@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -24,10 +25,22 @@ const gate = "scripts/check-non-blocking-jobs.sh";
 const realCi = readFileSync(join(repoRoot, ".github/workflows/ci.yml"), "utf8");
 
 const trees: string[] = [];
+const restores: Array<() => void> = [];
 
 afterEach(() => {
+  for (const undo of restores.splice(0)) undo();
   for (const t of trees.splice(0)) rmSync(t, { recursive: true, force: true });
 });
+
+/** 읽기 권한을 뺏는다. 정리 때 되돌려야 임시 트리가 지워진다. */
+function denyRead(path: string, restoreMode: number): void {
+  chmodSync(path, 0o000);
+  restores.push(() => chmodSync(path, restoreMode));
+}
+
+// root 는 권한 비트를 무시하고 다 읽는다 — 권한 케이스가 컨테이너 안에서 조용히
+// 거짓 green 이 되지 않게 건너뛴다 (check-memory-doc-size.test.ts 와 같은 이유).
+const asRoot = process.getuid?.() === 0;
 
 /** `<tmp>/.github/workflows/` 에 워크플로 파일을 뿌린 트리를 만든다. */
 function seed(workflows: Record<string, string>): string {
@@ -279,6 +292,38 @@ describe("check-non-blocking-jobs", () => {
     ].join("\n");
     const run = runGate(seed({ "ci.yml": realCi, "other.yml": odd }));
     expect(run.out).toContain("4칸 들여쓴 job-level 키를 0 개");
+    expect(run.status).toBe(2);
+  });
+
+  // 아래 셋은 리뷰가 "픽스처로 못 만든다" 던 상태를 실제로 만든다. 못 만든다고 적어
+  // 둔 것이 틀렸고, 셋 다 자기 가드만 발화시킨다.
+  it.skipIf(asRoot)(
+    "refuses when find could not walk the workflow directory",
+    () => {
+      const root = seed({ "ci.yml": realCi });
+      denyRead(join(root, ".github/workflows"), 0o755);
+      const run = runGate(root);
+      expect(run.out).toContain("다 훑지 못했다");
+      expect(run.status).toBe(2);
+    },
+  );
+
+  it.skipIf(asRoot)("refuses when a workflow file cannot be read", () => {
+    const root = seed({ "ci.yml": realCi });
+    const locked = join(root, ".github/workflows/locked.yml");
+    writeFileSync(locked, "jobs:\n  a:\n    name: A\n");
+    denyRead(locked, 0o644);
+    const run = runGate(root);
+    expect(run.out).toContain("awk 가 exit");
+    expect(run.status).toBe(2);
+  });
+
+  it("refuses a tree whose every workflow file is empty", () => {
+    const root = seed({});
+    writeFileSync(join(root, ".github/workflows/a.yml"), "");
+    writeFileSync(join(root, ".github/workflows/b.yml"), "");
+    const run = runGate(root);
+    expect(run.out).toContain("집계 줄이 안 나왔다");
     expect(run.status).toBe(2);
   });
 
