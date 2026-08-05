@@ -65,8 +65,14 @@ describe("DataSourceProfile registry", () => {
       identityColumn: true,
     },
     intelligence: { erd: true },
-    // Issue #1073 — MySQL/MariaDB admin ops parity (no users: #1077 PG-first).
-    operations: { activity: true, slowQueries: true, serverInfo: true },
+    // Issue #1073 — MySQL/MariaDB admin ops parity. Issue #1077 Stage 2 — users
+    // listing from mysql.user (no password/authentication_string column).
+    operations: {
+      activity: true,
+      slowQueries: true,
+      serverInfo: true,
+      users: true,
+    },
   });
 
   const expectedCapabilitiesByType: Record<
@@ -162,8 +168,14 @@ describe("DataSourceProfile registry", () => {
         identityColumn: true,
       },
       intelligence: { erd: true },
-      // Issue #1073 — SQL Server admin ops parity (no users: #1077 PG-first).
-      operations: { activity: true, slowQueries: true, serverInfo: true },
+      // Issue #1073 — SQL Server admin ops parity. Issue #1077 Stage 2 — users
+      // listing from sys.server_principals (no password_hash / sys.sql_logins).
+      operations: {
+        activity: true,
+        slowQueries: true,
+        serverInfo: true,
+        users: true,
+      },
     }),
     oracle: expectedCapabilities({
       connection: { test: true, readOnly: true },

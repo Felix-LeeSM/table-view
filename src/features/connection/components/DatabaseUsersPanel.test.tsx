@@ -1,6 +1,8 @@
 // Issue #1077 Stage 2 — DatabaseUsersPanel guard. Read-only accounts/roles
 // panel: (a) initial fetch + row render, (b) refresh re-fetch, (c) empty
-// state, (d) error state, (e) it is read-only (no kill/edit/delete control).
+// state, (d) error state, (e) it is read-only (no kill/edit/delete control),
+// (f) the SQL Server `CapabilityNotEnabled` envelope renders a passive grant
+// hint instead of `[object Object]`.
 
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -78,6 +80,36 @@ describe("DatabaseUsersPanel (issue #1077 Stage 2)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /permission denied/i,
     );
+  });
+
+  // `AppError::CapabilityNotEnabled` serializes as an object (`error.rs`
+  // `CapabilityEnvelope`), so Tauri rejects with a plain object rather than an
+  // Error. `String(e)` on it yields "[object Object]" and the GRANT hint never
+  // reaches the operator — the exact regression this asserts against. MSSQL
+  // raises it from the `VIEW ANY DEFINITION` probe in `db/mssql/admin.rs`.
+  it("renders a passive grant hint for the MSSQL VIEW ANY DEFINITION denial", async () => {
+    listDatabaseUsersMock.mockRejectedValueOnce({
+      type: "CapabilityNotEnabled",
+      message:
+        "This login lacks VIEW ANY DEFINITION, so SQL Server would return a " +
+        "silently truncated sys.server_principals list. Ask an administrator " +
+        "for: GRANT VIEW ANY DEFINITION TO [<login>];",
+      payload: { code: "mssql_view_any_definition" },
+    });
+
+    render(<DatabaseUsersPanel connectionId="conn-mssql" dbType="mssql" />);
+
+    const hint = await screen.findByTestId("database-users-unavailable");
+    expect(hint).toHaveTextContent(
+      /VIEW ANY DEFINITION permission is required/,
+    );
+    expect(hint).toHaveTextContent(/GRANT VIEW ANY DEFINITION TO \[<login>\];/);
+    expect(hint.textContent ?? "").not.toContain("[object Object]");
+    // Passive hint, not the red alert box, and not a false "no users" claim.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("database-users-empty"),
+    ).not.toBeInTheDocument();
   });
 
   it("is read-only — exposes no mutation (kill/edit/delete) control", async () => {
