@@ -11,10 +11,16 @@
 #
 #   위반 = 아래 명령이 내는 줄
 #
-#     git grep -nE "round [0-9]" -- 'src/' 'src-tauri/' 'e2e/'
+#     git grep -nEi "round [0-9]|라운드 [0-9]" -- 'src/' 'src-tauri/' 'e2e/'
 #
 #   hit 0 이어야 통과한다. 이 명령이 이슈 #2114 오너 결정이 못박은 수용 기준
 #   그대로이고, 여기 안 적힌 성질은 판정에 안 들어간다.
+#
+#   `-i` 와 한국어 대안이 판정에 들어 있는 이유: 오너 경계는 "라운드 번호 표기"
+#   라는 개념이고 소문자 영문은 그 부분집합일 뿐이다. 처음 판정은 소문자 `round`
+#   만 봤는데, 그때도 같은 세 경로에 `Round N` 11줄 · `라운드 N` 38줄이 살아
+#   있었다 — 그 상태로 머지됐으면 게이트가 "0 줄" 이라고 거짓 green 을 인증한다.
+#   #2108 의 전수 명령이 클래스의 43% 만 걸어 이 이슈가 생긴 것과 같은 형태다.
 #
 # 유지되는 것: PR 번호 · 이슈 번호. 회귀 앵커라 지우면 테스트의 출처가 0 이 된다
 # (PR #2112 가 재작성한 테스트 2개가 그랬다). 지우는 것은 라운드 번호 표기뿐이다.
@@ -22,8 +28,8 @@
 # 예외 목록이 없는 이유: 세 경로가 곧 필터다. `review-gate` 의 스텝 이름
 # `Stop at review round 3` 은 .github/ · scripts/ · docs/ · memory/ 에만 있고 그
 # 셋 밖이라 자동으로 빠진다 — 범위를 넓히면 그 커플링 assertion 이 걸린다.
-# 배치 적용 회차처럼 리뷰 라운드가 아닌 뜻으로 "round N" 을 쓰던 자리는 예외로
-# 빼지 않고 `pass N` 으로 개명해 어휘 충돌 자체를 없앴다.
+# 배치 적용 · 재시도 회차처럼 리뷰 라운드가 아닌 뜻으로 쓰던 자리는 예외로 빼지
+# 않고 `pass N` 으로 개명해 어휘 충돌 자체를 없앴다.
 #
 # 사용:
 #   bash scripts/check-round-narrative.sh          # 이 repo
@@ -33,7 +39,7 @@
 
 set -uo pipefail
 
-PATTERN='round [0-9]'
+PATTERN='round [0-9]|라운드 [0-9]'
 SCOPE=('src/' 'src-tauri/' 'e2e/')
 
 ROOT="${1:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"}"
@@ -65,7 +71,7 @@ fi
 
 # `git grep` 은 0 건일 때 1, 오류일 때 2 이상으로 나간다. 그 둘을 여기서 갈라야
 # 오류가 "위반 없음" 으로 강등되지 않는다 — 이 게이트의 유일한 fail-open 경로다.
-hits="$(git -C "$ROOT" grep -nE "$PATTERN" -- "${SCOPE[@]}")"
+hits="$(git -C "$ROOT" grep -nEi "$PATTERN" -- "${SCOPE[@]}")"
 grep_rc=$?
 if [ "$grep_rc" -gt 1 ]; then
 	echo "ERROR: git grep 이 exit $grep_rc 로 죽었다 (위 stderr) — 검사 불성립" >&2

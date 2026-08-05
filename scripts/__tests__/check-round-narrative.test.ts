@@ -66,16 +66,37 @@ describe("check-round-narrative", () => {
     expect(run.status).toBe(0);
   });
 
-  it("fails on review round narrative in a src/ comment", () => {
-    const root = seed({
-      "src/DataGrid.quicklook-focus.test.tsx":
-        "// Reason: round 2 blocking — the two paths that remove the panel\n",
+  // 표기 세 변형을 각각 판다. 처음 판정은 소문자 `round` 하나만 봤고, 그때도
+  // 같은 세 경로에 대문자 11줄 · 한국어 38줄이 살아 있었다 — 게이트는 "0 줄" 로
+  // green 이었다. 문안은 그 49줄에서 그대로 가져온다: 대상이 안 쓰는 표기로
+  // 변형을 만들면 가장 흔한 회귀를 못 잡는다.
+  const notations = [
+    {
+      label: "lower-case `round N`",
+      file: "src/DataGrid.quicklook-focus.test.tsx",
+      body: "// Reason: round 2 blocking — the two paths that remove the panel\n",
+    },
+    {
+      label: "sentence-initial `Round N`",
+      file: "src/components/datagrid/DataGridTable.selection-contrast.test.tsx",
+      body: "// Round 1 of PR #2115 shipped `bg-primary/15`, which improved the default\n",
+    },
+    {
+      label: "Korean `라운드 N`",
+      file: "src/lib/schemaGraphTextExport.test.ts",
+      body: "  // Reason: 라운드 4 blocking ⑥ — `pk` 로 **시작**하고 뒤에 ASCII\n",
+    },
+  ];
+
+  for (const { label, file, body } of notations) {
+    it(`fails on ${label}`, () => {
+      const root = seed({ [file]: body });
+      const run = runGate(root);
+      expect(run.out).toContain(`${file}:1`);
+      expect(run.out).toContain("리뷰 라운드 서사 주석 1 줄");
+      expect(run.status).toBe(1);
     });
-    const run = runGate(root);
-    expect(run.out).toContain("src/DataGrid.quicklook-focus.test.tsx:1");
-    expect(run.out).toContain("리뷰 라운드 서사 주석 1 줄");
-    expect(run.status).toBe(1);
-  });
+  }
 
   // #2108 의 전수 명령은 리터럴이 `review round [0-9]` 라 `review` 낱말이 없는
   // 변형과 `e2e/` 경로를 통째로 놓쳤다 (같은 클래스의 43%). 이 픽스처는 그 두
@@ -93,11 +114,27 @@ describe("check-round-narrative", () => {
 
   it("covers src-tauri/ as well", () => {
     const root = seed({
-      "src-tauri/src/lib.rs": "// fixed in round 3 of the review\n",
+      "src-tauri/src/commands/mod.rs":
+        "    //! 작성 이유 (2026-05-08, spec-first 라운드 2; Sprint 237 P5+ hoist):\n",
     });
     const run = runGate(root);
-    expect(run.out).toContain("src-tauri/src/lib.rs:1");
+    expect(run.out).toContain("src-tauri/src/commands/mod.rs:1");
     expect(run.status).toBe(1);
+  });
+
+  // `라운드` 를 품고 있지만 회차가 아닌 낱말이 이 트리에 실재한다 — `라운드트립`
+  // (src-tauri/tests/mongo_integration.rs) 과 `백그라운드` (src/lib/i18n). 판정이
+  // 낱말 경계를 잃고 `라운드` 만 보게 되면 여기가 red 다.
+  it("does not flag 라운드트립 / 백그라운드", () => {
+    const root = seed({
+      "src/lib/i18n/locales/shared.ts":
+        '  asyncError: "백그라운드 작업이 실패했습니다: {{message}}",\n',
+      "src-tauri/tests/mongo_integration.rs":
+        "/// IPC 페어 라운드트립을 wire-up 한다. 2 개를 만든다.\n",
+    });
+    const run = runGate(root);
+    expect(run.out).toMatch(/^ok:/);
+    expect(run.status).toBe(0);
   });
 
   // 게이트 스텝 이름 `Stop at review round 3` 은 measure-rounds.sh ·
