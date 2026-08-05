@@ -16,16 +16,22 @@
 #
 # 검사 대상은 셋이다:
 #   ① 파싱 — manifest 픽스처
-#   ② 배선 — auto-tag-release.yml 의 태그 스텝이 이 스크립트를 부르는가. 파싱만
-#      맞고 워크플로가 이 스크립트를 안 부르면 ①은 통과한다.
+#   ② 배선 — auto-tag-release.yml 의 태그 스텝이 이 스크립트를 부르는가, 그리고 그
+#      스텝의 `run:` 블록이 커밋된 기대 블록과 바이트 동일한가. 파싱만 맞고
+#      워크플로가 이 스크립트를 안 부르면 ①은 통과한다.
 #   ③ mutation — #2169 이전 형태를 실제로 만들어 이 스위트가 red 가 되는지,
-#      그리고 어느 입력이 그 형태를 잡는지. 양성 대조(미변조 사본)가 green 인
-#      것까지 확인한다.
+#      그리고 어느 입력이 그 형태를 잡는지. 워크플로를 갈아끼우는 변조 3종도 같이
+#      돌린다. 양성 대조(미변조 사본)가 green 인 것까지 확인한다.
 #
 # 「스텝의 어떤 줄도 스크립트 밖에서 manifest 를 읽지 않는다」는 단언은 여기 없다.
 # 반례 공간이 가능한 모든 shell 줄이라 닫는 명령이 없는 열린 집합 주장이었고, 세
-# 라운드에 걸쳐 우회·거짓 양성·거짓 음성이 번갈아 나왔다. 그 검사의 올바른 설계
-# (태그 스텝 `run:` 블록의 닫힌 바이트 비교)는 #2175 가 소유한다.
+# 라운드에 걸쳐 우회·거짓 양성·거짓 음성이 번갈아 나왔다 (#2172). ②의 바이트 비교가
+# 그 자리를 대신한다 (#2175) — 임의의 줄을 분류하지 않고 블록 전체를 대조하므로,
+# 통과하는 블록은 픽스처와 같은 한 벌뿐이다.
+#
+# 대신 태그 스텝을 정당하게 고치면 픽스처도 같이 갱신해야 한다. 그것이 이 가드의
+# 목적이다 — 릴리스 태그를 만드는 스텝의 편집을 사람이 한 번 보게 만든다. 갱신
+# 명령은 실패 메시지가 그대로 찍는다 (`--print-tag-step`).
 
 set -uo pipefail
 
@@ -34,13 +40,41 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # "미변조 사본이 red" 라는 엉뚱한 실패로 나타난다.
 SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/${BASH_SOURCE[0]##*/}"
 SCRIPT="${CARGO_PACKAGE_VERSION_SCRIPT:-$ROOT/scripts/release/cargo-package-version.sh}"
-# 배선 대상 워크플로. env 로 갈아끼울 수 있는 것은 ②의 RED 를 손으로 재현하기
-# 위해서다. 기본값은 저장소의 진짜 파일이다.
+# 배선 대상 워크플로. env 로 갈아끼우는 것은 아래 mutation 단계가 워크플로 변조본을
+# 이 스위트에 물리기 위해서다. 기본값은 저장소의 진짜 파일이다.
 WORKFLOW="${CARGO_PACKAGE_VERSION_WORKFLOW:-$ROOT/.github/workflows/auto-tag-release.yml}"
+# 태그 스텝의 기대 블록. ②의 바이트 비교가 이 파일과 대조한다.
+TAG_STEP_FIXTURE="$ROOT/scripts/release/fixtures/auto-tag-release-tag-step.txt"
+# 픽스처 갱신 명령과 바이트 비교의 실패 라벨. 실패 메시지와 mutation 단계가 같은
+# 문자열을 쓴다 — 손으로 두 번 적으면 파일을 옮기거나 문구를 고친 날 한쪽만 낡는다.
+TAG_STEP_UPDATE_CMD="bash scripts/release/cargo-package-version.test.sh --print-tag-step > scripts/release/fixtures/auto-tag-release-tag-step.txt"
+TAG_STEP_PIN_FAIL="coupling: 태그 스텝의 run: 블록이 기대 블록과 다르다"
 
 if [ ! -f "$SCRIPT" ]; then
 	echo "FAIL: 대상 스크립트가 없다: $SCRIPT" >&2
 	exit 1
+fi
+
+# 태그 스텝의 `run:` 블록 본문. 스텝 본문은 10칸 이상 들여쓰기고, 다음 스텝의
+# `- name:` 앞에는 그 스텝의 주석이 먼저 올 수 있으므로 이름이 아니라 들여쓰기로
+# 끊는다. ②의 단언들과 `--print-tag-step` 이 같은 추출기를 쓴다 — 둘이 갈라지면
+# 픽스처를 갱신한 그다음 실행이 red 가 된다.
+tag_step() {
+	awk '/- name: Tag release if version bumped/{f=1}
+	     f && /^[[:space:]]*run:/{g=1; next}
+	     g && NF && substr($0, 1, 10) != "          " {exit}
+	     g' "$WORKFLOW"
+}
+
+# 픽스처 생성기. 단언 출력이 섞이지 않도록 스위트 본문보다 먼저 끝낸다. 추출이
+# 비면 멈춘다 — 빈 픽스처를 커밋하면 빈 추출과 바이트 동일해져 ②가 영영 green 이다.
+if [ "${1:-}" = "--print-tag-step" ]; then
+	if [ -z "$(tag_step)" ]; then
+		echo "FAIL: 태그 스텝의 run: 블록을 못 찾았다: $WORKFLOW" >&2
+		exit 1
+	fi
+	tag_step
+	exit 0
 fi
 
 total=0
@@ -167,26 +201,14 @@ else
 	fail "저장소 manifest 의 값이 X.Y.Z 가 아니다" "$OUT"
 fi
 
-# ── 배선 — 워크플로의 태그 스텝이 이 스크립트를 부르는가 ────────────────────
-# mutation 서브런에서는 끈다. 판정 대상이 변조된 스크립트이지 저장소의 워크플로가
-# 아니라서다 — 켜 두면 워크플로가 바뀐 날 양성 대조와 변조본이 같은 이유로 red 가
-# 되어 결과가 무의미해진다.
+# ── 배선 — 태그 스텝이 이 스크립트를 부르는가 + 블록이 기대본과 바이트 동일한가 ──
+# **스크립트** 변조 서브런에서는 끈다. 판정 대상이 변조된 스크립트이지 저장소의
+# 워크플로가 아니라서다 — 켜 두면 워크플로가 바뀐 날 양성 대조와 변조본이 같은
+# 이유로 red 가 되어 결과가 무의미해진다. 반대로 **워크플로** 변조 서브런에서는
+# 켜 둔다. 거기서는 이 단계가 판정 대상이다.
 #
-# RED 재현. 이 단계에서 red 가 나야 한다:
-#   d="$(mktemp -d)"; git archive HEAD | tar -x -C "$d"
-#   perl -0pi -e "s|\Qbash scripts/release/cargo-package-version.sh src-tauri/Cargo.toml\E|grep -m1 '^version' src-tauri/Cargo.toml \| sed -E 's/.*\"([^\"]+)\".*/\\\\1/'|" \
-#     "$d/.github/workflows/auto-tag-release.yml"
-#   CARGO_PACKAGE_VERSION_WORKFLOW="$d/.github/workflows/auto-tag-release.yml" \
-#     bash scripts/release/cargo-package-version.test.sh
-#
-# 스텝 본문은 10칸 이상 들여쓰기고, 다음 스텝의 `- name:` 앞에는 그 스텝의 주석이
-# 먼저 올 수 있으므로 이름이 아니라 들여쓰기로 끊는다.
-tag_step() {
-	awk '/- name: Tag release if version bumped/{f=1}
-	     f && /^[[:space:]]*run:/{g=1; next}
-	     g && NF && substr($0, 1, 10) != "          " {exit}
-	     g' "$WORKFLOW"
-}
+# 이 단계의 RED 는 아래 mutation 의 "워크플로 변조" 3종이 실제로 돌린다 — 손으로
+# 재현하는 절차를 주석에 적어 두면 그 사본만 낡는다.
 
 check_workflow_coupling() {
 	[ "${CARGO_PACKAGE_VERSION_SKIP_COUPLING:-0}" = "1" ] && return 0
@@ -215,6 +237,29 @@ check_workflow_coupling() {
 			"이 스위트가 green 이어도 워크플로가 자기 파싱을 들고 있으면 릴리스는 그 파싱으로 돈다.
 현재 스텝:
 $step"
+	fi
+
+	# 블록 전체를 커밋된 기대본과 바이트로 대조한다 (#2175). 위 grep 은 호출 줄
+	# 하나만 보므로, 그 줄을 남긴 채 밑에 옛 파싱을 한 줄 더하는 편집을 통과시킨다 —
+	# 나중 대입이 이겨서 릴리스는 그 파싱으로 돈다. 판정은 cmp 다: 통과하는 블록은
+	# 픽스처와 같은 한 벌뿐이라 임의의 줄을 "읽기냐 아니냐" 로 분류할 필요가 없다.
+	if [ ! -f "$TAG_STEP_FIXTURE" ]; then
+		fail "coupling: 기대 블록 픽스처가 없다: ${TAG_STEP_FIXTURE#"$ROOT/"}" \
+			"만드는 법:
+  $TAG_STEP_UPDATE_CMD"
+		return
+	fi
+
+	tag_step >"$FIX_DIR/tag-step.actual"
+	if cmp -s "$TAG_STEP_FIXTURE" "$FIX_DIR/tag-step.actual"; then
+		pass "태그 스텝의 run: 블록이 커밋된 기대 블록과 바이트 동일하다"
+	else
+		fail "$TAG_STEP_PIN_FAIL" \
+			"$(diff -u -L expected -L actual "$TAG_STEP_FIXTURE" "$FIX_DIR/tag-step.actual")
+
+바이트 비교라서 공백·주석만 바뀌어도 여기서 걸린다. 릴리스 태그를 만드는 스텝이
+바뀌었다는 뜻이므로, 의도한 변경이면 픽스처를 갱신해 같은 커밋에 담아라:
+  $TAG_STEP_UPDATE_CMD"
 	fi
 }
 check_workflow_coupling
@@ -322,6 +367,97 @@ SH
 	else
 		fail "mutation[plain]: 변조본이 현재 배치에서 0.7.0 을 못 낸다 (rc=$MUT_RC) — 재현본이 옛 형태가 아니다"
 	fi
+
+	# ── 워크플로 변조 — ②의 바이트 비교가 실제로 잡는지 ──────────────────────
+	# 위 변조는 스크립트를 갈아끼웠다. 여기서는 워크플로를 갈아끼우고 배선 단계를
+	# 켜 둔 채 이 스위트를 다시 돌린다.
+	#
+	# 변조는 **대상 파일의 실제 표기**로 만든다. PR #2172 에서 심었던 `cat … | tail -1`
+	# 은 당시 필터가 정확히 잡는 모양이라, 필터가 잡는 한 모양으로 필터를 증명한
+	# 셈이었다. 아래 셋은 그 워크플로에 실제로 있었거나(#2169 이전 파싱 줄) 사람이
+	# 할 법한 편집이다.
+	echo "mutation (workflow):"
+
+	# 세 변조가 공유하는 앵커. 워크플로에 한 번만 나온다 — 아니면 perl 이 죽는다.
+	CALL_LINE='          cargo_version="$(bash scripts/release/cargo-package-version.sh src-tauri/Cargo.toml)"'
+	# #2169 이전 파싱 줄 원문. 따옴표와 백슬래시가 그대로라 heredoc 으로 받는다.
+	OLD_PARSE_LINE="$(cat <<'YML'
+          cargo_version="$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')"
+YML
+	)"
+
+	# 리터럴 치환. 정규식이 아니라 index/substr 이라 메타문자 이스케이프 문제가 없고,
+	# 대상이 없거나 둘 이상이면 죽는다 — 조용한 no-op 이 불가능하다.
+	write_workflow_mutant() {
+		local dst="$1" old="$2" new="$3"
+		perl -e '
+			my ($src, $o, $n) = @ARGV;
+			open my $fh, "<", $src or die "open: $!\n";
+			local $/;
+			my $t = <$fh>;
+			close $fh;
+			my $i = index($t, $o);
+			die "MUTATION TARGET NOT FOUND\n" if $i < 0;
+			die "MUTATION TARGET NOT UNIQUE\n" if index($t, $o, $i + length($o)) >= 0;
+			substr($t, $i, length($o), $n);
+			print $t;
+		' "$WORKFLOW" "$old" "$new" >"$dst"
+	}
+
+	# 워크플로만 갈아끼운 서브런. 배선 단계는 켜 둔다 (판정 대상이 그것이다).
+	# 대입문의 exit status 는 명령 치환의 것이라 전역이어야 한다 — 위 run_suite_against
+	# 와 같은 이유다.
+	run_suite_against_workflow() {
+		SUB_OUT="$(CARGO_PACKAGE_VERSION_WORKFLOW="$1" CARGO_PACKAGE_VERSION_SKIP_MUTATION=1 \
+			bash "$SELF" 2>&1)"
+	}
+
+	# 양성 대조. 미변조 사본이 red 면 아래 red 들은 아무것도 증명하지 못한다.
+	# 실패 원인이 둘이라 메시지가 둘 다 적는다 — 태그 스텝을 고치고 픽스처를 안
+	# 고치면 사본도 같은 이유로 red 라, 여기서 harness 탓만 하면 오진이다.
+	cp "$WORKFLOW" "$MUT_DIR/workflow-control.yml"
+	if run_suite_against_workflow "$MUT_DIR/workflow-control.yml"; then
+		pass "positive control: 미변조 워크플로 사본은 green"
+	else
+		fail "positive control: 미변조 워크플로 사본이 red" \
+			"위 배선 단계도 red 면 원인은 그것과 같다 — 저장소의 태그 스텝과 픽스처가 어긋났다.
+배선 단계가 green 인데 여기만 red 면 harness(워크플로 갈아끼우기)가 깨진 것이다.
+$SUB_OUT"
+	fi
+
+	# 셋 다 앵커는 호출 줄 하나다. "스위트가 red" 로 끝내지 않고 바이트 비교가 낸
+	# red 인지까지 본다 — 안 그러면 다른 단언이 깨져도 통과로 읽힌다.
+	workflow_mutation_case() {
+		local name="$1" new="$2"
+		local dst="$MUT_DIR/workflow-$name.yml"
+		rm -f "$dst"
+		if ! write_workflow_mutant "$dst" "$CALL_LINE" "$new"; then
+			fail "mutation[$name]: 치환 실패 (대상 없음/중복)"
+			return
+		fi
+		if cmp -s "$WORKFLOW" "$dst"; then
+			fail "mutation[$name]: 변조본이 원본과 동일하다 — 치환이 no-op 이다"
+			return
+		fi
+		if run_suite_against_workflow "$dst"; then
+			fail "mutation[$name]: 변조본이 green — 배선 단계가 이 편집을 못 잡는다" "$SUB_OUT"
+		elif printf '%s\n' "$SUB_OUT" | grep -qF "$TAG_STEP_PIN_FAIL"; then
+			pass "mutation[$name]: 바이트 비교가 red 를 낸다"
+		else
+			fail "mutation[$name]: 스위트는 red 인데 바이트 비교가 아닌 단언이 깨졌다" "$SUB_OUT"
+		fi
+	}
+
+	# ① 호출 줄을 남기고 그 밑에 옛 파싱 줄을 더한다. 나중 대입이 이기므로 릴리스는
+	#    옛 파싱으로 도는데, 호출 존재만 보는 grep 은 이걸 통과시킨다.
+	workflow_mutation_case "old-parse-appended" "$CALL_LINE
+$OLD_PARSE_LINE"
+	# ② 호출을 지우고 인라인 파싱으로 되돌린다 (#2169 이전 상태).
+	workflow_mutation_case "call-replaced-by-inline-parse" "$OLD_PARSE_LINE"
+	# ③ 빈 줄 하나. 의미는 그대로지만 바이트 비교라 red 가 맞다 — 주석만 고친
+	#    편집도 같은 류이고, 실패 메시지가 픽스처 갱신 명령을 찍는다.
+	workflow_mutation_case "whitespace-only" "
+$CALL_LINE"
 fi
 
 echo ""
