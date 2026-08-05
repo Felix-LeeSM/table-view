@@ -314,14 +314,25 @@ jobs:
           # (1) This release run's own check runs. They are in progress by
           #     definition — including the one you are reading — so counting
           #     them would wait on ourselves until the budget expires.
-          # (2) Names ending in `(non-blocking)`. That suffix is this repo's
-          #     marker for an advisory check (ci.yml: `Dependency Advisories`,
-          #     `WASM Size Budget`). A RUSTSEC advisory is an event about the
-          #     outside world, not about this commit, and ci.yml already refuses
-          #     to let it turn everything red at once (2026-07-02 incident) —
-          #     letting it block a release here would reintroduce exactly that.
-          #     Matching the suffix rather than listing job names means a future
-          #     advisory job is covered the day it is named by the convention.
+          # (2) Names ending in `(non-blocking)`. The case that suffix was made
+          #     for is ci.yml's `Dependency Advisories (non-blocking)`: a RUSTSEC
+          #     advisory is an event about the outside world, not about this
+          #     commit, and ci.yml marks that job `continue-on-error: true` so a
+          #     single advisory cannot turn every open PR and main push red at
+          #     once (2026-07-02 incident). Blocking a release on it would
+          #     reintroduce exactly that. Matching the suffix rather than listing
+          #     job names also covers a future advisory job the day it is named.
+          #
+          #     Read this exclusion as name-based, not behaviour-based — the two
+          #     do not currently agree. `WASM Size Budget (non-blocking)` carries
+          #     the name but has NO `continue-on-error`, so a blown budget really
+          #     does fail its own ci.yml run, and this job drops it anyway. That
+          #     name/behaviour mismatch is ci.yml's and predates this job; #2168
+          #     does not touch ci.yml. So a green result here is not the same
+          #     claim as "the commit is green" —
+          #     docs/contributor-guide/release/versioning-and-artifacts.md tells
+          #     the maintainer to read the commit's own check list before
+          #     publishing rather than trust this job alone.
           relevant() {
             awk -F'\t' -v self="/actions/runs/${GITHUB_RUN_ID}/" \
               'NF && index($4, self) == 0 && $1 !~ /\(non-blocking\)$/ { print $1 "\t" $2 "\t" $3 }'
