@@ -931,16 +931,33 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
   // #1804 — the gate has to hold on the payload producer, not only on the
   // affordance. `handleKeyDown` sits on the whole `<tr>`, and this PR put a
   // focusable Delete button inside that row for the first time on an engine
-  // that cannot rewrite a column, so Enter used to stage a `{type:"modify"}`
-  // the adapter refuses. Mutation check: drop `if (!isEditing) return;` from
-  // `handleKeyDown` and this test goes red.
+  // that cannot rewrite a column, so Enter reached `handleSave` with no
+  // `isEditing` check.
+  //
+  // The row's draft state is seeded from `col` at mount and never resynced,
+  // while the row key is `col.name` — so a refresh that changes the column
+  // definition under the same name (an external ALTER, another client) keeps
+  // the row mounted with a draft that no longer matches. That difference is
+  // what `handleSave` reads as a real edit. Mutation check: drop
+  // `if (!isEditing) return;` from `handleKeyDown` and this goes red.
   it("stages no modify from Enter in a row that is not being edited", () => {
-    render(
+    const { rerender } = render(
       <ColumnsEditor
         connectionId="conn-1"
         table="users"
         schema="public"
         columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canModifyColumn={false}
+      />,
+    );
+    // Same column name, new definition — row stays mounted, draft goes stale.
+    rerender(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[{ ...SAMPLE_COLUMN, data_type: "varchar(255)" }]}
         onRefresh={vi.fn().mockResolvedValue(undefined)}
         canModifyColumn={false}
       />,
