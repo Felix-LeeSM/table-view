@@ -184,7 +184,9 @@ gate_step() {
 #   perl -0pi -e 's/ && .1 !~ [^{]+\{/ {/' "$d/m.yml"                                                    # (1) (non-blocking) 필터를 뺀다
 #   perl -0pi -e 's/    needs: build\n    # Report/    # Report/' "$d/m.yml"                              # (1) needs: build 를 뗀다
 #   perl -0pi -e 's/    if: always\(\)\n    runs-on: ubuntu-22.04\n    timeout-minutes: 30/    runs-on: ubuntu-22.04\n    timeout-minutes: 30/' "$d/m.yml"  # (1) if: always() 를 뗀다
-#   perl -0pi -e 's/(has failing checks.*?)exit 1/${1}exit 0/s' "$d/m.yml"                                # (1) red 를 찍고도 0 으로 나간다
+#   perl -0pi -e 's/(has failing non-advisory checks.*?)exit 1/${1}exit 0/s' "$d/m.yml"                   # (1) red 를 찍고도 0 으로 나간다
+#   # ↑ 앵커는 스텝 이름이다. 스텝을 개명하면 `git grep -n 'has failing'` 으로 이 줄도 같이 옮겨라 —
+#   #   `has failing checks` 였을 때 개명이 앵커를 아래 `::error::` 문장으로 조용히 옮긴 적이 있다.
 #   perl -0pi -e 's/\$3 != "skipped"/\$3 != "skipped" && \$3 != "timed_out"/' "$d/m.yml"                  # (1) timed_out 을 통과로 강등
 #   perl -0pi -e 's/\n  # #2168.*\z//s' "$d/m.yml"                                                       # (7) 게이트 job 을 통째로 지운다
 #   # 문서 쪽

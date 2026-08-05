@@ -68,11 +68,12 @@ Two workflows drive a release:
     it counts failed, when one never finished inside its wait budget, or when
     the commit carries no check runs at all. It counts neither this release
     run's own jobs nor any check whose name ends in `(non-blocking)`. That
-    second exclusion goes by name. Since #2174 every job carrying the suffix
-    also carries `continue-on-error: true`, but that flag does not soften what
-    this job drops: a failing `continue-on-error` job still records
-    `conclusion: failure` on its own check run, so each row this exclusion
-    drops is a genuinely red one. On what it does
+    second exclusion goes by name and never reads the conclusion, so it drops
+    those checks whether they passed or failed. Since #2174 every job carrying
+    the suffix also carries `continue-on-error: true`, but that flag does not
+    soften what this job drops: a failing `continue-on-error` job still records
+    `conclusion: failure` on its own check run, so a dropped row that is red is
+    genuinely red. On what it does
     count it is fail-closed: an unreadable API answer is a failure, not a pass.
     It runs on the dry-run path too.
 - Release workflow output is a draft GitHub Release. A maintainer reviews and
