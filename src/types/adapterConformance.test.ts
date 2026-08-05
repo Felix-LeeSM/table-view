@@ -286,10 +286,15 @@ describe("adapter conformance matrix", () => {
 
     expect(mssql.level).toBe("runtime");
     // Issue #1529 — read-only is a live claim (engine-agnostic backend gate).
+    // Issue #2094 — switch-database joins them: the wired `MssqlAdapter`
+    // overrides `RdbAdapter::switch_database`, so the claim is live, not a
+    // deferral (nothing enters `deferred`).
     expect(mssql.areas.connection.checks).toEqual([
       "connection.test",
+      "connection.switchDatabase",
       "connection.readOnly",
     ]);
+    expect(mssql.areas.connection.deferred).toEqual([]);
     expect(mssql.areas.catalog.checks).toEqual([
       "catalog.indexes",
       "catalog.constraints",
@@ -306,7 +311,6 @@ describe("adapter conformance matrix", () => {
       "ddl.modifyColumn",
     ]);
     expect(mssql.areas.connection.unsupported).toEqual([
-      "connection.switchDatabase",
       "connection.filePicker",
     ]);
     expect(mssql.areas.catalog.unsupported).toEqual([]);

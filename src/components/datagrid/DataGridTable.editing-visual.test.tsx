@@ -132,7 +132,7 @@ describe("DataGridTable editing visual emphasis", () => {
     expect(marker).not.toBeNull();
   });
 
-  it("pending-only (not editing) cell uses yellow bg, not primary ring", () => {
+  it("pending-only (not editing) cell uses the highlight bg, not primary ring", () => {
     render(
       <DataGridTable
         {...makeProps({

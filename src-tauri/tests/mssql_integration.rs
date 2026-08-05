@@ -335,3 +335,211 @@ async fn test_stream_table_rows_unsupported_for_duckdb() {
         .expect_err("duckdb stream must be unsupported");
     assert!(matches!(err, AppError::Unsupported(_)), "duckdb: {err:?}");
 }
+
+/// Issue #1077 Stage 2 — row-shape gate for `list_database_users`. The unit
+/// guards in `db/mssql/admin.rs` pin the SQL text and the no-connection branch;
+/// the decode path needs a live server. `sa` is an enabled sysadmin, which pins
+/// the flags true.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mssql_list_database_users_row_shape_1077() {
+    let adapter = match common::setup_mssql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let rows = adapter
+        .list_database_users()
+        .await
+        .expect("sa holds VIEW ANY DEFINITION → the listing must succeed");
+
+    let sa = rows
+        .iter()
+        .find(|r| r.name == "sa")
+        .expect("the sa login must be listed");
+    assert!(sa.can_login, "sa is an enabled 'S' login → can_login");
+    assert!(sa.is_superuser, "sa is a sysadmin member → is_superuser");
+    assert!(sa.can_create_db, "sysadmin implies CREATE DATABASE");
+    assert!(
+        sa.can_create_role,
+        "sysadmin implies CREATE LOGIN/server roles"
+    );
+
+    // Fixed server roles are principals too, and they are not login-capable.
+    let public_role = rows
+        .iter()
+        .find(|r| r.name == "public")
+        .expect("the public fixed server role must be listed");
+    assert!(!public_role.can_login, "a server role cannot log in");
+
+    // `##MS_*` are internal certificate/role principals — audit noise, and the
+    // certificate-mapped ones make `IS_SRVROLEMEMBER` return NULL. This checks
+    // the literal `##MS_` prefix, a narrower set than the SQL filter
+    // `NOT LIKE '##MS_%'` — T-SQL `_` is a single-character wildcard.
+    assert!(
+        rows.iter().all(|r| !r.name.starts_with("##MS_")),
+        "no principal carrying the internal `##MS_` prefix may reach the panel"
+    );
+}
+
+/// Issue #1077 Stage 2 SECURITY (2026-07-25) — the defect a real principal
+/// fixture is needed for: `IS_SRVROLEMEMBER('dbcreator', <certificate-mapped
+/// login>)` is NULL even though `sys.server_role_members` records the
+/// membership, so the previous `ISNULL(IS_SRVROLEMEMBER(...), 0)` reported a
+/// real `dbcreator` as unable to create databases — "cannot resolve" collapsed
+/// into "not a member" on an account-audit surface. Same for `securityadmin`
+/// and an asymmetric-key login. Reproduced on the image `tests/common/mod.rs`
+/// spawns (`mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04`,
+/// `ProductVersion` 16.0.4135.4).
+///
+/// The sibling defect — a `'C'`/`'K'` principal reported as loginable by a
+/// `type <> 'R'` rule — needs no server and no fixture:
+/// `users_sql_limits_can_login_to_authenticatable_principal_types` in
+/// `db/mssql/admin.rs` fails on the SQL text alone. What has to come from a live
+/// server is the NULL answer above. Fixture DDL goes through
+/// `common::mssql_admin_batch` because the adapter refuses raw DDL by design
+/// (#903).
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mssql_users_null_role_membership_and_non_login_principals_1077() {
+    let adapter = match common::setup_mssql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    // Idempotent: a previous aborted run must not fail the fixture.
+    const TEARDOWN_SQL: &str = "\
+        IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'tv1077_cert_login') \
+            DROP LOGIN tv1077_cert_login; \
+        IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'tv1077_key_login') \
+            DROP LOGIN tv1077_key_login; \
+        IF EXISTS (SELECT 1 FROM sys.certificates WHERE name = 'tv1077_cert') \
+            DROP CERTIFICATE tv1077_cert; \
+        IF EXISTS (SELECT 1 FROM sys.asymmetric_keys WHERE name = 'tv1077_key') \
+            DROP ASYMMETRIC KEY tv1077_key;";
+    common::mssql_admin_batch(TEARDOWN_SQL)
+        .await
+        .expect("pre-clean principal fixture");
+    common::mssql_admin_batch(
+        // A `#`-leading SUBJECT is rejected with "The certificate, asymmetric
+        // key, or private key data is invalid." (error 15297, reproduced on
+        // 16.0.4135.4), so this SUBJECT carries no `#1077` anchor.
+        "CREATE CERTIFICATE tv1077_cert ENCRYPTION BY PASSWORD = 'Fixture!1077Pass' \
+             WITH SUBJECT = 'issue 1077 stage 2 users listing fixture'; \
+         CREATE LOGIN tv1077_cert_login FROM CERTIFICATE tv1077_cert; \
+         CREATE ASYMMETRIC KEY tv1077_key \
+             WITH ALGORITHM = RSA_2048 ENCRYPTION BY PASSWORD = 'Fixture!1077Pass'; \
+         CREATE LOGIN tv1077_key_login FROM ASYMMETRIC KEY tv1077_key; \
+         ALTER SERVER ROLE dbcreator ADD MEMBER tv1077_cert_login; \
+         ALTER SERVER ROLE securityadmin ADD MEMBER tv1077_key_login;",
+    )
+    .await
+    .expect("create certificate/asymmetric-key principal fixture");
+
+    let listed = adapter.list_database_users().await;
+
+    // Read the rows out before asserting so a failure still drops the fixture.
+    let found = listed.as_ref().ok().map(|rows| {
+        let pick = |name: &str| {
+            rows.iter()
+                .find(|r| r.name == name)
+                .map(|r| (r.can_login, r.can_create_db, r.can_create_role))
+        };
+        (pick("tv1077_cert_login"), pick("tv1077_key_login"))
+    });
+    common::mssql_admin_batch(TEARDOWN_SQL)
+        .await
+        .expect("drop principal fixture");
+
+    listed.expect("sa holds VIEW ANY DEFINITION → the listing must succeed");
+    let (cert_login, key_login) = found.expect("listing succeeded");
+    let (cert_can_login, cert_can_create_db, _) =
+        cert_login.expect("the certificate-mapped login must be listed");
+    let (key_can_login, _, key_can_create_role) =
+        key_login.expect("the asymmetric-key-mapped login must be listed");
+
+    assert!(
+        cert_can_create_db,
+        "dbcreator membership is recorded in sys.server_role_members — a NULL \
+         IS_SRVROLEMEMBER answer must not report the member as unprivileged"
+    );
+    assert!(
+        key_can_create_role,
+        "securityadmin membership is recorded in sys.server_role_members — a NULL \
+         IS_SRVROLEMEMBER answer must not report the member as unprivileged"
+    );
+    assert!(
+        !cert_can_login,
+        "a certificate-mapped principal carries permissions for signed modules and \
+         cannot authenticate"
+    );
+    assert!(
+        !key_can_login,
+        "an asymmetric-key-mapped principal cannot authenticate either"
+    );
+}
+
+/// Issue #1077 Stage 2 SECURITY (2026-07-25) — data loss. The listing gated
+/// rows on `sp.type IN ('S', 'U', 'G', 'R', 'C', 'K')`,
+/// which silently dropped every `'E'` (Microsoft Entra login) and `'X'` (Entra
+/// group) principal: no row, no error. On an Entra-authenticated SQL Server /
+/// Azure SQL those two are the primary login subjects, so the audit screen
+/// rendered a list missing them as complete. The fix removes the type predicate
+/// entirely, and this is its live gate.
+///
+/// A container cannot provision an `'E'`/`'X'` principal (Entra logins need an
+/// Entra-configured instance), so the Entra membership of the `can_login`
+/// whitelist is pinned by the `USERS_SQL` text guard in `db/mssql/admin.rs`
+/// (`users_sql_limits_can_login_to_authenticatable_principal_types`). What this
+/// test owns is the class against a real catalog: reintroduce ANY type
+/// whitelist that misses a type this server actually holds (`'R'` roles) and
+/// the two sets diverge here.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mssql_users_listing_drops_no_principal_type_1077() {
+    use table_view_lib::db::row_cap::DEFAULT_ROW_CAP;
+
+    let adapter = match common::setup_mssql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    // Control: same source, same `##MS_%` name filter, NO type predicate.
+    let control = adapter
+        .execute_query(
+            "SELECT name FROM sys.server_principals \
+             WHERE name NOT LIKE '##MS_%' ORDER BY name",
+            None,
+            DEFAULT_ROW_CAP,
+        )
+        .await
+        .expect("control sys.server_principals SELECT");
+    let expected: Vec<String> = control
+        .rows
+        .iter()
+        .map(|row| {
+            row[0]
+                .as_str()
+                .expect("principal name is a string cell")
+                .to_string()
+        })
+        .collect();
+    assert!(
+        expected.len() >= 2,
+        "control must see real principals (sa + fixed server roles), got {expected:?}"
+    );
+
+    let listed: Vec<String> = adapter
+        .list_database_users()
+        .await
+        .expect("sa holds VIEW ANY DEFINITION → the listing must succeed")
+        .into_iter()
+        .map(|r| r.name)
+        .collect();
+
+    assert_eq!(
+        listed, expected,
+        "every non-##MS_* principal must reach the panel — a type filter drops \
+         accounts with no row and no error"
+    );
+}

@@ -69,7 +69,33 @@ Mode covers `LIMIT offset,count`, `ON DUPLICATE KEY UPDATE`, and narrow `CALL
 proc(scalar)` with literal, `DEFAULT`, `NULL`, boolean, or user-variable
 arguments; routine execution beyond the seeded narrow CALL probe, broad CALL
 expressions, stored routine/event bodies, control-flow scripting, `DELIMITER`,
-and `LOAD DATA` are explicit unsupported editor/backend boundaries.
+and `LOAD DATA` are explicit unsupported editor/backend boundaries. A read-only
+users/roles listing from `mysql.user` (`User`/`Host` plus the privilege flags;
+the `authentication_string`/`Password` credential columns are never selected) is
+available on both MySQL and MariaDB (#1077 Stage 2). The two vendors need
+different SQL and the adapter branches on the connection's engine: `mysql.user`
+is a real table on MySQL with an `account_locked` column (added in MySQL 5.7.6;
+an older build fails loud rather than mislabelling a locked account as
+loginable), whereas MariaDB's `mysql.user` does not carry that column (measured
+absent on 10.3, 10.4 and 11.3) — 10.4 replaced the table with a view over
+`mysql.global_priv`, and there the lock flag is read from the `Priv` JSON
+document (`$.account_locked` only; that document also holds
+`authentication_string`, which is never projected), so MariaDB requires 10.4+
+and fails loud below it. `can_login` also accounts for the
+`mysql_no_login` plugin, and `max_user_connections` is normalised onto the PG
+`rolconnlimit` wire sentinel (MySQL `0` = unlimited becomes `-1`, a negative
+MariaDB cap becomes `0`). MariaDB roles live in the same view under their bare
+name and are listed as non-loginable; the role test is the `is_role` column, not
+an empty `Host`. `can_create_db` over-reports: it renders `mysql.user.Create_priv`,
+MySQL's global `CREATE` privilege, in the PG `rolcreatedb` ("may create
+databases") wire slot, but global `CREATE` also covers `CREATE TABLE`, so an
+account holding it for table DDL alone still shows as a database creator — and
+the flag does not consult `read_only`/`super_read_only`, which blocks
+`CREATE DATABASE` for a non-`SUPER` account regardless of the grant. Read
+it as "holds global `CREATE`". Role membership (`mysql.role_edges`), MySQL 8
+dynamic privileges such as `SYSTEM_USER`/`ROLE_ADMIN` (a holder is reported as
+non-superuser because only `Super_priv` is read), password expiry, per-schema
+grants, and user/role write management (create/alter/drop) remain unsupported.
 
 ### MySQL / MariaDB export and DDL parity
 
@@ -215,8 +241,10 @@ frontend SQL batch path with primary-key projection. #907 wires representative
 Runtime Happy Path smoke for connect, seeded catalog browse, SELECT/DML,
 destructive Safe Mode confirmation, cancellation, and grid edit. The `mssql`
 profile/dialect identity, SQL Server labels/defaults, URL parsing, and seed/spec
-inventory remain source-specific. `switchDatabase` stays disabled under the
-current connection contract. Bounded structured table/index/constraint DDL is
+inventory remain source-specific. `switchDatabase` is enabled since #2094 — the
+wired `MssqlAdapter` overrides `RdbAdapter::switch_database` and re-tests the
+connection config against the target catalog before swapping it, so the toolbar
+switcher is interactive. Bounded structured table/index/constraint DDL is
 now wired through the shared StructurePanel path (#1071). SQL Server schema
 dumps restore into SQL Server for text/numeric/boolean/JSON data:
 `export_schema_dump` emits `[bracket]`-quoted identifiers and Unicode-safe T-SQL
@@ -227,13 +255,46 @@ restores the emitted SQL, and matches the source rows (#1642, #1077 Stage 1).
 Binary/varbinary columns are now covered: they dump as an unquoted T-SQL binary
 literal (`0x<hex>`) so a byte-faithful round-trip survives restore, proven by
 the same docker round-trip seeding a varbinary column with a control-byte value
-(#1677). Admin/security/jobs/users/roles, DB-level import/backup/restore,
-profiler/activity dashboards, full T-SQL semantic parity, full workbench parity,
-and SQLCMD/meta-command/procedure-body scripting remain unsupported.
-Parser/completion support is bounded editor assistance and unsupported-boundary
-recognition only. Named instances, Windows authentication, Azure AD/authSource
-modes, backup/restore, and broader SQL Server operational workflows remain out
-of scope until a source-specific promotion issue proves them.
+(#1677). Admin/security/jobs and user/role write management (create/alter/drop),
+DB-level import/backup/restore, profiler/activity dashboards, full T-SQL
+semantic parity, full workbench parity, and SQLCMD/meta-command/procedure-body
+scripting remain unsupported; a read-only users/roles listing from
+`sys.server_principals` (login/role name + capability flags, never
+`password_hash`) is available (#1077 Stage 2). That listing requires `VIEW ANY
+DEFINITION`: `sys.server_principals` is a metadata-visibility-filtered catalog
+view, not a DMV, so an unprivileged login would receive a silently truncated
+principal list — the adapter probes the permission with `HAS_PERMS_BY_NAME` and
+fails loud as `CapabilityNotEnabled` instead. The probe answers for the SERVER
+scope, so one truncation survives it: a principal that carries `DENY VIEW
+DEFINITION ON LOGIN::<principal>` against the connected login is silently absent
+from the rows even though the probe returned 1 (reproduced on the SQL Server
+2022 image the docker gate spawns,
+`mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04`, `ProductVersion`
+16.0.4135.4 — a login holding `VIEW ANY DEFINITION` plus one such DENY sees the
+granting probe succeed and the denied principal missing, with no error).
+Detecting it would need per-principal permission reads that are themselves
+metadata-filtered, so the listing is complete only for a login with no
+per-principal DENY against it; use a `sysadmin`-level login for a full account
+audit. `is_superuser`/`can_create_db`/`can_create_role` reflect
+`sysadmin`/`dbcreator`/`securityadmin` membership, each resolved from both
+`IS_SRVROLEMEMBER` and a recursive `sys.server_role_members` walk, because
+`IS_SRVROLEMEMBER` alone answers NULL for a certificate-/asymmetric-key-mapped
+principal and would report a real member as unprivileged. `can_login` requires
+an enabled principal (`is_disabled = 0`) of a type that can authenticate (SQL
+login, Windows login, Windows group, Microsoft Entra login `'E'`, Entra group
+`'X'`), so a disabled login, a server role, or a certificate-/key-mapped
+principal is listed as non-loginable. Row selection itself applies no
+principal-type filter — an earlier `type IN ('S','U','G','R','C','K')` whitelist
+dropped every Entra principal with no row and no error, so the listing now
+returns every non-`##MS_*` principal whatever its type. Internal `##MS_*`
+principals are filtered out; database-scoped users/permissions, password expiry,
+and server-role membership arrays are not exposed, and the connection-limit
+column is a hardcoded `-1` that the panel renders as "Unlimited" rather than a
+real per-login cap. Parser/completion support is bounded editor assistance and
+unsupported-boundary recognition only. Named instances, Windows
+authentication, Azure AD/authSource modes, backup/restore, and broader SQL
+Server operational workflows remain out of scope until a source-specific
+promotion issue proves them.
 
 ### Oracle
 

@@ -52,10 +52,13 @@ directly; line-number references are not stable SOT.
 
 Table View 는 DB/index/database scope 를 paradigm 별로 다르게 노출한다.
 
-- RDB 에서 `connection.switchDatabase` 가 true 인 PostgreSQL, MySQL, MariaDB 는
-  toolbar `DbSwitcher` 를 connection-global active database/catalog 로 쓴다.
-  SQLite/DuckDB 는 file/session scope 로 고정되고, MSSQL/Oracle 은 현재 bounded
-  contract 에서 `switchDatabase` 를 disabled 로 유지한다.
+- RDB 에서 `connection.switchDatabase` 가 true 인 PostgreSQL, MySQL, MariaDB,
+  SQL Server 는 toolbar `DbSwitcher` 를 connection-global active
+  database/catalog 로 쓴다. SQL Server 는 #2094 에서 켰다 — wired `MssqlAdapter`
+  가 `RdbAdapter::switch_database` 를 override 해 `switch_active_database` 로
+  보내는데 선언만 빠져 있었다. SQLite/DuckDB 는 file/session scope 로 고정되고,
+  Oracle 은 `OracleAdapter` 에 override 가 없어 trait 기본값인 `Unsupported` 를
+  돌려주므로 `switchDatabase` 가 disabled 다.
 - KV 인 Redis/Valkey 는 toolbar `DbSwitcher` 를 connection-global numeric
   database index 로 쓴다. `switch_active_db` 는 `KvAdapter::switch_database` 로
   dispatch 되고, key scan/value/query/mutation 은 요청이 explicit database 를

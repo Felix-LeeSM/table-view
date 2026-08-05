@@ -108,7 +108,7 @@ function DdlMessage() {
 
 /**
  * Wrapper that decides whether the SELECT result is editable, fetches the
- * needed PK metadata, and renders either the editable grid + a green
+ * needed PK metadata, and renders either the editable grid + a `text-success`
  * "Editable" badge or the read-only table + an info banner explaining why
  * editing isn't available.
  */

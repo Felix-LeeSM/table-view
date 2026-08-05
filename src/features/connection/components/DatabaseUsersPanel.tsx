@@ -12,6 +12,7 @@ import {
   type DatabaseUserRow,
   listDatabaseUsers,
 } from "@/lib/api/databaseUsers";
+import { getCapabilityNotEnabledInfo } from "@/lib/tauri/error";
 import { DATABASE_TYPE_LABELS, type DatabaseType, paradigmOf } from "../model";
 import { PanelLoadingSkeleton } from "./PanelLoadingSkeleton";
 
@@ -29,15 +30,28 @@ export function DatabaseUsersPanel({
   const [rows, setRows] = useState<DatabaseUserRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Server-side capability gap (SQL Server's VIEW ANY DEFINITION probe) —
+  // a passive grant hint keyed by `code`, not a red error box. The envelope is
+  // a plain object, so the `String(e)` path below would print `[object Object]`.
+  const [unavailable, setUnavailable] = useState<{
+    code: string;
+    message: string;
+  } | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setUnavailable(null);
     try {
       const next = await listDatabaseUsers(connectionId);
       setRows(next);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const capability = getCapabilityNotEnabledInfo(e);
+      if (capability) {
+        setUnavailable(capability);
+      } else {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setLoading(false);
     }
@@ -89,17 +103,48 @@ export function DatabaseUsersPanel({
         </div>
       )}
 
+      {unavailable !== null && (
+        <div
+          data-testid="database-users-unavailable"
+          className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+        >
+          <p className="font-medium text-foreground">
+            {t(`databaseUsers.unavailable.${unavailable.code}.title`, {
+              defaultValue: unavailable.message,
+            })}
+          </p>
+          <p className="mt-1">
+            {t(`databaseUsers.unavailable.${unavailable.code}.body`, {
+              defaultValue: unavailable.message,
+            })}
+          </p>
+          {(() => {
+            const sql = t(`databaseUsers.unavailable.${unavailable.code}.sql`, {
+              defaultValue: "",
+            });
+            return sql === "" ? null : (
+              <pre className="mt-2 overflow-auto rounded border border-border bg-secondary/30 p-2 font-mono text-foreground">
+                {sql}
+              </pre>
+            );
+          })()}
+        </div>
+      )}
+
       {loading && rows.length === 0 && <PanelLoadingSkeleton />}
 
-      {!loading && error === null && rows.length === 0 && (
-        <p
-          role="status"
-          data-testid="database-users-empty"
-          className="px-3 py-2 text-xs italic text-muted-foreground"
-        >
-          {t("databaseUsers.empty")}
-        </p>
-      )}
+      {!loading &&
+        error === null &&
+        unavailable === null &&
+        rows.length === 0 && (
+          <p
+            role="status"
+            data-testid="database-users-empty"
+            className="px-3 py-2 text-xs italic text-muted-foreground"
+          >
+            {t("databaseUsers.empty")}
+          </p>
+        )}
 
       {rows.length > 0 && (
         <table
