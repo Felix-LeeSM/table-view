@@ -240,6 +240,19 @@ set -euo pipefail
 grep -m1 '^version' "${1:?}" | sed -E 's/.*"([^"]+)".*/\1/'
 SH
 
+	# 아래 단언들이 물릴 변조본. env 로 갈아끼우면 임의의 변조본에 같은 단언을
+	# 물릴 수 있다 — "이 단언이 실제로 fail 할 수 있나" 를 반례로 확인하는 용도다.
+	# 반례 둘, 각각 아래 mutant_* 단언이 fail 이어야 한다:
+	#   # ① null mutation — 고친 스크립트 자신. 변조가 아니므로 아무 입력도 못 잡는다
+	#   CARGO_PACKAGE_VERSION_MUTANT="$PWD/scripts/release/cargo-package-version.sh" \
+	#     bash scripts/release/cargo-package-version.test.sh
+	#   # ② 완전 fail-closed — 무엇을 받아도 멈춘다. 값을 지어내지 않으므로
+	#   #    "멈춰야 하는 입력" 은 이것을 구별하지 못한다
+	#   m="$(mktemp)"; printf '#!/usr/bin/env bash\nexit 1\n' >"$m"
+	#   CARGO_PACKAGE_VERSION_MUTANT="$m" bash scripts/release/cargo-package-version.test.sh
+	MUTANT="${CARGO_PACKAGE_VERSION_MUTANT:-$MUT_DIR/old-form.sh}"
+	MUT_NAME="${MUTANT##*/}"
+
 	# 서브런 출력. 버리면 양성 대조가 red 일 때 어느 단언이 깨졌는지가 사라진다.
 	SUB_OUT=""
 	run_suite_against() {
@@ -259,42 +272,62 @@ SH
 		fail "positive control: 사본이 원본과 다르다"
 	fi
 
-	# 스위트 전체. 옛 형태를 물리면 red 여야 한다.
-	if run_suite_against "$MUT_DIR/old-form.sh"; then
-		fail "mutation[old-form]: 옛 형태가 green — 이 스위트가 #2169 회귀를 못 잡는다" "$SUB_OUT"
+	# 스위트 전체. 변조본을 물리면 red 여야 한다.
+	if run_suite_against "$MUTANT"; then
+		fail "mutation[$MUT_NAME]: 변조본이 green — 이 스위트가 그 변조를 못 잡는다" "$SUB_OUT"
 	else
-		pass "mutation[old-form]: 옛 형태를 물리면 스위트가 red"
+		pass "mutation[$MUT_NAME]: 변조본을 물리면 스위트가 red"
 	fi
 
 	# 어느 입력이 잡는지. "스위트가 red" 만으로는 이슈가 지정한 입력 ②③ 이 각각
 	# 잡는다는 것을 증명하지 못한다.
-	mutant_output() {
-		local out
-		out="$(bash "$MUT_DIR/old-form.sh" "$FIX_DIR/$1.toml" 2>&1)" || out="rc=$? $out"
-		printf '%s' "$out"
+	#
+	# rc 와 출력을 **한 문자열로 합치지 않는다.** 합치면 `rc=N` 같은 기대 리터럴이
+	# 실제 문자열과 바이트 동일해질 수 없어(빈 출력이면 후행 공백, stderr 를 캡처하면
+	# 에러 문구가 붙는다) 단언의 한쪽 가지가 영영 안 도는 죽은 코드가 된다 —
+	# PR #2172 라운드 1 blocking 이 그것이었다. 비교는 rc 와 출력을 따로 본다.
+	MUT_RC=0
+	MUT_OUT=""
+	mutant_run() {
+		MUT_OUT="$(bash "$MUTANT" "$FIX_DIR/$1.toml" 2>&1)"
+		MUT_RC=$?
 	}
 
-	mutant_catches() {
-		local fixture="$1" want="$2" got
-		got="$(mutant_output "$fixture")"
-		if [ "$got" = "$want" ]; then
-			fail "mutation[$fixture]: 옛 형태도 $want 을 낸다 — 이 입력은 회귀를 못 잡는다"
+	# 값을 내야 하는 입력. 변조본이 정답 값을 그대로 내면 이 입력은 그 변조를
+	# 구별하지 못한다.
+	mutant_differs() {
+		local fixture="$1" want="$2"
+		mutant_run "$fixture"
+		if [ "$MUT_RC" -eq 0 ] && [ "$MUT_OUT" = "$want" ]; then
+			fail "mutation[$fixture]: 변조본도 $want 을 낸다 — 이 입력은 그 변조를 못 잡는다"
 		else
-			pass "mutation[$fixture]: 옛 형태는 '$got' 을 내 이 단언이 RED (기대 $want)"
+			pass "mutation[$fixture]: 변조본은 rc=$MUT_RC '$(printf '%s' "$MUT_OUT" | head -1 | cut -c1-40)' 을 내 이 단언이 RED (기대 $want)"
 		fi
 	}
 
-	mutant_catches workspace-first "0.7.0"
-	mutant_catches quoted-comment "0.7.0"
-	mutant_catches inherited "rc=1"
+	# 멈춰야 하는 입력. 변조본이 값을 지어내면(rc 0) 구별된다. 같이 멈추는 변조본은
+	# 이 입력으로 구별되지 않으므로 fail 이다 — 라운드 1 에 죽어 있던 가지가 여기다.
+	mutant_invents_value() {
+		local fixture="$1"
+		mutant_run "$fixture"
+		if [ "$MUT_RC" -eq 0 ]; then
+			pass "mutation[$fixture]: 변조본은 rc=0 으로 '$MUT_OUT' 을 지어내 이 단언이 RED (정답은 실패)"
+		else
+			fail "mutation[$fixture]: 변조본도 rc=$MUT_RC 로 멈춘다 — 이 입력은 그 변조를 못 잡는다"
+		fi
+	}
+
+	mutant_differs workspace-first "0.7.0"
+	mutant_differs quoted-comment "0.7.0"
+	mutant_invents_value inherited
 
 	# 왜 지금까지 안 터졌나 — 현재 배치에서는 옛 형태도 맞는 값을 낸다. 이 한 줄이
 	# 위 세 줄을 "회귀 재현" 으로 만든다 (전부 틀리는 파서면 아무 입력이나 잡는다).
-	got_plain="$(mutant_output plain)"
-	if [ "$got_plain" = "0.7.0" ]; then
-		pass "mutation[plain]: 현재 배치에서는 옛 형태도 0.7.0 — 결함이 red 가 아니라 green 이던 이유"
+	mutant_run plain
+	if [ "$MUT_RC" -eq 0 ] && [ "$MUT_OUT" = "0.7.0" ]; then
+		pass "mutation[plain]: 현재 배치에서는 변조본도 0.7.0 — 결함이 red 가 아니라 green 이던 이유"
 	else
-		fail "mutation[plain]: 옛 형태가 현재 배치에서도 틀린다 ('$got_plain') — 재현본이 옛 형태가 아니다"
+		fail "mutation[plain]: 변조본이 현재 배치에서 0.7.0 을 못 낸다 (rc=$MUT_RC) — 재현본이 옛 형태가 아니다"
 	fi
 fi
 
