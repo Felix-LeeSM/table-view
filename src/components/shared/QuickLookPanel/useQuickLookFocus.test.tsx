@@ -1,6 +1,6 @@
 // Issue #1734 (5) — the seam between Quick Look and the grid's own focuser.
 //
-// Round 1 restored focus with a bare
+// #1734 (5) first restored focus with a bare
 // `querySelector('[data-grid-row][tabindex="0"]')?.focus()`. That is a silent
 // no-op whenever the anchor row is outside the RDB grid's virtual window, which
 // is the default state past 200 rows, so closing the panel dropped focus on
@@ -10,7 +10,7 @@
 // scroll-in + retry itself is `useGridRoving.test.tsx:67`, and the grid's end
 // of the wire is `DataGridTable.roving.test.tsx`.
 //
-// Round 2 moved WHERE the restore hangs, and that is what the harness below
+// The fix then moved WHERE the restore hangs, and that is what the harness below
 // encodes: nothing calls a restore function — the panel is simply unmounted,
 // the same way a commit or a shrinking refetch removes it. The two real paths
 // are in `DataGrid.quicklook-focus.test.tsx`.

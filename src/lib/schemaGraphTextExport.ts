@@ -17,7 +17,7 @@
 // "exporter output parses with the real parsers" 가 이 모듈의 산출물을
 // `mermaid.parse()` / `Parser.parse(…, "dbml")` 에 그대로 먹인다. 문자 클래스나
 // fallback 을 건드리면 그 왕복·스윕 테스트로 다시 재라 — 추측으로 고친 이스케이프가
-// 두 라운드 연속 blocking 이었다 (#2097 라운드 1·2).
+// 두 번 연속 결함이었다 (#2097).
 import type {
   SchemaGraph,
   SchemaGraphCatalogSnapshot,
@@ -190,7 +190,7 @@ function dbmlRefLine(
 // DBML 은 본문 없는 `Table` 블록을 파싱하지 못한다 — `@dbml/core` 가
 // `Expected comment, valid name, or whitespace but "}" found` 로 거부하고,
 // DBML 은 블록 하나가 깨지면 문서 전체가 무효라 테이블 하나 때문에 export 결과가
-// 통째로 못 쓰게 된다 (라운드 1 blocking ①).
+// 통째로 못 쓰게 된다 (#2097).
 //
 // 컬럼 0개는 예외 상태가 아니다. 카탈로그는 테이블 목록을 먼저 싣고 컬럼을 마운트
 // 뒤 비동기로 채우므로(`schemaGraphCatalog.ts` 의 `?? []`), 로딩 중 export 는
@@ -316,7 +316,7 @@ function mermaidSafeText(value: string): string {
 
 // ATTRIBUTE_WORD 의 tail 클래스에서 구분자(`- . , ( ) [ ] *`)를 뺀 나머지.
 // 구분자는 문법상 합법이지만 렉서가 ATTRIBUTE_KEY 를 먼저 시도하므로 `pk-a` 처럼
-// 앞머리가 예약어면 토큰이 쪼개져 문서 전체가 깨진다 (라운드 4 blocking ⑥).
+// 앞머리가 예약어면 토큰이 쪼개져 문서 전체가 깨진다 (#2097).
 // `u` 플래그를 일부러 안 붙인다 — 문법이 코드유닛 범위(`\u00C0-\uFFFF`)로 쓰여
 // 있어서, 그래야 astral 문자를 surrogate 쌍째로 렉서와 똑같이 통과시킨다.
 const MERMAID_WORD_REJECTS = /[^A-Za-z0-9_\u00C0-\uFFFF]/g;
@@ -326,7 +326,7 @@ const MERMAID_WORD_HEAD = /^[A-Za-z_\u00C0-\uFFFF]/;
 // ATTRIBUTE_KEY 규칙 그대로. `\b` 는 ASCII 단어 경계라 토큰이 그 낱말**로 시작만
 // 해도** 뒤 문자가 `[A-Za-z0-9_]` 가 아니면 키 표시자로 떨어져 나간다 —
 // `pk`(단독)·`pk이름`·`pḱ` 전부 여기 걸리고, `pka`·`pk_`·`pk1` 은 안 걸린다.
-// 완전 일치(`^(pk|fk|uk)$`)로 보던 라운드 4 코드가 앞의 둘을 통과시켰다.
+// 완전 일치(`^(pk|fk|uk)$`)로 보던 이전 코드가 앞의 둘을 통과시켰다.
 const MERMAID_RESERVED_WORDS = /^(?:PK|FK|UK)\b/i;
 
 function mermaidWord(value: string): string {

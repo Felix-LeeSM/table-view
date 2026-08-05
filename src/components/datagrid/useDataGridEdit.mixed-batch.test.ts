@@ -1047,7 +1047,7 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     });
     expect(result.current.mqlPreview!.commands).toHaveLength(3);
 
-    // Round 1 — op 0 (Ada) applied, op 1 failed.
+    // Pass 1 — op 0 (Ada) applied, op 1 failed.
     mockBulkWriteDocuments.mockRejectedValueOnce(
       new Error("bulk_write op 1 insert_one failed: E11000 duplicate key"),
     );
@@ -1056,7 +1056,7 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     });
     expect(stagedNames()).toEqual(["Grace", "Edsger"]);
 
-    // Round 2 — in-modal retry resumes at [Grace, Edsger]; Grace (relative
+    // Pass 2 — in-modal retry resumes at [Grace, Edsger]; Grace (relative
     // op 0) applied, Edsger (relative op 1) failed. The pruned row must be
     // Grace (applied), NOT Edsger (never applied).
     mockBulkWriteDocuments.mockRejectedValueOnce(
@@ -1070,7 +1070,7 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     );
     expect(stagedNames()).toEqual(["Edsger"]);
 
-    // Round 3 — retry succeeds with exactly the one never-applied insert.
+    // Pass 3 — retry succeeds with exactly the one never-applied insert.
     mockBulkWriteDocuments.mockResolvedValueOnce({
       inserted_count: 1,
       matched_count: 0,

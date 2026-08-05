@@ -6,7 +6,7 @@
 // directions, and the panel disappearing must not leave focus on `<body>`,
 // where the next arrow key goes nowhere.
 //
-// Round 2 tried to hold that second half by calling a restore from each close
+// An earlier fix held that second half by calling a restore from each close
 // handler; the two cases at the bottom of this file are the ones that reach no
 // handler. `useQuickLookFocus` now hangs the restore off the panel node leaving
 // the DOM, so the close-button and `Cmd+L` cases below prove the same one

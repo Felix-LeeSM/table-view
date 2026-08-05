@@ -96,7 +96,7 @@ pub(crate) async fn release_cancel_token(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 이유 (2026-05-08, spec-first 라운드 2; Sprint 237 P5+ hoist):
+    //! 작성 이유 (2026-05-08):
     //! register_cancel_token / release_cancel_token 의 lifecycle 분기를 검증.
     //!   - query_id None → no-op (None 반환, registry 변동 없음)
     //!   - query_id Some(id) → registry 에 (id, fresh token) 삽입, Some 반환
