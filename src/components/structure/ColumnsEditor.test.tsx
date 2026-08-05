@@ -918,10 +918,16 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
   // turns into a click) may not open the editor the adapter would refuse.
   //
   // Ceiling — this does NOT lock the `preventDefault` on that button. The
-  // blocked branch wires no `onStartEdit` and the `<tr>` has no `onClick`, so
-  // deleting `preventDefault` leaves this green. It stays because the cited
-  // precedent carries it and because a later row-level click handler would
-  // make it load-bearing; what this test locks is the outcome, not the guard.
+  // blocked branch wires no `onStartEdit`, so deleting `preventDefault` leaves
+  // this green, and a row-level `onClick` would not change that: preventing
+  // the default does not stop propagation, so an ancestor handler runs anyway
+  // unless it reads `defaultPrevented` itself. The line earns its keep
+  // elsewhere — it holds the tooltip open through the click, because Radix
+  // composes the trigger's `onClick` with its own close handler and skips that
+  // handler on a prevented default, and it cancels the implicit `submit` the
+  // day a `<form>` ancestor appears, since the shared `Button` in
+  // `src/components/ui/button.tsx` sets no `type` of its own. What this test
+  // locks is the outcome, not the guard.
   it("opens no editor when the blocked Edit is clicked", () => {
     render(
       <ColumnsEditor
