@@ -163,15 +163,22 @@ gate_step() {
 
 # RED 재현. 대상이 이 스크립트가 아니라 저장소의 워크플로 · 문서라서 mutation
 # 하네스를 여기 넣지 않고 재현 명령만 남긴다 (measure-rounds.test.sh 의 게이트
-# 단언과 같은 이유). 아래 12종은 2026-08-05 에 전부 red 인 것을 확인했다 —
-# 괄호 안은 그때 깨진 단언 수다.
+# 단언과 같은 이유). 아래 12종은 2026-08-06 에 12종 전부를 다시 돌려 red 인 것을
+# 확인했다 — 적용 → `diff` 로 변경 여부 확인 → 스위트 실행까지 한 줄씩 밟았고,
+# 괄호 안은 그때 깨진 단언 수다. 12종의 diff 는 전부 1줄 이상이었다.
 #
-# 변조를 쓸 때 두 가지가 조용한 no-op 을 만든다. 둘 다 실제로 밟았다:
+# 변조를 쓸 때 세 가지가 조용한 no-op 을 만든다. 셋 다 실제로 밟았다:
 #   · perl 은 패턴/치환의 `$3` `$4` 를 캡처 변수로 먹는다 — `\$` 로 escape 하거나
 #     `.` 로 대신 쓴다. 안 그러면 빈 문자열로 치환돼 엉뚱한 것이 바뀐다.
 #   · `if: always()` 는 verify-latest-json 에도 있고 그쪽이 파일에서 먼저다.
 #     `timeout-minutes: 30` 까지 붙여야 이 잡을 고른다.
+#   · **lazy `.*?` 의 끝은 산문이 가로챈다.** span 끝을 `exit 1` 로 쓴 줄이,
+#     release.yml 주석에 새로 들어간 리터럴 `exit 1` 에서 멈춰 주석 한 줄만 바꾸는
+#     no-op 이 됐다 (#2178). 앵커도 span 끝도 **주석이 못 적는 실행 코드 모양**으로
+#     건다 — 아래 `[ -n ".failed" ]` 처럼.
 # 그래서 아래 각 줄은 적용 후 `diff` 로 실제 변경 여부를 먼저 확인해야 한다.
+# 그 절차를 안 밟아 no-op 을 green 으로 넘긴 적이 있다 — 이 파일이 그 절차를 적어
+# 두고도 그랬다.
 #
 #   d="$(mktemp -d)"
 #   cp .github/workflows/release.yml "$d/m.yml"
@@ -184,9 +191,7 @@ gate_step() {
 #   perl -0pi -e 's/ && .1 !~ [^{]+\{/ {/' "$d/m.yml"                                                    # (1) (non-blocking) 필터를 뺀다
 #   perl -0pi -e 's/    needs: build\n    # Report/    # Report/' "$d/m.yml"                              # (1) needs: build 를 뗀다
 #   perl -0pi -e 's/    if: always\(\)\n    runs-on: ubuntu-22.04\n    timeout-minutes: 30/    runs-on: ubuntu-22.04\n    timeout-minutes: 30/' "$d/m.yml"  # (1) if: always() 를 뗀다
-#   perl -0pi -e 's/(has failing non-advisory checks.*?)exit 1/${1}exit 0/s' "$d/m.yml"                   # (1) red 를 찍고도 0 으로 나간다
-#   # ↑ 앵커는 스텝 이름이다. 스텝을 개명하면 `git grep -n 'has failing'` 으로 이 줄도 같이 옮겨라 —
-#   #   `has failing checks` 였을 때 개명이 앵커를 아래 `::error::` 문장으로 조용히 옮긴 적이 있다.
+#   perl -0pi -e 's/(\[ -n ".failed" \].*?)exit 1/${1}exit 0/s' "$d/m.yml"                                # (6) red 를 찍고도 0 으로 나간다
 #   perl -0pi -e 's/\$3 != "skipped"/\$3 != "skipped" && \$3 != "timed_out"/' "$d/m.yml"                  # (1) timed_out 을 통과로 강등
 #   perl -0pi -e 's/\n  # #2168.*\z//s' "$d/m.yml"                                                       # (7) 게이트 job 을 통째로 지운다
 #   # 문서 쪽
