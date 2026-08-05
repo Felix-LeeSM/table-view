@@ -179,11 +179,13 @@ jobs:
       # still failing its own run. `WASM Size Budget (non-blocking)` was in
       # exactly that state until this PR. What counts as a violation is decided
       # by `scripts/check-non-blocking-jobs.sh` alone; its header states the
-      # rule. The script needs no toolchain: 0.02s, median of 9 local runs of
-      # `/usr/bin/time -p bash scripts/check-non-blocking-jobs.sh` on macOS
-      # against this branch's tree (the shell builtin `time` prints no `real`
-      # line under zsh, so the command is spelled with the binary). No runner
-      # measurement exists until this merges.
+      # rule. The script needs no toolchain — awk and the shell — so it adds no
+      # setup to the cheapest job. No timing figure is quoted here on purpose:
+      # the sibling figures in this job do not reproduce (review of #2178
+      # measured this script at a median of 0.04s where 0.02s was written, and
+      # `check-ci-test-calls.sh` at 0.07-0.08s where 0.18s is written), so the
+      # repo has not pinned the measurement conditions. Pinning them is a
+      # separate cleanup, owned by that review, not by this job.
       - name: (non-blocking) job names carry continue-on-error
         run: bash scripts/check-non-blocking-jobs.sh
 

@@ -72,7 +72,7 @@ describe("check-non-blocking-jobs", () => {
   it("passes on the real repo tree", () => {
     const run = runGate();
     expect(run.out).toMatch(
-      /^ok: 워크플로 \d+ 개 · job \d+ 개 \(이름 있는 것 \d+ 개\) — \(non-blocking\) job \d+ 개가 다 continue-on-error: true/,
+      /^ok: 워크플로 \d+ 개 · job \d+ 개 \(이름 있는 것 \d+ 개\) · \(non-blocking\) job \d+ 개 — 전부 continue-on-error: true/,
     );
     expect(run.stderr).toBe("");
     expect(run.status).toBe(0);
@@ -144,6 +144,62 @@ describe("check-non-blocking-jobs", () => {
     expect(run.status).toBe(1);
   });
 
+  // 리뷰가 재현한 구멍: `name:` 에 후행 YAML 주석이 하나 붙으면 그 job 이 판정에서
+  // 통째로 빠졌다. 두 job 의 YAML `name:` 값은 글자 그대로 같은데 한쪽만 걸리던
+  // 상태다. 원인은 `name:` 과 `continue-on-error:` 가 값을 각자 벗긴 비대칭이고,
+  // 지금은 `scalar()` 한 자리가 둘 다 읽는다.
+  it("catches a (non-blocking) name that carries a trailing YAML comment", () => {
+    const commented = fakeJob.replace(
+      "    name: Probe Advisory (non-blocking)",
+      "    name: Probe Advisory (non-blocking)  # advisory only",
+    );
+    const run = runGate(seed({ "ci.yml": realCi + commented }));
+    expect(run.out).toContain("job `probe-advisory`");
+    expect(run.status).toBe(1);
+  });
+
+  // 같은 비대칭의 반대 방향. 두 분기를 각각 파야 한다 — 한쪽만 파면 다음에 갈라져도
+  // 안 걸린다.
+  it("accepts a job-level flag that carries a trailing YAML comment", () => {
+    const commented = fakeJob.replace(
+      "    runs-on: ubuntu-latest",
+      "    runs-on: ubuntu-latest\n    continue-on-error: true  # advisory",
+    );
+    const run = runGate(seed({ "ci.yml": realCi + commented }));
+    expect(run.out).toMatch(/^ok:/);
+    expect(run.status).toBe(0);
+  });
+
+  // YAML 에서 `#` 은 앞이 공백일 때만 주석을 연다. 주석 벗기기가 그 규칙을 무시하면
+  // 이름 안의 `#` 에서 값이 잘려 접미사 판정이 조용히 빗나간다.
+  it("treats a hash with no leading space as part of the name", () => {
+    const hashed = fakeJob.replace(
+      "    name: Probe Advisory (non-blocking)",
+      "    name: Probe#2 Advisory (non-blocking)",
+    );
+    const run = runGate(seed({ "ci.yml": realCi + hashed }));
+    expect(run.out).toContain("job `probe-advisory`");
+    expect(run.status).toBe(1);
+  });
+
+  it("keeps a quoted name whose value contains a hash", () => {
+    const hashed = fakeJob.replace(
+      "    name: Probe Advisory (non-blocking)",
+      '    name: "Probe # Advisory (non-blocking)"',
+    );
+    const run = runGate(seed({ "ci.yml": realCi + hashed }));
+    expect(run.out).toContain("job `probe-advisory`");
+    expect(run.status).toBe(1);
+  });
+
+  // 집계 줄이 통과 경로에만 있으면 반쪽이다. 헤더가 "수치를 인용하려면 이 출력을
+  // 써라" 라고 하는데, 위반이 있을 때 숫자가 사라지면 인용할 상태가 없다.
+  it("prints the tally on the violation path too", () => {
+    const run = runGate(seed({ "ci.yml": realCi + fakeJob }));
+    expect(run.out).toMatch(/집계: 워크플로 \d+ 개 · job \d+ 개/);
+    expect(run.status).toBe(1);
+  });
+
   it("passes the same job once the job-level flag is there", () => {
     const fixed = fakeJob.replace(
       "    runs-on: ubuntu-latest",
@@ -192,6 +248,47 @@ describe("check-non-blocking-jobs", () => {
     writeFileSync(join(root, ".github/workflows/README.md"), "빈 디렉토리\n");
     const run = runGate(root);
     expect(run.out).toContain("워크플로 파일이 0 개다");
+    expect(run.status).toBe(2);
+  });
+
+  // 아래 둘은 파일별로 안 보면 못 잡는다. 전역 합계만 보면 한 파일이 다른 관례로
+  // 적혀 0 개로 읽혀도 나머지 파일의 수가 그것을 가려 준다 — 그 파일은 통째로 안
+  // 훑힌 채 green 이 된다 (리뷰 재현).
+  it("refuses a tree where one file's job keys sit at a different depth", () => {
+    const odd = [
+      "jobs:",
+      "    odd-job:",
+      "        name: Odd (non-blocking)",
+      "",
+    ].join("\n");
+    const run = runGate(seed({ "ci.yml": realCi, "other.yml": odd }));
+    expect(run.out).toContain("other.yml");
+    expect(run.out).toContain("job 을 0 개 읽었다");
+    expect(run.status).toBe(2);
+  });
+
+  // job 은 2칸으로 읽히는데 job-level 키만 더 깊은 경우. 위 케이스는 job 수로
+  // 걸리고 이 케이스는 키 수로만 걸린다 — 두 가드가 서로의 대체재가 아니라는 것을
+  // 이 한 쌍이 고정한다.
+  it("refuses a file whose job-level keys sit at a different depth", () => {
+    const odd = [
+      "jobs:",
+      "  odd-job:",
+      "      name: Odd (non-blocking)",
+      "",
+    ].join("\n");
+    const run = runGate(seed({ "ci.yml": realCi, "other.yml": odd }));
+    expect(run.out).toContain("4칸 들여쓴 job-level 키를 0 개");
+    expect(run.status).toBe(2);
+  });
+
+  // 빈 파일은 awk 의 FNR==1 이 한 번도 안 걸려 집계 줄을 아예 안 낸다. 파일 수와
+  // 집계 수를 대조하는 가드만 이 케이스를 잡는다 — 다른 가드로는 안 걸린다.
+  it("refuses a workflow file that produced no tally at all", () => {
+    const root = seed({ "ci.yml": realCi });
+    writeFileSync(join(root, ".github/workflows/empty.yml"), "");
+    const run = runGate(root);
+    expect(run.out).toContain("개만 집계됐다");
     expect(run.status).toBe(2);
   });
 
