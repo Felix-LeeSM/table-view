@@ -91,17 +91,22 @@ PR body 의 기존 주장이 낡았으면 fix commit 과 같은 턴에 body 도 
 - `needs:user` 가 걸린 이슈/PR — `memory/workflow/orchestration/memory.md` §3.
 
 **회고 트리거가 발화한 라운드**면 fix 를 더 얹지 않고 상태만 보고하고 종료한다 —
-판정은 회고 모드 리뷰어 몫이다. **라운드 번호만으로는 멈추지 않는다**: 리뷰어가
-§3 정지를 요구하지 않았고 verdict 가 `review:changes-requested` 면 라운드가 몇이든
-수정 라운드이고, `.agents/prompts/orchestrator.md` 「라우팅」이 그 상태를 이 노드로
-보낸다. 정지 여부의 SOT 는 리뷰어의 scorecard 이지 번호가 아니다.
+판정은 회고 모드 리뷰어 몫이다. **라운드 번호만으로는 멈추지 않는다.** 멈추는
+자리는 둘이다: 리뷰어가 §3 정지를 요구했을 때, 그리고 `review-gate` 의
+`Stop at review round 3` 이 red 인데 `reflect:done` 이 아직 안 붙었을 때. 그 step 은
+`.github/workflows/review-gate.yml` 에서 `rounds >= 3` 이면서 `reflect:done` 이
+없을 때만 돌고, 그 label 이 이번 라운드의 진행 승인이라 새 head OID 마다 떨어진다.
+`.agents/prompts/orchestrator.md` 「라우팅」은 **위에서부터 첫 매치**이고 회고 모드
+리뷰어 행이 `review:changes-requested` 행보다 위라, 그 red 가 살아 있는 동안은 이
+노드가 아니라 리뷰어가 뜬다. 둘 다 아니면 라운드가 몇이든 수정 라운드다 — 정지
+여부의 SOT 는 리뷰어의 scorecard 와 그 label 이지 번호가 아니다.
 
 라운드 번호 자체가 두 벌로 셌다는 점도 알아 둬라 — `review-gate` 의
 `Count review rounds by head OID` 는 **서로 다른 head 커밋에 붙은 리뷰 인계 수**를
 세고, scorecard 가 제목에 쓰는 관행 번호는 리뷰와 수정을 번갈아 센다. 2026-08-05
-실측에서 셋 다 벌어졌다 (#2146 관행 3 / 게이트 2, #2143 관행 9 / 게이트 6, #2104
-관행 12 / 게이트 9). **게이트가 집행하는 값은 앞의 것이다** — `reflect:done` 필요
-여부는 그 값으로 결정되므로 다시 세지 말고 게이트 로그를 읽어라.
+실측 3건 중 둘이 벌어졌다 (#2143 관행 9 / 게이트 6, #2104 관행 12 / 게이트 9;
+#2146 은 둘 다 2 로 일치). **게이트가 집행하는 값은 앞의 것이다** — 위
+`rounds >= 3` 이 그 값이므로 다시 세지 말고 게이트 로그를 읽어라.
 
 ## 반환 형식
 
