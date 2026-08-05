@@ -90,8 +90,18 @@ PR body 의 기존 주장이 낡았으면 fix commit 과 같은 턴에 body 도 
   「Push reject 응급 처치」의 4-step 을 먼저 밟고, 그래도 안 풀리면 보고하고 멈춘다.
 - `needs:user` 가 걸린 이슈/PR — `memory/workflow/orchestration/memory.md` §3.
 
-라운드가 3 이상이면 fix 를 더 얹지 않고 상태만 보고하고 종료한다 — 판정은 회고
-모드 리뷰어 몫이다.
+**회고 트리거가 발화한 라운드**면 fix 를 더 얹지 않고 상태만 보고하고 종료한다 —
+판정은 회고 모드 리뷰어 몫이다. **라운드 번호만으로는 멈추지 않는다**: 리뷰어가
+§3 정지를 요구하지 않았고 verdict 가 `review:changes-requested` 면 라운드가 몇이든
+수정 라운드이고, `.agents/prompts/orchestrator.md` 「라우팅」이 그 상태를 이 노드로
+보낸다. 정지 여부의 SOT 는 리뷰어의 scorecard 이지 번호가 아니다.
+
+라운드 번호 자체가 두 벌로 셌다는 점도 알아 둬라 — `review-gate` 의
+`Count review rounds by head OID` 는 **서로 다른 head 커밋에 붙은 리뷰 인계 수**를
+세고, scorecard 가 제목에 쓰는 관행 번호는 리뷰와 수정을 번갈아 센다. 2026-08-05
+실측에서 셋 다 벌어졌다 (#2146 관행 3 / 게이트 2, #2143 관행 9 / 게이트 6, #2104
+관행 12 / 게이트 9). **게이트가 집행하는 값은 앞의 것이다** — `reflect:done` 필요
+여부는 그 값으로 결정되므로 다시 세지 말고 게이트 로그를 읽어라.
 
 ## 반환 형식
 
