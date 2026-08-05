@@ -123,11 +123,14 @@ JSON1/FTS5 read-query assistance.
 **Current boundary**: Raw SQL DDL is rejected by the SQLite adapter, and
 structured DDL stops where SQLite would need to rewrite the whole table:
 changing a column's type, NOT NULL or DEFAULT, and adding or dropping a
-constraint after `CREATE TABLE`, are not implemented, so the Structure UI
-withholds those two controls and names the reason on screen. `ADD COLUMN` and
+constraint after `CREATE TABLE`, are not implemented. In the Structure UI the
+column change keeps its per-row Edit on screen, disabled, with the reason on
+hover; constraints have no tab at all for SQLite, because the adapter has no
+structured constraint listing, so nothing is rendered to disable. `ADD COLUMN`
+and
 `DROP COLUMN` carry SQLite's own row-dependent conditions and report them after
 the attempt with the blocking object named. Row edits require key/projected row identity, read-only file
-connections reject writes and table creation, nested JSON edits are deferred,
+connections reject writes and every structured DDL entry point, nested JSON edits are deferred,
 sqlite-cli dot commands and `load_extension()` are not executed, virtual-table
 CRUD and broad extension semantics are unsupported, and RTREE inventory is
 exposed only as capability metadata. Capability inventory does not imply

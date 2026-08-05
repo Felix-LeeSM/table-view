@@ -165,8 +165,12 @@ Changes SQLite cannot make without rewriting the whole table are the boundary
 and stay unimplemented: a column's type, NOT NULL or DEFAULT, and adding or
 dropping a constraint after `CREATE TABLE`. SQLite fixes both when the table is
 created, so changing one means a 12-step rebuild — a data-loss path this app
-deliberately does not run. The Structure UI withholds those two controls and
-names the reason on screen instead of failing on click. `ADD COLUMN` and
+deliberately does not run. The two land differently in the Structure UI. The
+per-row Edit in the Columns tab stays on screen and is disabled, and hovering it
+shows the reason, so the control is never a click that fails. Constraints have
+no tab at all for SQLite — the adapter has no structured constraint listing, so
+the Constraints tab does not render for this engine and there is no control to
+disable; the boundary is stated here rather than on screen. `ADD COLUMN` and
 `DROP COLUMN` also carry SQLite's own conditions (a NOT NULL column with no
 default on a non-empty table, a non-constant default, or dropping a column a
 PRIMARY KEY / UNIQUE / index / view / trigger depends on); those are reported

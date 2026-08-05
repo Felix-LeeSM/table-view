@@ -351,7 +351,7 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
       "The file's only 'structured DDL parity' is :33, under `## PostgreSQL`, " +
       "listing what PostgreSQL support does not guarantee (roles/users, " +
       "extension management, DB-level import/export). None of those has a " +
-      "CONFORMANCE_CHECKS id — the seven `ddl.*` checks cover table, column, " +
+      "CONFORMANCE_CHECKS id — the `ddl.*` checks cover table, column, " +
       "index and constraint actions only — so there is no fact to bind, and " +
       "binding it to the SQLite claims, as this row used to, made a ledger " +
       "flip name a file section that never mentioned SQLite.",
@@ -376,7 +376,7 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
       "widen roles/users, extension management, profiler, import/export, " +
       "broader admin, or broader structured DDL parity'. None of those " +
       "surfaces has a CONFORMANCE_CHECKS id, so nothing binds; postgresql's " +
-      "own seven `ddl.*` checks are all supported and say nothing about them.",
+      "own `ddl.*` checks are all supported and say nothing about them.",
   },
   {
     path: "docs/product/known-limitations-rdbms.md",
@@ -642,7 +642,7 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
     reason:
       "The header names three engines and asserts a ledger fact for each: " +
       "'SQLite — Columns tab shows + Column and per-row Delete, Indexes tab " +
-      "shows Create index + drop-index, per-row Edit stays hidden on " +
+      "shows Create index + drop-index, per-row Edit stays disabled on " +
       "modifyColumn', 'PostgreSQL (all DDL true) — both editors keep their " +
       "mutation controls', and 'DuckDB — Add constraint stays hidden " +
       "(alterConstraint false)'. Carrying only the DuckDB one, as this row " +

@@ -115,9 +115,10 @@ export default function StructurePanel({
   // Issue #1460 — the Columns / Indexes editors keep rendering their read-only
   // listing for every RDB engine, but their mutation affordances (Add/Edit/Drop
   // column, Create Index, Drop index) read the per-action DDL capability so an
-  // engine whose adapter rejects the write hides the control instead of
-  // click-then-error (#1046). DuckDB (#1070), MSSQL (#1071), Oracle (#1072) and
-  // SQLite (#1804) claim these four, so their editors are live.
+  // engine whose adapter rejects the write withholds or disables the control
+  // instead of click-then-error (#1046). DuckDB (#1070), MSSQL (#1071), Oracle
+  // (#1072) and SQLite (#1804) claim `alterTable` / `createIndex` /
+  // `dropObject`, so those editors are live.
   const canAlterTable = supportsDdl(dbType, "alterTable");
   const canCreateIndex = supportsDdl(dbType, "createIndex");
   const canDropObject = supportsDdl(dbType, "dropObject");
@@ -126,7 +127,9 @@ export default function StructurePanel({
   // fixes a column's type, NOT NULL and DEFAULT at creation, so changing one
   // needs the 12-step table rebuild this app does not run. Gating that edit on
   // `alterTable` alone would either hide the add/drop it can do or surface an
-  // edit its adapter refuses, preview included.
+  // edit its adapter refuses, preview included. SQLite is the one engine here
+  // that does NOT claim it, so its per-row Edit renders disabled with the
+  // reason in a Radix tooltip (`memory/product/ui-parity/memory.md` §4).
   const canModifyColumn = supportsDdl(dbType, "modifyColumn");
   // Issue #1070 (ADR 0051 Stage 2) — constraint add/drop is a separate gate
   // from column-alter: DuckDB does native column ALTER but cannot add/drop

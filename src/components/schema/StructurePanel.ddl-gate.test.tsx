@@ -6,10 +6,9 @@
 //   - SQLite (#1804 — natively-runnable DDL claimed) — Columns tab shows
 //     `+ Column` + per-row Delete and Indexes tab shows `Create index` +
 //     drop-index, because the adapter executes those. The per-row Edit stays
-//     hidden on its own `modifyColumn` gate: an in-place column change needs
-//     the 12-step table rebuild this app does not run, and the absence is
-//     explained by the `column-modify-rebuild-hint` banner instead of being
-//     silently missing.
+//     on screen but `disabled` on its own `modifyColumn` gate: an in-place
+//     column change needs the 12-step table rebuild this app does not run, and
+//     a Radix tooltip names that reason.
 //   - PostgreSQL (all DDL true) — both editors keep their mutation controls
 //     (regression guard).
 //   - DuckDB (#1070 ADR 0051 Stage 2 — native structural DDL) — `+ Column` +
@@ -24,7 +23,7 @@
 //
 // Issue #1804 — adds the `modifyColumn` axis, the same shape one level up: the
 // per-row Edit reads its OWN capability, so an engine that adds and drops
-// columns but cannot rewrite one keeps Delete live and Edit hidden.
+// columns but cannot rewrite one keeps Delete live and Edit disabled.
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { act, fireEvent, screen } from "@testing-library/react";
@@ -59,7 +58,7 @@ describe("StructurePanel DDL capability gate (#1460)", () => {
     useConnectionStore.setState({ connections: [] });
   });
 
-  it("keeps Add/Delete Column but hides per-row Edit for SQLite (#1804 rebuild boundary)", async () => {
+  it("keeps Add/Delete Column but disables per-row Edit for SQLite (#1804 rebuild boundary)", async () => {
     setConnection("sqlite");
     await act(async () => {
       renderPanel();
@@ -72,14 +71,18 @@ describe("StructurePanel DDL capability gate (#1460)", () => {
     expect(
       screen.getByRole("button", { name: "Delete column id" }),
     ).toBeInTheDocument();
-    // An in-place column change is not, so Edit is hidden…
+    // An in-place column change is not, so Edit stays but is off…
+    const edit = screen.getByRole("button", { name: "Edit column id" });
+    expect(edit).toBeDisabled();
+    // …with the reason in a Radix tooltip, not a native `title`
+    // (`memory/product/ui-parity/memory.md` §4 retires that pairing).
+    expect(edit).not.toHaveAttribute("title");
+    await act(async () => {
+      fireEvent.pointerMove(edit.parentElement as HTMLElement);
+    });
     expect(
-      screen.queryByRole("button", { name: "Edit column id" }),
-    ).not.toBeInTheDocument();
-    // …and the reason is on screen rather than left to guesswork.
-    expect(
-      screen.getByTestId("column-modify-rebuild-hint"),
-    ).toBeInTheDocument();
+      await screen.findByTestId("column-modify-rebuild-reason"),
+    ).toHaveTextContent(/would need a full table rebuild/i);
   });
 
   it("keeps Add Column + Edit for PostgreSQL (regression guard)", async () => {
@@ -90,13 +93,13 @@ describe("StructurePanel DDL capability gate (#1460)", () => {
     expect(
       screen.getByRole("button", { name: "Add column" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Edit column id" }),
-    ).toBeInTheDocument();
-    // #1804 — the rebuild banner is gated, not always-on: an engine that can
+    // #1804 — the disabled state is gated, not always-on: an engine that can
     // rewrite a column must not be told it cannot.
     expect(
-      screen.queryByTestId("column-modify-rebuild-hint"),
+      screen.getByRole("button", { name: "Edit column id" }),
+    ).toBeEnabled();
+    expect(
+      screen.queryByTestId("column-modify-rebuild-reason"),
     ).not.toBeInTheDocument();
   });
 

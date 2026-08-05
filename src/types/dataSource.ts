@@ -170,8 +170,9 @@ export interface DataSourceCapabilities {
      *
      * Same shape as `alterConstraint` (#1070): one ALTER TABLE surface an
      * engine can serve only in part. Gates ONLY the ColumnsEditor per-row edit
-     * affordance; SQLite keeps it false so that affordance is hidden (#1046
-     * disable-at-source) instead of click-then-error.
+     * affordance; SQLite keeps it false so that affordance renders `disabled`
+     * with the reason in a Radix tooltip (`memory/product/ui-parity/memory.md`
+     * §4) instead of click-then-error.
      */
     readonly modifyColumn: boolean;
     /**

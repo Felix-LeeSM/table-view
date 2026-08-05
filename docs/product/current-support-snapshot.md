@@ -99,7 +99,10 @@ SQLite structured DDL 은 엔진이 네이티브로 실행하는 범위다 — `
 `DROP TABLE` / `ALTER TABLE … RENAME TO` / `ADD COLUMN` / `DROP COLUMN` /
 `CREATE INDEX` / `DROP INDEX`. 테이블을 통째로 다시 써야 하는 변경(컬럼의 타입·NOT NULL·DEFAULT,
 `CREATE TABLE` 이후의 제약 추가·삭제)은 12-step rebuild 가 필요해 unsupported 이고,
-Structure UI 가 해당 컨트롤을 내리고 사유를 화면에 적는다. raw SQL DDL, nested JSON
+Structure UI 에서 둘은 다르게 나타난다. Columns 탭의 per-row Edit 은 화면에 그대로 두되
+disabled 이고 마우스를 올리면 사유가 뜬다. 제약은 SQLite 에 Constraints 탭 자체가 없어
+(어댑터에 구조화된 제약 목록이 없다) 끌 컨트롤도 없고, 그 경계는 화면이 아니라 이 문서가
+적는다. raw SQL DDL, nested JSON
 edit, sqlite-cli execution, extension/capability semantics 는 unsupported
 
 ## DuckDB

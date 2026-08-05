@@ -96,6 +96,8 @@ Current evidence:
 
 `src-tauri/table-view-core/src/db/adapters/sqlite/mod.rs`,
 `src-tauri/table-view-core/src/db/adapters/sqlite/ddl.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/ddl_native.rs`,
+`src-tauri/table-view-core/src/db/adapters/sqlite/ddl_errors.rs`,
 `src-tauri/table-view-core/src/db/adapters/sqlite/queries_tests.rs`,
 `src-tauri/table-view-core/src/db/adapters/sqlite/batch_tests.rs`,
 `src-tauri/tests/sqlite_browse_query_adapter.rs`,
