@@ -163,25 +163,34 @@ gate_step() {
 
 # RED 재현. 대상이 이 스크립트가 아니라 저장소의 워크플로 · 문서라서 mutation
 # 하네스를 여기 넣지 않고 재현 명령만 남긴다 (measure-rounds.test.sh 의 게이트
-# 단언과 같은 이유). 아래 11종은 2026-08-05 에 전부 red 인 것을 확인했다 —
-# 괄호 안은 깨진 단언 수다.
+# 단언과 같은 이유). 아래 12종은 2026-08-05 에 전부 red 인 것을 확인했다 —
+# 괄호 안은 그때 깨진 단언 수다.
+#
+# 변조를 쓸 때 두 가지가 조용한 no-op 을 만든다. 둘 다 실제로 밟았다:
+#   · perl 은 패턴/치환의 `$3` `$4` 를 캡처 변수로 먹는다 — `\$` 로 escape 하거나
+#     `.` 로 대신 쓴다. 안 그러면 빈 문자열로 치환돼 엉뚱한 것이 바뀐다.
+#   · `if: always()` 는 verify-latest-json 에도 있고 그쪽이 파일에서 먼저다.
+#     `timeout-minutes: 30` 까지 붙여야 이 잡을 고른다.
+# 그래서 아래 각 줄은 적용 후 `diff` 로 실제 변경 여부를 먼저 확인해야 한다.
 #
 #   d="$(mktemp -d)"
 #   cp .github/workflows/release.yml "$d/m.yml"
 #   cp docs/contributor-guide/release/versioning-and-artifacts.md "$d/m.md"
-#   # 워크플로 쪽 — 하나 골라 적용한 뒤 아래 마지막 두 줄로 돌린다
+#   # 워크플로 쪽 — 하나 골라 적용한다
 #   perl -0pi -e 's/(    permissions:\n      checks: read)/    continue-on-error: true\n$1/' "$d/m.yml"   # (1) 실패를 삼킨다
 #   perl -0pi -e 's/index\(.4, self\) == 0 && //' "$d/m.yml"                                             # (2) 자기 run 제외를 뺀다
 #   perl -0pi -e 's/\[ -z ".running" \] && break/break/' "$d/m.yml"                                      # (2) 안 끝난 체크를 안 기다린다
 #   perl -0pi -e 's/if \[ -z ".rows" \]; then/if false; then/' "$d/m.yml"                                # (3) 0건을 통과로 읽는다
 #   perl -0pi -e 's/ && .1 !~ [^{]+\{/ {/' "$d/m.yml"                                                    # (1) (non-blocking) 필터를 뺀다
 #   perl -0pi -e 's/    needs: build\n    # Report/    # Report/' "$d/m.yml"                              # (1) needs: build 를 뗀다
-#   perl -0pi -e 's/    if: always\(\)\n    runs-on/    runs-on/' "$d/m.yml"                              # (1) if: always() 를 뗀다
+#   perl -0pi -e 's/    if: always\(\)\n    runs-on: ubuntu-22.04\n    timeout-minutes: 30/    runs-on: ubuntu-22.04\n    timeout-minutes: 30/' "$d/m.yml"  # (1) if: always() 를 뗀다
+#   perl -0pi -e 's/(has failing checks.*?)exit 1/${1}exit 0/s' "$d/m.yml"                                # (1) red 를 찍고도 0 으로 나간다
+#   perl -0pi -e 's/\$3 != "skipped"/\$3 != "skipped" && \$3 != "timed_out"/' "$d/m.yml"                  # (1) timed_out 을 통과로 강등
 #   perl -0pi -e 's/\n  # #2168.*\z//s' "$d/m.yml"                                                       # (7) 게이트 job 을 통째로 지운다
-#   perl -0pi -e 's/.3 != "skipped"/$3 != "skipped" && $3 != "timed_out"/' "$d/m.yml"                     # (8) timed_out 을 통과로 강등
 #   # 문서 쪽
 #   perl -0pi -e 's/`Verify tag SHA CI is green`/the release CI check/g' "$d/m.md"                        # (1) job 이름을 안 부른다
 #   perl -0pi -e 's/The tag must also point to a `main` commit SHA that passed the Pre-Release\n  Verification Gate\./The tag points at whatever merged./' "$d/m.md"  # (1) 보증 문구를 낮춘다
+#   # 안 고른 쪽은 원본이어야 하므로 둘 다 넘긴다
 #   VERIFY_TAG_CI_RELEASE_WORKFLOW="$d/m.yml" VERIFY_TAG_CI_DOC="$d/m.md" \
 #     bash scripts/release/verify-tag-ci.test.sh
 echo "gate behaviour (stubbed gh):"
