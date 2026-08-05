@@ -181,9 +181,9 @@ jobs:
       # by `scripts/check-non-blocking-jobs.sh` alone; its header states the
       # rule. The script needs no toolchain — awk and the shell — so it adds no
       # setup to the cheapest job. No timing figure is quoted here on purpose:
-      # the figures on the sibling steps above do not reproduce, and the repo
-      # has never pinned the machine, load, or warm/cold state that would make
-      # them comparable. That gap is registered in
+      # the one figure above that was re-measured (`check-ci-test-calls.sh`) did
+      # not reproduce, and none of them record the machine, load, or warm/cold
+      # state that would make two runs comparable. That gap is registered in
       # docs/roadmap/follow-up-queue.md under Quality gates; pinning the
       # conditions is that item's job, not this one's.
       - name: (non-blocking) job names carry continue-on-error
