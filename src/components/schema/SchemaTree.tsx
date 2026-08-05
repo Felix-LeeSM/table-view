@@ -135,9 +135,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   // #1460 — each schema-tree DDL entry reads its own `ddl.*` capability so the
   // affordance matches what the wired adapter can execute: Create Table →
   // `createTable`, Rename (ALTER TABLE RENAME) → `alterTable`, Drop →
-  // `dropObject`. SQLite claims only `createTable`, so its Rename/Drop entries
-  // are hidden while Create Table stays; DuckDB (#1070), MSSQL (#1071) and
-  // Oracle (#1072) claim all three, so every entry shows.
+  // `dropObject`. DuckDB (#1070), MSSQL (#1071), Oracle (#1072) and SQLite
+  // (#1804) claim all three, so every entry shows.
   // Unsupported = HIDDEN, not click-then-error (#1046). An unknown /
   // still-loading dbType returns true for each so entries aren't stripped early.
   const canCreateTable = supportsDdl(dbType, "createTable");

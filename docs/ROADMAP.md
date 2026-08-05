@@ -165,7 +165,6 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 | 영역 | 질문 | 결정 전 기본값 |
 |---|---|---|
 | MariaDB | MySQL adapter reuse 를 단순하게 유지할 수 있나? | Dialect flag 로 reuse. Evidence 있을 때만 split. |
-| SQLite DBMS | Unsupported `ALTER TABLE` 을 disable 할지 auto-rebuild 할지? | ADR 이 rebuild 를 선택하기 전까지 disable + tooltip. |
 | DuckDB | File analytics 를 RDBMS 로 볼지 separate file-sql paradigm 으로 볼지? | Evidence 가 split 을 요구하기 전까지 RDBMS + `file` connection kind. |
 | Redis/Search | Redis full UI/editor parity 와 Search index/settings admin execution 을 언제 승격할 수 있나? | 둘 다 freeze 밖이라 lane 통과를 기다리지 않는다 (ADR 0060). Search 는 admin destructive 실행 정책과 observability/profile-explain 계약이 선행이다 — live `_delete_by_query` 는 #1076 으로 이미 shipped. Redis full parity, broader Search smoke, remaining MSSQL/Oracle widening 은 evidence/smoke 비용 기준으로 고른다. |
 | 더 넓은 paradigm | Cassandra/DynamoDB/graph/vector/stream 중 무엇을 먼저 승격하나? | H6 기본값은 candidate-only. Workflow value, contract readiness, fixture/live evidence, smoke/E2E cost, safety risk 가 분명해질 때까지 승격 금지. |

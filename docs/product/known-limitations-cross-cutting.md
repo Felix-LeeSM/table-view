@@ -187,8 +187,9 @@ dump/import/admin, vendor-workbench parity, or broader stored-routine/body
 workflows. SQLite smoke covers deterministic file create/open, table browse,
 read query, writable DML, row edit, bounded structured table creation with
 schema refresh proof, read-only write rejection, and internal app-state DB
-rejection; it does not widen raw SQL DDL, ALTER rebuilds,
-index/constraint/table-removal DDL, nested JSON edit, sqlite-cli execution, or
+rejection. The rest of the DDL #1804 opened is proved by adapter-level tests
+rather than by this smoke, and neither widens raw SQL DDL, ALTER rebuilds,
+standalone constraint changes, nested JSON edit, sqlite-cli execution, or
 extension/capability semantics. DuckDB `.duckdb` smoke covers deterministic
 `.duckdb` open, catalog/table browse, raw SELECT tabular result/history
 evidence, writable DML readback, and read-only write rejection; it does not

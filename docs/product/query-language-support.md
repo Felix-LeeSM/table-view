@@ -175,9 +175,11 @@ are:
   server-resolved behavior.
 - SQLite read queries can run on readable files, while raw SQL writes are
   limited to DML on writable files. Transactional DML batch and dry-run paths
-  exist, but raw DDL, structured DDL UI parity, unsupported `ALTER TABLE`
-  rebuilds, nested JSON edits, virtual-table CRUD, broad extension semantics,
-  and SQLite capability-specific parser/Safe Mode validation remain future work.
+  exist, and the Structure UI runs the DDL SQLite performs natively. Raw DDL,
+  `ALTER TABLE` rebuilds — the path an in-place column change or a
+  standalone constraint change would need — nested JSON edits, virtual-table
+  CRUD, broad extension semantics, and SQLite capability-specific parser/Safe
+  Mode validation remain future work.
 - SQLite completion can suggest built-in SQLite vocabulary, cached schema
   objects, sqlite-cli dot-command vocabulary, and detected-only JSON1/FTS5
   read-query assistance. Dot commands carry non-executable completion metadata;

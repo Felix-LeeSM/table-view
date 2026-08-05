@@ -110,19 +110,27 @@ completion-runtime claims still need separate tests/docs before promotion.
 
 **Current support**: File connection, table browsing, raw read queries,
 writable-file DML, transactional DML batches, dry-run rollback,
-primary-key-scoped row edits, and bounded structured table creation for writable
-files are supported. Opening a SQLite file probes a bounded JSON1/FTS5/RTREE
+primary-key-scoped row edits, and the structured DDL SQLite runs natively on a
+writable file (`CREATE TABLE`, `DROP TABLE`, `ALTER TABLE … RENAME TO`,
+`ADD COLUMN`, `DROP COLUMN`, `CREATE INDEX`, `DROP INDEX`) are supported. A
+multi-change `ALTER TABLE` runs in one transaction, so a failure part-way leaves
+the table as it was. Opening a SQLite file probes a bounded JSON1/FTS5/RTREE
 capability inventory without enabling loadable extensions. Completion covers
 built-in SQLite keywords/functions, cached schema objects, sqlite-cli
 dot-command vocabulary as non-executable suggestions, and detected-only
 JSON1/FTS5 read-query assistance.
 
 **Current boundary**: Raw SQL DDL is rejected by the SQLite adapter, and
-structured DDL is limited to `CREATE TABLE` through the Structure dialog.
-Structured `ALTER TABLE` rebuilds, table/index removal or rename, index
-creation, standalone constraint changes, and broader DDL parity are not
-implemented. Row edits require key/projected row identity, read-only file
-connections reject writes and table creation, nested JSON edits are deferred,
+structured DDL stops where SQLite would need to rewrite the whole table:
+changing a column's type, NOT NULL or DEFAULT, and adding or dropping a
+standalone constraint, are not implemented. In the Structure UI the
+column change keeps its per-row Edit on screen, disabled, with the reason on
+hover; constraints have no tab at all for SQLite, because the adapter has no
+structured constraint listing, so nothing is rendered to disable. `ADD COLUMN`
+and
+`DROP COLUMN` carry SQLite's own row-dependent conditions and report them after
+the attempt with the blocking object named. Row edits require key/projected row identity, read-only file
+connections reject writes and every structured DDL entry point, nested JSON edits are deferred,
 sqlite-cli dot commands and `load_extension()` are not executed, virtual-table
 CRUD and broad extension semantics are unsupported, and RTREE inventory is
 exposed only as capability metadata. Capability inventory does not imply

@@ -3,9 +3,12 @@
 // capability (`supportsDdl(dbType, ...)`) so an engine whose adapter rejects the
 // write hides the control instead of surfacing a click-then-error path (#1046).
 // Asserts:
-//   - SQLite (createTable only) — Columns tab hides `+ Column` + per-row
-//     Edit/Delete; Indexes tab hides `Create index` + drop-index. The listings
-//     still render (browse stays).
+//   - SQLite (#1804 — natively-runnable DDL claimed) — Columns tab shows
+//     `+ Column` + per-row Delete and Indexes tab shows `Create index` +
+//     drop-index, because the adapter executes those. The per-row Edit stays
+//     on screen but `disabled` on its own `modifyColumn` gate: an in-place
+//     column change needs the 12-step table rebuild this app does not run, and
+//     a Radix tooltip names that reason.
 //   - PostgreSQL (all DDL true) — both editors keep their mutation controls
 //     (regression guard).
 //   - DuckDB (#1070 ADR 0051 Stage 2 — native structural DDL) — `+ Column` +
@@ -17,6 +20,10 @@
 // Issue #1735 — adds the `editColumnComment` axis: the comment cell reads its
 // OWN capability, not `alterTable`, so an engine that runs structural ALTERs
 // but does not emit `COMMENT ON COLUMN` keeps the cell read-only.
+//
+// Issue #1804 — adds the `modifyColumn` axis, the same shape one level up: the
+// per-row Edit reads its OWN capability, so an engine that adds and drops
+// columns but cannot rewrite one keeps Delete live and Edit disabled.
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { act, fireEvent, screen } from "@testing-library/react";
@@ -51,22 +58,34 @@ describe("StructurePanel DDL capability gate (#1460)", () => {
     useConnectionStore.setState({ connections: [] });
   });
 
-  it("hides Add Column + per-row Edit/Delete for SQLite (alterTable false)", async () => {
+  it("keeps Add/Delete Column but disables per-row Edit for SQLite (#1804 rebuild boundary)", async () => {
     setConnection("sqlite");
     await act(async () => {
       renderPanel();
     });
-    // Columns listing still renders (browse stays).
     expect(screen.getByText("id")).toBeInTheDocument();
+    // ADD COLUMN and DROP COLUMN are native, so their affordances are live.
     expect(
-      screen.queryByRole("button", { name: "Add column" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Add column" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Edit column id" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Delete column id" }),
+    ).toBeInTheDocument();
+    // An in-place column change is not, so Edit stays but is off — via
+    // `aria-disabled`, which keeps it in the tab order so the reason is not a
+    // pointer-only fact (native `disabled` would drop it out).
+    const edit = screen.getByRole("button", { name: "Edit column id" });
+    expect(edit).toHaveAttribute("aria-disabled", "true");
+    expect(edit).not.toBeDisabled();
+    // …with the reason in a Radix tooltip, not a native `title`
+    // (`memory/product/ui-parity/memory.md` §4 retires that pairing).
+    expect(edit).not.toHaveAttribute("title");
+    await act(async () => {
+      fireEvent.focus(edit);
+    });
     expect(
-      screen.queryByRole("button", { name: "Delete column id" }),
-    ).not.toBeInTheDocument();
+      await screen.findByTestId("column-modify-rebuild-reason"),
+    ).toHaveTextContent(/would need a full table rebuild/i);
   });
 
   it("keeps Add Column + Edit for PostgreSQL (regression guard)", async () => {
@@ -77,9 +96,14 @@ describe("StructurePanel DDL capability gate (#1460)", () => {
     expect(
       screen.getByRole("button", { name: "Add column" }),
     ).toBeInTheDocument();
+    // #1804 — the disabled state is gated, not always-on: an engine that can
+    // rewrite a column must not be told it cannot.
     expect(
       screen.getByRole("button", { name: "Edit column id" }),
-    ).toBeInTheDocument();
+    ).toBeEnabled();
+    expect(
+      screen.queryByTestId("column-modify-rebuild-reason"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows Add Column for DuckDB (#1070 Stage 2 native column ALTER)", async () => {
@@ -162,19 +186,18 @@ describe("StructurePanel DDL capability gate (#1460)", () => {
     expect(screen.queryByLabelText("Comment for id")).not.toBeInTheDocument();
   });
 
-  it("hides Create Index + drop-index for SQLite (createIndex / dropObject false)", async () => {
+  it("keeps Create Index + drop-index for SQLite (#1804 — both are native)", async () => {
     setConnection("sqlite");
     await act(async () => {
       renderPanel({ initialSubTab: "indexes" });
     });
-    // Indexes listing still renders (catalog.indexes true → browse stays).
     expect(screen.getByText("users_name_idx")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Create index" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Create index" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Delete index users_name_idx" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Delete index users_name_idx" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps Create Index + drop-index for PostgreSQL (regression guard)", async () => {

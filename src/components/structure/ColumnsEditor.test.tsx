@@ -850,4 +850,187 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
       screen.queryByLabelText("Comment for email"),
     ).not.toBeInTheDocument();
   });
+
+  // Reason: #1804 — an engine that adds and drops columns but needs a full
+  // table rebuild to change one (SQLite) keeps `canAlterTable` true and
+  // `canModifyColumn` false. Add + Delete stay live and the per-row Edit stays
+  // on screen, disabled — the 2026-07-25 owner grill on #1804 kept the open
+  // question's default (disable + tooltip) for rebuild-requiring changes.
+  it("disables the per-row Edit when canModifyColumn is false and keeps Add/Delete", () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canModifyColumn={false}
+      />,
+    );
+    const edit = screen.getByRole("button", { name: /Edit column email/i });
+    expect(edit).toBeInTheDocument();
+    expect(edit).toHaveAttribute("aria-disabled", "true");
+    // ADD COLUMN / DROP COLUMN ride `canAlterTable`, which is still true.
+    expect(
+      screen.getByRole("button", { name: /Add column/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Delete column email/i }),
+    ).toBeInTheDocument();
+  });
+
+  // The blocked control must stay reachable, or the reason it carries is a
+  // pointer-only fact. A natively `disabled` button leaves the tab order and
+  // takes no focus, so `aria-disabled` is the form
+  // (`src/components/document/MongoIndexesPanel.tsx` uses the same one).
+  //
+  // Mutation check — swap `aria-disabled="true"` back to `disabled`: only two
+  // of the three assertions below carry it. `not.toBeDisabled()` (jest-dom
+  // reads the native attribute, not `aria-disabled`) and `toHaveFocus()`
+  // (jsdom makes `focus()` a silent no-op on a disabled button) both go red.
+  // The tooltip assertion does NOT — React fires focus handlers regardless of
+  // `disabled`, so it only locks the copy and the i18n key, not the form.
+  it("keeps the blocked Edit focusable so the reason reaches a keyboard user", async () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canModifyColumn={false}
+      />,
+    );
+    const edit = screen.getByRole("button", { name: /Edit column email/i });
+    // Native `disabled` is what removes it from the tab order — it must be absent.
+    expect(edit).not.toBeDisabled();
+    await act(async () => {
+      edit.focus();
+      fireEvent.focus(edit);
+    });
+    expect(edit).toHaveFocus();
+    expect(
+      await screen.findByTestId("column-modify-rebuild-reason"),
+    ).toHaveTextContent(/would need a full table rebuild/i);
+  });
+
+  // Reachable must not mean operable: clicking (or Enter, which the browser
+  // turns into a click) may not open the editor the adapter would refuse.
+  //
+  // Ceiling — this does NOT lock the `preventDefault` on that button. The
+  // blocked branch wires no `onStartEdit` and the `<tr>` has no `onClick`, so
+  // deleting `preventDefault` leaves this green. It stays because the cited
+  // precedent carries it and because a later row-level click handler would
+  // make it load-bearing; what this test locks is the outcome, not the guard.
+  it("opens no editor when the blocked Edit is clicked", () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canModifyColumn={false}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Edit column email/i }));
+    // Edit mode is what turns the read-only cells into inputs.
+    expect(
+      screen.queryByLabelText("Data type for email"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Save changes/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  // §4 lists "disabled + native `title`" as the FIRST retired pattern, so the
+  // blocked Edit must carry no `title` — the reason rides a Radix tooltip.
+  // Same lock DbSwitcher.test.tsx holds on its read-only trigger (AC-141-3).
+  it("puts the reason in a Radix tooltip, not a native title attribute", async () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canModifyColumn={false}
+      />,
+    );
+    const edit = screen.getByRole("button", { name: /Edit column email/i });
+    expect(edit).not.toHaveAttribute("title");
+    await act(async () => {
+      fireEvent.pointerMove(edit);
+    });
+    // Assert the rendered copy, not just a testid — a deleted `en` string has
+    // to turn this red. (Radix also portals an aria-hidden duplicate of the
+    // text, so match on the tooltip node itself.)
+    const tip = await screen.findByTestId("column-modify-rebuild-reason");
+    expect(tip).toHaveTextContent(/would need a full table rebuild/i);
+  });
+
+  // The disabled state is bound to the gate, not to the editor: an engine that
+  // can rewrite a column must not be told it cannot.
+  it("leaves the per-row Edit enabled and untooltipped while canModifyColumn holds", () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /Edit column email/i }),
+    ).toBeEnabled();
+    expect(
+      screen.queryByTestId("column-modify-rebuild-reason"),
+    ).not.toBeInTheDocument();
+  });
+
+  // #1804 — the gate has to hold on the payload producer, not only on the
+  // affordance. `handleKeyDown` sits on the whole `<tr>`, and this PR put a
+  // focusable Delete button inside that row for the first time on an engine
+  // that cannot rewrite a column, so Enter reached `handleSave` with no
+  // `isEditing` check.
+  //
+  // The row's draft state is seeded from `col` at mount and never resynced,
+  // while the row key is `col.name` — so a refresh that changes the column
+  // definition under the same name (an external ALTER, another client) keeps
+  // the row mounted with a draft that no longer matches. That difference is
+  // what `handleSave` reads as a real edit. Mutation check: drop
+  // `if (!isEditing) return;` from `handleKeyDown` and this goes red.
+  it("stages no modify from Enter in a row that is not being edited", () => {
+    const { rerender } = render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canModifyColumn={false}
+      />,
+    );
+    // Same column name, new definition — row stays mounted, draft goes stale.
+    rerender(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[{ ...SAMPLE_COLUMN, data_type: "varchar(255)" }]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canModifyColumn={false}
+      />,
+    );
+    fireEvent.keyDown(
+      screen.getByRole("button", { name: /Delete column email/i }),
+      { key: "Enter" },
+    );
+    // A staged change is what turns the Review SQL button on; no button, no
+    // pending `alter_table` payload.
+    expect(
+      screen.queryByRole("button", { name: /Review SQL/i }),
+    ).not.toBeInTheDocument();
+  });
 });

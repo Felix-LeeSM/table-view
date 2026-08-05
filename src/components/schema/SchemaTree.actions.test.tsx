@@ -375,12 +375,13 @@ describe("SchemaTree — actions", () => {
     expect(screen.getByText("Rename Table")).toBeInTheDocument();
   });
 
-  // #1460 — SQLite has PARTIAL DDL: the wired adapter runs `create_table` but
-  // rejects rename / drop (`sqlite_unsupported`). So the table context menu must
-  // hide Rename (alterTable) + Drop (dropObject) and inert F2, while the flat
-  // "+" Create Table entry (createTable) stays. This locks per-action gating,
-  // not the coarse all-or-nothing `editRows` proxy the entries used to ride on.
-  it("[#1460] SQLite hides table Rename/Drop + inerts F2 but keeps the Create Table entry (partial DDL)", async () => {
+  // #1804 — the wired SQLite adapter runs `ALTER TABLE … RENAME TO` and
+  // `DROP TABLE` natively, so the table context menu shows Rename (alterTable)
+  // + Drop (dropObject) and F2 opens the rename dialog, alongside the flat "+"
+  // Create Table entry (createTable). This replaces the #1460 lock, which
+  // asserted they were hidden while the adapter still refused them; the
+  // per-action gating it was written to prove is what moves them here.
+  it("[#1804] SQLite shows table Rename/Drop, F2 opens rename, Create Table stays", async () => {
     useConnectionStore.setState({
       connections: [
         {
@@ -420,14 +421,14 @@ describe("SchemaTree — actions", () => {
 
     expect(screen.getByText("Structure")).toBeInTheDocument();
     expect(screen.getByText("Data")).toBeInTheDocument();
-    // alterTable / dropObject are false → Rename + Drop are hidden.
-    expect(screen.queryByText("Rename")).toBeNull();
-    expect(screen.queryByText("Drop")).toBeNull();
+    // alterTable / dropObject are true → Rename + Drop show.
+    expect(screen.getByText("Rename")).toBeInTheDocument();
+    expect(screen.getByText("Drop")).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.keyDown(tableItem, { key: "F2" });
     });
-    expect(screen.queryByText("Rename Table")).toBeNull();
+    expect(screen.getByText("Rename Table")).toBeInTheDocument();
   });
 
   // AC-CM-02: Context menu closes when onClose is called (click outside)

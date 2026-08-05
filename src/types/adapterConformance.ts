@@ -131,6 +131,11 @@ export const CONFORMANCE_CHECKS = Object.freeze([
     "Identity / auto-increment column DDL claim is enabled.",
   ),
   check(
+    "ddl.modifyColumn",
+    "ddl",
+    "In-place column definition change (ALTER COLUMN via alter_table) is enabled.",
+  ),
+  check(
     "ddl.editColumnComment",
     "ddl",
     "Column-comment DDL claim (COMMENT ON COLUMN via alter_table) is enabled.",

@@ -30,6 +30,12 @@ export const en = {
     deleteTitle: "Delete",
     reviewSqlAria: "Review SQL ({{count}})",
     reviewSqlLabel: "Review SQL ({{count}})",
+    // Issue #1804 — Radix tooltip on the disabled per-row Edit, where the
+    // engine adds and drops columns but cannot change one in place. The control
+    // stays visible and says why it is off (2026-07-25 owner grill on #1804),
+    // instead of vanishing or erroring on click.
+    modifyNeedsRebuildTooltip:
+      "This engine fixes a column's type, NOT NULL and DEFAULT when the table is created — changing one would need a full table rebuild, which this app does not do. Add or drop columns here, and recreate the table to change an existing column.",
     nullableYes: "YES",
     nullableNo: "NO",
   },
@@ -137,6 +143,8 @@ export const ko = {
     deleteTitle: "삭제",
     reviewSqlAria: "SQL 검토 ({{count}})",
     reviewSqlLabel: "SQL 검토 ({{count}})",
+    modifyNeedsRebuildTooltip:
+      "이 엔진은 테이블을 만들 때 열의 타입과 NOT NULL, DEFAULT 를 고정합니다. 이미 있는 열을 바꾸려면 테이블을 통째로 다시 만들어야 하는데 이 앱은 그렇게 하지 않습니다. 여기서 열을 추가하거나 지울 수 있고, 기존 열을 바꾸려면 테이블을 새로 만드세요.",
     nullableYes: "예",
     nullableNo: "아니오",
   },

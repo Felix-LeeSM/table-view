@@ -1,5 +1,11 @@
 import { Button } from "@components/ui/button";
 import { INLINE_EDIT_INPUT } from "@components/ui/inlineEdit";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@components/ui/tooltip";
 import { AddColumnDialog, DropColumnDialog } from "@features/catalog";
 import { ConfirmDestructiveDialog } from "@features/workspace";
 import * as tauri from "@lib/tauri";
@@ -81,6 +87,15 @@ interface EditableColumnRowProps {
    */
   canAlterTable: boolean;
   /**
+   * Issue #1804 — when false the per-row Edit affordance renders `disabled`
+   * with a Radix tooltip naming the reason, while Delete stays live: the engine
+   * can add and drop a column but cannot change an existing one in place.
+   * Separate from `canAlterTable` because those are different statements —
+   * SQLite runs ADD/DROP COLUMN natively and needs a full table rebuild only
+   * for a type / NOT NULL / DEFAULT change.
+   */
+  canModifyColumn: boolean;
+  /**
    * Issue #1735 — when false the comment cell stays read-only even in edit
    * mode (the engine's adapter defers COMMENT ON COLUMN emit — MySQL/MSSQL/
    * SQLite/DuckDB). True only for PG + Oracle. Separate from `canAlterTable`
@@ -102,6 +117,7 @@ function EditableColumnRow({
   schema,
   tableName,
   canAlterTable,
+  canModifyColumn,
   canEditColumnComment,
 }: EditableColumnRowProps) {
   const { t } = useTranslation("structure");
@@ -236,6 +252,12 @@ function EditableColumnRow({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // #1804 — the row-level handler is the payload producer for a `modify`
+    // change, so it carries the same gate the Edit affordance does. Without
+    // this, Enter anywhere in the row (the Delete button is focusable on an
+    // engine that cannot rewrite a column) stages a `{type:"modify"}` the
+    // adapter refuses — the click-then-error the gate exists to prevent.
+    if (!isEditing) return;
     if (e.key === "Enter") handleSave();
     if (e.key === "Escape") onCancelEdit();
   };
@@ -404,15 +426,51 @@ function EditableColumnRow({
               </>
             ) : (
               <>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={onStartEdit}
-                  aria-label={t("col.editAria", { name: col.name })}
-                  title={t("col.editTitle")}
-                >
-                  <Pencil />
-                </Button>
+                {/* #1804 — Edit is the only in-place column change (ALTER
+                    COLUMN); it reads its own gate so an engine that runs
+                    ADD/DROP COLUMN but needs a table rebuild to change one
+                    keeps Delete live. Blocked = disabled + a Radix tooltip
+                    naming the reason (2026-07-25 owner grill on #1804), never
+                    a native `title`.
+
+                    `aria-disabled` + `preventDefault`, NOT the native
+                    `disabled` attribute: a natively disabled button drops out
+                    of the tab order, so the tooltip would only ever open for a
+                    pointer and a screen reader would meet an unexplained dead
+                    control. Same shape as the primary-index drop button in
+                    `src/components/document/MongoIndexesPanel.tsx`. */}
+                {canModifyColumn ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={onStartEdit}
+                    aria-label={t("col.editAria", { name: col.name })}
+                    title={t("col.editTitle")}
+                  >
+                    <Pencil />
+                  </Button>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-disabled="true"
+                        onClick={(e) => e.preventDefault()}
+                        aria-label={t("col.editAria", { name: col.name })}
+                        className="cursor-not-allowed opacity-50 hover:bg-transparent"
+                      >
+                        <Pencil />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      data-testid="column-modify-rebuild-reason"
+                      className="max-w-80"
+                    >
+                      {t("col.modifyNeedsRebuildTooltip")}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -475,6 +533,14 @@ interface ColumnsEditorProps {
    */
   canAlterTable?: boolean;
   /**
+   * Issue #1804 — whether the engine can change an existing column in place.
+   * Gates the per-row Edit action only; `+ Column` and per-row Delete stay on
+   * `canAlterTable`. Defaults to `true` (same affordance-preserving fallback as
+   * `canAlterTable`); the production caller passes
+   * `supportsDdl(dbType, "modifyColumn")`.
+   */
+  canModifyColumn?: boolean;
+  /**
    * Issue #1735 — whether the comment cell is editable (engine emits
    * COMMENT ON COLUMN). Defaults to `true` so callers that don't gate keep the
    * editable surface (same affordance-preserving fallback as `canAlterTable`);
@@ -492,6 +558,7 @@ export default function ColumnsEditor({
   onRefresh,
   paradigm,
   canAlterTable = true,
+  canModifyColumn = true,
   canEditColumnComment = true,
 }: ColumnsEditorProps) {
   const { t } = useTranslation("structure");
@@ -669,60 +736,63 @@ export default function ColumnsEditor({
       />
 
       {columns.length > 0 && (
-        <StructureTable fixed>
-          <thead className={STRUCTURE_THEAD}>
-            <tr>
-              <th scope="col" className={STRUCTURE_TH}>
-                {t("th.name")}
-              </th>
-              <th scope="col" className={STRUCTURE_TH}>
-                {t("th.type")}
-              </th>
-              <th scope="col" className={STRUCTURE_TH}>
-                {t("th.nullable")}
-              </th>
-              <th scope="col" className={STRUCTURE_TH}>
-                {t("th.default")}
-              </th>
-              <th scope="col" className={STRUCTURE_TH}>
-                {t("th.check")}
-              </th>
-              <th scope="col" className={STRUCTURE_TH}>
-                {t("th.ref")}
-              </th>
-              <th scope="col" className={STRUCTURE_TH}>
-                {t("th.comment")}
-              </th>
-              <th scope="col" className={STRUCTURE_TH_ACTIONS}>
-                {t("th.actions")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleColumns.map((col) => (
-              <EditableColumnRow
-                key={col.name}
-                col={col}
-                isEditing={editingColumn === col.name}
-                onStartEdit={() => setEditingColumn(col.name)}
-                onCancelEdit={() => setEditingColumn(null)}
-                onSaveEdit={(change) => handleSaveEdit(col.name, change)}
-                onDelete={() => handleDeleteColumn(col.name)}
-                connectionId={connectionId}
-                database={database}
-                schema={schema}
-                tableName={table}
-                canAlterTable={canAlterTable}
-                canEditColumnComment={canEditColumnComment}
-              />
-            ))}
-            {/* Sprint 236 \u2014 inline `NewColumnRow` + pending-add row
+        <TooltipProvider delayDuration={0}>
+          <StructureTable fixed>
+            <thead className={STRUCTURE_THEAD}>
+              <tr>
+                <th scope="col" className={STRUCTURE_TH}>
+                  {t("th.name")}
+                </th>
+                <th scope="col" className={STRUCTURE_TH}>
+                  {t("th.type")}
+                </th>
+                <th scope="col" className={STRUCTURE_TH}>
+                  {t("th.nullable")}
+                </th>
+                <th scope="col" className={STRUCTURE_TH}>
+                  {t("th.default")}
+                </th>
+                <th scope="col" className={STRUCTURE_TH}>
+                  {t("th.check")}
+                </th>
+                <th scope="col" className={STRUCTURE_TH}>
+                  {t("th.ref")}
+                </th>
+                <th scope="col" className={STRUCTURE_TH}>
+                  {t("th.comment")}
+                </th>
+                <th scope="col" className={STRUCTURE_TH_ACTIONS}>
+                  {t("th.actions")}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleColumns.map((col) => (
+                <EditableColumnRow
+                  key={col.name}
+                  col={col}
+                  isEditing={editingColumn === col.name}
+                  onStartEdit={() => setEditingColumn(col.name)}
+                  onCancelEdit={() => setEditingColumn(null)}
+                  onSaveEdit={(change) => handleSaveEdit(col.name, change)}
+                  onDelete={() => handleDeleteColumn(col.name)}
+                  connectionId={connectionId}
+                  database={database}
+                  schema={schema}
+                  tableName={table}
+                  canAlterTable={canAlterTable}
+                  canModifyColumn={canModifyColumn}
+                  canEditColumnComment={canEditColumnComment}
+                />
+              ))}
+              {/* Sprint 236 \u2014 inline `NewColumnRow` + pending-add row
                 rendering removed; `+ Column` toolbar now opens
                 `AddColumnDialog`. The inline-batched MODIFY path
                 stays \u2014 it goes through `pendingChanges` /
                 `alter_table` (Sprint 237 polish target). */}
-          </tbody>
-        </StructureTable>
+            </tbody>
+          </StructureTable>
+        </TooltipProvider>
       )}
 
       {columns.length === 0 &&

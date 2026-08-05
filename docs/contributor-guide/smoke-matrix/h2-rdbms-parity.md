@@ -395,8 +395,9 @@ Current evidence:
 Current gap / routing:
 
 Runtime smoke now covers file create/open, browse, read query, writable DML, row
-edit, read-only write rejection, and internal app-state DB rejection. DDL UI
-parity, raw DDL, ALTER rebuild, and extension semantics remain unsupported.
+edit, read-only write rejection, and internal app-state DB rejection. The DDL UI
+is open for what SQLite runs natively (#1804); raw DDL, ALTER rebuild, and
+extension semantics remain unsupported.
 
 ## SQLite documentation recheck
 
@@ -451,9 +452,9 @@ Current gap / routing:
 
 Final support-claim audit confirms product docs and evidence docs agree on
 file-backed SQLite runtime/query/edit support, deterministic Runtime Happy Path
-coverage, unsupported DDL/ALTER/nested JSON/sqlite-cli execution/extension
-semantics, fixture-only evidence boundaries, and DuckDB/file analytics
-separation.
+coverage, the natively-runnable DDL set and the rebuild-requiring changes left
+unsupported alongside nested JSON/sqlite-cli execution/extension semantics,
+fixture-only evidence boundaries, and DuckDB/file analytics separation.
 
 ## DuckDB `.duckdb` runtime smoke
 

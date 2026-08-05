@@ -115,13 +115,25 @@ export default function StructurePanel({
   // Issue #1460 — the Columns / Indexes editors keep rendering their read-only
   // listing for every RDB engine, but their mutation affordances (Add/Edit/Drop
   // column, Create Index, Drop index) read the per-action DDL capability so an
-  // engine whose adapter rejects the write hides the control instead of
-  // click-then-error (#1046). SQLite claims only `createTable`, so its column /
-  // index editors are view-only; DuckDB (#1070), MSSQL (#1071) and Oracle
-  // (#1072) now claim these four, so their editors are live.
+  // engine whose adapter rejects the write withholds or disables the control
+  // instead of click-then-error (#1046). DuckDB (#1070), MSSQL (#1071), Oracle
+  // (#1072) and SQLite (#1804) claim `alterTable` / `createIndex` /
+  // `dropObject`, so those editors are live.
   const canAlterTable = supportsDdl(dbType, "alterTable");
   const canCreateIndex = supportsDdl(dbType, "createIndex");
   const canDropObject = supportsDdl(dbType, "dropObject");
+  // Issue #1804 — an in-place column change is a separate gate from the rest of
+  // ALTER TABLE: SQLite runs ADD COLUMN / DROP COLUMN / RENAME TO natively but
+  // fixes a column's type, NOT NULL and DEFAULT at creation, so changing one
+  // needs the 12-step table rebuild this app does not run. Gating that edit on
+  // `alterTable` alone would either hide the add/drop it can do or surface an
+  // edit its adapter refuses, preview included. SQLite is the one engine here
+  // that does NOT claim it, so its per-row Edit renders disabled with the
+  // reason in a Radix tooltip. That choice comes from the 2026-07-25 owner
+  // grill on #1804 ("the open question's default — disable + tooltip — stays
+  // for rebuild-requiring changes"), not from the ui-parity §4 classification
+  // test; §4 only supplies the form (Radix tooltip, never a native `title`).
+  const canModifyColumn = supportsDdl(dbType, "modifyColumn");
   // Issue #1070 (ADR 0051 Stage 2) — constraint add/drop is a separate gate
   // from column-alter: DuckDB does native column ALTER but cannot add/drop
   // constraints (Stage 2b), so the Constraints editor reads `alterConstraint`,
@@ -333,6 +345,7 @@ export default function StructurePanel({
             onRefresh={fetchData}
             paradigm={paradigm}
             canAlterTable={canAlterTable}
+            canModifyColumn={canModifyColumn}
             canEditColumnComment={canEditColumnComment}
           />
         )}

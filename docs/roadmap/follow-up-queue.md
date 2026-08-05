@@ -22,12 +22,15 @@ matching tests and smoke routing. Keep MySQL/MariaDB runtime smoke baselines
 narrow to connect/browse/query/edit/cancel/history/result-envelope behavior; add
 broader MySQL/MariaDB operation-level UI/runtime consumers only with matching
 evidence. Keep SQLite file-DBMS work scoped to writable-file DML, PK row edits,
-bounded structured table creation, raw SQL DDL rejection, and the current
+the DDL SQLite runs natively, raw SQL DDL rejection, and the current
 deterministic file smoke baseline. SQLite adapter 가 전면 차단하던 DDL 중 **SQLite 가
-네이티브로 지원하는 축**의 개방은 #1804 로 승격됐다. 12-step ALTER rebuild 는 미도입 결정이고 (2026-07-25
-오너 grill), rebuild 가 필요한 변경 (타입/제약 변경) 은 Structure UI 에서 disable + 사유 tooltip 을
-유지한다. 실행 후 에러 매핑은 네이티브로 지원되는 `ADD COLUMN`/`DROP COLUMN` 의 조건부 실패에만 적용된다. raw SQL
-DDL 거부와 extension semantics 는 그대로 자체 구현 근거를 요구한다. Keep DuckDB split between
+네이티브로 지원하는 축**의 개방은 #1804 로 끝났다 — 어댑터 실행은 #2103, capability 선언과 UI
+게이트는 그 후속 PR 이다. 12-step ALTER rebuild 는 미도입 결정이고 (2026-07-25 오너 grill),
+직접 못 하는 변경 (컬럼 타입·NOT NULL·DEFAULT, 독립 제약 선언·추가·삭제) 중
+컬럼 쪽은 Structure UI 가 per-row Edit 을 disabled 로 남기고 사유를 툴팁으로 띄우고, 제약 쪽은
+SQLite 에 Constraints 탭 자체가 없어 끌 컨트롤이 없다. 실행 후 에러 매핑은 네이티브로 지원되는
+`ADD COLUMN`/`DROP COLUMN` 의 조건부 실패에만 적용된다. raw SQL DDL 거부와 extension
+semantics 는 그대로 자체 구현 근거를 요구한다. Keep DuckDB split between
 `.duckdb` file smoke and file analytics smoke; file analytics does not promote
 COPY/ATTACH/DETACH, extension install/load, raw external-file SQL functions,
 automatic import/export workflow, structured DDL/write UI, or admin parity.

@@ -53,6 +53,8 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
     dropObject: true,
     alterConstraint: true,
     identityColumn: true,
+    // Issue #1804 — native `ALTER TABLE … ALTER COLUMN`.
+    modifyColumn: true,
   },
   intelligence: { erd: true },
   // Issue #1073 — SQL Server admin ops parity. Issue #1077 Stage 2 — users
@@ -81,6 +83,8 @@ const expectedOracleRuntimeCapabilities = expectedCapabilities({
     dropObject: true,
     alterConstraint: true,
     identityColumn: true,
+    // Issue #1804 — native `ALTER TABLE … MODIFY`.
+    modifyColumn: true,
     // Issue #1735 — Oracle emits COMMENT ON COLUMN via alter_table.
     editColumnComment: true,
   },

@@ -63,6 +63,8 @@ describe("DataSourceProfile registry", () => {
       dropObject: true,
       alterConstraint: true,
       identityColumn: true,
+      // Issue #1804 — native `ALTER TABLE … MODIFY COLUMN`.
+      modifyColumn: true,
     },
     intelligence: { erd: true },
     // Issue #1073 — MySQL/MariaDB admin ops parity. Issue #1077 Stage 2 — users
@@ -100,6 +102,8 @@ describe("DataSourceProfile registry", () => {
         dropObject: true,
         alterConstraint: true,
         identityColumn: true,
+        // Issue #1804 — native `ALTER TABLE … ALTER COLUMN`.
+        modifyColumn: true,
         // Issue #1735 — PG emits COMMENT ON COLUMN via alter_table.
         editColumnComment: true,
       },
@@ -120,7 +124,15 @@ describe("DataSourceProfile registry", () => {
       // introspection is live); constraints remains a stub → false.
       catalog: { indexes: true },
       edit: { editRows: true, requiresPrimaryKeyForEdit: true },
-      ddl: { createTable: true },
+      // Issue #1804 — the wired adapter runs ADD/DROP COLUMN, RENAME TO,
+      // CREATE/DROP INDEX and DROP TABLE natively. `modifyColumn` and
+      // `alterConstraint` stay false: both need the 12-step table rebuild.
+      ddl: {
+        createTable: true,
+        alterTable: true,
+        createIndex: true,
+        dropObject: true,
+      },
       intelligence: { erd: true },
     }),
     duckdb: expectedCapabilities({
@@ -146,6 +158,8 @@ describe("DataSourceProfile registry", () => {
         alterTable: true,
         createIndex: true,
         dropObject: true,
+        // Issue #1804 — native `ALTER TABLE … ALTER COLUMN`.
+        modifyColumn: true,
       },
     }),
     mssql: expectedCapabilities({
@@ -166,6 +180,8 @@ describe("DataSourceProfile registry", () => {
         dropObject: true,
         alterConstraint: true,
         identityColumn: true,
+        // Issue #1804 — native `ALTER TABLE … ALTER COLUMN`.
+        modifyColumn: true,
       },
       intelligence: { erd: true },
       // Issue #1073 — SQL Server admin ops parity. Issue #1077 Stage 2 — users
@@ -193,6 +209,8 @@ describe("DataSourceProfile registry", () => {
         dropObject: true,
         alterConstraint: true,
         identityColumn: true,
+        // Issue #1804 — native `ALTER TABLE … MODIFY`.
+        modifyColumn: true,
         // Issue #1735 — Oracle emits COMMENT ON COLUMN via alter_table.
         editColumnComment: true,
       },
@@ -330,16 +348,21 @@ describe("DataSourceProfile registry", () => {
     expect(getDataSourceProfile("duckdb").connectionKind).toBe("file");
   });
 
-  it("describes SQLite as a file RDBMS with scoped row-edit and create-table-only DDL", () => {
+  it("describes SQLite as a file RDBMS with scoped row-edit and rebuild-free DDL", () => {
     const sqlite = getDataSourceProfile("sqlite");
 
     expect(sqlite.connectionKind).toBe("file");
     expect(sqlite.capabilities).toEqual(expectedCapabilitiesByType.sqlite);
     expect(sqlite.capabilities.edit.editRows).toBe(true);
     expect(sqlite.capabilities.ddl.createTable).toBe(true);
-    expect(sqlite.capabilities.ddl.alterTable).toBe(false);
-    expect(sqlite.capabilities.ddl.createIndex).toBe(false);
-    expect(sqlite.capabilities.ddl.dropObject).toBe(false);
+    expect(sqlite.capabilities.ddl.alterTable).toBe(true);
+    expect(sqlite.capabilities.ddl.createIndex).toBe(true);
+    expect(sqlite.capabilities.ddl.dropObject).toBe(true);
+    // Issue #1804 — the boundary the flip does NOT cross. Both changes need a
+    // 12-step table rebuild, which the adapter refuses outright, preview
+    // included.
+    expect(sqlite.capabilities.ddl.modifyColumn).toBe(false);
+    expect(sqlite.capabilities.ddl.alterConstraint).toBe(false);
   });
 
   it("keeps MongoDB document-scoped and separate from global switch-db", () => {
