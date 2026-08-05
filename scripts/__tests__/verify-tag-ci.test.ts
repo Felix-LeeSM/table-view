@@ -12,6 +12,11 @@ import { describe, expect, it } from "vitest";
 //
 // 네트워크를 타지 않는다. GitHub API 는 스위트가 PATH 앞에 놓는 `gh` 스텁이
 // 가로챈다.
+//
+// 스위트는 mutation 단계에서 워크플로 · 문서 변조본을 만들어 자기 자신을 다시
+// 돌린다 (#2180). 아래 timeout 이 그 서브런까지 덮는 값이라, 값을 줄이려면 그
+// 단계의 실측을 먼저 봐라. 변조의 근거는 커밋된 기대본
+// `scripts/release/fixtures/release-verify-tag-ci-job.txt` 다.
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 const suite = "scripts/release/verify-tag-ci.test.sh";
@@ -21,7 +26,9 @@ describe("verify-tag-ci", () => {
   // Reason: 태그는 CI 결과를 안 보고 붙는다. 그 간극을 메우는 게이트가 조용히
   // 무력화돼도(continue-on-error, 실패 경로의 exit 0, 자기 run 제외 누락) 릴리스는
   // green 으로 끝난다 — 이 스위트가 그 편집들을 red 로 만든다 (2026-08-05)
-  it("passes its own regression suite", { timeout: 60_000 }, () => {
+  it("passes its own regression suite, mutation cases included", {
+    timeout: 60_000,
+  }, () => {
     // spawnSync + status 검사: execFileSync 는 0 이 아닌 종료에서 던지는데 그
     // Error.message 에 stdout 이 안 붙어, 어느 단언에서 깨졌는지가 vitest 출력에서
     // 사라진다 (scripts/__tests__/measure-rounds.test.ts 와 같은 이유, issue #2085).
