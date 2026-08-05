@@ -52,8 +52,14 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
     identityColumn: true,
   },
   intelligence: { erd: true },
-  // Issue #1073 — SQL Server admin ops parity (no users: #1077 PG-first).
-  operations: { activity: true, slowQueries: true, serverInfo: true },
+  // Issue #1073 — SQL Server admin ops parity. Issue #1077 Stage 2 — users
+  // listing from sys.server_principals (no password_hash / sys.sql_logins).
+  operations: {
+    activity: true,
+    slowQueries: true,
+    serverInfo: true,
+    users: true,
+  },
 });
 
 const expectedOracleRuntimeCapabilities = expectedCapabilities({
