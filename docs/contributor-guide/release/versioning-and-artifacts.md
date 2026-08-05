@@ -68,9 +68,11 @@ Two workflows drive a release:
     it counts failed, when one never finished inside its wait budget, or when
     the commit carries no check runs at all. It counts neither this release
     run's own jobs nor any check whose name ends in `(non-blocking)`. That
-    second exclusion goes by name, not by behaviour, so it also drops
-    `WASM Size Budget (non-blocking)` — which has no `continue-on-error` and so
-    can fail the commit's CI run without failing this one. On what it does
+    second exclusion goes by name. Since #2174 every job carrying the suffix
+    also carries `continue-on-error: true`, but that flag does not soften what
+    this job drops: a failing `continue-on-error` job still records
+    `conclusion: failure` on its own check run, so each row this exclusion
+    drops is a genuinely red one. On what it does
     count it is fail-closed: an unreadable API answer is a failure, not a pass.
     It runs on the dry-run path too.
 - Release workflow output is a draft GitHub Release. A maintainer reviews and
@@ -129,10 +131,11 @@ After the draft release is created:
   [`docs/product/known-limitations.md`](../../product/known-limitations.md).
 - Before publishing, confirm the exact release SHA has green CI yourself. The
   release run's `Verify tag SHA CI is green` job does not settle that in either
-  direction. It ignores every check whose name ends in `(non-blocking)`, and one
-  of those — `WASM Size Budget (non-blocking)` — carries no
-  `continue-on-error`, so a blown size budget fails the commit's own CI run
-  while this job still passes. In the other direction the job runs under
+  direction. It ignores every check whose name ends in `(non-blocking)`, and
+  those checks still record `conclusion: failure` when they fail — their
+  `continue-on-error: true` spares the workflow run they belong to, not their
+  own check run — so a blown `WASM Size Budget (non-blocking)` leaves a red
+  check on the commit while this job still passes. In the other direction the job runs under
   `if: always()`, so a red release run may be red for something the job never
   looked at, such as a dead build leg; only a failure reported by the job itself
   names offending checks. Read the commit's check list, not the release run's

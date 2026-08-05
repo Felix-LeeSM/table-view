@@ -36,7 +36,7 @@ RELEASE_DOC="${VERIFY_TAG_CI_DOC:-$ROOT/docs/contributor-guide/release/versionin
 
 JOB_KEY="verify-tag-ci"
 JOB_NAME="Verify tag SHA CI is green"
-STEP_NAME="Fail the release run when the tagged SHA has failing checks"
+STEP_NAME="Fail the release run when the tagged SHA has failing non-advisory checks"
 
 for f in "$RELEASE_WORKFLOW" "$AUTOTAG_WORKFLOW" "$RELEASE_DOC"; do
 	if [ ! -f "$f" ]; then
@@ -261,7 +261,9 @@ run_gate "$d"
 assert_rc 0 "전부 green 이면 통과"
 assert_has "3 check runs green" "green 인 체크 수를 로그에 남긴다"
 
-# 하나라도 red 면 릴리스 run 이 red 다. 이것이 #2168 의 본체다.
+# 이 잡이 세는 체크 중 하나라도 red 면 릴리스 run 이 red 다. 이것이 #2168 의
+# 본체다. "하나라도" 가 전수가 아닌 이유는 아래 두 절에 있다 — 자기 run 의 잡과
+# `(non-blocking)` 이름은 애초에 안 센다.
 d="$(new_stub)"
 {
 	row "Rust Static Analysis" completed success "$CI_URL"
