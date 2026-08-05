@@ -23,14 +23,14 @@
 // arm 은 넷이고, 각각이 분리가 낡게 만드는 서로 다른 문장 모양을 본다:
 //   A  이동한 경로(와 그 디렉토리·crate 상대 표기)를 언급하는 자리
 //   B  manifest 를 안 준 cargo 명령
-//   C  분리가 바꾼 집합의 닫힌 개수 서술 ("four commands", "4종이 전부다")
+//   C  분리가 바꾼 집합의 닫힌 개수 서술
 //   D  분리가 이름을 겹치게 만든 파일을 맨 이름으로 부르는 자리 (`Cargo.lock`)
 // A·B 는 issue #2092 「방법」이 지정했고, C·D 는 같은 이슈 「알려진 잔여」의 항목이
 // A·B 에 안 잡혀서 보강했다 — 그 목록이 이 파일의 테스트 케이스다.
 //
 // 전수 도구는 `git grep` 이다 — `rg` 는 루트 `.ignore` 와 dotfile 기본 제외
 // 때문에 전수가 아니다 (memory/workflow/orchestration/memory.md §1).
-// 여기서는 hit 수집을 전부 `git grep` 에 맡기고, 분류만 JS 로 한다.
+// 여기서는 hit 수집을 `git grep` 에 맡기고, 분류만 JS 로 한다.
 
 import { execFileSync } from "node:child_process";
 import {
@@ -149,7 +149,7 @@ function armATerms(olds) {
     }
   }
   // 슬래시 없는 용어(맨 basename)를 뺀다. `mod.rs` · `queries.rs` 는 이 저장소에
-  // 수십 벌 있어 이동과 무관한 자리를 전부 끌어온다 — 경로 신호가 0 이다.
+  // 수십 벌 있어 이동과 무관한 자리를 끌어온다 — 경로 신호가 없다.
   for (const t of [...terms]) {
     if (!t.includes("/")) {
       terms.delete(t);
@@ -164,7 +164,7 @@ function armATerms(olds) {
 
 // 매치를 감싼 "경로처럼 생긴 토큰". 백틱/괄호/문장부호 안에서 경로만 떼어낸다.
 // `.` 이 문자셋에 있어서 앞뒤 문장부호가 토큰에 붙어 온다. 정규화가 그것을 벗긴다 —
-// 벗기지 않으면 `git ls-files` 로 푸는 처분 규칙이 0건을 받고 불발한다.
+// 벗기지 않으면 `git ls-files` 로 푸는 처분 규칙이 빈 결과를 받고 불발한다.
 const PATH_TOKEN = /[A-Za-z0-9_.*{}-]+(?:\/[A-Za-z0-9_.*{}-]+)+\/?\**/g;
 export const normalizeToken = (t) =>
   t
@@ -185,7 +185,7 @@ export function segmentAligned(token, term) {
   return false;
 }
 
-// 이동 경로가 전부 착지한 crate 루트. rename 의 new 쪽에서 뽑는다 — 이 안에서
+// 이동 경로가 착지한 crate 루트. rename 의 new 쪽에서 뽑는다 — 이 안에서
 // 쓴 crate 상대 경로(`db/mongodb.rs`)는 지금도 그대로 풀리므로 낡지 않았다.
 // 밖에서 쓴 같은 표기는 읽는 사람의 기준 디렉토리가 사라져 낡는다.
 function newRoots(olds, news) {
@@ -259,7 +259,7 @@ function armA() {
 // core 는 workspace member 가 아니라 path dependency 다. 저장소 루트에는
 // `Cargo.toml` 이 아예 없어서 맨 `cargo <verb>` 는 실패하고, `src-tauri` 에서
 // 돌리면 core 에 안 닿은 채로 exit 0 이다. 그래서 manifest 없는 cargo 명령을
-// 지시로 적어 둔 자리는 분리 이후 전부 낡았다.
+// 지시로 적어 둔 자리는 분리 이후 낡았다.
 //
 // `tree` 는 issue #2092 원문 동사 목록에 없다. 더한 이유: `cargo tree -i tauri` 를
 // 「빈 결과」로 서술한 자리가 실측으로는 exit 101 이라 같은 클래스다.
@@ -284,10 +284,10 @@ const armB = () =>
 // 만든다 — 실측으로 그 문장은 #2082 이 넣고 이틀 뒤 #2110 이 `five` 로 고쳤다.
 // 집합은 개수가 아니라 소유 파일 포인터로 가리켜야 한다.
 //
-// 범위는 cargo 명령 줄의 ±3 줄 창이다 — 분리가 바꾼 집합이 cargo lane 이라
-// 그 근처가 이 서술이 사는 자리다.
-// 뒤쪽 경계를 두지 않는다. 한국어 수량사는 조사가 바로 붙어서 (`4종이 전부다`)
-// 경계를 요구하면 이 클래스의 대표 문장이 통째로 빠진다.
+// 범위는 cargo 명령 줄 둘레의 창이고 폭은 아래 `WINDOW` 가 갖는다 — 분리가 바꾼
+// 집합이 cargo lane 이라 그 근처가 이 서술이 사는 자리다.
+// 뒤쪽 경계를 두지 않는다. 한국어 수량사는 조사가 바로 붙어서, 경계를 요구하면
+// 이 클래스의 대표 문장이 통째로 빠진다.
 //
 // 명사 목록의 `step` 은 오탐을 하나 만든다 (`sits one step further out`). 그래도
 // 빼지 않는다 — 이 스윕이 고친 자리 하나가 `without these two steps` 였고, 빼면
@@ -381,12 +381,11 @@ function armD() {
 // 판단했다는 뜻이고, 술어로 쓴 규칙은 매번 다시 잰다.
 //
 // ponytail: 경로 목록 규칙은 파일 단위라 같은 파일에 새로 생긴 hit 도 조용히
-// 덮는다 — 실측으로 이 PR 이 고친 21건 중 17건은 `--check` 가 잡았고 나머지 4건은
-// 이 부류에 가려졌다. 줄·문구 단위 술어로 좁힐 수 있지만 줄이 밀리면 같이 썩는다.
+// 덮는다. 줄·문구 단위 술어로 좁힐 수 있지만 줄이 밀리면 같이 썩는다.
 // 그 파일들에 manifest 없는 **실행 지시**가 새로 들어오는 일이 실제로 생기면 그때
 // 좁힌다.
 //
-// ponytail: arm C 의 ±3 줄 창도 같은 부류의 천장이다 — cargo 줄에서 먼 닫힌 개수
+// ponytail: arm C 의 `WINDOW` 창도 같은 부류의 천장이다 — cargo 줄에서 먼 닫힌 개수
 // 서술은 안 보인다. `docs/contributor-guide/testing-and-quality.md` 의 llvm-cov
 // 절이 그렇고(거리 7), 그 개수들은 잡 id 와 커밋 SHA 로 시점을 박은 측정 기록이라
 // 지금은 안 썩는다. 창을 넓히면 무관한 산문이 같이 딸려 온다.
@@ -515,7 +514,7 @@ const DISPOSITIONS = [
   {
     id: "B/names-the-lane",
     // 경로 목록은 각 항목이 실제로 hit 을 덮는지 재고 넣는다. `docs/roadmap/h7.md`
-    // 가 처음엔 있었는데 0건이었다 — 그 파일의 cargo 줄에는 `--manifest-path` 가
+    // 가 처음엔 있었는데 아무 hit 도 안 덮었다 — 그 파일의 cargo 줄에는 `--manifest-path` 가
     // 같이 있어 arm B 가 애초에 안 내보낸다.
     why: "cargo 를 돌리라는 지시가 아니라 lane·도구·소비자를 이름으로 부르는 산문이다. manifest 를 붙이면 문장이 명령으로 오독된다",
     test: (h) =>

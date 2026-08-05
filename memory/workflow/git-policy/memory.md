@@ -24,7 +24,7 @@ trigger:
 
 ### Why
 
-- push 직전 로컬 검증은 **`lefthook.yml` 의 pre-push 훅이 전부다** — 그 파일의
+- push 직전 로컬 검증은 **`lefthook.yml` 의 pre-push 훅**이다 — 그 파일의
   `pre-push.jobs` 가 목록의 SOT 이고, 지금 걸린 것은 `biome check .
   --error-on-warnings` (포맷 + 일반 lint, 전체 트리), push 대상 변경 파일 한정
   `eslint --quiet` (repo 고유 가드), 그리고 manifest 마다 도는

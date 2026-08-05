@@ -17,7 +17,7 @@ const sweep = "scripts/sweep/core-split-prose.mjs";
 // Purpose: `scripts/sweep/core-split-prose.mjs` 의 처분 게이트를 잠근다 — issue #2092
 describe("core-split-prose sweep", () => {
   // Reason: `--check` 가 규칙 없는 hit 에도 0 을 내면 게이트가 통째로 가짜가 된다.
-  // 처분표는 PR body 의 손 열거를 대신하는 유일한 근거라 fail-open 이 곧 무근거다.
+  // 처분표는 PR body 의 손 열거를 대신하는 근거라 fail-open 이 곧 무근거다.
   it("leaves a hit that matches no rule unclassified", () => {
     expect(
       classify({

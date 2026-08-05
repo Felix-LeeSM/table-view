@@ -46,7 +46,7 @@ Backend adapter capability (`BackendAdapterCapability`) 를 flip 하면 4곳을 
 갱신한다. 1-3 누락은
 `cargo test --manifest-path src-tauri/table-view-core/Cargo.toml --lib` 의 contract
 assertion 과 `src/types/dataSourceProfileParity.test.ts` 가 CI 에서 잡는다. 앱
-manifest 의 `--lib` 은 path dependency 인 core 에 안 닿아 그 assertion 을 0건
+manifest 의 `--lib` 은 path dependency 인 core 에 안 닿아 그 assertion 을 안
 돌리고 exit 0 이다. 4 를 잡는 것은 없다:
 
 1. Rust adapter contract — `src-tauri/table-view-core/src/models/data_source.rs` 의 `adapter_contract`
