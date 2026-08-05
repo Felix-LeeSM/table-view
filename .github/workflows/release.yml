@@ -252,3 +252,125 @@ jobs:
       # platform key per build-matrix leg. The download above fails closed when
       # the draft has no latest.json at all, but an INCOMPLETE manifest (a leg
       # that died after upload) publishes unnoticed.
+
+  # #2168 — the tag exists before its CI verdict does. auto-tag-release.yml fires
+  # on the version-bump merge and pushes `vX.Y.Z` right away, concurrently with
+  # the main-push CI on that same merge commit, so until this job nothing ever
+  # proved the tagged SHA was green. Meanwhile
+  # docs/contributor-guide/release/versioning-and-artifacts.md promises the tag
+  # points at a SHA that passed the Pre-Release Verification Gate. At v0.7.0 the
+  # promise happened to hold — all 18 checks on 39019c3c were success — but a
+  # human had to query the API to learn that; the pipeline never said so.
+  #
+  # The gate sits at the *draft*, not at the tag (owner decision, 2026-08-05, on
+  # #2168). Making auto-tag wait for CI would delay the tag by a full CI run and,
+  # worse, a missing tag means release.yml never fires and the bundles have to be
+  # produced by hand. What actually needs protecting is the moment artifacts
+  # reach users, and that moment is the maintainer's manual publish click. So the
+  # tag stays instant, the bundles still build, and a red tag SHA ends the
+  # release run red — the signal lands next to the Publish button.
+  #
+  # This job does not block the draft from being created: tauri-action makes the
+  # draft at the START of `build` (`releaseDraft: true` above), so there is no
+  # "create the draft only after verification" position in this pipeline.
+  verify-tag-ci:
+    name: Verify tag SHA CI is green
+    needs: build
+    # Report the tagged SHA's verdict even when a build leg died. A dead leg is
+    # evidence about the runner, not about the commit, and the maintainer still
+    # has a draft in front of them either way.
+    if: always()
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    # Narrower than the workflow-level `contents: write` — this job only reads.
+    permissions:
+      checks: read
+      contents: read
+    steps:
+      - name: Fail the release run when the tagged SHA has failing checks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job runs after `build` (up to 60 min), by which point the
+          # main-push CI on the same commit has long finished — the wait budget
+          # is the safety net for the `always()` path where a build leg dies
+          # early. Overridable so the regression suite can drive the poll
+          # without sleeping; the workflow pins the real values here.
+          TAG_CI_WAIT_SECONDS: "900"
+          TAG_CI_POLL_SECONDS: "30"
+        run: |
+          set -uo pipefail
+
+          # One row per check run on this commit: name, status, conclusion, url.
+          # The projection stays dumb on purpose — every decision below is made
+          # in shell so the regression suite can drive it with a stubbed `gh`.
+          fetch() {
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100" \
+              --jq '.check_runs[] | [.name, .status, (.conclusion // "pending"), (.details_url // "")] | @tsv'
+          }
+
+          # Two kinds of row are dropped.
+          #
+          # (1) This release run's own check runs. They are in progress by
+          #     definition — including the one you are reading — so counting
+          #     them would wait on ourselves until the budget expires.
+          # (2) Names ending in `(non-blocking)`. The case that suffix was made
+          #     for is ci.yml's `Dependency Advisories (non-blocking)`: a RUSTSEC
+          #     advisory is an event about the outside world, not about this
+          #     commit, and ci.yml marks that job `continue-on-error: true` so a
+          #     single advisory cannot turn every open PR and main push red at
+          #     once (2026-07-02 incident). Blocking a release on it would
+          #     reintroduce exactly that. Matching the suffix rather than listing
+          #     job names also covers a future advisory job the day it is named.
+          #
+          #     Read this exclusion as name-based, not behaviour-based — the two
+          #     do not currently agree. `WASM Size Budget (non-blocking)` carries
+          #     the name but has NO `continue-on-error`, so a blown budget really
+          #     does fail its own ci.yml run, and this job drops it anyway. That
+          #     name/behaviour mismatch is ci.yml's and predates this job; #2168
+          #     does not touch ci.yml. So a green result here is not the same
+          #     claim as "the commit is green" —
+          #     docs/contributor-guide/release/versioning-and-artifacts.md tells
+          #     the maintainer to read the commit's own check list before
+          #     publishing rather than trust this job alone.
+          relevant() {
+            awk -F'\t' -v self="/actions/runs/${GITHUB_RUN_ID}/" \
+              'NF && index($4, self) == 0 && $1 !~ /\(non-blocking\)$/ { print $1 "\t" $2 "\t" $3 }'
+          }
+
+          deadline=$((SECONDS + TAG_CI_WAIT_SECONDS))
+          while :; do
+            if ! raw="$(fetch 2>&1)"; then
+              echo "::error::Could not read check runs for ${GITHUB_SHA}. An unreadable verdict is not a pass — treat this draft as unverified and check the commit by hand before publishing." >&2
+              printf '%s\n' "$raw" >&2
+              exit 1
+            fi
+            rows="$(printf '%s\n' "$raw" | relevant)"
+
+            running="$(printf '%s\n' "$rows" | awk -F'\t' 'NF && $2 != "completed"')"
+            [ -z "$running" ] && break
+
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::Checks on ${GITHUB_SHA} were still running after ${TAG_CI_WAIT_SECONDS}s, so this release run cannot vouch for the commit. Still running:" >&2
+              printf '%s\n' "$running" >&2
+              exit 1
+            fi
+            sleep "$TAG_CI_POLL_SECONDS"
+          done
+
+          if [ -z "$rows" ]; then
+            echo "::error::${GITHUB_SHA} carries no check runs outside this release run. The tag points at a commit CI never verified — do not publish this draft." >&2
+            exit 1
+          fi
+
+          # success / neutral / skipped are the conclusions that mean "did not
+          # fail". Everything else (failure, timed_out, cancelled,
+          # action_required, startup_failure, stale) is red.
+          failed="$(printf '%s\n' "$rows" | awk -F'\t' 'NF && $3 != "success" && $3 != "neutral" && $3 != "skipped"')"
+          if [ -n "$failed" ]; then
+            echo "::error::${GITHUB_SHA} has failing checks. Do NOT publish this draft — publishing it ships these bundles to every installed client through the updater:" >&2
+            printf '%s\n' "$failed" >&2
+            exit 1
+          fi
+
+          echo "::notice::${GITHUB_SHA}: $(printf '%s\n' "$rows" | grep -c .) check runs green. The draft still needs the manual Post-Release Verification in docs/contributor-guide/release/versioning-and-artifacts.md before publishing."

@@ -21,7 +21,16 @@ pre-release gate stays in
   `git push origin vX.Y.Z` publishes whatever bundle the tag points at, under a
   mismatched version. Confirm the match yourself before pushing a tag by hand.
 - The tag must also point to a `main` commit SHA that passed the Pre-Release
-  Verification Gate. If the SHA changes, rerun the gate before tagging.
+  Verification Gate. If the SHA changes, rerun the gate before tagging. Nothing
+  prevents a tag from landing on a red SHA — `auto-tag-release.yml` fires the
+  moment the version bump merges, concurrently with that commit's own CI — so
+  the check happens after the fact: `release.yml`'s `Verify tag SHA CI is green`
+  job reads the tagged commit's check runs and ends the release run red when one
+  of the checks it counts failed (#2168 — it does not count all of them; the
+  exclusions are in Tag And Workflow below). A red release run is the signal
+  sitting next to the
+  Publish button; it does not delete the tag or the draft, and it does not stop
+  a maintainer who publishes anyway.
 - Parser subcrate versions such as `sql-parser-core` and `mongosh-parser-core`
   are internal crate versions and do not drive the desktop release tag.
 - Agents must not create, move, delete, or force-push release tags unless the
@@ -54,6 +63,16 @@ Two workflows drive a release:
     match yourself before pushing a tag by hand.
   - `workflow_dispatch` is a dry-run path. It creates a draft release named
     `manual-<sha>` instead of a version tag.
+  - Once the build legs finish, the `Verify tag SHA CI is green` job reads the
+    tagged commit's check runs and fails the release run when one of the checks
+    it counts failed, when one never finished inside its wait budget, or when
+    the commit carries no check runs at all. It counts neither this release
+    run's own jobs nor any check whose name ends in `(non-blocking)`. That
+    second exclusion goes by name, not by behaviour, so it also drops
+    `WASM Size Budget (non-blocking)` — which has no `continue-on-error` and so
+    can fail the commit's CI run without failing this one. On what it does
+    count it is fail-closed: an unreadable API answer is a failure, not a pass.
+    It runs on the dry-run path too.
 - Release workflow output is a draft GitHub Release. A maintainer reviews and
   publishes it manually — the draft is the only check that stops a bad build
   from auto-installing to every user via the updater.
@@ -108,11 +127,21 @@ After the draft release is created:
   [`release-notes-support-matrix.md`](release-notes-support-matrix.md),
   [`docs/product/README.md`](../../product/README.md), and
   [`docs/product/known-limitations.md`](../../product/known-limitations.md).
-- Before publishing, confirm the exact release SHA has green CI. `Runtime Happy
-  Path` on a PR only ran the specs that PR's changed paths selected; the run
-  that covers every spec is the `main` push run on the merge commit, or the
-  nightly. Take that run, or run the smoke suite by hand, when the release needs
-  full runtime proof (see
+- Before publishing, confirm the exact release SHA has green CI yourself. The
+  release run's `Verify tag SHA CI is green` job does not settle that in either
+  direction. It ignores every check whose name ends in `(non-blocking)`, and one
+  of those — `WASM Size Budget (non-blocking)` — carries no
+  `continue-on-error`, so a blown size budget fails the commit's own CI run
+  while this job still passes. In the other direction the job runs under
+  `if: always()`, so a red release run may be red for something the job never
+  looked at, such as a dead build leg; only a failure reported by the job itself
+  names offending checks. Read the commit's check list, not the release run's
+  colour. The job also reports only the conclusions those checks reached; it
+  cannot widen what they covered.
+  `Runtime Happy Path` on a PR only ran the specs that PR's changed paths
+  selected; the run that covers every spec is the `main` push run on the merge
+  commit, or the nightly. Take that run, or run the smoke suite by hand, when
+  the release needs full runtime proof (see
   [`testing-and-quality.md`](../testing-and-quality.md)).
 
 Updater artifacts — the auto-update path, which reaches every installed client,
