@@ -168,6 +168,27 @@ jobs:
       - name: no review-round narrative in source comments
         run: bash scripts/check-round-narrative.sh
 
+      # A sixth contract rides here for the same reason the second through
+      # fifth do (#2174): a required context cannot be registered by the PR
+      # that adds it, so riding one that is already required is what makes a
+      # new check blocking on the day it merges
+      # (memory/runbook/pr-merge-gates/memory.md). `(non-blocking)` is a name
+      # this repo's release gate READS — release.yml drops check runs by that
+      # suffix — so a job that carries the name without
+      # `continue-on-error: true` is dropped from the release verdict while
+      # still failing its own run. `WASM Size Budget (non-blocking)` was in
+      # exactly that state until this PR. What counts as a violation is decided
+      # by `scripts/check-non-blocking-jobs.sh` alone; its header states the
+      # rule. The script needs no toolchain — awk and the shell — so it adds no
+      # setup to the cheapest job. No timing figure is quoted here on purpose:
+      # the one figure above that was re-measured (`check-ci-test-calls.sh`) did
+      # not reproduce, and none of them record the machine, load, or warm/cold
+      # state that would make two runs comparable. That gap is registered in
+      # docs/roadmap/follow-up-queue.md under Quality gates; pinning the
+      # conditions is that item's job, not this one's.
+      - name: (non-blocking) job names carry continue-on-error
+        run: bash scripts/check-non-blocking-jobs.sh
+
   dependency-security:
     name: Dependency Security
     runs-on: ubuntu-latest
@@ -554,6 +575,20 @@ jobs:
     name: WASM Size Budget (non-blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The name promised this and the job did not deliver it until #2174: an
+    # over-budget commit ended this whole workflow run red. What the flag
+    # changes is the RUN's conclusion, not this job's. Measured on a throwaway
+    # branch (a `continue-on-error: true` job whose only step was `exit 1`):
+    # the job's check run still reports `conclusion: failure`, while the run it
+    # belongs to reports `success`
+    # (https://github.com/Felix-LeeSM/table-view/actions/runs/31017294699
+    # against the control https://github.com/Felix-LeeSM/table-view/actions/runs/31017295684).
+    # So a blown budget still shows red on the commit's check list and still
+    # merges (the name is absent from the `pr_to_main` ruleset, per the comment
+    # above); what it no longer does is drag the rest of CI's verdict down with
+    # it. `scripts/check-non-blocking-jobs.sh` is what keeps the two in step
+    # from here on.
+    continue-on-error: true
 
     steps:
       - name: Checkout

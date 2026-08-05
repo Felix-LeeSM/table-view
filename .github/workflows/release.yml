@@ -255,8 +255,11 @@ jobs:
 
   # #2168 — the tag exists before its CI verdict does. auto-tag-release.yml fires
   # on the version-bump merge and pushes `vX.Y.Z` right away, concurrently with
-  # the main-push CI on that same merge commit, so until this job nothing ever
-  # proved the tagged SHA was green. Meanwhile
+  # the main-push CI on that same merge commit, so until this job nothing in the
+  # pipeline ever read the tagged SHA's checks at all. Note the narrower claim:
+  # this job reports a verdict, it does not prove the SHA green — it counts
+  # neither its own run's checks nor any name ending in `(non-blocking)`, per
+  # `relevant()` below. Meanwhile
   # docs/contributor-guide/release/versioning-and-artifacts.md promises the tag
   # points at a SHA that passed the Pre-Release Verification Gate. At v0.7.0 the
   # promise happened to hold — all 18 checks on 39019c3c were success — but a
@@ -267,8 +270,10 @@ jobs:
   # worse, a missing tag means release.yml never fires and the bundles have to be
   # produced by hand. What actually needs protecting is the moment artifacts
   # reach users, and that moment is the maintainer's manual publish click. So the
-  # tag stays instant, the bundles still build, and a red tag SHA ends the
-  # release run red — the signal lands next to the Publish button.
+  # tag stays instant, the bundles still build, and a tag SHA carrying a red
+  # check this job counts ends the release run red — the signal lands next to
+  # the Publish button. A tag SHA whose only red check is an advisory one
+  # (`(non-blocking)` suffix) does not, by design.
   #
   # This job does not block the draft from being created: tauri-action makes the
   # draft at the START of `build` (`releaseDraft: true` above), so there is no
@@ -287,7 +292,7 @@ jobs:
       checks: read
       contents: read
     steps:
-      - name: Fail the release run when the tagged SHA has failing checks
+      - name: Fail the release run when the tagged SHA has failing non-advisory checks
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # This job runs after `build` (up to 60 min), by which point the
@@ -323,13 +328,29 @@ jobs:
           #     reintroduce exactly that. Matching the suffix rather than listing
           #     job names also covers a future advisory job the day it is named.
           #
-          #     Read this exclusion as name-based, not behaviour-based — the two
-          #     do not currently agree. `WASM Size Budget (non-blocking)` carries
-          #     the name but has NO `continue-on-error`, so a blown budget really
-          #     does fail its own ci.yml run, and this job drops it anyway. That
-          #     name/behaviour mismatch is ci.yml's and predates this job; #2168
-          #     does not touch ci.yml. So a green result here is not the same
-          #     claim as "the commit is green" —
+          #     The exclusion is name-based, and since #2174 the name is backed
+          #     by behaviour: `scripts/check-non-blocking-jobs.sh` turns CI red
+          #     if a job carries the suffix without `continue-on-error: true`.
+          #
+          #     That does NOT reduce this filter to a no-op. A failing
+          #     `continue-on-error: true` job still writes
+          #     `conclusion: failure` to its OWN check run — the flag spares the
+          #     workflow run, not the check run. Measured on a throwaway branch
+          #     whose only step was `exit 1`:
+          #     https://github.com/Felix-LeeSM/table-view/actions/runs/31017294699
+          #     (job `failure`, run `success`) against the control
+          #     https://github.com/Felix-LeeSM/table-view/actions/runs/31017295684
+          #     (both `failure`). Mind the direction of that claim. `relevant()`
+          #     below reads the name and the details URL only — never the
+          #     conclusion — so it drops these rows whatever colour they are:
+          #     on a green commit it drops a GREEN
+          #     `Dependency Advisories (non-blocking)` row, and it drops every
+          #     row belonging to this release run. The true, narrower statement
+          #     is that a dropped row which IS red is genuinely red, the flag
+          #     having spared the workflow run and not the check run. So it is
+          #     this filter — not the flag — that keeps one RUSTSEC advisory
+          #     from blocking every release, and a green result here is still
+          #     not the same claim as "the commit is green";
           #     docs/contributor-guide/release/versioning-and-artifacts.md tells
           #     the maintainer to read the commit's own check list before
           #     publishing rather than trust this job alone.

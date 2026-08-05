@@ -155,7 +155,13 @@ platform smoke gaps from `testing-and-quality.md` only when they block an active
 feature lane and have owner/runtime-cost/triage paths. Link checking left this
 list in #2125: internal markdown link targets are now checked by
 `scripts/docs-links.ts` as a blocking frontend test. External URLs were not part
-of that promotion and stay unchecked.
+of that promotion and stay unchecked. Open item from #2174: the `PR Body
+Contract` comment in `ci.yml` records `check-ci-test-calls.sh` at 0.18s, which
+review of that PR did not reproduce — it measured 0.07-0.08s. The figure is
+quoted with its command but not with the machine, load, or warm/cold state, so
+nothing makes the two runs comparable. Sibling steps in that job carry figures
+written the same way and were not re-measured. Pin the measurement conditions
+or drop the figures.
 
 ### Refactor backlog
 
