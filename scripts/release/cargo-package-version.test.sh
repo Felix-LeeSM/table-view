@@ -185,6 +185,34 @@ tag_step() {
 	     g' "$WORKFLOW"
 }
 
+# stdin 의 줄 중 manifest 를 **읽는** 줄만 낸다 (이 스크립트를 통하는 읽기는 뺀다).
+#
+# 「읽기」와 「언급」을 가르는 기준: 경로가 명령의 인자·리다이렉트 대상으로 들어가면
+# 읽기, 진단 문자열 안에 적히면 언급이다. 릴리스 스텝이 에러 메시지에 경로를 적는
+# 것은 자연스럽고(#2121 이 `Cargo.toml` 을 `src-tauri/Cargo.toml` 로 바꿨다) 읽기가
+# 아니다. 그 한 줄을 예외 목록에 넣으면 같은 모양이 또 생기므로 기준으로 가른다:
+#
+#   ⓐ 주석 줄은 통째로 비운다.
+#   ⓑ `"$( ... )"` 를 감싼 따옴표를 벗긴다 — 안쪽은 문자열이 아니라 명령이다.
+#      이게 없으면 `cargo_version="$(cat src-tauri/Cargo.toml)"` 이 ⓒ에서
+#      산문으로 오인돼 우회 읽기가 통과한다.
+#   ⓒ 공백을 품은 따옴표 구간(= 산문 = 진단 문자열)을 지운다. 인자로 쓰인 경로에는
+#      공백이 없으므로 `cat "src-tauri/Cargo.toml"` 같은 따옴표 낀 인자는 남는다.
+#
+# 판정은 변환본으로 하고 출력은 원본 줄이다 — 변조를 손으로 볼 때 변환본이 아니라
+# 실제 워크플로 줄이 보여야 한다.
+manifest_reads() {
+	awk '{
+		raw = $0
+		sub(/^[[:space:]]*#.*/, "")
+		gsub(/"\$\(/, "$(")
+		gsub(/\)"/, ")")
+		gsub(/"[^"]*[[:space:]][^"]*"/, "")
+		gsub(/\047[^\047]*[[:space:]][^\047]*\047/, "")
+		if (index($0, "src-tauri/Cargo.toml") && !index($0, "cargo-package-version.sh")) print raw
+	}'
+}
+
 check_workflow_coupling() {
 	[ "${CARGO_PACKAGE_VERSION_SKIP_COUPLING:-0}" = "1" ] && return 0
 
@@ -213,10 +241,10 @@ check_workflow_coupling() {
 $step"
 	fi
 
-	# ② 그 스텝의 다른 줄이 manifest 를 따로 읽지 않는가. ①만으로는 호출을
-	#    남긴 채 값을 다른 줄에서 덮어쓰는 편집을 못 잡는다. 주석은 뺀다.
+	# ② 그 스텝의 다른 줄이 manifest 를 따로 **읽지** 않는가. ①만으로는 호출을
+	#    남긴 채 값을 다른 줄에서 덮어쓰는 편집을 못 잡는다.
 	local stray
-	stray="$(printf '%s\n' "$step" | grep -v '^[[:space:]]*#' | grep -F 'src-tauri/Cargo.toml' | grep -vF 'cargo-package-version.sh')"
+	stray="$(printf '%s\n' "$step" | manifest_reads)"
 	if [ -z "$stray" ]; then
 		pass "태그 스텝에 manifest 를 따로 읽는 줄이 없다"
 	else
@@ -258,6 +286,12 @@ SH
 	run_suite_against() {
 		SUB_OUT="$(CARGO_PACKAGE_VERSION_SCRIPT="$1" CARGO_PACKAGE_VERSION_SKIP_MUTATION=1 \
 			CARGO_PACKAGE_VERSION_SKIP_COUPLING=1 bash "$SELF" 2>&1)"
+	}
+
+	# 워크플로 사본을 물리는 서브런. 판정 대상이 배선이므로 coupling 은 켠 채 둔다.
+	run_suite_with_workflow() {
+		SUB_OUT="$(CARGO_PACKAGE_VERSION_WORKFLOW="$1" CARGO_PACKAGE_VERSION_SKIP_MUTATION=1 \
+			bash "$SELF" 2>&1)"
 	}
 
 	# 양성 대조. 이게 red 면 아래 변조본의 red 는 아무것도 증명하지 못한다.
@@ -320,6 +354,22 @@ SH
 	mutant_differs workspace-first "0.7.0"
 	mutant_differs quoted-comment "0.7.0"
 	mutant_invents_value inherited
+
+	# 배선 필터가 「읽기」와 「언급」을 실제로 가르는가. 진단 문자열이 통과하는 쪽은
+	# 위 배선 단계가 저장소의 진짜 워크플로로 이미 보였다 (#2121 이 그 스텝의 에러
+	# 문구에 경로를 넣었다). 여기서는 반대쪽 — 진짜 우회 읽기를 넣으면 red 인가.
+	WF_MUT="$MUT_DIR/auto-tag-release.yml"
+	awk '{ print }
+	     /cargo-package-version\.sh src-tauri\/Cargo\.toml/ {
+	         print "          cargo_version=\"$(cat src-tauri/Cargo.toml | tail -1)\""
+	     }' "$WORKFLOW" >"$WF_MUT"
+	if ! grep -qF 'cat src-tauri/Cargo.toml' "$WF_MUT"; then
+		fail "mutation[workflow-bypass]: 변조가 착지하지 않았다 — 호출 줄을 못 찾았다"
+	elif run_suite_with_workflow "$WF_MUT"; then
+		fail "mutation[workflow-bypass]: 스텝에 우회 읽기를 넣어도 green — 배선 필터가 읽기를 못 잡는다" "$SUB_OUT"
+	else
+		pass "mutation[workflow-bypass]: 스텝에 우회 읽기를 넣으면 red"
+	fi
 
 	# 왜 지금까지 안 터졌나 — 현재 배치에서는 옛 형태도 맞는 값을 낸다. 이 한 줄이
 	# 위 세 줄을 "회귀 재현" 으로 만든다 (전부 틀리는 파서면 아무 입력이나 잡는다).
