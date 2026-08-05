@@ -4,7 +4,7 @@ type: convention
 updated: 2026-06-12
 task: refactor, god-file, comment-cleanup, decomposition
 surface: '**/*.ts, **/*.tsx, **/*.rs'
-keywords: God file, 700줄, max-lines, too_many_lines, 주석 단순화, sprint history 메타, load-bearing WHY, 정합성 검증, 5+ commit, Hidden constraints, Memory 이관 패턴, 500줄 임계
+keywords: God file, 700줄, max-lines, too_many_lines, 주석 단순화, sprint history 메타, load-bearing WHY, 정합성 검증, 5+ commit, Hidden constraints, Memory 이관 패턴, 500줄 임계, 리뷰 라운드 서사, round N, check-round-narrative
 trigger:
   signal: file >= 700 lines
   layer: ESLint max-lines. memory 자동 로드 없음
@@ -44,6 +44,13 @@ trigger:
 - "AC-NNN-NN" / "Sprint contract" 사양 인용
 - 라인 수, 카테고리 (B/D/C/A), 테스트 카운트 같은 메타 트리비아
 - caller list ("11 sites", "8 call sites") — grep으로 검증되므로 rot
+- **리뷰 라운드 서사** — 몇 번째 라운드에 무엇을 고쳤다는 서술. 리뷰 대응 이력의
+  SOT 는 PR 과 scorecard 다. **PR 번호 · 이슈 번호는 남긴다** — 회귀 앵커라 지우면
+  테스트의 출처가 0 이 된다 (P7 「버그 회귀 테스트는 출처 명시」).
+  `src/` `src-tauri/` `e2e/` 는 CI 가 집행한다: `scripts/check-round-narrative.sh`
+  가 `PR Body Contract` 잡에서 돌고 판정 규칙은 그 헤더가 소유한다 (#2114).
+  리뷰 라운드가 아닌 회차(배치 적용 등)는 예외로 빼지 말고 `pass N` 처럼 다른
+  낱말로 쓴다 — 어휘를 겹치면 예외 목록이 생긴다.
 
 ### 보존 — load-bearing WHY
 

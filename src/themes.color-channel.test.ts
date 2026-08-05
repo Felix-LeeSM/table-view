@@ -89,7 +89,7 @@ function tokenOf(cls: string, alias: Map<string, string>): string {
 // equal pair and is still one colour to the eye at 8px.
 const MIN_CHANNEL_DISTANCE = 15;
 
-/** What `supply` shipped in #2117 round 1, kept as the floor's discriminator. */
+/** What `supply` shipped in #2117, kept as the floor's discriminator. */
 const REJECTED_PAIRS = [
   { name: "supply dark", a: "#ffffff", b: "#ffffff" },
   { name: "supply light", a: "#101010", b: "#000000" },

@@ -4,7 +4,7 @@
 // some selection class would pass on exactly the bug being fixed. This test
 // measures instead.
 //
-// Round 1 of PR #2115 shipped `bg-primary/15`, which improved the default
+// PR #2115 first shipped `bg-primary/15`, which improved the default
 // palette (1.018 -> 1.255) while making six `theme x mode` combinations WORSE
 // than the fill it replaced, because a saturated-yellow `--tv-primary`
 // (clickhouse, miro, binance, voltagent, renault) is nearly as bright as the
@@ -164,7 +164,7 @@ function palettes(): Palette[] {
     out.push({ name: `(fallback) ${mode}`, tokens: declarations(block[1]!) });
   }
 
-  // Round 2 of PR #2115 anchored the completeness check on a second regex over
+  // PR #2115 later anchored the completeness check on a second regex over
   // the same file, and that regex was a PREFIX of the sweep's: changing the
   // selector shape sent both to zero at once, leaving `expected` = 2 and
   // `found` = 2 — green while measuring 2 palettes instead of 164. The shared

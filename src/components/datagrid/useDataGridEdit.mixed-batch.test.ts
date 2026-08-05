@@ -1024,8 +1024,8 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     // Reason: PR #1483 review B1 — the adapter reports applied inserts from
     // preview-time sources, but after the FIRST prune the live pendingNewRows
     // array has shifted left. A positional index from preview time then
-    // deletes the wrong row: staged [A,B,C], round 1 applies A (pruned),
-    // round 2 applies B but the stale index pointed at C — losing C (never
+    // deletes the wrong row: staged [A,B,C], pass 1 applies A (pruned),
+    // pass 2 applies B but the stale index pointed at C — losing C (never
     // applied) and keeping B (already applied → duplicate on re-commit).
     // Applied inserts must be identified by row identity. (2026-07-10)
     const { result } = renderDocHook();
@@ -1047,7 +1047,7 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     });
     expect(result.current.mqlPreview!.commands).toHaveLength(3);
 
-    // Round 1 — op 0 (Ada) applied, op 1 failed.
+    // Pass 1 — op 0 (Ada) applied, op 1 failed.
     mockBulkWriteDocuments.mockRejectedValueOnce(
       new Error("bulk_write op 1 insert_one failed: E11000 duplicate key"),
     );
@@ -1056,7 +1056,7 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     });
     expect(stagedNames()).toEqual(["Grace", "Edsger"]);
 
-    // Round 2 — in-modal retry resumes at [Grace, Edsger]; Grace (relative
+    // Pass 2 — in-modal retry resumes at [Grace, Edsger]; Grace (relative
     // op 0) applied, Edsger (relative op 1) failed. The pruned row must be
     // Grace (applied), NOT Edsger (never applied).
     mockBulkWriteDocuments.mockRejectedValueOnce(
@@ -1070,7 +1070,7 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     );
     expect(stagedNames()).toEqual(["Edsger"]);
 
-    // Round 3 — retry succeeds with exactly the one never-applied insert.
+    // Pass 3 — retry succeeds with exactly the one never-applied insert.
     mockBulkWriteDocuments.mockResolvedValueOnce({
       inserted_count: 1,
       matched_count: 0,

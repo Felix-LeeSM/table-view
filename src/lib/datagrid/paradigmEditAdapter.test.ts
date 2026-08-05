@@ -648,14 +648,14 @@ describe("documentEditAdapter.preparePreview + execute", () => {
       pendingNewRows: [rowA, rowB, rowC],
       pendingDeletedRowKeys: new Set(),
     });
-    // Round 1: op 0 (rowA) applied, op 1 failed.
+    // Pass 1: op 0 (rowA) applied, op 1 failed.
     const first = await session!.execute();
     expect(first.ok).toBe(false);
     expect(first.failedIndex).toBe(1);
     expect(first.appliedPending!.newRows).toHaveLength(1);
     expect(first.appliedPending!.newRows[0]).toBe(rowA);
 
-    // Round 2: retry resumes at [rowB, rowC]; relative op 1 fails, so rowB
+    // Pass 2: retry resumes at [rowB, rowC]; relative op 1 fails, so rowB
     // applied. The report must identify rowB itself.
     const second = await session!.execute();
     expect(second.ok).toBe(false);

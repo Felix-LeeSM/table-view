@@ -28,8 +28,8 @@
 // which is also what keeps the anchor correct when the user moves the selection
 // while the panel is open.
 //
-// The second trap is WHERE the restore hangs. Round 2 wired it into each close
-// handler and wrote that every close path went through them; two did not, and
+// The second trap is WHERE the restore hangs. #1734 (5) first wired it into each
+// close handler and wrote that every close path went through them; two did not, and
 // neither was a handler at all — a successful commit empties the selection the
 // panel's mount gate reads, and a refetch that returns fewer rows than the
 // selected index makes the body render `null`. Enumerating close handlers can

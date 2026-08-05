@@ -269,7 +269,7 @@ describe("layoutErdModel", () => {
     expect(positions.get("table:public.employees")).toBeDefined();
   });
 
-  // The overlap this guards against is what PR #2100 round 1 measured: cards
+  // The overlap this guards against is what PR #2100 measured: cards
   // laid out at one height and rendered at another sat on top of each other.
   it("places FK-less tables without overlapping once their columns arrive", async () => {
     const model = buildErdModel(

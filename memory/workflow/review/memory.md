@@ -84,9 +84,11 @@ trigger:
   되지는 않는다** — 라운드가 3 이상인데 `reflect:done` 이 없으면 label 을
   붙여도 `Stop at review round 3` step 이 fail 시킨다
   ([pr-merge-gates](../../runbook/pr-merge-gates/memory.md) 「review-gate run 상태 함정」).
-- 리뷰 대응 이력의 SOT는 PR과 scorecard다 — 소스 주석에 리뷰 라운드 서사
-  (`PR #N review round M` 류)를 남기지 않는다. 주석은 코드의 "왜"만 담는다
-  (PR #2105 라운드 1 blocking, 2026-08-02 — #2108).
+- 리뷰 대응 이력의 SOT는 PR과 scorecard다 — 소스 주석에 리뷰 라운드 서사를
+  남기지 않는다. 룰 본문은 구현자가 읽는
+  [god-file](../../engineering/conventions/refactoring/god-file/memory.md)
+  「제거 — rot 빠른 메타」가 소유하고, `src/` `src-tauri/` `e2e/` 는
+  `scripts/check-round-narrative.sh` 가 CI 에서 집행한다 (#2108, #2114).
 - 결함이 있으면 orchestrator가 `review:changes-requested` label을 보고 구현자를
   다시 띄운다. 구현자가 수정하고 push하면 그 커밋에 다음 라운드 리뷰가 붙는다.
 - Merge 판단은 종결자 몫이다. Reviewer pack은 판단 input만 제공한다.
