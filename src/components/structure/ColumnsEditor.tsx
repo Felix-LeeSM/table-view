@@ -429,11 +429,16 @@ function EditableColumnRow({
                 {/* #1804 — Edit is the only in-place column change (ALTER
                     COLUMN); it reads its own gate so an engine that runs
                     ADD/DROP COLUMN but needs a table rebuild to change one
-                    keeps Delete live. The blocked state is `disabled` + a
-                    Radix tooltip naming the reason, per the Unsupported
-                    convention in `memory/product/ui-parity/memory.md` §4 —
-                    NOT a native `title`, which is the first retired pattern
-                    that section lists. */}
+                    keeps Delete live. Blocked = disabled + a Radix tooltip
+                    naming the reason (2026-07-25 owner grill on #1804), never
+                    a native `title`.
+
+                    `aria-disabled` + `preventDefault`, NOT the native
+                    `disabled` attribute: a natively disabled button drops out
+                    of the tab order, so the tooltip would only ever open for a
+                    pointer and a screen reader would meet an unexplained dead
+                    control. Same shape as the primary-index drop button in
+                    `src/components/document/MongoIndexesPanel.tsx`. */}
                 {canModifyColumn ? (
                   <Button
                     variant="ghost"
@@ -447,19 +452,16 @@ function EditableColumnRow({
                 ) : (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      {/* A disabled button takes no pointer events
-                          (`disabled:pointer-events-none` in the button
-                          variants), so the span carries them for Radix. */}
-                      <span className="inline-flex">
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          disabled
-                          aria-label={t("col.editAria", { name: col.name })}
-                        >
-                          <Pencil />
-                        </Button>
-                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-disabled="true"
+                        onClick={(e) => e.preventDefault()}
+                        aria-label={t("col.editAria", { name: col.name })}
+                        className="cursor-not-allowed opacity-50 hover:bg-transparent"
+                      >
+                        <Pencil />
+                      </Button>
                     </TooltipTrigger>
                     <TooltipContent
                       data-testid="column-modify-rebuild-reason"

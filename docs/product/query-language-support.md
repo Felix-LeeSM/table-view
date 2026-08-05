@@ -177,7 +177,7 @@ are:
   limited to DML on writable files. Transactional DML batch and dry-run paths
   exist, and the Structure UI runs the DDL SQLite performs natively. Raw DDL,
   `ALTER TABLE` rebuilds — the path an in-place column change or a
-  post-creation constraint change would need — nested JSON edits, virtual-table
+  standalone constraint change would need — nested JSON edits, virtual-table
   CRUD, broad extension semantics, and SQLite capability-specific parser/Safe
   Mode validation remain future work.
 - SQLite completion can suggest built-in SQLite vocabulary, cached schema

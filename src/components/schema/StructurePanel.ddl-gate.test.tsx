@@ -71,14 +71,17 @@ describe("StructurePanel DDL capability gate (#1460)", () => {
     expect(
       screen.getByRole("button", { name: "Delete column id" }),
     ).toBeInTheDocument();
-    // An in-place column change is not, so Edit stays but is off…
+    // An in-place column change is not, so Edit stays but is off — via
+    // `aria-disabled`, which keeps it in the tab order so the reason is not a
+    // pointer-only fact (native `disabled` would drop it out).
     const edit = screen.getByRole("button", { name: "Edit column id" });
-    expect(edit).toBeDisabled();
+    expect(edit).toHaveAttribute("aria-disabled", "true");
+    expect(edit).not.toBeDisabled();
     // …with the reason in a Radix tooltip, not a native `title`
     // (`memory/product/ui-parity/memory.md` §4 retires that pairing).
     expect(edit).not.toHaveAttribute("title");
     await act(async () => {
-      fireEvent.pointerMove(edit.parentElement as HTMLElement);
+      fireEvent.focus(edit);
     });
     expect(
       await screen.findByTestId("column-modify-rebuild-reason"),

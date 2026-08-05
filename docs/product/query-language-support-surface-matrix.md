@@ -123,7 +123,7 @@ JSON1/FTS5 read-query assistance.
 **Current boundary**: Raw SQL DDL is rejected by the SQLite adapter, and
 structured DDL stops where SQLite would need to rewrite the whole table:
 changing a column's type, NOT NULL or DEFAULT, and adding or dropping a
-constraint after `CREATE TABLE`, are not implemented. In the Structure UI the
+standalone constraint, are not implemented. In the Structure UI the
 column change keeps its per-row Edit on screen, disabled, with the reason on
 hover; constraints have no tab at all for SQLite, because the adapter has no
 structured constraint listing, so nothing is rendered to disable. `ADD COLUMN`

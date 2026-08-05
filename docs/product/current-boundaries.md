@@ -100,7 +100,7 @@
   is open for what SQLite runs natively on a writable file (`CREATE TABLE`,
   `DROP TABLE`, `ALTER TABLE … RENAME TO`, `ADD COLUMN`, `DROP COLUMN`,
   `CREATE INDEX`, `DROP INDEX`). Automatic ALTER rebuilds — the path a column
-  type / NOT NULL / DEFAULT change or a post-creation constraint change would
+  type / NOT NULL / DEFAULT change or a standalone constraint change would
   need — plus extension/capability semantics, sqlite-cli command execution, and
   nested JSON edits remain future promotion gates.
 - Routine runtime smoke currently proves the GitHub Runtime Happy Path for

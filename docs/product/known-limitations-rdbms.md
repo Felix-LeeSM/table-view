@@ -161,9 +161,9 @@ file create/open, table browse, read query, writable DML, row edit, structured
 table creation with schema refresh proof, read-only write rejection, and
 internal app-state DB rejection.
 
-Changes SQLite cannot make without rewriting the whole table are the boundary
-and stay unimplemented: a column's type, NOT NULL or DEFAULT, and adding or
-dropping a constraint after `CREATE TABLE`. SQLite fixes both when the table is
+The structural changes this app does not make are the boundary: a column's
+type, NOT NULL or DEFAULT, and declaring, adding or
+dropping a standalone constraint. SQLite fixes the column when the table is
 created, so changing one means a 12-step rebuild — a data-loss path this app
 deliberately does not run. The two land differently in the Structure UI. The
 per-row Edit in the Columns tab stays on screen and is disabled, and hovering it

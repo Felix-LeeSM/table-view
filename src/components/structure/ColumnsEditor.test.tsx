@@ -854,8 +854,8 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
   // Reason: #1804 — an engine that adds and drops columns but needs a full
   // table rebuild to change one (SQLite) keeps `canAlterTable` true and
   // `canModifyColumn` false. Add + Delete stay live and the per-row Edit stays
-  // on screen `disabled`, which is the state-dependent branch of the
-  // Unsupported convention (`memory/product/ui-parity/memory.md` §4).
+  // on screen, disabled — the 2026-07-25 owner grill on #1804 kept the open
+  // question's default (disable + tooltip) for rebuild-requiring changes.
   it("disables the per-row Edit when canModifyColumn is false and keeps Add/Delete", () => {
     render(
       <ColumnsEditor
@@ -869,7 +869,7 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
     );
     const edit = screen.getByRole("button", { name: /Edit column email/i });
     expect(edit).toBeInTheDocument();
-    expect(edit).toBeDisabled();
+    expect(edit).toHaveAttribute("aria-disabled", "true");
     // ADD COLUMN / DROP COLUMN ride `canAlterTable`, which is still true.
     expect(
       screen.getByRole("button", { name: /Add column/i }),
@@ -877,6 +877,59 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
     expect(
       screen.getByRole("button", { name: /Delete column email/i }),
     ).toBeInTheDocument();
+  });
+
+  // The blocked control must stay reachable, or the reason it carries is a
+  // pointer-only fact. A natively `disabled` button leaves the tab order and
+  // takes no focus, so `aria-disabled` + `preventDefault` is the form
+  // (`src/components/document/MongoIndexesPanel.tsx` uses the same one).
+  // Mutation check: swap `aria-disabled="true"` back to `disabled` and both
+  // assertions below go red.
+  it("keeps the blocked Edit focusable so the reason reaches a keyboard user", async () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canModifyColumn={false}
+      />,
+    );
+    const edit = screen.getByRole("button", { name: /Edit column email/i });
+    // Native `disabled` is what removes it from the tab order — it must be absent.
+    expect(edit).not.toBeDisabled();
+    await act(async () => {
+      edit.focus();
+      fireEvent.focus(edit);
+    });
+    expect(edit).toHaveFocus();
+    expect(
+      await screen.findByTestId("column-modify-rebuild-reason"),
+    ).toHaveTextContent(/would need a full table rebuild/i);
+  });
+
+  // Reachable must not mean operable: clicking (or Enter, which the browser
+  // turns into a click) may not open the editor the adapter would refuse.
+  it("opens no editor when the blocked Edit is clicked", () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        canModifyColumn={false}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Edit column email/i }));
+    // Edit mode is what turns the read-only cells into inputs.
+    expect(
+      screen.queryByLabelText("Data type for email"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Save changes/i }),
+    ).not.toBeInTheDocument();
   });
 
   // §4 lists "disabled + native `title`" as the FIRST retired pattern, so the
@@ -895,11 +948,8 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
     );
     const edit = screen.getByRole("button", { name: /Edit column email/i });
     expect(edit).not.toHaveAttribute("title");
-    // The disabled button takes no pointer events; its wrapper is the Radix
-    // trigger, which is what a hovering user actually hits.
-    const trigger = edit.parentElement as HTMLElement;
     await act(async () => {
-      fireEvent.pointerMove(trigger);
+      fireEvent.pointerMove(edit);
     });
     // Assert the rendered copy, not just a testid — a deleted `en` string has
     // to turn this red. (Radix also portals an aria-hidden duplicate of the
