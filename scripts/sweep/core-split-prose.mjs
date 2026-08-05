@@ -398,6 +398,11 @@ const ADVERBIAL_DISTANCE =
 const CI_GATES = new Set([".github/workflows/ci.yml", "lefthook.yml"]);
 const SELF_TEST = "scripts/__tests__/core-split-prose.test.ts";
 
+// `scripts/check-ci-test-calls.sh` 게이트의 테스트 (#2146 이 넣었다). 이 파일의
+// cargo 텍스트는 `mkdtempSync` 트리에 뿌리는 픽스처 workflow 문자열이고, 테스트는
+// 게이트 스크립트를 spawn 해서 그 문자열을 파싱시킨다 — cargo 는 안 돈다.
+const GATE_TEST_FIXTURE = "scripts/__tests__/check-ci-test-calls.test.ts";
+
 // 이슈 본문이 N3 를 #2091 로 넘겼다 — "여기가 아니라 #2091 범위다, 중복 수리 금지".
 const OWNED_BY_2091 = new Set([
   "docs/contributor-guide/repository-topology-inventory.md",
@@ -501,6 +506,11 @@ const DISPOSITIONS = [
     id: "B/gate-passes-manifest",
     why: "게이트 배선 파일이고, 그 hit 이 실행 줄이면 감싼 step 이 `--manifest-path` 나 `working-directory` 로 crate 를 고른다 — 나머지는 그 step 을 설명하는 주석·이름이다",
     test: (h) => h.arm === "B" && CI_GATES.has(h.path),
+  },
+  {
+    id: "B/gate-test-fixture",
+    why: "게이트 테스트가 임시 트리에 뿌리는 픽스처 workflow 문자열이다 — `scripts/check-ci-test-calls.sh` 가 그 텍스트를 파싱만 하고 cargo 는 안 돈다. 셋 중 둘은 명령 줄도 아니다: step `name:` 줄(바로 아래 `run:` 이 manifest 를 준다)과, 주석 안의 `--test` 가 호출로 안 세어지는지 보는 주석 픽스처다",
+    test: (h) => h.arm === "B" && h.path === GATE_TEST_FIXTURE,
   },
   {
     id: "B/names-the-lane",

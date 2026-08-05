@@ -110,6 +110,32 @@ describe("core-split-prose sweep", () => {
     ).toBeNull();
   });
 
+  // Reason: 다른 게이트의 테스트가 임시 트리에 뿌리는 픽스처 workflow 문자열은
+  // 파서 입력이지 실행 지시가 아니다. 면제는 그 파일의 arm B 에만 걸어야 한다 —
+  // arm 조건이 풀리면 같은 파일에 생길 경로·개수 주장까지 조용히 덮는다.
+  it("exempts only the arm-B cargo text of a gate's test fixtures", () => {
+    const fixture = {
+      path: "scripts/__tests__/check-ci-test-calls.test.ts",
+      no: "141",
+    };
+    expect(
+      classify({
+        ...fixture,
+        arm: "B",
+        evidence: "manifest 미지정",
+        text: "      workflow: `      - run: cargo test --test called_one_extra\\n`,",
+      })?.id,
+    ).toBe("B/gate-test-fixture");
+    expect(
+      classify({
+        ...fixture,
+        arm: "A",
+        evidence: "src-tauri/src/db",
+        text: "// src-tauri/src/db 에 있다",
+      }),
+    ).toBeNull();
+  });
+
   // Reason: 얕은 체크아웃(`actions/checkout` 기본값 depth 1)에는 그 커밋 객체가
   // 없다. 예전엔 `fatal: bad object` 만 남고 stdout 이 비어서, 게이트가 red 인데
   // 원인이 안 보였다.
