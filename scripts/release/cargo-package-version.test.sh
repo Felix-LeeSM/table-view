@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # release/cargo-package-version.test.sh — scripts/release/cargo-package-version.sh 회귀 스위트 (#2169).
 #
-# 네트워크를 타지 않는다. 입력은 아래에서 만드는 Cargo.toml 픽스처 4벌과
+# 네트워크를 타지 않는다. 입력은 아래에서 만드는 manifest 픽스처와
 # 저장소의 실제 `src-tauri/Cargo.toml` 이다.
 #
 # 실행:
@@ -16,7 +16,7 @@
 #
 # 검사 대상은 셋이다:
 #   ① 파싱 — 픽스처 4벌
-#   ② 배선 — auto-tag-release.yml 의 태그 스텝이 이 스크립트로만 Cargo.toml 을
+#   ② 배선 — auto-tag-release.yml 의 태그 스텝이 이 스크립트로만 src-tauri/Cargo.toml 을
 #      읽는가. 파싱만 맞고 워크플로가 자기 파싱을 따로 들고 있으면 ①은 통과한다.
 #   ③ mutation — #2169 이전 형태를 실제로 만들어 이 스위트가 red 가 되는지,
 #      그리고 어느 입력이 그 형태를 잡는지. 양성 대조(미변조 사본)가 green 인
@@ -162,7 +162,7 @@ else
 	fail "저장소 manifest 의 값이 X.Y.Z 가 아니다" "$OUT"
 fi
 
-# ── 배선 — 워크플로가 이 스크립트로만 Cargo.toml 을 읽는가 ────────────────
+# ── 배선 — 워크플로가 이 스크립트로만 src-tauri/Cargo.toml 을 읽는가 ────────────────
 # mutation 서브런에서는 끈다. 판정 대상이 변조된 스크립트이지 저장소의 워크플로가
 # 아니라서다 — 켜 두면 워크플로가 바뀐 날 양성 대조와 변조본이 같은 이유로 red 가
 # 되어 결과가 무의미해진다.

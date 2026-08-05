@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# cargo-package-version.sh — Cargo.toml 의 `[package]` 섹션 version 을 낸다 (#2169).
+# cargo-package-version.sh — Cargo 매니페스트의 `[package]` 섹션 version 을 낸다 (#2169).
 #
 # 부르는 곳: `.github/workflows/auto-tag-release.yml` 의 "Tag release if version
-# bumped" 스텝. 그 스텝은 tauri.conf.json · Cargo.toml · package.json 세 SOT 의
+# bumped" 스텝. 그 스텝은 tauri.conf.json · src-tauri/Cargo.toml · package.json 세 SOT 의
 # 버전이 같을 때만 태그를 민다 — 이 값이 틀리면 릴리스가 틀린 값으로 대조한다.
 #
 # 왜 grep 한 줄이 아닌가:

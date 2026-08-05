@@ -10,13 +10,13 @@ import { describe, expect, it } from "vitest";
 // 이미 돌리고, vite.config.ts 의 `test.exclude` 는 scripts/ 를 빼지 않는다.
 // 아무도 안 돌리는 스위트는 red 가 될 수 없다.
 //
-// 네트워크를 타지 않는다. 입력은 스위트가 만드는 Cargo.toml 픽스처와 저장소의
+// 네트워크를 타지 않는다. 입력은 스위트가 만드는 manifest 픽스처와 저장소의
 // `src-tauri/Cargo.toml` 이다.
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 const suite = "scripts/release/cargo-package-version.test.sh";
 
-// Purpose: auto-tag-release.yml 의 Cargo.toml 버전 파싱 회귀 스위트를 CI 에 배선 — issue #2169 (2026-08-05)
+// Purpose: auto-tag-release.yml 의 src-tauri/Cargo.toml 버전 파싱 회귀 스위트를 CI 에 배선 — issue #2169 (2026-08-05)
 describe("cargo-package-version", () => {
   // Reason: bash 스위트를 실행하는 러너가 repo 에 없다. 이 파일이 없으면
   // `[workspace.package]`/따옴표 주석 오매치 단언이 아무 데서도 안 돌아 red 가
