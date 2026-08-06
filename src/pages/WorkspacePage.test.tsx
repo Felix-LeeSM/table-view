@@ -1,6 +1,7 @@
 import { hydrateConnectionSession } from "@lib/runtime/connection/hydrateConnectionSession";
 import * as windowControls from "@lib/window-controls";
 import { useLayoutStore } from "@stores/layoutStore";
+import { useThemeFavoritesStore } from "@stores/themeFavoritesStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -73,6 +74,10 @@ function resetStores() {
     mode: "dark",
     resolvedMode: "dark",
   });
+  // #2118 — a leaked `galleryOpen: true` would leave a modal dialog over the
+  // page, and Radix marks everything behind it `aria-hidden`, which drops the
+  // rest of this file's `getByRole` queries out of the accessibility tree.
+  useThemeFavoritesStore.setState({ galleryOpen: false });
   // #1734 — `layoutStore` is reset by the global `beforeEach` in
   // `src/test-setup.ts` (`__resetLayoutStoreForTests`), not here.
 }
@@ -90,6 +95,18 @@ describe("WorkspacePage", () => {
     render(<WorkspacePage />);
     expect(screen.getByTestId("sidebar-mock")).toBeInTheDocument();
     expect(screen.getByTestId("main-area-mock")).toBeInTheDocument();
+  });
+
+  // #2118 — the workspace owns the theme gallery overlay's mount. It cannot sit
+  // inside the appearance popover with `ThemePicker` (mocked in this file): the
+  // picker is `PopoverContent`, and Radix unmounts that subtree the moment the
+  // popover closes. So this one line is the workspace window's only route to
+  // the full catalog, and nothing in the theme specs can see it — they render
+  // the two components side by side themselves.
+  it("mounts the theme gallery overlay", () => {
+    useThemeFavoritesStore.setState({ galleryOpen: true });
+    render(<WorkspacePage />);
+    expect(screen.getByTestId("theme-gallery")).toBeInTheDocument();
   });
 
   // #1734 owner decision 1 — the Layout cluster's left-panel toggle drives

@@ -2,6 +2,7 @@ import MainArea from "@components/layout/MainArea";
 import Sidebar from "@components/layout/Sidebar";
 import ErrorBoundary from "@components/shared/ErrorBoundary";
 import LanguageSwitcher from "@components/theme/LanguageSwitcher";
+import ThemeGallery from "@components/theme/ThemeGallery";
 import ThemePicker from "@components/theme/ThemePicker";
 import { Button } from "@components/ui/button";
 import {
@@ -233,6 +234,10 @@ export default function WorkspacePage() {
         </div>
       </nav>
       <MainArea />
+      {/* #2118 — mounted outside the appearance popover on purpose: the
+          picker's "browse all" button raises `themeFavoritesStore.galleryOpen`,
+          and a child of `PopoverContent` would unmount with the popover. */}
+      <ThemeGallery />
     </div>
   );
 }

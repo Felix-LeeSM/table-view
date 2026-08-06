@@ -23,6 +23,24 @@ export const en = {
   },
   theme: {
     aria: "Theme {{name}}",
+    favorites: "Favorites",
+    favoritesEmpty: "No favorites yet. Star a theme in the gallery.",
+    openGallery: "Browse all themes",
+    gallery: {
+      title: "Theme gallery",
+      description: "Pick a theme, or star the ones you want in the picker.",
+      applied: "Applied: {{name}}",
+      searchLabel: "Filter themes",
+      searchPlaceholder: "Filter by name, id, or vibe",
+      filterAll: "All",
+      filterFavorites: "Favorites",
+      noMatch: "No theme matches this filter.",
+      apply: "Apply {{name}}",
+      addFavorite: "Add {{name}} to favorites",
+      removeFavorite: "Remove {{name}} from favorites",
+      reset: "Reset favorites",
+      resetTitle: "Reset favorites to defaults",
+    },
   },
 } as const;
 
@@ -40,5 +58,23 @@ export const ko = {
   },
   theme: {
     aria: "테마 {{name}}",
+    favorites: "즐겨찾기",
+    favoritesEmpty: "즐겨찾기가 없다. 갤러리에서 ★ 를 눌러 담는다.",
+    openGallery: "전체 테마 보기",
+    gallery: {
+      title: "테마 갤러리",
+      description: "테마를 고르거나, 피커에 둘 테마에 ★ 를 누른다.",
+      applied: "적용 중: {{name}}",
+      searchLabel: "테마 거르기",
+      searchPlaceholder: "이름 · id · 분위기로 거르기",
+      filterAll: "전체",
+      filterFavorites: "즐겨찾기",
+      noMatch: "이 조건에 맞는 테마가 없다.",
+      apply: "{{name}} 적용",
+      addFavorite: "{{name}} 즐겨찾기에 추가",
+      removeFavorite: "{{name}} 즐겨찾기에서 제거",
+      reset: "즐겨찾기 초기화",
+      resetTitle: "즐겨찾기를 기본값으로 초기화",
+    },
   },
 } as const;

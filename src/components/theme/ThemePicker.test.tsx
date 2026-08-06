@@ -8,13 +8,23 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(() => Promise.resolve()),
+  invoke: vi.fn(),
 }));
 
 import { THEME_STORAGE_KEY } from "@lib/themeBoot";
-import { DEFAULT_THEME_ID, FEATURED_THEME_IDS } from "@lib/themeCatalog";
+import {
+  DEFAULT_FAVORITE_THEME_IDS,
+  DEFAULT_THEME_ID,
+} from "@lib/themeCatalog";
+import {
+  THEME_FAVORITES_SETTING_KEY,
+  useThemeFavoritesStore,
+} from "@stores/themeFavoritesStore";
 import { useThemeStore } from "@stores/themeStore";
+import { invoke } from "@tauri-apps/api/core";
 import ThemePicker from "./ThemePicker";
+
+const invokeMock = vi.mocked(invoke);
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -36,22 +46,103 @@ Object.defineProperty(window, "localStorage", { value: localStorageMock });
 
 describe("ThemePicker", () => {
   beforeEach(() => {
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
     localStorageMock.clear();
     document.documentElement.removeAttribute("data-theme");
     document.documentElement.removeAttribute("data-mode");
     useThemeStore.getState().hydrate();
+    // #2118 — the grid follows the favorites store now, so each case starts
+    // from the seed list instead of the retired module-scope constant.
+    useThemeFavoritesStore.setState({
+      favoriteThemeIds: DEFAULT_FAVORITE_THEME_IDS,
+      galleryOpen: false,
+    });
   });
 
-  it("renders a card for every featured theme id", () => {
+  it("renders a card for every favorite theme", () => {
     render(<ThemePicker />);
     const grid = screen.getByTestId("theme-picker-grid");
     const cards = within(grid).getAllByRole("button");
-    expect(cards).toHaveLength(FEATURED_THEME_IDS.length);
-    // Sanity: every rendered card's id is in the featured set.
+    expect(cards).toHaveLength(DEFAULT_FAVORITE_THEME_IDS.length);
+    // Sanity: every rendered card's id is a favorite.
     const ids = cards.map((el) => el.getAttribute("data-theme-id"));
     for (const id of ids) {
-      expect(FEATURED_THEME_IDS).toContain(id);
+      expect(DEFAULT_FAVORITE_THEME_IDS).toContain(id);
     }
+  });
+
+  // #2118 — the picker is driven by the store, not by a constant: a theme the
+  // seed list never had shows up as soon as it is a favorite.
+  it("renders a theme that is not in the seed list once it is a favorite", () => {
+    expect(DEFAULT_FAVORITE_THEME_IDS).not.toContain("linear");
+    useThemeFavoritesStore.setState({ favoriteThemeIds: ["linear"] });
+
+    render(<ThemePicker />);
+
+    const grid = screen.getByTestId("theme-picker-grid");
+    const cards = within(grid).getAllByRole("button");
+    expect(cards.map((el) => el.getAttribute("data-theme-id"))).toEqual([
+      "linear",
+    ]);
+  });
+
+  // #2118 read path. This picker's mount effect is the only production caller
+  // of `hydrateFavorites`, so it is the whole of "the favorites I chose survive
+  // a restart" — delete it and that guarantee dies silently. The assertion is
+  // therefore what the user sees (cards in the grid) driven from the boundary
+  // (the `get_setting` IPC), never a direct call into the store: calling the
+  // store would keep passing with the effect gone. Same failure shape as
+  // docs/archives/incidents/ui-patterns/2026-05-16-theme-selection-silent-fail.
+  it("shows the persisted favorites after mount, not the seed list", async () => {
+    invokeMock.mockImplementation((cmd: string, args?: unknown) => {
+      const key = (args as { key?: string } | undefined)?.key;
+      if (cmd === "get_setting" && key === THEME_FAVORITES_SETTING_KEY) {
+        return Promise.resolve(JSON.stringify(["linear", "figma"]));
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await act(async () => {
+      render(<ThemePicker />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const grid = screen.getByTestId("theme-picker-grid");
+    const ids = within(grid)
+      .getAllByRole("button")
+      .map((el) => el.getAttribute("data-theme-id"));
+    // Rendered in catalog order, so `linear` precedes `figma`.
+    expect(ids).toEqual(["linear", "figma"]);
+    // The seed list is gone from the grid — the persisted value replaced it
+    // rather than merging into it.
+    for (const seeded of DEFAULT_FAVORITE_THEME_IDS) {
+      expect(ids).not.toContain(seeded);
+    }
+  });
+
+  // 수용 기준 4 — an empty favorites list must read as guidance, not as a
+  // blank rectangle the user cannot interpret.
+  it("shows guidance instead of a bare empty grid when nothing is starred", () => {
+    useThemeFavoritesStore.setState({ favoriteThemeIds: [] });
+
+    render(<ThemePicker />);
+
+    expect(screen.getByTestId("theme-picker-empty")).toBeInTheDocument();
+    const grid = screen.getByTestId("theme-picker-grid");
+    expect(within(grid).queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("the browse-all button opens the gallery", () => {
+    render(<ThemePicker />);
+    expect(useThemeFavoritesStore.getState().galleryOpen).toBe(false);
+
+    act(() => {
+      fireEvent.click(screen.getByTestId("theme-picker-open-gallery"));
+    });
+
+    expect(useThemeFavoritesStore.getState().galleryOpen).toBe(true);
   });
 
   it("marks the currently selected themeId as active", () => {

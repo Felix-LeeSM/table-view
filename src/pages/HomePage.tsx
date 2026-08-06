@@ -1,4 +1,5 @@
 import RevealLogsButton from "@components/settings/RevealLogsButton";
+import ThemeGallery from "@components/theme/ThemeGallery";
 import ThemePicker from "@components/theme/ThemePicker";
 import { Button } from "@components/ui/button";
 import {
@@ -371,6 +372,11 @@ export default function HomePage() {
           </PopoverContent>
         </Popover>
       </div>
+
+      {/* #2118 — mounted here, not inside the popover: the picker's "browse all"
+          button raises `themeFavoritesStore.galleryOpen`, and if the overlay
+          were a child of `PopoverContent` it would unmount with the popover. */}
+      <ThemeGallery />
 
       {showNewDialog && (
         <ConnectionDialog onClose={() => setShowNewDialog(false)} />
