@@ -18,7 +18,8 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
-import { DEFAULT_FAVORITE_THEME_IDS } from "@lib/themeCatalog";
+import { DEFAULT_FAVORITE_THEME_IDS, isThemeId } from "@lib/themeCatalog";
+import { useToastStore } from "@stores/toastStore";
 import { invoke } from "@tauri-apps/api/core";
 import {
   parseFavoriteThemeIds,
@@ -52,10 +53,50 @@ beforeEach(() => {
   });
 });
 
+/**
+ * What `FEATURED_THEME_IDS` held on `main` at 45dfbf40, the commit this branch
+ * forked from — i.e. exactly the cards the picker offered before #2118.
+ * Reproduce with:
+ *   git show 45dfbf40:src/lib/themeCatalog.ts | sed -n '/FEATURED_THEME_IDS/,/^\];/p'
+ */
+const PICKER_IDS_BEFORE_2118 = [
+  "slate",
+  "github",
+  "arc",
+  "claude",
+  "darcula",
+  "posthog",
+  "ibm",
+  "kraken",
+] as const;
+
 describe("themeFavoritesStore — seed", () => {
+  // `getInitialState()` and not `getState()`: the `beforeEach` above seeds the
+  // store, so `getState()` would keep passing even if the store's own initial
+  // value were emptied.
   it("starts from the catalog's default favorite ids", () => {
-    expect(useThemeFavoritesStore.getState().favoriteThemeIds).toEqual(
+    expect(useThemeFavoritesStore.getInitialState().favoriteThemeIds).toEqual(
       DEFAULT_FAVORITE_THEME_IDS,
+    );
+  });
+
+  it("starts with the gallery closed", () => {
+    expect(useThemeFavoritesStore.getInitialState().galleryOpen).toBe(false);
+  });
+
+  // The compatibility claim of #2118 — an existing user sees no change on
+  // upgrade — rests entirely on this list being the pre-#2118 one. Nothing else
+  // in the suite notices if the seed is edited, because every other case reads
+  // it as "whatever the store starts with" rather than as a fixed list.
+  it("seeds with exactly the ids the pre-#2118 picker offered", () => {
+    expect(DEFAULT_FAVORITE_THEME_IDS).toEqual(PICKER_IDS_BEFORE_2118);
+  });
+
+  it("seeds only ids the catalog still has", () => {
+    // A seed id the catalog dropped would render a card with no themes.css
+    // selector behind it.
+    expect(DEFAULT_FAVORITE_THEME_IDS.filter((id) => !isThemeId(id))).toEqual(
+      [],
     );
   });
 });
@@ -102,6 +143,11 @@ describe("themeFavoritesStore — toggleFavorite", () => {
     expect(useThemeFavoritesStore.getState().favoriteThemeIds).toContain(
       "linear",
     );
+    // The user has to learn the write was lost — there is no boot reconcile
+    // that would repair it, so a silent swallow loses the choice at next boot.
+    expect(useToastStore.getState().toasts.map((t) => t.variant)).toContain(
+      "error",
+    );
   });
 });
 
@@ -123,6 +169,26 @@ describe("themeFavoritesStore — resetFavorites", () => {
     // Writing the defaults back would defeat the row-delete contract
     // documented on `resetSetting` in src/lib/tauri/settings.ts.
     expect(persistedFavoriteLists()).toEqual([]);
+  });
+
+  // The reset button's click handler is a fire-and-forget `void
+  // resetFavorites()`, so a rejection that escapes this action becomes an
+  // unhandled promise: the user is told nothing while the row survives on disk.
+  // Only the toast makes that visible, so the toast is what gets asserted.
+  it("surfaces a failed reset instead of letting the rejection escape", async () => {
+    useThemeFavoritesStore.setState({ favoriteThemeIds: ["linear"] });
+    invokeMock.mockRejectedValueOnce(new Error("disk full"));
+
+    await expect(
+      useThemeFavoritesStore.getState().resetFavorites(),
+    ).resolves.toBeUndefined();
+
+    expect(useThemeFavoritesStore.getState().favoriteThemeIds).toEqual(
+      DEFAULT_FAVORITE_THEME_IDS,
+    );
+    expect(useToastStore.getState().toasts.map((t) => t.variant)).toContain(
+      "error",
+    );
   });
 });
 

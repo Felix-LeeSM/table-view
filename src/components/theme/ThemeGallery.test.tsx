@@ -151,8 +151,7 @@ describe("ThemeGallery — search and filter", () => {
 });
 
 describe("ThemeGallery — starring", () => {
-  // 수용 기준 2 — the RED counterpart of the retired
-  // `expect(cards).toHaveLength(FEATURED_THEME_IDS.length)` assertion.
+  // 수용 기준 2.
   it("starring a theme in the gallery puts it in the picker", async () => {
     expect(DEFAULT_FAVORITE_THEME_IDS).not.toContain("linear");
     renderWithGalleryOpen();

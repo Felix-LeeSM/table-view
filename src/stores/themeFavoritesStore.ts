@@ -17,10 +17,16 @@
  * key with `getSetting` on mount rather than riding the atomic boot snapshot,
  * which only carries the five boot-critical stores and is backend-owned.
  *
- * ponytail: no cross-window `state-changed` route. The favorites list is not
- * boot-critical and a second window converges on its next picker open. Add a
- * `settingsReceiver` branch for `theme_favorites` if two open windows drifting
- * for one session turns out to matter.
+ * ponytail: no cross-window `state-changed` route, and the ceiling is uneven.
+ * A star made in one window reaches the other on its next picker open, because
+ * `persist_setting` leaves a row and the picker re-reads it on mount. A *reset*
+ * does not: it deletes the row, `getSetting` then answers null, the hydrate
+ * below keeps the list it already had, and the next star writes that stale list
+ * back — undoing the other window's reset. Closing that needs a
+ * `setting.onReset` handler, which no store in this repo registers today
+ * (`src/lib/runtime/settings/settingsReceiver.ts` wires `onUpdated` only, though
+ * `src/lib/events/stateChanged.ts` dispatches both). Wire one here if a reset
+ * losing a race against a second window turns out to matter.
  */
 
 import i18n from "@lib/i18n";

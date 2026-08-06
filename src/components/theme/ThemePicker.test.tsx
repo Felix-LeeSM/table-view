@@ -8,7 +8,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(() => Promise.resolve()),
+  invoke: vi.fn(),
 }));
 
 import { THEME_STORAGE_KEY } from "@lib/themeBoot";
@@ -16,9 +16,15 @@ import {
   DEFAULT_FAVORITE_THEME_IDS,
   DEFAULT_THEME_ID,
 } from "@lib/themeCatalog";
-import { useThemeFavoritesStore } from "@stores/themeFavoritesStore";
+import {
+  THEME_FAVORITES_SETTING_KEY,
+  useThemeFavoritesStore,
+} from "@stores/themeFavoritesStore";
 import { useThemeStore } from "@stores/themeStore";
+import { invoke } from "@tauri-apps/api/core";
 import ThemePicker from "./ThemePicker";
+
+const invokeMock = vi.mocked(invoke);
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -40,6 +46,8 @@ Object.defineProperty(window, "localStorage", { value: localStorageMock });
 
 describe("ThemePicker", () => {
   beforeEach(() => {
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
     localStorageMock.clear();
     document.documentElement.removeAttribute("data-theme");
     document.documentElement.removeAttribute("data-mode");
@@ -77,6 +85,41 @@ describe("ThemePicker", () => {
     expect(cards.map((el) => el.getAttribute("data-theme-id"))).toEqual([
       "linear",
     ]);
+  });
+
+  // #2118 read path. This picker's mount effect is the only production caller
+  // of `hydrateFavorites`, so it is the whole of "the favorites I chose survive
+  // a restart" — delete it and that guarantee dies silently. The assertion is
+  // therefore what the user sees (cards in the grid) driven from the boundary
+  // (the `get_setting` IPC), never a direct call into the store: calling the
+  // store would keep passing with the effect gone. Same failure shape as
+  // docs/archives/incidents/ui-patterns/2026-05-16-theme-selection-silent-fail.
+  it("shows the persisted favorites after mount, not the seed list", async () => {
+    invokeMock.mockImplementation((cmd: string, args?: unknown) => {
+      const key = (args as { key?: string } | undefined)?.key;
+      if (cmd === "get_setting" && key === THEME_FAVORITES_SETTING_KEY) {
+        return Promise.resolve(JSON.stringify(["linear", "figma"]));
+      }
+      return Promise.resolve(undefined);
+    });
+
+    await act(async () => {
+      render(<ThemePicker />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const grid = screen.getByTestId("theme-picker-grid");
+    const ids = within(grid)
+      .getAllByRole("button")
+      .map((el) => el.getAttribute("data-theme-id"));
+    // Rendered in catalog order, so `linear` precedes `figma`.
+    expect(ids).toEqual(["linear", "figma"]);
+    // The seed list is gone from the grid — the persisted value replaced it
+    // rather than merging into it.
+    for (const seeded of DEFAULT_FAVORITE_THEME_IDS) {
+      expect(ids).not.toContain(seeded);
+    }
   });
 
   // 수용 기준 4 — an empty favorites list must read as guidance, not as a
