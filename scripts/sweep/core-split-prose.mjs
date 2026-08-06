@@ -256,10 +256,14 @@ function armA() {
 
 // ── arm B — manifest 를 안 준 cargo 명령 ─────────────────────────────────
 //
-// core 는 workspace member 가 아니라 path dependency 다. 저장소 루트에는
-// `Cargo.toml` 이 아예 없어서 맨 `cargo <verb>` 는 실패하고, `src-tauri` 에서
-// 돌리면 core 에 안 닿은 채로 exit 0 이다. 그래서 manifest 없는 cargo 명령을
-// 지시로 적어 둔 자리는 분리 이후 낡았다.
+// 저장소 루트에는 `Cargo.toml` 이 없다. manifest 도 작업 디렉토리도 안 준 cargo
+// 명령을 지시로 적어 두면 적힌 대로 따라 한 사람 손에서 실패한다.
+//
+// #1769 직후에는 사유가 하나 더 있었다 — `src-tauri` 에서 돌려도 path dependency
+// 인 core 에는 안 닿아 조용히 exit 0 이었다. #2161 이 crate 들을 한 Cargo
+// workspace 로 묶으면서 그쪽은 사라졌다: workspace root 인 `src-tauri` 에서
+// `--workspace` / `--all` 을 준 호출은 member 전부에 닿는다. 남은 것은 루트에서
+// 부르는 자리뿐이고, 이 arm 이 세는 것도 그것이다.
 //
 // `tree` 는 issue #2092 원문 동사 목록에 없다. 더한 이유: `cargo tree -i tauri` 를
 // 「빈 결과」로 서술한 자리가 실측으로는 exit 101 이라 같은 클래스다.
@@ -499,6 +503,15 @@ const DISPOSITIONS = [
         Number(h.no),
       );
       return dir !== null && existsSync(abs(join(dir, "Cargo.toml")));
+    },
+  },
+  {
+    id: "B/line-sets-working-directory",
+    why: "그 줄이 스스로 `cd <crate> &&` 로 작업 디렉토리를 세우고 나서 cargo 를 부른다 — 한 줄짜리 npm script 라 위의 펜스 블록 규칙이 문맥으로 못 본다",
+    test: (h) => {
+      if (h.arm !== "B") return false;
+      const m = /\bcd\s+([^\s&|;]+)\s*&&/.exec(h.text);
+      return m !== null && existsSync(abs(join(m[1], "Cargo.toml")));
     },
   },
   {
