@@ -706,6 +706,58 @@ jobs:
         working-directory: src-tauri/table-view-core
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+      # #2184 — `table-view-core`'s `testing` feature switches on the
+      # `TABLE_VIEW_TEST_DATA_DIR` override (`storage::data_dir_override`). That is
+      # how release *test* builds isolate themselves, and it is why a shipped
+      # binary must never carry the feature: with it on, anyone who can set an env
+      # var moves the app's data directory — the master `.key`, connections.json
+      # and state.db with it (#1454).
+      #
+      # Before this step that property was only a comment. It is checked by asking
+      # cargo, not by searching the manifests: enabling a feature for a normal
+      # build has no single spelling (core's own `[features] default`, an inline
+      # table, a `[dependencies.table-view-core]` table, a
+      # `default = ["table-view-core/testing"]` forward, a renamed `package = ...`
+      # entry), and a scanner tuned to one reports 0 for the rest.
+      #
+      # Two questions, because one does not cover the other:
+      #
+      #  (1) Is the feature in the release graph? `--edges normal` is the graph
+      #      `cargo build --release` / `cargo tauri build` resolves from, so the
+      #      feature must be absent there while `--edges dev` still shows it.
+      #
+      #  (2) Is `src-tauri` still its own workspace root? This is not redundant.
+      #      Under feature resolver 1, dev-dependency features unify into a plain
+      #      `cargo build`, and `cargo tree --edges normal` does NOT show it —
+      #      measured on a two-crate probe: with a resolver-1 virtual workspace the
+      #      release binary compiled with the feature ON while `--edges normal`
+      #      still printed only `feature "default"`. Adding a workspace manifest
+      #      above `src-tauri` without `resolver = "2"` is therefore invisible to
+      #      (1), and `src-tauri/Cargo.toml` already warns that this exact edit is
+      #      plausible. There is no workspace root today, so the check refuses the
+      #      precondition rather than trying to evaluate resolver semantics. If a
+      #      workspace is ever wanted, set `resolver = "2"` and replace this arm
+      #      with one that verifies the resolved features directly.
+      - name: Test-only data-dir override stays out of the release graph
+        run: |
+          set -euo pipefail
+
+          graph="$(cargo tree --manifest-path src-tauri/Cargo.toml \
+            -e features -i table-view-core --edges normal)"
+          echo "$graph"
+          if printf '%s\n' "$graph" | grep -q 'feature "testing"'; then
+            echo "::error file=src-tauri/Cargo.toml::#2184/#1454: table-view-core's 'testing' feature reached the release dependency graph. It enables the TABLE_VIEW_TEST_DATA_DIR override, so a shipped binary could be pointed at an attacker-chosen data directory. Keep it in [dev-dependencies] only."
+            exit 1
+          fi
+
+          root="$(cargo locate-project --workspace \
+            --manifest-path src-tauri/Cargo.toml --message-format plain)"
+          echo "workspace root: $root"
+          if [ "$root" != "$PWD/src-tauri/Cargo.toml" ]; then
+            echo "::error file=src-tauri/Cargo.toml::#2184/#1454: src-tauri is no longer its own workspace root ($root). A workspace without resolver = \"2\" unifies dev-dependency features into cargo build, which arms the TABLE_VIEW_TEST_DATA_DIR override in the shipped binary — and the cargo tree check above cannot see it. Set resolver = \"2\" in the workspace root and update this step to verify the resolved features directly."
+            exit 1
+          fi
+
   # 2026-07-25 — this job was briefly split into a 4-way `integration-shard`
   # matrix and reverted after measurement on run 30142745666. Partitioning by
   # test binary made it SLOWER, not faster: the slowest shard (mysql-family)

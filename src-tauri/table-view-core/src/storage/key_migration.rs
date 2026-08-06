@@ -105,8 +105,9 @@ impl KeyOutcome {
 }
 
 /// Sprint 356 (Q22) — file-key 의 3 path 분기. SQLite migration 전에 1회
-/// 호출. `data_dir` 는 user-data dir (테스트에서는 tempdir, 프로덕션에서는
-/// `dirs::data_local_dir().join("table-view")`).
+/// 호출. `data_dir` 는 호출자가 넘기는 user-data dir 다 — 테스트에서는 tempdir,
+/// 프로덕션에서는 [`app_data_dir_for_keyring`] 이 돌려주는 값, 즉 부팅 때
+/// [`crate::storage::init_production_data_dir`] 이 주입한 경로다 (#2184).
 pub fn migrate_or_initialize<B: KeyringBackend>(
     backend: &B,
     data_dir: &Path,

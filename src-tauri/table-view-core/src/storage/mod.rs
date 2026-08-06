@@ -109,12 +109,31 @@ pub(crate) fn reset_master_key_for_test() {
 ///   enables that feature from `[dev-dependencies]` only, and resolver v2 keeps
 ///   dev-dependency features out of the normal graph, so `cargo build --release`
 ///   / `cargo tauri build` never turn it on. Same gate `db::testing` already
-///   rides (`db/mod.rs`), and `app_manifest_never_enables_core_testing_feature_in_normal_deps`
-///   in `src-tauri/src/storage/mod.rs` fails if anyone moves it into
-///   `[dependencies]`.
+///   rides (`db/mod.rs`).
 ///
 /// Neither arm is an environment variable or a runtime flag: a shipped binary has
 /// no way to switch them on, which is the #1454 property this must not lose.
+///
+/// The `feature` arm moved that property from "unconditional at compile time" to
+/// "true of the build graph", so it is measured rather than asserted in prose.
+/// The `Test-only data-dir override stays out of the release graph` step in
+/// `.github/workflows/ci.yml` asks cargo two questions, and it takes both:
+///
+/// 1. `cargo tree ... --edges normal` must not contain `feature "testing"`. That
+///    is the graph `cargo build --release` resolves from, so it covers every way
+///    of *naming* the feature for a normal dependency — core's own
+///    `[features] default`, an inline table, a `[dependencies.table-view-core]`
+///    table, a `default = ["table-view-core/testing"]` forward, a renamed
+///    `package = ...` entry, a TOML literal string — without knowing any of the
+///    spellings in advance.
+/// 2. `cargo locate-project --workspace` must still name `src-tauri/Cargo.toml`.
+///    Question 1 does **not** subsume this: under feature resolver 1 a
+///    dev-dependency's features unify into a plain `cargo build`, and
+///    `--edges normal` does not show it. Measured on a two-crate probe — with a
+///    resolver-1 virtual workspace the release binary compiled with the feature
+///    ON while the tree still printed only `feature "default"`. There is no
+///    workspace root above `src-tauri` today, so the step refuses that
+///    precondition instead of trying to evaluate resolver semantics.
 #[cfg(any(debug_assertions, test, feature = "testing"))]
 pub(crate) fn data_dir_override() -> Option<PathBuf> {
     std::env::var_os("TABLE_VIEW_TEST_DATA_DIR").map(PathBuf::from)
@@ -589,16 +608,24 @@ mod tests {
         std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
     }
 
-    // Issue #1454 (P2-6) — the `TABLE_VIEW_TEST_DATA_DIR` override is honored in
-    // debug builds (test isolation) but must be compiled out in release so a
-    // shipped binary can never be redirected to an attacker-chosen data dir.
-    // The release branch (`None`) is guaranteed at compile time by
-    // `cfg(debug_assertions)`; a debug-mode `cargo test` cannot observe it, so
-    // we only assert the debug behavior here.
-    #[cfg(debug_assertions)]
+    // Issue #1454 (P2-6) / #2184 — the `TABLE_VIEW_TEST_DATA_DIR` override is
+    // honored in a debug build or a test build, and compiled out of a shipped
+    // binary so it can never be redirected to an attacker-chosen data dir.
+    //
+    // No `cargo test` can observe the `None` branch: `cfg(test)` is one of the
+    // arms that selects the honoring definition, so the branch this asserts is
+    // the only one a test binary ever links. `cfg(not(any(debug_assertions, test,
+    // feature = "testing")))` is what guarantees the other one, and the CI step
+    // named in that function's docs is what proves the `feature` arm stays out of
+    // the release graph.
+    //
+    // Deliberately NOT `#[cfg(debug_assertions)]` (#2184): gating the only test
+    // that asserts the gate on the profile deleted it from `--release` and
+    // `debug-assertions=off` runs — the exact builds this PR restored isolation
+    // for. It compiles and passes in all three.
     #[test]
     #[serial]
-    fn data_dir_override_honors_env_in_debug() {
+    fn data_dir_override_honors_env_in_any_test_build() {
         let dir = TempDir::new().unwrap();
         std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
         assert_eq!(data_dir_override(), Some(dir.path().to_path_buf()));
@@ -618,10 +645,16 @@ mod tests {
     /// copy of the resolution, so a test covering only this module's
     /// `app_data_dir` would stay green while the other two still resolved.
     ///
-    /// No test in this binary may call `init_production_data_dir()`:
-    /// `PROD_DATA_DIR` is a process-global `OnceLock`, so a single call would
-    /// re-arm the real-store default for every later test here and quietly turn
-    /// this assertion into a tautology.
+    /// It doubles as the caller guard on [`init_production_data_dir`]. That
+    /// function is `pub` and a single call re-arms the real-store default for
+    /// every later test in the same process — `PROD_DATA_DIR` is a `OnceLock`, so
+    /// there is no undo. A test in this binary that called it would not slip past
+    /// this assertion; it would break it loudly, at the `panic!` below naming the
+    /// directory that got resolved. So the rule is enforced here for this binary
+    /// rather than by the doc comment on that function.
+    ///
+    /// The `table-view` crate's test binaries have no equivalent assertion, and a
+    /// call from one of them would only affect that one process (#2184, N5).
     #[test]
     #[serial]
     fn no_resolver_reaches_the_real_data_dir_without_injection() {
@@ -681,14 +714,26 @@ mod tests {
     /// to hold private copies. Scanning the source rather than listing the known
     /// call sites is what makes a *new* file fail on the day it lands.
     ///
-    /// Would this guard have caught what #2184 cleaned up? It counts non-comment
-    /// lines, and at the base commit there were 3 — the permitted one plus the two
-    /// private copies this PR deletes, so 2 of 2. One remains here.
-    /// `git grep -n data_local_dir 02d70e28 -- src-tauri/table-view-core/src | grep -v ':[0-9]*: *//'`
+    /// The needle is the `dirs::` crate, not one function in it. Counting the
+    /// literal `data_local_dir` would have measured a spelling: a fourth resolver
+    /// written with `dirs::data_dir()`, `dirs::home_dir()` or `dirs::config_dir()`
+    /// reaches a user directory just as well and would have left the count at 1.
+    /// `dirs::` is the whole surface through which this crate can learn where the
+    /// user's files live, so it is the thing to hold at one site.
+    ///
+    /// Would this guard have caught what #2184 cleaned up? At the base commit the
+    /// non-comment `dirs::` lines were 6, spread over 3 files: `mod.rs`,
+    /// `local.rs` and `key_migration.rs`, two lines each. This PR removes the
+    /// `local.rs` and `key_migration.rs` copies, so the guard covers 2 of the 2
+    /// files it cleaned up. The assertion is on the file set rather than a line
+    /// count because the surviving lookup is one expression split across two
+    /// lines (`data_local_dir()` then `.or_else(dirs::data_dir)`), which a
+    /// reformat would renumber.
+    /// `git grep -n 'dirs::' 02d70e28 -- src-tauri/table-view-core/src | grep -v ':[0-9]*: *//'`
     #[test]
     fn only_one_place_in_this_crate_names_the_real_data_dir() {
         // Assembled at compile time so this scanner does not match its own line.
-        let needle = concat!("data_local", "_dir");
+        let needle = concat!("dirs", "::");
 
         fn scan(dir: &std::path::Path, needle: &str, hits: &mut Vec<String>) {
             for entry in fs::read_dir(dir).unwrap().flatten() {
@@ -716,17 +761,15 @@ mod tests {
         scan(&src, needle, &mut hits);
         hits.sort();
 
+        let files: std::collections::BTreeSet<&str> =
+            hits.iter().map(|h| h.split(':').next().unwrap()).collect();
         assert_eq!(
-            hits.len(),
-            1,
+            files,
+            ["mod.rs"].into_iter().collect(),
             "the OS user-data lookup must stay inside storage::init_production_data_dir. \
              Any other site resolves the real user store on its own and never passes the \
              #2184 injection guard — delegate to storage::app_data_dir() instead. Found: \
              {hits:?}"
-        );
-        assert!(
-            hits[0].starts_with("mod.rs:"),
-            "the single lookup must be the one in storage/mod.rs, found: {hits:?}"
         );
     }
 
