@@ -129,7 +129,7 @@ pub(crate) fn reset_master_key_for_test() {
 /// 2. `cargo locate-project --workspace` must still name `src-tauri/Cargo.toml`.
 ///    Question 1 does **not** subsume this: under feature resolver 1 a
 ///    dev-dependency's features unify into a plain `cargo build`, and
-///    `--edges normal` does not show it. Measured on a two-crate probe — with a
+///    `--edges normal` does not show it. Measured on a throwaway probe — with a
 ///    resolver-1 virtual workspace the release binary compiled with the feature
 ///    ON while the tree still printed only `feature "default"`. There is no
 ///    workspace root above `src-tauri` today, so the step refuses that
@@ -160,7 +160,7 @@ pub(crate) fn data_dir_override() -> Option<PathBuf> {
 /// convention of remembering to set an env var.
 ///
 /// This is the half that cannot be a `cfg` — gating a panic on `cfg(test)` would
-/// have missed the 35 files under `src-tauri/tests/`, which link this crate as a
+/// have missed everything under `src-tauri/tests/`, which links this crate as a
 /// plain dependency where `cfg(test)` is false. The `cfg` on
 /// [`data_dir_override`] above solves a different problem: it decides who is
 /// *allowed* to name a directory, not what happens when nobody did.
@@ -735,22 +735,35 @@ mod tests {
         // Assembled at compile time so this scanner does not match its own line.
         let needle = concat!("dirs", "::");
 
-        fn scan(dir: &std::path::Path, needle: &str, hits: &mut Vec<String>) {
+        // Keyed by the path relative to `src`, never by the bare file name: this
+        // crate has a `mod.rs` in eight directories, so `storage/mod.rs` and
+        // `db/mod.rs` collapse to the same name and a copy written in the latter
+        // would leave the set unchanged.
+        fn scan(
+            root: &std::path::Path,
+            dir: &std::path::Path,
+            needle: &str,
+            hits: &mut Vec<String>,
+        ) {
             for entry in fs::read_dir(dir).unwrap().flatten() {
                 let path = entry.path();
                 if path.is_dir() {
-                    scan(&path, needle, hits);
+                    scan(root, &path, needle, hits);
                     continue;
                 }
                 if path.extension().and_then(|e| e.to_str()) != Some("rs") {
                     continue;
                 }
-                let name = path.file_name().unwrap().to_string_lossy().into_owned();
+                let rel = path
+                    .strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
                 let body = fs::read_to_string(&path).unwrap();
                 for (i, line) in body.lines().enumerate() {
                     // Prose may discuss the lookup; only code counts.
                     if !line.trim_start().starts_with("//") && line.contains(needle) {
-                        hits.push(format!("{name}:{}", i + 1));
+                        hits.push(format!("{rel}:{}", i + 1));
                     }
                 }
             }
@@ -758,14 +771,14 @@ mod tests {
 
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut hits = Vec::new();
-        scan(&src, needle, &mut hits);
+        scan(&src, &src, needle, &mut hits);
         hits.sort();
 
         let files: std::collections::BTreeSet<&str> =
-            hits.iter().map(|h| h.split(':').next().unwrap()).collect();
+            hits.iter().map(|h| h.rsplit_once(':').unwrap().0).collect();
         assert_eq!(
             files,
-            ["mod.rs"].into_iter().collect(),
+            ["storage/mod.rs"].into_iter().collect(),
             "the OS user-data lookup must stay inside storage::init_production_data_dir. \
              Any other site resolves the real user store on its own and never passes the \
              #2184 injection guard — delegate to storage::app_data_dir() instead. Found: \

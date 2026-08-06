@@ -729,7 +729,7 @@ jobs:
       #  (2) Is `src-tauri` still its own workspace root? This is not redundant.
       #      Under feature resolver 1, dev-dependency features unify into a plain
       #      `cargo build`, and `cargo tree --edges normal` does NOT show it —
-      #      measured on a two-crate probe: with a resolver-1 virtual workspace the
+      #      measured on a throwaway probe: with a resolver-1 virtual workspace the
       #      release binary compiled with the feature ON while `--edges normal`
       #      still printed only `feature "default"`. Adding a workspace manifest
       #      above `src-tauri` without `resolver = "2"` is therefore invisible to
