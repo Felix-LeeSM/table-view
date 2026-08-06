@@ -68,11 +68,12 @@ regions / 2,842 functions / 21,694 lines.
 
 The crate's own unit coverage on `dd1d9d0a` is 69.17% regions / 65.76%
 functions / 69.54% lines over 1,204 tests, and its `TOTAL` row counts 65,446
-regions. Run this one from the repo root, not from the `src-tauri` directory the
-block above leaves you in:
+regions. Run this one from `src-tauri` as well — `-p` selects the member, and
+selection is what decides whose sources land in the report:
 
 ```bash
-cargo llvm-cov --manifest-path src-tauri/table-view-core/Cargo.toml --lib --summary-only
+cd src-tauri
+cargo llvm-cov -p table-view-core --lib --summary-only
 ```
 
 Read a job with
@@ -162,25 +163,21 @@ Required local evidence:
   `run -- --run --coverage ...` and treats everything after `--` as non-flag
   arguments. It exited 0 without collecting coverage or applying the
   vite.config.ts thresholds, so this lane produced no coverage evidence.
-- Rust lane, in this order:
-  `cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration`,
-  `cargo test --manifest-path src-tauri/table-view-core/Cargo.toml --lib`,
-  `cargo test --manifest-path src-tauri/sql-parser-core/Cargo.toml --lib`,
-  `cargo test --manifest-path src-tauri/Cargo.toml --test parse_sql_backend`,
-  `cargo test --manifest-path src-tauri/Cargo.toml --test keyring_migration --test keyring_new_user --test keyring_linux_fallback`,
-  and `cargo test --manifest-path src-tauri/mongosh-parser-core/Cargo.toml --lib`.
-  `table-view-core` and `sql-parser-core` are path dependencies, not workspace
-  members: the app manifest's `--lib` compiles them but never runs their own
-  unit tests. `mongosh-parser-core` sits one step further out — it is not in
-  the app's dependency graph at all (`git grep -n mongosh -- src-tauri/Cargo.lock`
-  returns 0 hits), so no flag on the app manifest can reach it and only its own
-  `--manifest-path` line runs it. That is how its lib tests stayed outside every
-  gate until #2098. `--test` is an allowlist on top of that: an integration
-  binary that no line names never runs, which is how the three `keyring_*`
-  binaries stayed outside CI until #1815. Drop a line and the lane still exits 0
-  with those crates' unit tests — or those binaries — unrun, the same reason CI
-  wires them as separate steps (the `Rust Unit And Storage Tests` job in
-  `.github/workflows/ci.yml`). Since #2113 the difference is measured rather
+- Rust lane:
+  `cd src-tauri && cargo test --workspace --lib --test storage_integration --test parse_sql_backend --test keyring_migration --test keyring_new_user --test keyring_linux_fallback`.
+  Since #2161 the Rust crates are one Cargo workspace rooted at
+  `src-tauri/Cargo.toml`, so `--workspace --lib` runs every member's unit tests
+  and a crate added later arrives already covered. This lane was a command per
+  manifest before, because a cargo invocation reaches only the package it is
+  invoked on, and the same omission was found three times — #1769 (`table-view-core`),
+  sprint-390 (`sql-parser-core`), #2098 (`mongosh-parser-core`) — each time with
+  CI green while those unit tests sat unrun.
+  `--test` is a different matter and stays hand-listed: it is an allowlist, so
+  an integration binary that no line names never runs, which is how the three
+  `keyring_*` binaries stayed outside CI until #1815. Dropping `--workspace`
+  un-runs whole crates; dropping a `--test` name un-runs that binary; both still
+  exit 0. CI runs the identical command (the `Rust Unit And Storage Tests` job in
+  `.github/workflows/ci.yml`). Since #2113 the second failure mode is measured rather
   than noticed one binary at a time: `scripts/check-ci-test-calls.sh` compares
   the integration targets under `src-tauri/tests` against the `--test` names CI
   calls, and fails unless each uncalled one carries a reason in
@@ -190,7 +187,7 @@ Required local evidence:
   quote that output rather than re-deriving the comparison by hand. Closing the
   entries the file was seeded with is a separate issue.
 - Docker integration lane: with required services available,
-  `cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
+  `cd src-tauri && cargo test --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
 - Documentation lane: `git diff --check` on the touched docs plus
   `pnpm docs:links`, which fails on an internal markdown link whose file or
   heading does not exist and runs in CI inside the frontend test shards.

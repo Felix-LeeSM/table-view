@@ -13,7 +13,7 @@
 //! offline 인 `mariadb_ddl_preview.rs` 도 그 경로를 지나지 않아 CI 가 green 이었다.
 //!
 //! 실행:
-//!   cargo test --manifest-path src-tauri/Cargo.toml --test mariadb_integration
+//!   cd src-tauri && cargo test --test mariadb_integration
 //!   MARIADB_HOST=localhost MARIADB_PORT=23306 cargo test ... (외부 재사용)
 
 mod common;
