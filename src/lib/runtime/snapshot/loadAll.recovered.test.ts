@@ -25,6 +25,7 @@ function makeSnapshot(
     generatedAt: 1_700_000_000_000,
     partial: false,
     recovered: false,
+    connectionsRestoredFromBackup: false,
     stores: {
       connections: { items: [], groups: [] },
       workspaces: { byConnectionId: {} },
@@ -63,5 +64,50 @@ describe("v0.3.1 boot recovery toast", () => {
     const toasts = useToastStore.getState().toasts;
     const warning = toasts.find((t) => t.variant === "warning");
     expect(warning, "no recovery toast on a normal boot").toBeUndefined();
+  });
+});
+
+// #2183 — connections.json 이 사라졌다가 옆의 백업에서 돌아온 사건. 위의
+// `recovered` 와 같은 배선(boot flag → snapshot → toast)을 타지만 키가 따로다.
+describe("#2183 connections restored from backup toast", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    useToastStore.setState({ toasts: [] });
+    resetSnapshotBufferForTests();
+  });
+
+  it("pushes a sticky warning naming the connections backup", async () => {
+    invokeMock.mockResolvedValueOnce(
+      makeSnapshot({ connectionsRestoredFromBackup: true }),
+    );
+
+    await loadAllFromSnapshot();
+
+    const warning = useToastStore
+      .getState()
+      .toasts.find((t) => t.variant === "warning");
+    expect(warning, "a restore must be reported to the user").toBeTruthy();
+    expect(
+      warning?.message,
+      "the user has to be told which file to look at, and it is not the state.db one",
+    ).toContain("connections.json.bak");
+    expect(warning?.message).not.toContain("state.db.bak");
+    expect(
+      warning?.durationMs,
+      "a boot-time data-loss notice must not time out — going unnoticed is the #2183 failure",
+    ).toBeNull();
+  });
+
+  it("stays silent when nothing was restored", async () => {
+    invokeMock.mockResolvedValueOnce(
+      makeSnapshot({ connectionsRestoredFromBackup: false }),
+    );
+
+    await loadAllFromSnapshot();
+
+    expect(
+      useToastStore.getState().toasts.find((t) => t.variant === "warning"),
+      "a first run has nothing to report — warning on every launch would be a new defect",
+    ).toBeUndefined();
   });
 });

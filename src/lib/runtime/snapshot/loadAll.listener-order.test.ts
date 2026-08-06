@@ -96,6 +96,7 @@ describe("AC-367-04 listener buffer drain (race window)", () => {
         generatedAt: 1_700_000_000_000,
         partial: false,
         recovered: false,
+        connectionsRestoredFromBackup: false,
         stores: {
           connections: {
             items: [
@@ -164,6 +165,7 @@ describe("AC-367-04 listener buffer drain (race window)", () => {
         generatedAt: 1_700_000_000_000,
         partial: false,
         recovered: false,
+        connectionsRestoredFromBackup: false,
         stores: {
           connections: { items: [], groups: [] },
           workspaces: { byConnectionId: {} },

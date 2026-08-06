@@ -40,8 +40,9 @@ pub fn db_path() -> Result<PathBuf, AppError> {
 /// 렌더러가 지정한, Tauri command 가 파일로 쓸 대상 경로를 검증한다. 상대경로
 /// (must be absolute) 와 내부 app 데이터 디렉토리(`app_data_dir()`) 안으로
 /// resolve 되는 경로를 거부 — 침해된 렌더러가 export target 을 빌미로 `.key`
-/// (마스터키) / `connections.json` (암호화 password blob) / `state.db`(+`.bak`·
-/// `-wal` sidecar) 등 내부 credential 을 overwrite/삭제하지 못하게 막는다.
+/// (마스터키) / `connections.json` 과 그 `.bak` (#2183, 둘 다 암호화 password
+/// blob) / `state.db`(+`.bak`·`-wal` sidecar) 등 내부 credential 을
+/// overwrite/삭제하지 못하게 막는다.
 /// Issue #1094, #1449. sqlite connect/create 와 같은 `reject_internal_app_data_path`
 /// 가드를 재사용한다.
 pub fn validate_export_target_path(path: &Path) -> Result<(), AppError> {
@@ -55,8 +56,9 @@ pub fn validate_export_target_path(path: &Path) -> Result<(), AppError> {
 
 /// 인자 경로가 내부 app 데이터 디렉토리(`app_data_dir()`) 안으로 resolve 되면
 /// 거부. `state.db` 단일 파일이 아니라 디렉토리 전체를 confinement 한다 —
-/// `connections.json`(암호화 비밀번호 blob) / `.key`(마스터키) / `state.db`
-/// (+`.bak`·`-wal` sidecar) 등 앱 내부 state 를 export/import/connect/create
+/// `connections.json` 과 그 `.bak`(#2183, 암호화 비밀번호 blob) / `.key`
+/// (마스터키) / `state.db`(+`.bak`·`-wal` sidecar) 등 앱 내부 state 를
+/// export/import/connect/create
 /// target 이나 DuckDB file analytics source 로 삼아 overwrite 하거나 read-exfil
 /// 하는 것을 막는다 (Issue #1106, #1449). export/import/connect/create·file
 /// analytics 가 공유하는 단일 가드. normalized (`..`·`.` 정리) 와 canonical
