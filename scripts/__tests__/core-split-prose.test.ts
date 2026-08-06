@@ -1,12 +1,13 @@
-import { spawnSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   CARDINAL,
   classify,
   cwdFromBlock,
-  fenceOpenerAbove,
   normalizeToken,
   segmentAligned,
 } from "../sweep/core-split-prose.mjs";
@@ -111,35 +112,76 @@ describe("core-split-prose sweep", () => {
     ).toBeNull();
   });
 
-  // Reason: 한국어 수사는 단위 명사 없이 계사로 닫힌다 — 「검사는 다섯이다」.
-  // 단위 명사만 요구하던 동안 그 형태가 통째로 빠졌고, #2161 이 블록에서 한 줄을
-  // 지웠는데 그 줄을 세던 문장이 남아도 스윕이 green 이었다. 계사 갈래에 `이/였` 를
-  // 요구하는 것도 같이 잠근다 — 맨 `다` 를 허용하면 「둘 다」가 걸린다.
-  it("detects a Korean numeral closed by a copula, not by 둘 다", () => {
+  // Reason: 한국어 수사는 단위 명사 없이 계사로 닫힌다 — 「다섯이다」, 축약형
+  // 「하나다」. 단위 명사만 요구하던 동안 그 형태가 통째로 빠졌고, #2161 이 블록에서
+  // 한 줄을 지웠는데 그 줄을 세던 문장이 남아도 스윕이 green 이었다.
+  // 아래 둘은 각각 이 정규식의 결정 하나씩을 가른다 — 「하나다」는 계사 갈래에 맨
+  // `다` 를 넣은 결정을, `x86_64입니다` 는 앞 경계에 `_` 를 넣은 결정을 문다.
+  // 「둘 다」로는 못 가른다: 계사 갈래가 수사에 구분자 없이 붙어서, 맨 `다` 가 있든
+  // 없든 띄어 쓴 「둘 다」는 안 걸린다 (실측). 그 단언은 어느 설계에서도 통과한다.
+  it("detects a Korean numeral closed by a copula, including the short form", () => {
     expect(CARDINAL.test("이 저장소의 검사는 다섯이다.")).toBe(true);
     expect(CARDINAL.test("검사는 넷이고 그중 하나는 rustfmt 다")).toBe(true);
-    expect(CARDINAL.test("둘 다 예산 안이다")).toBe(false);
+    expect(CARDINAL.test("이 저장소의 검사는 하나다")).toBe(true);
+    expect(CARDINAL.test("x86_64입니다")).toBe(false);
   });
 
-  // Reason: 블록을 세는 문장은 블록 앞에 있고, 블록이 길면 cargo 줄에서 WINDOW
-  // 밖으로 밀린다 (위 SKILL.md 는 6줄 떨어져 있었다). 펜스 여는 줄을 창의 중심으로
-  // 같이 써서 블록 전체를 한 덩어리로 본다.
-  it("anchors the arm-C window on the fence a cargo line sits in", () => {
-    const md = [
-      "## 4. 자동 검사를 돌린다", // 1
-      "", // 2
-      "이 저장소의 검사는 다섯이다.", // 3
-      "", // 4
-      "```bash", // 5
-      "pnpm lint", // 6
-      "pnpm test", // 7
-      "pnpm build", // 8
-      "(cd src-tauri && cargo fmt --all --check)", // 9  <- cargo 줄
-      "```", // 10
-    ];
-    // cargo 줄(9)에서 세면 3 은 WINDOW(3) 밖이고, 펜스(5)에서 세면 안이다.
-    expect(fenceOpenerAbove(md, 9)).toBe(5);
-    expect(Math.abs(9 - 3) > 3 && Math.abs(5 - 3) <= 3).toBe(true);
+  // Reason: 세는 문장은 블록 **앞**에 있고 블록이 길면 cargo 줄의 WINDOW 밖으로
+  // 밀린다. `fenceOpenerAbove` 가 무엇을 계산하나와 그것이 `armC` 에서 **불리기는
+  // 하나**는 다른 축이다 — 앞 축만 재면 배선을 지워도 아무 신호가 안 난다.
+  // 그래서 스윕을 픽스처 저장소에 통째로 돌린다: 배선을 지우면 이 hit 이 사라진다
+  // (실측 — `arm_c_closed_count` 1 → 0).
+  it("anchors the arm-C window on the fence, wiring included", () => {
+    const dir = mkdtempSync(join(tmpdir(), "core-split-prose-"));
+    const g = (...argv: string[]) =>
+      execFileSync("git", argv, { cwd: dir, encoding: "utf8" });
+    try {
+      g("init", "-q", "-b", "main", ".");
+      g("config", "user.email", "t@example.invalid");
+      g("config", "user.name", "t");
+      g("config", "commit.gpgsign", "false");
+      writeFileSync(join(dir, "seed.txt"), "seed\n");
+      g("add", "-A");
+      g("commit", "-qm", "seed");
+      g("checkout", "-q", "-b", "side");
+      writeFileSync(join(dir, "side.txt"), "side\n");
+      g("add", "-A");
+      g("commit", "-qm", "side");
+      g("checkout", "-q", "main");
+      g("merge", "-q", "--no-ff", "side", "-m", "merge");
+      const merge = g("log", "--merges", "-1", "--format=%H").trim();
+      // 세는 문장 :3, 펜스 :5, cargo 줄 :9. |9-3| = 6 > WINDOW, |5-3| = 2 <= WINDOW.
+      writeFileSync(
+        join(dir, "fixture.md"),
+        [
+          "# fixture",
+          "",
+          "이 저장소의 검사는 다섯이다.",
+          "",
+          "```bash",
+          "pnpm lint",
+          "pnpm test",
+          "pnpm build",
+          "cargo fmt --all --check",
+          "```",
+          "",
+        ].join("\n"),
+      );
+      g("add", "-A");
+      g("commit", "-qm", "fixture");
+
+      const run = spawnSync("node", [join(repoRoot, sweep), "--merge", merge], {
+        cwd: dir,
+        encoding: "utf8",
+        timeout: 50_000,
+      });
+      expect(run.error ?? null).toBeNull();
+      expect(run.stdout, `stderr: ${run.stderr}`).toContain("merge=");
+      expect(run.stdout).toContain("arm_c_closed_count=1");
+      expect(run.stdout).toContain("fixture.md:3");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   // Reason: 다른 게이트의 테스트가 임시 트리에 뿌리는 픽스처 workflow 문자열은

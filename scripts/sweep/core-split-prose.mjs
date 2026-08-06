@@ -297,19 +297,27 @@ const armB = () =>
 // 빼지 않는다 — 이 스윕이 고친 자리 하나가 `without these two steps` 였고, 빼면
 // 그 자리를 놓친다. 잡는 쪽을 넓게 두고 부사구는 아래 `C/adverbial-distance` 처분이
 // 사유와 함께 걷는다 (필터로 숨기지 않는다는 이 파일의 기조와 같다).
-// 한국어 수사는 단위 명사 없이 계사로 바로 닫힌다 — 「검사는 다섯이다」. 단위
-// 명사만 요구하면 그 형태가 통째로 빠지고, 실제로 빠져 있었다: #2161 이
-// `resolving-merge-conflicts/SKILL.md` 의 블록에서 한 줄을 지웠는데 그 줄을 세던
-// 「다섯이다」가 남았고 이 스윕은 green 이었다. 계사 갈래는 `이/였` 를 요구한다 —
-// 맨 `다` 를 허용하면 「둘 다」가 걸린다.
+// 한국어 수사는 단위 명사 없이 계사로 바로 닫힌다 — 「검사는 다섯이다」, 축약형
+// 「검사는 하나다」. 단위 명사만 요구하면 그 형태가 통째로 빠지고, 실제로 빠져
+// 있었다: #2161 이 `resolving-merge-conflicts/SKILL.md` 의 블록에서 한 줄을 지웠는데
+// 그 줄을 세던 「다섯이다」가 남았고 이 스윕은 green 이었다.
+//
+// 계사 갈래는 수사에 **구분자 없이 바로** 붙는다. 그래서 맨 `다` 를 넣어도
+// 「둘 다」는 안 걸린다 (띄어쓰기가 있다) — 실측했다. 넣어서 더 걸리는 것은 붙여 쓴
+// 오기 「둘다」와, 정작 필요한 축약형 「하나다」다. 그래서 넣는다.
+//
+// 앞 경계에 `_` 를 더한다. `x86_64입니다` 의 `64` 는 식별자 안이라 개수 서술이
+// 아닌데, `_` 가 문자도 숫자도 아니라 경계로 통과하던 실측 오탐이다. 값을 말하는
+// 계사(`0이며`, `–15입니다`)는 구조로는 개수 서술과 구분이 안 된다 — 걸리면 처분표에
+// 사유와 함께 올린다. 필터로 숨기지 않는다는 이 파일의 기조와 같다.
 export const CARDINAL =
-  /(^|[^\p{L}\p{N}])(one|two|three|four|five|six|seven|eight|nine|ten|하나|둘|셋|넷|다섯|여섯|일곱|여덟|\d+)([ -]?(개|종|벌|곳|가지|commands?|manifests?|crates?|lanes?|steps?|files?|invocations?|packages?)|(이다|이고|이며|이라|입니다|이었|였))/u;
+  /(^|[^\p{L}\p{N}_])(one|two|three|four|five|six|seven|eight|nine|ten|하나|둘|셋|넷|다섯|여섯|일곱|여덟|\d+)([ -]?(개|종|벌|곳|가지|commands?|manifests?|crates?|lanes?|steps?|files?|invocations?|packages?)|(이다|이고|이며|이라|입니다|이었|였|다))/u;
 const WINDOW = 3;
 
 // 펜스 블록을 세는 문장은 블록 **앞**에 있고, 블록이 길면 WINDOW 밖으로 밀린다
 // (위 SKILL.md 는 6줄 떨어져 있었다). 그래서 cargo 줄이 펜스 안이면 그 펜스 여는
 // 줄도 창의 중심으로 같이 쓴다 — 블록 전체를 한 덩어리로 보는 것과 같다.
-export function fenceOpenerAbove(src, lineNo) {
+function fenceOpenerAbove(src, lineNo) {
   let opener = null;
   let open = false;
   for (let n = 1; n <= lineNo && n <= src.length; n++) {

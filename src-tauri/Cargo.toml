@@ -1,5 +1,5 @@
 # #2161 — 네 crate 가 한 Cargo workspace 다. root 는 이 manifest 이고, lock 은
-# `src-tauri/Cargo.lock` 하나다. `table-view-core` / `sql-parser-core` 는 아래
+# `src-tauri/Cargo.lock` 이다. `table-view-core` / `sql-parser-core` 는 아래
 # `[dependencies]` 의 path dependency 라 적지 않아도 member 지만,
 # `mongosh-parser-core` 는 아무도 의존하지 않아 여기 적어야 들어온다 — 그래서 셋 다
 # 적는다. CI 가 crate 를 하나씩 호명하는 대신 `cargo test --workspace --lib` /
