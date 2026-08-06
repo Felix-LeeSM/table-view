@@ -13,7 +13,7 @@ use crate::error::AppError;
 use crate::models::{ConnectionConfig, ConnectionGroup, StorageData};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, OnceLock};
 use tracing::{debug, error, info, warn};
 use zeroize::Zeroizing;
 
@@ -105,17 +105,86 @@ pub(crate) fn data_dir_override() -> Option<PathBuf> {
     None
 }
 
-fn app_data_dir() -> Result<PathBuf, AppError> {
-    if let Some(dir) = data_dir_override() {
-        fs::create_dir_all(&dir)?;
-        return Ok(dir);
-    }
+/// #2184 — the app's real data directory, and the ONLY value in this crate that
+/// may name it. Empty until [`init_production_data_dir`] injects it at boot.
+///
+/// Before this, `app_data_dir()` *defaulted* to `dirs::data_local_dir()/table-view`
+/// and a caller had to opt **out** — via `TABLE_VIEW_TEST_DATA_DIR` — to stay off
+/// the developer's real store. Forgetting the opt-out was silent, and storage is
+/// not read-only there: it quarantines `connections.json` on a parse error and
+/// rewrites it empty, quarantines `state.db`, and creates or replaces the master
+/// `.key`. #2183 lost a real machine's saved connections that way on 2026-08-06.
+/// A `cfg(test)` panic would not have covered it — `cfg(test)` is off when
+/// `src-tauri/tests/*.rs` links this crate as a plain dependency, which is 35 of
+/// the test files that touch this path.
+///
+/// So the default is flipped: the real store is unreachable to any process that
+/// did not explicitly ask for it. Every test binary, every `[[bin]]` target and
+/// every entry point added later is isolated by construction rather than by the
+/// convention of remembering to set an env var.
+static PROD_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// #2184 — hand storage the real user data directory. The Tauri `setup` hook
+/// calls this once at boot, before `boot_wire_master_key` and before any IPC can
+/// fire; a process that never calls it cannot resolve the real store at all
+/// ([`app_data_dir`] returns `Err`).
+///
+/// Creates the directory so the boot fails here, loudly, rather than at the first
+/// write. Idempotent: a second call is a no-op, so a re-entrant boot is not an
+/// error.
+///
+/// Do NOT call this from a test. It is process-global and permanent — one call
+/// re-arms the real-store default for every later test in the same binary, which
+/// is the exact failure this guard exists to remove.
+pub fn init_production_data_dir() -> Result<(), AppError> {
     let dir = dirs::data_local_dir()
         .or_else(dirs::data_dir)
-        .ok_or_else(|| AppError::Storage("Cannot determine app data directory".into()))?;
-    let dir = dir.join("table-view");
+        .ok_or_else(|| AppError::Storage("Cannot determine app data directory".into()))?
+        .join("table-view");
+    fs::create_dir_all(&dir)?;
+    let _ = PROD_DATA_DIR.set(dir);
+    Ok(())
+}
+
+/// #2184 — the single data-directory decision for the whole crate.
+/// [`local::app_data_dir`] and [`key_migration::app_data_dir_for_keyring`] are
+/// one-line delegations to it. Each of the three used to carry its own copy of
+/// the resolve-or-fall-back body, so the #2183 hole was open in three places at
+/// once and a fix to one copy left the other two on the real store.
+/// `only_one_place_in_this_crate_names_the_real_data_dir` in this module's tests
+/// is what keeps a fourth copy from being written.
+pub(crate) fn app_data_dir() -> Result<PathBuf, AppError> {
+    let dir = app_data_dir_path().ok_or_else(|| {
+        AppError::Storage(
+            "app data directory not resolved: no TABLE_VIEW_TEST_DATA_DIR override and \
+             storage::init_production_data_dir() was never called (#2184). In the app, \
+             the Tauri setup hook must call it before any storage path runs. In a test, \
+             do NOT call it — it would point storage at the real user store; instead set \
+             TABLE_VIEW_TEST_DATA_DIR to a temp dir, keep that dir alive for the whole \
+             test, and mark the test #[serial] because the variable is process-global. \
+             If the variable IS set and you still see this, the build has debug_assertions \
+             off (cargo test --release), where #1454 compiles the override out — run \
+             storage tests in debug."
+                .into(),
+        )
+    })?;
     fs::create_dir_all(&dir)?;
     Ok(dir)
+}
+
+/// #2184 — where the app's data directory *would* be, without creating it and
+/// without failing when this process has none.
+///
+/// [`local::reject_internal_app_data_path`] is the only caller: it asks the
+/// read-only question "does this path fall inside the app's own directory?", and
+/// answering it should neither create that directory nor turn every export /
+/// import / connect into an error in a process that has no directory to protect.
+/// `None` means exactly that — no injection and no override, so this process has
+/// no `connections.json`, no `.key` and no `state.db`, and the confined set is
+/// empty. The app never sees `None`: `lib.rs::setup` injects before the first IPC
+/// handler can fire and exits the process if that injection fails.
+pub(crate) fn app_data_dir_path() -> Option<PathBuf> {
+    data_dir_override().or_else(|| PROD_DATA_DIR.get().cloned())
 }
 
 fn storage_file_path() -> Result<PathBuf, AppError> {
@@ -514,6 +583,131 @@ mod tests {
         std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
         assert_eq!(data_dir_override(), Some(dir.path().to_path_buf()));
         std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+    }
+
+    // -------------------------------------------------------------------
+    // #2184 — the real user data directory is injected, never defaulted.
+    // -------------------------------------------------------------------
+
+    /// The guard itself. With no `TABLE_VIEW_TEST_DATA_DIR` override and no
+    /// `init_production_data_dir()` injection, every resolver must refuse rather
+    /// than hand back the developer's real store — that store is what #2183 lost.
+    ///
+    /// All three resolvers are asserted here on purpose. `local::app_data_dir`
+    /// and `key_migration::app_data_dir_for_keyring` each used to own a private
+    /// copy of the resolution, so a test covering only this module's
+    /// `app_data_dir` would stay green while the other two still resolved.
+    ///
+    /// No test in this binary may call `init_production_data_dir()`:
+    /// `PROD_DATA_DIR` is a process-global `OnceLock`, so a single call would
+    /// re-arm the real-store default for every later test here and quietly turn
+    /// this assertion into a tautology.
+    #[test]
+    #[serial]
+    fn no_resolver_reaches_the_real_data_dir_without_injection() {
+        cleanup_test_env();
+
+        for (name, resolved) in [
+            ("storage::app_data_dir", app_data_dir()),
+            ("storage::local::app_data_dir", local::app_data_dir()),
+            (
+                "key_migration::app_data_dir_for_keyring",
+                key_migration::app_data_dir_for_keyring(),
+            ),
+        ] {
+            let err = match resolved {
+                Err(e) => e,
+                Ok(dir) => panic!(
+                    "{name} resolved to {} with neither an override nor an injection — \
+                     that is the user's real store",
+                    dir.display()
+                ),
+            };
+            assert!(
+                matches!(&err, AppError::Storage(msg)
+                    if msg.contains("init_production_data_dir")
+                        && msg.contains("TABLE_VIEW_TEST_DATA_DIR")),
+                "{name} must name both fixes (inject at boot / override in a test), got: {err:?}"
+            );
+        }
+    }
+
+    /// The positive half of "one decision, three callers": with the override set,
+    /// all three resolvers return the *same* directory.
+    ///
+    /// It catches what the test above cannot. Measured on this branch by mutating
+    /// `local::app_data_dir` to `Ok(crate::storage::app_data_dir()?.join("sqlite"))`
+    /// — a copy that still honors the override, so
+    /// `no_resolver_reaches_the_real_data_dir_without_injection` stays green while
+    /// this one turns red.
+    #[test]
+    #[serial]
+    fn all_resolvers_share_one_decision() {
+        let dir = setup_test_env();
+        let expected = dir.path();
+
+        assert_eq!(app_data_dir().unwrap(), expected);
+        assert_eq!(local::app_data_dir().unwrap(), expected);
+        assert_eq!(key_migration::app_data_dir_for_keyring().unwrap(), expected);
+
+        cleanup_test_env();
+    }
+
+    /// The two tests above pin today's three resolvers. This one keeps a fourth
+    /// from being written: in this crate the OS user-data lookup may appear in
+    /// exactly one place, `init_production_data_dir`. Any other function that
+    /// performs it resolves the real store on its own and the injection guard
+    /// never sees it — which is exactly how `local.rs` and `key_migration.rs` came
+    /// to hold private copies. Scanning the source rather than listing the known
+    /// call sites is what makes a *new* file fail on the day it lands.
+    ///
+    /// Would this guard have caught what #2184 cleaned up? It counts non-comment
+    /// lines, and at the base commit there were 3 — the permitted one plus the two
+    /// private copies this PR deletes, so 2 of 2. One remains here.
+    /// `git grep -n data_local_dir 02d70e28 -- src-tauri/table-view-core/src | grep -v ':[0-9]*: *//'`
+    #[test]
+    fn only_one_place_in_this_crate_names_the_real_data_dir() {
+        // Assembled at compile time so this scanner does not match its own line.
+        let needle = concat!("data_local", "_dir");
+
+        fn scan(dir: &std::path::Path, needle: &str, hits: &mut Vec<String>) {
+            for entry in fs::read_dir(dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    scan(&path, needle, hits);
+                    continue;
+                }
+                if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                    continue;
+                }
+                let name = path.file_name().unwrap().to_string_lossy().into_owned();
+                let body = fs::read_to_string(&path).unwrap();
+                for (i, line) in body.lines().enumerate() {
+                    // Prose may discuss the lookup; only code counts.
+                    if !line.trim_start().starts_with("//") && line.contains(needle) {
+                        hits.push(format!("{name}:{}", i + 1));
+                    }
+                }
+            }
+        }
+
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut hits = Vec::new();
+        scan(&src, needle, &mut hits);
+        hits.sort();
+
+        assert_eq!(
+            hits.len(),
+            1,
+            "the OS user-data lookup must stay inside storage::init_production_data_dir. \
+             Any other site resolves the real user store on its own and never passes the \
+             #2184 injection guard — delegate to storage::app_data_dir() instead. Found: \
+             {hits:?}"
+        );
+        assert!(
+            hits[0].starts_with("mod.rs:"),
+            "the single lookup must be the one in storage/mod.rs, found: {hits:?}"
+        );
     }
 
     /// Test helper: previous-style save that treats the conn.password field

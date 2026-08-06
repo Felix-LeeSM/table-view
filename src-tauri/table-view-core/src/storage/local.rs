@@ -23,21 +23,13 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use tracing::{info, warn};
 
-/// 앱 데이터 디렉토리 (storage::app_data_dir 와 동일 정책 — TABLE_VIEW_TEST_DATA_DIR
-/// env 우선). 분리해서 두는 이유: storage/mod.rs 는 file-based connections.json
-/// 영역, 이 파일은 SQLite 영역. 디렉토리는 공유.
+/// 앱 데이터 디렉토리. 이름을 SQLite 영역에도 남겨 두는 이유는 호출자 편의뿐이고
+/// (storage/mod.rs 는 file-based connections.json 영역, 이 파일은 SQLite 영역,
+/// 디렉토리는 공유), 판정 자체는 [`crate::storage::app_data_dir`] 한 곳에 있다.
+/// #2184 이전에는 이 함수가 override → fallback 본문을 따로 한 벌 갖고 있었다 —
+/// 같은 본문이 세 벌이라 #2183 의 구멍이 세 군데에서 동시에 열려 있었다.
 pub fn app_data_dir() -> Result<PathBuf, AppError> {
-    // #1454 (P2-6) — override honored in debug only; release ignores env.
-    if let Some(dir) = crate::storage::data_dir_override() {
-        std::fs::create_dir_all(&dir)?;
-        return Ok(dir);
-    }
-    let dir = dirs::data_local_dir()
-        .or_else(dirs::data_dir)
-        .ok_or_else(|| AppError::Storage("Cannot determine app data directory".into()))?;
-    let dir = dir.join("table-view");
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
+    crate::storage::app_data_dir()
 }
 
 /// SQLite DB 파일 경로. Phase 1 부터 영구 위치.
@@ -73,7 +65,17 @@ pub fn validate_export_target_path(path: &Path) -> Result<(), AppError> {
 /// 존재 파일·symlink 는 canonical 비교가 잡는다. 호출자가 미리 canonicalize 해
 /// 넘겨도 무방하다.
 pub fn reject_internal_app_data_path(path: &Path) -> Result<(), AppError> {
-    let data_dir = app_data_dir()?;
+    // #2184 — resolve the directory instead of opening it: this check is
+    // read-only, so it must not create the very directory it protects, and it
+    // must not turn into an error in a process that has none. `None` = no boot
+    // injection and no test override, which means this process has no
+    // `connections.json` / `.key` / `state.db` at all — the confined set is empty
+    // and no path can be inside it. The app cannot take that arm:
+    // `lib.rs::setup` injects before the first IPC handler can fire and exits the
+    // process if the injection fails.
+    let Some(data_dir) = crate::storage::app_data_dir_path() else {
+        return Ok(());
+    };
     let normalized_within =
         normalize_absolute_path(path).starts_with(normalize_absolute_path(&data_dir));
     let canonical_within = matches!(
@@ -294,6 +296,44 @@ mod tests {
 
     fn cleanup_env() {
         std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+    }
+
+    /// #2184 — the confinement check is scoped to the directory this process
+    /// actually has. With none resolved there is no `connections.json`, no `.key`
+    /// and no `state.db` to target, so the confined set is empty and the check
+    /// must pass rather than turn every export / import / connect into an error.
+    /// It must NOT resolve one to answer the question: doing so is what had 76
+    /// sqlite/duckdb adapter tests creating the developer's real app data
+    /// directory on every `cargo test` run.
+    ///
+    /// The second half is the part that must never weaken: as soon as a directory
+    /// is resolved, a path inside it is rejected again. The app only ever runs in
+    /// that state — `lib.rs::setup` injects before the first IPC handler can fire
+    /// and exits the process if the injection fails.
+    #[test]
+    #[serial]
+    fn confinement_is_empty_without_a_data_dir_and_closed_with_one() {
+        cleanup_env();
+        let outside = TempDir::new().unwrap();
+        let target = outside.path().join("export.csv");
+        assert!(
+            reject_internal_app_data_path(&target).is_ok(),
+            "nothing to confine when this process has no app data directory"
+        );
+        assert!(validate_export_target_path(&target).is_ok());
+
+        let dir = setup_env();
+        let internal = dir.path().join("connections.json");
+        assert!(
+            reject_internal_app_data_path(&internal).is_err(),
+            "a resolved data directory must still be closed to renderer-named paths"
+        );
+        assert!(validate_export_target_path(&internal).is_err());
+        assert!(
+            reject_internal_app_data_path(&target).is_ok(),
+            "paths outside the resolved directory stay allowed"
+        );
+        cleanup_env();
     }
 
     #[tokio::test]
