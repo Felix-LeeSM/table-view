@@ -137,7 +137,7 @@ async fn a_column_added_in_this_session_can_be_dropped_again() {
     // them after the ADD instead would let the DROP pick the ADD's own
     // connection back up, and the test would pass with the refresh removed.
     // The loop reads the pool constant rather than repeating its value: raising
-    // the pool without filling it leaves a spare permit, `pool.begin()` never
+    // the pool without filling it leaves a spare permit, the runner's begin never
     // parks, and this guard would silently stop discriminating.
     let pool = adapter.active_pool().await.unwrap();
     let mut warm = Vec::new();
@@ -165,6 +165,61 @@ async fn a_column_added_in_this_session_can_be_dropped_again() {
         .unwrap()
         .iter()
         .all(|c| c.name != "locale"));
+}
+
+/// How long the fixture writer keeps the file's lock. Far under the 5s
+/// `busy_timeout` sqlx sets by default, so a runner that waits has room to
+/// spare on a loaded machine, while a runner that fails fast returns in
+/// microseconds and misses the window by orders of magnitude.
+const CONTENDED_HOLD: std::time::Duration = std::time::Duration::from_millis(200);
+
+/// Floor for how long the worker itself must have been stuck. It sits below the
+/// hold rather than at it because the worker's clock starts when the runtime
+/// first polls its task, which can trail the test body's sleep. In practice the
+/// measured stall lands past the hold instead — the worker still has to finish
+/// its statements after the release — and a path that never blocks comes back
+/// in a millisecond or two, so the floor separates the two cases by orders of
+/// magnitude from either side. The worker times itself: timing it from the test
+/// body would just measure that body's sleep and could not fail.
+const CONTENDED_FLOOR: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Regression (#2129): the DDL runner opened its transaction deferred, so the
+/// write lock was only requested once a statement ran — after the runner's own
+/// schema-refresh read had already put the connection in a read transaction.
+/// SQLite refuses to run the busy handler for that read-to-write upgrade
+/// (it could deadlock), so `busy_timeout` was dead on this path and any
+/// concurrent writer turned a legal DDL into an instant "database is locked".
+#[tokio::test]
+async fn structured_ddl_waits_out_a_concurrent_writer() {
+    let (dir, adapter) = connected(USERS, false).await;
+    let release =
+        crate::db::adapters::sqlite::connection::hold_write_lock(&dir.path().join("ddl.sqlite"))
+            .await;
+
+    let mut add = add_column_req("users", column("locale", "TEXT", true));
+    add.preview_only = false;
+    let ddl = adapter.clone();
+    let running = tokio::spawn(async move {
+        let started = std::time::Instant::now();
+        (ddl.add_column(&add).await, started.elapsed())
+    });
+
+    tokio::time::sleep(CONTENDED_HOLD).await;
+    release.send(()).expect("release the contending writer");
+    let (result, blocked_for) = running.await.expect("DDL task");
+
+    result.expect("DDL must wait for the lock, not fail fast");
+    assert!(
+        blocked_for >= CONTENDED_FLOOR,
+        "the DDL finished in {blocked_for:?}, so it never blocked on the \
+         contending writer and this case has stopped exercising the lock"
+    );
+    assert!(adapter
+        .get_table_columns("main", "users")
+        .await
+        .unwrap()
+        .iter()
+        .any(|c| c.name == "locale"));
 }
 
 /// `preview_only` returns the SQL without touching the file — the same

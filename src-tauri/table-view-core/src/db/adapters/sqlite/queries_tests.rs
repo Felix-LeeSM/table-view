@@ -1,4 +1,5 @@
 use super::*;
+use crate::db::adapters::sqlite::sql_text::sqlite_statement_writes;
 use crate::db::RdbAdapter;
 use crate::models::{
     ConnectionConfig, DatabaseType, FilterCondition, FilterOperator, QueryType, SslMode,
@@ -100,6 +101,59 @@ fn sqlite_query_type_classifies_cte_prefixed_main_statement() {
              UPDATE users SET name = (SELECT value FROM next_name) WHERE id = 1"
         ),
         QueryType::Dml { .. }
+    ));
+}
+
+/// The write question is not the `QueryType` question (#2155). `QueryType`
+/// groups statements by the shape of their result, so every `PRAGMA` lands in
+/// `Select`; the transaction's begin style has to know that
+/// `PRAGMA user_version = 5` writes the database header. The read side of this
+/// predicate is an allowlist on purpose — an unrecognised statement takes the
+/// write lock it may not need rather than skipping one it does.
+#[test]
+fn sqlite_statement_writes_splits_reads_from_writes_where_query_type_cannot() {
+    for read in [
+        "SELECT id FROM users",
+        "  -- leading comment\n SELECT 1",
+        "VALUES (1), (2)",
+        "EXPLAIN SELECT id FROM users",
+        // `EXPLAIN` returns byte code instead of running the statement, so even
+        // wrapped around a write it touches nothing.
+        "EXPLAIN UPDATE users SET name = 'x' WHERE id = 1",
+        "WITH active AS (SELECT id FROM users) SELECT * FROM active",
+    ] {
+        assert!(
+            !sqlite_statement_writes(read),
+            "read misread as write: {read}"
+        );
+        assert!(matches!(sqlite_query_type(read), QueryType::Select));
+    }
+
+    for write in [
+        "UPDATE users SET name = 'x' WHERE id = 1",
+        "INSERT INTO users(id, email, name) VALUES (9, 'i@example.test', 'I')",
+        "DELETE FROM users WHERE id = 1",
+        "REPLACE INTO users(id, email, name) VALUES (1, 'r@example.test', 'R')",
+        "WITH next_name(value) AS (SELECT 'Ada')
+         UPDATE users SET name = (SELECT value FROM next_name) WHERE id = 1",
+        // The case `QueryType` cannot see: a pragma that assigns.
+        "PRAGMA user_version = 5",
+        "ALTER TABLE users ADD COLUMN nickname TEXT",
+        "VACUUM",
+    ] {
+        assert!(
+            sqlite_statement_writes(write),
+            "write misread as read: {write}"
+        );
+    }
+
+    // The pragmas that only read are on the write side too, and that is the
+    // allowlist working as intended: it costs this statement the write lock,
+    // where guessing the other way would cost a real pragma its `busy_timeout`.
+    assert!(sqlite_statement_writes("PRAGMA table_info(users)"));
+    assert!(matches!(
+        sqlite_query_type("PRAGMA table_info(users)"),
+        QueryType::Select
     ));
 }
 
@@ -415,6 +469,37 @@ async fn stream_table_rows_streams_seeded_rows_across_batches_1068() {
     assert_eq!(rows[0][0], serde_json::json!("1"));
     assert_eq!(rows[0][1], serde_json::json!("ada@example.test"));
     assert_eq!(rows[0][2], serde_json::json!("Ada"));
+}
+
+/// Boundary guard for #2155: the export's transaction stays deferred. Moving it
+/// to `BEGIN IMMEDIATE` alongside the write paths would make a reader take the
+/// file's write lock, so an export would have to queue behind any writer that
+/// already holds it and would only give up once `busy_timeout` ran out. Nothing
+/// else in this suite notices that swap — every other case runs uncontended.
+#[tokio::test]
+async fn stream_table_rows_reads_while_another_writer_holds_the_file() {
+    let (dir, adapter) = connected_adapter().await;
+    let release =
+        crate::db::adapters::sqlite::connection::hold_write_lock(&dir.path().join("app.sqlite"))
+            .await;
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<Vec<serde_json::Value>>>(4);
+    let cols = vec!["id".to_string()];
+    let exporting = tokio::spawn(async move {
+        <SqliteAdapter as RdbAdapter>::stream_table_rows(
+            &adapter, "main", "users", 1, &cols, tx, None,
+        )
+        .await
+    });
+
+    let first = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
+        .await
+        .expect("an export must not queue behind an unrelated writer");
+    assert!(first.is_some(), "the export sent no rows");
+
+    release.send(()).expect("release the contending writer");
+    let total = exporting.await.unwrap().expect("export completes");
+    assert_eq!(total, 3);
 }
 
 #[tokio::test]

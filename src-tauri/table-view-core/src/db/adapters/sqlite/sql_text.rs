@@ -4,21 +4,49 @@ pub(super) fn strip_trailing_terminator(sql: &str) -> &str {
     sql.trim_end_matches(|c: char| c == ';' || c.is_whitespace())
 }
 
+/// How a statement's *result* is shaped, for the guardrails and the UI.
+///
+/// This is not a "does it write" predicate and must not be used as one — the
+/// `Select` arm holds every `PRAGMA` because a pragma's result renders like a
+/// query, while `PRAGMA user_version = 5` writes the database header. Callers
+/// that need the write question ask [`sqlite_statement_writes`] (#2155).
 pub(super) fn sqlite_query_type(sql: &str) -> QueryType {
+    match sqlite_main_verb(sql).as_str() {
+        "SELECT" | "VALUES" | "PRAGMA" | "EXPLAIN" => QueryType::Select,
+        "INSERT" | "UPDATE" | "DELETE" | "REPLACE" => QueryType::Dml { rows_affected: 0 },
+        _ => QueryType::Ddl,
+    }
+}
+
+/// Does this statement write to the database file?
+///
+/// Answered by allowlist: only the forms that cannot write count as reads, so
+/// anything unfamiliar lands on the write side. That side costs concurrency —
+/// the transaction takes the file's write lock — while the read side costs
+/// correctness, because a writer that opened a deferred transaction has to
+/// upgrade a read lock and SQLite fails that upgrade without ever consulting
+/// `busy_timeout`. Given an unknown statement, pay the slower one.
+///
+/// `EXPLAIN` is a read whatever it wraps: it returns the byte code for the
+/// statement instead of running it.
+pub(super) fn sqlite_statement_writes(sql: &str) -> bool {
+    !matches!(
+        sqlite_main_verb(sql).as_str(),
+        "SELECT" | "VALUES" | "EXPLAIN"
+    )
+}
+
+/// The verb that decides what a statement does, looking through leading
+/// comments and through a `WITH` prefix to the statement the CTEs feed.
+fn sqlite_main_verb(sql: &str) -> String {
     let stripped = strip_leading_comments(sql);
     let verb = first_sql_word(stripped, 0)
         .map(|(word, _)| word)
         .unwrap_or_default();
-    let verb = if verb == "WITH" {
+    if verb == "WITH" {
         sqlite_with_main_verb(stripped).unwrap_or_else(|| "UNKNOWN".to_string())
     } else {
         verb
-    };
-
-    match verb.as_str() {
-        "SELECT" | "VALUES" | "PRAGMA" | "EXPLAIN" => QueryType::Select,
-        "INSERT" | "UPDATE" | "DELETE" | "REPLACE" => QueryType::Dml { rows_affected: 0 },
-        _ => QueryType::Ddl,
     }
 }
 

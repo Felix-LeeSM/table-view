@@ -277,6 +277,124 @@ async fn dry_run_query_batch_rolls_back_successful_statements() {
     );
 }
 
+/// How long the fixture writer keeps the file's lock, and the floor the worker's
+/// own stall has to clear — both explained on the twins in
+/// `ddl_native_live_tests.rs`.
+const CONTENDED_HOLD: std::time::Duration = std::time::Duration::from_millis(200);
+const CONTENDED_FLOOR: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Runs `statements` as a dry-run batch while an unrelated writer holds the
+/// file, releases that writer after [`CONTENDED_HOLD`], and reports the batch's
+/// result together with how long the batch worker itself was stuck. The worker
+/// times itself — timing it from here would fold in this function's own sleep
+/// and could never fail.
+async fn dry_run_against_a_held_write_lock(
+    adapter: &SqliteAdapter,
+    db_path: &std::path::Path,
+    statements: Vec<String>,
+) -> (Result<Vec<QueryResult>, AppError>, std::time::Duration) {
+    let release = crate::db::adapters::sqlite::connection::hold_write_lock(db_path).await;
+    let worker = adapter.clone();
+    let running = tokio::spawn(async move {
+        let started = std::time::Instant::now();
+        (
+            worker.dry_run_query_batch(&statements, None).await,
+            started.elapsed(),
+        )
+    });
+
+    tokio::time::sleep(CONTENDED_HOLD).await;
+    release.send(()).expect("release the contending writer");
+    running.await.expect("batch task")
+}
+
+fn assert_waited_for_the_lock(
+    result: Result<Vec<QueryResult>, AppError>,
+    blocked_for: std::time::Duration,
+) {
+    result.expect("the batch must wait for the lock, not fail fast");
+    assert!(
+        blocked_for >= CONTENDED_FLOOR,
+        "the batch finished in {blocked_for:?}, so it never blocked on the \
+         contending writer and this case has stopped exercising the lock"
+    );
+}
+
+/// Regression (#2130): the batch runner opened its transaction deferred, which
+/// is enough for a batch that writes first — SQLite takes the write lock
+/// straight away and the busy handler applies. A batch that reads first does
+/// not get that: the read leaves the connection in a read transaction, and the
+/// later write has to upgrade one, which SQLite refuses on the spot without
+/// consulting `busy_timeout`. A statement list the adapter accepts must not
+/// depend on its own statement order to survive a concurrent writer.
+#[tokio::test]
+async fn a_batch_that_reads_before_it_writes_waits_out_a_concurrent_writer() {
+    let (dir, adapter) = connected_adapter().await;
+    let (result, blocked_for) = dry_run_against_a_held_write_lock(
+        &adapter,
+        &dir.path().join("app.sqlite"),
+        vec![
+            "SELECT id FROM users".to_string(),
+            "UPDATE users SET name = 'Ada Lovelace' WHERE id = 1".to_string(),
+        ],
+    )
+    .await;
+
+    assert_waited_for_the_lock(result, blocked_for);
+}
+
+/// Regression (#2155): the same read-then-upgrade failure, reached through a
+/// statement whose write nothing in `QueryType` can see. `PRAGMA user_version`
+/// assigns to the database header, but a pragma's result renders like a query
+/// so `QueryType` files it under `Select` next to `PRAGMA table_info`. A begin
+/// style chosen from that classification opened this batch deferred and it
+/// failed fast, which is why the choice is made by `sqlite_statement_writes`
+/// instead. The SQL editor's Dry Run hands the buffer through unsplit, so this
+/// is a statement list a user sends, not a synthetic one.
+#[tokio::test]
+async fn a_batch_whose_only_write_is_a_pragma_waits_out_a_concurrent_writer() {
+    let (dir, adapter) = connected_adapter().await;
+    let (result, blocked_for) = dry_run_against_a_held_write_lock(
+        &adapter,
+        &dir.path().join("app.sqlite"),
+        vec![
+            "SELECT id FROM users".to_string(),
+            "PRAGMA user_version = 5".to_string(),
+        ],
+    )
+    .await;
+
+    assert_waited_for_the_lock(result, blocked_for);
+}
+
+/// Regression (#2130 반작용): a statement list of nothing but reads is legal
+/// input, so the batch runner must not take the file's write lock for it. It
+/// used to open deferred and never did; the `BEGIN IMMEDIATE` fix would have,
+/// which just moves the "database is locked" onto whoever wanted to write
+/// during the read.
+#[tokio::test]
+async fn a_read_only_batch_does_not_take_the_write_lock() {
+    let (dir, adapter) = connected_adapter().await;
+    let release =
+        crate::db::adapters::sqlite::connection::hold_write_lock(&dir.path().join("app.sqlite"))
+            .await;
+    let statements = vec!["SELECT id FROM users".to_string()];
+
+    // A writer holds the file. A deferred read shares it; an `IMMEDIATE` one
+    // queues behind it and only gives up when `busy_timeout` runs out. Dry-run
+    // is the entry point a read-only list can succeed on — the commit one takes
+    // it and then rejects any statement that does not touch exactly one row.
+    let batch = tokio::time::timeout(
+        CONTENDED_HOLD,
+        adapter.dry_run_query_batch(&statements, None),
+    )
+    .await
+    .expect("a read-only batch must not queue behind an unrelated writer");
+
+    release.send(()).expect("release the contending writer");
+    batch.expect("read-only batch");
+}
+
 #[tokio::test]
 async fn execute_query_batch_empty_input_is_noop_without_connection() {
     let adapter = SqliteAdapter::new();
