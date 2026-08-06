@@ -20,6 +20,12 @@ export const en = {
   // one-time column-prefs reset notice (boot migration)
   columnPrefsReset:
     "Per-table preferences will reset once — column widths and hidden columns now sync across windows.",
+  // #2183 — boot found connections.json gone and restored it from the backup
+  // beside it. Sticky, because this reports a data event the user has to check:
+  // the backup is one generation old, so a connection saved right before the
+  // file went missing is not in it.
+  connectionsRestoredFromBackup:
+    "Your saved connections were missing and have been restored from the backup beside them (connections.json.bak). Please check that the list is complete.",
 } as const;
 
 export const ko = {
@@ -35,4 +41,7 @@ export const ko = {
   // one-time column-prefs reset notice (boot migration)
   columnPrefsReset:
     "테이블별 환경설정이 한 번 초기화됩니다 — 컬럼 너비와 숨긴 컬럼이 이제 창 간에 동기화됩니다.",
+  // #2183 — boot found connections.json gone and restored it from the backup.
+  connectionsRestoredFromBackup:
+    "저장된 연결 파일이 사라져서 옆의 백업(connections.json.bak)에서 되살렸습니다. 목록이 다 있는지 확인해 주세요.",
 } as const;

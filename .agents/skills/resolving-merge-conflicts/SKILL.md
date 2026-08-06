@@ -95,5 +95,5 @@ merge 로 온 이상 결과 트리가 의도와 같다는 것은 **트리 비교
 
 푸시는 `memory/workflow/delivery/memory.md` 의 계약을 따른다. push 가
 non-fast-forward 로 튕기면 `git reset --hard` 나 `git pull --rebase` 로 가지 말고
-`git-policy` 의 4-step 회복으로 간다. 그래도 안 풀리면 force 를 시도하지 말고
-상황을 보고한다.
+`.agents/skills/recovering-push-rejects/SKILL.md` 의 4-step 회복으로 간다. 그래도
+안 풀리면 force 를 시도하지 말고 상황을 보고한다.

@@ -203,6 +203,17 @@ export async function loadAllFromSnapshot(): Promise<InitialAppState> {
     );
   }
 
+  // #2183 — separate from `recovered` on purpose: that one says the app state
+  // was reset and points at state.db.bak, this one says the connections came
+  // back from connections.json.bak and nothing was reset. Sticky rather than
+  // timed, because the silent handling of this exact event is what let a real
+  // machine lose every saved connection unnoticed on 2026-08-06.
+  if (snap.connectionsRestoredFromBackup) {
+    toast.warning(i18n.t("feedback:connectionsRestoredFromBackup"), {
+      durationMs: null,
+    });
+  }
+
   drainBuffer(snap.snapshotVersion);
   bufferActive = false;
 

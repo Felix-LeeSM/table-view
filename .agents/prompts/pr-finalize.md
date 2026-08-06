@@ -27,10 +27,13 @@ test "$(git rev-parse --show-toplevel)" != "$CLONE" \
 - `memory/workflow/delivery/memory.md` — 노드 표 · 머지 자율 조건 · 머지 방식
   기본값 · 중단 조건.
 - `memory/workflow/review/memory.md` 「Merge 전 요구」 — 머지가 성립하는 조건.
-- `memory/runbook/pr-merge-gates/memory.md` — required 게이트의 분산 위치,
-  라운드 게이트, `mergeStateStatus` 값의 뜻, BLOCKED 진단 순서, 하면 안 되는 대응.
+- `memory/runbook/pr-merge-gates/memory.md` — required 게이트의 분산 위치와
+  각 required 가 검사하는 것.
+- `.agents/skills/diagnosing-merge-gates/SKILL.md` — 라운드 게이트,
+  `mergeStateStatus` 값의 뜻, BLOCKED 진단 순서, 하면 안 되는 대응.
 - `memory/runbook/worktree/memory.md` 「회수」 — 사본 삭제 판정.
-- `memory/workflow/git-policy/memory.md` 「PR close cleanup」 — 브랜치 정리.
+- `.agents/skills/recovering-push-rejects/SKILL.md` 「PR close cleanup」 —
+  브랜치 정리 (계약은 `memory/workflow/git-policy/memory.md`).
 
 ## 금지 / Write 예산
 
@@ -39,7 +42,8 @@ test "$(git rev-parse --show-toplevel)" != "$CLONE" \
 - verdict 를 재단하지 않는다. `review:approved` 는 리뷰어가 붙인 것을 확인만
   한다.
 - 새 커밋을 push 하거나 `gh pr update-branch` 로 head SHA 를 건드리지 않는다.
-  트리거를 섞었을 때 무엇이 고착되는지는 pr-merge-gates 가 SOT 다.
+  트리거를 섞었을 때 무엇이 고착되는지는
+  `.agents/skills/diagnosing-merge-gates/SKILL.md` 「잘못된 대응이 만드는 함정」.
 - write 는 `reflect:done` label · 머지 · 브랜치와 사본 회수 · 이슈 종결까지다.
 
 출처: `memory/workflow/delivery/memory.md` 「Node 별 계약」.
@@ -75,7 +79,7 @@ gh pr view <N> --json statusCheckRollup \
 rollup 은 이 한 곳에서만 쓴다 — **required 판정 수단이 아니다.** required 는
 2단계의 `mergeStateStatus` 로 확인한다. 그 구분과 라운드 게이트의 조건 · 누가
 붙이는가 · 여기서 rollup 을 봐야 하는 이유는
-`memory/runbook/pr-merge-gates/memory.md` 가 SOT 다.
+`.agents/skills/diagnosing-merge-gates/SKILL.md` 가 SOT 다.
 
 ## 2단계 — 머지 전 확인 (전부 통과해야 진행)
 
@@ -88,8 +92,8 @@ gh pr checks <N>
 
 1. `mergeStateStatus` 가 `CLEAN` 또는 `UNSTABLE` 이다 — required(`review-gate`
    포함) 충족 판정은 이 값으로 읽는다. 두 값의 뜻과 `BLOCKED` 진단 순서는
-   `memory/runbook/pr-merge-gates/memory.md` 가 SOT — `BLOCKED` 면 머지를
-   시도하지 말고 그 방으로 간다.
+   `.agents/skills/diagnosing-merge-gates/SKILL.md` 가 SOT — `BLOCKED` 면 머지를
+   시도하지 말고 그 skill 로 간다.
 2. `needs:user` label 이 없고 사용자 명시 거부가 없다.
 3. **PR body 를 저장된 값으로 1회 재검사한다.** `PR Body Contract` 는 push 시점
    payload 의 body 로만 돌고 body 편집으로는 다시 돌지 않는다 (기전 SOT:

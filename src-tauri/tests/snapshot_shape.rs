@@ -12,8 +12,11 @@
 //!     runtime: { activeStatuses }
 //!   }
 //!
-//! 9 top-level keys. boot non-critical (favorites / queryHistory / schemaCache /
-//! datagrid_prefs) 은 미포함 — lazy IPC 로 mount 시 fetch.
+//! top-level 키 집합은 아래 `test_snapshot_top_level_key_set_is_closed` 의
+//! `assert_eq!` 가 갖는다 — 여기 개수를 적으면 다음 필드 추가가 이 줄을 낡게
+//! 만든다 (#2183 이 `connectionsRestoredFromBackup` 을 더할 때 이 줄은 이미
+//! 실제 키 수와 어긋나 있었다). boot non-critical (favorites / queryHistory /
+//! schemaCache / datagrid_prefs) 은 미포함 — lazy IPC 로 mount 시 fetch.
 //!
 //! `_inner` 시그니처: (pool, window_label, status_map) → 직렬화 가능한 JSON value
 //! — Tauri command 의 wrapper 는 `window.label()` + `state.connection_status`
@@ -44,12 +47,12 @@ fn empty_status() -> HashMap<String, ConnectionStatus> {
 }
 
 // ----------------------------------------------------------------------
-// AC-357-01 — shape 9 키 확인. Empty DB 시점에도 top-level 9 키가 모두
-// 존재해야 함.
+// AC-357-01 — top-level 키 집합이 닫혀 있는지. Empty DB 시점에도 모든 키가
+// 존재해야 하고, 목록 밖의 키는 없어야 한다.
 // ----------------------------------------------------------------------
 #[tokio::test]
 #[serial]
-async fn test_snapshot_top_level_has_nine_keys() {
+async fn test_snapshot_top_level_key_set_is_closed() {
     let (_dir, pool) = setup().await;
     let snap = get_initial_app_state_inner(&pool, "launcher", &empty_status())
         .await
@@ -57,27 +60,27 @@ async fn test_snapshot_top_level_has_nine_keys() {
     let json = serde_json::to_value(&snap).unwrap();
     let obj = json.as_object().expect("top-level must be an object");
 
-    // 9 키: schemaVersion + snapshotVersion + generatedAt + partial + stores +
-    //       runtime
-    // (stores 와 runtime 은 nested object; 본 assert 는 top-level 키 6 개 +
-    //  stores 내부 5 store + runtime 내부 1 = 9 의미 라고 spec 이 적은 것)
-    assert!(obj.contains_key("schemaVersion"), "missing schemaVersion");
-    assert!(
-        obj.contains_key("snapshotVersion"),
-        "missing snapshotVersion"
-    );
-    assert!(obj.contains_key("generatedAt"), "missing generatedAt");
-    assert!(obj.contains_key("partial"), "missing partial");
-    // v0.3.1 — boot 자동 복구(quarantine + fresh) 발생 여부를 frontend toast 용
-    // runtime meta 로 전달. schemaVersion 은 1 유지.
-    assert!(obj.contains_key("recovered"), "missing recovered");
-    assert!(obj.contains_key("stores"), "missing stores");
-    assert!(obj.contains_key("runtime"), "missing runtime");
+    // 집합 비교 하나로 둔다 — 빠진 키와 목록 밖 키를 같은 단언이 잡고, 길이
+    // 리터럴을 따로 두지 않아 필드를 더할 때 갱신할 자리가 하나다.
+    //
+    // `recovered` (v0.3.1) 는 boot 자동 복구(quarantine + fresh) 발생 여부,
+    // `connectionsRestoredFromBackup` (#2183) 은 connections.json 이 없어서
+    // 백업으로 되살렸는지다. 두 사건은 사용자에게 반대되는 말을 하고 다른
+    // 파일을 가리켜서 키가 따로다. 둘 다 runtime meta 라 schemaVersion 은 1 유지.
+    let keys: std::collections::BTreeSet<&str> = obj.keys().map(String::as_str).collect();
     assert_eq!(
-        obj.len(),
-        7,
-        "top-level must have exactly 7 keys (schemaVersion, snapshotVersion, generatedAt, partial, recovered, stores, runtime), found {:?}",
-        obj.keys().collect::<Vec<_>>()
+        keys,
+        std::collections::BTreeSet::from([
+            "schemaVersion",
+            "snapshotVersion",
+            "generatedAt",
+            "partial",
+            "recovered",
+            "connectionsRestoredFromBackup",
+            "stores",
+            "runtime",
+        ]),
+        "top-level wire keys are a closed set"
     );
 
     let stores = obj["stores"].as_object().expect("stores must be object");

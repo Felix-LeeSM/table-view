@@ -53,6 +53,13 @@ pub struct InitialAppState {
     /// 발생했으면 `true`. runtime meta 이지 wire shape change 가 아니므로
     /// `schema_version` 은 1 유지.
     pub recovered: bool,
+    /// #2183: `connections.json` 이 없어서 옆의 백업으로 되살렸으면 `true`.
+    /// `recovered` 와 별개인 이유는 두 사건이 사용자에게 반대되는 말을 해야
+    /// 하기 때문이다 — `recovered` 는 "앱 상태를 초기화했고 옛 사본은
+    /// `state.db.bak` 에 있다", 이쪽은 "연결이 `connections.json.bak` 에서
+    /// 돌아왔고 초기화된 것은 없다". 같은 runtime meta 라
+    /// `schema_version` 은 1 유지.
+    pub connections_restored_from_backup: bool,
     pub stores: Stores,
     pub runtime: Runtime,
 }
@@ -249,6 +256,7 @@ pub async fn get_initial_app_state_inner(
         generated_at,
         partial,
         recovered: false,
+        connections_restored_from_backup: false,
         stores: Stores {
             connections,
             workspaces,
@@ -535,6 +543,11 @@ pub async fn get_initial_app_state(
     // reset — 다음 boot cycle 은 false 로 시작.
     snap.recovered = crate::storage::corrupt_recovery::DID_RECOVER
         .swap(false, std::sync::atomic::Ordering::SeqCst);
+    // #2183 — 같은 방식으로 connections.json 백업 복구를 전달한다. 위
+    // `_inner` 안의 `read_connections` 가 파일 SOT 를 읽으므로(wallet presence
+    // + TLS posture overlay) 이 swap 시점엔 복구가 이미 일어난 뒤다.
+    snap.connections_restored_from_backup = crate::storage::CONNECTIONS_RESTORED_FROM_BACKUP
+        .swap(false, std::sync::atomic::Ordering::SeqCst);
     Ok(snap)
 }
 
@@ -704,6 +717,7 @@ mod tests {
             generated_at: 1_700_000_000_000,
             partial: false,
             recovered: false,
+            connections_restored_from_backup: false,
             stores: Stores {
                 connections: StoreSlot::Ok(ConnectionsStore {
                     items: vec![],

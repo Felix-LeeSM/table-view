@@ -46,6 +46,8 @@ SOT 는 없다.
   같은 유형에 fix 를 더 쌓지 말고 종료한다. 판정은 회고 모드 리뷰어가,
   재설계는 interface 를 거쳐 사용자가 한다(`reflect:done` label). 단 verdict 가 green 이면 중단이 아니다 — 라운드 3
   이상이어도 종결자가 `reflect:done` 붙이고 머지한다. 게이트 진단은
+  [diagnosing-merge-gates](../../../.agents/skills/diagnosing-merge-gates/SKILL.md),
+  required context 목록은
   [runbook/pr-merge-gates](../../runbook/pr-merge-gates/memory.md).
 - 사용자 명시 거부("commit 하지 마", "push 멈춰") — 즉시 중단.
 
