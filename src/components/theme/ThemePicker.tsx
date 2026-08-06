@@ -1,20 +1,13 @@
+import { Button } from "@components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import { applyTheme, type ThemeMode } from "@lib/themeBoot";
-import {
-  FEATURED_THEME_IDS,
-  THEME_CATALOG,
-  type ThemeId,
-} from "@lib/themeCatalog";
+import { THEME_CATALOG, type ThemeId } from "@lib/themeCatalog";
+import { useThemeFavoritesStore } from "@stores/themeFavoritesStore";
 import { useThemeStore } from "@stores/themeStore";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { LayoutGrid, Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
-
-const FEATURED_ID_SET = new Set<ThemeId>(FEATURED_THEME_IDS);
-const VISIBLE_THEMES = THEME_CATALOG.filter((entry) =>
-  FEATURED_ID_SET.has(entry.id),
-);
 
 export default function ThemePicker() {
   const { t } = useTranslation();
@@ -22,6 +15,12 @@ export default function ThemePicker() {
   const mode = useThemeStore((s) => s.mode);
   const setTheme = useThemeStore((s) => s.setTheme);
   const setMode = useThemeStore((s) => s.setMode);
+  // #2118 — the grid used to be a module-scope filter over the hard-coded
+  // `FEATURED_THEME_IDS`. It now follows the user's favorites, which the
+  // gallery edits and `theme_favorites` persists.
+  const favoriteThemeIds = useThemeFavoritesStore((s) => s.favoriteThemeIds);
+  const hydrateFavorites = useThemeFavoritesStore((s) => s.hydrateFavorites);
+  const setGalleryOpen = useThemeFavoritesStore((s) => s.setGalleryOpen);
   const [previewId, setPreviewId] = useState<ThemeId | null>(null);
   // 2026-05-16 — light/dark/system 토글 hover 시 DOM 의 `data-mode` 만
   // 일시 변경 (store 는 그대로). 카드 hover preview 와 동일 패턴이지만
@@ -46,6 +45,18 @@ export default function ThemePicker() {
       applyTheme(themeRef.current.themeId, themeRef.current.mode);
     };
   }, []);
+
+  // Read the persisted favorites when the picker becomes visible. Same shape as
+  // `RowCapSetting` (#1231) — `theme_favorites` is not part of the backend boot
+  // snapshot, and the picker mounts inside a popover, so "on mount" is "when the
+  // user opens it". A rejected read keeps whatever the store holds.
+  useEffect(() => {
+    void hydrateFavorites();
+  }, [hydrateFavorites]);
+
+  const visibleThemes = THEME_CATALOG.filter((entry) =>
+    favoriteThemeIds.includes(entry.id),
+  );
 
   return (
     <div className="flex flex-col gap-2">
@@ -93,12 +104,25 @@ export default function ThemePicker() {
         </ToggleGroup>
       </div>
 
+      <span className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {t("theme.favorites")}
+      </span>
+
+      {visibleThemes.length === 0 && (
+        <p
+          data-testid="theme-picker-empty"
+          className="rounded-md border border-dashed border-border px-2 py-3 text-center text-2xs text-muted-foreground"
+        >
+          {t("theme.favoritesEmpty")}
+        </p>
+      )}
+
       <div
         data-testid="theme-picker-grid"
         className="grid grid-cols-2 gap-1.5 p-0.5"
         onMouseLeave={() => setPreviewId(null)}
       >
-        {VISIBLE_THEMES.map((entry) => {
+        {visibleThemes.map((entry) => {
           const active = entry.id === themeId;
           return (
             <button
@@ -134,6 +158,18 @@ export default function ThemePicker() {
           );
         })}
       </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        data-testid="theme-picker-open-gallery"
+        className="w-full justify-center"
+        onClick={() => setGalleryOpen(true)}
+      >
+        <LayoutGrid size={12} aria-hidden="true" />
+        {t("theme.openGallery")}
+      </Button>
     </div>
   );
 }

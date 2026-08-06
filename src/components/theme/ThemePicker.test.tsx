@@ -12,7 +12,11 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import { THEME_STORAGE_KEY } from "@lib/themeBoot";
-import { DEFAULT_THEME_ID, FEATURED_THEME_IDS } from "@lib/themeCatalog";
+import {
+  DEFAULT_FAVORITE_THEME_IDS,
+  DEFAULT_THEME_ID,
+} from "@lib/themeCatalog";
+import { useThemeFavoritesStore } from "@stores/themeFavoritesStore";
 import { useThemeStore } from "@stores/themeStore";
 import ThemePicker from "./ThemePicker";
 
@@ -40,18 +44,62 @@ describe("ThemePicker", () => {
     document.documentElement.removeAttribute("data-theme");
     document.documentElement.removeAttribute("data-mode");
     useThemeStore.getState().hydrate();
+    // #2118 — the grid follows the favorites store now, so each case starts
+    // from the seed list instead of the retired module-scope constant.
+    useThemeFavoritesStore.setState({
+      favoriteThemeIds: DEFAULT_FAVORITE_THEME_IDS,
+      galleryOpen: false,
+    });
   });
 
-  it("renders a card for every featured theme id", () => {
+  it("renders a card for every favorite theme", () => {
     render(<ThemePicker />);
     const grid = screen.getByTestId("theme-picker-grid");
     const cards = within(grid).getAllByRole("button");
-    expect(cards).toHaveLength(FEATURED_THEME_IDS.length);
-    // Sanity: every rendered card's id is in the featured set.
+    expect(cards).toHaveLength(DEFAULT_FAVORITE_THEME_IDS.length);
+    // Sanity: every rendered card's id is a favorite.
     const ids = cards.map((el) => el.getAttribute("data-theme-id"));
     for (const id of ids) {
-      expect(FEATURED_THEME_IDS).toContain(id);
+      expect(DEFAULT_FAVORITE_THEME_IDS).toContain(id);
     }
+  });
+
+  // #2118 — the picker is driven by the store, not by a constant: a theme the
+  // seed list never had shows up as soon as it is a favorite.
+  it("renders a theme that is not in the seed list once it is a favorite", () => {
+    expect(DEFAULT_FAVORITE_THEME_IDS).not.toContain("linear");
+    useThemeFavoritesStore.setState({ favoriteThemeIds: ["linear"] });
+
+    render(<ThemePicker />);
+
+    const grid = screen.getByTestId("theme-picker-grid");
+    const cards = within(grid).getAllByRole("button");
+    expect(cards.map((el) => el.getAttribute("data-theme-id"))).toEqual([
+      "linear",
+    ]);
+  });
+
+  // 수용 기준 4 — an empty favorites list must read as guidance, not as a
+  // blank rectangle the user cannot interpret.
+  it("shows guidance instead of a bare empty grid when nothing is starred", () => {
+    useThemeFavoritesStore.setState({ favoriteThemeIds: [] });
+
+    render(<ThemePicker />);
+
+    expect(screen.getByTestId("theme-picker-empty")).toBeInTheDocument();
+    const grid = screen.getByTestId("theme-picker-grid");
+    expect(within(grid).queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("the browse-all button opens the gallery", () => {
+    render(<ThemePicker />);
+    expect(useThemeFavoritesStore.getState().galleryOpen).toBe(false);
+
+    act(() => {
+      fireEvent.click(screen.getByTestId("theme-picker-open-gallery"));
+    });
+
+    expect(useThemeFavoritesStore.getState().galleryOpen).toBe(true);
   });
 
   it("marks the currently selected themeId as active", () => {

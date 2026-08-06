@@ -284,11 +284,15 @@ export type ThemeId = (typeof THEME_CATALOG)[number]["id"];
 export const THEME_IDS: readonly ThemeId[] = THEME_CATALOG.map((t) => t.id);
 
 /**
- * Curated subset surfaced in the ThemePicker. The full THEME_CATALOG stays
- * valid (so previously-saved user selections outside this list keep working
- * on load), but the picker itself only offers these as choices.
+ * #2118 — seed value for the user's theme favorites, nothing more. It used to
+ * be `FEATURED_THEME_IDS`, the hard-coded allowlist the ThemePicker filtered
+ * by, which left every other catalog entry reachable only by editing SQLite.
+ * The picker now renders `themeFavoritesStore.favoriteThemeIds`, and this list
+ * is only what that store starts from before the persisted `theme_favorites`
+ * setting arrives (and what "reset favorites" goes back to). Keeping the same
+ * ids means an existing user sees no change on upgrade.
  */
-export const FEATURED_THEME_IDS: readonly ThemeId[] = [
+export const DEFAULT_FAVORITE_THEME_IDS: readonly ThemeId[] = [
   "slate",
   "github",
   "arc",
