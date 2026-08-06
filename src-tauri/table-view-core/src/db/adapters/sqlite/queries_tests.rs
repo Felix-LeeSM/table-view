@@ -417,6 +417,37 @@ async fn stream_table_rows_streams_seeded_rows_across_batches_1068() {
     assert_eq!(rows[0][2], serde_json::json!("Ada"));
 }
 
+/// Boundary guard for #2155: the export's transaction stays deferred. Moving it
+/// to `BEGIN IMMEDIATE` alongside the write paths would make a reader take the
+/// file's write lock, so an export would have to queue behind any writer that
+/// already holds it and would only give up once `busy_timeout` ran out. Nothing
+/// else in this suite notices that swap — every other case runs uncontended.
+#[tokio::test]
+async fn stream_table_rows_reads_while_another_writer_holds_the_file() {
+    let (dir, adapter) = connected_adapter().await;
+    let release =
+        crate::db::adapters::sqlite::connection::hold_write_lock(&dir.path().join("app.sqlite"))
+            .await;
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<Vec<serde_json::Value>>>(4);
+    let cols = vec!["id".to_string()];
+    let exporting = tokio::spawn(async move {
+        <SqliteAdapter as RdbAdapter>::stream_table_rows(
+            &adapter, "main", "users", 1, &cols, tx, None,
+        )
+        .await
+    });
+
+    let first = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
+        .await
+        .expect("an export must not queue behind an unrelated writer");
+    assert!(first.is_some(), "the export sent no rows");
+
+    release.send(()).expect("release the contending writer");
+    let total = exporting.await.unwrap().expect("export completes");
+    assert_eq!(total, 3);
+}
+
 #[tokio::test]
 async fn stream_table_rows_rejects_zero_batch_and_empty_columns_1068() {
     let (_dir, adapter) = connected_adapter().await;

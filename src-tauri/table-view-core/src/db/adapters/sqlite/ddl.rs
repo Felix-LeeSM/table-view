@@ -14,9 +14,7 @@ use crate::models::{
     SchemaChangeResult,
 };
 
-use super::connection::{
-    begin_write_transaction, quote_identifier, validate_namespace, SqliteAdapter,
-};
+use super::connection::{begin_transaction, quote_identifier, validate_namespace, SqliteAdapter};
 use super::ddl_errors::ddl_failure;
 use super::ddl_native::build_create_index_sql;
 
@@ -126,7 +124,9 @@ impl SqliteAdapter {
             ));
         }
 
-        let mut tx = begin_write_transaction(&pool).await?;
+        // Always a writer — `preview_only` returned above without touching the
+        // file, and the read-only refusal is the branch just before this.
+        let mut tx = begin_transaction(&pool, true).await?;
         // SQLite parses `ALTER TABLE` against the schema its *connection* has
         // cached, and the pool hands out up to `SQLITE_POOL_MAX_CONNECTIONS`
         // of them. A connection that has not read the file since another one

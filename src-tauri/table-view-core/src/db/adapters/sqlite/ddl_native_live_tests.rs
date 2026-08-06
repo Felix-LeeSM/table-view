@@ -137,7 +137,7 @@ async fn a_column_added_in_this_session_can_be_dropped_again() {
     // them after the ADD instead would let the DROP pick the ADD's own
     // connection back up, and the test would pass with the refresh removed.
     // The loop reads the pool constant rather than repeating its value: raising
-    // the pool without filling it leaves a spare permit, `pool.begin()` never
+    // the pool without filling it leaves a spare permit, the runner's begin never
     // parks, and this guard would silently stop discriminating.
     let pool = adapter.active_pool().await.unwrap();
     let mut warm = Vec::new();
@@ -173,6 +173,14 @@ async fn a_column_added_in_this_session_can_be_dropped_again() {
 /// microseconds and misses the window by orders of magnitude.
 const CONTENDED_HOLD: std::time::Duration = std::time::Duration::from_millis(200);
 
+/// Floor for how long the worker itself must have been stuck. Half the hold
+/// rather than all of it: the worker's clock starts when the runtime first
+/// polls its task, which can trail the test task's own sleep. A path that never
+/// blocks returns in microseconds, so half the hold still separates the two by
+/// orders of magnitude. The worker times itself — timing it from the test body
+/// would just measure that body's sleep and could not fail.
+const CONTENDED_FLOOR: std::time::Duration = std::time::Duration::from_millis(100);
+
 /// Regression (#2129): the DDL runner opened its transaction deferred, so the
 /// write lock was only requested once a statement ran — after the runner's own
 /// schema-refresh read had already put the connection in a read transaction.
@@ -189,19 +197,20 @@ async fn structured_ddl_waits_out_a_concurrent_writer() {
     let mut add = add_column_req("users", column("locale", "TEXT", true));
     add.preview_only = false;
     let ddl = adapter.clone();
-    let started = std::time::Instant::now();
-    let running = tokio::spawn(async move { ddl.add_column(&add).await });
+    let running = tokio::spawn(async move {
+        let started = std::time::Instant::now();
+        (ddl.add_column(&add).await, started.elapsed())
+    });
 
     tokio::time::sleep(CONTENDED_HOLD).await;
     release.send(()).expect("release the contending writer");
-    let result = running.await.expect("DDL task");
-    let waited = started.elapsed();
+    let (result, blocked_for) = running.await.expect("DDL task");
 
     result.expect("DDL must wait for the lock, not fail fast");
     assert!(
-        waited >= CONTENDED_HOLD,
-        "DDL returned Ok in {waited:?}, before the contending writer let go — \
-         the fixture never held the lock, so this proves nothing"
+        blocked_for >= CONTENDED_FLOOR,
+        "the DDL finished in {blocked_for:?}, so it never blocked on the \
+         contending writer and this case has stopped exercising the lock"
     );
     assert!(adapter
         .get_table_columns("main", "users")

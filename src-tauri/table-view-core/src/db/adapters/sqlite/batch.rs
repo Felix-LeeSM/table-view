@@ -5,7 +5,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::AppError;
 use crate::models::{QueryResult, QueryType};
 
-use super::connection::{begin_write_transaction, SqliteAdapter};
+use super::connection::{begin_transaction, SqliteAdapter};
 use super::queries::validate_sqlite_execution_guardrails;
 use super::sql_text::{sqlite_query_type, strip_trailing_terminator};
 
@@ -56,14 +56,20 @@ impl SqliteAdapter {
         }
 
         let (pool, read_only) = self.active_pool_with_mode().await?;
+        // A statement list of nothing but reads is legal input here, and it must
+        // not take the file's write lock — see `begin_transaction`. Anything not
+        // classified as a read counts as a write, so a new `QueryType` variant
+        // lands on the correct-but-slower side rather than reopening #2129.
+        let mut writes = false;
         for raw in statements {
             let stmt = strip_trailing_terminator(raw);
             let statement_type = sqlite_query_type(stmt);
             validate_sqlite_execution_guardrails(stmt, &statement_type, read_only)?;
+            writes |= !matches!(statement_type, QueryType::Select);
         }
         let total = statements.len();
         let work = async {
-            let mut tx = begin_write_transaction(&pool).await?;
+            let mut tx = begin_transaction(&pool, writes).await?;
 
             let mut results = Vec::with_capacity(total);
             for (idx, raw) in statements.iter().enumerate() {

@@ -612,26 +612,38 @@ async fn probe_sqlite_temp_virtual_table(
     created
 }
 
-/// Opens a write transaction with `BEGIN IMMEDIATE`. SQLite write paths start
-/// here rather than at `pool.begin()`.
+/// Opens a transaction on `pool`, picking the begin style from whether the
+/// caller writes. Callers say what they are rather than which SQL to send, so
+/// the choice has one home instead of one per entry point.
 ///
-/// A deferred `BEGIN` takes no lock at all, so the transaction's first read
-/// leaves the connection holding a read transaction and its first write then
-/// has to upgrade one. SQLite answers that upgrade with `SQLITE_BUSY` at once
-/// and deliberately does not run the busy handler, because waiting on a lock it
-/// already blocks could deadlock — which leaves `busy_timeout` inert exactly
-/// where writers collide, and turns any concurrent writer into an instant
-/// "database is locked" on a legal statement. Asking for the write lock at
-/// `BEGIN`, while the connection holds nothing, puts the request back in front
-/// of the busy handler.
+/// A writer needs `BEGIN IMMEDIATE`. A deferred `BEGIN` takes no lock at all,
+/// so the transaction's first read leaves the connection holding a read
+/// transaction and its first write then has to upgrade one. SQLite answers that
+/// upgrade with `SQLITE_BUSY` at once and deliberately does not run the busy
+/// handler, because waiting on a lock it already blocks could deadlock — which
+/// leaves `busy_timeout` inert exactly where writers collide, and turns any
+/// concurrent writer into an instant "database is locked" on a legal statement.
+/// Asking for the write lock at `BEGIN`, while the connection holds nothing,
+/// puts the request back in front of the busy handler.
 ///
-/// Read-only transactions deliberately keep `pool.begin()`: `IMMEDIATE` would
-/// make a reader take the file's single write lock and serialise every other
-/// reader behind it (#2129, #2130).
-pub(super) async fn begin_write_transaction(
+/// A reader must not ask for it. `IMMEDIATE` takes the file's write lock, and
+/// while that still lets ordinary readers run, it excludes every writer and
+/// every other `IMMEDIATE` transaction for as long as the transaction lives. A
+/// long export would park unrelated writers until it finished and queue a
+/// second export behind the first — the same failure this helper removes, moved
+/// to a different pair (#2129, #2130).
+///
+// ponytail: opt-in — nothing stops a new write path in this module from calling
+// `pool.begin()` directly. A clippy `disallowed-methods` ban was priced and
+// rejected: `git grep -nE '\.begin\(\)'` reaches well past this adapter into the
+// other DBMS adapters and the app crate, so the ban would need per-site allows
+// in code that has no stake in this bug. Promote it if SQLite write paths
+// outgrow this module.
+pub(super) async fn begin_transaction(
     pool: &SqlitePool,
+    writes: bool,
 ) -> Result<Transaction<'static, Sqlite>, AppError> {
-    pool.begin_with("BEGIN IMMEDIATE")
+    pool.begin_with(if writes { "BEGIN IMMEDIATE" } else { "BEGIN" })
         .await
         .map_err(|e| AppError::Database(e.to_string()))
 }
