@@ -23,13 +23,20 @@ const MAX_LOG_FILES: usize = 14;
 
 /// Directory that holds the rotating diagnostic log files.
 ///
-/// Rooted under the same `table-view` folder the rest of storage uses
-/// (`storage::app_data_dir` → `dirs::data_local_dir().join("table-view")`)
+/// Resolves the same folder `storage::init_production_data_dir` injects at boot,
 /// rather than Tauri's `app.path().app_log_dir()`, on purpose:
 /// 1. init stays on the pre-builder critical path — no need to wait for
 ///    `app.path()` — so even a `build`/`run` failure in `run()` is captured;
 /// 2. one discoverable folder when a user zips up their data + logs for a
 ///    bug report.
+///
+/// It derives that path itself instead of asking storage, because (1) puts it
+/// ahead of the injection: `run()` builds the log sink before `setup` runs. So
+/// this is the one place in the app outside `storage` that names the real user
+/// directory, and the only one the #2184 injection guard does not cover — it
+/// ignores `TABLE_VIEW_TEST_DATA_DIR` too, so a dev run with that variable set
+/// still logs to the real folder. Logs only; no credential ever lands here, and
+/// the tests below all pass an explicit temp dir.
 ///
 /// `dirs` is already a direct dependency (Cargo.toml). Falls back to the OS
 /// temp dir only if no data dir resolves, so init never hard-fails.

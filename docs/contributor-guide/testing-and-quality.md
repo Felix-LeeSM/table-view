@@ -228,7 +228,11 @@ Required remote evidence on the exact release SHA:
   produce — the full sequence (debug build, seed, then
   `TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke pnpm test:e2e:smoke`) is in
   README 「E2E Smoke」. Without that variable the specs drive the app against
-  your real connection store (`src-tauri/table-view-core/src/storage/mod.rs` `data_dir_override`).
+  your real connection store: the smoke run drives a real binary, and a real
+  binary injects that store at boot
+  (`src-tauri/table-view-core/src/storage/mod.rs` `init_production_data_dir`).
+  Rust tests inject nothing, so they cannot reach it at all — they fail instead
+  (#2184).
 - `main` push checks pass on the merge commit before a release tag is pushed.
 - Release workflow output is packaging evidence only. Draft bundle creation and
   checksum upload do not replace CI or runtime smoke evidence.

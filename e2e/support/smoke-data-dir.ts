@@ -20,9 +20,11 @@ import { resolve } from "node:path";
  * collapsed groups, datagrid prefs).
  *
  * Deliberately narrow, because this deletes files:
- * - No override (unset/empty) means the binary falls back to
+ * - No override (unset/empty) means the binary uses the store it injects at boot,
  *   `dirs::data_local_dir()/table-view` (src-tauri/table-view-core/src/storage/mod.rs
- *   `data_dir_override`) — a developer's real connection store. Wipe nothing.
+ *   `init_production_data_dir`) — a developer's real connection store. Wipe
+ *   nothing. Only a real binary reaches it; a Rust test injects nothing and
+ *   errors instead (#2184).
  * - Only the *contents* of that exact directory are removed. The parent and the
  *   sibling `<dataDir>-fixtures` (e2e/smoke/_helpers.ts `smokeFixtureRoot`,
  *   #1449) hold prepared file-DB fixtures built once per job and must survive.

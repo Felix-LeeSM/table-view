@@ -333,6 +333,20 @@ pub fn run() {
     // the `not(macos)` build sees an unused param; `_app` keeps it usable where
     // it is needed while satisfying `-D unused-variables` elsewhere.
     let builder = builder.setup(|_app| {
+        // #2184 — hand storage the real user data directory. Until this runs,
+        // `app_data_dir()` refuses to resolve one: that refusal is what keeps every
+        // test binary and every future entry point off the user's real store, and
+        // the price is that the app has to ask. So this must come FIRST in `setup`
+        // — `boot_wire_master_key` below and every IPC handler resolve through it.
+        //
+        // `?` rather than a logged warning, deliberately. If storage has no
+        // directory the app must not continue into a launcher showing an empty
+        // connection list: that silent-empty state is indistinguishable from the
+        // data loss #2183 reported. The error leaves `setup`, so the
+        // `builder.build()` / `builder.run(context)` arms further down log it,
+        // print it, and exit 1.
+        storage::init_production_data_dir()?;
+
         if let Some(t0) = BOOT_T0.get() {
             let delta_ms = t0.elapsed().as_secs_f64() * 1000.0;
             info!(target: "boot", "rust:setup-done delta_ms={:.3}", delta_ms);

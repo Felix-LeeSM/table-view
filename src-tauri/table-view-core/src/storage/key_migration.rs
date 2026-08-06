@@ -41,21 +41,11 @@ pub fn disk_key_path(data_dir: &Path) -> PathBuf {
     data_dir.join(".key")
 }
 
-/// Sprint 356 — production 시점의 user-data dir 해상도. `TABLE_VIEW_TEST_DATA_DIR`
-/// env 가 set 돼 있으면 그 값을 우선 사용 (테스트 격리). storage::local 의
-/// 정책과 동일.
+/// Sprint 356 — production 시점의 user-data dir 해상도. 이름만 keyring 쪽 호출자를
+/// 위해 남아 있고 판정은 [`crate::storage::app_data_dir`] 한 곳이다 (#2184).
+/// 그 전에는 override → fallback 본문을 여기서 한 벌 더 갖고 있었다.
 pub fn app_data_dir_for_keyring() -> Result<PathBuf, AppError> {
-    // #1454 (P2-6) — override honored in debug only; release ignores env.
-    if let Some(dir) = crate::storage::data_dir_override() {
-        fs::create_dir_all(&dir)?;
-        return Ok(dir);
-    }
-    let dir = dirs::data_local_dir()
-        .or_else(dirs::data_dir)
-        .ok_or_else(|| AppError::Storage("Cannot determine app data directory".into()))?;
-    let dir = dir.join("table-view");
-    fs::create_dir_all(&dir)?;
-    Ok(dir)
+    crate::storage::app_data_dir()
 }
 
 /// Sprint 356 — Path B 실패 시 생성되는 sentinel. 다음 boot 가 migration
@@ -115,8 +105,9 @@ impl KeyOutcome {
 }
 
 /// Sprint 356 (Q22) — file-key 의 3 path 분기. SQLite migration 전에 1회
-/// 호출. `data_dir` 는 user-data dir (테스트에서는 tempdir, 프로덕션에서는
-/// `dirs::data_local_dir().join("table-view")`).
+/// 호출. `data_dir` 는 호출자가 넘기는 user-data dir 다 — 테스트에서는 tempdir,
+/// 프로덕션에서는 [`app_data_dir_for_keyring`] 이 돌려주는 값, 즉 부팅 때
+/// [`crate::storage::init_production_data_dir`] 이 주입한 경로다 (#2184).
 pub fn migrate_or_initialize<B: KeyringBackend>(
     backend: &B,
     data_dir: &Path,
