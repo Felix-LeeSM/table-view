@@ -1,5 +1,6 @@
 import * as windowControls from "@lib/window-controls";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useThemeFavoritesStore } from "@stores/themeFavoritesStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -121,6 +122,10 @@ function resetStores() {
     focusedConnId: null,
   });
   useWorkspaceStore.setState({ workspaces: {} });
+  // #2118 — a leaked `galleryOpen: true` would leave a modal dialog over the
+  // page, and Radix marks everything behind it `aria-hidden`, which drops the
+  // rest of this file's `getByRole` queries out of the accessibility tree.
+  useThemeFavoritesStore.setState({ galleryOpen: false });
 }
 
 describe("HomePage", () => {
@@ -136,6 +141,18 @@ describe("HomePage", () => {
   it("renders the ConnectionList", () => {
     render(<HomePage />);
     expect(screen.getByTestId("connection-list")).toBeInTheDocument();
+  });
+
+  // #2118 — the launcher owns the theme gallery overlay's mount. It cannot sit
+  // inside the appearance popover with `ThemePicker` (mocked in this file): the
+  // picker is `PopoverContent`, and Radix unmounts that subtree the moment the
+  // popover closes. So this one line is the launcher's only route to the full
+  // catalog, and nothing in the theme specs can see it — they render the two
+  // components side by side themselves.
+  it("mounts the theme gallery overlay", () => {
+    useThemeFavoritesStore.setState({ galleryOpen: true });
+    render(<HomePage />);
+    expect(screen.getByTestId("theme-gallery")).toBeInTheDocument();
   });
 
   // --- #1134: heading a11y ---

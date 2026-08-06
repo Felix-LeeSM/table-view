@@ -148,6 +148,25 @@ describe("ThemeGallery — search and filter", () => {
       ).map((e) => e.id),
     );
   });
+
+  // Without this the filter is one-way: a user who narrowed to favorites can
+  // never get back to the rest of the catalog, which is the exact dead end
+  // #2118 exists to remove. The favorites-chip case above passes either way,
+  // because it never asks the grid to widen again.
+  it("the all chip widens the grid back to the whole catalog", () => {
+    renderWithGalleryOpen();
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /^favorites$/i }));
+    });
+    expect(cardIds().length).toBeLessThan(THEME_CATALOG.length);
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /^all$/i }));
+    });
+
+    expect(cardIds()).toEqual(THEME_CATALOG.map((entry) => entry.id));
+  });
 });
 
 describe("ThemeGallery — starring", () => {
