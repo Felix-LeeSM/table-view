@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { prefersReducedMotion } from "@/lib/prefersReducedMotion";
 import {
   type SchemaGraphIntelligenceSelectors,
   selectSchemaGraphIntelligence,
@@ -56,6 +57,20 @@ const ERD_RELATIONSHIP_EDGE_TYPE = "erdRelationship";
 const ERD_MIN_ZOOM = 0.15;
 const ERD_MAX_ZOOM = 2;
 const ERD_TRANSITION_MS = 200;
+
+/**
+ * How long a viewport move (zoom, fit, recenter) animates. React Flow takes the
+ * duration as a call argument, so reading the preference per call instead of
+ * once per mount is what makes an OS setting flipped mid-session apply to the
+ * very next interaction.
+ *
+ * ponytail: no `change` listener — nothing on this canvas re-renders on the
+ * preference, so there is nothing for a listener to update. Add one when a
+ * transition starts from a render effect rather than from a user action.
+ */
+function erdTransitionMs(): number {
+  return prefersReducedMotion() ? 0 : ERD_TRANSITION_MS;
+}
 
 type ErdRelationshipFlowEdge = Edge<
   { highlighted: boolean },
@@ -274,7 +289,7 @@ function ErdCanvasSurface({
       setCenter(
         node.position.x + (node.width ?? 0) / 2,
         node.position.y + (node.height ?? 0) / 2,
-        { zoom, duration: ERD_TRANSITION_MS },
+        { zoom, duration: erdTransitionMs() },
       );
     }
     runAfterPaint(() => tableButtons.current.get(tableId)?.focus());
@@ -286,7 +301,7 @@ function ErdCanvasSurface({
       nodes: [{ id: activeSelected }],
       padding: 0.4,
       maxZoom: 1.2,
-      duration: ERD_TRANSITION_MS,
+      duration: erdTransitionMs(),
     });
   };
 
@@ -343,7 +358,7 @@ function ErdCanvasSurface({
             size="icon-xs"
             aria-label={t("zoomOutAria")}
             title={t("zoomOutTitle")}
-            onClick={() => zoomOut({ duration: ERD_TRANSITION_MS })}
+            onClick={() => zoomOut({ duration: erdTransitionMs() })}
           >
             <ZoomOut />
           </Button>
@@ -359,7 +374,7 @@ function ErdCanvasSurface({
             size="icon-xs"
             aria-label={t("zoomInAria")}
             title={t("zoomInTitle")}
-            onClick={() => zoomIn({ duration: ERD_TRANSITION_MS })}
+            onClick={() => zoomIn({ duration: erdTransitionMs() })}
           >
             <ZoomIn />
           </Button>
@@ -381,7 +396,7 @@ function ErdCanvasSurface({
             aria-label={t("fitErdAria")}
             title={t("fitErdTitle")}
             onClick={() =>
-              void fitView({ padding: 0.15, duration: ERD_TRANSITION_MS })
+              void fitView({ padding: 0.15, duration: erdTransitionMs() })
             }
           >
             <Maximize2 />
