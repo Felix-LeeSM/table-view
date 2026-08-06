@@ -7,7 +7,7 @@ use bip39::{Language, Mnemonic};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-#[cfg(any(test, debug_assertions))]
+#[cfg(any(test, debug_assertions, feature = "testing"))]
 use std::sync::Mutex;
 use std::time::Duration;
 use tracing::warn;
@@ -139,7 +139,13 @@ impl KeyringBackend for OsKeyringBackend {
 /// Linux desktop / macOS / Windows machine, `new_unavailable()` simulates the
 /// Linux server / minimal-desktop case from AC-356-05 where `is_available()`
 /// returns false and the migration path must fall back to disk.
-#[cfg(any(test, debug_assertions))]
+///
+/// #2184 — `feature = "testing"` joined the gate for the same reason
+/// [`crate::storage::data_dir_override`] widened: `debug_assertions` is a profile
+/// signal, so this was configured out of the `table-view` crate's release test
+/// builds and `tests/keyring_new_user.rs` failed to compile there (E0432).
+/// The feature is dev-dependency-only, so a shipped binary still excludes this.
+#[cfg(any(test, debug_assertions, feature = "testing"))]
 pub struct InMemoryKeyringBackend {
     inner: Mutex<std::collections::HashMap<String, Vec<u8>>>,
     available: bool,
@@ -150,7 +156,7 @@ pub struct InMemoryKeyringBackend {
     set_should_fail: Mutex<bool>,
 }
 
-#[cfg(any(test, debug_assertions))]
+#[cfg(any(test, debug_assertions, feature = "testing"))]
 impl InMemoryKeyringBackend {
     pub fn new_available() -> Self {
         Self {
@@ -180,7 +186,7 @@ impl InMemoryKeyringBackend {
     }
 }
 
-#[cfg(any(test, debug_assertions))]
+#[cfg(any(test, debug_assertions, feature = "testing"))]
 impl KeyringBackend for InMemoryKeyringBackend {
     fn is_available(&self) -> bool {
         self.available

@@ -89,18 +89,38 @@ pub(crate) fn reset_master_key_for_test() {
     *MASTER_KEY.lock().expect("master key mutex poisoned") = None;
 }
 
-/// #1454 (P2-6) — test-only data-directory override. Honored ONLY in debug
-/// builds; in release it is compiled out (`None`), so a shipped binary can never
-/// be redirected to an attacker-chosen data dir via `TABLE_VIEW_TEST_DATA_DIR`
-/// (bypassing app-data confinement, the master `.key`, and connections.json).
-/// Every data-dir resolver (`storage::app_data_dir`, `storage::local::app_data_dir`,
+/// #1454 (P2-6) — test-only data-directory override. Compiled out (`None`) in a
+/// shipped binary, so an attacker cannot redirect it to a directory of their
+/// choosing via `TABLE_VIEW_TEST_DATA_DIR` (bypassing app-data confinement, the
+/// master `.key`, and connections.json). Every data-dir resolver
+/// (`storage::app_data_dir`, `storage::local::app_data_dir`,
 /// `key_migration::app_data_dir_for_keyring`) routes through this one gate.
-#[cfg(debug_assertions)]
+///
+/// #2184 widened the gate from `debug_assertions` alone to "debug build OR test
+/// build". `debug_assertions` is a *profile* signal, not a test one, so it left
+/// release test builds with no isolation mechanism at all — `cargo test --release`
+/// ignored the variable and every storage test then took the real user store.
+/// The two added arms are compile-time and cannot be reached by a shipped app:
+///
+/// - `test` — this crate compiled as its own test harness, i.e. `cargo test
+///   --manifest-path src-tauri/table-view-core/Cargo.toml`, at any profile.
+/// - `feature = "testing"` — the `table-view` crate's test builds, where this
+///   crate is a plain dependency and `cfg(test)` is false. `src-tauri/Cargo.toml`
+///   enables that feature from `[dev-dependencies]` only, and resolver v2 keeps
+///   dev-dependency features out of the normal graph, so `cargo build --release`
+///   / `cargo tauri build` never turn it on. Same gate `db::testing` already
+///   rides (`db/mod.rs`), and `app_manifest_never_enables_core_testing_feature_in_normal_deps`
+///   in `src-tauri/src/storage/mod.rs` fails if anyone moves it into
+///   `[dependencies]`.
+///
+/// Neither arm is an environment variable or a runtime flag: a shipped binary has
+/// no way to switch them on, which is the #1454 property this must not lose.
+#[cfg(any(debug_assertions, test, feature = "testing"))]
 pub(crate) fn data_dir_override() -> Option<PathBuf> {
     std::env::var_os("TABLE_VIEW_TEST_DATA_DIR").map(PathBuf::from)
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(any(debug_assertions, test, feature = "testing")))]
 pub(crate) fn data_dir_override() -> Option<PathBuf> {
     None
 }
@@ -114,14 +134,17 @@ pub(crate) fn data_dir_override() -> Option<PathBuf> {
 /// not read-only there: it quarantines `connections.json` on a parse error and
 /// rewrites it empty, quarantines `state.db`, and creates or replaces the master
 /// `.key`. #2183 lost a real machine's saved connections that way on 2026-08-06.
-/// A `cfg(test)` panic would not have covered it — `cfg(test)` is off when
-/// `src-tauri/tests/*.rs` links this crate as a plain dependency, which is 35 of
-/// the test files that touch this path.
 ///
 /// So the default is flipped: the real store is unreachable to any process that
 /// did not explicitly ask for it. Every test binary, every `[[bin]]` target and
 /// every entry point added later is isolated by construction rather than by the
 /// convention of remembering to set an env var.
+///
+/// This is the half that cannot be a `cfg` — gating a panic on `cfg(test)` would
+/// have missed the 35 files under `src-tauri/tests/`, which link this crate as a
+/// plain dependency where `cfg(test)` is false. The `cfg` on
+/// [`data_dir_override`] above solves a different problem: it decides who is
+/// *allowed* to name a directory, not what happens when nobody did.
 static PROD_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// #2184 — hand storage the real user data directory. The Tauri `setup` hook
@@ -161,10 +184,7 @@ pub(crate) fn app_data_dir() -> Result<PathBuf, AppError> {
              the Tauri setup hook must call it before any storage path runs. In a test, \
              do NOT call it — it would point storage at the real user store; instead set \
              TABLE_VIEW_TEST_DATA_DIR to a temp dir, keep that dir alive for the whole \
-             test, and mark the test #[serial] because the variable is process-global. \
-             If the variable IS set and you still see this, the build has debug_assertions \
-             off (cargo test --release), where #1454 compiles the override out — run \
-             storage tests in debug."
+             test, and mark the test #[serial] because the variable is process-global."
                 .into(),
         )
     })?;
