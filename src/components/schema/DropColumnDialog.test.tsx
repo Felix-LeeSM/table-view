@@ -13,6 +13,9 @@
 //   `[{ previewOnly: true }, { previewOnly: false }]`.
 // - AC-236-09: invalid-column-name rejection (defense-in-depth — the
 //   typing-confirm input is the user-visible gate).
+// - Issue #2157: the preview gate and the execution gate are separate.
+//   The DROP SQL renders before the typing-confirm input matches; the
+//   typing-confirm input still owns whether the DROP may run.
 
 import {
   act,
@@ -122,6 +125,20 @@ function renderDialog(
   };
 }
 
+const DROP_EMAIL_SQL = 'ALTER TABLE "public"."users" DROP COLUMN "email"';
+
+/**
+ * The preview pane renders the SQL through `<SqlSyntax>`, which splits it
+ * into one `<span>` per token — no single element holds the whole string.
+ * Match the `<pre>` wrapper by its `textContent` instead.
+ */
+function findPreviewSql(sql: string) {
+  return screen.findByText(
+    (_content, element) =>
+      element?.tagName === "PRE" && element.textContent === sql,
+  );
+}
+
 describe("DropColumnDialog (Sprint 236)", () => {
   beforeEach(() => {
     cleanup();
@@ -158,15 +175,62 @@ describe("DropColumnDialog (Sprint 236)", () => {
     expect(apply).toBeDisabled();
   });
 
-  // AC-236-05 — typing match enables Show DDL flow.
-  it("[AC-236-05] typing match unlocks Show DDL → preview SQL fetched", async () => {
+  // Issue #2157 — preview gate. The user reads the exact DROP statement
+  // first and confirms afterwards, so nothing gates the preview fetch.
+  it("[#2157] renders the DROP SQL before the typing-confirm input is touched", async () => {
     renderDialog({ columnName: "email" });
+
+    expect(
+      screen.getByLabelText("Type the column name to confirm"),
+    ).toHaveValue("");
+    expect(await findPreviewSql(DROP_EMAIL_SQL)).toBeInTheDocument();
+    expect(mockDropColumnRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ previewOnly: true }),
+    );
+  });
+
+  // Issue #2157 — execution gate. Showing the SQL must not move the Apply
+  // gate; the typing-confirm input still owns it.
+  it("[#2157] keeps Apply disabled while the DROP SQL is on screen and the input is untouched", async () => {
+    renderDialog({ columnName: "email" });
+    await findPreviewSql(DROP_EMAIL_SQL);
+
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
+
+  // Issue #2157 — the execution gate is checked in the click handler too,
+  // not only in the button's `disabled` binding. `previewSql` no longer
+  // proves the user confirmed, so it cannot be the thing that admits a
+  // commit.
+  it("[#2157] clicking Apply before the typing match sends no commit request", async () => {
+    renderDialog({ columnName: "email" });
+    await findPreviewSql(DROP_EMAIL_SQL);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+
+    expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
+    expect(mockDropColumnRequest).not.toHaveBeenCalledWith(
+      expect.objectContaining({ previewOnly: false }),
+      expect.anything(),
+    );
+  });
+
+  // AC-236-05 (issue #2157) — typing no longer drives the preview. It is
+  // already on screen, and matching the column name only flips Apply.
+  it("[AC-236-05][#2157] typing the column name enables Apply without re-fetching the preview", async () => {
+    renderDialog({ columnName: "email" });
+    await findPreviewSql(DROP_EMAIL_SQL);
+    expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
+
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+
     await waitFor(() => {
-      expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
     });
+    expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
   });
 
   // AC-236-05 — CASCADE checkbox label per Sprint 236 spec.
