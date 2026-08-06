@@ -6,13 +6,17 @@
 //   byte-for-byte match (`Email` ≠ `email`), CASCADE toggle invalidates
 //   preview + emits ` CASCADE` in next request, commit-success closes
 //   modal + onColumnDropped called.
-// - AC-236-06: Safe Mode block / warn-cancel / safe matrix.
+// - AC-236-06: Safe Mode confirm / warn-cancel / safe matrix (Sprint 245
+//   retired the block tier — see the case at "production × strict").
 //   `ALTER TABLE … DROP COLUMN` is classified `ddl-drop`/danger so the
 //   gate fires on production environments.
 // - AC-236-02 / AC-236-03: IPC payload shape (camelCase) + sequence
 //   `[{ previewOnly: true }, { previewOnly: false }]`.
 // - AC-236-09: invalid-column-name rejection (defense-in-depth — the
 //   typing-confirm input is the user-visible gate).
+// - Issue #2157: the preview gate and the execution gate are separate.
+//   The DROP SQL renders before the typing-confirm input matches; the
+//   typing-confirm input still owns whether the DROP may run.
 
 import {
   act,
@@ -122,6 +126,39 @@ function renderDialog(
   };
 }
 
+const DROP_EMAIL_SQL = 'ALTER TABLE "public"."users" DROP COLUMN "email"';
+
+/**
+ * The preview pane renders the SQL through `<SqlSyntax>`, which splits it
+ * into one `<span>` per token — no single element holds the whole string.
+ * Match the `<pre>` wrapper by its `textContent` instead.
+ */
+function findPreviewSql(sql: string) {
+  return screen.findByText(
+    (_content, element) =>
+      element?.tagName === "PRE" && element.textContent === sql,
+  );
+}
+
+/**
+ * React refuses to deliver a click to a `disabled` button, and it decides
+ * that from its own props — clearing the DOM attribute changes nothing
+ * (measured on react-dom 19.2.4). So the button's `disabled` binding hides
+ * the click handler's own guard from every DOM-level test. Pull the
+ * registered `onClick` off the host node instead: that is the entry point a
+ * regressed `disabled` binding would expose, and it is the only way to
+ * assert the second layer holds on its own.
+ */
+function reactOnClick(node: HTMLElement): () => Promise<void> {
+  const key = Object.keys(node).find((k) => k.startsWith("__reactProps$"));
+  if (!key) throw new Error("no React props key on the host node");
+  const props = (
+    node as unknown as Record<string, { onClick?: () => Promise<void> }>
+  )[key];
+  if (!props?.onClick) throw new Error("no onClick registered on the button");
+  return props.onClick;
+}
+
 describe("DropColumnDialog (Sprint 236)", () => {
   beforeEach(() => {
     cleanup();
@@ -158,15 +195,82 @@ describe("DropColumnDialog (Sprint 236)", () => {
     expect(apply).toBeDisabled();
   });
 
-  // AC-236-05 — typing match enables Show DDL flow.
-  it("[AC-236-05] typing match unlocks Show DDL → preview SQL fetched", async () => {
+  // Issue #2157 — preview gate. The user reads the exact DROP statement
+  // first and confirms afterwards, so nothing gates the preview fetch.
+  it("[#2157] renders the DROP SQL before the typing-confirm input is touched", async () => {
     renderDialog({ columnName: "email" });
+
+    expect(
+      screen.getByLabelText("Type the column name to confirm"),
+    ).toHaveValue("");
+    expect(await findPreviewSql(DROP_EMAIL_SQL)).toBeInTheDocument();
+    expect(mockDropColumnRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ previewOnly: true }),
+    );
+  });
+
+  // Issue #2157 — execution gate. Showing the SQL must not move the Apply
+  // gate; the typing-confirm input still owns it.
+  it("[#2157] keeps Apply disabled while the DROP SQL is on screen and the input is untouched", async () => {
+    renderDialog({ columnName: "email" });
+    await findPreviewSql(DROP_EMAIL_SQL);
+
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
+
+  // Issue #2157 — the execution gate is checked in the click handler too,
+  // not only in the button's `disabled` binding. `previewSql` no longer
+  // proves the user confirmed, so it cannot be the thing that admits a
+  // commit.
+  it("[#2157] clicking Apply before the typing match sends no commit request", async () => {
+    renderDialog({ columnName: "email" });
+    await findPreviewSql(DROP_EMAIL_SQL);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+
+    expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
+    expect(mockDropColumnRequest).not.toHaveBeenCalledWith(
+      expect.objectContaining({ previewOnly: false }),
+      expect.anything(),
+    );
+  });
+
+  // Issue #2157 — second layer, on its own. A DOM click only ever proves
+  // the first layer (`disabled`), since React never routes it to the
+  // handler. Reaching the handler directly is what pins the `!canApply`
+  // guard: delete that one line and this case is the only one that reddens.
+  it("[#2157] the Apply handler refuses to commit when the click reaches it anyway", async () => {
+    renderDialog({ columnName: "email" });
+    await findPreviewSql(DROP_EMAIL_SQL);
+
+    const apply = screen.getByRole("button", { name: "Apply" });
+    await act(async () => {
+      await reactOnClick(apply)();
+    });
+
+    expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
+    expect(mockDropColumnRequest).not.toHaveBeenCalledWith(
+      expect.objectContaining({ previewOnly: false }),
+      expect.anything(),
+    );
+  });
+
+  // AC-236-05 (issue #2157) — typing no longer drives the preview. It is
+  // already on screen, and matching the column name only flips Apply.
+  it("[AC-236-05][#2157] typing the column name enables Apply without re-fetching the preview", async () => {
+    renderDialog({ columnName: "email" });
+    await findPreviewSql(DROP_EMAIL_SQL);
+    expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
+
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+
     await waitFor(() => {
-      expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
     });
+    expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
   });
 
   // AC-236-05 — CASCADE checkbox label per Sprint 236 spec.
