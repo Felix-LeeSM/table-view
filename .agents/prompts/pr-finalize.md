@@ -27,10 +27,13 @@ test "$(git rev-parse --show-toplevel)" != "$CLONE" \
 - `memory/workflow/delivery/memory.md` — 노드 표 · 머지 자율 조건 · 머지 방식
   기본값 · 중단 조건.
 - `memory/workflow/review/memory.md` 「Merge 전 요구」 — 머지가 성립하는 조건.
-- `memory/runbook/pr-merge-gates/memory.md` — required 게이트의 분산 위치,
-  라운드 게이트, `mergeStateStatus` 값의 뜻, BLOCKED 진단 순서, 하면 안 되는 대응.
+- `memory/runbook/pr-merge-gates/memory.md` — required 게이트의 분산 위치와
+  각 required 가 검사하는 것.
+- `.agents/skills/diagnosing-merge-gates/SKILL.md` — 라운드 게이트,
+  `mergeStateStatus` 값의 뜻, BLOCKED 진단 순서, 하면 안 되는 대응.
 - `memory/runbook/worktree/memory.md` 「회수」 — 사본 삭제 판정.
-- `memory/workflow/git-policy/memory.md` 「PR close cleanup」 — 브랜치 정리.
+- `.agents/skills/recovering-push-rejects/SKILL.md` 「PR close cleanup」 —
+  브랜치 정리 (계약은 `memory/workflow/git-policy/memory.md`).
 
 ## 금지 / Write 예산
 

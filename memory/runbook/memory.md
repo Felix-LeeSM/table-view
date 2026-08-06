@@ -14,8 +14,10 @@ keywords: 절차, runbook, 명령 시퀀스
 ## 소유권 / SOT
 
 - 본 방은 운영 절차의 의도, 순서, guardrail 만 소유한다.
-- 위임할 스크립트는 없다. 각 런북 방이 절차의 유일한 SOT 이고, 명령은 표준
-  git/gh/pnpm 으로 적는다.
+- 위임할 스크립트는 없다. 명령은 표준 git/gh/pnpm 으로 적는다.
+- 방이 cap 에 붙으면 긴 절차를 `.agents/skills/` 로 내리고 여기에는 계약과 그
+  경로만 남긴다 (`AGENTS.md` 「강제 룰」). 그때는 skill 이 절차의 SOT 이고 런북
+  방은 계약의 SOT 다 — 지금 그렇게 갈린 것은 `pr-merge-gates` 하나다.
 - workflow 행동 계약은 [workflow](../workflow/memory.md) 가 소유하고, runbook 은
   실행 절차로만 연결한다.
 - 미래 목표는 [docs/ROADMAP.md](../../docs/ROADMAP.md), historical 사건은
@@ -24,7 +26,7 @@ keywords: 절차, runbook, 명령 시퀀스
 ## 방 지도
 
 - [worktree](./worktree/memory.md) — 다중 agent 병렬 작업의 독립 clone 사본 격리 룰 (생성·점유·회수)
-- [pr-merge-gates](./pr-merge-gates/memory.md) — PR merge BLOCKED/UNSTABLE 진단 (review-gate + ruleset required context, 트리거 함정. `Runtime Happy Path` 는 실검사라 blocker 가 될 수 있다)
+- [pr-merge-gates](./pr-merge-gates/memory.md) — required context 목록과 게이트 계약 (review-gate + ruleset 7종. `Runtime Happy Path` 는 실검사라 blocker 가 될 수 있다). BLOCKED/UNSTABLE 진단 순서와 트리거 함정은 [diagnosing-merge-gates](../../.agents/skills/diagnosing-merge-gates/SKILL.md)
 
 ## 진입 규칙
 

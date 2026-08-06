@@ -83,7 +83,7 @@ trigger:
   (계정 1개 = GitHub review approval 불가의 label 우회). **label 만으로 pass 가
   되지는 않는다** — 라운드가 3 이상인데 `reflect:done` 이 없으면 label 을
   붙여도 `Stop at review round 3` step 이 fail 시킨다
-  ([pr-merge-gates](../../runbook/pr-merge-gates/memory.md) 「review-gate run 상태 함정」).
+  ([diagnosing-merge-gates](../../../.agents/skills/diagnosing-merge-gates/SKILL.md) 「review-gate run 상태 함정」).
 - 리뷰 대응 이력의 SOT는 PR과 scorecard다 — 소스 주석에 리뷰 라운드 서사를
   남기지 않는다. 룰 본문은 구현자가 읽는
   [god-file](../../engineering/conventions/refactoring/god-file/memory.md)
