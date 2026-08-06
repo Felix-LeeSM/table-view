@@ -23,6 +23,32 @@ writes, and secret-free credential feedback regions. Credential rotation, KDF
 changes, ACL, cloud credential UI, code-signing, and provider-secret decisions
 require a threat-model handoff before support claims.
 
+### Connection store backup and recovery
+
+The connection store keeps one backup of itself, `connections.json.bak`, beside
+it in the app data directory. Every save moves the file it replaces there, and a
+successful load creates one for an install that has none yet, so an install
+carries a backup from its first launch after #2183 rather than from its next
+edit. A launch that finds `connections.json` gone restores it from that backup,
+warns in the log, and raises a sticky toast naming the file; a launch that finds
+neither file starts empty and says nothing, because there is nothing to put
+back.
+
+Four boundaries ride with it. Only one generation is kept, so a save made after
+the last backup rotation is not recoverable — the backup is the state before the
+most recent write, not the most recent write. The backup lives inside the app
+data directory, which is the deliberate trade-off (owner decision 2026-08-06):
+anything that removes that directory wholesale removes the backup with it, and
+the app has no copy elsewhere. A backup that no longer parses restores nothing;
+it is moved to `connections.json.bak.corrupt-<timestamp>` for manual recovery
+and the app boots empty **without** a toast, so that case is visible only in the
+log. And the corrupt-`connections.json` path does not consult the backup at all
+— a store that fails to parse is still quarantined and replaced with an empty
+one, with no notification and no automatic use of the copy sitting next to it.
+
+An install with no connections and no groups gets no backup, which is why a
+first run stays silent across launches rather than only on the very first.
+
 ### Security / admin surface
 
 Destructive and admin safeguards are source-specific rather than universal.
@@ -166,8 +192,11 @@ validated for presence only — a path that does not exist, or points at
 something that is not a certificate, is stored and only surfaces as the driver's
 raw error at connect time. One unrecognized `sslMode` string quarantines the
 whole connection store: the enum has no catch-all variant, so the parse fails,
-`connections.json` is moved aside with a timestamped suffix, and the app boots
-with zero connections until the backup is restored by hand. Advanced
+`connections.json` is moved aside as `connections.json.corrupt-<timestamp>`, and
+the app boots with zero connections until that file is repaired by hand. The
+`connections.json.bak` backup described under *Connection store backup and
+recovery* is not consulted on this path — it covers a store that goes missing,
+not one that fails to parse. Advanced
 depth — client certificates, TOFU certificate pinning, the in-form CA file
 picker, and private trust anchors on the five on/off TLS engines — remains a
 follow-up (#1649).

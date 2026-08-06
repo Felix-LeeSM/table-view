@@ -419,6 +419,15 @@ fn reencrypt_secrets(doc: &mut serde_json::Value, old: &[u8], new: &[u8]) -> Res
 /// 재암호화된 문서를 원자적으로 발행한다 — create-time 0600 임시 파일에 쓰고
 /// `fsync` 한 뒤 rename. `storage::mod.rs` 의 `save_storage_raw()` 와 같은 절차다.
 /// rename 이 성공하기 전에는 원본이 한 바이트도 안 바뀐다.
+///
+/// #2183 — rename 이 성공한 **뒤에** `connections.json.bak` 을 지운다. 이 함수는
+/// `save_storage_raw` 를 안 거치므로 백업이 갱신되지 않는데, 재키잉의 다음 단계가
+/// 옛 키를 폐기하면 그 백업은 **어디에도 없는 키로 암호화된 암호문**이 된다. JSON
+/// 으로는 멀쩡히 파싱되므로 소실 복구 경로가 성공 분기를 타고 "되살렸다"고 알린
+/// 뒤 사용자는 접속마다 복호화 실패를 만난다. 지우면
+/// `storage::seed_backup_if_absent` 가 같은 부팅의 첫 로드에서 새 키로 다시
+/// 만든다. rename 전에 지우면 발행이 실패했을 때 옛 키로 열리는 멀쩡한 백업까지
+/// 잃으므로 순서가 중요하다.
 fn publish_connections_atomically(
     data_dir: &Path,
     doc: &serde_json::Value,
@@ -448,6 +457,7 @@ fn publish_connections_atomically(
         let _ = fs::remove_file(&tmp_path); // best-effort: leave no orphan
         return Err(e.into());
     }
+    let _ = fs::remove_file(crate::storage::backup_path_for(&path));
     Ok(())
 }
 
@@ -1409,6 +1419,41 @@ mod tests {
             "the rekey temp file must not survive the boot"
         );
         assert!(!disk_key_path(dir.path()).exists());
+    }
+
+    /// #2183 — a rekey replaces `connections.json` without going through
+    /// `save_storage_raw`, so the backup beside it keeps ciphertext under the key
+    /// this very boot destroys. It still parses as JSON, so a later loss would
+    /// take the success branch, tell the user their connections came back, and
+    /// hand them entries that no key opens. Publishing therefore drops it, and
+    /// `storage::seed_backup_if_absent` makes a correct one on the next load.
+    #[test]
+    fn rekey_drops_a_backup_that_the_retired_key_encrypted() {
+        let dir = TempDir::new().unwrap();
+        let exposed_key: Vec<u8> = (0..32u8).collect();
+        seed_disk_key(dir.path(), &exposed_key);
+        let doc = serde_json::json!({
+            "connections": [{
+                "id": "c1",
+                "password": encrypt("db-pw", &exposed_key).unwrap(),
+                "wallet_password": "",
+            }],
+            "groups": [],
+        });
+        let connections = dir.path().join("connections.json");
+        fs::write(&connections, doc.to_string()).unwrap();
+        let stale_backup = crate::storage::backup_path_for(&connections);
+        fs::write(&stale_backup, doc.to_string()).unwrap();
+
+        let backend = InMemoryKeyringBackend::new_available();
+        backend.set(KEYRING_ENTRY_NAME, &exposed_key).unwrap();
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+
+        assert!(outcome.rekeyed_after_disk_exposure);
+        assert!(
+            !stale_backup.exists(),
+            "a backup encrypted under the retired key must not stay behind claiming to be a recovery"
+        );
     }
 
     /// 재키잉하지 않은 부팅은 flag 를 세우지 않는다 — 디스크 `.key` 가 없는

@@ -148,6 +148,27 @@ threat-model handoff and source-specific implementation own
 preview/confirm/dry-run/auditability. Users/roles/auth mechanism UI waits until
 source order is clear.
 
+Open items from #2183, which gave the connection store a single-generation
+`connections.json.bak` and a restore path for a store that goes missing. Each was
+left out deliberately and none has an owning issue yet; the shipped boundaries
+are stated under *Connection store backup and recovery* in
+[`known-limitations-cross-cutting.md`](../product/known-limitations-cross-cutting.md).
+Promote any of them when a second loss report arrives, and prefer whichever the
+report actually exercises:
+
+- Generations beyond the previous one, a backup outside the app data directory,
+  and a user-chosen backup location. The owner ruled the location trade-off
+  accepted on 2026-08-06, so reopening it needs a new decision, not an
+  implementation slice.
+- A backup that fails to parse is set aside and the app boots empty with nothing
+  said to the user — that path is visible only in the log, while the successful
+  restore raises a toast. Telling the user their backup was unusable needs a
+  second wire flag, and #2183 asked only for the success case to be reported.
+- The corrupt-`connections.json` path still quarantines and boots empty without
+  consulting the backup sitting next to it. Reading the backup there would make
+  a parse failure recoverable the same way a missing file now is, but it changes
+  what the existing quarantine test asserts and was outside what #2183 asked for.
+
 ### Quality gates
 
 **Follow-up**: Promote a11y, perf, E2E isolation, dependency security CI, and

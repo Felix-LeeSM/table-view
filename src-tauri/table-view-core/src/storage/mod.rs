@@ -245,16 +245,23 @@ fn storage_file_path() -> Result<PathBuf, AppError> {
     Ok(app_data_dir()?.join("connections.json"))
 }
 
-/// #2183 — the generation of `connections.json` that the last save replaced,
-/// kept beside it **inside** the app data directory (owner decision 2026-08-06:
-/// a backup outside that directory was proposed and not adopted).
+/// #2183 — the backup that sits beside a `connections.json`, **inside** the app
+/// data directory (owner decision 2026-08-06: a backup outside that directory
+/// was proposed and not adopted).
 ///
-/// Derived from [`storage_file_path`] instead of spelled out again, so the two
-/// cannot drift into different directories or stop being siblings.
-fn storage_backup_path() -> Result<PathBuf, AppError> {
-    let mut name = storage_file_path()?.into_os_string();
+/// Takes the file rather than resolving it, so the one other writer that
+/// replaces `connections.json` without going through [`save_storage_raw`] —
+/// `key_migration::publish_connections_atomically`, which already holds the
+/// directory — names the same file without a second copy of the suffix.
+pub(crate) fn backup_path_for(path: &std::path::Path) -> PathBuf {
+    let mut name = path.to_path_buf().into_os_string();
     name.push(".bak");
-    Ok(PathBuf::from(name))
+    PathBuf::from(name)
+}
+
+/// The backup for this process's own `connections.json`.
+fn storage_backup_path() -> Result<PathBuf, AppError> {
+    Ok(backup_path_for(&storage_file_path()?))
 }
 
 /// Load storage from disk WITHOUT decrypting passwords. Each connection's
@@ -270,7 +277,10 @@ fn load_storage_raw() -> Result<StorageData, AppError> {
 
     let content = fs::read_to_string(&path)?;
     let data: StorageData = match serde_json::from_str(&content) {
-        Ok(data) => data,
+        Ok(data) => {
+            seed_backup_if_absent(&path, &data);
+            data
+        }
         Err(parse_err) => {
             // Corrupt JSON: a Serde error here would force the user to lose
             // all stored connections. Quarantine the file and start clean
@@ -294,26 +304,84 @@ fn load_storage_raw() -> Result<StorageData, AppError> {
     Ok(data)
 }
 
+/// #2183 — make sure a `connections.json` that just loaded has a backup, even
+/// if it has not been saved since this build shipped.
+///
+/// Without this, [`save_storage_raw`] is the only thing that ever creates one,
+/// and the read paths never save. Every install that predates this build would
+/// therefore carry no backup until the user's next add / edit / delete, and a
+/// file lost inside that window would be read as a first run and silently
+/// replaced with an empty one — the exact #2183 behavior. The user this issue
+/// came from is in that window right now. Seeding here moves the protection from
+/// "next mutation" to "next launch".
+///
+/// Two conditions, both load-bearing:
+///
+/// - only when the parse succeeded, so the empty document written after a
+///   corrupt-file quarantine can never become the backup;
+/// - only when there is something to protect. An install with no connections and
+///   no groups has nothing to lose, and seeding it would leave an empty backup
+///   that a later loss would "restore" while telling the user their connections
+///   came back.
+///
+/// A copy, not the rename [`save_storage_raw`] uses: there the old file is being
+/// replaced anyway, here it has to stay. A copy interrupted midway leaves a
+/// truncated backup, which the restore path reports and sets aside instead of
+/// trusting — never worse than the no-backup state it replaces, which is why
+/// this is not worth a second temp-file dance.
+///
+/// Failures are logged and swallowed on purpose. This is a read path: a data
+/// directory that cannot take the copy must not turn every connection list in
+/// the app into an error. `save_storage_raw` propagates the same class of
+/// failure because a save can be retried with the file still intact.
+fn seed_backup_if_absent(path: &std::path::Path, data: &StorageData) {
+    if data.connections.is_empty() && data.groups.is_empty() {
+        return;
+    }
+    let backup = backup_path_for(path);
+    if backup.exists() {
+        return;
+    }
+    match fs::copy(path, &backup) {
+        Ok(_) => info!(
+            "seeded {} from the connections file that had none (#2183)",
+            backup.display()
+        ),
+        Err(e) => warn!(
+            "could not seed {} ({}); the connections file stays unprotected until the next save",
+            backup.display(),
+            e
+        ),
+    }
+}
+
 /// #2183 — `connections.json` is not there. Until this, that answer was one
 /// `info!` line followed by a write of an empty file, which turned an absence
 /// into a permanent loss: after the write there was nothing left on disk to
 /// recover from. On 2026-08-06 a user's machine lost every saved connection
 /// through exactly that path, and the app was what made it final.
 ///
-/// A missing file is two different events, and the backup that
-/// [`save_storage_raw`] leaves behind is what tells them apart:
+/// A missing file is two different events, and the backup is what tells them
+/// apart. Both writers of that backup — [`save_storage_raw`] on a save and
+/// [`seed_backup_if_absent`] on a successful load — only ever run with a
+/// `connections.json` in hand, so its presence means this install has held one:
 ///
-/// - a backup is there → connections were saved here before and the file they
-///   lived in is gone. Put them back, `warn!`, and raise
+/// - a backup is there → connections were here and the file they lived in is
+///   gone. Put them back, `warn!`, and raise
 ///   [`CONNECTIONS_RESTORED_FROM_BACKUP`] so the boot snapshot can tell the user.
-/// - no backup → nothing was ever saved on this install, so nothing was lost.
-///   This is the genuine first run and it stays as quiet as it was before
-///   (acceptance ③ — a warning on every first launch would be a new defect).
+/// - no backup → **there is nothing to put back**, so start empty and stay
+///   quiet (acceptance ③ — a warning on every first launch would be a new
+///   defect). Note what this arm does *not* claim: it cannot tell a genuine
+///   first run from a loss that happened before any backup existed. It said so
+///   until seeding closed the gap, and the reason for silence is the absence of
+///   a recovery source, never a conclusion that nothing was lost.
 ///
-/// A backup that cannot be read or parsed takes the quiet branch but is never
-/// touched: with `connections.json` gone it is the user's only remaining copy,
-/// so it is reported and left on disk for manual recovery rather than
-/// overwritten or quarantined.
+/// A backup that cannot be read or parsed restores nothing and is moved aside
+/// with a timestamp instead of being left in place. With `connections.json` gone
+/// it is the user's only remaining copy, and leaving it under its own name would
+/// hand it to the next save's rename — the empty file this function just wrote
+/// would take the backup slot and the last copy would be gone. Moving it is what
+/// makes "kept for manual recovery" survive past this boot.
 fn restore_from_backup_or_start_empty() -> Result<StorageData, AppError> {
     let empty = StorageData {
         connections: vec![],
@@ -331,10 +399,11 @@ fn restore_from_backup_or_start_empty() -> Result<StorageData, AppError> {
         Err(e) => {
             warn!(
                 "connections.json is missing and its backup {} could not be read ({}); \
-                 starting empty and leaving the backup untouched",
+                 starting empty",
                 backup.display(),
                 e
             );
+            set_aside_unusable_backup(&backup);
             save_storage_raw(&empty)?;
             return Ok(empty);
         }
@@ -345,10 +414,11 @@ fn restore_from_backup_or_start_empty() -> Result<StorageData, AppError> {
         Err(parse_err) => {
             warn!(
                 "connections.json is missing and its backup {} failed to parse ({}); \
-                 starting empty and leaving the backup on disk for manual recovery",
+                 starting empty",
                 backup.display(),
                 parse_err
             );
+            set_aside_unusable_backup(&backup);
             save_storage_raw(&empty)?;
             return Ok(empty);
         }
@@ -363,6 +433,32 @@ fn restore_from_backup_or_start_empty() -> Result<StorageData, AppError> {
     save_storage_raw(&data)?;
     CONNECTIONS_RESTORED_FROM_BACKUP.store(true, Ordering::SeqCst);
     Ok(data)
+}
+
+/// #2183 — a backup that could not be used is still the user's last copy, so it
+/// is moved to a timestamped name rather than deleted or left where it is.
+///
+/// Leaving it in place would not preserve it: `connections.json` is missing, the
+/// caller is about to write an empty one, and the next save renames that empty
+/// file straight over the backup. Moving it out of the slot is what makes it
+/// outlive this boot, and it lands under the same `.corrupt-<ts>` convention the
+/// corrupt-`connections.json` path already uses.
+///
+/// Best-effort by design: this is a recovery that already failed, so a rename
+/// that also fails must not turn into a boot error on top of it. The `warn!`
+/// above has already named the file either way.
+fn set_aside_unusable_backup(backup: &std::path::Path) {
+    match quarantine_corrupt_storage(backup) {
+        Ok(kept) => warn!(
+            "kept the unusable backup at {} for manual recovery",
+            kept.display()
+        ),
+        Err(e) => warn!(
+            "could not move the unusable backup {} aside ({}); the next save will replace it",
+            backup.display(),
+            e
+        ),
+    }
 }
 
 /// Move a corrupt storage file aside with a timestamped suffix so the user
@@ -1628,8 +1724,85 @@ mod tests {
             ["c1", "c2"],
             "the restored data must be written back, or the next boot restores all over again"
         );
+        // A restore reads the backup, it does not spend it. Without this the
+        // implementation could move the file instead of copying its contents out
+        // and every assertion above would still hold, leaving a second loss with
+        // nothing to fall back on.
+        assert_eq!(
+            ids(&read_json(&backup)),
+            ["c1", "c2"],
+            "the backup must survive the restore it served"
+        );
 
         CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
+        cleanup_test_env();
+    }
+
+    /// B② — an install that predates this build has no backup, because the read
+    /// paths never save and `save_storage_raw` is otherwise the only writer.
+    /// Until the user's next add / edit / delete, a loss in that window would be
+    /// read as a first run and answered with a silent empty file — the #2183
+    /// behavior, reproduced. A successful load seeds the backup so the window is
+    /// one launch, not one mutation.
+    ///
+    /// The file is written directly here rather than through `save_conn`: going
+    /// through the writer would create the backup as a side effect and there
+    /// would be nothing left to prove.
+    #[test]
+    #[serial]
+    fn a_load_seeds_the_backup_for_an_install_that_has_none() {
+        let dir = setup_test_env();
+        let (path, backup) = storage_and_backup(&dir);
+        CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
+
+        let existing = StorageData {
+            connections: vec![sample_connection("c1", "DB1")],
+            groups: vec![sample_group("g1", "Production")],
+        };
+        fs::write(&path, serde_json::to_string_pretty(&existing).unwrap()).unwrap();
+        assert!(
+            !backup.exists(),
+            "the fixture starts the way a pre-#2183 install does"
+        );
+
+        load_storage_redacted().unwrap();
+        assert_eq!(
+            ids(&read_json(&backup)),
+            ["c1"],
+            "a successful load must leave a backup behind for an install that had none"
+        );
+        assert!(
+            !CONNECTIONS_RESTORED_FROM_BACKUP.load(Ordering::SeqCst),
+            "seeding is not a recovery and must not tell the user anything"
+        );
+
+        // And the protection is real: the loss that follows is now recoverable.
+        fs::remove_file(&path).unwrap();
+        assert_eq!(ids(&load_storage_redacted().unwrap()), ["c1"]);
+        assert!(CONNECTIONS_RESTORED_FROM_BACKUP.load(Ordering::SeqCst));
+
+        CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
+        cleanup_test_env();
+    }
+
+    /// The seed must not manufacture an empty backup. A first run writes an
+    /// empty `connections.json`; if the next launch seeded from it, a later loss
+    /// would "restore" nothing while telling the user their connections came
+    /// back. Acceptance ③ also depends on this staying quiet across launches,
+    /// not just on the very first one.
+    #[test]
+    #[serial]
+    fn a_load_does_not_seed_a_backup_from_an_empty_store() {
+        let dir = setup_test_env();
+        let (_path, backup) = storage_and_backup(&dir);
+
+        load_storage_redacted().unwrap(); // first run — writes the empty file
+        load_storage_redacted().unwrap(); // second launch — would seed
+        assert!(
+            !backup.exists(),
+            "an install with nothing in it has nothing to protect"
+        );
+
         cleanup_test_env();
     }
 
@@ -1680,11 +1853,31 @@ mod tests {
             !CONNECTIONS_RESTORED_FROM_BACKUP.load(Ordering::SeqCst),
             "nothing was restored, so the user must not be told that something was"
         );
-        assert_eq!(
-            fs::read_to_string(&backup).unwrap(),
-            "{ half a file",
-            "the last remaining copy must survive byte for byte for manual recovery"
+
+        // Byte-for-byte, but out of the backup slot. Left under its own name it
+        // would survive this load and then be renamed over by the next save,
+        // which is when the user's last copy would actually disappear — so the
+        // assertion has to be about the file that outlives the boot.
+        let kept: Vec<PathBuf> = fs::read_dir(dir.path())
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with("connections.json.bak.corrupt-"))
+            })
+            .collect();
+        assert_eq!(kept.len(), 1, "expected one set-aside backup, got {kept:?}");
+        assert_eq!(fs::read_to_string(&kept[0]).unwrap(), "{ half a file");
+        assert!(
+            !backup.exists(),
+            "the unusable copy must not stay where the next save would overwrite it"
         );
+
+        // The next save is what used to destroy it.
+        save_conn(sample_connection("c1", "DB1")).unwrap();
+        assert_eq!(fs::read_to_string(&kept[0]).unwrap(), "{ half a file");
 
         cleanup_test_env();
     }
