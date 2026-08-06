@@ -23,7 +23,8 @@ worktree 는 `.git` 을 공유해 index.lock 겹침·FETCH_HEAD 등 공유 자�
 
 - 본 파일이 사본 격리(생성·점유·회수)의 유일한 SOT 다.
 - commit / push / PR / merge 행동 계약은 [delivery](../../workflow/delivery/memory.md),
-  push reject 회복은 [git-policy](../../workflow/git-policy/memory.md) 소유.
+  push reject 의 계약은 [git-policy](../../workflow/git-policy/memory.md),
+  회복 절차는 [recovering-push-rejects](../../../.agents/skills/recovering-push-rejects/SKILL.md) 소유.
 
 ## 생성
 
@@ -64,7 +65,8 @@ worktree 가 공짜로 주던 "같은 브랜치 이중 체크아웃 방지"가 c
   경로를 GitHub 에 적지 않는다.
 - spawn 전 확인 둘: 이슈에 살아 있는 점유 코멘트가 없는가,
   `git ls-remote origin <branch>` 가 stale ref 를 내지 않는가
-  (stale 이면 [git-policy](../../workflow/git-policy/memory.md) 의 재spawn 절차).
+  (stale 이면 [recovering-push-rejects](../../../.agents/skills/recovering-push-rejects/SKILL.md)
+  의 「재 spawn 시 stale ref 검증」).
 - **stalled/timeout 알림은 사망 확정이 아니다.** 확인 없이 respawn 하면 같은
   사본에 노드가 둘 붙는다 — 점유 코멘트와 살아 있는 프로세스를 먼저 확인한다.
 
@@ -112,8 +114,9 @@ SHA="$(git rev-parse HEAD)"
 git push origin "$SHA":refs/heads/<branch>       # 4) SHA refspec push
 ```
 
-자세히: [git-policy](../../workflow/git-policy/memory.md) — 외부 race 가짜
-신호 + push reject 응급 처치.
+자세히: [recovering-push-rejects](../../../.agents/skills/recovering-push-rejects/SKILL.md)
+— 외부 race 가짜 신호 + push reject 응급 처치. 계약은
+[git-policy](../../workflow/git-policy/memory.md).
 
 ## 관련
 

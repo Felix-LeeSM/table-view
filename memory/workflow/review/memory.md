@@ -83,7 +83,7 @@ trigger:
   (계정 1개 = GitHub review approval 불가의 label 우회). **label 만으로 pass 가
   되지는 않는다** — 라운드가 3 이상인데 `reflect:done` 이 없으면 label 을
   붙여도 `Stop at review round 3` step 이 fail 시킨다
-  ([pr-merge-gates](../../runbook/pr-merge-gates/memory.md) 「review-gate run 상태 함정」).
+  ([diagnosing-merge-gates](../../../.agents/skills/diagnosing-merge-gates/SKILL.md) 「review-gate run 상태 함정」).
 - 리뷰 대응 이력의 SOT는 PR과 scorecard다 — 소스 주석에 리뷰 라운드 서사를
   남기지 않는다. 룰 본문은 구현자가 읽는
   [god-file](../../engineering/conventions/refactoring/god-file/memory.md)
@@ -104,8 +104,8 @@ trigger:
   `review:approved` 가 붙어 있어도 `review-gate` 가 fail 한다. 라운드는 서로 다른
   head 커밋에 붙은 리뷰 인계의 수이고 코멘트 수는 그 **상한**이다 — 같은 커밋에
   코멘트가 셋 달려도 1라운드라 게이트가 안 막는다. `reflect:done` 은 새 커밋이
-  오면 자동으로 떨어지므로 그 라운드에만 유효하다. 누가 붙이는지와
-  진단은 [pr-merge-gates](../../runbook/pr-merge-gates/memory.md).
+  오면 자동으로 떨어지므로 그 라운드에만 유효하다. 누가 붙이는지와 진단은
+  [diagnosing-merge-gates](../../../.agents/skills/diagnosing-merge-gates/SKILL.md).
 - 정성 차원에 blocking 이 없어야 한다 — 위 행동 계약의 blocking 정의를 그대로
   쓴다. 이 절은 별도 기준을 세우지 않는다.
 - PR이 mergeable이고 branch policy block이 없어야 한다.

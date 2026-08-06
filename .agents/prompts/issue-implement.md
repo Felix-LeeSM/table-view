@@ -29,7 +29,9 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
   필수 read 다.
 - `memory/workflow/delivery/memory.md` — 커밋~PR 구간 행동 계약 · 중단 조건 ·
   PR body 제약.
-- `memory/workflow/git-policy/memory.md` — hard block 목록과 push reject 회복.
+- `memory/workflow/git-policy/memory.md` — hard block 목록과 push 계약.
+- `.agents/skills/recovering-push-rejects/SKILL.md` — push reject 4-step 회복 ·
+  SHA refspec push · closed-PR stale ref 청소. 위 방이 계약이고 이쪽이 절차다.
 - `memory/runbook/worktree/memory.md` — 사본 규율.
 - 코드를 만지면 `memory/index/by-surface.md` 에서 해당 surface 룰.
 - 버그 · 회귀면 `memory/workflow/bug-fix/memory.md` 와
@@ -66,7 +68,8 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
    것은 못 돌렸다고 보고한다 — 추론으로 통과 판정하지 않는다.
 4. commit (Conventional Commits) → push. push 는 SHA refspec 으로 하고,
    `git ls-remote origin <branch>` 로 원격 SHA 를 대조해 성공을 확인한다.
-   출처: `memory/workflow/git-policy/memory.md` 「SHA refspec push 패턴」.
+   출처: `.agents/skills/recovering-push-rejects/SKILL.md` 「SHA refspec push
+   패턴」 (계약은 `memory/workflow/git-policy/memory.md`).
 5. PR 생성 (base main, 본문에 `Closes #<이슈>`). body 를 쓰기 전에 read 목록의
    두 제약을 그대로 적용한다 — 정량 주장은 implementation §5 표, 근거의 이식성은
    `memory/workflow/delivery/memory.md` 「PR body」. 두 제약의 본문은 그 방에 있다.
@@ -86,8 +89,9 @@ PR body 의 기존 주장이 낡았으면 fix commit 과 같은 턴에 body 도 
   「자율 실행 vs 중단」.
 - GPG pinentry 실패 — 같은 방 「검증 — 절대 회피 금지」. unsigned 로 진행하지
   않는다.
-- push reject — **즉시 중단이 아니다.** `memory/workflow/git-policy/memory.md`
-  「Push reject 응급 처치」의 4-step 을 먼저 밟고, 그래도 안 풀리면 보고하고 멈춘다.
+- push reject — **즉시 중단이 아니다.**
+  `.agents/skills/recovering-push-rejects/SKILL.md` 「Push reject 응급 처치」의
+  4-step 을 먼저 밟고, 그래도 안 풀리면 보고하고 멈춘다.
 - `needs:user` 가 걸린 이슈/PR — `memory/workflow/orchestration/memory.md` §3.
 
 **회고 트리거가 발화한 라운드**면 fix 를 더 얹지 않고 상태만 보고하고 종료한다 —

@@ -36,9 +36,9 @@ GitHub 산출물로 남긴 뒤 종료한다 — 다음 노드는 그 상태를 �
 | subagent spawn / 역할 프롬프트 | `.agents/prompts/` — orchestrator·issue-implement·pr-review·pr-finalize 고정부. **자동 도달 아니다**: spawn 시 파일을 그대로 첨부하거나 `.claude/agents/<role>.md` 정의가 첫 행동으로 읽는다 |
 | 사용자 대화 / 설계 결정 / raw→task 승격 | `memory/workflow/interface/memory.md` (top-level 세션 전용) |
 | 문서화 / PR body       | `memory/workflow/documentation/memory.md`              |
-| git / PR / push reject | `memory/workflow/git-policy/memory.md`                 |
+| git / PR / push reject | `memory/workflow/git-policy/memory.md` (금지 목록·계약) + `.agents/skills/recovering-push-rejects/SKILL.md` (4-step 회복·SHA refspec·stale ref) |
 | 머지 충돌 해소         | `.agents/skills/resolving-merge-conflicts/SKILL.md`     |
-| PR merge 막힘 / BLOCKED | `memory/runbook/pr-merge-gates/memory.md` (required CI green·review-gate·ruleset 게이트 진단) |
+| PR merge 막힘 / BLOCKED | `memory/runbook/pr-merge-gates/memory.md` (required context 목록·계약) + `.agents/skills/diagnosing-merge-gates/SKILL.md` (진단 순서·트리거 함정) |
 | 작업 사본 격리 (clone) | `memory/runbook/worktree/memory.md`                    |
 
 코드 만지기 전: `memory/index/by-surface.md` (해당 active rule 묶음).
@@ -72,8 +72,11 @@ surface 디렉토리(`src/` 등)의 `AGENTS.md` 는 해당 surface rule 로 가�
 
 - `memory/` 트리: `memory.md` 만, 200줄 / 12,000 chars cap (둘 다). 크기 두 상한은
   CI 가 잡고, `memory.md` 만 두라는 쪽은 규율뿐이다.
-- workflow memory 는 행동 계약만 둔다. 긴 절차는 `.agents/skills/` 로 내리고
-  memory 에는 계약과 그 경로만 남긴다.
+- workflow · runbook memory 는 행동 계약만 둔다. 긴 절차는 `.agents/skills/` 로
+  내리고 memory 에는 계약과 그 경로만 남긴다. 무엇이 계약이고 무엇이 절차인지는
+  `memory/runbook/memory.md` 「계약 / 절차 경계」가 판정한다. skill 은 어떤
+  harness 도 자동으로 안 읽으므로 **위 매트릭스 행과 memory 에 남는 포인터**가
+  유일한 도달 경로다 — 절차를 내리면 그 둘을 같은 커밋에 고친다.
 - ADR 본문 동결. 결정 뒤집기 = 새 ADR + `Superseded`. 본문은
   `docs/decisions/`.
 - git/hook 회피 금지: 대표 예 `--no-verify` / force-push. SOT 는
