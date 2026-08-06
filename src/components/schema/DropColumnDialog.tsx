@@ -40,15 +40,17 @@ import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSumma
  * trim, NO debounce, every keystroke re-evaluates (mirror Sprint 235
  * `DropTableDialog`).
  *
- * Toggling CASCADE invalidates the cached preview so the next Show
- * DDL click re-fetches with the new SQL.
+ * Toggling CASCADE re-fetches the preview by itself (Sprint 238) — no
+ * Show DDL click in between.
  *
  * Safe Mode dispatch is provided by `useDdlPreviewExecution` —
  * `ALTER TABLE … DROP COLUMN` is classified as `ddl-drop`/danger by
- * `analyzeStatement`, so the production-strict tier blocks, the
- * production-warn tier escalates to `pendingConfirm` (additional
- * `ConfirmDestructiveDialog` mounts on top of the typing-confirm gate),
- * and non-production / mode=off allows.
+ * `analyzeStatement`. Under the Sprint 245 destructive-only policy
+ * (ADR 0022 Phase 1; canonical matrix in `src/lib/safeMode.ts`) every
+ * production tier and non-production strict escalate to
+ * `pendingConfirm`, mounting an additional `ConfirmDestructiveDialog` on
+ * top of the typing-confirm gate. Non-production warn / off allow.
+ * `decideSafeModeAction` never returns `block` for this path.
  *
  * On commit success the dialog calls `onColumnDropped()` which the
  * parent `ColumnsEditor` wires to `onRefresh` → `getTableColumns`
@@ -95,9 +97,10 @@ export default function DropColumnDialog({
   const { t } = useTranslation("schemaDialogs");
   const [typingConfirm, setTypingConfirm] = useState("");
   const [cascade, setCascade] = useState(false);
-  // Preview pane defaults open — auto-debounced fetch fills it as the
-  // user types. Hiding it by default required an extra click and made
-  // users think the preview was broken.
+  // Preview pane defaults open — the auto-debounced fetch fills it as
+  // soon as the dialog opens, with no typing involved (issue #2157).
+  // Hiding it by default required an extra click and made users think
+  // the preview was broken.
   const [showDdl, setShowDdl] = useState(true);
 
   const connectionEnvironment = useConnectionStore(
@@ -280,7 +283,7 @@ export default function DropColumnDialog({
               <button
                 type="button"
                 onClick={handleShowDdl}
-                // Toggle is always enabled now; the pane shows helpful empty/loading states
+                // Toggle is always enabled; the pane carries its own loading / error states
                 className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-secondary-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 aria-expanded={showDdl}
                 aria-controls="drop-column-ddl-preview"

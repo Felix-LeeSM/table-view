@@ -6,7 +6,8 @@
 //   byte-for-byte match (`Email` ≠ `email`), CASCADE toggle invalidates
 //   preview + emits ` CASCADE` in next request, commit-success closes
 //   modal + onColumnDropped called.
-// - AC-236-06: Safe Mode block / warn-cancel / safe matrix.
+// - AC-236-06: Safe Mode confirm / warn-cancel / safe matrix (Sprint 245
+//   retired the block tier — see the case at "production × strict").
 //   `ALTER TABLE … DROP COLUMN` is classified `ddl-drop`/danger so the
 //   gate fires on production environments.
 // - AC-236-02 / AC-236-03: IPC payload shape (camelCase) + sequence
@@ -139,6 +140,25 @@ function findPreviewSql(sql: string) {
   );
 }
 
+/**
+ * React refuses to deliver a click to a `disabled` button, and it decides
+ * that from its own props — clearing the DOM attribute changes nothing
+ * (measured on react-dom 19.2.4). So the button's `disabled` binding hides
+ * the click handler's own guard from every DOM-level test. Pull the
+ * registered `onClick` off the host node instead: that is the entry point a
+ * regressed `disabled` binding would expose, and it is the only way to
+ * assert the second layer holds on its own.
+ */
+function reactOnClick(node: HTMLElement): () => Promise<void> {
+  const key = Object.keys(node).find((k) => k.startsWith("__reactProps$"));
+  if (!key) throw new Error("no React props key on the host node");
+  const props = (
+    node as unknown as Record<string, { onClick?: () => Promise<void> }>
+  )[key];
+  if (!props?.onClick) throw new Error("no onClick registered on the button");
+  return props.onClick;
+}
+
 describe("DropColumnDialog (Sprint 236)", () => {
   beforeEach(() => {
     cleanup();
@@ -208,6 +228,26 @@ describe("DropColumnDialog (Sprint 236)", () => {
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+
+    expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
+    expect(mockDropColumnRequest).not.toHaveBeenCalledWith(
+      expect.objectContaining({ previewOnly: false }),
+      expect.anything(),
+    );
+  });
+
+  // Issue #2157 — second layer, on its own. A DOM click only ever proves
+  // the first layer (`disabled`), since React never routes it to the
+  // handler. Reaching the handler directly is what pins the `!canApply`
+  // guard: delete that one line and this case is the only one that reddens.
+  it("[#2157] the Apply handler refuses to commit when the click reaches it anyway", async () => {
+    renderDialog({ columnName: "email" });
+    await findPreviewSql(DROP_EMAIL_SQL);
+
+    const apply = screen.getByRole("button", { name: "Apply" });
+    await act(async () => {
+      await reactOnClick(apply)();
     });
 
     expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
