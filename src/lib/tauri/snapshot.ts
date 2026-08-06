@@ -72,6 +72,13 @@ export interface InitialAppState {
   partial: boolean;
   /** v0.3.1: boot 자동 복구(quarantine + fresh)가 발생했으면 true. runtime meta 이라 schemaVersion 은 1 유지. */
   recovered: boolean;
+  /**
+   * #2183: `connections.json` 이 없어서 옆의 백업으로 되살렸으면 true.
+   * `recovered` 와 다른 키다 — `recovered` 는 앱 상태를 초기화했다는 뜻이고
+   * 이쪽은 아무것도 초기화하지 않고 연결이 돌아왔다는 뜻이라, 사용자에게 할
+   * 말과 가리킬 파일이 서로 다르다. 역시 runtime meta 라 schemaVersion 은 1 유지.
+   */
+  connectionsRestoredFromBackup: boolean;
   stores: {
     connections: StoreSlot<ConnectionsStore>;
     workspaces: StoreSlot<WorkspacesStore>;

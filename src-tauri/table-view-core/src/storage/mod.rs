@@ -13,6 +13,7 @@ use crate::error::AppError;
 use crate::models::{ConnectionConfig, ConnectionGroup, StorageData};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex, OnceLock};
 use tracing::{debug, error, info, warn};
 use zeroize::Zeroizing;
@@ -226,8 +227,34 @@ pub(crate) fn app_data_dir_path() -> Option<PathBuf> {
     data_dir_override().or_else(|| PROD_DATA_DIR.get().cloned())
 }
 
+/// #2183 — `true` once this process found `connections.json` gone and put it
+/// back from the backup beside it. `get_initial_app_state` swaps it into
+/// `InitialAppState.connections_restored_from_backup`, which the frontend turns
+/// into a toast — the same boot-flag-to-toast wiring
+/// [`corrupt_recovery::DID_RECOVER`] uses for a quarantined `state.db`.
+///
+/// It is deliberately a second flag rather than that one, because the two events
+/// need opposite sentences and name different files: `DID_RECOVER` says the app
+/// state was reset and the old copy sits in `state.db.bak`, this one says the
+/// connections came back from `connections.json.bak` and nothing was reset.
+/// Reusing `DID_RECOVER` would have shown the user the reset message on a
+/// restore and pointed them at a file that has none of their connections.
+pub static CONNECTIONS_RESTORED_FROM_BACKUP: AtomicBool = AtomicBool::new(false);
+
 fn storage_file_path() -> Result<PathBuf, AppError> {
     Ok(app_data_dir()?.join("connections.json"))
+}
+
+/// #2183 — the generation of `connections.json` that the last save replaced,
+/// kept beside it **inside** the app data directory (owner decision 2026-08-06:
+/// a backup outside that directory was proposed and not adopted).
+///
+/// Derived from [`storage_file_path`] instead of spelled out again, so the two
+/// cannot drift into different directories or stop being siblings.
+fn storage_backup_path() -> Result<PathBuf, AppError> {
+    let mut name = storage_file_path()?.into_os_string();
+    name.push(".bak");
+    Ok(PathBuf::from(name))
 }
 
 /// Load storage from disk WITHOUT decrypting passwords. Each connection's
@@ -238,13 +265,7 @@ fn storage_file_path() -> Result<PathBuf, AppError> {
 fn load_storage_raw() -> Result<StorageData, AppError> {
     let path = storage_file_path()?;
     if !path.exists() {
-        info!("Storage file not found, creating default");
-        let default = StorageData {
-            connections: vec![],
-            groups: vec![],
-        };
-        save_storage_raw(&default)?;
-        return Ok(default);
+        return restore_from_backup_or_start_empty();
     }
 
     let content = fs::read_to_string(&path)?;
@@ -270,6 +291,77 @@ fn load_storage_raw() -> Result<StorageData, AppError> {
         }
     };
     debug!("Loaded {} connections (raw)", data.connections.len());
+    Ok(data)
+}
+
+/// #2183 — `connections.json` is not there. Until this, that answer was one
+/// `info!` line followed by a write of an empty file, which turned an absence
+/// into a permanent loss: after the write there was nothing left on disk to
+/// recover from. On 2026-08-06 a user's machine lost every saved connection
+/// through exactly that path, and the app was what made it final.
+///
+/// A missing file is two different events, and the backup that
+/// [`save_storage_raw`] leaves behind is what tells them apart:
+///
+/// - a backup is there → connections were saved here before and the file they
+///   lived in is gone. Put them back, `warn!`, and raise
+///   [`CONNECTIONS_RESTORED_FROM_BACKUP`] so the boot snapshot can tell the user.
+/// - no backup → nothing was ever saved on this install, so nothing was lost.
+///   This is the genuine first run and it stays as quiet as it was before
+///   (acceptance ③ — a warning on every first launch would be a new defect).
+///
+/// A backup that cannot be read or parsed takes the quiet branch but is never
+/// touched: with `connections.json` gone it is the user's only remaining copy,
+/// so it is reported and left on disk for manual recovery rather than
+/// overwritten or quarantined.
+fn restore_from_backup_or_start_empty() -> Result<StorageData, AppError> {
+    let empty = StorageData {
+        connections: vec![],
+        groups: vec![],
+    };
+    let backup = storage_backup_path()?;
+
+    let content = match fs::read_to_string(&backup) {
+        Ok(content) => content,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            info!("Storage file not found, creating default");
+            save_storage_raw(&empty)?;
+            return Ok(empty);
+        }
+        Err(e) => {
+            warn!(
+                "connections.json is missing and its backup {} could not be read ({}); \
+                 starting empty and leaving the backup untouched",
+                backup.display(),
+                e
+            );
+            save_storage_raw(&empty)?;
+            return Ok(empty);
+        }
+    };
+
+    let data: StorageData = match serde_json::from_str(&content) {
+        Ok(data) => data,
+        Err(parse_err) => {
+            warn!(
+                "connections.json is missing and its backup {} failed to parse ({}); \
+                 starting empty and leaving the backup on disk for manual recovery",
+                backup.display(),
+                parse_err
+            );
+            save_storage_raw(&empty)?;
+            return Ok(empty);
+        }
+    };
+
+    warn!(
+        "connections.json was missing; restored connections={} groups={} from {}",
+        data.connections.len(),
+        data.groups.len(),
+        backup.display()
+    );
+    save_storage_raw(&data)?;
+    CONNECTIONS_RESTORED_FROM_BACKUP.store(true, Ordering::SeqCst);
     Ok(data)
 }
 
@@ -327,6 +419,32 @@ fn save_storage_raw(data: &StorageData) -> Result<(), AppError> {
         use std::io::Write;
         f.write_all(json.as_bytes())?;
         f.sync_all()?;
+    }
+
+    // #2183 — keep the generation this write replaces, so a `connections.json`
+    // that later goes missing can be put back (`restore_from_backup_or_start_empty`).
+    //
+    // `rename` rather than a copy: it moves a directory entry, so the backup is
+    // whole or absent and can never be a half-written last copy. The window it
+    // opens — `connections.json` missing between the two renames — is the very
+    // state the load path now recovers from, so a crash inside it heals on the
+    // next boot.
+    //
+    // It runs after the tmp file is complete so a save that fails while writing
+    // tmp leaves both files alone, instead of spending the single backup slot on
+    // a write that never landed.
+    //
+    // An absent `path` backs up nothing, and that is what keeps the corrupt-file
+    // path from replacing a good backup with the empty file it writes:
+    // `quarantine_corrupt_storage` has already renamed the file away before that
+    // save runs. `quarantining_a_corrupt_file_does_not_overwrite_the_backup`
+    // holds that, not this ordering.
+    if path.exists() {
+        let backup = storage_backup_path()?;
+        if let Err(e) = fs::rename(&path, &backup) {
+            let _ = fs::remove_file(&tmp_path); // best-effort: leave no orphan
+            return Err(e.into());
+        }
     }
 
     if let Err(e) = fs::rename(&tmp_path, &path) {
@@ -1395,6 +1513,213 @@ mod tests {
                 .iter()
                 .any(|n| n.starts_with("connections.json.corrupt-")),
             "quarantined backup not found in {entries:?}"
+        );
+
+        cleanup_test_env();
+    }
+
+    // -------------------------------------------------------------------
+    // #2183 — a missing connections.json is a data-loss event, not a first
+    // run. On 2026-08-06 a real machine's app data directory lost its
+    // contents; boot answered with one `info!` line and saved an empty file,
+    // which is what made the loss permanent (there was nothing on disk left to
+    // recover from). The file now leaves a backup behind on every save, and a
+    // missing file is restored from it.
+    // -------------------------------------------------------------------
+
+    /// Helper: the two paths these tests care about, beside each other in the
+    /// data dir. Spelled out rather than taken from `storage_backup_path()` —
+    /// the on-disk name is what a user recovering by hand has to find, so the
+    /// test has to fail if it changes.
+    fn storage_and_backup(dir: &TempDir) -> (PathBuf, PathBuf) {
+        (
+            dir.path().join("connections.json"),
+            dir.path().join("connections.json.bak"),
+        )
+    }
+
+    fn read_json(path: &std::path::Path) -> StorageData {
+        serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    fn ids(data: &StorageData) -> Vec<&str> {
+        data.connections.iter().map(|c| c.id.as_str()).collect()
+    }
+
+    /// Acceptance ① — every save keeps the generation it replaced.
+    #[test]
+    #[serial]
+    fn a_save_leaves_the_generation_it_replaced_in_the_backup() {
+        let dir = setup_test_env();
+        let (path, backup) = storage_and_backup(&dir);
+
+        save_conn(sample_connection("c1", "DB1")).unwrap();
+        save_conn(sample_connection("c2", "DB2")).unwrap();
+
+        assert_eq!(
+            ids(&read_json(&backup)),
+            ["c1"],
+            "the backup must hold the generation before the last save, not the last save itself"
+        );
+        assert_eq!(ids(&read_json(&path)), ["c1", "c2"]);
+
+        // The backup carries the same encrypted passwords as the file it copies,
+        // so it inherits the 0600 the atomic write applies at create time. That
+        // holds because the backup is a rename of that very file; a rewrite of
+        // this step that opens a new file has to apply the mode itself.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&backup).unwrap().permissions().mode() & 0o777,
+                0o600,
+                "the backup holds ciphertext and must not be readable by other users"
+            );
+        }
+
+        cleanup_test_env();
+    }
+
+    /// Acceptance ② — the incident, replayed: `connections.json` disappears
+    /// while the backup survives. This is the assertion that says the PR
+    /// undoes the accident rather than merely logging it: the connections come
+    /// back, their stored secrets come back with them, the file is put back on
+    /// disk, and the user is told.
+    #[test]
+    #[serial]
+    fn a_missing_storage_file_is_restored_from_the_backup() {
+        let dir = setup_test_env();
+        let (path, backup) = storage_and_backup(&dir);
+        CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
+
+        save_conn(sample_connection("c1", "DB1")).unwrap();
+        save_conn(sample_connection("c2", "DB2")).unwrap();
+        save_group(sample_group("g1", "Production")).unwrap();
+        save_conn(sample_connection("c3", "DB3")).unwrap();
+        assert_eq!(ids(&read_json(&backup)), ["c1", "c2"]);
+
+        // The 2026-08-06 shape: the file is gone, the directory is not.
+        fs::remove_file(&path).unwrap();
+
+        let loaded = load_storage().unwrap();
+        assert_eq!(
+            ids(&loaded),
+            ["c1", "c2"],
+            "a missing connections.json with a backup beside it must not resolve to an empty \
+             list. `c3` is absent on purpose: one generation is kept, so the write that \
+             followed the backup is not recoverable — issue #2183 scopes N-generation \
+             retention out"
+        );
+        assert_eq!(
+            loaded.connections[0].password, "testpass",
+            "the restored entries must still decrypt — a backup of unusable ciphertext is not a recovery"
+        );
+        assert_eq!(
+            loaded.groups.len(),
+            1,
+            "groups are restored with connections"
+        );
+        assert!(
+            CONNECTIONS_RESTORED_FROM_BACKUP.load(Ordering::SeqCst),
+            "the restore must raise the flag the boot snapshot reports to the user"
+        );
+        assert_eq!(
+            ids(&read_json(&path)),
+            ["c1", "c2"],
+            "the restored data must be written back, or the next boot restores all over again"
+        );
+
+        CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
+        cleanup_test_env();
+    }
+
+    /// Acceptance ③ — an install that never saved anything has nothing to
+    /// recover, so it stays as quiet as it was before this change. A warning on
+    /// every first run would be a new defect, so the flag that drives the toast
+    /// must stay down.
+    #[test]
+    #[serial]
+    fn a_genuine_first_run_stays_silent() {
+        let dir = setup_test_env();
+        let (_path, backup) = storage_and_backup(&dir);
+        CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
+
+        let loaded = load_storage_redacted().unwrap();
+        assert!(loaded.connections.is_empty());
+        assert!(loaded.groups.is_empty());
+        assert!(
+            !CONNECTIONS_RESTORED_FROM_BACKUP.load(Ordering::SeqCst),
+            "an empty data directory is a first run, not a loss — it must not warn the user"
+        );
+        assert!(
+            !backup.exists(),
+            "writing the initial empty file must not manufacture a backup of it"
+        );
+
+        cleanup_test_env();
+    }
+
+    /// The backup is the user's last copy once `connections.json` is gone, so a
+    /// backup that does not parse is reported and left exactly as it is. The
+    /// corrupt-file path may rename `connections.json` aside; nothing may do
+    /// that to the backup.
+    #[test]
+    #[serial]
+    fn an_unparseable_backup_is_kept_and_never_restored() {
+        let dir = setup_test_env();
+        let (_path, backup) = storage_and_backup(&dir);
+        CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
+        fs::write(&backup, b"{ half a file").unwrap();
+
+        let loaded = load_storage_redacted().unwrap();
+        assert!(
+            loaded.connections.is_empty(),
+            "an unreadable backup restores nothing"
+        );
+        assert!(
+            !CONNECTIONS_RESTORED_FROM_BACKUP.load(Ordering::SeqCst),
+            "nothing was restored, so the user must not be told that something was"
+        );
+        assert_eq!(
+            fs::read_to_string(&backup).unwrap(),
+            "{ half a file",
+            "the last remaining copy must survive byte for byte for manual recovery"
+        );
+
+        cleanup_test_env();
+    }
+
+    /// The exact sequence that produced the incident: a corrupt
+    /// `connections.json` is quarantined and an empty file is written in its
+    /// place. That empty write must not become the backup — if it does, the
+    /// quarantine path destroys the recovery this PR adds.
+    ///
+    /// What holds it is that `quarantine_corrupt_storage` renames the file away
+    /// *before* the empty save runs, so `save_storage_raw` finds no file to back
+    /// up. Nothing in the type system says those two must stay in that order,
+    /// which is why the assertion is here: swapping them, or turning the
+    /// quarantine into a copy, silently spends the backup slot on an empty
+    /// document.
+    #[test]
+    #[serial]
+    fn quarantining_a_corrupt_file_does_not_overwrite_the_backup() {
+        let dir = setup_test_env();
+        let (path, backup) = storage_and_backup(&dir);
+
+        save_conn(sample_connection("c1", "DB1")).unwrap();
+        save_conn(sample_connection("c2", "DB2")).unwrap();
+        let before = fs::read_to_string(&backup).unwrap();
+        fs::write(&path, b"{ this is not valid json }").unwrap();
+
+        assert!(load_storage_redacted().unwrap().connections.is_empty());
+        assert_eq!(
+            fs::read_to_string(&backup).unwrap(),
+            before,
+            "the empty file the quarantine path writes must not replace the backup"
+        );
+        assert!(
+            !ids(&read_json(&backup)).is_empty(),
+            "the preserved backup must still hold real connections, not an empty document"
         );
 
         cleanup_test_env();
