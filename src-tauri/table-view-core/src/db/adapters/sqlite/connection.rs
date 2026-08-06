@@ -1,7 +1,7 @@
 //! SQLite connection lifecycle and baseline catalog reads.
 
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{Row, SqlitePool};
+use sqlx::{Row, Sqlite, SqlitePool, Transaction};
 use std::collections::{HashMap, HashSet};
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
@@ -610,6 +610,64 @@ async fn probe_sqlite_temp_virtual_table(
     let created = sqlx::query(create_sql).execute(pool).await.is_ok();
     let _ = sqlx::query(drop_sql).execute(pool).await;
     created
+}
+
+/// Opens a write transaction with `BEGIN IMMEDIATE`. SQLite write paths start
+/// here rather than at `pool.begin()`.
+///
+/// A deferred `BEGIN` takes no lock at all, so the transaction's first read
+/// leaves the connection holding a read transaction and its first write then
+/// has to upgrade one. SQLite answers that upgrade with `SQLITE_BUSY` at once
+/// and deliberately does not run the busy handler, because waiting on a lock it
+/// already blocks could deadlock — which leaves `busy_timeout` inert exactly
+/// where writers collide, and turns any concurrent writer into an instant
+/// "database is locked" on a legal statement. Asking for the write lock at
+/// `BEGIN`, while the connection holds nothing, puts the request back in front
+/// of the busy handler.
+///
+/// Read-only transactions deliberately keep `pool.begin()`: `IMMEDIATE` would
+/// make a reader take the file's single write lock and serialise every other
+/// reader behind it (#2129, #2130).
+pub(super) async fn begin_write_transaction(
+    pool: &SqlitePool,
+) -> Result<Transaction<'static, Sqlite>, AppError> {
+    pool.begin_with("BEGIN IMMEDIATE")
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))
+}
+
+/// Test-only: parks a writer on `path` from a connection that is not in the
+/// adapter's pool, so a write path under test meets the same lock an unrelated
+/// process would hold. The future resolves only once the lock is actually held,
+/// so the caller cannot race the fixture; the returned sender releases it.
+///
+/// The `BEGIN IMMEDIATE` here is the fixture's own way of parking on the file,
+/// not the behaviour under test.
+#[cfg(test)]
+pub(super) async fn hold_write_lock(path: &Path) -> tokio::sync::oneshot::Sender<()> {
+    use sqlx::{ConnectOptions, Connection};
+
+    let (held_tx, held_rx) = tokio::sync::oneshot::channel::<()>();
+    let (release_tx, release_rx) = tokio::sync::oneshot::channel::<()>();
+    let path = path.to_path_buf();
+    tokio::spawn(async move {
+        let mut conn = SqliteConnectOptions::new()
+            .filename(&path)
+            .create_if_missing(false)
+            .connect()
+            .await
+            .expect("contending connection");
+        let tx = conn
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .expect("contending write lock");
+        held_tx.send(()).expect("signal that the lock is held");
+        let _ = release_rx.await;
+        tx.rollback().await.expect("contending rollback");
+        conn.close().await.expect("contending close");
+    });
+    held_rx.await.expect("contending writer took the lock");
+    release_tx
 }
 
 pub(super) fn validate_namespace(namespace: &str) -> Result<(), AppError> {

@@ -277,6 +277,45 @@ async fn dry_run_query_batch_rolls_back_successful_statements() {
     );
 }
 
+/// How long the fixture writer keeps the file's lock — see the twin in
+/// `ddl_native_live_tests.rs`.
+const CONTENDED_HOLD: std::time::Duration = std::time::Duration::from_millis(200);
+
+/// Regression (#2130): the batch runner opened its transaction deferred, which
+/// is enough for a batch that writes first — SQLite takes the write lock
+/// straight away and the busy handler applies. A batch that reads first does
+/// not get that: the read leaves the connection in a read transaction, and the
+/// later write has to upgrade one, which SQLite refuses on the spot without
+/// consulting `busy_timeout`. A statement list the adapter accepts must not
+/// depend on its own statement order to survive a concurrent writer.
+#[tokio::test]
+async fn a_batch_that_reads_before_it_writes_waits_out_a_concurrent_writer() {
+    let (dir, adapter) = connected_adapter().await;
+    let release =
+        crate::db::adapters::sqlite::connection::hold_write_lock(&dir.path().join("app.sqlite"))
+            .await;
+    let statements = vec![
+        "SELECT id FROM users".to_string(),
+        "UPDATE users SET name = 'Ada Lovelace' WHERE id = 1".to_string(),
+    ];
+
+    let worker = adapter.clone();
+    let started = std::time::Instant::now();
+    let running = tokio::spawn(async move { worker.dry_run_query_batch(&statements, None).await });
+
+    tokio::time::sleep(CONTENDED_HOLD).await;
+    release.send(()).expect("release the contending writer");
+    let result = running.await.expect("batch task");
+    let waited = started.elapsed();
+
+    result.expect("batch must wait for the lock, not fail fast");
+    assert!(
+        waited >= CONTENDED_HOLD,
+        "batch returned Ok in {waited:?}, before the contending writer let go — \
+         the fixture never held the lock, so this proves nothing"
+    );
+}
+
 #[tokio::test]
 async fn execute_query_batch_empty_input_is_noop_without_connection() {
     let adapter = SqliteAdapter::new();

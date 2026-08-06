@@ -5,7 +5,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::AppError;
 use crate::models::{QueryResult, QueryType};
 
-use super::connection::SqliteAdapter;
+use super::connection::{begin_write_transaction, SqliteAdapter};
 use super::queries::validate_sqlite_execution_guardrails;
 use super::sql_text::{sqlite_query_type, strip_trailing_terminator};
 
@@ -63,10 +63,7 @@ impl SqliteAdapter {
         }
         let total = statements.len();
         let work = async {
-            let mut tx = pool
-                .begin()
-                .await
-                .map_err(|e| AppError::Database(e.to_string()))?;
+            let mut tx = begin_write_transaction(&pool).await?;
 
             let mut results = Vec::with_capacity(total);
             for (idx, raw) in statements.iter().enumerate() {

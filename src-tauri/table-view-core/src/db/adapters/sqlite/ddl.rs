@@ -14,7 +14,9 @@ use crate::models::{
     SchemaChangeResult,
 };
 
-use super::connection::{quote_identifier, validate_namespace, SqliteAdapter};
+use super::connection::{
+    begin_write_transaction, quote_identifier, validate_namespace, SqliteAdapter,
+};
 use super::ddl_errors::ddl_failure;
 use super::ddl_native::build_create_index_sql;
 
@@ -124,20 +126,17 @@ impl SqliteAdapter {
             ));
         }
 
-        let mut tx = pool
-            .begin()
-            .await
-            .map_err(|e| AppError::Database(e.to_string()))?;
+        let mut tx = begin_write_transaction(&pool).await?;
         // SQLite parses `ALTER TABLE` against the schema its *connection* has
         // cached, and the pool hands out up to `SQLITE_POOL_MAX_CONNECTIONS`
         // of them. A connection that has not read the file since another one
-        // ran DDL still holds the old copy, and sqlx's deferred `BEGIN` has not
-        // opened a read transaction yet, so nothing has revalidated the schema
-        // cookie — dropping a column added moments earlier fails with
-        // `no such column`. This read opens the transaction and forces the
-        // reload. Measured: without it, add-column-then-drop-column in one
-        // session fails every time on the 5-connection pool and never on a
-        // 1-connection one.
+        // ran DDL still holds the old copy, so dropping a column added moments
+        // earlier fails with `no such column`. Opening the transaction is not
+        // what fixes that: the reload needs a statement that actually runs and
+        // finds the schema cookie changed, and no begin style carries such a
+        // check. So this read stays load-bearing — measured, deleting it fails
+        // `a_column_added_in_this_session_can_be_dropped_again` with either
+        // `BEGIN` or `BEGIN IMMEDIATE`.
         sqlx::query("SELECT count(*) FROM sqlite_schema")
             .execute(&mut *tx)
             .await

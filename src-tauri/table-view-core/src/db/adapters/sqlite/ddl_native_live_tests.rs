@@ -167,6 +167,50 @@ async fn a_column_added_in_this_session_can_be_dropped_again() {
         .all(|c| c.name != "locale"));
 }
 
+/// How long the fixture writer keeps the file's lock. Far under the 5s
+/// `busy_timeout` sqlx sets by default, so a runner that waits has room to
+/// spare on a loaded machine, while a runner that fails fast returns in
+/// microseconds and misses the window by orders of magnitude.
+const CONTENDED_HOLD: std::time::Duration = std::time::Duration::from_millis(200);
+
+/// Regression (#2129): the DDL runner opened its transaction deferred, so the
+/// write lock was only requested once a statement ran — after the runner's own
+/// schema-refresh read had already put the connection in a read transaction.
+/// SQLite refuses to run the busy handler for that read-to-write upgrade
+/// (it could deadlock), so `busy_timeout` was dead on this path and any
+/// concurrent writer turned a legal DDL into an instant "database is locked".
+#[tokio::test]
+async fn structured_ddl_waits_out_a_concurrent_writer() {
+    let (dir, adapter) = connected(USERS, false).await;
+    let release =
+        crate::db::adapters::sqlite::connection::hold_write_lock(&dir.path().join("ddl.sqlite"))
+            .await;
+
+    let mut add = add_column_req("users", column("locale", "TEXT", true));
+    add.preview_only = false;
+    let ddl = adapter.clone();
+    let started = std::time::Instant::now();
+    let running = tokio::spawn(async move { ddl.add_column(&add).await });
+
+    tokio::time::sleep(CONTENDED_HOLD).await;
+    release.send(()).expect("release the contending writer");
+    let result = running.await.expect("DDL task");
+    let waited = started.elapsed();
+
+    result.expect("DDL must wait for the lock, not fail fast");
+    assert!(
+        waited >= CONTENDED_HOLD,
+        "DDL returned Ok in {waited:?}, before the contending writer let go — \
+         the fixture never held the lock, so this proves nothing"
+    );
+    assert!(adapter
+        .get_table_columns("main", "users")
+        .await
+        .unwrap()
+        .iter()
+        .any(|c| c.name == "locale"));
+}
+
 /// `preview_only` returns the SQL without touching the file — the same
 /// preview/confirm contract `create_table` already honours.
 #[tokio::test]
