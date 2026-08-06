@@ -112,8 +112,9 @@ SHA="$(git rev-parse HEAD)"
 git push origin "$SHA":refs/heads/<branch>       # 4) SHA refspec push
 ```
 
-자세히: [git-policy](../../workflow/git-policy/memory.md) — 외부 race 가짜
-신호 + push reject 응급 처치.
+자세히: [recovering-push-rejects](../../../.agents/skills/recovering-push-rejects/SKILL.md)
+— 외부 race 가짜 신호 + push reject 응급 처치. 계약은
+[git-policy](../../workflow/git-policy/memory.md).
 
 ## 관련
 

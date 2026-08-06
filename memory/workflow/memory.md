@@ -12,9 +12,11 @@ keywords: 행동 계약, phase, 방 지도, workflow
 ## 원칙
 
 - Workflow memory는 "언제 agent가 무엇을 해야 하는가"를 저장한다.
-- 긴 절차는 `.agents/skills/` 에도 있다 —
+- 긴 절차는 `.agents/skills/` 가 소유한다 —
   [diagnosing-bugs](../../.agents/skills/diagnosing-bugs/SKILL.md) ·
-  [resolving-merge-conflicts](../../.agents/skills/resolving-merge-conflicts/SKILL.md).
+  [resolving-merge-conflicts](../../.agents/skills/resolving-merge-conflicts/SKILL.md) ·
+  [recovering-push-rejects](../../.agents/skills/recovering-push-rejects/SKILL.md) ·
+  [diagnosing-merge-gates](../../.agents/skills/diagnosing-merge-gates/SKILL.md).
   `AGENTS.md` 매트릭스가 작업 type 에서 그 경로로 보낸다. 계약이 더 필요하면
   방을 쪼개 여기 적는다.
 
@@ -28,7 +30,7 @@ keywords: 행동 계약, phase, 방 지도, workflow
 - [orchestration](./orchestration/memory.md) — 병렬 작업 spawn · 리뷰 큐 직렬화 · 사이클 정지 · 이슈 수용기준
 - [interface](./interface/memory.md) — 사용자 대화 전담 · grill · 결정 기록 · raw→task 승격 · orchestrator 운용 (top-level 세션)
 - [documentation](./documentation/memory.md) — 문서화 필요 여부 판단 + 기존 SOT 라우팅 + PR evidence portability
-- [git-policy](./git-policy/memory.md) — commit / push 금지 명령과 push reject 복구
+- [git-policy](./git-policy/memory.md) — commit / push 금지 명령과 계약 (복구 절차는 [recovering-push-rejects](../../.agents/skills/recovering-push-rejects/SKILL.md))
 
 ## phase 식별
 
