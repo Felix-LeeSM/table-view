@@ -73,8 +73,10 @@ surface 디렉토리(`src/` 등)의 `AGENTS.md` 는 해당 surface rule 로 가�
 - `memory/` 트리: `memory.md` 만, 200줄 / 12,000 chars cap (둘 다). 크기 두 상한은
   CI 가 잡고, `memory.md` 만 두라는 쪽은 규율뿐이다.
 - workflow · runbook memory 는 행동 계약만 둔다. 긴 절차는 `.agents/skills/` 로
-  내리고 memory 에는 계약과 그 경로만 남긴다. skill 은 어떤 harness 도 자동으로
-  안 읽으므로 memory 에 남는 포인터가 유일한 도달 경로다.
+  내리고 memory 에는 계약과 그 경로만 남긴다. 무엇이 계약이고 무엇이 절차인지는
+  `memory/runbook/memory.md` 「계약 / 절차 경계」가 판정한다. skill 은 어떤
+  harness 도 자동으로 안 읽으므로 **위 매트릭스 행과 memory 에 남는 포인터**가
+  유일한 도달 경로다 — 절차를 내리면 그 둘을 같은 커밋에 고친다.
 - ADR 본문 동결. 결정 뒤집기 = 새 ADR + `Superseded`. 본문은
   `docs/decisions/`.
 - git/hook 회피 금지: 대표 예 `--no-verify` / force-push. SOT 는

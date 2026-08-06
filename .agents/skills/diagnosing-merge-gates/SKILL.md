@@ -19,6 +19,8 @@ description: PR 이 mergeable 인데 BLOCKED 이거나 merge 가 base branch pol
 7종은 별도 계층이고 docs 만 바꾼 PR 에도 전부 요구된다.
 
 → `Runtime Happy Path` 가 red 면 job 로그의 `selected N specs` 를 먼저 봐라.
+그 job 이 무엇을 골라 돌리는지는 `memory/runbook/pr-merge-gates/memory.md`
+「각 required 가 실제로 무엇을 보나」가 소유한다.
 **N=0 인데 red 면 spec 실패가 아니다** — spec 은 하나도 안 돌았고, 원인은
 `if:` 없이 항상 도는 앞 두 step 이다: `Self-test the scope map` (누가 매핑 안 된
 `e2e/smoke/*.spec.ts` 를 머지하면 그 뒤 docs-only PR 까지 전부 여기서 죽는다) 이나
@@ -80,8 +82,8 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
   라운드 3 이상이면 **두 고착 다** 재발화만으로 안 풀린다 — `reflect:done` 이 먼저다 (아래).
 - **라운드 3 이상은 `labeled` 도 fail (2026-07-29)**: `Stop at review round 3` step 이
   라운드 3 이상이고 `reflect:done` label 이 없으면 exit 1 한다. rerun 도 label
-  재발화도 같은 상태를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이다
-  (`enforce_admins=true` 라 `--admin` 우회 없음). **누가 붙이냐는 verdict 가 가른다** —
+  재발화도 같은 상태를 재생하므로 계속 fail — 해소는 `reflect:done` 뿐이고
+  `--admin` 으로 못 넘긴다 (근거는 방). **누가 붙이냐는 verdict 가 가른다** —
   green 이면 종결자가 바로 붙이고, red 면 회고 모드 리뷰어가 interface 를 거쳐
   사용자에게 올려 받는다 (`memory/workflow/delivery/memory.md`). 저자는 붙이지
   않는다. 게이트는 라운드만 세고 verdict 를 안 보므로 green 도 걸린다.
@@ -95,10 +97,11 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
   그 스텝의 `rounds=N` 을 읽어라 — 코멘트 수는 라운드의 **상한**이라 3 미만이면
   라운드도 3 미만이다. 옛 정의(코멘트 1건 = 1라운드)로 잰 "머지 30건 중 16건이
   승인 시점에 `comments >= 3`" 은 새 정의로 다시 재지 않았다.
-- **새로 머지한 게이트 스텝은 이미 열린 PR 에 바로 안 걸린다** — `pull_request` run 은
-  PR 의 merge ref 에서 workflow 정의를 읽고, 그 merge ref 는 base 보다 낡아 있을 수 있다
-  (#1868: merge ref 에 `Stop at review round 3` 이 아예 없어 두 run 이 그 스텝 없이
-  success). 게이트 도입 직후에는 초록을 믿지 말고 `gh run view <id> --json jobs` 로
+- **새로 머지한 게이트 스텝은 이미 열린 PR 에 바로 안 걸린다** (#1868: merge ref 에
+  `Stop at review round 3` 이 아예 없어 두 run 이 그 스텝 없이 success). 기전 —
+  열린 PR 이 merge ref 에서 workflow 정의를 읽는다는 것 — 은
+  `memory/runbook/pr-merge-gates/memory.md` 「계약」이 소유한다. 여기서 할 일은
+  하나다: 게이트 도입 직후에는 초록을 믿지 말고 `gh run view <id> --json jobs` 로
   step 목록을 확인한다.
 
 ## 올바른 순서
@@ -111,8 +114,9 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
 3. E2E flaky fail 은 workflow run 완료 후 `gh run rerun <id> --failed` 1회 — 그 run 이
    그 이름의 최신 suite 일 때만 판정이 바뀐다 (위 「함정」).
 4. `mergeState` 가 `UNSTABLE` 또는 `CLEAN` 이 되면 `gh pr merge`.
-   (`--admin` 은 `enforce_admins=true` + ruleset 이라 우회 불가 — required 를 실제로
-   충족시켜야 한다.)
+   **`--admin` 으로는 못 넘긴다** — required 를 실제로 충족시켜야 한다. 왜 못
+   넘기는지(`enforce_admins` · ruleset)는 `memory/runbook/pr-merge-gates/memory.md`
+   「계약」이 소유한다.
 
 ## 진단 명령
 
@@ -130,8 +134,10 @@ E2E 였고 protection API 에 안 보여 뒤늦게 `--admin` 에러로 발견. U
 
 ## How to apply
 
-merge 막히면 위 "두 곳 분산" → "함정" → "올바른 순서" 순으로 점검. 이미 run 이 엉켰으면
-빈 commit 으로 SHA 리셋보다 **트리거를 멈추고** UNSTABLE 로 안착하길 기다린 뒤 merge.
+merge 막히면 방의 「Required 게이트는 두 곳에 분산」 → 이 파일의 「먼저 배제할 두
+오해」 → 「잘못된 대응이 만드는 함정」 → 「올바른 순서」 순으로 점검. 이미 run 이
+엉켰으면 빈 commit 으로 SHA 리셋보다 **트리거를 멈추고** UNSTABLE 로 안착하길
+기다린 뒤 merge.
 
 ## 관련
 

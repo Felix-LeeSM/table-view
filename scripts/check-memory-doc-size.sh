@@ -104,7 +104,7 @@ if [ "$violations" -gt 0 ]; then
 	# 화면 맨 위 annotation 이 되고, 로컬에서는 접두어가 그대로 찍히는 평범한 한
 	# 줄이다. 게이트가 blocking 이라 "어느 파일이 얼마나 넘었나" 가 로그를 열지
 	# 않고도 보여야 해서 넣었다.
-	echo "::error::memory doc-size cap 위반 $violations 건 (위 FAIL 줄). cap 은 $MAX_LINES 줄 / $MAX_CHARS 문자이고, 넘으면 방을 하위 주제로 쪼갠다 — memory/memory.md 「팔레스 규칙」." >&2
+	echo "::error::memory doc-size cap 위반 $violations 건 (위 FAIL 줄). cap 은 $MAX_LINES 줄 / $MAX_CHARS 문자이고, 넘으면 긴 절차를 .agents/skills/ 로 내리거나 방을 하위 주제로 쪼갠다 — 어느 쪽인지는 memory/runbook/memory.md 「계약 / 절차 경계」, cap 의 SOT 는 memory/memory.md 「팔레스 규칙」." >&2
 	exit 1
 fi
 
