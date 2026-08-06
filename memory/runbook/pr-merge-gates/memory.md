@@ -14,9 +14,12 @@ trigger:
 이 방은 **어떤 이름이 required 이고 무엇을 검사하는가**를 소유한다. 막힌 PR 을
 푸는 진단 순서와 함정은 `.agents/skills/diagnosing-merge-gates/SKILL.md` 가
 소유한다 — **어떤 harness 도 그 파일을 자동으로 안 읽는다**: `AGENTS.md`
-매트릭스와 이 포인터가 유일한 도달 경로다. 둘이 어긋나면 이 방이 이긴다. label
-메커니즘 자체는 [delivery](../../workflow/delivery/memory.md) 의 라운드 회고 ·
-머지 계약이 소유한다.
+매트릭스와 이 포인터가 유일한 도달 경로다. 둘이 어긋나면 이 방이 이긴다. 위
+`keywords:` 줄은 진단이 나간 뒤에도 **그대로 둔다** — 기본 `rg` 는 dotfile 을
+빼서 `.agents/` 를 못 보므로, 에러 문자열로 찾는 쪽이 닿는 곳은 이 방이고 방이
+앞으로 넘긴다. 그 줄을 "낡았다" 며 지우면 도달이 끊긴다. label 메커니즘 자체는
+[delivery](../../workflow/delivery/memory.md) 의 라운드 회고 · 머지 계약이
+소유한다.
 
 ## Required 게이트는 두 곳에 분산 (핵심)
 

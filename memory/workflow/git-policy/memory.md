@@ -82,6 +82,10 @@ refspec push, closed-PR stale ref 청소, 외부 race 오진.
 **어떤 harness 도 그 파일을 자동으로 안 읽는다**: `AGENTS.md` 매트릭스와 이
 포인터가 유일한 도달 경로다. 이 방에는 그 절차가 지켜야 하는 계약만 둔다.
 
+위 `keywords:` 줄은 절차가 나간 뒤에도 **그대로 둔다.** 기본 `rg` 는 dotfile 을
+빼서 `.agents/` 를 못 보므로, 에러 문자열로 찾는 쪽이 닿는 곳은 이 방이고 방이
+앞으로 넘긴다. 그 줄을 "낡았다" 며 지우면 도달이 끊긴다.
+
 - **push reject 는 즉시 중단 사유가 아니다.** skill 의 4-step 을 먼저 밟고,
   그래도 안 풀리면 force/reset 을 시도하지 말고 보고하고 멈춘다.
 - **push 는 항상 literal SHA refspec 으로 한다.** `HEAD:branch` 는 push 시점의

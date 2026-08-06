@@ -121,7 +121,9 @@ run 을 죽인다 (#1907). 위 `sleep 5` 는 폴링 간격, `{1..25}` 는 run �
 `memory/workflow/review/memory.md` 「행동 계약」 이 SOT 다.
 
 label 을 붙이기 전에 `review-gate` 상태를 직접 확인한다 — 확인 방법과 엉켰을 때의
-진단은 `memory/runbook/pr-merge-gates/memory.md`.
+진단은 `.agents/skills/diagnosing-merge-gates/SKILL.md` 「진단 명령」·
+「review-gate run 상태 함정」. 어떤 이름이 required 인지는
+`memory/runbook/pr-merge-gates/memory.md`.
 
 ## 라운드 3 이상 — 회고 모드
 

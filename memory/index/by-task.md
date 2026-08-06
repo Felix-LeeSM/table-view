@@ -42,7 +42,8 @@ generator: none — 손으로 갱신한다
 
 ### blocked
 
-- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 — required context 계약](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 진단](../../.agents/skills/diagnosing-merge-gates/SKILL.md)
 
 ### bug-fix
 
@@ -51,7 +52,8 @@ generator: none — 손으로 갱신한다
 
 ### cancelled-rollup
 
-- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 — required context 계약](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 진단](../../.agents/skills/diagnosing-merge-gates/SKILL.md)
 
 ### capability
 
@@ -60,7 +62,7 @@ generator: none — 손으로 갱신한다
 
 ### ci
 
-- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 — required context 계약](../../memory/runbook/pr-merge-gates/memory.md)
 
 ### clone
 
@@ -131,7 +133,7 @@ generator: none — 손으로 갱신한다
 ### e2e
 
 - [E2E 시나리오 설계 원칙](../../memory/engineering/conventions/e2e-scenarios/memory.md)
-- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 — required context 계약](../../memory/runbook/pr-merge-gates/memory.md)
 
 ### fixture
 
@@ -170,8 +172,9 @@ generator: none — 손으로 갱신한다
 
 ### merge
 
-- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 — required context 계약](../../memory/runbook/pr-merge-gates/memory.md)
 - [Delivery — 행동 계약](../../memory/workflow/delivery/memory.md)
+- [PR merge 게이트 진단](../../.agents/skills/diagnosing-merge-gates/SKILL.md)
 
 ### merge-gate
 
@@ -224,7 +227,7 @@ generator: none — 손으로 갱신한다
 
 ### pr
 
-- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 — required context 계약](../../memory/runbook/pr-merge-gates/memory.md)
 - [Delivery — 행동 계약](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
 - [PR Review Behavior](../../memory/workflow/review/memory.md)
@@ -232,15 +235,18 @@ generator: none — 손으로 갱신한다
 ### pr-close
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
+- [push reject 회복](../../.agents/skills/recovering-push-rejects/SKILL.md)
 
 ### push
 
 - [Delivery — 행동 계약](../../memory/workflow/delivery/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
+- [push reject 회복](../../.agents/skills/recovering-push-rejects/SKILL.md)
 
 ### push-reject
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
+- [push reject 회복](../../.agents/skills/recovering-push-rejects/SKILL.md)
 
 ### query-language
 
@@ -249,6 +255,7 @@ generator: none — 손으로 갱신한다
 ### race-trace
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
+- [push reject 회복](../../.agents/skills/recovering-push-rejects/SKILL.md)
 
 ### react-impl
 
@@ -281,7 +288,8 @@ generator: none — 손으로 갱신한다
 
 ### review-gate
 
-- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 — required context 계약](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 진단](../../.agents/skills/diagnosing-merge-gates/SKILL.md)
 
 ### review-queue
 
@@ -293,11 +301,12 @@ generator: none — 손으로 갱신한다
 
 ### round-gate
 
-- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 — required context 계약](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 진단](../../.agents/skills/diagnosing-merge-gates/SKILL.md)
 
 ### ruleset
 
-- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 — required context 계약](../../memory/runbook/pr-merge-gates/memory.md)
 
 ### rust-impl
 
@@ -348,7 +357,8 @@ generator: none — 손으로 갱신한다
 
 ### synchronize-rerun
 
-- [PR merge 게이트 진단 / 처리](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 — required context 계약](../../memory/runbook/pr-merge-gates/memory.md)
+- [PR merge 게이트 진단](../../.agents/skills/diagnosing-merge-gates/SKILL.md)
 
 ### tauri
 

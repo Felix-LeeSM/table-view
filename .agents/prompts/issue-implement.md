@@ -29,7 +29,9 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
   필수 read 다.
 - `memory/workflow/delivery/memory.md` — 커밋~PR 구간 행동 계약 · 중단 조건 ·
   PR body 제약.
-- `memory/workflow/git-policy/memory.md` — hard block 목록과 push reject 회복.
+- `memory/workflow/git-policy/memory.md` — hard block 목록과 push 계약.
+- `.agents/skills/recovering-push-rejects/SKILL.md` — push reject 4-step 회복 ·
+  SHA refspec push · closed-PR stale ref 청소. 위 방이 계약이고 이쪽이 절차다.
 - `memory/runbook/worktree/memory.md` — 사본 규율.
 - 코드를 만지면 `memory/index/by-surface.md` 에서 해당 surface 룰.
 - 버그 · 회귀면 `memory/workflow/bug-fix/memory.md` 와
