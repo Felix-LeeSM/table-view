@@ -626,19 +626,20 @@ async fn probe_sqlite_temp_virtual_table(
 /// Asking for the write lock at `BEGIN`, while the connection holds nothing,
 /// puts the request back in front of the busy handler.
 ///
-/// A reader must not ask for it. `IMMEDIATE` takes the file's write lock, and
-/// while that still lets ordinary readers run, it excludes every writer and
-/// every other `IMMEDIATE` transaction for as long as the transaction lives. A
-/// long export would park unrelated writers until it finished and queue a
-/// second export behind the first — the same failure this helper removes, moved
-/// to a different pair (#2129, #2130).
+/// A reader must not ask for it. `IMMEDIATE` takes the file's write lock, which
+/// excludes every writer and every other `IMMEDIATE` transaction for as long as
+/// the transaction lives. Ordinary readers do keep running alongside it, up
+/// until a writer reaches its commit and SQLite escalates to an exclusive lock.
+/// So a long export asking for `IMMEDIATE` would park unrelated writers until it
+/// finished and queue a second export behind the first — the same failure this
+/// helper removes, moved to a different pair (#2129, #2130).
 ///
 // ponytail: opt-in — nothing stops a new write path in this module from calling
-// `pool.begin()` directly. A clippy `disallowed-methods` ban was priced and
-// rejected: `git grep -nE '\.begin\(\)'` reaches well past this adapter into the
-// other DBMS adapters and the app crate, so the ban would need per-site allows
-// in code that has no stake in this bug. Promote it if SQLite write paths
-// outgrow this module.
+// `pool.begin()` directly. clippy's `disallowed-methods` would enforce it, but
+// its config is per-crate: the mysql and postgres adapters share this crate and
+// open deferred transactions throughout, none of which this bug touches, so the
+// ban would mean per-site allows across all of them. Promote it if SQLite write
+// paths outgrow this module.
 pub(super) async fn begin_transaction(
     pool: &SqlitePool,
     writes: bool,

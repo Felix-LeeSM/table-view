@@ -173,12 +173,14 @@ async fn a_column_added_in_this_session_can_be_dropped_again() {
 /// microseconds and misses the window by orders of magnitude.
 const CONTENDED_HOLD: std::time::Duration = std::time::Duration::from_millis(200);
 
-/// Floor for how long the worker itself must have been stuck. Half the hold
-/// rather than all of it: the worker's clock starts when the runtime first
-/// polls its task, which can trail the test task's own sleep. A path that never
-/// blocks returns in microseconds, so half the hold still separates the two by
-/// orders of magnitude. The worker times itself — timing it from the test body
-/// would just measure that body's sleep and could not fail.
+/// Floor for how long the worker itself must have been stuck. It sits below the
+/// hold rather than at it because the worker's clock starts when the runtime
+/// first polls its task, which can trail the test body's sleep. In practice the
+/// measured stall lands past the hold instead — the worker still has to finish
+/// its statements after the release — and a path that never blocks comes back
+/// in a millisecond or two, so the floor separates the two cases by orders of
+/// magnitude from either side. The worker times itself: timing it from the test
+/// body would just measure that body's sleep and could not fail.
 const CONTENDED_FLOOR: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// Regression (#2129): the DDL runner opened its transaction deferred, so the

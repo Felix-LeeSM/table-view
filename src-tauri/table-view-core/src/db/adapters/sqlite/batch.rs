@@ -7,7 +7,7 @@ use crate::models::{QueryResult, QueryType};
 
 use super::connection::{begin_transaction, SqliteAdapter};
 use super::queries::validate_sqlite_execution_guardrails;
-use super::sql_text::{sqlite_query_type, strip_trailing_terminator};
+use super::sql_text::{sqlite_query_type, sqlite_statement_writes, strip_trailing_terminator};
 
 enum BatchMode {
     Commit,
@@ -56,16 +56,19 @@ impl SqliteAdapter {
         }
 
         let (pool, read_only) = self.active_pool_with_mode().await?;
-        // A statement list of nothing but reads is legal input here, and it must
-        // not take the file's write lock — see `begin_transaction`. Anything not
-        // classified as a read counts as a write, so a new `QueryType` variant
-        // lands on the correct-but-slower side rather than reopening #2129.
+        // A statement list of nothing but reads is legal input here and must not
+        // take the file's write lock (`begin_transaction`), so the begin style
+        // follows the statements. The question is asked of
+        // `sqlite_statement_writes` rather than of the `QueryType` computed on
+        // the line above: that type describes the shape of a result, and it
+        // files `PRAGMA user_version = 5` under `Select` alongside the pragmas
+        // that only read.
         let mut writes = false;
         for raw in statements {
             let stmt = strip_trailing_terminator(raw);
             let statement_type = sqlite_query_type(stmt);
             validate_sqlite_execution_guardrails(stmt, &statement_type, read_only)?;
-            writes |= !matches!(statement_type, QueryType::Select);
+            writes |= sqlite_statement_writes(stmt);
         }
         let total = statements.len();
         let work = async {

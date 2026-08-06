@@ -1,4 +1,5 @@
 use super::*;
+use crate::db::adapters::sqlite::sql_text::sqlite_statement_writes;
 use crate::db::RdbAdapter;
 use crate::models::{
     ConnectionConfig, DatabaseType, FilterCondition, FilterOperator, QueryType, SslMode,
@@ -100,6 +101,59 @@ fn sqlite_query_type_classifies_cte_prefixed_main_statement() {
              UPDATE users SET name = (SELECT value FROM next_name) WHERE id = 1"
         ),
         QueryType::Dml { .. }
+    ));
+}
+
+/// The write question is not the `QueryType` question (#2155). `QueryType`
+/// groups statements by the shape of their result, so every `PRAGMA` lands in
+/// `Select`; the transaction's begin style has to know that
+/// `PRAGMA user_version = 5` writes the database header. The read side of this
+/// predicate is an allowlist on purpose — an unrecognised statement takes the
+/// write lock it may not need rather than skipping one it does.
+#[test]
+fn sqlite_statement_writes_splits_reads_from_writes_where_query_type_cannot() {
+    for read in [
+        "SELECT id FROM users",
+        "  -- leading comment\n SELECT 1",
+        "VALUES (1), (2)",
+        "EXPLAIN SELECT id FROM users",
+        // `EXPLAIN` returns byte code instead of running the statement, so even
+        // wrapped around a write it touches nothing.
+        "EXPLAIN UPDATE users SET name = 'x' WHERE id = 1",
+        "WITH active AS (SELECT id FROM users) SELECT * FROM active",
+    ] {
+        assert!(
+            !sqlite_statement_writes(read),
+            "read misread as write: {read}"
+        );
+        assert!(matches!(sqlite_query_type(read), QueryType::Select));
+    }
+
+    for write in [
+        "UPDATE users SET name = 'x' WHERE id = 1",
+        "INSERT INTO users(id, email, name) VALUES (9, 'i@example.test', 'I')",
+        "DELETE FROM users WHERE id = 1",
+        "REPLACE INTO users(id, email, name) VALUES (1, 'r@example.test', 'R')",
+        "WITH next_name(value) AS (SELECT 'Ada')
+         UPDATE users SET name = (SELECT value FROM next_name) WHERE id = 1",
+        // The case `QueryType` cannot see: a pragma that assigns.
+        "PRAGMA user_version = 5",
+        "ALTER TABLE users ADD COLUMN nickname TEXT",
+        "VACUUM",
+    ] {
+        assert!(
+            sqlite_statement_writes(write),
+            "write misread as read: {write}"
+        );
+    }
+
+    // The pragmas that only read are on the write side too, and that is the
+    // allowlist working as intended: it costs this statement the write lock,
+    // where guessing the other way would cost a real pragma its `busy_timeout`.
+    assert!(sqlite_statement_writes("PRAGMA table_info(users)"));
+    assert!(matches!(
+        sqlite_query_type("PRAGMA table_info(users)"),
+        QueryType::Select
     ));
 }
 
