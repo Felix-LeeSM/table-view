@@ -13,9 +13,6 @@
 # ---- Generated / cache artefacts (regenerated inside the image) ----
 node_modules
 src-tauri/target
-# #1769 — `table-view-core` builds standalone into its own target dir, which
-# `src-tauri/target` above does not cover.
-src-tauri/table-view-core/target
 target
 dist
 coverage

@@ -31,17 +31,13 @@ serde-wasm-bindgen = { version = "0.6", optional = true }
 [dev-dependencies]
 serde_json = "1"
 
-# Sprint 385 foundation — release WASM profile aggressively shrinks the
-# output. `opt-level = "z"` favors size over speed, `lto = true` lets the
-# linker dead-code-eliminate across crate boundaries, `codegen-units = 1`
-# allows whole-crate optimization, and `panic = "abort"` strips the
-# panicking machinery (we never panic on user-input paths anyway).
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
+# Sprint 385 foundation — the release WASM profile that shrinks this output
+# (`opt-level = "z"`, `codegen-units = 1`, `strip`) now lives in the workspace
+# root as `[profile.release.package.sql-parser-core]` (#2161): cargo ignores
+# `[profile.*]` in a non-root member. `lto` and `panic` cannot be set per
+# package, and neither is load-bearing here — measured in the PR that moved
+# them, and `wasm32-unknown-unknown` aborts on panic by target definition
+# regardless of the profile.
 
 # wasm-pack metadata. The `wasm-opt` flags pass `--enable-bulk-memory`
 # so newer rustc-emitted bulk-memory opcodes (`memory.fill` / `memory.copy`)

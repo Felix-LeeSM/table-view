@@ -5,24 +5,14 @@ export function mongo_completion_vocabulary(): any;
 
 export function parse_mongosh(input: string): any;
 
-export type InitInput =
-  | RequestInfo
-  | URL
-  | Response
-  | BufferSource
-  | WebAssembly.Module;
+export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
-  readonly memory: WebAssembly.Memory;
-  readonly mongo_completion_vocabulary: () => number;
-  readonly parse_mongosh: (a: number, b: number) => number;
-  readonly __wbindgen_export: (a: number, b: number) => number;
-  readonly __wbindgen_export2: (
-    a: number,
-    b: number,
-    c: number,
-    d: number,
-  ) => number;
+    readonly memory: WebAssembly.Memory;
+    readonly mongo_completion_vocabulary: () => number;
+    readonly parse_mongosh: (a: number, b: number) => number;
+    readonly __wbindgen_export: (a: number, b: number) => number;
+    readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
 }
 
 export type SyncInitInput = BufferSource | WebAssembly.Module;
@@ -35,9 +25,7 @@ export type SyncInitInput = BufferSource | WebAssembly.Module;
  *
  * @returns {InitOutput}
  */
-export function initSync(
-  module: { module: SyncInitInput } | SyncInitInput,
-): InitOutput;
+export function initSync(module: { module: SyncInitInput } | SyncInitInput): InitOutput;
 
 /**
  * If `module_or_path` is {RequestInfo} or {URL}, makes a request and
@@ -47,9 +35,4 @@ export function initSync(
  *
  * @returns {Promise<InitOutput>}
  */
-export default function __wbg_init(
-  module_or_path?:
-    | { module_or_path: InitInput | Promise<InitInput> }
-    | InitInput
-    | Promise<InitInput>,
-): Promise<InitOutput>;
+export default function __wbg_init (module_or_path?: { module_or_path: InitInput | Promise<InitInput> } | InitInput | Promise<InitInput>): Promise<InitOutput>;

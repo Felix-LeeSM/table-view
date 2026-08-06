@@ -347,8 +347,14 @@ fn ac_903_mssql_scripting_and_admin_heads_are_known_unsupported() {
     // T-SQL shapes, but this parser does not dispatch them into AST support.
     for (sql, expected_head) in [
         ("EXEC dbo.rebuild_leaderboard @season = 2026", "EXEC"),
-        ("CREATE PROCEDURE dbo.p AS BEGIN SELECT 1 END", "CREATE PROCEDURE"),
-        ("CREATE OR ALTER PROC dbo.p AS SELECT 1", "CREATE OR ALTER PROC"),
+        (
+            "CREATE PROCEDURE dbo.p AS BEGIN SELECT 1 END",
+            "CREATE PROCEDURE",
+        ),
+        (
+            "CREATE OR ALTER PROC dbo.p AS SELECT 1",
+            "CREATE OR ALTER PROC",
+        ),
         ("ALTER PROCEDURE dbo.p AS SELECT 1", "ALTER PROCEDURE"),
         ("DROP LOGIN app_login", "DROP LOGIN"),
         ("BACKUP DATABASE master TO DISK = 'x.bak'", "BACKUP"),
