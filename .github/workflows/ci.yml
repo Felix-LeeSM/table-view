@@ -690,6 +690,14 @@ jobs:
       # `src-tauri/Cargo.toml` now IS the workspace root and sets
       # `resolver = "2"`; a virtual manifest added above it without that key is
       # the live hazard, and this step sees it.
+      #
+      # What the removed arm also happened to cover: it refused any root above
+      # `src-tauri`, and such a root would change which packages the coverage
+      # job selects by default, pulling `table-view-core` into the
+      # `--fail-under-*` denominator (see that job's comment). This step does
+      # not check that, and nothing else does either. It is fail-loud rather
+      # than silent — the ratio drops below the floor and the job goes red — so
+      # it is a lost early warning, not a lost gate.
       - name: Test-only data-dir override stays out of the release graph
         working-directory: src-tauri
         run: |

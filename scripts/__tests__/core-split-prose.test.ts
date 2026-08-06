@@ -6,6 +6,7 @@ import {
   CARDINAL,
   classify,
   cwdFromBlock,
+  fenceOpenerAbove,
   normalizeToken,
   segmentAligned,
 } from "../sweep/core-split-prose.mjs";
@@ -108,6 +109,37 @@ describe("core-split-prose sweep", () => {
         text: "# db/models/storage/error tree, so without these two steps ~60% of the",
       }),
     ).toBeNull();
+  });
+
+  // Reason: 한국어 수사는 단위 명사 없이 계사로 닫힌다 — 「검사는 다섯이다」.
+  // 단위 명사만 요구하던 동안 그 형태가 통째로 빠졌고, #2161 이 블록에서 한 줄을
+  // 지웠는데 그 줄을 세던 문장이 남아도 스윕이 green 이었다. 계사 갈래에 `이/였` 를
+  // 요구하는 것도 같이 잠근다 — 맨 `다` 를 허용하면 「둘 다」가 걸린다.
+  it("detects a Korean numeral closed by a copula, not by 둘 다", () => {
+    expect(CARDINAL.test("이 저장소의 검사는 다섯이다.")).toBe(true);
+    expect(CARDINAL.test("검사는 넷이고 그중 하나는 rustfmt 다")).toBe(true);
+    expect(CARDINAL.test("둘 다 예산 안이다")).toBe(false);
+  });
+
+  // Reason: 블록을 세는 문장은 블록 앞에 있고, 블록이 길면 cargo 줄에서 WINDOW
+  // 밖으로 밀린다 (위 SKILL.md 는 6줄 떨어져 있었다). 펜스 여는 줄을 창의 중심으로
+  // 같이 써서 블록 전체를 한 덩어리로 본다.
+  it("anchors the arm-C window on the fence a cargo line sits in", () => {
+    const md = [
+      "## 4. 자동 검사를 돌린다", // 1
+      "", // 2
+      "이 저장소의 검사는 다섯이다.", // 3
+      "", // 4
+      "```bash", // 5
+      "pnpm lint", // 6
+      "pnpm test", // 7
+      "pnpm build", // 8
+      "(cd src-tauri && cargo fmt --all --check)", // 9  <- cargo 줄
+      "```", // 10
+    ];
+    // cargo 줄(9)에서 세면 3 은 WINDOW(3) 밖이고, 펜스(5)에서 세면 안이다.
+    expect(fenceOpenerAbove(md, 9)).toBe(5);
+    expect(Math.abs(9 - 3) > 3 && Math.abs(5 - 3) <= 3).toBe(true);
   });
 
   // Reason: 다른 게이트의 테스트가 임시 트리에 뿌리는 픽스처 workflow 문자열은

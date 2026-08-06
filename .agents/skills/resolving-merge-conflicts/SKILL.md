@@ -62,7 +62,7 @@ gh issue view <N> --comments
 
 ## 4. 자동 검사를 돌린다
 
-merge 가 깨뜨린 것을 찾는다. 이 저장소의 검사는 다섯이다.
+merge 가 깨뜨린 것을 찾는다. 이 저장소의 검사는 아래 블록이 전부다.
 
 ```bash
 pnpm lint
