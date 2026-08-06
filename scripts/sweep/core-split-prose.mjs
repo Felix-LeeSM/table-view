@@ -256,10 +256,14 @@ function armA() {
 
 // ── arm B — manifest 를 안 준 cargo 명령 ─────────────────────────────────
 //
-// core 는 workspace member 가 아니라 path dependency 다. 저장소 루트에는
-// `Cargo.toml` 이 아예 없어서 맨 `cargo <verb>` 는 실패하고, `src-tauri` 에서
-// 돌리면 core 에 안 닿은 채로 exit 0 이다. 그래서 manifest 없는 cargo 명령을
-// 지시로 적어 둔 자리는 분리 이후 낡았다.
+// 저장소 루트에는 `Cargo.toml` 이 없다. manifest 도 작업 디렉토리도 안 준 cargo
+// 명령을 지시로 적어 두면 적힌 대로 따라 한 사람 손에서 실패한다.
+//
+// #1769 직후에는 사유가 하나 더 있었다 — `src-tauri` 에서 돌려도 path dependency
+// 인 core 에는 안 닿아 조용히 exit 0 이었다. #2161 이 crate 들을 한 Cargo
+// workspace 로 묶으면서 그쪽은 사라졌다: workspace root 인 `src-tauri` 에서
+// `--workspace` / `--all` 을 준 호출은 member 전부에 닿는다. 남은 것은 루트에서
+// 부르는 자리뿐이고, 이 arm 이 세는 것도 그것이다.
 //
 // `tree` 는 issue #2092 원문 동사 목록에 없다. 더한 이유: `cargo tree -i tauri` 를
 // 「빈 결과」로 서술한 자리가 실측으로는 exit 101 이라 같은 클래스다.
@@ -293,9 +297,36 @@ const armB = () =>
 // 빼지 않는다 — 이 스윕이 고친 자리 하나가 `without these two steps` 였고, 빼면
 // 그 자리를 놓친다. 잡는 쪽을 넓게 두고 부사구는 아래 `C/adverbial-distance` 처분이
 // 사유와 함께 걷는다 (필터로 숨기지 않는다는 이 파일의 기조와 같다).
+// 한국어 수사는 단위 명사 없이 계사로 바로 닫힌다 — 「검사는 다섯이다」, 축약형
+// 「검사는 하나다」. 단위 명사만 요구하면 그 형태가 통째로 빠지고, 실제로 빠져
+// 있었다: #2161 이 `resolving-merge-conflicts/SKILL.md` 의 블록에서 한 줄을 지웠는데
+// 그 줄을 세던 「다섯이다」가 남았고 이 스윕은 green 이었다.
+//
+// 계사 갈래는 수사에 **구분자 없이 바로** 붙는다. 그래서 맨 `다` 를 넣어도
+// 「둘 다」는 안 걸린다 (띄어쓰기가 있다) — 실측했다. 넣어서 더 걸리는 것은 붙여 쓴
+// 오기 「둘다」와, 정작 필요한 축약형 「하나다」다. 그래서 넣는다.
+//
+// 앞 경계에 `_` 를 더한다. `x86_64입니다` 의 `64` 는 식별자 안이라 개수 서술이
+// 아닌데, `_` 가 문자도 숫자도 아니라 경계로 통과하던 실측 오탐이다. 값을 말하는
+// 계사(`0이며`, `–15입니다`)는 구조로는 개수 서술과 구분이 안 된다 — 걸리면 처분표에
+// 사유와 함께 올린다. 필터로 숨기지 않는다는 이 파일의 기조와 같다.
 export const CARDINAL =
-  /(^|[^\p{L}\p{N}])(one|two|three|four|five|six|seven|eight|nine|ten|하나|둘|셋|넷|다섯|여섯|일곱|여덟|\d+)[ -]?(개|종|벌|곳|가지|commands?|manifests?|crates?|lanes?|steps?|files?|invocations?|packages?)/u;
+  /(^|[^\p{L}\p{N}_])(one|two|three|four|five|six|seven|eight|nine|ten|하나|둘|셋|넷|다섯|여섯|일곱|여덟|\d+)([ -]?(개|종|벌|곳|가지|commands?|manifests?|crates?|lanes?|steps?|files?|invocations?|packages?)|(이다|이고|이며|이라|입니다|이었|였|다))/u;
 const WINDOW = 3;
+
+// 펜스 블록을 세는 문장은 블록 **앞**에 있고, 블록이 길면 WINDOW 밖으로 밀린다
+// (위 SKILL.md 는 6줄 떨어져 있었다). 그래서 cargo 줄이 펜스 안이면 그 펜스 여는
+// 줄도 창의 중심으로 같이 쓴다 — 블록 전체를 한 덩어리로 보는 것과 같다.
+function fenceOpenerAbove(src, lineNo) {
+  let opener = null;
+  let open = false;
+  for (let n = 1; n <= lineNo && n <= src.length; n++) {
+    if (!/^\s*```/.test(src[n - 1])) continue;
+    open = !open;
+    opener = open ? n : null;
+  }
+  return opener;
+}
 
 function armC() {
   const byPath = new Map();
@@ -309,7 +340,12 @@ function armC() {
     // 방금 고친 줄이 반영된다 (`HEAD:` 로 읽으면 커밋 전 수정이 안 보인다).
     const src = readFileSync(abs(path), "utf8").split("\n");
     const seen = new Set();
+    const anchors = new Set(centers);
     for (const c of centers) {
+      const opener = fenceOpenerAbove(src, c);
+      if (opener !== null) anchors.add(opener);
+    }
+    for (const c of anchors) {
       for (let n = c - WINDOW; n <= c + WINDOW; n++) {
         if (n < 1 || n > src.length || centers.has(n) || seen.has(n)) continue;
         seen.add(n);
@@ -502,6 +538,15 @@ const DISPOSITIONS = [
     },
   },
   {
+    id: "B/line-sets-working-directory",
+    why: "그 줄이 스스로 `cd <crate> &&` 로 작업 디렉토리를 세우고 나서 cargo 를 부른다 — 한 줄짜리 npm script 라 위의 펜스 블록 규칙이 문맥으로 못 본다",
+    test: (h) => {
+      if (h.arm !== "B") return false;
+      const m = /\bcd\s+([^\s&|;]+)\s*&&/.exec(h.text);
+      return m !== null && existsSync(abs(join(m[1], "Cargo.toml")));
+    },
+  },
+  {
     id: "B/gate-passes-manifest",
     why: "게이트 배선 파일이고, 그 hit 이 실행 줄이면 감싼 step 이 `--manifest-path` 나 `working-directory` 로 crate 를 고른다 — 나머지는 그 step 을 설명하는 주석·이름이다",
     test: (h) => h.arm === "B" && CI_GATES.has(h.path),
@@ -514,8 +559,11 @@ const DISPOSITIONS = [
   {
     id: "B/names-the-lane",
     // 경로 목록은 각 항목이 실제로 hit 을 덮는지 재고 넣는다. `docs/roadmap/h7.md`
-    // 가 처음엔 있었는데 아무 hit 도 안 덮었다 — 그 파일의 cargo 줄에는 `--manifest-path` 가
-    // 같이 있어 arm B 가 애초에 안 내보낸다.
+    // 가 처음엔 있었는데 아무 hit 도 안 덮었다 — 그때는 그 파일의 cargo 줄에
+    // `--manifest-path` 가 같이 있어 arm B 가 애초에 안 내보냈기 때문이다. #2161 이
+    // 그 플래그를 지워서 지금은 내보내고, `cd src-tauri &&` 를 같이 넣었으므로
+    // 아래 `B/line-sets-working-directory` 가 덮는다. 여기 다시 넣지 마라 —
+    // 그러면 처분이 겹쳐 어느 쪽이 실제로 재는지 알 수 없게 된다.
     why: "cargo 를 돌리라는 지시가 아니라 lane·도구·소비자를 이름으로 부르는 산문이다. manifest 를 붙이면 문장이 명령으로 오독된다",
     test: (h) =>
       h.arm === "B" &&

@@ -34,9 +34,12 @@ What the individual jobs own:
   which is `continue-on-error` so one new external advisory cannot turn every
   open PR red at once.
 
-- `Rust Static Analysis` runs `cargo fmt --check` and
-  `cargo clippy --all-targets --all-features -- -D warnings`. CI is the only
-  place either check runs.
+- `Rust Static Analysis` runs `cargo fmt --all --check` and
+  `cargo clippy --workspace --all-targets --all-features -- -D warnings` in
+  `src-tauri`, the Cargo workspace root. The workspace flags are what make the
+  checks cover every member crate; the bare forms reach only the package they
+  are invoked on (#2161). CI is the only place clippy runs — `lefthook.yml`
+  runs the same rustfmt command on pre-push.
 
 - `Integration Tests (Docker)` runs the Rust integration coverage cutoffs
   (`cargo llvm-cov nextest --profile push`). The cutoff numbers stay in the

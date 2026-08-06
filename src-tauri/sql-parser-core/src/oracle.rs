@@ -137,7 +137,10 @@ mod tests {
         // The exact repro from the issue — a PL/SQL block wrapping a dynamic
         // DROP. The shared classifier sees `Info`; Oracle must see danger.
         let sql = "BEGIN EXECUTE IMMEDIATE 'DROP TABLE payroll'; END;";
-        assert!(!is_danger(sql), "shared classifier misses PL/SQL (documents the hole)");
+        assert!(
+            !is_danger(sql),
+            "shared classifier misses PL/SQL (documents the hole)"
+        );
         assert!(is_oracle_danger(sql));
     }
 
@@ -157,15 +160,25 @@ mod tests {
 
     #[test]
     fn plsql_routine_ddl_is_danger() {
-        assert!(is_oracle_danger("CREATE OR REPLACE PACKAGE app_pkg AS END app_pkg;"));
+        assert!(is_oracle_danger(
+            "CREATE OR REPLACE PACKAGE app_pkg AS END app_pkg;"
+        ));
         assert!(is_oracle_danger("CREATE PACKAGE BODY app_pkg AS END;"));
-        assert!(is_oracle_danger("CREATE OR REPLACE PROCEDURE p AS BEGIN NULL; END;"));
-        assert!(is_oracle_danger("CREATE FUNCTION f RETURN NUMBER AS BEGIN RETURN 1; END;"));
-        assert!(is_oracle_danger("CREATE OR REPLACE TRIGGER trg BEFORE INSERT ON t BEGIN NULL; END;"));
+        assert!(is_oracle_danger(
+            "CREATE OR REPLACE PROCEDURE p AS BEGIN NULL; END;"
+        ));
+        assert!(is_oracle_danger(
+            "CREATE FUNCTION f RETURN NUMBER AS BEGIN RETURN 1; END;"
+        ));
+        assert!(is_oracle_danger(
+            "CREATE OR REPLACE TRIGGER trg BEFORE INSERT ON t BEGIN NULL; END;"
+        ));
         assert!(is_oracle_danger("CREATE TYPE BODY t AS END;"));
         // Editionable variants the frontend regex allows.
         assert!(is_oracle_danger("CREATE EDITIONABLE PACKAGE p AS END;"));
-        assert!(is_oracle_danger("CREATE NONEDITIONABLE PROCEDURE p AS BEGIN NULL; END;"));
+        assert!(is_oracle_danger(
+            "CREATE NONEDITIONABLE PROCEDURE p AS BEGIN NULL; END;"
+        ));
     }
 
     // --- Admin DDL ------------------------------------------------------
@@ -269,12 +282,16 @@ mod tests {
     #[test]
     fn normal_oracle_dml_keeps_shared_severity() {
         // These are handled by the shared classifier; Oracle adds nothing.
-        assert!(!is_oracle_danger("UPDATE accounts SET status = 'closed' WHERE id = 1"));
+        assert!(!is_oracle_danger(
+            "UPDATE accounts SET status = 'closed' WHERE id = 1"
+        ));
         assert!(!is_oracle_danger("INSERT INTO audit_log (id) VALUES (1)"));
         assert!(!is_oracle_danger("SELECT * FROM accounts WHERE id = 1"));
         // ALTER TABLE / DROP TABLE are the shared classifier's job, not this
         // module's — it must not double-classify or mis-flag ALTER TABLE ADD.
-        assert!(!is_oracle_danger("ALTER TABLE accounts ADD (archived NUMBER)"));
+        assert!(!is_oracle_danger(
+            "ALTER TABLE accounts ADD (archived NUMBER)"
+        ));
     }
 
     #[test]
@@ -289,7 +306,9 @@ mod tests {
         // A leading read must not shield a trailing admin DROP.
         assert!(is_oracle_danger("SELECT 1 FROM dual; DROP USER hr CASCADE"));
         // …but the same tokens inside a string literal are inert.
-        assert!(!is_oracle_danger("SELECT '; DROP USER hr' AS note FROM dual"));
+        assert!(!is_oracle_danger(
+            "SELECT '; DROP USER hr' AS note FROM dual"
+        ));
     }
 
     #[test]

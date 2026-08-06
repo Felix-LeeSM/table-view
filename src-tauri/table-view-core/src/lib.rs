@@ -2,7 +2,8 @@
 //!
 //! DB adapter (`db`), wire model (`models`), 로컬 저장소 (`storage`), 그리고
 //! 그 셋이 공유하는 에러 타입 (`error`) 을 담는다. **Tauri 에 의존하지 않는
-//! 것이 이 crate 의 계약이다** — `cargo tree -i tauri` 가 빈 결과여야 하고,
+//! 것이 이 crate 의 계약이다** — `cargo tree -p table-view-core -i tauri` 가
+//! exit 101 (`did not match any packages`) 이어야 하고,
 //! ADR 0061 의 `tvw` CLI 가 webview 없이 이 crate 만 링크한다.
 //!
 //! 앱 쪽 (`table_view_lib`) 은 `pub use table_view_core::{db, error, models}`

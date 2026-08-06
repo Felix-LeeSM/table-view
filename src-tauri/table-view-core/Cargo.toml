@@ -8,21 +8,19 @@ rust-version = "1.91.0"
 publish = false
 description = "Headless core for table-view: DB adapters, wire models, and local storage. No Tauri dependency, so a CLI/daemon surface can link it without a webview."
 
-# #1769 — `sql-parser-core` 와 같은 **path dependency** 이고 Cargo workspace
-# member 가 아니다 (`src-tauri/Cargo.toml` 에 `[workspace]` 가 없다). 앱이 실제로
-# 의존하는 path crate 전례는 `sql-parser-core` 하나다 — `mongosh-parser-core` 는
-# 아직 wasm 전용이라 앱 manifest 에 없다. 격리 이유:
-#   - `cargo llvm-cov --lib` for `table-view` 가 이 crate 의 coverage profile 과
-#     섞이지 않는다 (실측: path dep 소스는 root package 리포트에 안 들어온다).
-#   - 이 crate 를 단독으로 빌드할 때 Tauri transitive dep 이 하나도 안 딸려온다
-#     — ADR 0061 의 `tvw` CLI 트랙이 요구하는 성질이다.
+# #2161 — `src-tauri/Cargo.toml` 을 root 로 하는 Cargo workspace 의 member 다.
+# `[dependencies]` 의 path dependency 라 `members` 에 안 적어도 들어오지만, 그
+# 목록이 곧 CI 의 범위라 거기에도 적혀 있다.
 #
-# 대가: `table-view-core/Cargo.lock` 이 `src-tauri/Cargo.lock` 과 별도라 단독
-# 빌드가 다른 버전으로 resolve 될 수 있다. 실제로 첫 resolve 가 duckdb 를
-# 1.10503.1 → 1.10505.0 으로 올려 `db/duckdb/value.rs` 의 match 가 E0004 로
-# 깨졌다. 두 lock 은 같은 버전으로 유지한다 — 새로 만들 때는
-# `cp src-tauri/Cargo.lock src-tauri/table-view-core/Cargo.lock` 후 cargo 가
-# 잉여 항목을 쳐내게 하면 된다.
+# 이 crate 가 지키는 성질은 그대로다: 단독으로 빌드하면 Tauri transitive dep 이
+# 하나도 안 딸려온다 (`cargo tree -p table-view-core -i tauri` → exit 101).
+# ADR 0061 의 `tvw` CLI 트랙이 요구하는 성질이고, workspace 는 의존 그래프를 안
+# 바꾸므로 유지된다.
+#
+# #1769 이 치르던 대가 — 이 crate 의 별도 `Cargo.lock` — 는 없어졌다. 그때는 첫
+# 단독 resolve 가 duckdb 를 1.10503.1 → 1.10505.0 으로 올려 `db/duckdb/value.rs`
+# 의 match 를 E0004 로 깨뜨렸고, 두 lock 을 손으로 맞춰야 했다. 이제 lock 은
+# `src-tauri/Cargo.lock` 하나라 그 유형이 성립하지 않는다.
 
 [lib]
 name = "table_view_core"
@@ -45,12 +43,11 @@ default = []
 #
 # 그 사실은 주석이 아니라 CI 가 잰다 — `.github/workflows/ci.yml` 의
 # `Test-only data-dir override stays out of the release graph` 스텝이
-# `cargo tree ... --edges normal`(릴리스 빌드가 실제로 쓰는 그래프)에
-# `feature "testing"` 이 있으면 실패한다. 아래 `default` 줄을
-# `default = ["testing"]` 로 바꾸는 것도 그 스텝이 잡는다 — manifest 텍스트를
-# 훑는 방식이 아니라 결과 그래프를 읽기 때문이다. 같은 스텝의 두 번째 단언이
-# `src-tauri` 가 계속 자기 workspace root 인지 본다: resolver 1 은 dev-dep
-# feature 를 일반 빌드로 unify 하는데 그것은 위 그래프에 안 보인다 (실측).
+# `cargo tree -i table-view-core --edges normal --format '{f}'` 로 **cargo 가
+# 릴리스 그래프에 실제로 켜 준 feature 집합**을 읽고, 거기 `testing` 이 있으면
+# 실패한다. 아래 `default` 줄을 `default = ["testing"]` 로 바꾸는 것도, workspace
+# 를 resolver 1 로 떨어뜨려 dev-dep feature 를 일반 빌드로 unify 시키는 것도 같은
+# 한 줄이 잡는다 — manifest 텍스트가 아니라 resolve 결과를 읽기 때문이다.
 testing = []
 
 [dependencies]
@@ -108,8 +105,6 @@ keyring = { version = "3", default-features = false, features = ["sync-secret-se
 tempfile = "3"
 serial_test = "3"
 
-[profile.dev]
-# `src-tauri/Cargo.toml` 과 같은 이유 — duckdb 정적 링크 × debuginfo 가 계측
-# 빌드에서 디스크를 고갈시킨다. profile 은 root package 것만 적용되므로 이
-# 블록은 `--manifest-path table-view-core/Cargo.toml` 단독 빌드에서만 산다.
-debug = 0
+# `[profile.dev] debug = 0` 은 workspace root(`src-tauri/Cargo.toml`)가 든다.
+# member 의 `[profile.*]` 는 cargo 가 경고를 내고 무시하므로 여기 두면 거짓말이
+# 된다 — root 하나가 member 전부에 걸린다 (#2161).

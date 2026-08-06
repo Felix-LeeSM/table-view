@@ -26,11 +26,11 @@ description: 어려운 버그와 성능 회귀의 진단 루프. 사용자가 "�
 
 1. **실패하는 테스트.** 버그에 닿는 seam 이면 어느 층이든 — 레이어 선택 기준은
    `memory/engineering/conventions/testing-scenarios/memory.md` P1.
-   단일 파일: `pnpm vitest run <path>` / `cargo test --manifest-path src-tauri/Cargo.toml <name>`.
-   **Rust 는 manifest 를 골라야 한다** — `db` · `models` · `storage` · `error`
-   아래 테스트는 core crate 로 갔다 (#1769):
-   `cargo test --manifest-path src-tauri/table-view-core/Cargo.toml <name>`.
-   manifest 를 잘못 고르면 **cargo 는 0건을 돌리고 exit 0 으로 조용히 끝난다** —
+   단일 파일: `pnpm vitest run <path>` / `cd src-tauri && cargo test <name>`.
+   **Rust 는 `src-tauri` 에서 돌린다** — 저장소 루트에는 manifest 가 없다. 이름이
+   어느 crate 에 있는지 모르면 `--workspace` 를 붙여 전부 훑고, 좁힐 때 `-p` 로
+   고른다 (`db` · `models` · `storage` · `error` 는 core crate 다, #1769).
+   `-p` 를 잘못 고르면 **cargo 는 0건을 돌리고 exit 0 으로 조용히 끝난다** —
    `running N tests` 의 N 을 보고 루프가 실제로 돌았는지 확인해라.
 2. **실제 DB 를 띄운 fixture 루프.** `pnpm fixtures:start` (docker compose) 로
    대상 DBMS 를 올리고 어댑터를 직접 호출한다. 드라이버 계층 버그의 기본 경로다.

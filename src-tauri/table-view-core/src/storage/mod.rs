@@ -104,7 +104,7 @@ pub(crate) fn reset_master_key_for_test() {
 /// The two added arms are compile-time and cannot be reached by a shipped app:
 ///
 /// - `test` — this crate compiled as its own test harness, i.e. `cargo test
-///   --manifest-path src-tauri/table-view-core/Cargo.toml`, at any profile.
+///   -p table-view-core`, at any profile.
 /// - `feature = "testing"` — the `table-view` crate's test builds, where this
 ///   crate is a plain dependency and `cfg(test)` is false. `src-tauri/Cargo.toml`
 ///   enables that feature from `[dev-dependencies]` only, and resolver v2 keeps
@@ -118,23 +118,32 @@ pub(crate) fn reset_master_key_for_test() {
 /// The `feature` arm moved that property from "unconditional at compile time" to
 /// "true of the build graph", so it is measured rather than asserted in prose.
 /// The `Test-only data-dir override stays out of the release graph` step in
-/// `.github/workflows/ci.yml` asks cargo two questions, and it takes both:
+/// `.github/workflows/ci.yml` asks cargo one question:
 ///
-/// 1. `cargo tree ... --edges normal` must not contain `feature "testing"`. That
-///    is the graph `cargo build --release` resolves from, so it covers every way
-///    of *naming* the feature for a normal dependency — core's own
-///    `[features] default`, an inline table, a `[dependencies.table-view-core]`
-///    table, a `default = ["table-view-core/testing"]` forward, a renamed
-///    `package = ...` entry, a TOML literal string — without knowing any of the
-///    spellings in advance.
-/// 2. `cargo locate-project --workspace` must still name `src-tauri/Cargo.toml`.
-///    Question 1 does **not** subsume this: under feature resolver 1 a
-///    dev-dependency's features unify into a plain `cargo build`, and
-///    `--edges normal` does not show it. Measured on a throwaway probe — with a
-///    resolver-1 virtual workspace the release binary compiled with the feature
-///    ON while the tree still printed only `feature "default"`. There is no
-///    workspace root above `src-tauri` today, so the step refuses that
-///    precondition instead of trying to evaluate resolver semantics.
+/// > `cargo tree -i table-view-core --edges normal --format '{f}'` must not
+/// > list `testing`.
+///
+/// `--edges normal` picks the graph `cargo build --release` resolves from, and
+/// `{f}` prints the features cargo actually resolved for the package there. Both
+/// halves carry weight:
+///
+/// - Reading the *resolved set* rather than the manifest text covers every way
+///   of naming the feature for a normal dependency — core's own
+///   `[features] default`, an inline table, a `[dependencies.table-view-core]`
+///   table, a `default = ["table-view-core/testing"]` forward, a renamed
+///   `package = ...` entry, a TOML literal string — without knowing any of the
+///   spellings in advance.
+/// - Reading the resolved set rather than the *edge labels* is what makes it
+///   see feature resolver 1, under which a dev-dependency's features unify into
+///   a plain `cargo build`. #2184 shipped this as `-e features ... | grep
+///   'feature "testing"'`, an edge-label read, and #2161 re-measured it blind:
+///   on a throwaway probe with a resolver-1 virtual workspace the release binary
+///   compiled with the feature ON while the edge view still printed only
+///   `feature "default"` — the `{f}` view printed `default,testing`.
+///
+/// `src-tauri/Cargo.toml` is the workspace root and pins `resolver = "2"`. A
+/// virtual manifest added above it without that key is the live form of the
+/// hazard, and the step above sees it.
 #[cfg(any(debug_assertions, test, feature = "testing"))]
 pub(crate) fn data_dir_override() -> Option<PathBuf> {
     std::env::var_os("TABLE_VIEW_TEST_DATA_DIR").map(PathBuf::from)

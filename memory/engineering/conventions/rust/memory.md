@@ -4,7 +4,7 @@ type: convention
 updated: 2026-08-01
 surface: src-tauri/**/*.rs
 task: rust-impl, refactor
-keywords: cargo fmt --manifest-path, cargo clippy --manifest-path, thiserror, unwrap(), spawn_blocking, tokio::sync::Mutex, cargo-mutants, --in-place, include_str!, sqlparser, raw_where.rs, SECURITY RE-AUDIT ON sqlparser BUMP
+keywords: cd src-tauri && cargo fmt --all, cargo clippy --workspace, Cargo workspace, thiserror, unwrap(), spawn_blocking, tokio::sync::Mutex, cargo-mutants, --in-place, include_str!, sqlparser, raw_where.rs, SECURITY RE-AUDIT ON sqlparser BUMP
 trigger:
   signal: src-tauri/**/*.rs 편집 시
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -16,14 +16,12 @@ trigger:
 
 ## 포맷팅 / 린트
 
-- 포맷은 `pnpm format:rust`. manifest 를 안 준 호출은 저장소 루트에 cargo
-  manifest 가 없어 exit 1 이고, `src-tauri` 에서 돌려도 path dependency 인 core
-  에는 안 닿는다 — 돌 manifest 목록은 `package.json` 의 `format:rust` 가 갖는다.
-- clippy 는 manifest 마다 한 번씩
-  `cargo clippy --manifest-path <manifest> --all-targets --all-features -- -D warnings`.
-  대상 목록은 `.github/workflows/ci.yml` 의 `Rust Static Analysis` 잡이 갖는다 —
-  그 잡은 `--manifest-path` 대신 `working-directory` 로 고르니 디렉토리 하나가
-  manifest 하나다.
+- 포맷은 `pnpm format:rust` (= `cd src-tauri && cargo fmt --all`). 저장소
+  루트에는 cargo manifest 가 없어 거기서는 맨 cargo 호출이 exit 1 이다.
+  workspace root 는 `src-tauri` 이고 `--all` 이 member 전부를 잡는다 (#2161).
+- clippy 는 한 번:
+  `cd src-tauri && cargo clippy --workspace --all-targets --all-features -- -D warnings`.
+  `.github/workflows/ci.yml` 의 `Rust Static Analysis` 잡이 같은 명령을 건다.
 - 들여쓰기: 4 spaces
 
 ## 에러 처리
@@ -84,8 +82,8 @@ fn get_user(id: u64) -> Result<User, AppError> {
   필수** (#1620 F1). `is_safe_value_expr` / `is_predicate` 의 allowlist 는 `Expr`
   variant + child field 를 열거하는데, `..` rest 패턴과 `_ => false` 때문에 범프로
   기존 variant 에 새 subquery-bearing field 가 추가되면 검사 없이 조용히 흡수됨
-  (#1549 류 우회 재발). `sqlparser` 는 `src-tauri/Cargo.lock` 과
-  `src-tauri/table-view-core/Cargo.lock` 에 따로 잠기니 어느 쪽 diff 든 트리거로
+  (#1549 류 우회 재발). `sqlparser` 는 workspace 의 유일한 lock
+  `src-tauri/Cargo.lock` 에 잠기니 그 diff 를 트리거로
   보고, `Expr` diff 후 매칭된 variant 의 미검증 child 부재를 재확인. 코드
   주석(SECURITY RE-AUDIT ON sqlparser BUMP)이 대응 지점.
 

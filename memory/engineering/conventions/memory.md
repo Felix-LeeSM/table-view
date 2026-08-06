@@ -20,8 +20,8 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 
 ## Rust
 
-- 포맷/린트 명령은 [rust](./rust/memory.md) 「포맷팅 / 린트」 가 SOT. manifest 를
-  안 주면 path dependency 인 core 에 안 닿는다.
+- 포맷/린트 명령은 [rust](./rust/memory.md) 「포맷팅 / 린트」 가 SOT. 저장소
+  루트가 아니라 workspace root 인 `src-tauri` 에서 돌린다.
 - 에러: `thiserror`로 `AppError` 정의, `Result<T, AppError>` 반환. `unwrap()` 금지 (테스트 제외) — `?` 또는 `map_err` 사용.
 - 공개 API는 `///` 문서 주석.
 - 모듈: `mod.rs`에서 공개 인터페이스 노출, 파일 1개 = 주요 struct/trait 1개, 순환 참조 금지.

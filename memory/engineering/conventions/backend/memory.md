@@ -67,7 +67,7 @@ Backend 변경은 Tauri command / state / DB adapter contract 를 깨지 않는 
 ## Workflow
 
 - Rust 변경의 포맷/린트 명령은 [rust](../rust/memory.md) 「포맷팅 / 린트」 가 SOT
-  다 — manifest 를 안 주면 path dependency 인 core 에 안 닿는다. 관련
+  다 — workspace root 인 `src-tauri` 에서 돌린다. 관련
   unit/integration test 도 같이 통과시킨다.
 - DB adapter 변경은 happy path, 빈 결과, driver error, unsupported feature 를 최소 세트로 검증.
 - Tauri command 변경은 TS invoke 호출부와 serialization shape 를 같이 확인.

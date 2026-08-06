@@ -29,8 +29,8 @@ trigger:
 - push 직전 로컬 검증은 **`lefthook.yml` 의 pre-push 훅**이다 — 그 파일의
   `pre-push.jobs` 가 목록의 SOT 이고, 지금 걸린 것은
   `biome check . --error-on-warnings` (포맷 + 일반 lint, 전체 트리), push 대상
-  변경 파일 한정 `eslint --quiet` (repo 고유 가드), 그리고 manifest 마다 도는
-  `cargo fmt --manifest-path <manifest> --check`. `--no-verify` 는 통째로 끈다.
+  변경 파일 한정 `eslint --quiet` (repo 고유 가드), 그리고 workspace 전체를 도는
+  `cd src-tauri && cargo fmt --all --check`. `--no-verify` 는 통째로 끈다.
 - 나머지 — `cargo clippy -D warnings`, `cargo test`, vitest, 커버리지 — 는
   여전히 **CI 에서만 돈다.** 깨진 코드를 push 하면 CI 에서 처음 드러난다.
 - pre-commit 훅은 없다. 커밋은 게이트 없이 지나가고 push 에서 한 번 잡힌다.
@@ -47,8 +47,8 @@ trigger:
 ## 실패 시 — 회피 X, 근본 fix
 
 - 포맷 실패 → `pnpm format` (= `biome format --write .`) / rust 는
-  `pnpm format:rust` — 맨 `cargo fmt` 는 루트에 `Cargo.toml` 이 없어 실패한다.
-  manifest 경로는 그 스크립트에 있다.
+  `pnpm format:rust` — 저장소 루트에는 `Cargo.toml` 이 없어 거기서는 맨 cargo
+  호출이 실패한다. 그 스크립트가 workspace root 로 들어가 `cargo fmt --all` 을 돈다.
 - 린트 실패 → 경고 수정. 억제는 사유 코멘트와 함께만 — 일반 규칙은
   `biome-ignore`, repo 고유 가드는 `eslint-disable`.
 - 테스트 실패 → 코드 수정 또는 (테스트가 틀렸으면) 테스트 + ADR 수정.

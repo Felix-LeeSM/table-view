@@ -721,9 +721,7 @@ fn duckdb_file_analytics_catalog_suggests_registered_sources_and_columns() {
 
     let source_result = complete_sql(req.clone());
     assert!(source_result.items.iter().any(|item| {
-        item.label == "sales_csv"
-            && item.kind == "table"
-            && item.detail.as_deref() == Some("main")
+        item.label == "sales_csv" && item.kind == "table" && item.detail.as_deref() == Some("main")
     }));
 
     req.text = "SELECT sales_csv.or FROM sales_csv".to_string();

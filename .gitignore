@@ -1,10 +1,9 @@
 # Rust build/cache roots. Keep root-anchored so source directories named
 # "target" are not hidden.
 /target/
+# #2161 — the crates share one workspace target dir. The per-crate entries that
+# used to sit here covered the standalone builds each path crate then had.
 /src-tauri/target/
-/src-tauri/sql-parser-core/target/
-/src-tauri/mongosh-parser-core/target/
-/src-tauri/table-view-core/target/
 **/*.rs.bk
 *.pdb
 

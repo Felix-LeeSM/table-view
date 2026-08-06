@@ -14,7 +14,7 @@
     "lint": "biome check . --error-on-warnings && eslint .",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "format:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/table-view-core/Cargo.toml",
+    "format:rust": "cd src-tauri && cargo fmt --all",
     "build:sql-wasm": "cd src-tauri/sql-parser-core && wasm-pack build --target web --out-dir ../../src/lib/sql/wasm --features wasm",
     "build:mongosh-wasm": "cd src-tauri/mongosh-parser-core && wasm-pack build --target web --out-dir ../../src/lib/mongo/wasm --features wasm",
     "test": "vitest run",

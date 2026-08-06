@@ -2,7 +2,7 @@
 title: Architecture
 type: memory
 updated: 2026-08-01
-keywords: 기술 스택, 디렉토리 구조, Tauri 2.0, React 19, Zustand, IPC 경계, tauri::command, invoke(), ActiveAdapter, DbAdapter, AppError::DbMismatch, src/lib/runtime/**, table-view-core, path dependency, headless core
+keywords: 기술 스택, 디렉토리 구조, Tauri 2.0, React 19, Zustand, IPC 경계, tauri::command, invoke(), ActiveAdapter, DbAdapter, AppError::DbMismatch, src/lib/runtime/**, table-view-core, Cargo workspace, workspace member, headless core
 ---
 
 # 시스템 구조
@@ -29,13 +29,13 @@ keywords: 기술 스택, 디렉토리 구조, Tauri 2.0, React 19, Zustand, IPC 
 
 ```
 table-view/
-├── src-tauri/                # Rust 백엔드 — crate 둘 (#1769)
+├── src-tauri/                # Rust 백엔드 — Cargo workspace root (#2161)
 │   ├── src/                  # 앱 crate `table-view` (Tauri 의존)
 │   │   ├── main.rs           # Tauri 진입점
 │   │   ├── commands/         # Tauri IPC 명령 핸들러
 │   │   ├── state/            # 프로세스 수명 런타임 상태
 │   │   └── storage/          # boot 글루만 (history audit / retention)
-│   ├── table-view-core/src/  # 코어 crate — path dep, Tauri 비의존
+│   ├── table-view-core/src/  # 코어 crate — workspace member, Tauri 비의존
 │   │   ├── db/               # DB lifecycle + paradigm adapter traits
 │   │   ├── storage/          # 연결 설정 I/O + 암호화
 │   │   ├── models/           # 데이터 모델 (struct)
@@ -81,15 +81,16 @@ table-view/
 - `error.rs` — `AppError` (thiserror) + `Result<T, AppError>`
 
 core 는 Tauri 에 의존하지 않는 것이 계약이다 —
-`cargo tree --manifest-path src-tauri/table-view-core/Cargo.toml -i tauri` 가
+`cargo tree -p table-view-core -i tauri` 가
 `package ID specification 'tauri' did not match any packages` 로 exit 101 이어야
-하고 (빈 출력이 아니라 에러가 통과 신호다), 그래서 workspace member 가 아니라
-path dependency 다. **그래서
-테스트 명령이 manifest 하나로 안 닫힌다** — `src-tauri/Cargo.toml` 의 `--lib` 은
-core 에 안 닿고, 빠져도 exit 0 이다. 돌려야 하는 목록의 SOT 는
-`docs/contributor-guide/testing-and-quality.md` 의 Pre-Release Verification Gate
-Rust lane 이고, CI 도 같은 이유로 그 명령들을 `Rust Unit And Storage Tests` 잡의
-스텝으로 나눠 건다.
+한다 (빈 출력이 아니라 에러가 통과 신호다). workspace 는 의존 그래프를 안 바꾸니
+member 가 돼도 그대로다 (#2161).
+
+**테스트 명령은 `src-tauri` 에서 `--workspace` 로 닫힌다** —
+`cargo test --workspace --lib` 이 member 전부의 lib 테스트를 돌린다. crate 별
+호출을 손으로 나열하던 시절에는 빠뜨려도 exit 0 이라 세 번 놓쳤다. 통합 테스트까지
+포함한 순서의 SOT 는 `docs/contributor-guide/testing-and-quality.md` 의
+Pre-Release Verification Gate Rust lane 이다.
 
 ## Frontend 상태 관리
 

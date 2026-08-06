@@ -1,3 +1,34 @@
+# #2161 — 네 crate 가 한 Cargo workspace 다. root 는 이 manifest 이고, lock 은
+# `src-tauri/Cargo.lock` 이다. `table-view-core` / `sql-parser-core` 는 아래
+# `[dependencies]` 의 path dependency 라 적지 않아도 member 지만,
+# `mongosh-parser-core` 는 아무도 의존하지 않아 여기 적어야 들어온다 — 그래서 셋 다
+# 적는다. CI 가 crate 를 하나씩 호명하는 대신 `cargo test --workspace --lib` /
+# `cargo fmt --all` / `cargo clippy --workspace` 로 도는 근거가 이 목록이다.
+[workspace]
+members = ["table-view-core", "sql-parser-core", "mongosh-parser-core"]
+# root manifest 가 패키지라 resolver 는 아래 `edition = "2021"` 에서 2 로 풀린다.
+# 그래도 명시하는 이유: 이 manifest 를 virtual manifest 로 바꾸는 리팩토링(앱
+# 패키지를 하위 디렉토리로 빼는 등)은 기본값을 1 로 떨어뜨리고, resolver 1 은
+# dev-dependency 의 feature 를 일반 빌드 그래프로 unify 한다 — `table-view-core` 의
+# `testing` 이 켜진 릴리스 바이너리가 나온다는 뜻이고 그것이 #1454 다.
+# 이 줄이 실제로 뭘 막는지는 `.github/workflows/ci.yml` 의 `Test-only data-dir
+# override stays out of the release graph` 스텝이 잰다.
+resolver = "2"
+
+# 앱 릴리스 profile 은 cargo 기본값이다 — 특히 `panic` 을 건드리지 않는다.
+# `src/diagnostics.rs` 의 panic 로그 경로가 unwind 를 전제한다 (#1564).
+# 두 wasm crate 의 크기 profile 은 아래 `[profile.release.package.*]` 로 준다:
+# workspace 에서 member 의 `[profile.*]` 는 무시되므로 root 가 대신 든다.
+[profile.release.package.sql-parser-core]
+opt-level = "z"
+codegen-units = 1
+strip = true
+
+[profile.release.package.mongosh-parser-core]
+opt-level = "z"
+codegen-units = 1
+strip = true
+
 [package]
 name = "table-view"
 version = "0.7.0"
@@ -21,13 +52,9 @@ tauri = { version = "2", features = ["test"] }
 # #1769 — command 테스트가 `crate::db::testing::Stub*` 를 쓴다. dev-dep 자체는
 # 해소돼 Cargo.lock 에 들어가지만 `testing` feature 는 `cargo build` 에 안 실린다
 # — resolver v2 가 dev-dep 의 feature 를 일반 빌드 그래프로 unify 하지 않기
-# 때문이다 (`cargo tree --manifest-path src-tauri/Cargo.toml -e features -i
-# table-view-core --edges normal` → `feature "default"` 만, `--edges dev` 에서만
-# `feature "testing"`). 이 crate 는 `[workspace]` 가 없어 resolver 2 가 package
-# `edition = "2021"` 로 암묵 적용된다 — 나중에 virtual workspace manifest 를
-# 추가하면 `resolver = "2"` 를 명시해라. virtual manifest 는 member 의 edition 과
-# 무관하게 resolver 1 이 기본이라, 빠뜨리면 `db/testing.rs` 가 release 빌드에
-# 조용히 들어온다.
+# 때문이다. 재현: `cargo tree -i table-view-core --edges normal --format '{f}'`
+# 가 `default` 만 내고, `--edges dev` 로 바꿔야 `testing` 이 나온다. 위
+# `[workspace] resolver = "2"` 가 그 성질의 전제이고, CI 스텝이 그것을 잰다.
 table-view-core = { path = "table-view-core", version = "0.1.0", features = ["testing"] }
 # Sprint 237 P5+ (2026-05-08) — DB tier 2 통합 테스트용. cargo test --test
 # pg_integration 호출 시 process 안에서 docker container lifecycle 을
@@ -38,11 +65,13 @@ testcontainers = "0.27"
 testcontainers-modules = { version = "0.15", features = ["postgres", "mongo", "mysql", "mariadb", "mssql_server", "oracle", "redis"] }
 
 [dependencies]
-# #1769 — DB adapter / wire model / 로컬 저장소 본체. `sql-parser-core` 와 같은
-# path dependency (workspace member 아님) 라서 llvm-cov profile 이 섞이지 않고,
-# core 를 단독 빌드할 때 Tauri transitive dep 이 0 이다 (ADR 0061 의 `tvw` CLI
-# 선행 조건). `lib.rs` 가 `db` / `error` / `models` 를 crate root 로 re-export
-# 한다.
+# #1769 — DB adapter / wire model / 로컬 저장소 본체. `-p table-view-core` 로
+# 단독 빌드하면 Tauri transitive dep 이 0 이다 (ADR 0061 의 `tvw` CLI 선행 조건).
+# `lib.rs` 가 `db` / `error` / `models` 를 crate root 로 re-export 한다.
+# workspace member 가 돼도 커버리지 분모는 안 바뀐다 — 리포트에 들어오는 것은
+# **선택된 패키지**의 소스이고, 커버리지 잡은 `--workspace` 없이 도니 root
+# package 하나만 고른다 (#2161 실측). 그 잡에 `--workspace` 를 붙이면 core 소스가
+# 분모에 합류해 `--fail-under-*` 수치가 다른 모집단에 걸린다.
 table-view-core = { path = "table-view-core", version = "0.1.0" }
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
@@ -78,12 +107,10 @@ redis = { version = "0.32", features = ["tokio-rustls-comp"] }
 tiberius = { version = "0.12.3", default-features = false, features = ["tds73", "native-tls", "tokio", "chrono", "bigdecimal"] }
 tauri-plugin-single-instance = "2"
 # Sprint 385 (2026-05-17) — pure-Rust SQL parser. The crate lives under
-# `sql-parser-core/` as a path dependency (NOT a Cargo workspace member)
-# so `cargo llvm-cov --lib` for `table-view` stays isolated from the new
-# crate's coverage profile and so `cargo build --target
-# wasm32-unknown-unknown` of the sub-crate doesn't pull in any Tauri
-# transitive deps. The same `.rs` sources compile to native (this dep)
-# and to WASM (frontend lazy-load via wasm-pack).
+# `sql-parser-core/` and the same `.rs` sources compile to native (this dep)
+# and to WASM (frontend lazy-load via wasm-pack). `cargo build --target
+# wasm32-unknown-unknown` of the sub-crate pulls in no Tauri transitive deps:
+# the dependency edge runs this way only.
 sql-parser-core = { path = "sql-parser-core", version = "0.1.0" }
 duckdb = { version = "1.10503.1", features = ["bundled", "json", "parquet"] }
 oracle-rs = "0.1.7"
