@@ -580,6 +580,23 @@ fn save_storage_raw(data: &StorageData) -> Result<(), AppError> {
     // not possible in-process anyway: every save runs under `STORAGE_LOCK` after a
     // `load_storage_raw` that has already quarantined an unparseable file.
     let replaced_is_worth_keeping = fs::read_to_string(&path)
+        .inspect_err(|e| {
+            // A missing file is the ordinary answer on a first save and stays
+            // quiet. Any other read error means the question could not be asked,
+            // and the answer is still `false` — this save replaces whatever is on
+            // disk without keeping a copy of it, which is the shape of the loss
+            // #2183 was reported for. Every other best-effort failure in this
+            // module logs (`seed_backup_if_absent`, `set_aside_unusable_backup`);
+            // so does this one, so the day a caller reaches it the generation does
+            // not go silently.
+            if e.kind() != std::io::ErrorKind::NotFound {
+                warn!(
+                    "could not read {} before replacing it ({}); saving without keeping a backup of it",
+                    path.display(),
+                    e
+                );
+            }
+        })
         .ok()
         .and_then(|existing| serde_json::from_str::<StorageData>(&existing).ok())
         .is_some_and(|existing| is_worth_protecting(&existing));
@@ -1667,8 +1684,9 @@ mod tests {
     // run. On 2026-08-06 a real machine's app data directory lost its
     // contents; boot answered with one `info!` line and saved an empty file,
     // which is what made the loss permanent (there was nothing on disk left to
-    // recover from). The file now leaves a backup behind on every save, and a
-    // missing file is restored from it.
+    // recover from). A save now leaves the file it replaces behind as a backup
+    // whenever that file holds something (#2187), and a missing file is
+    // restored from it.
     // -------------------------------------------------------------------
 
     /// Helper: the two paths these tests care about, beside each other in the
@@ -1688,6 +1706,10 @@ mod tests {
 
     fn ids(data: &StorageData) -> Vec<&str> {
         data.connections.iter().map(|c| c.id.as_str()).collect()
+    }
+
+    fn group_ids(data: &StorageData) -> Vec<&str> {
+        data.groups.iter().map(|g| g.id.as_str()).collect()
     }
 
     /// Acceptance ① — every save keeps the generation it replaced.
@@ -2033,11 +2055,77 @@ mod tests {
         );
 
         let loaded = load_storage_redacted().unwrap();
+        // Without this the fixture is not verified: delete the `fs::write` above and
+        // the load takes the NotFound arm instead, which returns the same empty
+        // document and leaves the flag alone — both assertions below would still
+        // hold while nothing ever reached the success branch this test is about. It
+        // also pins that a parseable-but-empty backup is *not* set aside, which is
+        // the other way the user's last copy could quietly leave the slot.
+        assert!(
+            backup.exists(),
+            "the empty backup must still be in the slot — otherwise this asserts the \
+             no-backup path, not the restore-with-nothing-in-it path"
+        );
         assert!(loaded.connections.is_empty() && loaded.groups.is_empty());
         assert!(
             !CONNECTIONS_RESTORED_FROM_BACKUP.load(Ordering::SeqCst),
             "a backup with no connections and no groups restores nothing, so the boot \
              must not tell the user that something came back"
+        );
+
+        CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
+        cleanup_test_env();
+    }
+
+    /// #2187 — the other half of `is_worth_protecting`, which nothing else in this
+    /// suite exercises. Every fixture that has groups has connections beside them,
+    /// so `!data.connections.is_empty()` alone answered every question the suite
+    /// ever asked and `|| !data.groups.is_empty()` could be deleted with the whole
+    /// suite still green.
+    ///
+    /// The state is not hypothetical: a fresh install whose first action is *Add
+    /// group* holds zero connections and one group, and that document is worth
+    /// exactly what a connection-bearing one is — losing it loses the user's work.
+    /// Both halves of the contract are asserted here because the deleted clause
+    /// breaks both: the save stops rotating the backup, and the recovery stops
+    /// being announced.
+    #[test]
+    #[serial]
+    fn a_groups_only_install_is_backed_up_and_its_restore_is_announced() {
+        let dir = setup_test_env();
+        let (path, backup) = storage_and_backup(&dir);
+        CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
+
+        // Add a group, then a second one. The first save replaces the empty
+        // document a first run writes and correctly leaves no backup; the second
+        // has a groups-only file in front of it that is worth keeping.
+        save_group(sample_group("g1", "Production")).unwrap();
+        save_group(sample_group("g2", "Staging")).unwrap();
+
+        let kept = read_json(&backup);
+        assert!(
+            kept.connections.is_empty(),
+            "the fixture has to stay groups-only or it stops testing this half"
+        );
+        assert_eq!(
+            group_ids(&kept),
+            ["g1"],
+            "a document with groups and no connections has something to lose, so the \
+             save that replaced it had to leave it in the backup"
+        );
+
+        // And the loss it protects against, end to end: the file goes, the groups
+        // come back, and the user is told — the contract connections already get.
+        fs::remove_file(&path).unwrap();
+        let loaded = load_storage_redacted().unwrap();
+        assert_eq!(
+            group_ids(&loaded),
+            ["g1"],
+            "a groups-only backup is a recovery source like any other"
+        );
+        assert!(
+            CONNECTIONS_RESTORED_FROM_BACKUP.load(Ordering::SeqCst),
+            "something did come back, so the boot has to say so"
         );
 
         CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
