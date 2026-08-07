@@ -21,9 +21,16 @@ import type { DropTriggerRequest } from "@/types/schema";
  * Sprint 274 — `DropTriggerDialog`. Typing-confirm input + CASCADE
  * checkbox + inline DDL preview pane + Cancel + Apply buttons.
  *
- * Structural parity target: Sprint 235 `DropTableDialog`. The only
- * differences are the SQL target (DROP TRIGGER vs DROP TABLE) and the
- * typing-confirm target (trigger name vs table name).
+ * Structural parity target: Sprint 235 `DropTableDialog` — same layout,
+ * same two gates. What differs: the SQL target (DROP TRIGGER vs DROP
+ * TABLE), the typing-confirm target (trigger name vs table name), and
+ * the commit payload — `buildRequest` below carries `cascade` into the
+ * commit, which `DropTableDialog` does not (issue #2213).
+ *
+ * Issue #2191 (the split issue #2157 made in `DropColumnDialog`) — the
+ * preview gate and the execution gate are separate. The DDL preview loads
+ * as soon as the dialog opens so the user reads the exact DROP statement
+ * first; the typing-confirm input only decides whether it may run.
  *
  * Apply is `disabled` UNTIL the typing-confirm input matches the
  * current trigger name byte-for-byte (case-sensitive — `Audit` ≠
@@ -31,22 +38,27 @@ import type { DropTriggerRequest } from "@/types/schema";
  * (whitespace-only matches stay invalid), every keystroke re-evaluates.
  *
  * CASCADE checkbox defaults to OFF — user opts INTO the more dangerous
- * `DROP TRIGGER … CASCADE` form explicitly. Toggling it invalidates the
- * cached preview so the next debounced auto-refresh re-fetches with the
- * new SQL.
+ * `DROP TRIGGER … CASCADE` form explicitly. Toggling it re-fetches the
+ * preview by itself through the debounced auto-refresh.
  *
  * Safe Mode dispatch is provided by `useDdlPreviewExecution` — `DROP
- * TRIGGER` is classified as `ddl-drop` / danger by the analyzer, so the
- * production-strict tier blocks, the production-warn tier escalates to
- * `pendingConfirm` (additional `ConfirmDestructiveDialog` mounts on top
- * of the typing-confirm gate), and non-production / mode=off allows.
+ * TRIGGER` is classified as `ddl-drop` / danger by the analyzer. Under
+ * the Sprint 245 destructive-only policy (ADR 0022 Phase 1; canonical
+ * matrix in `src/lib/safeMode.ts`) every production tier and
+ * non-production strict escalate to `pendingConfirm`, mounting an
+ * additional `ConfirmDestructiveDialog` on top of the typing-confirm
+ * gate. Non-production warn / off allow. `decideSafeModeAction` never
+ * returns `block` for this path.
  *
  * Sequence:
- *   1. user types name → typing match enables Apply → click Apply.
- *   2. preview SQL fetched (or returned from cache) → `attemptExecute`.
- *   3. Safe Mode gate decides → block (previewError) | warn-confirm
- *      (pendingConfirm dialog) | safe (commit).
- *   4. on warn-confirm, user types analyzer reason → commit runs.
+ *   1. dialog opens → debounced preview fetch renders the DROP statement.
+ *   2. user types the trigger name → typing match enables Apply → click
+ *      Apply → `attemptExecute`.
+ *   3. Safe Mode gate decides → confirm (pendingConfirm dialog) | allow
+ *      (commit).
+ *   4. on confirm, the user answers the single-click Yes/No dialog
+ *      (Sprint 246 replaced the earlier type-to-confirm gate) → commit
+ *      runs.
  *   5. on commit success, `onRefresh` invalidates the
  *      `schemaStore.triggers[connId][db][schema][table]` cache entry
  *      so the dropped trigger disappears from the SchemaTree Triggers
@@ -89,9 +101,10 @@ export default function DropTriggerDialog({
   const { t } = useTranslation("schemaDialogs");
   const [typingConfirm, setTypingConfirm] = useState("");
   const [cascade, setCascade] = useState(false);
-  // Preview pane defaults open — auto-debounced fetch fills it as the
-  // user types. Hiding it by default required an extra click and made
-  // users think the preview was broken (mirrors Sprint 235).
+  // Preview pane defaults open — the auto-debounced fetch fills it as
+  // soon as the dialog opens, with no typing involved (issue #2191).
+  // Hiding it by default required an extra click and made users think
+  // the preview was broken (mirrors Sprint 235).
   const [showDdl, setShowDdl] = useState(true);
 
   const connectionEnvironment = useConnectionStore(
@@ -121,19 +134,25 @@ export default function DropTriggerDialog({
   }, [open, triggerName, tableName, schemaName]);
 
   // Sprint 274 — typing-confirm match is case-sensitive byte-for-byte.
-  // No trim, no debounce — every keystroke re-evaluates. Mirrors
-  // DropTableDialog line 105 contract.
+  // No trim, no debounce — every keystroke re-evaluates. Mirrors the
+  // `DropTableDialog` contract.
   const typingMatches = typingConfirm === triggerName;
-  const canPreview = typingMatches;
-  const canApply = canPreview && !ddl.previewLoading && !!ddl.previewSql;
+  // Issue #2191 — the preview has no gate. `previewOnly: true` never
+  // executes anything (`gate_destructive_ddl` in
+  // `src-tauri/src/commands/rdb/ddl.rs` and `run_schema_change` in
+  // `src-tauri/src/commands/rdb/ddl/dispatch.rs` both exempt it, and each
+  // adapter returns the SQL before touching a pool), so withholding it
+  // only hid what the user is about to destroy. `typingMatches` now gates
+  // execution alone.
+  const canApply = typingMatches && !ddl.previewLoading && !!ddl.previewSql;
 
-  // Sprint 274 — 250ms debounced auto-refresh on every form edit
-  // (typing-confirm match → canPreview flips → effect fires; CASCADE
-  // toggle re-fires the preview with the new SQL). Mirrors Sprint 235
-  // `DropTableDialog`.
+  // Sprint 274 — 250ms debounced auto-refresh: the preview SQL rebuilds
+  // on open and on every CASCADE toggle. The debounce mirrors Sprint 235
+  // `DropTableDialog`; the commit does not — `buildRequest(false)` below
+  // carries the CASCADE choice, while `DropTableDialog`'s commit path
+  // drops it (issue #2213).
   useEffect(() => {
     if (!open) return;
-    if (!canPreview) return;
     const handle = window.setTimeout(() => {
       const buildRequest = (previewOnly: boolean): DropTriggerRequest => ({
         connectionId,
@@ -166,7 +185,6 @@ export default function DropTriggerDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     open,
-    canPreview,
     cascade,
     connectionId,
     schemaName,
@@ -180,7 +198,12 @@ export default function DropTriggerDialog({
   };
 
   const handleApply = async () => {
-    if (!ddl.previewSql) return;
+    // Issue #2191 — the execution gate has to be re-checked here, not just
+    // reflected in the button's `disabled`. Before the split, a non-empty
+    // `previewSql` proved the user had typed the trigger name; now the
+    // preview loads without any confirmation, so `previewSql` alone would
+    // let a DROP through if the `disabled` binding ever regressed.
+    if (!canApply) return;
     await ddl.attemptExecute();
   };
 
@@ -267,7 +290,12 @@ export default function DropTriggerDialog({
                   id="drop-trigger-ddl-preview"
                   className="border-t border-border bg-background px-4 py-2"
                 >
-                  {ddl.previewLoading ? (
+                  {/* Issue #2191 — the empty pane is now only the debounce
+                      window before the first fetch, so it reads as loading.
+                      The old hint told the user to type to see the SQL, which
+                      is exactly what stopped being true. */}
+                  {ddl.previewLoading ||
+                  (!ddl.previewError && !ddl.previewSql) ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />
                       {t("generatingPreview")}
@@ -279,14 +307,10 @@ export default function DropTriggerDialog({
                     >
                       {ddl.previewError}
                     </pre>
-                  ) : ddl.previewSql ? (
+                  ) : (
                     <pre className="max-h-scroll-md overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-2 text-xs font-mono text-foreground">
                       <SqlSyntax sql={ddl.previewSql} />
                     </pre>
-                  ) : (
-                    <span className="text-xs italic text-muted-foreground">
-                      {t("ddlHintTypeTriggerName")}
-                    </span>
                   )}
                 </div>
               )}

@@ -20,9 +20,6 @@ export const en = {
   ddlHintFillNameType: "-- Fill in name + type to see the generated SQL",
   ddlHintFillTrigger:
     "-- Fill in trigger name + function to see the generated SQL",
-  ddlHintTypeTableName: "-- Type the table name to see the generated SQL",
-  ddlHintTypeColumnName: "-- Type the column name to see the generated SQL",
-  ddlHintTypeTriggerName: "-- Type the trigger name to see the generated SQL",
   ddlHintTypeNewName: "-- Type a new name to see the generated SQL",
 
   // ── CreateTableDialog ─────────────────────────────────────────
@@ -343,10 +340,6 @@ export const ko = {
   ddlHintFillNameType: "-- 이름과 타입을 입력하면 생성된 SQL을 볼 수 있습니다",
   ddlHintFillTrigger:
     "-- 트리거 이름과 함수를 입력하면 생성된 SQL을 볼 수 있습니다",
-  ddlHintTypeTableName: "-- 테이블 이름을 입력하면 생성된 SQL을 볼 수 있습니다",
-  ddlHintTypeColumnName: "-- 컬럼 이름을 입력하면 생성된 SQL을 볼 수 있습니다",
-  ddlHintTypeTriggerName:
-    "-- 트리거 이름을 입력하면 생성된 SQL을 볼 수 있습니다",
   ddlHintTypeNewName: "-- 새 이름을 입력하면 생성된 SQL을 볼 수 있습니다",
 
   // ── CreateTableDialog ─────────────────────────────────────────
