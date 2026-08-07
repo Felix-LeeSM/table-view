@@ -1,7 +1,7 @@
 ---
 title: Delivery — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 행동 계약
 type: workflow-rule
-updated: 2026-08-01
+updated: 2026-08-07
 task: delivery, commit, push, pr, review, merge
 keywords: 커밋, commit, push, PR 생성, squash, squash body, --body-file, 낡은 수치, staleness, 머지 정책, review:approved, reflect:done, 자율 실행, 중단 조건, GPG, pinentry, 노드 표
 trigger:
@@ -27,7 +27,7 @@ SOT 는 없다.
 |---|---|---|
 | interface | 사용자 대화 · grill · 결정 기록 · raw→task 승격 · `needs:user` 중계. orchestration(spawn · 리뷰 큐 · 머지) 겸무 가능 — 조건은 [interface](../interface/memory.md) §3 | 코드 수정 — 쓰기 범위는 [interface](../interface/memory.md) §4 |
 | orchestrator | label 을 보고 다음 node spawn (`.agents/prompts/orchestrator.md` 그대로 기동) | 판단. 사용자와 대화하지 않는다. 코멘트를 읽지 않는다 |
-| 구현자 | 커밋 · 푸시 · PR 생성 · 수정 라운드 반영. **파일을 쓰는 유일한 역할** | 리뷰어 부착, 라운드 판정, 머지 |
+| 구현자 | 커밋 · 푸시 · PR 생성 · 수정 라운드 반영. **저자 사본에 파일을 쓰는 유일한 역할** | 리뷰어 부착, 라운드 판정, 머지 |
 | 리뷰어 | 판정 + scorecard + verdict label. 라운드 3부터는 회고 모드 — 개별 지적 대신 유형 반복 표 | commit / push / merge / branch 수정, 이슈 발행 |
 | 종결자 | 머지 · 브랜치 삭제 · 사본 회수 · 이슈 종결. 대규모 삭제 머지 시 삭제 경로 참조 이슈 스윕 | 코드 수정 |
 

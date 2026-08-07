@@ -1,9 +1,14 @@
 # PR Review
 
 PR review separates automatic gates from qualitative judgement. Lint, typecheck,
-test, CI, and Required Checks are automatic gates. The reviewer does
-not rerun those checks; it reads their results and evaluates the PR diff, body,
-and relevant source of truth.
+test, CI, and Required Checks are automatic gates; the reviewer reads their
+results and evaluates the PR diff, body, and relevant source of truth.
+
+The reviewer does not edit the author's working copy — neither sources nor build
+output. Running test, lint, or build is allowed and never required: clone a
+throwaway copy, run there, and delete it in the same turn. That copy is separate
+from the single work copy a PR gets, and the reviewer who made it reclaims it.
+What the reviewer ran that way is evidence like any gate result.
 
 ## Reviewer Output
 

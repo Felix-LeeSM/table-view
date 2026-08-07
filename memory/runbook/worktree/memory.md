@@ -1,9 +1,9 @@
 ---
 title: 작업 사본 격리 — clone
 type: runbook
-updated: 2026-08-01
+updated: 2026-08-07
 task: clone, worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
-keywords: index.lock, FETCH_HEAD, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject, stalled, timeout, respawn, npx, pnpm exec, cargo clean, stale path
+keywords: index.lock, FETCH_HEAD, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject, stalled, timeout, respawn, npx, pnpm exec, cargo clean, stale path, 일회용 사본, 리뷰어 사본
 ---
 
 # 작업 사본 격리 — clone
@@ -21,10 +21,13 @@ worktree 는 `.git` 을 공유해 index.lock 겹침·FETCH_HEAD 등 공유 자�
 
 ## 소유권 / SOT
 
-- 본 파일이 사본 격리(생성·점유·회수)의 유일한 SOT 다.
+- 본 파일이 사본 격리(생성·점유·회수)의 유일한 SOT 다 — 예외는 아래가 지명하는
+  소유자뿐이다.
 - commit / push / PR / merge 행동 계약은 [delivery](../../workflow/delivery/memory.md),
   push reject 의 계약은 [git-policy](../../workflow/git-policy/memory.md),
   회복 절차는 [recovering-push-rejects](../../../.agents/skills/recovering-push-rejects/SKILL.md) 소유.
+- 리뷰어가 검증용으로 만드는 **일회용 사본**의 생성·회수는
+  [review](../../workflow/review/memory.md) 「행동 계약」 소유. 작업 사본과 별개다.
 
 ## 생성
 
@@ -97,9 +100,14 @@ spawner 가 이 스니펫을 prompt 의 첫 명령 슬롯에 넣는다. 불일�
 
 - 생성/회수: orchestrator 가 spawn 시 명시 실행. agent 가 자율 생성하지 않는다
   (사용자가 못 보는 디스크 점유). 막는 장치 없음 — 규율만.
-- 사본은 PR 당 하나, 동시에 쓰는 node 는 하나 (파일 writer 는 구현자뿐,
-  리뷰어는 read-only). 리뷰 라운드는 새 사본을 만들지 않고 같은 사본에 다음
-  구현자를 붙인다 — 쪼개면 죽은 구현자의 미푸시 커밋을 못 이어받는다.
+- **예외는 리뷰어의 일회용 검증 사본뿐이다** — 리뷰어가 스스로 만든다
+  ([review](../../workflow/review/memory.md) 「행동 계약」). 디스크 점유 사유는
+  그대로 걸리므로 **만든 리뷰어가 같은 턴에 지운다.** 규약 경로 밖이라 종결자의
+  회수(위 「회수」)가 못 찾는다 — 남기고 죽으면 아무도 안 지운다.
+- 작업 사본은 PR 당 하나, 동시에 쓰는 node 는 하나 (그 사본에 파일을 쓰는 것은
+  구현자뿐 — 리뷰어는 저자 사본을 편집하지 않는다). 리뷰 라운드는 새 사본을
+  만들지 않고 같은 사본에 다음 구현자를 붙인다 — 쪼개면 죽은 구현자의 미푸시
+  커밋을 못 이어받는다.
 
 ## Agent hard rule — fetch/reset/pull 금지
 
