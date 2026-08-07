@@ -80,19 +80,23 @@ export async function renameTableRequest(
  * Sprint 271c — optional `expectedDatabase` last-positional propagates
  * to the underlying request struct so a swapped backend pool rejects
  * with `AppError::DbMismatch` before the table is dropped.
+ *
+ * Issue #2213 — `cascade` is last-positional and defaults to `false`, so
+ * a caller without a CASCADE surface stays on the non-cascading form.
  */
 export async function dropTable(
   connectionId: string,
   table: string,
   schema: string,
   expectedDatabase?: string,
+  cascade = false,
 ): Promise<void> {
   await dropTableRequest(
     {
       connectionId,
       schema,
       table,
-      cascade: false,
+      cascade,
       previewOnly: false,
       expectedDatabase,
     },
