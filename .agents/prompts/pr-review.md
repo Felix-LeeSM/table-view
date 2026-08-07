@@ -41,7 +41,10 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 - **저자 사본을 편집하지 않는다** — 소스도 빌드 산출물도 거기 쓰지 않는다.
   test · lint · build 를 돌리려면 일회용 사본을 따로 만들어 거기서 돌리고 끝나면
   지운다. 돌릴지 말지는 재량이고 의무가 아니다. 조건과 판정 입력 목록은
-  `memory/workflow/review/memory.md` 「행동 계약」에 있다.
+  `memory/workflow/review/memory.md` 「행동 계약」에 있고, **만드는 법은
+  `memory/runbook/worktree/memory.md` 「리뷰어 사본」** 이다 — PR head 를 잡는
+  레시피와, 돌린 출력에 head OID 를 같이 적는 인용 형식이 거기 있다. 「생성」
+  레시피는 구현자용이라 `origin/main` 을 잡는다.
 - 이슈를 발행하지 않는다 — non-blocking 을 어디에 남기는지는 review 「행동 계약」.
 - **write 는 둘뿐이다: scorecard comment 1개 + verdict label.** 그 외 GitHub
   write 금지.
