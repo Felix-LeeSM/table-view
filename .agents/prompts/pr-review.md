@@ -19,7 +19,8 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
   || { echo "ABORT: wrong checkout" >&2; exit 1; }
 ```
 
-불일치면 즉시 중단하고 보고한다. 사본은 구현자와 공유하므로 읽기만 한다.
+불일치면 즉시 중단하고 보고한다. 그 사본은 구현자와 공유하므로 편집하지 않는다 —
+검증을 돌리는 방법은 아래 「금지 / Write 예산」.
 출처: `memory/runbook/worktree/memory.md` 「첫 turn 검증 (MANDATORY)」 · 「책임」.
 
 ## 착수 전 MANDATORY read
