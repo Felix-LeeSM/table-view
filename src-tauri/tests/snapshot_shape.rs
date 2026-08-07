@@ -65,8 +65,9 @@ async fn test_snapshot_top_level_key_set_is_closed() {
     //
     // `recovered` (v0.3.1) 는 boot 자동 복구(quarantine + fresh) 발생 여부,
     // `connectionsRestoredFromBackup` (#2183) 은 connections.json 이 없어서
-    // 백업으로 되살렸는지다. 두 사건은 사용자에게 반대되는 말을 하고 다른
-    // 파일을 가리켜서 키가 따로다. 둘 다 runtime meta 라 schemaVersion 은 1 유지.
+    // 백업으로 되살렸고 그 백업에 연결이나 그룹이 있었는지다. 두 사건은
+    // 사용자에게 반대되는 말을 하고 다른 파일을 가리켜서 키가 따로다. 둘 다
+    // runtime meta 라 schemaVersion 은 1 유지.
     let keys: std::collections::BTreeSet<&str> = obj.keys().map(String::as_str).collect();
     assert_eq!(
         keys,

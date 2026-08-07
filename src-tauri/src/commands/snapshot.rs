@@ -53,12 +53,15 @@ pub struct InitialAppState {
     /// 발생했으면 `true`. runtime meta 이지 wire shape change 가 아니므로
     /// `schema_version` 은 1 유지.
     pub recovered: bool,
-    /// #2183: `connections.json` 이 없어서 옆의 백업으로 되살렸으면 `true`.
+    /// #2183: `connections.json` 이 없어서 옆의 백업으로 되살렸고 그 백업에
+    /// 연결이나 그룹이 들어 있었으면 `true`. #2187 부터는 빈 문서를 되살린
+    /// 경우가 빠진다 — 돌려놓은 것이 없으니 알릴 것도 없다.
     /// `recovered` 와 별개인 이유는 두 사건이 사용자에게 반대되는 말을 해야
     /// 하기 때문이다 — `recovered` 는 "앱 상태를 초기화했고 옛 사본은
-    /// `state.db.bak` 에 있다", 이쪽은 "연결이 `connections.json.bak` 에서
-    /// 돌아왔고 초기화된 것은 없다". 같은 runtime meta 라
-    /// `schema_version` 은 1 유지.
+    /// `state.db.bak` 에 있다", 이쪽은 "저장해 둔 연결과 그룹이
+    /// `connections.json.bak` 에서 돌아왔고 초기화된 것은 없다". 둘 중 한쪽만
+    /// 돌아와도 `true` 라서 사용자에게 보여 줄 문장은 둘 다 이름을 불러야 한다.
+    /// 같은 runtime meta 라 `schema_version` 은 1 유지.
     pub connections_restored_from_backup: bool,
     pub stores: Stores,
     pub runtime: Runtime,
