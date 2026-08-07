@@ -39,10 +39,9 @@ import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSumma
  * dialog). Per Sprint 235 contract: NO `onChange` debounce, NO trim
  * (whitespace-only matches stay invalid), every keystroke re-evaluates.
  *
- * CASCADE checkbox defaults to OFF. It drives the PREVIEWED `DROP TABLE
- * … CASCADE` form — toggling it re-fetches the preview by itself
- * (Sprint 238), no `Show DDL` click in between. The commit does not
- * carry the choice; see the auto-refresh comment on the preview effect.
+ * CASCADE checkbox defaults to OFF. Toggling it re-fetches the preview by
+ * itself (Sprint 238), no `Show DDL` click in between, and the commit runs
+ * the form that was previewed (issue #2213).
  *
  * Safe Mode dispatch is provided by `useDdlPreviewExecution` — `DROP
  * TABLE` is classified as `ddl-drop` / danger by the analyzer. Under the
@@ -153,12 +152,10 @@ export default function DropTableDialog({
   const canApply = typingMatches && !ddl.previewLoading && !!ddl.previewSql;
 
   // Sprint 238 — auto-refresh debounced: the preview SQL rebuilds on open
-  // and on every CASCADE toggle. The commit closure below does NOT carry
-  // that choice — `useSchemaTableMutations.dropTable` takes no `cascade`
-  // argument and `src/lib/tauri/ddl.ts` hardcodes `cascade: false`, so a
-  // previewed `… CASCADE` executes without the keyword (issue #2213).
-  // `DropTriggerDialog` does not share the defect: its `buildRequest`
-  // carries `cascade` into the commit. Apply stays gated on `canApply`.
+  // and on every CASCADE toggle. `loadPreview` mints the commit closure
+  // next to the SQL it just fetched, so the committed `cascade` is the one
+  // the rendered preview was built with (issue #2213). Apply stays gated
+  // on `canApply`.
   useEffect(() => {
     if (!open) return;
     const handle = window.setTimeout(() => {
@@ -184,6 +181,7 @@ export default function DropTableDialog({
             database,
             tableName,
             schemaName,
+            cascade,
           );
         },
       );
