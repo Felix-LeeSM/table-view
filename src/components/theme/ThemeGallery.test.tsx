@@ -14,7 +14,7 @@
  */
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -338,16 +338,37 @@ describe("ThemeGallery — each card previews its own theme", () => {
     );
   });
 
-  // Both modes, because the property is "follows the app's resolved mode":
-  // asserting one mode alone is also satisfied by a hardcoded literal.
-  it("follows the app's resolved mode on its preview", () => {
+  // Two phases, and the second one splits `mode` from `resolvedMode`. One mode
+  // alone is satisfied by a hardcoded literal; two modes that agree are also
+  // satisfied by reading `mode`, and `mode` can be `system`, which no
+  // `[data-theme][data-mode]` block in `src/themes.css` selects — a system-mode
+  // user would then browse a catalog where no card gets its own `--tv-*`
+  // overrides (#2212).
+  it("follows the app's resolved mode, not the raw mode, on its preview", () => {
     renderWithGalleryOpen();
 
     expect(previewAttrs("data-mode")).toEqual(THEME_CATALOG.map(() => "light"));
 
-    act(() => {
-      useThemeStore.setState({ mode: "dark", resolvedMode: "dark" });
+    // `system` only stays split from `dark` while the OS query answers dark:
+    // the store subscriber re-runs `applyTheme` on a `mode` change and pushes
+    // its result back into `resolvedMode` when the two differ. The suite-wide
+    // stub in `src/test-setup.ts` answers `matches: false`.
+    const realMatchMedia = window.matchMedia;
+    onTestFinished(() => {
+      window.matchMedia = realMatchMedia;
     });
+    window.matchMedia = ((query: string) => ({
+      ...realMatchMedia(query),
+      matches: query.includes("prefers-color-scheme: dark"),
+    })) as typeof window.matchMedia;
+
+    act(() => {
+      useThemeStore.setState({ mode: "system", resolvedMode: "dark" });
+    });
+    // The split is what makes the assertion below discriminate; if the store
+    // collapses it back, the assertion silently stops testing anything.
+    expect(useThemeStore.getState().mode).toBe("system");
+    expect(useThemeStore.getState().resolvedMode).toBe("dark");
 
     expect(previewAttrs("data-mode")).toEqual(THEME_CATALOG.map(() => "dark"));
   });
