@@ -25,11 +25,12 @@ export const en = {
   // something back, and "something" is connections *or* groups, so the text
   // names both: a groups-only backup shows this over a connection list that is
   // still empty afterwards. Sticky, because the user has to check the result in
-  // both directions — the backup predates the last change that rotated it, so
-  // an entry added since then is missing from it and one deleted since then is
-  // back.
+  // both directions. The text names no generation distance: the backup is the
+  // state before the most recent write that had something to replace
+  // (docs/product/known-limitations-cross-cutting.md), which can sit several
+  // changes back, and a seeded one can match the file exactly.
   connectionsRestoredFromBackup:
-    "Your saved connections and groups were missing and have been restored from the backup beside them (connections.json.bak). The backup is from before your last change, so please check the list both ways — something you added may be missing, and something you deleted may be back.",
+    "Your saved connections and groups were missing and have been restored from the backup beside them (connections.json.bak). The backup may not match your latest changes, so please check the list both ways — something you added may be missing, and something you deleted may be back.",
 } as const;
 
 export const ko = {
@@ -47,7 +48,8 @@ export const ko = {
     "테이블별 환경설정이 한 번 초기화됩니다 — 컬럼 너비와 숨긴 컬럼이 이제 창 간에 동기화됩니다.",
   // #2183 / #2187 — en 주석과 같은 계약이다. 백업이 실제로 무언가를 돌려놨을
   // 때만 뜨고, 그 무언가는 연결 또는 그룹이라 문장이 둘 다 이름을 불러야 한다.
-  // 빠진 항목과 되살아난 항목도 둘 다 말한다.
+  // 빠진 항목과 되살아난 항목도 둘 다 말한다. 백업이 몇 세대 전인지는 en 과
+  // 똑같이 안 부른다 — 코드가 보장하는 것이 아니다.
   connectionsRestoredFromBackup:
-    "저장해 둔 연결과 그룹이 사라져서 옆의 백업(connections.json.bak)에서 되살렸습니다. 백업은 마지막 변경 직전 상태라 최근에 추가한 항목이 빠져 있거나 지운 항목이 되살아났을 수 있습니다. 목록을 확인해 주세요.",
+    "저장해 둔 연결과 그룹이 사라져서 옆의 백업(connections.json.bak)에서 되살렸습니다. 백업이 최신 상태가 아닐 수 있으니 목록을 양쪽으로 확인해 주세요 — 최근에 추가한 항목이 빠져 있거나 지운 항목이 되살아났을 수 있습니다.",
 } as const;

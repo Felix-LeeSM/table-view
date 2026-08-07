@@ -1874,10 +1874,13 @@ mod tests {
     }
 
     /// The seed must not manufacture an empty backup. A first run writes an
-    /// empty `connections.json`; if the next launch seeded from it, a later loss
-    /// would "restore" nothing while telling the user their connections came
-    /// back. Acceptance ③ also depends on this staying quiet across launches,
-    /// not just on the very first one.
+    /// empty `connections.json`; if the next launch seeded from it, the one
+    /// backup slot would be spent on a document that puts nothing back, and the
+    /// user's first real generation would find it taken. Since #2187 that lost
+    /// slot is the whole cost — the restore path stays quiet over such a
+    /// document (`an_empty_backup_restores_nothing_and_claims_nothing`), so no
+    /// false claim reaches the user. Acceptance ③ also depends on this staying
+    /// quiet across launches, not just on the very first one.
     #[test]
     #[serial]
     fn a_load_does_not_seed_a_backup_from_an_empty_store() {
