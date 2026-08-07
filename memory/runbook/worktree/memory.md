@@ -3,7 +3,7 @@ title: 작업 사본 격리 — clone
 type: runbook
 updated: 2026-08-07
 task: clone, worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
-keywords: index.lock, FETCH_HEAD, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject, stalled, timeout, respawn, npx, pnpm exec, cargo clean, stale path, 일회용 사본, 리뷰어 사본
+keywords: index.lock, FETCH_HEAD, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject, stalled, timeout, respawn, npx, pnpm exec, cargo clean, stale path, 일회용 사본, 리뷰어 사본, PR head, headRefOid, gh pr checkout, checkout --detach, review__
 ---
 
 # 작업 사본 격리 — clone
@@ -58,6 +58,54 @@ cd "$DEST" && pnpm install --frozen-lockfile --prefer-offline
   `npx <pkg>@<버전>`. bare `npx biome` 가 동명의 무관 패키지를 끌어와 false green
   을 낸 실측이 있다 (2026-07-31).
 
+## 리뷰어 사본 — PR head 를 체크아웃한다
+
+위 「생성」은 구현자용이라 `origin/main` 을 잡는다. 리뷰어가 그대로 쓰면 **PR 의
+변경이 하나도 안 들어간 트리**에서 test·lint·build 를 돌리고 그 출력을 scorecard
+근거로 인용하게 된다 — 통과든 실패든 무의미한데 출력 어디에도 그 사실이 안 드러난다.
+만들 조건과 회수 의무는 [review](../../workflow/review/memory.md) 「행동 계약」.
+
+```bash
+PR=<PR 번호>
+AUTHOR="<spawn 이 준 저자 사본 경로>"   # 첫 turn 검증에 쓴 그 문자열. 경로 계산에만 쓴다
+OID="$(gh pr view "$PR" --repo Felix-LeeSM/table-view --json headRefOid -q .headRefOid)"
+DEST="$(dirname "$AUTHOR")/review__${PR}__${OID:0:12}"
+git init -q "$DEST"
+git -C "$DEST" remote add origin https://github.com/Felix-LeeSM/table-view.git
+git -C "$DEST" fetch --depth 1 origin "$OID"   # 평범한 fetch — hard block 이 아니다
+git -C "$DEST" -c advice.detachedHead=false checkout --detach "$OID"
+test "$(git -C "$DEST" rev-parse HEAD)" = "$OID" \
+  || { echo "ABORT: PR head 가 아니다" >&2; exit 1; }
+# 의존성이 필요하면 「생성」 3) 과 같다
+```
+
+- **`PRIMARY` 를 안 쓴다.** 리뷰어는 저자 사본 안에서 첫 명령을 돌리므로
+  `git rev-parse --show-toplevel` 이 저자 사본을 낸다 — `..` 를 붙이면 규약 밖
+  중첩 경로가 되고, primary 로 바꾸면 규약 경로가 저자 사본과 겹쳐 clone 이 실패한다.
+  위 형태는 cwd 를 안 읽어 어디에 서 있든 같은 `DEST` 가 나온다. `AUTHOR` 는
+  리뷰어가 받는 유일한 절대 경로라 사본 루트를 찾는 데만 쓴다.
+- **저자 사본을 clone 소스로 쓰지 않는다.** 저자 사본은 살아 움직이고 push 안 된
+  커밋을 갖는다 — 2026-08-07 PR #2210 실측으로 head `2e0bd76fc606` 위에 미push
+  커밋 `e6a2817bd5b6` 이 얹혀 있었다. 그 사본을 clone 한 뒤 `gh pr checkout 2210`
+  을 돌리면 "Already up to date" 를 내며 `e6a2817bd5b6` 에 선다 — GitHub 에 없는
+  커밋이 그 PR 의 근거가 된다. 그래서 소스는 GitHub 이고 대상은 브랜치가 아니라
+  OID 이며, 마지막 `test` 가 통과하기 전에는 이 사본의 출력을 근거로 쓰지 않는다.
+- 이름 `review__<PR>__<OID 앞 12>` 는 저자 사본(브랜치 이름)과 안 겹치고, 라운드가
+  바뀌면 OID 가 달라져 옛 사본을 조용히 재사용하지 못한다.
+- `--depth 1` 은 의도한 상한이다 — test·lint·build 는 되고 `git log` 나 base 대비
+  diff 는 안 된다. 필요하면 `git fetch --deepen <N>` 으로 늘린다.
+
+### 결과를 인용하는 법
+
+출력 자체에는 **어느 커밋에서 나왔는지가 안 적혀 있다.** scorecard 로 옮길 때 명령과
+head OID 를 같이 적는다 — 위 해악을 막는 장치는 이것뿐이다.
+
+```
+`pnpm exec vitest run` @ #2210 head 2e0bd76fc606 → 실패 0
+```
+
+OID 가 리뷰 중인 라운드의 head 와 다르면 그 출력은 폐기하고 사본을 다시 만든다.
+
 ## 점유 — 같은 브랜치에 사본 둘 금지
 
 worktree 가 공짜로 주던 "같은 브랜치 이중 체크아웃 방지"가 clone 에는 없다.
@@ -102,8 +150,9 @@ spawner 가 이 스니펫을 prompt 의 첫 명령 슬롯에 넣는다. 불일�
   (사용자가 못 보는 디스크 점유). 막는 장치 없음 — 규율만.
 - **예외는 리뷰어의 일회용 검증 사본뿐이다** — 리뷰어가 스스로 만든다
   ([review](../../workflow/review/memory.md) 「행동 계약」). 디스크 점유 사유는
-  그대로 걸리므로 **만든 리뷰어가 같은 턴에 지운다.** 규약 경로 밖이라 종결자의
-  회수(위 「회수」)가 못 찾는다 — 남기고 죽으면 아무도 안 지운다.
+  그대로 걸리므로 **만든 리뷰어가 같은 턴에 지운다.** 만드는 법과 경로는 위
+  「리뷰어 사본」이 정한다 — 사본 루트 안에 `review__` 로 남지만 위 「회수」는
+  브랜치별 작업 사본만 보므로 여전히 아무도 안 지운다.
 - 작업 사본은 PR 당 하나, 동시에 쓰는 node 는 하나 (그 사본에 파일을 쓰는 것은
   구현자뿐 — 리뷰어는 저자 사본을 편집하지 않는다). 리뷰 라운드는 새 사본을
   만들지 않고 같은 사본에 다음 구현자를 붙인다 — 쪼개면 죽은 구현자의 미푸시

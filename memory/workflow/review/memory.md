@@ -33,13 +33,14 @@ trigger:
 - Coordinator와 subreviewer는 read-only다. commit, push, merge, branch 수정 금지.
 - Reviewer는 **저자 사본을 편집하지 않는다.** 소스도 빌드 산출물도 거기 쓰지
   않는다 — 리뷰 전후로 저자 사본의 HEAD 와 `git status` 가 같다. test·lint·build
-  를 돌려야 하면 일회용 사본을 따로 만들어 거기서 돌리고 끝나면 지운다. 그 사본은
-  PR 당 하나인 작업 사본([worktree](../../runbook/worktree/memory.md))과 별개이고,
-  만든 리뷰어가 같은 턴에 회수한다. **돌릴지 말지는 리뷰어 판단이고 의무가 아니다**
-  — 자율 실행이 이미 blocking 발견을 냈고(2026-08-06 #2190 · #2195), 그 둘은 저자
-  표에 없던 변형이라 「저자 표를 표본 재현하라」 형태의 의무로는 못 잡았을
-  것들이다(#2196). 판정 입력은 자동 gate 결과, PR diff, PR body, sprint contract,
-  필요한 active SOT 이고, 직접 돌렸으면 그 결과도 근거가 된다.
+  를 돌려야 하면 일회용 사본을 따로 만들어 거기서 돌리고 끝나면 지운다 — 만드는
+  법은 [worktree](../../runbook/worktree/memory.md) 「리뷰어 사본」이고,
+  `origin/main` 을 잡는 「생성」이 아니다. 그 사본은 PR 당 하나인 작업 사본과
+  별개이고, 만든 리뷰어가 같은 턴에 회수한다. **돌릴지 말지는 리뷰어 판단이고
+  의무가 아니다** — 자율 실행이 이미 blocking 발견을 냈고(2026-08-06 #2190 ·
+  #2195), 그 둘은 저자 표에 없던 변형이라 「저자 표를 표본 재현하라」 형태의
+  의무로는 못 잡았을 것들이다(#2196). 판정 입력은 자동 gate 결과, PR diff, PR
+  body, sprint contract, 필요한 active SOT 이고, 직접 돌렸으면 그 결과도 근거가 된다.
 - Subreview 결과는 coordinator의 입력이다. Coordinator는 PR에 직접 하나의
   통합 scorecard와 action items를 repo-relative evidence로 comment한다.
 - Blocking은 세 사유뿐이다: 런타임·보안 / 이 PR 귀책의 거짓이 SOT에 들어감 /
