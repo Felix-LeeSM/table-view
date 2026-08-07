@@ -119,10 +119,10 @@ gh pr checks <N>
 고치고 머지 뒤에는 아무도 못 고친다. 교정 대상의 정의와 사유는
 `memory/workflow/delivery/memory.md` 「PR body」.
 
-**커밋이 하나면 대조를 건너뛴다** — 뒤집을 이전 커밋이 없다. 기본 body 로 머지한다.
-
-커밋이 둘 이상이면 대조한다. **무엇이 거짓인지 새로 판정하지 않는다 — 리뷰어가 이미
-판정한 것을 커밋 메시지에서 찾는다.**
+**커밋이 하나면 라운드 1 scorecard 만 대조한다 — 건너뛰지는 않는다.** 라운드 1 의
+finding 이 그 하나뿐인 커밋 메시지를 지목할 수 있다. 커밋이 둘 이상이면 전 라운드를
+대조한다. **무엇이 거짓인지 새로 판정하지 않는다 — 리뷰어가 이미 판정한 것을 커밋
+메시지에서 찾는다.**
 
 ```bash
 gh pr view <N> --json commits -q '.commits[] | .messageHeadline, .messageBody'
@@ -167,7 +167,7 @@ gh pr merge <N> --squash --delete-branch --body-file <교정본 경로>  # 교�
 
 ```
 - PR: #<번호> — merged <머지 SHA> (squash)
-- squash body: 기본(커밋 1개, 대조 생략) / 기본(대조 clean) / 교정(뒤집힌 주장 N건)
+- squash body: 기본(대조 clean) / 교정(뒤집힌 주장 N건)
 - reflect:done: 부착 / 불필요 (라운드 <N>) — 부착했으면 labeled run 결과
 - required: 머지 시점 충족 — `mergeStateStatus` = CLEAN / UNSTABLE
 - PR body 재검사: clean / dirty → 머지 중단하고 새 commit 요구
