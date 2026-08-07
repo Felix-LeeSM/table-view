@@ -161,9 +161,10 @@ report actually exercises:
   accepted on 2026-08-06, so reopening it needs a new decision, not an
   implementation slice.
 - A backup that fails to parse is set aside and the app boots empty with nothing
-  said to the user — that path is visible only in the log, while the successful
-  restore raises a toast. Telling the user their backup was unusable needs a
-  second wire flag, and #2183 asked only for the success case to be reported.
+  said to the user — that path is visible only in the log, while a restore that
+  put something back raises a toast. Telling the user their backup was unusable
+  needs a second wire flag, and #2183 asked only for the success case to be
+  reported.
 - The corrupt-`connections.json` path still quarantines and boots empty without
   consulting the backup sitting next to it. Reading the backup there would make
   a parse failure recoverable the same way a missing file now is, but it changes
