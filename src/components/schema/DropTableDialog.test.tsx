@@ -2,10 +2,10 @@
 // — DropTableDialog test suite. Date: 2026-05-07.
 //
 // Why this file exists:
-// - AC-235-05: typing-confirm enable/disable, CASCADE toggle → preview
-//   re-fetch on next Show DDL, CASCADE checked emits SQL with `... CASCADE`,
-//   case-sensitive typing match (`Users` ≠ `users`), Apply disabled
-//   before typing match.
+// - AC-235-05: typing-confirm enable/disable, CASCADE toggle → debounced
+//   preview re-fetch with no `Show DDL` click in between (Sprint 238),
+//   CASCADE checked emits SQL with `... CASCADE`, case-sensitive typing
+//   match (`Users` ≠ `users`), Apply disabled before typing match.
 // - AC-235-06: Safe Mode confirm / warn-cancel / safe matrix (Sprint 245
 //   retired the block tier — see the case at "production × strict").
 //   `DROP TABLE` is classified `ddl-drop`/danger so the gate fires on
@@ -272,8 +272,8 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    // 타이핑이 typingMatches=true 로 만들면 자동 fetch (cascade:false) 가
-    // debounce 후 한 번 발생.
+    // 자동 fetch (cascade:false) 는 다이얼로그가 열릴 때 debounce 후 한 번
+    // 난다 — 타이핑과 무관하다 (이슈 #2191).
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
     });

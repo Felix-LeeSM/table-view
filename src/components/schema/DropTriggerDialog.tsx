@@ -21,9 +21,11 @@ import type { DropTriggerRequest } from "@/types/schema";
  * Sprint 274 — `DropTriggerDialog`. Typing-confirm input + CASCADE
  * checkbox + inline DDL preview pane + Cancel + Apply buttons.
  *
- * Structural parity target: Sprint 235 `DropTableDialog`. The only
- * differences are the SQL target (DROP TRIGGER vs DROP TABLE) and the
- * typing-confirm target (trigger name vs table name).
+ * Structural parity target: Sprint 235 `DropTableDialog` — same layout,
+ * same two gates. What differs: the SQL target (DROP TRIGGER vs DROP
+ * TABLE), the typing-confirm target (trigger name vs table name), and
+ * the commit payload — `buildRequest` below carries `cascade` into the
+ * commit, which `DropTableDialog` does not (issue #2213).
  *
  * Issue #2191 (the split issue #2157 made in `DropColumnDialog`) — the
  * preview gate and the execution gate are separate. The DDL preview loads
@@ -136,16 +138,19 @@ export default function DropTriggerDialog({
   // `DropTableDialog` contract.
   const typingMatches = typingConfirm === triggerName;
   // Issue #2191 — the preview has no gate. `previewOnly: true` never
-  // executes anything (`gate_destructive_ddl` and `run_schema_change` in
-  // `src-tauri/src/commands/rdb/ddl.rs` both exempt it, and each adapter
-  // returns the SQL before touching a pool), so withholding it only hid
-  // what the user is about to destroy. `typingMatches` now gates
+  // executes anything (`gate_destructive_ddl` in
+  // `src-tauri/src/commands/rdb/ddl.rs` and `run_schema_change` in
+  // `src-tauri/src/commands/rdb/ddl/dispatch.rs` both exempt it, and each
+  // adapter returns the SQL before touching a pool), so withholding it
+  // only hid what the user is about to destroy. `typingMatches` now gates
   // execution alone.
   const canApply = typingMatches && !ddl.previewLoading && !!ddl.previewSql;
 
   // Sprint 274 — 250ms debounced auto-refresh: the preview SQL rebuilds
-  // on open and on every CASCADE toggle. Mirrors Sprint 235
-  // `DropTableDialog`.
+  // on open and on every CASCADE toggle. The debounce mirrors Sprint 235
+  // `DropTableDialog`; the commit does not — `buildRequest(false)` below
+  // carries the CASCADE choice, while `DropTableDialog`'s commit path
+  // drops it (issue #2213).
   useEffect(() => {
     if (!open) return;
     const handle = window.setTimeout(() => {

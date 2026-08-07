@@ -4,8 +4,8 @@
 // 고정한다 — (1) form mount + Apply 비활성 초기 상태, (2) typing-confirm
 // 게이트가 byte-for-byte (empty / partial / case-mismatched / whitespace
 // 모두 disabled), (3) 250 ms 디바운스 preview fetch + expectedDatabase
-// 페이로드 전파, (4) CASCADE 토글이 preview cache 를 무효화하고 두 번째
-// fetch 가 cascade:true 로 emit, (5) Safe-Mode warn 티어 confirm 흐름
+// 페이로드 전파, (4) CASCADE 토글이 두 번째 debounce fetch 를 일으키고
+// cascade:true 로 emit, (5) Safe-Mode warn 티어 confirm 흐름
 // (`ConfirmDestructiveDialog` 마운트 후 confirm → drop_trigger 호출),
 // (6) commit 성공 시 onRefresh + onClose 가 정확히 1 회 호출,
 // (7) DbMismatch (Sprint 271c wire format) 에 대해 syncMismatchedActiveDb
@@ -245,7 +245,8 @@ describe("DropTriggerDialog — Sprint 274", () => {
     fireEvent.change(input, { target: { value: "   " } });
     expect(apply).toBeDisabled();
 
-    // Exact byte-for-byte match → preview fetched + Apply enabled.
+    // Exact byte-for-byte match → Apply enabled. The preview fetch is not
+    // part of this — it already fired when the dialog opened (issue #2191).
     fireEvent.change(input, { target: { value: "Tg_Audit" } });
     await waitFor(() => {
       expect(mockDropTrigger).toHaveBeenCalled();
@@ -289,7 +290,7 @@ describe("DropTriggerDialog — Sprint 274", () => {
     expect(firstCall?.expectedDatabase).toBe("db-1");
   });
 
-  it("CASCADE toggle invalidates preview cache → second fetch fires with cascade:true", async () => {
+  it("CASCADE toggle fires a second debounced fetch with cascade:true", async () => {
     mockDropTrigger
       .mockResolvedValueOnce({
         sql: 'DROP TRIGGER "tg_audit" ON "public"."users"',

@@ -39,9 +39,10 @@ import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSumma
  * dialog). Per Sprint 235 contract: NO `onChange` debounce, NO trim
  * (whitespace-only matches stay invalid), every keystroke re-evaluates.
  *
- * CASCADE checkbox defaults to OFF — user opts INTO the more dangerous
- * `DROP TABLE … CASCADE` form explicitly. Toggling it re-fetches the
- * preview by itself (Sprint 238) — no `Show DDL` click in between.
+ * CASCADE checkbox defaults to OFF. It drives the PREVIEWED `DROP TABLE
+ * … CASCADE` form — toggling it re-fetches the preview by itself
+ * (Sprint 238), no `Show DDL` click in between. The commit does not
+ * carry the choice; see the auto-refresh comment on the preview effect.
  *
  * Safe Mode dispatch is provided by `useDdlPreviewExecution` — `DROP
  * TABLE` is classified as `ddl-drop` / danger by the analyzer. Under the
@@ -143,16 +144,21 @@ export default function DropTableDialog({
   // No trim, no debounce — every keystroke re-evaluates.
   const typingMatches = typingConfirm === tableName;
   // Issue #2191 — the preview has no gate. `previewOnly: true` never
-  // executes anything (`gate_destructive_ddl` and `run_schema_change` in
-  // `src-tauri/src/commands/rdb/ddl.rs` both exempt it, and each adapter
-  // returns the SQL before touching a pool), so withholding it only hid
-  // what the user is about to destroy. `typingMatches` now gates
+  // executes anything (`gate_destructive_ddl` in
+  // `src-tauri/src/commands/rdb/ddl.rs` and `run_schema_change` in
+  // `src-tauri/src/commands/rdb/ddl/dispatch.rs` both exempt it, and each
+  // adapter returns the SQL before touching a pool), so withholding it
+  // only hid what the user is about to destroy. `typingMatches` now gates
   // execution alone.
   const canApply = typingMatches && !ddl.previewLoading && !!ddl.previewSql;
 
   // Sprint 238 — auto-refresh debounced: the preview SQL rebuilds on open
-  // and on every CASCADE toggle, so the registered commit closure always
-  // reflects the latest CASCADE choice. Apply stays gated on `canApply`.
+  // and on every CASCADE toggle. The commit closure below does NOT carry
+  // that choice — `useSchemaTableMutations.dropTable` takes no `cascade`
+  // argument and `src/lib/tauri/ddl.ts` hardcodes `cascade: false`, so a
+  // previewed `… CASCADE` executes without the keyword (issue #2213).
+  // `DropTriggerDialog` does not share the defect: its `buildRequest`
+  // carries `cascade` into the commit. Apply stays gated on `canApply`.
   useEffect(() => {
     if (!open) return;
     const handle = window.setTimeout(() => {
