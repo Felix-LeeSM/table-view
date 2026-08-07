@@ -4,6 +4,7 @@
  * User path being locked:
  *   - user opens the picker, presses "browse all themes"
  *   - the whole catalog is there, filterable by name / id / vibe
+ *   - every card previews itself in its own theme, in the mode being browsed
  *   - starring a theme puts it in the picker and writes it to SQLite
  *   - clicking a card applies that theme and closes the overlay
  *
@@ -63,6 +64,18 @@ function cardIds(): (string | null)[] {
     (li) =>
       li.querySelector("[data-theme-id]")?.getAttribute("data-theme-id") ??
       null,
+  );
+}
+
+/**
+ * Each card's preview swatch, read through the attribute under test. The
+ * swatch is `aria-hidden` decoration with no role or text, so the attribute is
+ * the handle — and a deleted attribute surfaces as `null` for every card
+ * rather than the query quietly matching something else.
+ */
+function previewAttrs(attr: "data-theme" | "data-mode"): (string | null)[] {
+  return galleryCards().map(
+    (li) => li.querySelector(`[${attr}]`)?.getAttribute(attr) ?? null,
   );
 }
 
@@ -303,5 +316,39 @@ describe("ThemeGallery — applying", () => {
     expect(useThemeFavoritesStore.getState().favoriteThemeIds).not.toContain(
       "linear",
     );
+  });
+});
+
+/**
+ * #2200 — the preview swatch is the gallery's whole point. `src/themes.css`
+ * keys on `[data-theme][data-mode]` on any element, not just `:root`, and the
+ * Tailwind colour utilities in the card read the `--tv-*` custom properties
+ * those selectors set, which inherit into the subtree. Drop either attribute
+ * and the gallery still renders, still filters, still applies — every card
+ * just paints in the app's current theme, so "see it before you pick it"
+ * silently stops working. The issue carries the command showing that nothing
+ * asserted them.
+ */
+describe("ThemeGallery — each card previews its own theme", () => {
+  it("carries that card's theme id on its preview", () => {
+    renderWithGalleryOpen();
+
+    expect(previewAttrs("data-theme")).toEqual(
+      THEME_CATALOG.map((entry) => entry.id),
+    );
+  });
+
+  // Both modes, because the property is "follows the app's resolved mode":
+  // asserting one mode alone is also satisfied by a hardcoded literal.
+  it("follows the app's resolved mode on its preview", () => {
+    renderWithGalleryOpen();
+
+    expect(previewAttrs("data-mode")).toEqual(THEME_CATALOG.map(() => "light"));
+
+    act(() => {
+      useThemeStore.setState({ mode: "dark", resolvedMode: "dark" });
+    });
+
+    expect(previewAttrs("data-mode")).toEqual(THEME_CATALOG.map(() => "dark"));
   });
 });
