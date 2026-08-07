@@ -113,14 +113,29 @@ gh pr checks <N>
 
 ## 3단계 — 머지
 
-머지 전에 squash body 로 들어갈 커밋 메시지를 훑는다. 기본 squash body 는 커밋
-메시지에서 오므로 중간 커밋의 낡은 수치나 재현 명령 없는 수치가 그대로 main 기록이
-된다 — 그런 수치가 있으면 교정본을 만들어 `--body-file` 로 대체한다. 계약과 사유는
+기본 squash body 는 PR body 가 아니라 **브랜치 커밋 메시지를 이어붙인 것이다**
+(repo 설정 `squash_merge_commit_message=COMMIT_MESSAGES`). 리뷰 라운드가 뒤집은
+주장이 거기 남아 있으면 그대로 main 히스토리가 된다 — 저자는 force-push 금지라 못
+고치고 머지 뒤에는 아무도 못 고친다. 교정 대상의 정의와 사유는
 `memory/workflow/delivery/memory.md` 「PR body」.
+
+**커밋이 하나면 대조를 건너뛴다** — 뒤집을 이전 커밋이 없다. 기본 body 로 머지한다.
+
+커밋이 둘 이상이면 대조한다. **무엇이 거짓인지 새로 판정하지 않는다 — 리뷰어가 이미
+판정한 것을 커밋 메시지에서 찾는다.**
 
 ```bash
 gh pr view <N> --json commits -q '.commits[] | .messageHeadline, .messageBody'
-gh pr merge <N> --squash --delete-branch                            # 기본 body
+gh pr view <N> --json comments -q '.comments[].body'   # 라운드별 scorecard
+```
+
+각 라운드 scorecard 의 blocking / non-blocking 목록을 커밋 메시지와 대조한다.
+**라운드 N 의 finding 이 지목한 주장이 라운드 N 이전 커밋 메시지에 그대로 남아
+있으면 그것이 교정 대상이다** — 수치든 산문이든 저자의 철회문이든 같다. 하나라도
+걸리면 교정본을 만들어 `--body-file` 로 대체한다.
+
+```bash
+gh pr merge <N> --squash --delete-branch                            # 대조 결과 clean
 gh pr merge <N> --squash --delete-branch --body-file <교정본 경로>  # 교정할 때
 ```
 
@@ -152,7 +167,7 @@ gh pr merge <N> --squash --delete-branch --body-file <교정본 경로>  # 교�
 
 ```
 - PR: #<번호> — merged <머지 SHA> (squash)
-- squash body: 기본 / 교정(사유)
+- squash body: 기본(커밋 1개, 대조 생략) / 기본(대조 clean) / 교정(뒤집힌 주장 N건)
 - reflect:done: 부착 / 불필요 (라운드 <N>) — 부착했으면 labeled run 결과
 - required: 머지 시점 충족 — `mergeStateStatus` = CLEAN / UNSTABLE
 - PR body 재검사: clean / dirty → 머지 중단하고 새 commit 요구
