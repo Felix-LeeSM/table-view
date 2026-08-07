@@ -334,7 +334,12 @@ fn duckdb_profile_is_file_backed_rdbms_with_runtime_catalog_query_contract() {
     assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
     assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalCatalog));
     assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalQuery));
-    assert!(!profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
+    // #1070 Stage 2 (ADR 0051, wired in #1787) — DuckdbAdapter routes native structural DDL
+    // (table create/drop/rename, column add/drop/type, index create/drop) through
+    // `duckdb/ddl.rs`, so the profile claims RelationalSchemaMutation, like SQLite #1044.
+    // Do NOT read constraint DDL still being `Unsupported` (Stage 2b) as "the flag is off":
+    // it is coarse and means "some structural DDL", which is what flipped it in Stage 2.
+    assert!(profile.has_backend_capability(BackendAdapterCapability::RelationalSchemaMutation));
 }
 
 #[test]
