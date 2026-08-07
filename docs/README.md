@@ -139,3 +139,72 @@ clone 한 사본에서 같은 결과였다 (2026-08-01 실측).
 `.gitignore` 에 안 걸린 미추적 파일을 같이 세고, `-g '!.git'` 을 빼면 `.git/` 안까지
 얹힌다 — `packed-refs` 의 ref 이름, `COMMIT_EDITMSG` 의 직전 커밋 메시지, 설치된
 훅이 검색어에 걸린다. 검색어와 사본에 따라 달라지므로 파일 이름을 못 박지 않는다.
+
+### 변수에 담은 pathspec — zsh 에서 조용히 0건
+
+**이 harness 의 Bash 도구가 띄우는 셸은 zsh 다.** 한 줄로 확인한다.
+
+```sh
+echo "ZSH_VERSION=${ZSH_VERSION:-unset}  BASH_VERSION=${BASH_VERSION:-unset}"
+# ZSH_VERSION=5.9  BASH_VERSION=unset
+```
+
+zsh 는 bash 와 달리 **변수 전개에서 단어 분리를 하지 않는다.** 변수에 담은
+pathspec 은 공백까지 통째로 **인자 하나**가 되고, 그런 이름의 경로가 없으니 0건이
+나온다. `git grep` 은 매치 안 되는 pathspec 을 조용히 넘겨 **stderr 도 안 낸다.**
+
+아래 재현은 커밋 `f41e0a10` 을 못 박고 돌린 것이다. 이 문서 자신이 검색어를 품고
+있어 현재 트리로 돌리면 자기를 세고, 못 박으면 값이 앞으로도 그대로다.
+
+```sh
+P="docs/ memory/"
+git grep -l "리뷰어" f41e0a10 -- $P            | wc -l   # 0  ← 인자 하나 "docs/ memory/"
+git grep -l "리뷰어" f41e0a10 -- docs/ memory/ | wc -l   # 8
+git grep -l "리뷰어" f41e0a10 -- ${=P}         | wc -l   # 8
+```
+
+**rc 로는 못 가른다.** 변수가 죽어도 rc=1, 진짜 0건도 rc=1 이다.
+
+```sh
+git grep -q "리뷰어" f41e0a10 -- $P ; echo $?                            # 1  ← pathspec 이 죽었다
+git grep -q "존재하지않는문자열zzzz" f41e0a10 -- docs/ memory/ ; echo $?  # 1  ← 진짜 0건
+```
+
+그래서 `... || echo "0건 — 닫혔다"` 형태는 pathspec 이 통째로 죽어도 **통과처럼
+보인다.** 그 0건이 「닫혔다」의 증거로 PR body 에 실리면 아무도 못 잡는다. `rg` 는
+같은 실수에서 `No such file or directory (os error 2)` 를 stderr 로 내고 rc=2 로
+죽어 바로 드러난다 — 조용한 쪽은 `git grep` 이고, 위 「저장소 전수」가 전수 도구로
+권하는 것이 그 `git grep` 이다.
+
+**처방: pathspec 은 리터럴로 쓴다.** 위 「저장소 전수」와 그 앞의 레시피들이 그
+형태다. 길어서 변수에 담아야 하면 **배열에 담고 `"${PATHS[@]}"` 로 편다** — 원소
+하나가 인자 하나로 넘어가 인용이 살고, zsh 와 bash 가 같은 값을 낸다.
+
+**`${=VAR}` 로 때우지 마라 — 단어 분리만 되살리고 인용은 안 살린다.** 문자열에
+담은 `':!docs/archives'` 가 따옴표째 경로 이름이 되어 exclude 절이 조용히 죽는다.
+아래 네 줄이 배열 20건 · `${=VAR}` 23건 · exclude 를 아예 안 준 값 23건을 나란히
+내고, 마지막 `diff` 가 여분 3건이 전부 `docs/{archives,explorations}` 밑임을 짚는다.
+
+```sh
+PATHS=(docs/ memory/ .agents/ .claude/ .github/ AGENTS.md CLAUDE.md ':!docs/archives' ':!docs/explorations')
+S="docs/ memory/ .agents/ .claude/ .github/ AGENTS.md CLAUDE.md ':!docs/archives' ':!docs/explorations'"
+git grep -lniE "리뷰어|reviewer" f41e0a10 -- "${PATHS[@]}" | wc -l    # 20  배열 — exclude 가 산다
+git grep -lniE "리뷰어|reviewer" f41e0a10 -- ${=S} | wc -l           # 23  ${=VAR} — exclude 가 죽었다
+git grep -lniE "리뷰어|reviewer" f41e0a10 -- docs/ memory/ .agents/ .claude/ .github/ AGENTS.md CLAUDE.md | wc -l   # 23  exclude 를 안 준 값
+diff <(git grep -lniE "리뷰어|reviewer" f41e0a10 -- "${PATHS[@]}" | sort) \
+     <(git grep -lniE "리뷰어|reviewer" f41e0a10 -- ${=S} | sort)   # `>` 3줄, 전부 archives/explorations
+```
+
+`${=VAR}` 는 인용부호가 없는 단순 목록에서만 쓴다 (bash 에는 이 문법이 아예 없다).
+
+**단어 분리를 안 하는 쪽이 zsh 고유이고, 따옴표가 전개를 못 넘기는 쪽은 bash 도
+같다.** 위 `S` 를 bash 3.2.57 에서 `-- $S` 로 그냥 펴도 23건이라 exclude 가 똑같이
+죽는다. 그러니 "나는 bash 니 변수를 써도 된다" 가 아니다. 배열이 두 셸의 공통
+정답이고, 그때도 전개 형태가 갈린다 — `-- "${PATHS[@]}"` 는 zsh · bash 둘 다
+20건인데 `-- $PATHS` 는 bash 에서 첫 원소 `docs/` 하나만 넘겨 **rc=0 · stderr
+0바이트로 7건**을 낸다. 이 절이 막으려는 바로 그 형태다.
+
+값은 2026-08-07 에 `f41e0a10` 을 못 박고 잰 것이다 (zsh 5.9 / bash 3.2.57 /
+git 2.50.1). 판별에 쓰는 것은 절대값이 아니라 **같은 검색어에서 변수형이 리터럴형과
+다른 값을 내는가** 다 — 적게 나오면 pathspec 이 죽은 것이고(0 vs 8), 많이 나오면
+exclude 가 죽은 것이다(23 vs 20).
