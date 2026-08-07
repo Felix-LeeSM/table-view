@@ -26,25 +26,27 @@ require a threat-model handoff before support claims.
 ### Connection store backup and recovery
 
 The connection store keeps one backup of itself, `connections.json.bak`, beside
-it in the app data directory. Every save moves the file it replaces there, and a
-successful load creates one for an install that has none yet, so an install
-carries a backup from its first launch after #2183 rather than from its next
-edit. A launch that finds `connections.json` gone restores it from that backup,
-warns in the log, and raises a sticky toast naming the file; a launch that finds
-neither file starts empty and says nothing, because there is nothing to put
-back.
+it in the app data directory. A save moves the file it replaces there when that
+file holds connections or groups, and a successful load creates one for an
+install that has none yet, so an install carries a backup from its first launch
+after #2183 rather than from its next edit. A launch that finds
+`connections.json` gone restores it from that backup and warns in the log, and
+raises a sticky toast naming the file when the backup put something back; a
+launch that finds neither file starts empty and says nothing, because there is
+nothing to put back.
 
 Four boundaries ride with it. Only one generation is kept, so a save made after
 the last backup rotation is not recoverable — the backup is the state before the
-most recent write, not the most recent write. The backup lives inside the app
-data directory, which is the deliberate trade-off (owner decision 2026-08-06):
-anything that removes that directory wholesale removes the backup with it, and
-the app has no copy elsewhere. A backup that no longer parses restores nothing;
-it is moved to `connections.json.bak.corrupt-<timestamp>` for manual recovery
-and the app boots empty **without** a toast, so that case is visible only in the
-log. And the corrupt-`connections.json` path does not consult the backup at all
-— a store that fails to parse is still quarantined and replaced with an empty
-one, with no notification and no automatic use of the copy sitting next to it.
+most recent write that had something to replace, not the most recent write. The
+backup lives inside the app data directory, which is the deliberate trade-off
+(owner decision 2026-08-06): anything that removes that directory wholesale
+removes the backup with it, and the app has no copy elsewhere. A backup that no
+longer parses restores nothing; it is moved to
+`connections.json.bak.corrupt-<timestamp>` for manual recovery and the app
+boots empty **without** a toast, so that case is visible only in the log. And
+the corrupt-`connections.json` path does not consult the backup at all — a
+store that fails to parse is still quarantined and replaced with an empty one,
+with no notification and no automatic use of the copy sitting next to it.
 
 An install with no connections and no groups gets no backup, which is why a
 first run stays silent across launches rather than only on the very first.

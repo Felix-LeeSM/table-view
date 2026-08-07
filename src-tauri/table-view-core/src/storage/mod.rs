@@ -273,6 +273,26 @@ fn storage_backup_path() -> Result<PathBuf, AppError> {
     Ok(backup_path_for(&storage_file_path()?))
 }
 
+/// #2187 — the one question every backup decision asks: does this document hold
+/// anything a backup could put back?
+///
+/// There is a single backup slot, so writing a document with no connections and
+/// no groups into it is not a cheap no-op — it destroys the generation that was
+/// there, which was the last copy that parses. And restoring such a document puts
+/// nothing back, so announcing it as a recovery hands the user a sentence their
+/// empty connection list contradicts.
+///
+/// Three callers ask it and they have to agree, because the same empty document
+/// reaches all three: [`seed_backup_if_absent`] before copying one into the slot,
+/// [`save_storage_raw`] before renaming one into it, and
+/// [`restore_from_backup_or_start_empty`] before reporting a restore. #2186
+/// shipped the question inline in the first of those, where it guarded only the
+/// seed; the other two paths kept producing and then announcing the empty backup
+/// it was written to prevent.
+fn is_worth_protecting(data: &StorageData) -> bool {
+    !data.connections.is_empty() || !data.groups.is_empty()
+}
+
 /// Load storage from disk WITHOUT decrypting passwords. Each connection's
 /// `password` field still holds the on-disk ciphertext (or "" when no
 /// password is set). Use this when a function will not return password data
@@ -328,10 +348,10 @@ fn load_storage_raw() -> Result<StorageData, AppError> {
 ///
 /// - only when the parse succeeded, so the empty document written after a
 ///   corrupt-file quarantine can never become the backup;
-/// - only when there is something to protect. An install with no connections and
-///   no groups has nothing to lose, and seeding it would leave an empty backup
-///   that a later loss would "restore" while telling the user their connections
-///   came back.
+/// - only when there is something to protect ([`is_worth_protecting`]). An
+///   install with no connections and no groups has nothing to lose, and seeding
+///   it would leave an empty backup that a later loss would "restore" while
+///   telling the user their connections came back.
 ///
 /// A copy, not the rename [`save_storage_raw`] uses: there the old file is being
 /// replaced anyway, here it has to stay. A copy interrupted midway leaves a
@@ -344,7 +364,7 @@ fn load_storage_raw() -> Result<StorageData, AppError> {
 /// the app into an error. `save_storage_raw` propagates the same class of
 /// failure because a save can be retried with the file still intact.
 fn seed_backup_if_absent(path: &std::path::Path, data: &StorageData) {
-    if data.connections.is_empty() && data.groups.is_empty() {
+    if !is_worth_protecting(data) {
         return;
     }
     let backup = backup_path_for(path);
@@ -440,7 +460,13 @@ fn restore_from_backup_or_start_empty() -> Result<StorageData, AppError> {
         backup.display()
     );
     save_storage_raw(&data)?;
-    CONNECTIONS_RESTORED_FROM_BACKUP.store(true, Ordering::SeqCst);
+    // #2187 ② — the flag is a claim that something came back, so it is raised only
+    // when something did. A backup that parses to an empty document reaches this
+    // point on the success branch, and raising it there showed the user a sticky
+    // "your connections were restored" toast over an empty list.
+    if is_worth_protecting(&data) {
+        CONNECTIONS_RESTORED_FROM_BACKUP.store(true, Ordering::SeqCst);
+    }
     Ok(data)
 }
 
@@ -539,12 +565,25 @@ fn save_storage_raw(data: &StorageData) -> Result<(), AppError> {
     // tmp leaves both files alone, instead of spending the single backup slot on
     // a write that never landed.
     //
-    // An absent `path` backs up nothing, and that is what keeps the corrupt-file
-    // path from replacing a good backup with the empty file it writes:
-    // `quarantine_corrupt_storage` has already renamed the file away before that
-    // save runs. `quarantining_a_corrupt_file_does_not_overwrite_the_backup`
-    // holds that, not this ordering.
-    if path.exists() {
+    // #2187 — and only when the file being replaced holds something
+    // (`is_worth_protecting`). Presence used to be the whole test, which made the
+    // corrupt-boot path destroy the recovery one step later than anyone looked:
+    // `load_storage_raw` quarantines the unparseable file and saves an empty
+    // document in its place, so the *next* save found a present `connections.json`
+    // and renamed that empty document over a good backup. What was left on disk
+    // was the quarantine file, which by definition does not parse.
+    //
+    // A file that does not parse answers `false` as well. It cannot feed
+    // `restore_from_backup_or_start_empty` — that path sets an unparseable backup
+    // aside instead of trusting it — so moving it into the slot would spend the
+    // last parseable copy on bytes the restore refuses. Reaching here with one is
+    // not possible in-process anyway: every save runs under `STORAGE_LOCK` after a
+    // `load_storage_raw` that has already quarantined an unparseable file.
+    let replaced_is_worth_keeping = fs::read_to_string(&path)
+        .ok()
+        .and_then(|existing| serde_json::from_str::<StorageData>(&existing).ok())
+        .is_some_and(|existing| is_worth_protecting(&existing));
+    if replaced_is_worth_keeping {
         let backup = storage_backup_path()?;
         if let Err(e) = fs::rename(&path, &backup) {
             let _ = fs::remove_file(&tmp_path); // best-effort: leave no orphan
@@ -1924,6 +1963,84 @@ mod tests {
             "the preserved backup must still hold real connections, not an empty document"
         );
 
+        cleanup_test_env();
+    }
+
+    /// #2187 ① — the save *after* that quarantine, which is where the recovery
+    /// was actually spent.
+    ///
+    /// `quarantining_a_corrupt_file_does_not_overwrite_the_backup` stops at the
+    /// empty write, and that write is safe for a reason that does not survive one
+    /// more step: the quarantine renamed `connections.json` away, so there was no
+    /// file to back up. What it leaves behind is a `connections.json` that parses
+    /// to an empty document. The user's next add found it present, renamed it over
+    /// the backup, and the last parseable copy of the connections was gone —
+    /// leaving only the quarantine file, which by definition does not parse.
+    #[test]
+    #[serial]
+    fn a_save_after_a_corrupt_boot_keeps_the_backup_it_would_have_replaced() {
+        let dir = setup_test_env();
+        let (path, backup) = storage_and_backup(&dir);
+
+        save_conn(sample_connection("c1", "DB1")).unwrap();
+        save_conn(sample_connection("c2", "DB2")).unwrap();
+        let before = fs::read_to_string(&backup).unwrap();
+        assert_eq!(ids(&read_json(&backup)), ["c1"]);
+
+        // Boot on a corrupt file: quarantine, then save an empty document.
+        fs::write(&path, b"{ this is not valid json }").unwrap();
+        assert!(load_storage_redacted().unwrap().connections.is_empty());
+        assert_eq!(fs::read_to_string(&backup).unwrap(), before);
+
+        // The user adds a connection. The file this save replaces is the empty
+        // document above, and it has nothing in it to keep.
+        save_conn(sample_connection("c3", "DB3")).unwrap();
+
+        assert_eq!(
+            ids(&read_json(&backup)),
+            ["c1"],
+            "a save must not spend the single backup slot on the empty document a \
+             corrupt boot wrote — that document is not the last parseable copy of the \
+             user's connections, the backup is"
+        );
+        assert_eq!(fs::read_to_string(&backup).unwrap(), before);
+
+        cleanup_test_env();
+    }
+
+    /// #2187 ② — a backup that parses but holds nothing puts nothing back, so the
+    /// boot must not raise the flag the frontend turns into "your connections came
+    /// back". The user would read that sentence over an empty connection list.
+    ///
+    /// `seed_backup_if_absent` already refuses to *create* such a backup, but that
+    /// guard covers only the seed path. A rename in `save_storage_raw` and a
+    /// hand-placed file both reach the restore with one.
+    #[test]
+    #[serial]
+    fn an_empty_backup_restores_nothing_and_claims_nothing() {
+        let dir = setup_test_env();
+        let (path, backup) = storage_and_backup(&dir);
+        CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
+
+        let nothing = StorageData {
+            connections: vec![],
+            groups: vec![],
+        };
+        fs::write(&backup, serde_json::to_string_pretty(&nothing).unwrap()).unwrap();
+        assert!(
+            !path.exists(),
+            "the restore path needs the file to be missing"
+        );
+
+        let loaded = load_storage_redacted().unwrap();
+        assert!(loaded.connections.is_empty() && loaded.groups.is_empty());
+        assert!(
+            !CONNECTIONS_RESTORED_FROM_BACKUP.load(Ordering::SeqCst),
+            "a backup with no connections and no groups restores nothing, so the boot \
+             must not tell the user that something came back"
+        );
+
+        CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
         cleanup_test_env();
     }
 
