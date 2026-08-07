@@ -236,8 +236,10 @@ pub(crate) fn app_data_dir_path() -> Option<PathBuf> {
     data_dir_override().or_else(|| PROD_DATA_DIR.get().cloned())
 }
 
-/// #2183 — `true` once this process found `connections.json` gone and put it
-/// back from the backup beside it. `get_initial_app_state` swaps it into
+/// #2183 — `true` once this process found `connections.json` gone and put back a
+/// backup that held something ([`is_worth_protecting`]). A backup that parses to
+/// an empty document is still written back, and leaves this `false`: it returned
+/// nothing, so there is nothing to claim. `get_initial_app_state` swaps it into
 /// `InitialAppState.connections_restored_from_backup`, which the frontend turns
 /// into a toast — the same boot-flag-to-toast wiring
 /// [`corrupt_recovery::DID_RECOVER`] uses for a quarantined `state.db`.
@@ -245,7 +247,10 @@ pub(crate) fn app_data_dir_path() -> Option<PathBuf> {
 /// It is deliberately a second flag rather than that one, because the two events
 /// need opposite sentences and name different files: `DID_RECOVER` says the app
 /// state was reset and the old copy sits in `state.db.bak`, this one says the
-/// connections came back from `connections.json.bak` and nothing was reset.
+/// stored connections and groups came back from `connections.json.bak` and
+/// nothing was reset. Either half of that store raises it on its own, so the
+/// sentence it drives has to name both — a groups-only backup raises this over a
+/// connection list that is still empty afterwards.
 /// Reusing `DID_RECOVER` would have shown the user the reset message on a
 /// restore and pointed them at a file that has none of their connections.
 pub static CONNECTIONS_RESTORED_FROM_BACKUP: AtomicBool = AtomicBool::new(false);
@@ -350,8 +355,10 @@ fn load_storage_raw() -> Result<StorageData, AppError> {
 ///   corrupt-file quarantine can never become the backup;
 /// - only when there is something to protect ([`is_worth_protecting`]). An
 ///   install with no connections and no groups has nothing to lose, and seeding
-///   it would leave an empty backup that a later loss would "restore" while
-///   telling the user their connections came back.
+///   it would spend the one backup slot on a document that puts nothing back.
+///   The restore path refuses to announce such a document, so what an empty seed
+///   costs is not a false claim to the user — it is the slot a real generation
+///   would have taken.
 ///
 /// A copy, not the rename [`save_storage_raw`] uses: there the old file is being
 /// replaced anyway, here it has to stay. A copy interrupted midway leaves a
@@ -395,9 +402,13 @@ fn seed_backup_if_absent(path: &std::path::Path, data: &StorageData) {
 /// [`seed_backup_if_absent`] on a successful load — only ever run with a
 /// `connections.json` in hand, so its presence means this install has held one:
 ///
-/// - a backup is there → connections were here and the file they lived in is
-///   gone. Put them back, `warn!`, and raise
+/// - a backup is there → connections or groups were here and the file they lived
+///   in is gone. Put them back, `warn!`, and — when what came back holds
+///   something ([`is_worth_protecting`]) — raise
 ///   [`CONNECTIONS_RESTORED_FROM_BACKUP`] so the boot snapshot can tell the user.
+///   A backup that parses to an empty document takes the same write and none of
+///   the announcement: it put nothing back, and a recovery notice over an empty
+///   list is a sentence the user's own screen contradicts.
 /// - no backup → **there is nothing to put back**, so start empty and stay
 ///   quiet (acceptance ③ — a warning on every first launch would be a new
 ///   defect). Note what this arm does *not* claim: it cannot tell a genuine
@@ -408,9 +419,11 @@ fn seed_backup_if_absent(path: &std::path::Path, data: &StorageData) {
 /// A backup that cannot be read or parsed restores nothing and is moved aside
 /// with a timestamp instead of being left in place. With `connections.json` gone
 /// it is the user's only remaining copy, and leaving it under its own name would
-/// hand it to the next save's rename — the empty file this function just wrote
-/// would take the backup slot and the last copy would be gone. Moving it is what
-/// makes "kept for manual recovery" survive past this boot.
+/// hand it to a later save's rename. Not to the empty file this function just
+/// wrote — [`is_worth_protecting`] keeps that one out of the slot — but to the
+/// first save that replaces a document holding something, which is where the last
+/// copy would actually go. Moving it is what makes "kept for manual recovery"
+/// survive that save and not merely this boot.
 fn restore_from_backup_or_start_empty() -> Result<StorageData, AppError> {
     let empty = StorageData {
         connections: vec![],
@@ -463,7 +476,7 @@ fn restore_from_backup_or_start_empty() -> Result<StorageData, AppError> {
     // #2187 ② — the flag is a claim that something came back, so it is raised only
     // when something did. A backup that parses to an empty document reaches this
     // point on the success branch, and raising it there showed the user a sticky
-    // "your connections were restored" toast over an empty list.
+    // recovery toast over a list that was still empty underneath it.
     if is_worth_protecting(&data) {
         CONNECTIONS_RESTORED_FROM_BACKUP.store(true, Ordering::SeqCst);
     }
@@ -473,10 +486,12 @@ fn restore_from_backup_or_start_empty() -> Result<StorageData, AppError> {
 /// #2183 — a backup that could not be used is still the user's last copy, so it
 /// is moved to a timestamped name rather than deleted or left where it is.
 ///
-/// Leaving it in place would not preserve it: `connections.json` is missing, the
-/// caller is about to write an empty one, and the next save renames that empty
-/// file straight over the backup. Moving it out of the slot is what makes it
-/// outlive this boot, and it lands under the same `.corrupt-<ts>` convention the
+/// Leaving it in place would not preserve it: `connections.json` is missing and
+/// the caller is about to write an empty one. That empty document cannot take the
+/// slot — [`is_worth_protecting`] refuses it — but the user's next real change
+/// can, because the save that follows it renames a document holding something
+/// straight over this file. Moving it out of the slot is what makes it outlive
+/// that save, and it lands under the same `.corrupt-<ts>` convention the
 /// corrupt-`connections.json` path already uses.
 ///
 /// Best-effort by design: this is a recovery that already failed, so a rename
@@ -489,7 +504,7 @@ fn set_aside_unusable_backup(backup: &std::path::Path) {
             kept.display()
         ),
         Err(e) => warn!(
-            "could not move the unusable backup {} aside ({}); the next save will replace it",
+            "could not move the unusable backup {} aside ({}); a later save will replace it",
             backup.display(),
             e
         ),
@@ -1712,7 +1727,10 @@ mod tests {
         data.groups.iter().map(|g| g.id.as_str()).collect()
     }
 
-    /// Acceptance ① — every save keeps the generation it replaced.
+    /// Acceptance ① — a save keeps the generation it replaced whenever that
+    /// generation holds something. The first save below replaces the empty
+    /// document a first run writes and correctly keeps nothing; the second is
+    /// the one the assertion is about.
     #[test]
     #[serial]
     fn a_save_leaves_the_generation_it_replaced_in_the_backup() {
@@ -1892,7 +1910,8 @@ mod tests {
         assert!(loaded.groups.is_empty());
         assert!(
             !CONNECTIONS_RESTORED_FROM_BACKUP.load(Ordering::SeqCst),
-            "an empty data directory is a first run, not a loss — it must not warn the user"
+            "an empty data directory has no backup to put anything back from, so the silence \
+             is the absence of a recovery source — not a finding that nothing was lost"
         );
         assert!(
             !backup.exists(),
@@ -1903,9 +1922,11 @@ mod tests {
     }
 
     /// The backup is the user's last copy once `connections.json` is gone, so a
-    /// backup that does not parse is reported and left exactly as it is. The
-    /// corrupt-file path may rename `connections.json` aside; nothing may do
-    /// that to the backup.
+    /// backup that does not parse is reported and kept byte for byte — but out of
+    /// the slot, under the same `.corrupt-<ts>` name the corrupt-`connections.json`
+    /// path uses. Left in the slot it would sit in front of the first save that
+    /// replaces a document holding something, and that rename is where the last
+    /// copy would actually go.
     #[test]
     #[serial]
     fn an_unparseable_backup_is_kept_and_never_restored() {
@@ -1925,9 +1946,10 @@ mod tests {
         );
 
         // Byte-for-byte, but out of the backup slot. Left under its own name it
-        // would survive this load and then be renamed over by the next save,
-        // which is when the user's last copy would actually disappear — so the
-        // assertion has to be about the file that outlives the boot.
+        // would survive this load and then be renamed over by the first save that
+        // replaces a document holding something, which is when the user's last
+        // copy would actually disappear — so the assertion has to be about the
+        // file that outlives the boot, not about surviving this load.
         let kept: Vec<PathBuf> = fs::read_dir(dir.path())
             .unwrap()
             .flatten()
@@ -1942,10 +1964,14 @@ mod tests {
         assert_eq!(fs::read_to_string(&kept[0]).unwrap(), "{ half a file");
         assert!(
             !backup.exists(),
-            "the unusable copy must not stay where the next save would overwrite it"
+            "the unusable copy must not stay in the slot a later save renames over"
         );
 
-        // The next save is what used to destroy it.
+        // A save is what used to destroy it. This one does not reach the rename —
+        // the document it replaces is the empty one the restore just wrote, and
+        // that holds nothing — but the set-aside file has to survive it anyway,
+        // and the name it was moved to is what keeps that true for the saves after
+        // it as well.
         save_conn(sample_connection("c1", "DB1")).unwrap();
         assert_eq!(fs::read_to_string(&kept[0]).unwrap(), "{ half a file");
 
@@ -1955,14 +1981,15 @@ mod tests {
     /// The exact sequence that produced the incident: a corrupt
     /// `connections.json` is quarantined and an empty file is written in its
     /// place. That empty write must not become the backup — if it does, the
-    /// quarantine path destroys the recovery this PR adds.
+    /// quarantine path destroys the recovery.
     ///
-    /// What holds it is that `quarantine_corrupt_storage` renames the file away
-    /// *before* the empty save runs, so `save_storage_raw` finds no file to back
-    /// up. Nothing in the type system says those two must stay in that order,
-    /// which is why the assertion is here: swapping them, or turning the
-    /// quarantine into a copy, silently spends the backup slot on an empty
-    /// document.
+    /// Two independent things hold it. `quarantine_corrupt_storage` renames the
+    /// file away *before* the empty save runs, so `save_storage_raw` finds no file
+    /// to back up; and `is_worth_protecting` refuses the rename for any document
+    /// with no connections and no groups, so the empty write stays out of the slot
+    /// even where that ordering does not. The assertion pins the outcome rather
+    /// than either mechanism, which is what makes it the guard that still holds
+    /// when a later change removes one of them.
     #[test]
     #[serial]
     fn quarantining_a_corrupt_file_does_not_overwrite_the_backup() {
@@ -2031,12 +2058,16 @@ mod tests {
     }
 
     /// #2187 ② — a backup that parses but holds nothing puts nothing back, so the
-    /// boot must not raise the flag the frontend turns into "your connections came
-    /// back". The user would read that sentence over an empty connection list.
+    /// boot must not raise the flag the frontend turns into "your connections and
+    /// groups came back". The user would read that sentence over an empty list.
     ///
-    /// `seed_backup_if_absent` already refuses to *create* such a backup, but that
-    /// guard covers only the seed path. A rename in `save_storage_raw` and a
-    /// hand-placed file both reach the restore with one.
+    /// Both writers this module owns already refuse to put such a document in the
+    /// slot — `seed_backup_if_absent` before copying one in, `save_storage_raw`
+    /// before renaming one in. This assertion covers what they cannot: a file
+    /// placed by hand, one left by a build that predates those guards, or one from
+    /// a writer added later. The restore is the last point at which the claim can
+    /// be withheld, so it reads the document it is about to announce instead of
+    /// trusting where the document came from.
     #[test]
     #[serial]
     fn an_empty_backup_restores_nothing_and_claims_nothing() {

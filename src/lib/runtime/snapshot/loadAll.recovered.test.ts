@@ -86,7 +86,10 @@ describe("#2183 connections restored from backup toast", () => {
     const warning = useToastStore
       .getState()
       .toasts.find((t) => t.variant === "warning");
-    expect(warning, "a restore must be reported to the user").toBeTruthy();
+    expect(
+      warning,
+      "the flag says the backup put something back, so the user has to be told",
+    ).toBeTruthy();
     expect(
       warning?.message,
       "the user has to be told which file to look at, and it is not the state.db one",
@@ -98,7 +101,7 @@ describe("#2183 connections restored from backup toast", () => {
     ).toBeNull();
   });
 
-  it("stays silent when nothing was restored", async () => {
+  it("stays silent when the flag says nothing came back", async () => {
     invokeMock.mockResolvedValueOnce(
       makeSnapshot({ connectionsRestoredFromBackup: false }),
     );
@@ -107,7 +110,7 @@ describe("#2183 connections restored from backup toast", () => {
 
     expect(
       useToastStore.getState().toasts.find((t) => t.variant === "warning"),
-      "a first run has nothing to report — warning on every launch would be a new defect",
+      "the flag down covers a first run and a backup that held nothing, and neither has anything to report — warning on every launch would be a new defect",
     ).toBeUndefined();
   });
 });

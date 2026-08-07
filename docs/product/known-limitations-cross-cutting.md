@@ -35,7 +35,7 @@ raises a sticky toast naming the file when the backup put something back; a
 launch that finds neither file starts empty and says nothing, because there is
 nothing to put back.
 
-Four boundaries ride with it. Only one generation is kept, so a save made after
+Boundaries ride with it. Only one generation is kept, so a save made after
 the last backup rotation is not recoverable — the backup is the state before the
 most recent write that had something to replace, not the most recent write. The
 backup lives inside the app data directory, which is the deliberate trade-off
