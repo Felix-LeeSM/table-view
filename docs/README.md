@@ -177,8 +177,8 @@ git grep -q "존재하지않는문자열zzzz" f41e0a10 -- docs/ memory/ ; echo $
 권하는 것이 그 `git grep` 이다.
 
 **처방: pathspec 은 리터럴로 쓴다.** 위 「저장소 전수」와 그 앞의 레시피들이 그
-형태다. 길어서 변수에 담아야 하면 **배열**을 쓴다 — 원소 하나가 인자 하나라
-인용이 산다.
+형태다. 길어서 변수에 담아야 하면 **배열에 담고 `"${PATHS[@]}"` 로 편다** — 원소
+하나가 인자 하나로 넘어가 인용이 살고, zsh 와 bash 가 같은 값을 낸다.
 
 **`${=VAR}` 로 때우지 마라 — 단어 분리만 되살리고 인용은 안 살린다.** 문자열에
 담은 `':!docs/archives'` 가 따옴표째 경로 이름이 되어 exclude 절이 조용히 죽는다.
@@ -188,13 +188,23 @@ git grep -q "존재하지않는문자열zzzz" f41e0a10 -- docs/ memory/ ; echo $
 ```sh
 PATHS=(docs/ memory/ .agents/ .claude/ .github/ AGENTS.md CLAUDE.md ':!docs/archives' ':!docs/explorations')
 S="docs/ memory/ .agents/ .claude/ .github/ AGENTS.md CLAUDE.md ':!docs/archives' ':!docs/explorations'"
-git grep -lniE "리뷰어|reviewer" f41e0a10 -- $PATHS | wc -l    # 20  배열 — exclude 가 산다
-git grep -lniE "리뷰어|reviewer" f41e0a10 -- ${=S} | wc -l     # 23  ${=VAR} — exclude 가 죽었다
+git grep -lniE "리뷰어|reviewer" f41e0a10 -- "${PATHS[@]}" | wc -l    # 20  배열 — exclude 가 산다
+git grep -lniE "리뷰어|reviewer" f41e0a10 -- ${=S} | wc -l           # 23  ${=VAR} — exclude 가 죽었다
 git grep -lniE "리뷰어|reviewer" f41e0a10 -- docs/ memory/ .agents/ .claude/ .github/ AGENTS.md CLAUDE.md | wc -l   # 23  exclude 를 안 준 값
-diff <(git grep -lniE "리뷰어|reviewer" f41e0a10 -- $PATHS | sort) \
+diff <(git grep -lniE "리뷰어|reviewer" f41e0a10 -- "${PATHS[@]}" | sort) \
      <(git grep -lniE "리뷰어|reviewer" f41e0a10 -- ${=S} | sort)   # `>` 3줄, 전부 archives/explorations
 ```
 
-`${=VAR}` 는 인용부호가 없는 단순 목록에서만 쓴다. 값은 2026-08-07 에 `f41e0a10`
-을 못 박고 잰 것이다. 판별에 쓰는 것은 절대값이 아니라 **같은 검색어에서 변수형이
-리터럴형보다 적게 나오는가** 다.
+`${=VAR}` 는 인용부호가 없는 단순 목록에서만 쓴다 (bash 에는 이 문법이 아예 없다).
+
+**단어 분리를 안 하는 쪽이 zsh 고유이고, 따옴표가 전개를 못 넘기는 쪽은 bash 도
+같다.** 위 `S` 를 bash 3.2.57 에서 `-- $S` 로 그냥 펴도 23건이라 exclude 가 똑같이
+죽는다. 그러니 "나는 bash 니 변수를 써도 된다" 가 아니다. 배열이 두 셸의 공통
+정답이고, 그때도 전개 형태가 갈린다 — `-- "${PATHS[@]}"` 는 zsh · bash 둘 다
+20건인데 `-- $PATHS` 는 bash 에서 첫 원소 `docs/` 하나만 넘겨 **rc=0 · stderr
+0바이트로 7건**을 낸다. 이 절이 막으려는 바로 그 형태다.
+
+값은 2026-08-07 에 `f41e0a10` 을 못 박고 잰 것이다 (zsh 5.9 / bash 3.2.57 /
+git 2.50.1). 판별에 쓰는 것은 절대값이 아니라 **같은 검색어에서 변수형이 리터럴형과
+다른 값을 내는가** 다 — 적게 나오면 pathspec 이 죽은 것이고(0 vs 8), 많이 나오면
+exclude 가 죽은 것이다(23 vs 20).
