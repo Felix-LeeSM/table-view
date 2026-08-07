@@ -85,11 +85,13 @@ test "$(git -C "$DEST" rev-parse HEAD)" = "$OID" \
   위 형태는 cwd 를 안 읽어 어디에 서 있든 같은 `DEST` 가 나온다. `AUTHOR` 는
   리뷰어가 받는 유일한 절대 경로라 사본 루트를 찾는 데만 쓴다.
 - **저자 사본을 clone 소스로 쓰지 않는다.** 저자 사본은 살아 움직이고 push 안 된
-  커밋을 갖는다 — 2026-08-07 PR #2210 실측으로 head `2e0bd76fc606` 위에 미push
-  커밋 `e6a2817bd5b6` 이 얹혀 있었다. 그 사본을 clone 한 뒤 `gh pr checkout 2210`
-  을 돌리면 "Already up to date" 를 내며 `e6a2817bd5b6` 에 선다 — GitHub 에 없는
-  커밋이 그 PR 의 근거가 된다. 그래서 소스는 GitHub 이고 대상은 브랜치가 아니라
-  OID 이며, 마지막 `test` 가 통과하기 전에는 이 사본의 출력을 근거로 쓰지 않는다.
+  커밋을 갖는다. 2026-08-07 실측: PR #2210 의 저자 사본이 그 시점 head
+  `2e0bd76fc606` 위에 미push 커밋 `e6a2817bd5b6` 을 얹고 있었고, 그 사본을 clone 한
+  뒤 `gh pr checkout 2210` 은 "Already up to date" 를 내며 `e6a2817bd5b6` 에 섰다 —
+  GitHub 에 없는 커밋이 그 PR 의 근거가 될 뻔했다. (`e6a2817bd5b6` 은 몇 분 뒤
+  push 되어 head 가 됐으니 이 대조 자체는 지금 재현되지 않는다.) 그래서 소스는
+  GitHub 이고 대상은 브랜치가 아니라 OID 이며, 마지막 `test` 가 통과하기 전에는 이
+  사본의 출력을 근거로 쓰지 않는다.
 - 이름 `review__<PR>__<OID 앞 12>` 는 저자 사본(브랜치 이름)과 안 겹치고, 라운드가
   바뀌면 OID 가 달라져 옛 사본을 조용히 재사용하지 못한다.
 - `--depth 1` 은 의도한 상한이다 — test·lint·build 는 되고 `git log` 나 base 대비
