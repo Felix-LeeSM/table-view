@@ -101,15 +101,20 @@ advisory 였다(스크립트 헤더 「기본: 경고만 출력 (exit 0)」, 커
 이고 cap 은 그것의 1.124 배였다.
 
 **분모를 106,766 으로 잡은 이유** — 같은 커밋 메시지는 `docs 최대 106,473 < 120,000`
-이라고 다른 수를 적는다. 그 값은 브랜치가 갈린 `9ca42507` 의 트리에서 나오고, 그
+이라고 다른 수를 적는다. 그 값은 브랜치가 갈린 `cb2f41f1` 의 트리에서 나오고, 그
 뒤 `93d89b27` (#968) 이 같은 파일에 293 chars 를 더해 머지 시점에는 106,766 이 됐다.
 이 절의 방법이 「이름 댄 rev 의 트리를 잰다」이므로 이름 댄 `3b3d38d2` 에서 나오는
 값을 쓴다. 어느 쪽을 분모로 써도 반올림한 결과는 33,000 으로 같다.
 
 ```sh
-git show 9ca42507:docs/contributor-guide/testing-and-quality.md | LC_ALL=en_US.UTF-8 wc -m  # 106473
+# 분기점은 PR 의 base 로 확인한다 — squash 머지라 브랜치가 그래프에 안 남는다
+gh api repos/Felix-LeeSM/table-view/pulls/970 --jq .base.sha
+# cb2f41f1696534b1b8e5edaf88a265ec3eab02f4
+git show cb2f41f1:docs/contributor-guide/testing-and-quality.md | LC_ALL=en_US.UTF-8 wc -m  # 106473
 git show 3b3d38d2:docs/contributor-guide/testing-and-quality.md | LC_ALL=en_US.UTF-8 wc -m  # 106766
-git rev-list --count 9ca42507..3b3d38d2                                                     # 6
+git rev-list --count cb2f41f1..3b3d38d2                                                     # 4
+git log --oneline cb2f41f1..3b3d38d2 -- docs/contributor-guide/testing-and-quality.md
+# 93d89b27 feat(oracle): enable key-projected edit safety (#968)
 awk 'BEGIN{printf "%.0f %.0f\n", 29472*120000/106766, 29472*120000/106473}'                 # 33125 33216
 ```
 
