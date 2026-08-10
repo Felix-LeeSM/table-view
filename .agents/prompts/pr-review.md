@@ -48,8 +48,14 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 - 이슈를 발행하지 않는다 — non-blocking 을 어디에 남기는지는 review 「행동 계약」.
 - **write 는 둘뿐이다: scorecard comment 1개 + verdict label.** 그 외 GitHub
   write 금지.
-- subreviewer 는 발견과 근거만 낸다. severity 를 붙이지 않는다. blocking 은
-  coordinator 만 정한다. 같은 관점 중복 spawn 금지.
+- **fan-out 은 `subagent_type: subreviewer` 로 띄운다** — 그래야
+  `.claude/agents/subreviewer.md` 정의가 실려 노드가 첫 행동으로
+  `.agents/prompts/pr-subreview.md` 고정부를 읽는다. 그 `subagent_type` 이 없는
+  harness 면 그 파일을 spawn 메시지에 **그대로 첨부**한다 — 요약하지 않는다.
+  같은 관점 중복 spawn 금지.
+- blocking 은 coordinator 만 정한다 — 관점을 늘려도 blocking 이 늘지 않는다.
+  subreviewer 쪽 제약(발견과 근거만 · severity 없음 · 처방 없음 · 수는 목록)은
+  위 고정부가 싣는다.
 
 출처: `memory/workflow/review/memory.md` 「행동 계약」.
 
