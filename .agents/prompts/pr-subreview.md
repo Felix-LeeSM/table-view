@@ -13,13 +13,18 @@
 
 ## MANDATORY 첫 명령
 
+저자 사본 **안에서 돌면 안 된다.** 그 사본은 구현자의 작업 공간이고 리뷰어는
+편집하지 않는다. 사유는 `memory/workflow/review/memory.md` 「행동 계약」.
+
 ```bash
-test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
-  || { echo "ABORT: wrong checkout" >&2; exit 1; }
+AUTHOR="<사본 경로>"
+test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
+  || { echo "ABORT: 저자 사본 안에서는 리뷰하지 않는다" >&2; exit 1; }
 ```
 
-불일치면 즉시 중단하고 보고한다. 그 사본은 구현자와 공유하므로 편집하지 않는다.
-출처: `memory/runbook/worktree/memory.md` 「첫 turn 검증 (MANDATORY)」 · 「책임」.
+일치하면 즉시 중단하고 보고한다. 그 밖에는 **어디에서 떠도 된다** — 대신 서 있는
+트리를 근거로 쓰지 않는다. 근거를 PR head OID 에 고정하는 인용 형식은 아래
+「반환 형식」 이 가리킨다.
 
 ## 착수 전 MANDATORY read
 
