@@ -43,8 +43,10 @@ trigger:
   body, sprint contract, 필요한 active SOT 이고, 직접 돌렸으면 그 결과도 근거가 된다.
 - Subreview 결과는 coordinator의 입력이다. Coordinator는 PR에 직접 하나의
   통합 scorecard와 action items를 repo-relative evidence로 comment한다.
-- Blocking은 세 사유뿐이다: 런타임·보안 / 이 PR 귀책의 거짓이 SOT에 들어감 /
-  자동 layer 실패. 그 외 발견은 non-blocking이고 scorecard 에
+- Blocking은 아래 사유뿐이다: 런타임·보안 / 이 PR 귀책의 거짓이 SOT에 들어감 /
+  자동 layer 실패 / 문서화 impact 게이트 위반. 그 게이트의 상세는
+  [documentation](../documentation/memory.md) 「Reviewer 판정」이 갖고 여기
+  복제하지 않는다. 그 외 발견은 non-blocking이고 scorecard 에
   남긴다. 점수 기준은 쓰지 않는다 — 앵커가 없어 판정을 대신해 왔다.
 - Blocking 판정은 coordinator 단독 권한이다. subreviewer는 발견과 근거만 내고
   severity를 붙이지 않는다. 관점을 늘려도 blocking이 늘지 않는다.

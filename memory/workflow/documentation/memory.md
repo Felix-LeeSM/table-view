@@ -89,13 +89,20 @@ PR #2232 의 squash body 를 이 규약에 맞게 고친 것은 저자도 리뷰
 
 ## Reviewer 판정
 
+[review](../review/memory.md) 「행동 계약」의 문서화 impact 게이트 사유가 이 절을
+가리킨다 — blocking 사유 목록은 그 방이 갖고, 여기는 그 사유의 상세만 둔다.
+
 리뷰어는 다음을 blocking finding 으로 본다. 판정하는 것은 **내용**이고,
 body 에 어떤 섹션이 있는지는 판정 대상이 아니다:
 
 - 문서화 트리거가 있는데 어떤 SOT 도 갱신되지 않음.
 - 기존 SOT 대신 새 backlog/plan 디렉토리를 만들고 retire 조건 없음.
-- PR 에서 볼 수 없는 로컬 절대경로를 근거로 사용.
 - workflow/rule 변경인데 `memory/workflow/**` 갱신 없음.
+- PR 에서 볼 수 없는 로컬 절대경로를 근거로 사용 — **이 줄만 문서화 impact
+  게이트가 아니다.** `.github/workflows/ci.yml` 의
+  `Reject non-portable paths in PR body` step 이 기계로 잡으므로 review 방의
+  자동 layer 실패 사유로 걸린다. 앞의 줄들은 트리거 발생 여부를 사람이 읽어야
+  판정되고, 그래서 이 게이트가 별도 사유로 선다.
 
 ## 관련
 
