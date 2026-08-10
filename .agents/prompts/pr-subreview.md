@@ -14,7 +14,11 @@
 ## MANDATORY 첫 명령
 
 저자 사본 **안에서 돌면 안 된다.** 그 사본은 구현자의 작업 공간이고 리뷰어는
-편집하지 않는다. 사유는 `memory/workflow/review/memory.md` 「행동 계약」.
+편집하지 않는다 — `memory/workflow/review/memory.md` 「행동 계약」. 「안에 서지
+마라」까지는 그 절이 안 정하므로 `memory/runbook/worktree/memory.md` 가 받친다:
+사본 격리를 도입한 사유(linked worktree 가 `.git` 을 공유해 index.lock ·
+FETCH_HEAD 충돌을 냈다)와 「책임」의 「동시에 쓰는 node 는 하나」. 읽기만 하는
+리뷰라도 `git fetch` 한 번이 서 있는 사본의 `.git` 에 쓴다.
 
 ```bash
 AUTHOR="<사본 경로>"

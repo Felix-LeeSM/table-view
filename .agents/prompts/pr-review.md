@@ -15,8 +15,12 @@
 ## MANDATORY 첫 명령
 
 저자 사본 **안에서 돌면 안 된다.** 그 사본은 구현자의 작업 공간이고, 리뷰 전후로
-HEAD 와 `git status` 가 그대로여야 한다. 사유는
-`memory/workflow/review/memory.md` 「행동 계약」.
+HEAD 와 `git status` 가 그대로여야 한다 — `memory/workflow/review/memory.md`
+「행동 계약」. 그 절이 정하는 것은 거기까지이므로 「안에 서지 마라」를 받치는 것은
+`memory/runbook/worktree/memory.md` 다: 사본 격리를 도입한 사유(linked worktree
+가 `.git` 을 공유해 index.lock · FETCH_HEAD 충돌을 냈다)와 「책임」의 「동시에
+쓰는 node 는 하나」. 읽기만 하는 리뷰라도 `git fetch` 한 번이 서 있는 사본의
+`.git` 에 쓴다.
 
 ```bash
 AUTHOR="<사본 경로>"
