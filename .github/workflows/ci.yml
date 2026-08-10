@@ -189,6 +189,37 @@ jobs:
       - name: (non-blocking) job names carry continue-on-error
         run: bash scripts/check-non-blocking-jobs.sh
 
+      # The second step that reads the PR body (#2228). It sits at the bottom
+      # instead of next to the first one because it runs a script out of the
+      # tree, so it has to be after `Checkout`; the body-path step above reads
+      # the event payload and needs no tree. The body arrives through `env:`
+      # for the same reason it does up there — a PR body is attacker-controlled
+      # text, and `${{ ... }}` inside `run:` is substituted before bash parses
+      # the line.
+      #
+      # What it enforces is that a universal claim carries the command that
+      # would disprove it: the rule is memory/workflow/implementation/memory.md
+      # §5 「새로 쓴 전칭 서술이 실측을 넘어섬」, and until now nothing measured
+      # it. What counts as a violation is decided by
+      # `scripts/check-pr-body-universals.sh` alone; its header states the rule,
+      # including the six trigger words and what ±6 lines means.
+      #
+      # This does NOT check whether the body is true. It checks that six
+      # Korean trigger words are not left standing without a command near them;
+      # a false claim that uses none of those words passes untouched, and the
+      # share of past blocking findings this shape covers is the number issue
+      # #2228 pinned. Clearing a red needs a new commit, not a body edit — see
+      # the `on:` comment at the top of this file.
+      - name: Universal claims in PR body carry a command
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [ -z "$BODY" ]; then
+            echo "no PR body on this event — nothing to check"
+            exit 0
+          fi
+          printf '%s\n' "$BODY" | bash scripts/check-pr-body-universals.sh
+
   dependency-security:
     name: Dependency Security
     runs-on: ubuntu-latest

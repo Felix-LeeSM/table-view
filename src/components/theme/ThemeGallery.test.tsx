@@ -4,6 +4,7 @@
  * User path being locked:
  *   - user opens the picker, presses "browse all themes"
  *   - the whole catalog is there, filterable by name / id / vibe
+ *   - every card previews itself in its own theme, in the mode being browsed
  *   - starring a theme puts it in the picker and writes it to SQLite
  *   - clicking a card applies that theme and closes the overlay
  *
@@ -13,7 +14,7 @@
  */
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -63,6 +64,18 @@ function cardIds(): (string | null)[] {
     (li) =>
       li.querySelector("[data-theme-id]")?.getAttribute("data-theme-id") ??
       null,
+  );
+}
+
+/**
+ * Each card's preview swatch, read through the attribute under test. The
+ * swatch is `aria-hidden` decoration with no role or text, so the attribute is
+ * the handle — and a deleted attribute surfaces as `null` for every card
+ * rather than the query quietly matching something else.
+ */
+function previewAttrs(attr: "data-theme" | "data-mode"): (string | null)[] {
+  return galleryCards().map(
+    (li) => li.querySelector(`[${attr}]`)?.getAttribute(attr) ?? null,
   );
 }
 
@@ -303,5 +316,60 @@ describe("ThemeGallery — applying", () => {
     expect(useThemeFavoritesStore.getState().favoriteThemeIds).not.toContain(
       "linear",
     );
+  });
+});
+
+/**
+ * #2200 — the preview swatch is the gallery's whole point. `src/themes.css`
+ * keys on `[data-theme][data-mode]` on any element, not just `:root`, and the
+ * Tailwind colour utilities in the card read the `--tv-*` custom properties
+ * those selectors set, which inherit into the subtree. Drop either attribute
+ * and the gallery still renders, still filters, still applies — every card
+ * just paints in the app's current theme, so "see it before you pick it"
+ * silently stops working. The issue carries the command showing that nothing
+ * asserted them.
+ */
+describe("ThemeGallery — each card previews its own theme", () => {
+  it("carries that card's theme id on its preview", () => {
+    renderWithGalleryOpen();
+
+    expect(previewAttrs("data-theme")).toEqual(
+      THEME_CATALOG.map((entry) => entry.id),
+    );
+  });
+
+  // Two phases, and the second one splits `mode` from `resolvedMode`. One mode
+  // alone is satisfied by a hardcoded literal; two modes that agree are also
+  // satisfied by reading `mode`, and `mode` can be `system`, which no
+  // `[data-theme][data-mode]` block in `src/themes.css` selects — a system-mode
+  // user would then browse a catalog where no card gets its own `--tv-*`
+  // overrides (#2212).
+  it("follows the app's resolved mode, not the raw mode, on its preview", () => {
+    renderWithGalleryOpen();
+
+    expect(previewAttrs("data-mode")).toEqual(THEME_CATALOG.map(() => "light"));
+
+    // `system` only stays split from `dark` while the OS query answers dark:
+    // the store subscriber re-runs `applyTheme` on a `mode` change and pushes
+    // its result back into `resolvedMode` when the two differ. The suite-wide
+    // stub in `src/test-setup.ts` answers `matches: false`.
+    const realMatchMedia = window.matchMedia;
+    onTestFinished(() => {
+      window.matchMedia = realMatchMedia;
+    });
+    window.matchMedia = ((query: string) => ({
+      ...realMatchMedia(query),
+      matches: query.includes("prefers-color-scheme: dark"),
+    })) as typeof window.matchMedia;
+
+    act(() => {
+      useThemeStore.setState({ mode: "system", resolvedMode: "dark" });
+    });
+    // The split is what makes the assertion below discriminate; if the store
+    // collapses it back, the assertion silently stops testing anything.
+    expect(useThemeStore.getState().mode).toBe("system");
+    expect(useThemeStore.getState().resolvedMode).toBe("dark");
+
+    expect(previewAttrs("data-mode")).toEqual(THEME_CATALOG.map(() => "dark"));
   });
 });

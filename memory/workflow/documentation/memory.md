@@ -1,9 +1,9 @@
 ---
 title: Documentation Impact Gate
 type: workflow-rule
-updated: 2026-07-31
+updated: 2026-08-10
 task: documentation, docs, pr, review, delivery
-keywords: 문서화, documentation impact, SOT 라우팅, evidence portability, repo-relative, retire 조건
+keywords: 문서화, documentation impact, SOT 라우팅, evidence portability, repo-relative, retire 조건, 개수 서술, 닫힌 개수, 자리 나열, scorecard 수치
 trigger:
   signal: PR 작성 / 문서 추가 / workflow·contract·user-facing 변경
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -16,7 +16,7 @@ trigger:
 
 ## Documentation impact 판단
 
-PR body 형식 요구는 없다. 아래 세 질문에 스스로 답하고, 답을 남길 곳은
+PR body 형식 요구는 없다. 아래 질문에 스스로 답하고, 답을 남길 곳은
 PR body / 커밋 메시지 / 리뷰 코멘트 중 아무 곳이나 고른다.
 
 - 문서화가 필요한가 (아래 트리거 목록).
@@ -60,9 +60,36 @@ PR body / review comment / handoff 는 GitHub 에서 확인 가능한 증거만 
   로컬 plan path.
 - 로컬 임시 로그는 요약을 붙이고, 재현 명령 또는 repo artifact 로 대체.
 
+## 개수 서술 대신 자리를 나열한다
+
+「N개뿐」·「넷이다」·「둘 다」 같은 닫힌 개수 서술은 그것이 세는 목록이 늘거나
+줄면 그 자리에서 거짓이 된다. **수를 쓰지 않으면 잘못 셀 수가 없다** — 개수
+대신 자리를 나열한다.
+
+**저장소 산문을 쓰는 자리면 걸린다 — 특정 역할의 목록이 아니다.** 저자의 PR
+body · 커밋 메시지 · 소스 주석, 리뷰어의 scorecard · 리뷰 코멘트, 티켓 저자의
+이슈 본문, 종결자의 squash body 가 그 자리다. 역할이 늘면 자리도 는다 — 이
+규약을 낳은 #2229 자신이 「범위」를 「두 파일.」로 열고 같은 파일만 나열했고,
+PR #2232 의 squash body 를 이 규약에 맞게 고친 것은 저자도 리뷰어도 아닌
+종결자였다. scorecard 의 수는 다음 라운드 저자의 입력이라, 리뷰어가 잘못 센
+수를 저자가 body 로 옮기고 다음 라운드가 그것을 blocking 으로 잡는다
+(PR #2218 — 라운드 2 scorecard 가 그 수의 출처를 라운드 1 scorecard 로 밝혔다).
+
+```
+❌ 승격 claim 이 5곳에 남아 있다.
+
+✅ 남은 자리:
+   - src/lib/a.ts:12
+   - src/lib/b.ts:44
+```
+
+목록은 줄마다 대조되고, 빠진 자리가 있어도 틀린 수가 아니라 참인 부분집합이다.
+옮겨 적을 수가 애초에 안 생긴다. 수 자체가 결론이면 그것을 만든 명령을 붙인다 —
+[implementation](../implementation/memory.md) §5 「수치가 추론으로 생산됨」이 SOT 다.
+
 ## Reviewer 판정
 
-리뷰어는 다음을 blocking finding 으로 본다. 셋 다 **내용**에 관한 것이고,
+리뷰어는 다음을 blocking finding 으로 본다. 판정하는 것은 **내용**이고,
 body 에 어떤 섹션이 있는지는 판정 대상이 아니다:
 
 - 문서화 트리거가 있는데 어떤 SOT 도 갱신되지 않음.

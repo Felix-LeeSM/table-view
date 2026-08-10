@@ -1,9 +1,9 @@
 ---
 title: Delivery — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 행동 계약
 type: workflow-rule
-updated: 2026-08-01
+updated: 2026-08-07
 task: delivery, commit, push, pr, review, merge
-keywords: 커밋, commit, push, PR 생성, squash, squash body, --body-file, 낡은 수치, staleness, 머지 정책, review:approved, reflect:done, 자율 실행, 중단 조건, GPG, pinentry, 노드 표
+keywords: 커밋, commit, push, PR 생성, squash, squash body, --body-file, COMMIT_MESSAGES, 뒤집힌 주장, 철회문, scorecard 대조, staleness, 머지 정책, review:approved, reflect:done, 자율 실행, 중단 조건, GPG, pinentry, 노드 표
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -27,7 +27,7 @@ SOT 는 없다.
 |---|---|---|
 | interface | 사용자 대화 · grill · 결정 기록 · raw→task 승격 · `needs:user` 중계. orchestration(spawn · 리뷰 큐 · 머지) 겸무 가능 — 조건은 [interface](../interface/memory.md) §3 | 코드 수정 — 쓰기 범위는 [interface](../interface/memory.md) §4 |
 | orchestrator | label 을 보고 다음 node spawn (`.agents/prompts/orchestrator.md` 그대로 기동) | 판단. 사용자와 대화하지 않는다. 코멘트를 읽지 않는다 |
-| 구현자 | 커밋 · 푸시 · PR 생성 · 수정 라운드 반영. **파일을 쓰는 유일한 역할** | 리뷰어 부착, 라운드 판정, 머지 |
+| 구현자 | 커밋 · 푸시 · PR 생성 · 수정 라운드 반영. **저자 사본에 파일을 쓰는 유일한 역할** | 리뷰어 부착, 라운드 판정, 머지 |
 | 리뷰어 | 판정 + scorecard + verdict label. 라운드 3부터는 회고 모드 — 개별 지적 대신 유형 반복 표 | commit / push / merge / branch 수정, 이슈 발행 |
 | 종결자 | 머지 · 브랜치 삭제 · 사본 회수 · 이슈 종결. 대규모 삭제 머지 시 삭제 경로 참조 이슈 스윕 | 코드 수정 |
 
@@ -69,9 +69,14 @@ head OID 로 센 라운드가 3 이상이면 `reflect:done` 까지, mergeable, �
 
 ## PR body
 
-형식 요구는 없다. CI 가 집행하는 유일한 제약은 근거의 이식성 — PR body / comment 는
-GitHub 에서 열리는 repo-relative path 와 URL 만 쓴다. `/Users`, `/tmp`, `file://`,
-`worktrees/`, `clones/` 금지. 문서화 판단은 [documentation](../documentation/memory.md).
+형식 요구는 없다. CI 가 집행하는 제약은 근거의 이식성과 전칭 서술의 반증 명령이다.
+**이식성** — PR body / comment 는 GitHub 에서 열리는 repo-relative path 와 URL 만
+쓴다. `/Users`, `/tmp`, `file://`, `worktrees/`, `clones/` 금지. **전칭** — 트리거
+낱말이 든 줄은 ±6 줄 안에 명령을 갖고 있어야 한다 (#2228). 낱말 목록과 「±6」의 뜻은
+`scripts/check-pr-body-universals.sh` 헤더가 소유하니 여기 옮겨 적지 않는다 — 규칙
+자체의 SOT 는 [implementation](../implementation/memory.md) §5 다. 그 검사는 낱말
+옆에 명령이 있는지만 보고 주장의 참·거짓은 안 본다.
+문서화 판단은 [documentation](../documentation/memory.md).
 
 2026-07-31 부터 PR body 는 CI 가 실제로 검사한다 — `PR Body Contract` job 이
 `/Users/` · `/tmp/` · `file://` · `worktrees/` · `clones/` 를 찾으면 fail 이다
@@ -80,14 +85,38 @@ GitHub 에서 열리는 repo-relative path 와 URL 만 쓴다. `/Users`, `/tmp`,
 (body 편집으로는 재검사되지 않음 — [pr-merge-gates](../../runbook/pr-merge-gates/memory.md)).
 
 **PR body 와 squash 커밋 메시지는 다음 노드가 읽는 입력이다** — 노드는 죽고 산출물만
-남으니 거짓이거나 낡은 수치는 미래 구현자·디버깅 세션의 거짓 전제가 된다 (정량 주장에
+남으니 거짓이거나 낡아진 주장은 미래 구현자·디버깅 세션의 거짓 전제가 된다 (정량 주장에
 재현 명령을 붙이는 제약은 [implementation](../implementation/memory.md) §5 표가 SOT).
-수정 라운드에서 코드가 바뀌어 body 의 기존 주장이 낡으면 fix commit 과 같은 턴에
-body 도 갱신한다 — body 편집 단독은 재검사되지 않으니 commit + push 와 한 세트로 간다.
-기본 squash body 는 커밋 메시지에서 오므로 중간 커밋의 낡은 수치가 main 기록에 들어갈
-수 있다 — 종결자는 머지 시점에 `--body-file` 교정본으로 대체할 수 있고, 교정본에도 위
-수치 제약이 그대로 걸린다 (2026-07-31 PR #2023: 커밋 606c426e 의 통과 수치가 작성 뒤
-스위트 확장으로 낡아, 종결자가 교정본으로 머지했다 — 2007be88).
+수정 라운드에서 낡은 주장은 **지우는 것이 기본**이다 — 그 라운드가 새로 쓰는 줄은
+정의상 지난 라운드 검증 집합 밖이라, 고쳐 쓴 문장이 다음 라운드에 반증되는 것이
+blocking 의 반복 공급원이었다 (#2226). 다시 쓰는 것은 지우면 정보가 사라질 때뿐이고,
+그때는 추론이 아니라 명령 출력으로 쓴다 (같은 §5 표의 「수치가 추론으로 생산됨」 행).
+지우든 다시 쓰든 body 편집 단독은 재검사되지 않으니 fix commit + push 와 한 세트로 간다.
+
+### squash body 교정
+
+기본 squash body 는 PR body 가 아니라 **브랜치 커밋 메시지를 이어붙인 것이다**
+(repo 설정 `squash_merge_commit_message=COMMIT_MESSAGES`). 저자는 이미 push 된 커밋
+메시지를 못 고친다 — force-push 가 [git-policy](../git-policy/memory.md) hard block
+이라, 리뷰가 소스와 PR body 를 고쳐도 커밋 메시지는 거짓인 채로 남는다. 교정 지점은
+종결자의 `--body-file` 하나뿐이고 머지 뒤에는 히스토리라 아무도 못 고친다.
+
+**교정 대상은 리뷰 라운드가 뒤집은 모든 주장이다 — 수치 · 산문 · 철회된 결론.**
+수치로만 좁히면 수치가 아닌 거짓이 조건에 안 걸린다. 2026-08-07 #2204 가 그
+형태다 — 저자의 철회 목록이 같은 줄의 `182 → 183` 은 고치고 `the two new tests` 라는
+**낱말**은 안 건드렸는데, 브랜치가 더한 테스트는 셋이었다 (라운드 2 scorecard NB2).
+저자의 철회문도 주장이라 같이 본다 — 저자가 자기 거짓을 세는 구조라 목록이 빠지거나
+철회문 자체가 거짓일 수 있다 (2026-08-07 #2206 라운드 2 scorecard non-blocking 3:
+철회문이 "base 와 head 에서 똑같이 0건" 이라 적었는데 base 는 2건이었다).
+
+**종결자는 무엇이 거짓인지 새로 판정하지 않는다** — 리뷰어가 이미 판정한 것을
+커밋 메시지와 대조한다. **커밋이 하나여도 대조를 통째로 건너뛰지 않는다** — 라운드 1 의
+finding 이 그 하나뿐인 커밋 메시지를 지목할 수 있고, non-blocking 만 달고 라운드 1 에서
+approved 되면 커밋이 둘로 늘지 않은 채 머지된다. 싼 경로는 대조 범위를 라운드 1
+scorecard 하나로 줄이는 것이지 생략이 아니다. 대조 절차는
+[pr-finalize preamble](../../../.agents/prompts/pr-finalize.md) 「3단계」가 갖는다.
+교정본에도 위 정량 주장 제약이 그대로 걸린다 (2026-07-31 PR #2023: 커밋 606c426e 의
+통과 수치가 작성 뒤 스위트 확장으로 낡아, 종결자가 교정본으로 머지했다 — 2007be88).
 
 ## Agent spawn — reviewer 독립
 

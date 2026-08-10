@@ -33,7 +33,7 @@ GitHub 산출물로 남긴 뒤 종료한다 — 다음 노드는 그 상태를 �
 | commit / PR            | `memory/workflow/delivery/memory.md`                   |
 | PR review              | `memory/workflow/review/memory.md`                     |
 | 병렬 작업 / 이슈 발행  | `memory/workflow/orchestration/memory.md` (spawn·리뷰 큐·사이클 정지·이슈 수용기준) |
-| subagent spawn / 역할 프롬프트 | `.agents/prompts/` — orchestrator·issue-implement·pr-review·pr-finalize 고정부. **자동 도달 아니다**: spawn 시 파일을 그대로 첨부하거나 `.claude/agents/<role>.md` 정의가 첫 행동으로 읽는다 |
+| subagent spawn / 역할 프롬프트 | `.agents/prompts/` — orchestrator·issue-implement·pr-review·pr-subreview·pr-finalize 고정부. **자동 도달 아니다**: spawn 시 파일을 그대로 첨부하거나 `.claude/agents/<role>.md` 정의가 첫 행동으로 읽는다 |
 | 사용자 대화 / 설계 결정 / raw→task 승격 | `memory/workflow/interface/memory.md` (top-level 세션 전용) |
 | 문서화 / PR body       | `memory/workflow/documentation/memory.md`              |
 | git / PR / push reject | `memory/workflow/git-policy/memory.md` (금지 목록·계약) + `.agents/skills/recovering-push-rejects/SKILL.md` (4-step 회복·SHA refspec·stale ref) |

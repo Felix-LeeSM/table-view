@@ -50,6 +50,10 @@ import {
   SCHEMA_GRAPH_IMPACT_SESSION_FK,
   seedSchemaGraphMigrationImpactFixture,
 } from "@/test-utils/schemaGraphImpactFixture";
+import {
+  findPreviewSql,
+  reactOnClick,
+} from "./__tests__/dropDialogGateHelpers";
 import DropColumnDialog from "./DropColumnDialog";
 
 function setProductionConnection() {
@@ -127,37 +131,6 @@ function renderDialog(
 }
 
 const DROP_EMAIL_SQL = 'ALTER TABLE "public"."users" DROP COLUMN "email"';
-
-/**
- * The preview pane renders the SQL through `<SqlSyntax>`, which splits it
- * into one `<span>` per token — no single element holds the whole string.
- * Match the `<pre>` wrapper by its `textContent` instead.
- */
-function findPreviewSql(sql: string) {
-  return screen.findByText(
-    (_content, element) =>
-      element?.tagName === "PRE" && element.textContent === sql,
-  );
-}
-
-/**
- * React refuses to deliver a click to a `disabled` button, and it decides
- * that from its own props — clearing the DOM attribute changes nothing
- * (measured on react-dom 19.2.4). So the button's `disabled` binding hides
- * the click handler's own guard from every DOM-level test. Pull the
- * registered `onClick` off the host node instead: that is the entry point a
- * regressed `disabled` binding would expose, and it is the only way to
- * assert the second layer holds on its own.
- */
-function reactOnClick(node: HTMLElement): () => Promise<void> {
-  const key = Object.keys(node).find((k) => k.startsWith("__reactProps$"));
-  if (!key) throw new Error("no React props key on the host node");
-  const props = (
-    node as unknown as Record<string, { onClick?: () => Promise<void> }>
-  )[key];
-  if (!props?.onClick) throw new Error("no onClick registered on the button");
-  return props.onClick;
-}
 
 describe("DropColumnDialog (Sprint 236)", () => {
   beforeEach(() => {

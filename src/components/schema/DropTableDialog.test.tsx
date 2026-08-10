@@ -2,17 +2,21 @@
 // — DropTableDialog test suite. Date: 2026-05-07.
 //
 // Why this file exists:
-// - AC-235-05: typing-confirm enable/disable, CASCADE toggle → preview
-//   re-fetch on next Show DDL, CASCADE checked emits SQL with `... CASCADE`,
-//   case-sensitive typing match (`Users` ≠ `users`), Apply disabled
-//   before typing match.
-// - AC-235-06: Safe Mode block / warn-cancel / warn-confirm / safe matrix.
+// - AC-235-05: typing-confirm enable/disable, CASCADE toggle → debounced
+//   preview re-fetch with no `Show DDL` click in between (Sprint 238),
+//   CASCADE checked emits SQL with `... CASCADE`, case-sensitive typing
+//   match (`Users` ≠ `users`), Apply disabled before typing match.
+// - AC-235-06: Safe Mode confirm / warn-cancel / safe matrix (Sprint 245
+//   retired the block tier — see the case at "production × strict").
 //   `DROP TABLE` is classified `ddl-drop`/danger so the gate fires on
 //   production environments.
 // - AC-235-02 / AC-235-03: IPC payload shape (camelCase) + call sequence
 //   `[{ previewOnly: true }, { previewOnly: false }]`.
 // - AC-235-09: invalid-table-name rejection (defense-in-depth — typing-
 //   confirm is the user-visible gate).
+// - Issue #2191: the preview gate and the execution gate are separate.
+//   The DROP SQL renders before the typing-confirm input matches; the
+//   typing-confirm input still owns whether the DROP may run.
 //
 // Mock pattern: `vi.hoisted` for `@lib/tauri.dropTableRequest`,
 // `tauri.dropTable` (compat), and `tauri.listTables` (Sprint 223
@@ -55,7 +59,13 @@ import {
   SCHEMA_GRAPH_IMPACT_SESSION_FK,
   seedSchemaGraphMigrationImpactFixture,
 } from "@/test-utils/schemaGraphImpactFixture";
+import {
+  findPreviewSql,
+  reactOnClick,
+} from "./__tests__/dropDialogGateHelpers";
 import DropTableDialog from "./DropTableDialog";
+
+const DROP_USERS_SQL = 'DROP TABLE "public"."users"';
 
 function setProductionConnection() {
   useConnectionStore.setState({
@@ -153,15 +163,76 @@ describe("DropTableDialog (Sprint 235)", () => {
     expect(apply).toBeDisabled();
   });
 
-  // AC-235-05 — typing match enables Show DDL flow (Apply needs preview SQL too).
-  it("[AC-235-05] typing match unlocks Show DDL → preview SQL fetched", async () => {
+  // Issue #2191 — preview gate. The user reads the exact DROP statement
+  // first and confirms afterwards, so nothing gates the preview fetch.
+  it("[#2191] renders the DROP SQL before the typing-confirm input is touched", async () => {
     renderDialog({ tableName: "users" });
+
+    expect(screen.getByLabelText("Type the table name to confirm")).toHaveValue(
+      "",
+    );
+    expect(await findPreviewSql(DROP_USERS_SQL)).toBeInTheDocument();
+    expect(mockDropTableRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ previewOnly: true }),
+    );
+  });
+
+  // Issue #2191 — execution gate. Showing the SQL must not move the Apply
+  // gate; the typing-confirm input still owns it.
+  it("[#2191] keeps Apply disabled while the DROP SQL is on screen and the input is untouched", async () => {
+    renderDialog({ tableName: "users" });
+    await findPreviewSql(DROP_USERS_SQL);
+
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
+
+  // Issue #2191 — the execution gate is checked in the click handler too,
+  // not only in the button's `disabled` binding. `previewSql` no longer
+  // proves the user confirmed, so it cannot be the thing that admits a
+  // commit.
+  it("[#2191] clicking Apply before the typing match sends no commit request", async () => {
+    renderDialog({ tableName: "users" });
+    await findPreviewSql(DROP_USERS_SQL);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+
+    expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
+    expect(mockDropTable).not.toHaveBeenCalled();
+  });
+
+  // Issue #2191 — second layer, on its own. A DOM click only ever proves
+  // the first layer (`disabled`), since React never routes it to the
+  // handler. Reaching the handler directly is what pins the `!canApply`
+  // guard: delete that one line and this case is the only one that reddens.
+  it("[#2191] the Apply handler refuses to commit when the click reaches it anyway", async () => {
+    renderDialog({ tableName: "users" });
+    await findPreviewSql(DROP_USERS_SQL);
+
+    const apply = screen.getByRole("button", { name: "Apply" });
+    await act(async () => {
+      await reactOnClick(apply)();
+    });
+
+    expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
+    expect(mockDropTable).not.toHaveBeenCalled();
+  });
+
+  // AC-235-05 (issue #2191) — typing no longer drives the preview. It is
+  // already on screen, and matching the table name only flips Apply.
+  it("[AC-235-05][#2191] typing the table name enables Apply without re-fetching the preview", async () => {
+    renderDialog({ tableName: "users" });
+    await findPreviewSql(DROP_USERS_SQL);
+    expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
+
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+
     await waitFor(() => {
-      expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
     });
+    expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
   });
 
   it("shows cached SchemaGraph migration impact in the DDL preview", () => {
@@ -201,8 +272,8 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    // 타이핑이 typingMatches=true 로 만들면 자동 fetch (cascade:false) 가
-    // debounce 후 한 번 발생.
+    // 자동 fetch (cascade:false) 는 다이얼로그가 열릴 때 debounce 후 한 번
+    // 난다 — 타이핑과 무관하다 (이슈 #2191).
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
     });
@@ -219,6 +290,41 @@ describe("DropTableDialog (Sprint 235)", () => {
     expect(mockDropTableRequest.mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({ cascade: true, previewOnly: true }),
     );
+  });
+
+  // Issue #2213 — the previewed statement has to be the statement that
+  // runs. CASCADE used to reach the preview only, so the user read
+  // `… CASCADE`, typed the table name, and committed a plain DROP.
+  it("[#2213] CASCADE checked → the commit carries the same choice the preview showed", async () => {
+    mockDropTableRequest
+      .mockResolvedValueOnce({ sql: DROP_USERS_SQL })
+      .mockResolvedValueOnce({ sql: `${DROP_USERS_SQL} CASCADE` });
+    renderDialog({ tableName: "users" });
+    await findPreviewSql(DROP_USERS_SQL);
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("CASCADE"));
+    });
+    expect(
+      await findPreviewSql(`${DROP_USERS_SQL} CASCADE`),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Type the table name to confirm"), {
+      target: { value: "users" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+
+    await waitFor(() => {
+      expect(mockDropTable).toHaveBeenCalledWith(
+        "conn-1",
+        "users",
+        "public",
+        "db-1",
+        true,
+      );
+    });
   });
 
   // AC-235-05 — commit success closes modal.
@@ -244,6 +350,7 @@ describe("DropTableDialog (Sprint 235)", () => {
       "users",
       "public",
       "db-1",
+      false,
     );
   });
 
@@ -283,6 +390,7 @@ describe("DropTableDialog (Sprint 235)", () => {
       "users",
       "public",
       "db-1",
+      false,
     );
   });
 
@@ -307,7 +415,9 @@ describe("DropTableDialog (Sprint 235)", () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     });
     // Confirm dialog mounts; commit closure (tauri.dropTable compat)
-    // does NOT run until the user types the analyzer reason.
+    // does NOT run until the user answers it. Sprint 246 replaced the
+    // earlier type-to-confirm gate with the single-click Yes/No dialog —
+    // `ConfirmDestructiveDialog` has no text input.
     await screen.findByText("PRODUCTION DATABASE");
     expect(mockDropTable).not.toHaveBeenCalled();
   });

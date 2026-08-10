@@ -14,13 +14,27 @@
 
 ## MANDATORY 첫 명령
 
+저자 사본 **안에서 돌면 안 된다.** 그 사본은 구현자의 작업 공간이고, 리뷰 전후로
+HEAD 와 `git status` 가 그대로여야 한다 — `memory/workflow/review/memory.md`
+「행동 계약」. 그 절이 정하는 것은 거기까지이므로 「안에 서지 마라」를 받치는 것은
+`memory/runbook/worktree/memory.md` 다: 사본 격리를 도입한 사유(linked worktree
+가 `.git` 을 공유해 index.lock · FETCH_HEAD 충돌을 냈다)와 「책임」의 「동시에
+쓰는 node 는 하나」. 읽기만 하는 리뷰라도 `git fetch` 한 번이 서 있는 사본의
+`.git` 에 쓴다.
+
 ```bash
-test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
-  || { echo "ABORT: wrong checkout" >&2; exit 1; }
+AUTHOR="<사본 경로>"
+test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
+  || { echo "ABORT: 저자 사본 안에서는 리뷰하지 않는다" >&2; exit 1; }
 ```
 
-불일치면 즉시 중단하고 보고한다. 사본은 구현자와 공유하므로 읽기만 한다.
-출처: `memory/runbook/worktree/memory.md` 「첫 turn 검증 (MANDATORY)」 · 「책임」.
+일치하면 즉시 중단하고 보고한다. 그 밖에는 **어디에서 떠도 된다** — 이 노드는
+저자 사본에 설 이유가 없다.
+
+**대신 서 있는 트리를 근거로 쓰지 않는다.** 판정 근거는 PR head OID 에 고정하고,
+명령 출력을 인용할 때 그 OID 를 같이 적는다 — 형식은
+`memory/runbook/worktree/memory.md` 「결과를 인용하는 법」. 검증을 돌리는 방법은
+아래 「금지 / Write 예산」.
 
 ## 착수 전 MANDATORY read
 
@@ -37,13 +51,24 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 ## 금지 / Write 예산
 
 - **read-only 다.** commit · push · merge · branch 수정 금지.
-- test · lint · build 를 재실행하지 않는다. 읽어도 되는 것의 목록은
-  `memory/workflow/review/memory.md` 「행동 계약」에 있다.
+- **저자 사본을 편집하지 않는다** — 소스도 빌드 산출물도 거기 쓰지 않는다.
+  test · lint · build 를 돌리려면 일회용 사본을 따로 만들어 거기서 돌리고 끝나면
+  지운다. 돌릴지 말지는 재량이고 의무가 아니다. 조건과 판정 입력 목록은
+  `memory/workflow/review/memory.md` 「행동 계약」에 있고, **만드는 법은
+  `memory/runbook/worktree/memory.md` 「리뷰어 사본」** 이다 — PR head 를 잡는
+  레시피와, 돌린 출력에 head OID 를 같이 적는 인용 형식이 거기 있다. 「생성」
+  레시피는 구현자용이라 `origin/main` 을 잡는다.
 - 이슈를 발행하지 않는다 — non-blocking 을 어디에 남기는지는 review 「행동 계약」.
 - **write 는 둘뿐이다: scorecard comment 1개 + verdict label.** 그 외 GitHub
   write 금지.
-- subreviewer 는 발견과 근거만 낸다. severity 를 붙이지 않는다. blocking 은
-  coordinator 만 정한다. 같은 관점 중복 spawn 금지.
+- **fan-out 은 `subagent_type: subreviewer` 로 띄운다** — 그래야
+  `.claude/agents/subreviewer.md` 정의가 실려 노드가 첫 행동으로
+  `.agents/prompts/pr-subreview.md` 고정부를 읽는다. 그 `subagent_type` 이 없는
+  harness 면 그 파일을 spawn 메시지에 **그대로 첨부**한다 — 요약하지 않는다.
+  같은 관점 중복 spawn 금지.
+- blocking 은 coordinator 만 정한다 — 관점을 늘려도 blocking 이 늘지 않는다.
+  subreviewer 쪽 제약(발견과 근거만 · severity 없음 · 처방 없음 · 수는 목록)은
+  위 고정부가 싣는다.
 
 출처: `memory/workflow/review/memory.md` 「행동 계약」.
 

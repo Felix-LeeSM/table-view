@@ -73,13 +73,13 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 5. PR 생성 (base main, 본문에 `Closes #<이슈>`). body 를 쓰기 전에 read 목록의
    두 제약을 그대로 적용한다 — 정량 주장은 implementation §5 표, 근거의 이식성은
    `memory/workflow/delivery/memory.md` 「PR body」. 두 제약의 본문은 그 방에 있다.
-   body 와 squash 커밋 메시지는 다음 노드가 읽는 입력이다 — 거짓이거나 낡은 수치는
+   body 와 squash 커밋 메시지는 다음 노드가 읽는 입력이다 — 거짓이거나 낡아진 주장은
    미래 노드의 거짓 전제가 된다 (같은 절).
 6. 보고하고 종료한다. CI 를 기다리지 않고, 다음 노드를 부르지 않는다.
    리뷰 부착은 orchestrator 가 label 을 보고 한다.
 
 수정 라운드도 같은 사본, 같은 브랜치에서 이 절차를 다시 밟는다. 이번 라운드의 변경으로
-PR body 의 기존 주장이 낡았으면 fix commit 과 같은 턴에 body 도 갱신한다.
+PR body 의 기존 주장이 낡았을 때 무엇을 하는지는 그 방이 갖는다 — 옮겨 적지 않는다.
 출처: `memory/workflow/delivery/memory.md` 「PR body」.
 
 ## 중단 조건
@@ -120,7 +120,17 @@ PR body 의 기존 주장이 낡았으면 fix commit 과 같은 턴에 body 도 
 - push: <ls-remote 로 대조한 원격 SHA>
 - PR: #<번호>
 - 검증: 돌린 명령 → 결과 / 못 돌린 것 → 이유
+- 주장 근거: <body 의 정량·전칭 주장> — <만든 명령> → <출력 요약> (주장마다 한 줄)
 - 남은 위험: 없으면 "없음"
 ```
 
 서사 없이 위 항목만. 출처: `memory/workflow/implementation/memory.md` §1.
+
+`주장 근거` 는 `검증` 과 세는 축이 다르다 — `검증` 은 돌린 명령을 세고, 이쪽은
+body 에 남은 주장을 센다. 그래서 body 를 다 쓴 뒤 한 줄씩 되짚어야 채워진다.
+구분자가 `|` 가 아닌 이유는 명령 자리가 파이프를 낄 수 있어서다. 명령 자리가 빈
+주장은 body 에 두지 않고, 뺐다는 사실을 그 줄에 적는다. 쓸 주장이 하나도 없으면
+"없음". 명령이 붙었다고 주장이 서는 게 아니라, 그 명령이 주장의 집합을 덮어야
+선다. 제약 본문은 여기 없다 — `memory/workflow/implementation/memory.md` §5
+「수치가 추론으로 생산됨」 · 「새로 쓴 전칭 서술이 실측을 넘어섬」 ·
+「전수 명령의 필터가 검증 안 됨」 이 SOT 다.

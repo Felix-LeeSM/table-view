@@ -1,9 +1,9 @@
 ---
 title: 작업 사본 격리 — clone
 type: runbook
-updated: 2026-08-01
+updated: 2026-08-10
 task: clone, worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
-keywords: index.lock, FETCH_HEAD, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject, stalled, timeout, respawn, npx, pnpm exec, cargo clean, stale path
+keywords: index.lock, FETCH_HEAD, git fetch, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject, stalled, timeout, respawn, npx, pnpm exec, cargo clean, stale path, 일회용 사본, 리뷰어 사본, PR head, headRefOid, gh pr checkout, checkout --detach, review__, --depth, shallow clone, is-shallow-repository, --unshallow, bad object
 ---
 
 # 작업 사본 격리 — clone
@@ -21,10 +21,14 @@ worktree 는 `.git` 을 공유해 index.lock 겹침·FETCH_HEAD 등 공유 자�
 
 ## 소유권 / SOT
 
-- 본 파일이 사본 격리(생성·점유·회수)의 유일한 SOT 다.
+- 본 파일이 사본 격리(생성·점유·회수)의 유일한 SOT 다 — 예외는 아래가 지명하는
+  소유자뿐이다.
 - commit / push / PR / merge 행동 계약은 [delivery](../../workflow/delivery/memory.md),
   push reject 의 계약은 [git-policy](../../workflow/git-policy/memory.md),
   회복 절차는 [recovering-push-rejects](../../../.agents/skills/recovering-push-rejects/SKILL.md) 소유.
+- 리뷰어의 **일회용 사본**도 본 파일 소유다 — 만드는 법은 아래 「리뷰어 사본」,
+  지우는 의무는 아래 「책임」. [review](../../workflow/review/memory.md) 「행동 계약」은
+  언제 만드는지만 정한다. 작업 사본과 별개다.
 
 ## 생성
 
@@ -32,18 +36,25 @@ worktree 는 `.git` 을 공유해 index.lock 겹침·FETCH_HEAD 등 공유 자�
 # primary 루트에서 실행 — 사본은 primary "밖" 형제 디렉토리에 만든다
 PRIMARY="$(git rev-parse --show-toplevel)"
 DEST="$PRIMARY/../table-view-clones/<branch 의 / 를 __ 로>"
-# 1) 로컬 객체를 hardlink 로 공유하는 clone — 수 초, 디스크 저렴
-git clone --local "$PRIMARY" "$DEST"
+# 1) GitHub 에서 clone — primary 를 소스로 쓰지 않는다 (아래 「사본은 얕으면 안 된다」).
+#    https 인 이유: 이 머신의 ssh 는 GitHub 인증이 없어 fetch 가 실패한다 (2026-07-31 실측)
+git clone https://github.com/Felix-LeeSM/table-view.git "$DEST"
 DEST="$(cd "$DEST" && pwd -P)"   # `..` 정규화 — 첫 turn 검증(rev-parse)의 문자열 비교와 일치시킨다
-# 2) origin 을 GitHub 으로 — 이후 fetch/push 는 GitHub 과 직접 (https — 이
-#    머신의 ssh 는 GitHub 인증이 없어 fetch 가 실패한다, 2026-07-31 실측)
-git -C "$DEST" remote set-url origin https://github.com/Felix-LeeSM/table-view.git
-git -C "$DEST" fetch origin main
+test "$(git -C "$DEST" rev-parse --is-shallow-repository)" = false \
+  || { echo "ABORT: 역사가 잘린 사본" >&2; exit 1; }
+# 2) 브랜치
 git -C "$DEST" checkout -b <branch> origin/main
 # 3) 의존성 — cold 시작
 cd "$DEST" && pnpm install --frozen-lockfile --prefer-offline
 ```
 
+- **사본은 얕으면 안 된다 — 소스는 GitHub 이고 primary 가 아니다.** primary 가
+  shallow 라(경계 `539d05f3`, 2026-06-11) `git clone --local` 은 `--local` 을
+  무시하고 거기까지만 복제한다. 2026-08-10 실측:
+  `git rev-list --count 0da61f06` 이 그렇게 뜬 사본에선 778, GitHub clone 에선
+  1921 이다. 잘려도 에러가 안 나고 정상적인 숫자가 나오니 위 `test` 로 판정한다.
+  `--depth` 도 같은 금지다 — `--depth 1` 이면 `scripts/sweep/core-split-prose.mjs` 의
+  고정 커밋이 없어 `pnpm test` 가 죽는다 (CI 도 `frontend-shard` 잡에 `fetch-depth: 0`).
 - 위치: primary **밖** 형제 디렉토리 `../table-view-clones/`. repo 안에 두면
   rg·Tailwind source scan·lint 글롭이 사본을 훑는 함정이 생기고 `.gitignore`
   로는 도구 전부를 못 막는다.
@@ -54,6 +65,56 @@ cd "$DEST" && pnpm install --frozen-lockfile --prefer-offline
 - 사본 안에서 도구는 **버전을 고정해** 실행한다 — `pnpm exec <도구>` 또는
   `npx <pkg>@<버전>`. bare `npx biome` 가 동명의 무관 패키지를 끌어와 false green
   을 낸 실측이 있다 (2026-07-31).
+
+## 리뷰어 사본 — PR head 를 체크아웃한다
+
+위 「생성」은 구현자용이라 `origin/main` 을 잡는다. 리뷰어가 그대로 쓰면 **PR 의
+변경이 하나도 안 들어간 트리**에서 test·lint·build 를 돌리고 그 출력을 scorecard
+근거로 인용하게 된다 — 통과든 실패든 무의미한데 출력 어디에도 그 사실이 안 드러난다.
+만들 조건은 [review](../../workflow/review/memory.md) 「행동 계약」, 지우는 의무는
+아래 「책임」이다.
+
+```bash
+PR=<PR 번호>
+AUTHOR="<spawn 이 준 저자 사본 경로>"   # 첫 turn 검증에 쓴 그 문자열. 경로 계산에만 쓴다
+case "$AUTHOR" in /*) ;; *) echo "ABORT: AUTHOR 는 절대경로여야 한다" >&2; exit 1;; esac
+OID="$(gh pr view "$PR" --repo Felix-LeeSM/table-view --json headRefOid -q .headRefOid)"
+DEST="$(dirname "$AUTHOR")/review__${PR}__${OID:0:12}"
+git init -q "$DEST"
+git -C "$DEST" remote add origin https://github.com/Felix-LeeSM/table-view.git
+git -C "$DEST" fetch origin "$OID"
+git -C "$DEST" -c advice.detachedHead=false checkout --detach "$OID"
+test "$(git -C "$DEST" rev-parse HEAD)" = "$OID" \
+  || { echo "ABORT: PR head 가 아니다" >&2; exit 1; }
+# 의존성이 필요하면 「생성」 3) 과 같다
+```
+
+- **`PRIMARY` 를 안 쓴다 — cwd 를 아예 안 읽는다.** 리뷰어의 첫 명령이 저자 사본
+  **밖**을 요구하고 그 밖에는 어디든 허용하므로(`.agents/prompts/pr-review.md`
+  「MANDATORY 첫 명령」) `git rev-parse --show-toplevel` 이 무엇을 낼지 정해져
+  있지 않다. 위 형태는 `dirname "$AUTHOR"` 만 읽어 어디에 서 있든 같은 `DEST` 다.
+- **저자 사본을 clone 소스로 쓰지 않는다.** 저자 사본은 살아 움직이고 push 안 된
+  커밋을 갖는다. 2026-08-07 실측: PR #2210 의 저자 사본이 그 시점 head
+  `2e0bd76fc606` 위에 미push 커밋 `e6a2817bd5b6` 을 얹고 있었고, 그 사본을 clone 한
+  뒤 `gh pr checkout 2210` 은 "Already up to date" 를 내며 `e6a2817bd5b6` 에 섰다 —
+  GitHub 에 없는 커밋이 그 PR 의 근거가 될 뻔했다. (`e6a2817bd5b6` 은 몇 분 뒤
+  push 되어 head 가 됐으니 이 대조 자체는 지금 재현되지 않는다.) 그래서 소스는
+  GitHub 이고 대상은 브랜치가 아니라 OID 이며, 마지막 `test` 가 통과하기 전에는 이
+  사본의 출력을 근거로 쓰지 않는다.
+- 이름 `review__<PR>__<OID 앞 12>` 는 저자 사본(브랜치 이름)과 안 겹치고, 라운드가
+  바뀌면 OID 가 달라져 옛 사본을 조용히 재사용하지 못한다.
+- **깊이를 줄이지 않는다** — 사유는 위 「생성」의 얕은 사본 금지와 같다.
+
+### 결과를 인용하는 법
+
+출력 자체에는 **어느 커밋에서 나왔는지가 안 적혀 있다.** scorecard 로 옮길 때 명령과
+head OID 를 같이 적는다 — 위 해악을 막는 장치는 이것뿐이다.
+
+```
+`pnpm exec vitest run` @ #2221 head ff7861aedeab → 실패 0
+```
+
+OID 가 리뷰 중인 라운드의 head 와 다르면 그 출력은 폐기하고 사본을 다시 만든다.
 
 ## 점유 — 같은 브랜치에 사본 둘 금지
 
@@ -73,13 +134,15 @@ worktree 가 공짜로 주던 "같은 브랜치 이중 체크아웃 방지"가 c
 ## 첫 turn 검증 (MANDATORY)
 
 ```bash
+# 그 사본에서 일하는 역할(issue-implement)은 `=`, 남의 사본에 서면 안 되는
+# 역할(pr-review · pr-subreview · pr-finalize)은 `!=` 로 뒤집어 쓴다
 test "$(git rev-parse --show-toplevel)" = "<expected_path>" \
   || { echo "ABORT: wrong checkout" >&2; exit 1; }
 ```
 
-spawner 가 이 스니펫을 prompt 의 첫 명령 슬롯에 넣는다. 불일치 = 즉시 abort +
-보고, 다른 디렉토리에서 작업 재개 금지. cross-checkout 오염은 3회 관측된
-실사고다 (sprint-380/381/385).
+spawner 가 역할에 맞는 쪽을 prompt 의 첫 명령 슬롯에 넣는다 — 부호를 잘못
+복사하면 가드가 반대로 선다. 판정 실패 = 즉시 abort + 보고, 다른 디렉토리에서
+작업 재개 금지. cross-checkout 오염은 3회 관측된 실사고다 (sprint-380/381/385).
 
 ## 회수
 
@@ -97,14 +160,25 @@ spawner 가 이 스니펫을 prompt 의 첫 명령 슬롯에 넣는다. 불일�
 
 - 생성/회수: orchestrator 가 spawn 시 명시 실행. agent 가 자율 생성하지 않는다
   (사용자가 못 보는 디스크 점유). 막는 장치 없음 — 규율만.
-- 사본은 PR 당 하나, 동시에 쓰는 node 는 하나 (파일 writer 는 구현자뿐,
-  리뷰어는 read-only). 리뷰 라운드는 새 사본을 만들지 않고 같은 사본에 다음
-  구현자를 붙인다 — 쪼개면 죽은 구현자의 미푸시 커밋을 못 이어받는다.
+- **예외는 리뷰어의 일회용 검증 사본뿐이다** — 리뷰어가 스스로 만든다
+  ([review](../../workflow/review/memory.md) 「행동 계약」). 디스크 점유 사유는
+  그대로 걸리므로 **만든 리뷰어가 같은 턴에 지운다.** 만드는 법과 경로는 위
+  「리뷰어 사본」이 정한다 — 사본 루트 안에 `review__` 로 남지만 종결자가 회수할
+  사본 경로를 하나만 받으므로(`.agents/prompts/pr-finalize.md` 「MANDATORY 첫
+  명령」·「4단계 — 회수」) 스윕이 애초에 그 자리를 안 본다.
+- 작업 사본은 PR 당 하나, 동시에 쓰는 node 는 하나 (그 사본에 파일을 쓰는 것은
+  구현자뿐 — 리뷰어는 저자 사본을 편집하지 않는다). 리뷰 라운드는 새 사본을
+  만들지 않고 같은 사본에 다음 구현자를 붙인다 — 쪼개면 죽은 구현자의 미푸시
+  커밋을 못 이어받는다.
 
-## Agent hard rule — fetch/reset/pull 금지
+## Agent hard rule — reset --hard (remote/upstream target) · pull 금지
 
 `git reset --hard FETCH_HEAD/ORIG_HEAD/origin/*/@{u}`, `git pull` (모든 변종)
-**절대 금지**. 훅이 막아 주지 않는다. push reject 시 회복 정답 4-step:
+**절대 금지**. 훅이 막아 주지 않는다. **`git fetch` 는 금지가 아니다** — 위
+`FETCH_HEAD` 는 `reset --hard` 의 대상이지 `fetch` 명령이 아니고, 이 방의
+「리뷰어 사본」이 `git fetch` 를 절차로 처방한다.
+
+push reject 시 회복 정답 4-step:
 
 ```bash
 git ls-remote origin <branch>                    # 1) remote SHA 진단

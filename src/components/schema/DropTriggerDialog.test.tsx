@@ -4,12 +4,15 @@
 // 고정한다 — (1) form mount + Apply 비활성 초기 상태, (2) typing-confirm
 // 게이트가 byte-for-byte (empty / partial / case-mismatched / whitespace
 // 모두 disabled), (3) 250 ms 디바운스 preview fetch + expectedDatabase
-// 페이로드 전파, (4) CASCADE 토글이 preview cache 를 무효화하고 두 번째
-// fetch 가 cascade:true 로 emit, (5) Safe-Mode warn 티어 confirm 흐름
+// 페이로드 전파, (4) CASCADE 토글이 두 번째 debounce fetch 를 일으키고
+// cascade:true 로 emit, (5) Safe-Mode warn 티어 confirm 흐름
 // (`ConfirmDestructiveDialog` 마운트 후 confirm → drop_trigger 호출),
 // (6) commit 성공 시 onRefresh + onClose 가 정확히 1 회 호출,
 // (7) DbMismatch (Sprint 271c wire format) 에 대해 syncMismatchedActiveDb
 // + Sprint 269 passive Retry toast 가 emit.
+//
+// 이슈 #2191 — 미리보기 게이트와 실행 게이트가 갈렸다. DROP SQL 은 확인
+// 타이핑 전에 렌더되고, 확인 타이핑은 실행 여부만 쥔다.
 
 import {
   act,
@@ -46,10 +49,22 @@ vi.mock("@lib/api/verifyActiveDb", () => ({
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
+import {
+  findPreviewSql,
+  reactOnClick,
+} from "./__tests__/dropDialogGateHelpers";
 import DropTriggerDialog from "./DropTriggerDialog";
 
 const DB_MISMATCH_ERROR =
   "Database mismatch: expected 'db-1', but found 'db-2'";
+const DROP_TRIGGER_SQL = 'DROP TRIGGER "tg_audit" ON "public"."users"';
+
+function commitCalls() {
+  return mockDropTrigger.mock.calls.filter(
+    (c) =>
+      (c[0] as { previewOnly?: boolean } | undefined)?.previewOnly === false,
+  );
+}
 
 function setDevConnection() {
   useConnectionStore.setState({
@@ -133,6 +148,78 @@ describe("DropTriggerDialog — Sprint 274", () => {
     expect(apply).toBeDisabled();
   });
 
+  // Issue #2191 — preview gate. The user reads the exact DROP statement
+  // first and confirms afterwards, so nothing gates the preview fetch.
+  it("[#2191] renders the DROP SQL before the typing-confirm input is touched", async () => {
+    renderDialog();
+
+    expect(
+      screen.getByLabelText("Type the trigger name to confirm"),
+    ).toHaveValue("");
+    expect(await findPreviewSql(DROP_TRIGGER_SQL)).toBeInTheDocument();
+    expect(mockDropTrigger).toHaveBeenCalledWith(
+      expect.objectContaining({ previewOnly: true }),
+    );
+  });
+
+  // Issue #2191 — execution gate. Showing the SQL must not move the Apply
+  // gate; the typing-confirm input still owns it.
+  it("[#2191] keeps Apply disabled while the DROP SQL is on screen and the input is untouched", async () => {
+    renderDialog();
+    await findPreviewSql(DROP_TRIGGER_SQL);
+
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
+
+  // Issue #2191 — the execution gate is checked in the click handler too,
+  // not only in the button's `disabled` binding. `previewSql` no longer
+  // proves the user confirmed, so it cannot be the thing that admits a
+  // commit.
+  it("[#2191] clicking Apply before the typing match sends no commit request", async () => {
+    renderDialog();
+    await findPreviewSql(DROP_TRIGGER_SQL);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+
+    expect(mockDropTrigger).toHaveBeenCalledTimes(1);
+    expect(commitCalls()).toHaveLength(0);
+  });
+
+  // Issue #2191 — second layer, on its own. A DOM click only ever proves
+  // the first layer (`disabled`), since React never routes it to the
+  // handler. Reaching the handler directly is what pins the `!canApply`
+  // guard: delete that one line and this case is the only one that reddens.
+  it("[#2191] the Apply handler refuses to commit when the click reaches it anyway", async () => {
+    renderDialog();
+    await findPreviewSql(DROP_TRIGGER_SQL);
+
+    const apply = screen.getByRole("button", { name: "Apply" });
+    await act(async () => {
+      await reactOnClick(apply)();
+    });
+
+    expect(mockDropTrigger).toHaveBeenCalledTimes(1);
+    expect(commitCalls()).toHaveLength(0);
+  });
+
+  // Issue #2191 — typing no longer drives the preview. It is already on
+  // screen, and matching the trigger name only flips Apply.
+  it("[#2191] typing the trigger name enables Apply without re-fetching the preview", async () => {
+    renderDialog();
+    await findPreviewSql(DROP_TRIGGER_SQL);
+    expect(mockDropTrigger).toHaveBeenCalledTimes(1);
+
+    const input = screen.getByLabelText("Type the trigger name to confirm");
+    fireEvent.change(input, { target: { value: "tg_audit" } });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+    });
+    expect(mockDropTrigger).toHaveBeenCalledTimes(1);
+  });
+
   it("typing-confirm gate is byte-for-byte (empty / partial / whitespace / case-mismatch all stay Apply-disabled)", async () => {
     renderDialog({ triggerName: "Tg_Audit" });
     const input = screen.getByLabelText("Type the trigger name to confirm");
@@ -158,7 +245,8 @@ describe("DropTriggerDialog — Sprint 274", () => {
     fireEvent.change(input, { target: { value: "   " } });
     expect(apply).toBeDisabled();
 
-    // Exact byte-for-byte match → preview fetched + Apply enabled.
+    // Exact byte-for-byte match → Apply enabled. The preview fetch is not
+    // part of this — it already fired when the dialog opened (issue #2191).
     fireEvent.change(input, { target: { value: "Tg_Audit" } });
     await waitFor(() => {
       expect(mockDropTrigger).toHaveBeenCalled();
@@ -202,7 +290,7 @@ describe("DropTriggerDialog — Sprint 274", () => {
     expect(firstCall?.expectedDatabase).toBe("db-1");
   });
 
-  it("CASCADE toggle invalidates preview cache → second fetch fires with cascade:true", async () => {
+  it("CASCADE toggle fires a second debounced fetch with cascade:true", async () => {
     mockDropTrigger
       .mockResolvedValueOnce({
         sql: 'DROP TRIGGER "tg_audit" ON "public"."users"',
@@ -253,12 +341,7 @@ describe("DropTriggerDialog — Sprint 274", () => {
     });
 
     await waitFor(() => {
-      const commitCall = mockDropTrigger.mock.calls.find(
-        (c) =>
-          (c[0] as { previewOnly?: boolean } | undefined)?.previewOnly ===
-          false,
-      );
-      expect(commitCall).toBeTruthy();
+      expect(commitCalls()).toHaveLength(1);
     });
 
     // Post-commit refresh invalidates the triggers cache (Sprint 274
@@ -295,11 +378,7 @@ describe("DropTriggerDialog — Sprint 274", () => {
     // banner appears). The commit closure has NOT run yet — only the
     // preview fetch has been called.
     await screen.findByText("PRODUCTION DATABASE");
-    const previewOnlyCommits = mockDropTrigger.mock.calls.filter(
-      (c) =>
-        (c[0] as { previewOnly?: boolean } | undefined)?.previewOnly === false,
-    );
-    expect(previewOnlyCommits).toHaveLength(0);
+    expect(commitCalls()).toHaveLength(0);
   });
 
   it("DbMismatch from preview fetch → verifyActiveDb + Sprint 269 Retry toast", async () => {

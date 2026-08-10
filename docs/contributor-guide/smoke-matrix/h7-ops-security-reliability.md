@@ -47,13 +47,21 @@ What the individual jobs own:
 
 - `PR Body Contract` rejects a PR body carrying a path only the author can open
   — an absolute home or temp path, a `file:` URL, or a path inside a work copy.
+  It also rejects a universal claim left standing with no command near it: a
+  line carrying one of the Korean trigger words needs a code fence or an inline
+  command within six lines either way, and `scripts/check-pr-body-universals.sh`
+  owns the word list and the window (#2228). That step reads the wording, never
+  the truth — a false claim that uses none of those words passes.
   An empty body passes. The workflow does not listen for `edited`, so a red
   verdict clears on the next commit, not on a body edit. The job also carries
-  three contracts that have nothing to do with the body — the `CLAUDE.md` import
-  line, the `memory/` doc-size cap, and the `src-tauri` test-binary allowlist
-  (`scripts/check-ci-test-calls.sh`) — so a red verdict here is not always
-  about the body. `memory/runbook/pr-merge-gates/memory.md` names all four and
-  is where a red one is diagnosed.
+  contracts that have nothing to do with the body — the `CLAUDE.md` import
+  line, the `memory/` doc-size cap, the `src-tauri` test-binary allowlist
+  (`scripts/check-ci-test-calls.sh`), the review-round narrative sweep
+  (`scripts/check-round-narrative.sh`), and the `(non-blocking)` job-name check
+  (`scripts/check-non-blocking-jobs.sh`) — so a red verdict here is not always
+  about the body. `memory/runbook/pr-merge-gates/memory.md` names them and is
+  where a red one is diagnosed; the running step list lives in the `pr-body`
+  job of `.github/workflows/ci.yml`.
 
 - `Runtime Happy Path` runs the smoke specs `e2e/scope-map.mjs` selects from the
   changed paths, and it fails when they fail.

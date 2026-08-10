@@ -1,9 +1,9 @@
 ---
 title: PR Review Behavior
 type: workflow-rule
-updated: 2026-08-01
+updated: 2026-08-10
 task: review, pr, delivery
-keywords: scorecard, verdict, blocking, non-blocking, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표
+keywords: scorecard, verdict, blocking, non-blocking, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -31,8 +31,16 @@ trigger:
   관점들을 순차 단독 검증으로 강등해 수행하고, scorecard에 "fan-out 불가로 단독
   강등" 사실을 명시한다.
 - Coordinator와 subreviewer는 read-only다. commit, push, merge, branch 수정 금지.
-- Reviewer는 test/lint/build를 재실행하지 않는다. 자동 gate 결과와 PR diff,
-  PR body, sprint contract, 필요한 active SOT만 읽는다.
+- Reviewer는 **저자 사본을 편집하지 않는다.** 소스도 빌드 산출물도 거기 쓰지
+  않는다 — 리뷰 전후로 저자 사본의 HEAD 와 `git status` 가 같다. test·lint·build
+  를 돌려야 하면 일회용 사본을 따로 만들어 거기서 돌리고 끝나면 지운다 — 만드는
+  법은 [worktree](../../runbook/worktree/memory.md) 「리뷰어 사본」이고,
+  `origin/main` 을 잡는 「생성」이 아니다. 그 사본은 PR 당 하나인 작업 사본과
+  별개이고, 만든 리뷰어가 같은 턴에 회수한다. **돌릴지 말지는 리뷰어 판단이고
+  의무가 아니다** — 자율 실행이 이미 blocking 발견을 냈고(2026-08-06 #2190 ·
+  #2195), 그 둘은 저자 표에 없던 변형이라 「저자 표를 표본 재현하라」 형태의
+  의무로는 못 잡았을 것들이다(#2196). 판정 입력은 자동 gate 결과, PR diff, PR
+  body, sprint contract, 필요한 active SOT 이고, 직접 돌렸으면 그 결과도 근거가 된다.
 - Subreview 결과는 coordinator의 입력이다. Coordinator는 PR에 직접 하나의
   통합 scorecard와 action items를 repo-relative evidence로 comment한다.
 - Blocking은 세 사유뿐이다: 런타임·보안 / 이 PR 귀책의 거짓이 SOT에 들어감 /
@@ -40,6 +48,27 @@ trigger:
   남긴다. 점수 기준은 쓰지 않는다 — 앵커가 없어 판정을 대신해 왔다.
 - Blocking 판정은 coordinator 단독 권한이다. subreviewer는 발견과 근거만 내고
   severity를 붙이지 않는다. 관점을 늘려도 blocking이 늘지 않는다.
+- **PR body 는 squash body 로 안 넘어간다** — 기본 squash body 는 브랜치 커밋
+  메시지를 이어붙인 것이다. 그래서 교정 자리를 종결자에게 넘길 때는 그 문구가
+  커밋 메시지에 있는지 먼저 대조한다:
+
+  ```
+  gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
+    --jq '.[].commit.message' | tr -s '[:space:]' ' ' | grep -c -F '<문구>'
+  ```
+
+  hit 이면 저자가 못 고치는 자리라(force-push 가 hard block) 종결자 몫이다.
+  **hit 0 은 「PR body 에만 있다」의 증명이 아니다** — 인증 실패도 `--jq` 오타도
+  문구 쪽 오타도 똑같이 0 이다. 0 이면 문구를 줄여 다시 재고, 그래도 0 이면 저자
+  쪽으로 적되 scorecard 에서 지우지는 않는다. 종결자가 그 목록을 다시 훑기
+  때문이고(`.agents/prompts/pr-finalize.md` 「3단계」), 오판 값이 한쪽으로만 크기
+  때문이다 — hit 을 잘못 믿으면 종결자가 한 번 더 볼 뿐이지만 0 을 잘못 믿으면
+  못 고치는 자리가 못 고치는 노드에게 간다.
+  **`gh pr view --json commits` 로 되돌리지 마라** — 거기 `messageHeadline` 은
+  69자에서 낱말 한가운데를 `…` 로 자르고, `commits(first: 100)` 이라 101번째부터
+  조용히 빠진다. `tr` 은 하드랩된 산문이 줄 단위 `grep` 을 빠져나가는 것을 막는다.
+  무엇이 교정 대상이고 왜 종결자만 고칠 수 있는지는
+  [delivery](../delivery/memory.md) 「squash body 교정」이 SOT 다.
 - **라운드 3 이상은 회고 모드다.** 그 라운드에서 개별 finding 수리를 계속하는 것
   자체가 사이클 신호다 — fix 를 더 얹으라는 지적 대신 유형 재발 표(유형 × 라운드별
   건수)를 먼저 낸다. 트리거와 보고 항목은

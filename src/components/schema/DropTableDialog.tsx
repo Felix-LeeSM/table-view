@@ -27,6 +27,11 @@ import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSumma
  * checkbox + inline DDL preview pane + Cancel + Show DDL + Apply
  * buttons.
  *
+ * Issue #2191 (the split issue #2157 made in `DropColumnDialog`) — the
+ * preview gate and the execution gate are separate. The DDL preview loads
+ * as soon as the dialog opens so the user reads the exact DROP statement
+ * first; the typing-confirm input only decides whether it may run.
+ *
  * Apply is `disabled` UNTIL the typing-confirm input matches the current
  * table name byte-for-byte (case-sensitive — `Users` ≠ `users`). The
  * typing-confirm pattern is NEW in Sprint 235 (no prior occurrence in
@@ -34,23 +39,28 @@ import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSumma
  * dialog). Per Sprint 235 contract: NO `onChange` debounce, NO trim
  * (whitespace-only matches stay invalid), every keystroke re-evaluates.
  *
- * CASCADE checkbox defaults to OFF — user opts INTO the more dangerous
- * `DROP TABLE … CASCADE` form explicitly. Toggling it invalidates the
- * cached preview so the next `Show DDL` click re-fetches with the new
- * SQL.
+ * CASCADE checkbox defaults to OFF. Toggling it re-fetches the preview by
+ * itself (Sprint 238), no `Show DDL` click in between, and the commit runs
+ * the form that was previewed (issue #2213).
  *
  * Safe Mode dispatch is provided by `useDdlPreviewExecution` — `DROP
- * TABLE` is classified as `ddl-drop` / danger by the analyzer, so the
- * production-strict tier blocks, the production-warn tier escalates to
- * `pendingConfirm` (additional `ConfirmDestructiveDialog` mounts on top
- * of the typing-confirm gate), and non-production / mode=off allows.
+ * TABLE` is classified as `ddl-drop` / danger by the analyzer. Under the
+ * Sprint 245 destructive-only policy (ADR 0022 Phase 1; canonical matrix
+ * in `src/lib/safeMode.ts`) every production tier and non-production
+ * strict escalate to `pendingConfirm`, mounting an additional
+ * `ConfirmDestructiveDialog` on top of the typing-confirm gate.
+ * Non-production warn / off allow. `decideSafeModeAction` never returns
+ * `block` for this path.
  *
  * Sequence:
- *   1. user types name → typing match enables Apply → click Apply.
- *   2. preview SQL fetched (or returned from cache) → `attemptExecute`.
- *   3. Safe Mode gate decides → block (previewError) | warn-confirm
- *      (pendingConfirm dialog) | safe (commit).
- *   4. on warn-confirm, user types analyzer reason → commit runs.
+ *   1. dialog opens → debounced preview fetch renders the DROP statement.
+ *   2. user types the table name → typing match enables Apply → click
+ *      Apply → `attemptExecute`.
+ *   3. Safe Mode gate decides → confirm (pendingConfirm dialog) | allow
+ *      (commit).
+ *   4. on confirm, the user answers the single-click Yes/No dialog
+ *      (Sprint 246 replaced the earlier type-to-confirm gate) → commit
+ *      runs.
  *   5. on commit success, modal closes.
  */
 
@@ -80,9 +90,10 @@ export default function DropTableDialog({
   const { t } = useTranslation("schemaDialogs");
   const [typingConfirm, setTypingConfirm] = useState("");
   const [cascade, setCascade] = useState(false);
-  // Preview pane defaults open — auto-debounced fetch fills it as the
-  // user types. Hiding it by default required an extra click and made
-  // users think the preview was broken.
+  // Preview pane defaults open — the auto-debounced fetch fills it as
+  // soon as the dialog opens, with no typing involved (issue #2191).
+  // Hiding it by default required an extra click and made users think
+  // the preview was broken.
   const [showDdl, setShowDdl] = useState(true);
 
   const { dropTable: dropTableMutation } = useSchemaTableMutations();
@@ -131,15 +142,22 @@ export default function DropTableDialog({
   // Sprint 235 — typing-confirm match is case-sensitive byte-for-byte.
   // No trim, no debounce — every keystroke re-evaluates.
   const typingMatches = typingConfirm === tableName;
-  const canPreview = typingMatches;
-  const canApply = canPreview && !ddl.previewLoading && !!ddl.previewSql;
+  // Issue #2191 — the preview has no gate. `previewOnly: true` never
+  // executes anything (`gate_destructive_ddl` in
+  // `src-tauri/src/commands/rdb/ddl.rs` and `run_schema_change` in
+  // `src-tauri/src/commands/rdb/ddl/dispatch.rs` both exempt it, and each
+  // adapter returns the SQL before touching a pool), so withholding it
+  // only hid what the user is about to destroy. `typingMatches` now gates
+  // execution alone.
+  const canApply = typingMatches && !ddl.previewLoading && !!ddl.previewSql;
 
-  // Sprint 238 — auto-refresh the preview pane on every form edit so
-  // Apply stays enabled and the registered commit closure reflects the
-  // latest CASCADE choice. The pane no longer auto-collapses.
+  // Sprint 238 — auto-refresh debounced: the preview SQL rebuilds on open
+  // and on every CASCADE toggle. `loadPreview` mints the commit closure
+  // next to the SQL it just fetched, so the committed `cascade` is the one
+  // the rendered preview was built with (issue #2213). Apply stays gated
+  // on `canApply`.
   useEffect(() => {
     if (!open) return;
-    if (!canPreview) return;
     const handle = window.setTimeout(() => {
       void ddl.loadPreview(
         async () => {
@@ -163,6 +181,7 @@ export default function DropTableDialog({
             database,
             tableName,
             schemaName,
+            cascade,
           );
         },
       );
@@ -171,14 +190,19 @@ export default function DropTableDialog({
     // ddl.loadPreview + the tauri request builder are stable per render; keep
     // deps to the inputs that actually drive the previewed SQL.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, canPreview, cascade, connectionId, schemaName, tableName]);
+  }, [open, cascade, connectionId, schemaName, tableName]);
 
   const handleShowDdl = () => {
     setShowDdl((s) => !s);
   };
 
   const handleApply = async () => {
-    if (!ddl.previewSql) return;
+    // Issue #2191 — the execution gate has to be re-checked here, not just
+    // reflected in the button's `disabled`. Before the split, a non-empty
+    // `previewSql` proved the user had typed the table name; now the
+    // preview loads without any confirmation, so `previewSql` alone would
+    // let a DROP through if the `disabled` binding ever regressed.
+    if (!canApply) return;
     await ddl.attemptExecute();
   };
 
@@ -248,7 +272,7 @@ export default function DropTableDialog({
               <button
                 type="button"
                 onClick={handleShowDdl}
-                // Toggle is always enabled now; the pane shows helpful empty/loading states
+                // Toggle is always enabled; the pane carries its own loading / error states
                 className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-secondary-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 aria-expanded={showDdl}
                 aria-controls="drop-table-ddl-preview"
@@ -267,7 +291,12 @@ export default function DropTableDialog({
                   className="space-y-2 border-t border-border bg-background px-4 py-2"
                 >
                   <SchemaGraphMigrationImpactSummary impact={migrationImpact} />
-                  {ddl.previewLoading ? (
+                  {/* Issue #2191 — the empty pane is now only the debounce
+                      window before the first fetch, so it reads as loading.
+                      The old hint told the user to type to see the SQL, which
+                      is exactly what stopped being true. */}
+                  {ddl.previewLoading ||
+                  (!ddl.previewError && !ddl.previewSql) ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />
                       {t("generatingPreview")}
@@ -279,14 +308,10 @@ export default function DropTableDialog({
                     >
                       {ddl.previewError}
                     </pre>
-                  ) : ddl.previewSql ? (
+                  ) : (
                     <pre className="max-h-scroll-md overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-2 text-xs font-mono text-foreground">
                       <SqlSyntax sql={ddl.previewSql} />
                     </pre>
-                  ) : (
-                    <span className="text-xs italic text-muted-foreground">
-                      {t("ddlHintTypeTableName")}
-                    </span>
                   )}
                 </div>
               )}
