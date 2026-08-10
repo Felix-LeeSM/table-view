@@ -41,6 +41,15 @@ trigger:
   #2195), 그 둘은 저자 표에 없던 변형이라 「저자 표를 표본 재현하라」 형태의
   의무로는 못 잡았을 것들이다(#2196). 판정 입력은 자동 gate 결과, PR diff, PR
   body, sprint contract, 필요한 active SOT 이고, 직접 돌렸으면 그 결과도 근거가 된다.
+- **그 사본의 티어는 「설치가 필요한가」로 가른다.** `pnpm install` 도 cargo 빌드도
+  안 부르는 검증(읽기 · `<rev>` 범위 git/gh · `pnpm` 을 안 부르는 `scripts/*.sh`)은
+  subreviewer 가 자기 사본에서 직접 돌린다. 둘 중 하나를 요구하는 검증은 돌리지 말고
+  **돌려야 할 명령을 coordinator 에게 반환한다** — coordinator 는 그것을 자기 사본에서
+  돌리거나, 안 돌리기로 하고 scorecard 에 그 사실을 적는다. 형용사가 아니라 명령으로
+  가르는 이유는 사본 디스크가 설치에서 자릿수를 바꾸기 때문이고(`du -sh <사본>` 로
+  잰다), fan-out 은 그 사본을 관점 수만큼 복제한다. 반환 자리는
+  [pr-subreview preamble](../../../.agents/prompts/pr-subreview.md) 「반환 형식」의
+  독립 항목이다 — 「판단 못 한 것」은 기록이라 섞으면 실행 지시가 안 보인다.
 - Subreview 결과는 coordinator의 입력이다. Coordinator는 PR에 직접 하나의
   통합 scorecard와 action items를 repo-relative evidence로 comment한다.
 - Blocking은 아래 사유뿐이다: 런타임·보안 / 이 PR 귀책의 거짓이 SOT에 들어감 /
