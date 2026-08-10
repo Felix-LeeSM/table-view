@@ -5,15 +5,15 @@ test, CI, and Required Checks are automatic gates; the reviewer reads their
 results and evaluates the PR diff, body, and relevant source of truth.
 
 The reviewer does not edit the author's working copy — neither sources nor build
-output. Running test, lint, or build is allowed and never required: make a
-throwaway copy standing at the PR head, run there, and delete it in the same
-turn. Do not clone the author's copy: it carries commits that were never pushed,
-so fetch the head OID from GitHub instead. The recipe is in
-`memory/runbook/worktree/memory.md` under 「리뷰어 사본」. That copy is separate
-from the single work copy a PR gets, and the reviewer who made it reclaims it.
-What the reviewer ran that way is evidence like any gate result — quote the
-command together with the head OID it ran on, because the output itself does not
-say which commit produced it.
+output. Verification that needs a working tree runs in a separate throwaway copy
+standing at the PR head.
+
+`memory/workflow/review/memory.md` 「행동 계약」 is the source of truth for the
+rest of that contract — whether anything is run at all, and which of the
+coordinator and a subreviewer runs which verification — and this page does not
+restate its wording. Building that copy, reclaiming it, and quoting what ran in
+it belong to `memory/runbook/worktree/memory.md` 「리뷰어 사본」, 「책임」, and
+「결과를 인용하는 법」.
 
 ## Reviewer Output
 

@@ -86,7 +86,7 @@ git -C "$DEST" fetch origin "$OID"
 git -C "$DEST" -c advice.detachedHead=false checkout --detach "$OID"
 test "$(git -C "$DEST" rev-parse HEAD)" = "$OID" \
   || { echo "ABORT: PR head 가 아니다" >&2; exit 1; }
-# 의존성이 필요하면 「생성」 3) 과 같다
+# 의존성이 필요하면 「생성」 3) 과 같다 — 설치 티어라 subreviewer 는 안 돈다
 ```
 
 - **`PRIMARY` 를 안 쓴다 — cwd 를 아예 안 읽는다.** 리뷰어의 첫 명령이 저자 사본
@@ -166,7 +166,7 @@ spawner 가 역할에 맞는 쪽을 prompt 의 첫 명령 슬롯에 넣는다 �
   정한다 — 사본 루트 안에 `review__` 로 남지만 종결자가 회수할 사본 경로를 하나만
   받으므로(`.agents/prompts/pr-finalize.md` 「MANDATORY 첫 명령」·「4단계 — 회수」)
   스윕이 그 자리를 안 본다. **노드가 죽어도 그 의무는 위 줄로 돌아간다** — 남은
-  `review__` 는 orchestrator 회수다 (2026-08-10 `review__2265__2c6c10ad9003` 잔존).
+  `review__` 는 orchestrator 회수다 (2026-08-10 사본 루트에 `review__*` 잔존 관측).
 - 작업 사본은 PR 당 하나, 동시에 쓰는 node 는 하나 (그 사본에 파일을 쓰는 것은
   구현자뿐 — 리뷰어는 저자 사본을 편집하지 않는다). 리뷰 라운드는 새 사본을
   만들지 않고 같은 사본에 다음 구현자를 붙인다 — 쪼개면 죽은 구현자의 미푸시
