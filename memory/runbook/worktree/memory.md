@@ -136,7 +136,7 @@ worktree 가 공짜로 주던 "같은 브랜치 이중 체크아웃 방지"가 c
 ```bash
 # 그 사본에서 일하는 역할(issue-implement)은 `=`, 남의 사본에 서면 안 되는
 # 역할(pr-review · pr-subreview · pr-finalize)은 `!=` 로 뒤집어 쓴다
-test "$(git rev-parse --show-toplevel)" = "<expected_path>" \
+test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
   || { echo "ABORT: wrong checkout" >&2; exit 1; }
 ```
 
@@ -164,8 +164,8 @@ spawner 가 역할에 맞는 쪽을 prompt 의 첫 명령 슬롯에 넣는다 �
   ([review](../../workflow/review/memory.md) 「행동 계약」). 디스크 점유 사유는
   그대로 걸리므로 **만든 리뷰어가 같은 턴에 지운다.** 만드는 법과 경로는 위
   「리뷰어 사본」이 정한다 — 사본 루트 안에 `review__` 로 남지만 종결자가 회수할
-  사본 경로를 하나만 받으므로(`.agents/prompts/pr-finalize.md` 「MANDATORY 첫
-  명령」·「4단계 — 회수」) 스윕이 애초에 그 자리를 안 본다.
+  사본 경로를 하나만 받으므로(`.agents/prompts/pr-finalize.md`
+  「MANDATORY 첫 명령」·「4단계 — 회수」) 스윕이 애초에 그 자리를 안 본다.
 - 작업 사본은 PR 당 하나, 동시에 쓰는 node 는 하나 (그 사본에 파일을 쓰는 것은
   구현자뿐 — 리뷰어는 저자 사본을 편집하지 않는다). 리뷰 라운드는 새 사본을
   만들지 않고 같은 사본에 다음 구현자를 붙인다 — 쪼개면 죽은 구현자의 미푸시
