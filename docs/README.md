@@ -71,9 +71,11 @@ cap 은 규율로만 남았고 자동 검사가 없다.
 
 ## 검색 팁
 
-루트의 `.ignore` 가 `docs/{archives,explorations}` 를 빼 두므로
-기본 검색이 곧 active 문서 검색이다. 단 루트를 둘 이상 주는 형태라
-`-j1` 이 함께 붙어야 한다 — 이유는 아래 주의를 보라.
+루트의 `.ignore` 가 `docs/{archives,explorations}` 를 빼 두므로 **`rg` 의** 기본
+검색이 곧 active 문서 검색이다. 단 루트를 둘 이상 주는 형태라 `-j1` 이 함께
+붙어야 한다 — 이유는 아래 주의를 보라. **`.ignore` 를 근거로 삼는 이 절의 서술은
+`rg` 에만 선다** — 이 harness 의 `grep` 은 그 파일을 안 읽어 같은 검색어에 다른
+집합을 낸다 (아래 「이 harness 의 `grep` 은 `rg` 와 다른 집합을 낸다」).
 
 ```sh
 rg -j1 '<term>' docs memory README.md AGENTS.md
@@ -139,6 +141,56 @@ clone 한 사본에서 같은 결과였다 (2026-08-01 실측).
 `.gitignore` 에 안 걸린 미추적 파일을 같이 세고, `-g '!.git'` 을 빼면 `.git/` 안까지
 얹힌다 — `packed-refs` 의 ref 이름, `COMMIT_EDITMSG` 의 직전 커밋 메시지, 설치된
 훅이 검색어에 걸린다. 검색어와 사본에 따라 달라지므로 파일 이름을 못 박지 않는다.
+
+### 이 harness 의 `grep` 은 `rg` 와 다른 집합을 낸다
+
+**`grep` 은 바이너리가 아니라 셸 함수다** — `type grep` 이 그렇게 답한다. 본체가
+ugrep 을 이렇게 부른다 (스냅샷 경로는 세션마다 다르므로 못 박지 않는다).
+
+```sh
+ARGV0=ugrep "$_cc_bin" -G --ignore-files --hidden -I --exclude-dir=.git …
+```
+
+`--ignore-files` 의 기본 FILE 은 `.gitignore` 다 (ugrep 도움말
+`The default FILE is '.gitignore'.`). 함수가 인자를 안 주므로 **루트 `.ignore` 는
+아예 안 읽힌다.** 거기에 `--hidden` 이 붙어 dot 디렉터리까지 본다. 그래서 위
+「검색 팁」 첫머리의 「기본 검색이 곧 active 문서 검색」은 `rg` 에만 참이고,
+`grep` 은 두 축 다 `git grep` 과 같은 값을 낸다.
+
+```sh
+grep -rl lefthook    | /usr/bin/grep -cE '^docs/(archives|explorations)/'  # 7
+rg   -l  lefthook    | /usr/bin/grep -cE '^docs/(archives|explorations)/'  # 0
+git grep -l lefthook | /usr/bin/grep -cE '^docs/(archives|explorations)/'  # 7
+
+grep -rl issue-implement    | /usr/bin/grep -c '^\.agents/'   # 2
+rg   -l  issue-implement    | /usr/bin/grep -c '^\.agents/'   # 0
+git grep -l issue-implement | /usr/bin/grep -c '^\.agents/'   # 2
+```
+
+값은 2026-08-10 에 `46b3d26c` 를 체크아웃해 잰 것이다 (ugrep 7.5.0 / zsh 5.9). 두
+필터가 이 문서 자신을 빼므로 위 「둘은 근사지 등식이 아니다」의 자기-계수 문제는
+여기 없다. 판별에 쓰는 것은 절대값이 아니라 **`grep` 값이 `rg` 값과 갈리는가** 다.
+
+**경로를 직접 주는 형태로는 이것을 못 가른다.** `grep -rl <패턴> docs/` 는 루트
+`.ignore` 가 원래 안 걸리는 자리라(그 파일 자신이 그렇게 적어 뒀다) 참인 시험과
+같은 값을 낸다. **두 시험이 안 갈리는 것 자체가 「`.ignore` 가 애초에 안 걸린다」는
+신호다** — 그 자리에서 반대 결론이 한 번 나왔다 (#2262).
+
+**둘째 축 — `-I` 가 binary 판정 입력을 통째로 건너뛴다.** 거짓 0 보다 나쁘다:
+`0` 조차 안 찍고 rc=1 이라 **진짜 0건과 구분이 안 된다.** 커밋 메시지를 `tr` 로
+정규화해 `grep -c` 로 세는 자리가 이 저장소에 있어 실제로 닿는 경로다.
+
+```sh
+printf 'hello\0world needle here\n' | grep -c needle            # 출력 없음, rc=1
+printf 'hello\0world needle here\n' | grep -a -c needle         # 1, rc=0
+printf 'hello\0world needle here\n' | command grep -c needle    # 1, rc=0
+printf 'hello\0world needle here\n' | /usr/bin/grep -c needle   # 1, rc=0
+bash -c 'printf "hello\0world needle here\n" | grep -c needle'  # 1, rc=0
+```
+
+**커밋되는 스크립트와 CI 는 두 축 다 안 물린다** — 비대화형 bash 는 프로필을 안
+읽어 함수가 없고 `/usr/bin/grep` 이 잡힌다. 위 마지막 줄이 그 근거다. 물리는 것은
+agent 가 손으로 도는 측정이고, 그 값이 이슈 body · PR body · scorecard 로 옮겨진다.
 
 ### 변수에 담은 pathspec — zsh 에서 조용히 0건
 

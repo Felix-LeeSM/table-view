@@ -23,7 +23,10 @@ subagent 에 배달되지 않았다 (#1865 측정). 지우면 배달이 끊긴�
 - [`docs/PLAN.md`](docs/PLAN.md) — product/roadmap/contributor SOT 인덱스.
 - [`docs/README.md`](docs/README.md) — docs 인덱스이자 검색 팁 SOT. 루트 `.ignore`
   가 제외 목록을 걸어 두므로 **기본 `rg` 결과는 저장소 전수가 아니다** — 전수는
-  `git grep` 으로 재고, 제외 목록과 되살리는 법은 저 문서에서 읽는다.
+  `git grep` 으로 재고, 제외 목록과 되살리는 법은 저 문서에서 읽는다. **`grep` 은
+  거기서 또 다르다** — 셸 함수라 `rg` 와 다른 집합을 내고, binary 판정 입력에서는
+  rc=1 로 빈 출력을 낸다. 같은 문서 「이 harness 의 `grep` 은 `rg` 와 다른 집합을
+  낸다」.
 - git/hook 회피 금지는 `memory/workflow/git-policy/memory.md` 가 SOT. 위 링크를
   스스로 열지 않으면 아무것도 오지 않고, 어겨도 막히지 않는다.
 
