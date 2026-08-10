@@ -74,8 +74,9 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
    출처: `.agents/skills/recovering-push-rejects/SKILL.md` 「SHA refspec push
    패턴」 (계약은 `memory/workflow/git-policy/memory.md`).
 5. PR 생성 (base main, 본문에 `Closes #<이슈>`). body 를 쓰기 전에 read 목록의
-   두 제약을 그대로 적용한다 — 정량 주장은 implementation §5 표, 근거의 이식성은
-   `memory/workflow/delivery/memory.md` 「PR body」. 두 제약의 본문은 그 방에 있다.
+   제약을 그대로 적용한다 — 정량 주장은 implementation §5 표, 그 밖은
+   `memory/workflow/delivery/memory.md` 「PR body」 절 전체다. 제약 본문은 그
+   방들에 있고 여기 옮겨 적지 않는다 — 그 절이 늘어도 이 줄은 안 고친다.
    body 와 squash 커밋 메시지는 다음 노드가 읽는 입력이다 — 거짓이거나 낡아진 주장은
    미래 노드의 거짓 전제가 된다 (같은 절).
 6. 보고하고 종료한다. CI 를 기다리지 않고, 다음 노드를 부르지 않는다.

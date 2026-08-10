@@ -84,6 +84,15 @@ head OID 로 센 라운드가 3 이상이면 `reflect:done` 까지, mergeable, �
 문자열을 쪼개거나 이름으로 부르고 그대로 붙이지 마라. 해소는 새 commit 뿐이다
 (body 편집으로는 재검사되지 않음 — [pr-merge-gates](../../runbook/pr-merge-gates/memory.md)).
 
+**diff 계열 명령은 움직이는 ref 가 아니라 `"$(git merge-base origin/main HEAD)"` 에
+앵커한다** — body · 이슈 · 커밋 메시지 어디든 같고, `--stat` · `--name-only` ·
+삽입/삭제 줄 수가 걸린다 (rev 를 명시하는 `git grep <rev>` 류는 해당 없다).
+`origin/main` 은 움직이는 표적이라 저자가 push 한 뒤 남의 PR 하나가 머지되면
+**저자 귀책 없이** 값이 바뀌고, 병렬 PR 이 도는 이 저장소에서는 push 와 리뷰 사이에
+거의 항상 main 이 움직인다. #2259 에서 저자의 「다섯 파일」은 참인데
+`git diff --stat origin/main` 이 여섯을 냈다 — 브랜치가 안 건드린 파일에서 브랜치가
+main 보다 뒤처진 것이 섞였다. **검사하는 기계는 없다.**
+
 **PR body 와 squash 커밋 메시지는 다음 노드가 읽는 입력이다** — 노드는 죽고 산출물만
 남으니 거짓이거나 낡아진 주장은 미래 구현자·디버깅 세션의 거짓 전제가 된다 (정량 주장에
 재현 명령을 붙이는 제약은 [implementation](../implementation/memory.md) §5 표가 SOT).
