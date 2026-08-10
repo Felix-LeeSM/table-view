@@ -23,9 +23,7 @@ import type { DropTriggerRequest } from "@/types/schema";
  *
  * Structural parity target: Sprint 235 `DropTableDialog` — same layout,
  * same two gates. What differs: the SQL target (DROP TRIGGER vs DROP
- * TABLE), the typing-confirm target (trigger name vs table name), and
- * the commit payload — `buildRequest` below carries `cascade` into the
- * commit, which `DropTableDialog` does not (issue #2213).
+ * TABLE) and the typing-confirm target (trigger name vs table name).
  *
  * Issue #2191 (the split issue #2157 made in `DropColumnDialog`) — the
  * preview gate and the execution gate are separate. The DDL preview loads
@@ -147,10 +145,9 @@ export default function DropTriggerDialog({
   const canApply = typingMatches && !ddl.previewLoading && !!ddl.previewSql;
 
   // Sprint 274 — 250ms debounced auto-refresh: the preview SQL rebuilds
-  // on open and on every CASCADE toggle. The debounce mirrors Sprint 235
-  // `DropTableDialog`; the commit does not — `buildRequest(false)` below
-  // carries the CASCADE choice, while `DropTableDialog`'s commit path
-  // drops it (issue #2213).
+  // on open and on every CASCADE toggle. Mirrors Sprint 235
+  // `DropTableDialog`; `buildRequest(false)` below carries the CASCADE
+  // choice into the commit.
   useEffect(() => {
     if (!open) return;
     const handle = window.setTimeout(() => {

@@ -292,6 +292,41 @@ describe("DropTableDialog (Sprint 235)", () => {
     );
   });
 
+  // Issue #2213 — the previewed statement has to be the statement that
+  // runs. CASCADE used to reach the preview only, so the user read
+  // `… CASCADE`, typed the table name, and committed a plain DROP.
+  it("[#2213] CASCADE checked → the commit carries the same choice the preview showed", async () => {
+    mockDropTableRequest
+      .mockResolvedValueOnce({ sql: DROP_USERS_SQL })
+      .mockResolvedValueOnce({ sql: `${DROP_USERS_SQL} CASCADE` });
+    renderDialog({ tableName: "users" });
+    await findPreviewSql(DROP_USERS_SQL);
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("CASCADE"));
+    });
+    expect(
+      await findPreviewSql(`${DROP_USERS_SQL} CASCADE`),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Type the table name to confirm"), {
+      target: { value: "users" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+
+    await waitFor(() => {
+      expect(mockDropTable).toHaveBeenCalledWith(
+        "conn-1",
+        "users",
+        "public",
+        "db-1",
+        true,
+      );
+    });
+  });
+
   // AC-235-05 — commit success closes modal.
   it("[AC-235-05] commit-success closes modal + calls onClose once", async () => {
     const onClose = vi.fn();
@@ -315,6 +350,7 @@ describe("DropTableDialog (Sprint 235)", () => {
       "users",
       "public",
       "db-1",
+      false,
     );
   });
 
@@ -354,6 +390,7 @@ describe("DropTableDialog (Sprint 235)", () => {
       "users",
       "public",
       "db-1",
+      false,
     );
   });
 

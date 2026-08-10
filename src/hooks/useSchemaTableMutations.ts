@@ -17,6 +17,7 @@ export function useSchemaTableMutations(): {
     database: string,
     table: string,
     schema: string,
+    cascade?: boolean,
   ) => Promise<void>;
   renameTable: (
     connectionId: string,
@@ -36,9 +37,11 @@ export function useSchemaTableMutations(): {
       database: string,
       table: string,
       schema: string,
+      cascade = false,
     ): Promise<void> => {
-      // Arg order tauri expects: (connId, table, schema, expectedDatabase).
-      await tauri.dropTable(connectionId, table, schema, database);
+      // Arg order tauri expects:
+      // (connId, table, schema, expectedDatabase, cascade).
+      await tauri.dropTable(connectionId, table, schema, database, cascade);
       try {
         // Forward `database` so a swapped backend pool fails closed before
         // populating a wrong-db cache.
