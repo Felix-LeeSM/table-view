@@ -43,7 +43,9 @@ test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
 - `memory/workflow/review/memory.md` — 이 역할의 계약 전부. blocking 판정 기준 ·
   fan-out 재량 · write 범위 · verdict label 규칙이 여기 있다.
 - `memory/workflow/orchestration/memory.md` — §3 사이클 정지 트리거.
-- `memory/workflow/documentation/memory.md` — 문서 변경이 섞인 PR 일 때.
+- `memory/workflow/documentation/memory.md` — 문서 변경 여부와 무관하게 읽는다.
+  문서화 impact 게이트 사유의 상세가 이 방이고, 그 첫 항목은 문서 변경이 **없는**
+  PR 에서 발화한다.
 
 리뷰 범위와 판정 기준은 위 계약과 PR diff 에서 **스스로** 세운다. 이 파일은
 기준을 주지 않는다.

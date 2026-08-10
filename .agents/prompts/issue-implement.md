@@ -30,8 +30,8 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 - `memory/workflow/delivery/memory.md` — 커밋~PR 구간 행동 계약 · 중단 조건 ·
   PR body 제약.
 - `memory/workflow/documentation/memory.md` — 문서화 필요 트리거 · 기존 SOT
-  라우팅 · evidence portability. 「Reviewer 판정」이 blocking 사유 하나의 상세라
-  (`memory/workflow/review/memory.md` 「행동 계약」) 저자가 착수 전에 본다.
+  라우팅 · evidence portability. 「Reviewer 판정」이 문서화 impact 게이트 사유의
+  상세라(`memory/workflow/review/memory.md` 「행동 계약」) 저자가 착수 전에 본다.
 - `memory/workflow/git-policy/memory.md` — hard block 목록과 push 계약.
 - `.agents/skills/recovering-push-rejects/SKILL.md` — push reject 4-step 회복 ·
   SHA refspec push · closed-PR stale ref 청소. 위 방이 계약이고 이쪽이 절차다.
