@@ -1,9 +1,9 @@
 ---
 title: PR Review Behavior
 type: workflow-rule
-updated: 2026-08-07
+updated: 2026-08-10
 task: review, pr, delivery
-keywords: scorecard, verdict, blocking, non-blocking, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build
+keywords: scorecard, verdict, blocking, non-blocking, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, 종결자 인계
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -48,6 +48,20 @@ trigger:
   남긴다. 점수 기준은 쓰지 않는다 — 앵커가 없어 판정을 대신해 왔다.
 - Blocking 판정은 coordinator 단독 권한이다. subreviewer는 발견과 근거만 내고
   severity를 붙이지 않는다. 관점을 늘려도 blocking이 늘지 않는다.
+- **PR body 는 squash body 로 안 넘어간다** — 기본 squash body 는 브랜치 커밋
+  메시지를 이어붙인 것이다. 그래서 교정 자리를 종결자에게 넘길 때는 그 문구가
+  커밋 메시지에 있는지 먼저 대조한다:
+
+  ```
+  gh pr view <N> --repo Felix-LeeSM/table-view \
+    --json commits -q '.commits[]|.messageHeadline,.messageBody' | grep -F '<문구>'
+  ```
+
+  hit 0 이면 PR body 에만 있는 거짓이라 다음 라운드 저자가 고치는 자리이고,
+  종결자에게 넘길 것은 hit 이 난 쪽이다. 대조 없이 넘기면 저자가 언제든 고치는
+  쪽이 종결자에게 가고 저자가 못 고치는 쪽이 안 다뤄진다 — 무엇이 교정 대상이고
+  왜 종결자만 고칠 수 있는지는 [delivery](../delivery/memory.md)
+  「squash body 교정」이 SOT 다.
 - **라운드 3 이상은 회고 모드다.** 그 라운드에서 개별 finding 수리를 계속하는 것
   자체가 사이클 신호다 — fix 를 더 얹으라는 지적 대신 유형 재발 표(유형 × 라운드별
   건수)를 먼저 낸다. 트리거와 보고 항목은
