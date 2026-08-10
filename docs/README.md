@@ -70,8 +70,9 @@ git ls-tree -r --name-only "$REV" -- docs \
 앞선 값은 120,000 이었고 본문에 근거가 없었다. 근거는 히스토리에 있다. 도입 커밋
 `3b3d38d2` (#970) 이 파일당 검사 스크립트 `scripts/hooks/check-doc-size.sh` 를 같이
 넣었고, 그 스크립트는 파일마다 `wc -m` 을 재 threshold 와 견줬다. 왜 하필 120,000
-이었는지는 커밋 메시지에 없다 — 거기 남은 것은 위반 0 확인뿐이다. 확인되는 것은
-비율이다. 위 명령을 `3b3d38d2` 에 대고 재면 그때의 최대가 106,766
+이었는지는 커밋 메시지에 없다 — `git log -1 --format=%B 3b3d38d2` 에 남은 것은
+위반 0 확인과 「threshold ratchet 은 후속 Phase」 뿐이다. 확인되는 것은 비율이다.
+위 명령을 `3b3d38d2` 에 대고 재면 그때의 최대가 106,766
 (`docs/contributor-guide/testing-and-quality.md`) 이고 cap 은 그것의 1.124 배였다.
 
 그 스크립트는 2026-07-30 `6cced3ab` (#2033) 의 workflow 철거에 딸려 지워졌고, 다음
