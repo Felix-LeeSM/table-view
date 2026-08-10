@@ -125,9 +125,28 @@ finding 이 그 하나뿐인 커밋 메시지를 지목할 수 있다. 커밋이
 메시지에서 찾는다.**
 
 ```bash
-gh pr view <N> --json commits -q '.commits[] | .messageHeadline, .messageBody'
+# 커밋 메시지 원문. REST 라 headline 이 안 잘리고 --paginate 가 100개 상한을 없앤다
+gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
+  --jq '.[].commit.message'
 gh pr view <N> --json comments -q '.comments[].body'   # 라운드별 scorecard
+
+# scorecard 가 지목한 문구 하나가 커밋 메시지에 있는지. tr 이 하드랩을 이어 붙인다.
+# LC_ALL=C 는 GNU tr 이 UTF-8 로케일에서 바이트 0xA0 을 공백으로 접어 한국어 문구를
+# 통째로 0 으로 만드는 것을 막는다 (BSD tr 은 안 그런다 — 어느 tr 이 잡힐지 모른다)
+gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
+  --jq '.[].commit.message' | LC_ALL=C tr -s '[:space:]' ' ' | grep -c -F '<문구>'
 ```
+
+**`gh pr view` 의 `commits` 필드로 되돌리지 마라.** 그 형태가 거짓 0 을 내는 기전 셋과
+왜 이 형태여야 하는지는 `memory/workflow/review/memory.md` 「행동 계약」이 SOT 다 —
+리뷰어가 교정 자리를 넘길 때 쓰는 것도 같은 형태다. 그 옛 명령을 여기 그대로 붙이지
+않는 이유는 금지 문구를 인용하는 것만으로 다음 노드가 복사해 갈 수 있어서다.
+
+**hit 0 은 「커밋 메시지에 없다」의 증명이 아니다.** `tr -s` 가 연속 공백을 한 칸으로
+접으므로 커밋 메시지의 코드 펜스나 들여쓴 이어짐을 **원문 그대로** 찾으면 0 이 난다 —
+**새 형태는 옛 형태의 상위집합이 아니다.** 0 이면 문구를 공백이
+안 낀 조각으로 줄여 다시 재고, 그래도 0 이면 교정 대상에서 빼기 전에 위 원문 덤프를
+육안으로 훑는다. 0 을 잘못 믿는 값이 한쪽으로만 크기 때문이다 (같은 방).
 
 각 라운드 scorecard 의 blocking / non-blocking 목록을 커밋 메시지와 대조한다.
 **라운드 N 의 finding 이 지목한 주장이 라운드 N 이전 커밋 메시지에 그대로 남아
