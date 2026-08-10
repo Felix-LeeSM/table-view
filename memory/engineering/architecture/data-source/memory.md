@@ -66,9 +66,10 @@ normalizer 로만 확장한다. Error boundary 는 `AppError` 다. `Cancel` /
 유지한다. Frontend 분기는 `src/lib/tauri/error.ts` normalizer 를 통하고, 테스트는
 문자열만 맞추지 말고 variant/envelope 를 단언한다.
 
-Contract/delta test ownership 은 `src/types/adapterContractTestMatrix.ts` 가 고정한다.
-Query/result 는 #765, catalog/explain 은 #766, completion metadata 는 #767,
-safety/capability unsupported delta 는 #768 이 owner 다. Common expectation 은
+Contract/delta test ownership 은 `src/types/adapterContractTestMatrix.ts` 가 고정한다 —
+query · result · catalog · explain · completion · safety 가 그 파일의 행이고 행마다
+`childIssue` (#765~#768) 를 단다. 행을 더하거나 순서를 옮기면 그 파일과 함께
+`src/types/adapterConformance.test.ts` 의 고정 목록도 고친다. Common expectation 은
 DBMS delta 가 아니며, delta 는 DBMS/version/dialect/paradigm/capability/evidence
 축과 fixture/live/support-claim boundary 를 명시해야 한다.
 
