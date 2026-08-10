@@ -3,7 +3,7 @@ title: Documentation Impact Gate
 type: workflow-rule
 updated: 2026-08-10
 task: documentation, docs, pr, review, delivery
-keywords: 문서화, documentation impact, SOT 라우팅, evidence portability, repo-relative, retire 조건, 개수 서술, 닫힌 개수, 자리 나열, scorecard 수치
+keywords: 문서화, documentation impact, 문서화 impact 게이트, Reviewer 판정, SOT 라우팅, evidence portability, repo-relative, retire 조건, 개수 서술, 닫힌 개수, 자리 나열, scorecard 수치
 trigger:
   signal: PR 작성 / 문서 추가 / workflow·contract·user-facing 변경
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -89,13 +89,26 @@ PR #2232 의 squash body 를 이 규약에 맞게 고친 것은 저자도 리뷰
 
 ## Reviewer 판정
 
+[review](../review/memory.md) 「행동 계약」의 문서화 impact 게이트 사유가 이 절을
+가리킨다 — blocking 사유 목록은 그 방이 갖고, 여기는 그 사유의 상세만 둔다.
+
 리뷰어는 다음을 blocking finding 으로 본다. 판정하는 것은 **내용**이고,
 body 에 어떤 섹션이 있는지는 판정 대상이 아니다:
 
 - 문서화 트리거가 있는데 어떤 SOT 도 갱신되지 않음.
 - 기존 SOT 대신 새 backlog/plan 디렉토리를 만들고 retire 조건 없음.
-- PR 에서 볼 수 없는 로컬 절대경로를 근거로 사용.
 - workflow/rule 변경인데 `memory/workflow/**` 갱신 없음.
+- PR 에서 볼 수 없는 로컬 절대경로를 근거로 사용. 이 줄만 겨냥된 required check
+  를 갖는다 — `.github/workflows/ci.yml` 의
+  `Reject non-portable paths in PR body` step 이다. **그 step 이 실제로 red 면 그
+  건은 review 방의 자동 layer 실패 사유로도 걸린다.** 다만 step 이 이 줄을
+  대신하지는 않는다: 덮는 것은 PR body 한 채널 · 그 파일에 박힌 리터럴 목록 ·
+  커밋이 올 때 한 시점이라, 위 「Evidence portability」가 금지하는 나머지(리뷰
+  코멘트 · handoff · 그 목록 밖 경로 형태 · 마지막 커밋 뒤 body 편집 · 빈 body)는
+  기계 밖이고 이 게이트가 판정한다.
+
+어느 줄이든 트리거가 발생했는지는 사람이 읽어야 판정된다 — 그래서 이 게이트가
+별도 사유로 선다.
 
 ## 관련
 

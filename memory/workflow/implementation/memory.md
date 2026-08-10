@@ -72,7 +72,7 @@ trigger:
 다섯 행을 #2227 이 뺐다. 판독 근거와 그 한계는 그 이슈가 갖는다. 지운 유형이
 실제로 다시 나오면 그때 다시 넣는다.
 리뷰어 컨텍스트에 두면 blocking 사유가 계속 늘고, 저자 컨텍스트에 두면 라운드가
-줄어든다. blocking 판정은 [review](../review/memory.md) 의 세 사유로 고정이고
+줄어든다. blocking 판정은 [review](../review/memory.md) 가 열거하는 사유로 고정이고
 이 표는 거기에 추가되지 않는다. **도달**: 구현자 preamble
 (`.agents/prompts/issue-implement.md`)이 이 방을 착수 전 MANDATORY read 로
 지정한다 — 첨부되는 고정부라 읽으라는 명령이 반드시 닿는다.

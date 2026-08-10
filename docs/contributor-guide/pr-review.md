@@ -27,12 +27,15 @@ or clone paths are not valid evidence.
 
 ## Red / Green Rule
 
-A finding blocks the merge only when it makes `main` worse. There are three
-such cases and no others:
+A finding blocks the merge only when it makes `main` worse. These are the cases
+and there are no others — `memory/workflow/review/memory.md` 「행동 계약」 is the
+source of truth for this list, and this page does not restate its wording:
 
-1. Runtime behaviour is wrong, or user data or security is at risk.
-2. A false statement this PR is responsible for lands in a source of truth.
-3. An automatic gate (required check) fails.
+- Runtime behaviour is wrong, or user data or security is at risk.
+- A false statement this PR is responsible for lands in a source of truth.
+- An automatic gate (required check) fails.
+- The documentation impact gate is violated. The detail lives in
+  `memory/workflow/documentation/memory.md` 「Reviewer 판정」.
 
 Everything else is non-blocking. The reviewer records it on the scorecard only
 — the reviewer does not file issues. Type-level issue emission happens in a
@@ -42,7 +45,8 @@ A blocking finding must be backed by a counter-example, a command's output, or
 a gate result. "Insufficient evidence" and "not verified for every case" are
 not blocking. Rounds after the first judge only whether the previous round's
 blocking findings were resolved; anything newly discovered is recorded on the
-scorecard, except case 1 which blocks regardless of round.
+scorecard, except the runtime, user-data and security case, which blocks
+regardless of round.
 
 Scores are not used. Blocking is decided once, in the integrated scorecard
 comment; per-perspective notes report findings and evidence, not severity.

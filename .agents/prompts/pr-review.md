@@ -9,7 +9,7 @@
 
 **memory 계약 본문을 복제하지 않는다.** 여기 있는 것은 절차 고정부뿐이고,
 정의 · 사유 · 예외의 SOT 는 아래 read 목록의 방이다. 어긋나면 memory 가 이긴다.
-특히 **blocking 3사유의 정의 본문은 여기 없다** —
+특히 **blocking 사유의 목록도 정의 본문도 여기 없다** —
 `memory/workflow/review/memory.md` 「행동 계약」 을 열어서 읽어라.
 
 ## MANDATORY 첫 명령
@@ -43,7 +43,9 @@ test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
 - `memory/workflow/review/memory.md` — 이 역할의 계약 전부. blocking 판정 기준 ·
   fan-out 재량 · write 범위 · verdict label 규칙이 여기 있다.
 - `memory/workflow/orchestration/memory.md` — §3 사이클 정지 트리거.
-- `memory/workflow/documentation/memory.md` — 문서 변경이 섞인 PR 일 때.
+- `memory/workflow/documentation/memory.md` — 문서 변경 여부와 무관하게 읽는다.
+  문서화 impact 게이트 사유의 상세가 이 방이고, 그 첫 항목은 문서 변경이 **없는**
+  PR 에서 발화한다.
 
 리뷰 범위와 판정 기준은 위 계약과 PR diff 에서 **스스로** 세운다. 이 파일은
 기준을 주지 않는다.
