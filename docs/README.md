@@ -50,8 +50,15 @@ git ls-tree -r --name-only "$REV" -- docs \
 - 빠지는 것: `archives/` · `explorations/` (일회성 산출물이라 다시 읽을 일이 거의
   없다), `decisions/` (ADR 본문은 동결이라 줄일 수 없다 — `archives/` 밑에 있던
   시절에도 cap 밖이었지만 그때 사유는 동결이 아니라 `archives/` 포괄 제외였다).
-  빠지는 하위 트리를 명령으로 뽑으려면 위 `grep -E` 를 `grep -vE` 로 뒤집고
-  `| cut -d/ -f2 | sort -u` 를 붙인다.
+  이 목록은 손으로 적은 것이 아니라 정규식을 뒤집으면 그대로 나온다 — 새 디렉터리가
+  `docs/` 에 생기면 여기 셋 말고 그 이름이 같이 뜬다.
+
+  ```sh
+  git ls-tree -r --name-only "$REV" -- docs \
+    | grep -vE '^docs/((product|contributor-guide|roadmap|phases)/.*|[^/]+)\.md$' \
+    | cut -d/ -f2 | sort -u
+  ```
+
 - 전수 도구가 `git ls-tree` 인 이유는 위 주석대로 워킹트리가 아니라 커밋을 재기
   때문이다 — `ls-tree` 도 `show` 도 인자로 준 rev 의 트리만 읽고 워킹트리나 지금
   선 브랜치를 안 본다. 값까지 맞추려면 로케일도 맞춰야 한다(다음 항목).
