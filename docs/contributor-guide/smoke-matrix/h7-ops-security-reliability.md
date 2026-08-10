@@ -47,6 +47,11 @@ What the individual jobs own:
 
 - `PR Body Contract` rejects a PR body carrying a path only the author can open
   — an absolute home or temp path, a `file:` URL, or a path inside a work copy.
+  It also rejects a universal claim left standing with no command near it: a
+  line carrying one of the Korean trigger words needs a code fence or an inline
+  command within six lines either way, and `scripts/check-pr-body-universals.sh`
+  owns the word list and the window (#2228). That step reads the wording, never
+  the truth — a false claim that uses none of those words passes.
   An empty body passes. The workflow does not listen for `edited`, so a red
   verdict clears on the next commit, not on a body edit. The job also carries
   three contracts that have nothing to do with the body — the `CLAUDE.md` import

@@ -67,6 +67,13 @@ trigger:
 payload 의 옛 body 를 다시 읽어 같은 자리에서 fail 한다.
 **해소는 새 commit 뿐이다.**
 
+같은 job 의 마지막 스텝 `Universal claims in PR body carry a command` (#2228) 가
+body 를 한 번 더 읽는다. 트리거 낱말이 든 줄 ±6 줄 안에 명령이 없으면 그 줄 번호와
+문안을 찍고 fail 한다 — 낱말 목록과 판정은 `scripts/check-pr-body-universals.sh`
+헤더가 소유하고, 로컬 재현은 `gh pr view <N> --json body -q .body | bash
+scripts/check-pr-body-universals.sh` 다. body 의 참·거짓은 안 본다. 위와 같은
+payload 기전이라 해소는 새 commit 이다.
+
 **같은 job 이 body 와 무관한 계약을 셋 더 검사한다 — body 가 깨끗해도 red 가 된다.**
 ① `CLAUDE.md import intact` (#2059) 는 `CLAUDE.md` 의 `@AGENTS.md` import 줄과
 `AGENTS.md` 존재를 본다. `grep -q` + `test -f` 라 로그엔 exit code 만 남으니,

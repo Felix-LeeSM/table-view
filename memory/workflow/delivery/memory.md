@@ -69,9 +69,14 @@ head OID 로 센 라운드가 3 이상이면 `reflect:done` 까지, mergeable, �
 
 ## PR body
 
-형식 요구는 없다. CI 가 집행하는 유일한 제약은 근거의 이식성 — PR body / comment 는
-GitHub 에서 열리는 repo-relative path 와 URL 만 쓴다. `/Users`, `/tmp`, `file://`,
-`worktrees/`, `clones/` 금지. 문서화 판단은 [documentation](../documentation/memory.md).
+형식 요구는 없다. CI 가 집행하는 제약은 근거의 이식성과 전칭 서술의 반증 명령이다.
+**이식성** — PR body / comment 는 GitHub 에서 열리는 repo-relative path 와 URL 만
+쓴다. `/Users`, `/tmp`, `file://`, `worktrees/`, `clones/` 금지. **전칭** — 트리거
+낱말이 든 줄은 ±6 줄 안에 명령을 갖고 있어야 한다 (#2228). 낱말 목록과 「±6」의 뜻은
+`scripts/check-pr-body-universals.sh` 헤더가 소유하니 여기 옮겨 적지 않는다 — 규칙
+자체의 SOT 는 [implementation](../implementation/memory.md) §5 다. 그 검사는 낱말
+옆에 명령이 있는지만 보고 주장의 참·거짓은 안 본다.
+문서화 판단은 [documentation](../documentation/memory.md).
 
 2026-07-31 부터 PR body 는 CI 가 실제로 검사한다 — `PR Body Contract` job 이
 `/Users/` · `/tmp/` · `file://` · `worktrees/` · `clones/` 를 찾으면 fail 이다
