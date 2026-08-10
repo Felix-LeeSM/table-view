@@ -89,11 +89,10 @@ test "$(git -C "$DEST" rev-parse HEAD)" = "$OID" \
 # 의존성이 필요하면 「생성」 3) 과 같다
 ```
 
-- **`PRIMARY` 를 안 쓴다.** 리뷰어는 저자 사본 안에서 첫 명령을 돌리므로
-  `git rev-parse --show-toplevel` 이 저자 사본을 낸다 — `..` 를 붙이면 규약 밖
-  중첩 경로가 되고, primary 로 바꾸면 규약 경로가 저자 사본과 겹쳐 clone 이 실패한다.
-  위 형태는 cwd 를 안 읽어 어디에 서 있든 같은 `DEST` 가 나온다. `AUTHOR` 는
-  리뷰어가 받는 유일한 절대 경로라 사본 루트를 찾는 데만 쓴다.
+- **`PRIMARY` 를 안 쓴다 — cwd 를 아예 안 읽는다.** 리뷰어의 첫 명령이 저자 사본
+  **밖**을 요구하고 그 밖에는 어디든 허용하므로(`.agents/prompts/pr-review.md`
+  「MANDATORY 첫 명령」) `git rev-parse --show-toplevel` 이 무엇을 낼지 정해져
+  있지 않다. 위 형태는 `dirname "$AUTHOR"` 만 읽어 어디에 서 있든 같은 `DEST` 다.
 - **저자 사본을 clone 소스로 쓰지 않는다.** 저자 사본은 살아 움직이고 push 안 된
   커밋을 갖는다. 2026-08-07 실측: PR #2210 의 저자 사본이 그 시점 head
   `2e0bd76fc606` 위에 미push 커밋 `e6a2817bd5b6` 을 얹고 있었고, 그 사본을 clone 한
@@ -135,13 +134,15 @@ worktree 가 공짜로 주던 "같은 브랜치 이중 체크아웃 방지"가 c
 ## 첫 turn 검증 (MANDATORY)
 
 ```bash
+# 그 사본에서 일하는 역할(issue-implement)은 `=`, 남의 사본에 서면 안 되는
+# 역할(pr-review · pr-subreview · pr-finalize)은 `!=` 로 뒤집어 쓴다
 test "$(git rev-parse --show-toplevel)" = "<expected_path>" \
   || { echo "ABORT: wrong checkout" >&2; exit 1; }
 ```
 
-spawner 가 이 스니펫을 prompt 의 첫 명령 슬롯에 넣는다. 불일치 = 즉시 abort +
-보고, 다른 디렉토리에서 작업 재개 금지. cross-checkout 오염은 3회 관측된
-실사고다 (sprint-380/381/385).
+spawner 가 역할에 맞는 쪽을 prompt 의 첫 명령 슬롯에 넣는다 — 부호를 잘못
+복사하면 가드가 반대로 선다. 판정 실패 = 즉시 abort + 보고, 다른 디렉토리에서
+작업 재개 금지. cross-checkout 오염은 3회 관측된 실사고다 (sprint-380/381/385).
 
 ## 회수
 
@@ -163,8 +164,8 @@ spawner 가 이 스니펫을 prompt 의 첫 명령 슬롯에 넣는다. 불일�
   ([review](../../workflow/review/memory.md) 「행동 계약」). 디스크 점유 사유는
   그대로 걸리므로 **만든 리뷰어가 같은 턴에 지운다.** 만드는 법과 경로는 위
   「리뷰어 사본」이 정한다 — 사본 루트 안에 `review__` 로 남지만 종결자가 회수할
-  사본 경로를 하나만 받으므로(`.agents/prompts/pr-finalize.md:18,141`) 스윕이 애초에
-  그 자리를 안 본다.
+  사본 경로를 하나만 받으므로(`.agents/prompts/pr-finalize.md` 「MANDATORY 첫
+  명령」·「4단계 — 회수」) 스윕이 애초에 그 자리를 안 본다.
 - 작업 사본은 PR 당 하나, 동시에 쓰는 node 는 하나 (그 사본에 파일을 쓰는 것은
   구현자뿐 — 리뷰어는 저자 사본을 편집하지 않는다). 리뷰 라운드는 새 사본을
   만들지 않고 같은 사본에 다음 구현자를 붙인다 — 쪼개면 죽은 구현자의 미푸시
