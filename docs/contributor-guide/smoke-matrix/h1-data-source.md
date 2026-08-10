@@ -173,8 +173,10 @@ Gap routing:
 
 `src/types/adapterContractTestMatrix.ts` owns the area split — query, result,
 catalog, explain, completion, and safety are rows in that file and each row
-carries its own `childIssue` (#765~#768). Adding or reordering a row also
-changes the fixed list in `src/types/adapterConformance.test.ts`. Common
+names the `childIssue` that owns it, several rows to one issue (six rows,
+#765~#768). Adding or reordering a row also changes the fixed list in
+`src/types/adapterConformance.test.ts`, which pins every area-to-issue pair
+alongside the row order. Common
 expectations stay separate from
 DBMS/version/dialect/paradigm/capability/evidence deltas; fixture-only evidence
 does not widen support claims.

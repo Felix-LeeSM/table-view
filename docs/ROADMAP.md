@@ -83,12 +83,18 @@ These rows are GitHub execution buckets, not `docs/PLAN.md` backlog rows.
 `docs/ROADMAP.md` keeps sequencing and boundary summaries; GitHub milestones and
 parent issues own child closure state. The compatibility-row classification rule
 (`migration-only` / `permanent-wire-compatibility` / `removable-debt`) lives in
-`memory/engineering/conventions/refactoring/memory.md`; the rows it classified
-are the frozen audit
-`docs/archives/audits/refactor-05-compatibility-ledger-2026-06-12.md` (#758).
-Product support-claim wording lives in `docs/product/**` — the `README.md`,
-`known-limitations.md`, and `query-language-support.md` indexes plus their child
-pages (#759).
+`memory/engineering/conventions/refactoring/memory.md` and, for the frontend
+surface, in `memory/engineering/conventions/frontend/memory.md` — which adds a
+clause the other does not: after Refactor 02 no new compatibility path is added
+without removal evidence. The rows it classified are split across two frozen
+audits — `docs/archives/audits/refactor-05-compatibility-ledger-2026-06-12.md`
+holds the cross-surface table and accepts the frontend ledger in
+`docs/archives/audits/refactor-02-frontend-compat-inventory-2026-06-10.md` by
+reference instead of duplicating it (#758). Product support-claim wording lives
+in `docs/product/**` — the `README.md`, `known-limitations.md`, and
+`query-language-support.md` indexes plus their child pages — and the frozen
+audit is `docs/archives/audits/refactor-05-support-claims-ledger-2026-06-12.md`
+(#759).
 
 | Bucket | Parent | Live GitHub state | Routing boundary |
 |---|---|---|---|

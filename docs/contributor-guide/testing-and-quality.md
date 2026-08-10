@@ -122,9 +122,10 @@ frontend coverage red the `vite.config.ts` numbers cannot explain is the
 ratchet: look for `FAIL <metric>` in the job log. E2E breadth stays with
 `e2e/scope-map.mjs` (the spec universe and the changed-path routing) and the
 `Runtime Happy Path` job in `.github/workflows/e2e-smoke.yml`; CI cache and
-parallelism stay with `.github/workflows/ci.yml` (pnpm cache, cargo-deny cache,
-the `frontend-shard` matrix) and `.github/workflows/e2e-smoke.yml` (Rust and
-tauri-driver caches, and the in-file note on why the smoke job stays serial).
+parallelism stay with `.github/workflows/ci.yml` and
+`.github/workflows/e2e-smoke.yml` — read each file's own cache steps and job
+matrices rather than a list here, including the in-file notes on why one CI job
+deliberately has no `Swatinem/rust-cache` and why the smoke job stays serial.
 Static lint changes should not edit those gates.
 
 ## Smoke Matrix Bands
