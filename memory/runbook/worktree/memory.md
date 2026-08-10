@@ -3,7 +3,7 @@ title: 작업 사본 격리 — clone
 type: runbook
 updated: 2026-08-10
 task: clone, worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
-keywords: index.lock, FETCH_HEAD, git fetch, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject, stalled, timeout, respawn, npx, pnpm exec, cargo clean, stale path, 일회용 사본, 리뷰어 사본, PR head, headRefOid, gh pr checkout, checkout --detach, review__, --depth, shallow clone, bad object
+keywords: index.lock, FETCH_HEAD, git fetch, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject, stalled, timeout, respawn, npx, pnpm exec, cargo clean, stale path, 일회용 사본, 리뷰어 사본, PR head, headRefOid, gh pr checkout, checkout --detach, review__, --depth, shallow clone, is-shallow-repository, --unshallow, bad object
 ---
 
 # 작업 사본 격리 — clone
@@ -36,18 +36,25 @@ worktree 는 `.git` 을 공유해 index.lock 겹침·FETCH_HEAD 등 공유 자�
 # primary 루트에서 실행 — 사본은 primary "밖" 형제 디렉토리에 만든다
 PRIMARY="$(git rev-parse --show-toplevel)"
 DEST="$PRIMARY/../table-view-clones/<branch 의 / 를 __ 로>"
-# 1) 로컬 객체를 hardlink 로 공유하는 clone — 수 초, 디스크 저렴
-git clone --local "$PRIMARY" "$DEST"
+# 1) GitHub 에서 clone — primary 를 소스로 쓰지 않는다 (아래 「사본은 얕으면 안 된다」).
+#    https 인 이유: 이 머신의 ssh 는 GitHub 인증이 없어 fetch 가 실패한다 (2026-07-31 실측)
+git clone https://github.com/Felix-LeeSM/table-view.git "$DEST"
 DEST="$(cd "$DEST" && pwd -P)"   # `..` 정규화 — 첫 turn 검증(rev-parse)의 문자열 비교와 일치시킨다
-# 2) origin 을 GitHub 으로 — 이후 fetch/push 는 GitHub 과 직접 (https — 이
-#    머신의 ssh 는 GitHub 인증이 없어 fetch 가 실패한다, 2026-07-31 실측)
-git -C "$DEST" remote set-url origin https://github.com/Felix-LeeSM/table-view.git
-git -C "$DEST" fetch origin main
+test "$(git -C "$DEST" rev-parse --is-shallow-repository)" = false \
+  || { echo "ABORT: 역사가 잘린 사본" >&2; exit 1; }
+# 2) 브랜치
 git -C "$DEST" checkout -b <branch> origin/main
 # 3) 의존성 — cold 시작
 cd "$DEST" && pnpm install --frozen-lockfile --prefer-offline
 ```
 
+- **사본은 얕으면 안 된다 — 소스는 GitHub 이고 primary 가 아니다.** primary 가
+  shallow 라(경계 `539d05f3`, 2026-06-11) `git clone --local` 은 `--local` 을
+  무시하고 거기까지만 복제한다. 2026-08-10 실측:
+  `git rev-list --count 0da61f06` 이 그렇게 뜬 사본에선 778, GitHub clone 에선
+  1921 이다. 잘려도 에러가 안 나고 정상적인 숫자가 나오니 위 `test` 로 판정한다.
+  `--depth` 도 같은 금지다 — `--depth 1` 이면 `scripts/sweep/core-split-prose.mjs` 의
+  고정 커밋이 없어 `pnpm test` 가 죽는다 (CI 도 `frontend-shard` 잡에 `fetch-depth: 0`).
 - 위치: primary **밖** 형제 디렉토리 `../table-view-clones/`. repo 안에 두면
   rg·Tailwind source scan·lint 글롭이 사본을 훑는 함정이 생기고 `.gitignore`
   로는 도구 전부를 못 막는다.
@@ -97,11 +104,7 @@ test "$(git -C "$DEST" rev-parse HEAD)" = "$OID" \
   사본의 출력을 근거로 쓰지 않는다.
 - 이름 `review__<PR>__<OID 앞 12>` 는 저자 사본(브랜치 이름)과 안 겹치고, 라운드가
   바뀌면 OID 가 달라져 옛 사본을 조용히 재사용하지 못한다.
-- **깊이를 줄이지 않는다.** `--depth 1` 로 받으면 `pnpm test` 가 죽는다 —
-  `scripts/__tests__/core-split-prose.test.ts` 의 스윕이
-  `scripts/sweep/core-split-prose.mjs:49` 의 고정 커밋을 `git diff-tree` 로 읽는데
-  얕은 사본에 그 객체가 없다. CI 도 같은 이유로 그 잡에 `fetch-depth: 0` 을 준다
-  (`.github/workflows/ci.yml:298-305`). 전체 히스토리는 몇 초면 받는다.
+- **깊이를 줄이지 않는다** — 사유는 위 「생성」의 얕은 사본 금지와 같다.
 
 ### 결과를 인용하는 법
 
@@ -172,7 +175,7 @@ spawner 가 이 스니펫을 prompt 의 첫 명령 슬롯에 넣는다. 불일�
 `git reset --hard FETCH_HEAD/ORIG_HEAD/origin/*/@{u}`, `git pull` (모든 변종)
 **절대 금지**. 훅이 막아 주지 않는다. **`git fetch` 는 금지가 아니다** — 위
 `FETCH_HEAD` 는 `reset --hard` 의 대상이지 `fetch` 명령이 아니고, 이 방의
-「생성」·「리뷰어 사본」이 `git fetch` 를 절차로 처방한다.
+「리뷰어 사본」이 `git fetch` 를 절차로 처방한다.
 
 push reject 시 회복 정답 4-step:
 
