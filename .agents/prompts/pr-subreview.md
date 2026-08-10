@@ -58,9 +58,13 @@ test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
 
 출처: `memory/workflow/review/memory.md` 「행동 계약」.
 
-test · lint · build 를 돌릴지, 돌린다면 어디서 돌릴지는 **이 파일이 정하지
-않는다** — #2217 이 결정 대기 중이다. 결정 전까지 저자 사본에서 돌리지 말고,
-못 돌려서 못 닫은 것은 아래 「판단 못 한 것」에 적는다.
+test · lint · build 를 돌릴지는 스스로 정한다 — 의무가 아니다. 다만 **`pnpm
+install` 이나 cargo 빌드를 요구하는 검증은 이 노드가 돌리지 않는다** — 돌려야 할
+명령을 아래 「coordinator 가 돌릴 검증」에 그대로 적어 넘긴다. 그 둘을 안 부르는
+검증은 직접 돌리되, 저자 사본이 아니라 자기 일회용 사본에서 돌리고 **만들었으면
+같은 턴에 지운다.** 만드는 법은 `memory/runbook/worktree/memory.md`
+「리뷰어 사본」, 회수 의무의 주인은 그 방 「책임」, 티어를 그 자리에서 가르는
+사유는 `memory/workflow/review/memory.md` 「행동 계약」이 갖는다.
 
 ## 반환 형식
 
@@ -72,8 +76,13 @@ coordinator 에게 돌려주는 보고 하나. severity 없음, 처방 없음.
 - 발견
   - <발견 한 줄> — 근거: <repo-relative path:line>
   - 같은 발견이 여러 자리면 자리를 전부 나열한다
+- coordinator 가 돌릴 검증: <`pnpm install` · cargo 빌드가 필요해 이 노드가 안
+  돌린 명령을 그대로 + 그 명령이 닫을 물음. 없으면 "없음">
 - 판단 못 한 것: <근거가 없어 못 닫은 것. 없으면 "없음">
 ```
+
+앞의 항목은 실행 지시고 뒤의 항목은 기록이다 — 섞으면 coordinator 가 무엇을
+돌려야 하는지 못 고른다.
 
 근거 경로는 repo-relative 다 — 로컬 절대경로는 coordinator 가 scorecard 로
 옮기는 순간 PR 에서 안 열린다. 출처: `memory/workflow/documentation/memory.md`
