@@ -61,6 +61,25 @@ describe("DDL Tauri wrappers", () => {
     });
   });
 
+  // Issue #2213 — the wrapper hardcoded `cascade: false`, so a dialog that
+  // previewed `DROP TABLE … CASCADE` committed a plain DROP.
+  it("forwards the caller's CASCADE choice into the compat drop payload", async () => {
+    invokeMock.mockResolvedValue({ sql: "" });
+
+    await dropTable("conn-1", "users", "public", "app", true);
+    expect(invokeMock).toHaveBeenLastCalledWith("drop_table", {
+      request: {
+        connectionId: "conn-1",
+        schema: "public",
+        table: "users",
+        cascade: true,
+        previewOnly: false,
+        expectedDatabase: "app",
+      },
+      safetyConfirmed: true,
+    });
+  });
+
   it("threads null expectedDatabase for countNullRows when workspace db is absent", async () => {
     invokeMock.mockResolvedValueOnce(0).mockResolvedValueOnce(3);
 

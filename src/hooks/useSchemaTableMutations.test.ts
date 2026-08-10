@@ -102,6 +102,7 @@ describe("useSchemaTableMutations", () => {
       "users",
       "public",
       "db1",
+      false,
     );
     expect(mockTauriListTables).toHaveBeenCalledWith("conn1", "public", "db1");
     expect(tableNames("conn1", "db1", "public")).toEqual(["orders"]);
@@ -124,6 +125,7 @@ describe("useSchemaTableMutations", () => {
       "users",
       "public",
       "db1",
+      false,
     );
     expect(tableNames("conn1", "db1", "public")).toEqual(["orders"]);
   });
@@ -141,6 +143,7 @@ describe("useSchemaTableMutations", () => {
       "users",
       "public",
       "db1",
+      false,
     );
     expect(tableNames("conn1", "db1", "public")).toEqual([]);
   });

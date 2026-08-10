@@ -611,6 +611,7 @@ describe("SchemaTree — actions", () => {
         "users",
         "public",
         "db1",
+        false,
       );
     });
     await waitFor(() => {
