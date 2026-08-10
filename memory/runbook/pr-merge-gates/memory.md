@@ -67,17 +67,28 @@ trigger:
 payload 의 옛 body 를 다시 읽어 같은 자리에서 fail 한다.
 **해소는 새 commit 뿐이다.**
 
-**같은 job 이 body 와 무관한 계약을 셋 더 검사한다 — body 가 깨끗해도 red 가 된다.**
-① `CLAUDE.md import intact` (#2059) 는 `CLAUDE.md` 의 `@AGENTS.md` import 줄과
+같은 job 의 마지막 스텝 `Universal claims in PR body carry a command` (#2228) 가
+body 를 한 번 더 읽는다. 트리거 낱말이 든 줄 ±6 줄 안에 명령이 없으면 그 줄 번호와
+문안을 찍고 fail 한다 — 낱말 목록과 판정은 `scripts/check-pr-body-universals.sh`
+헤더가 소유하고, 로컬 재현은 `gh pr view <N> --json body -q .body | bash
+scripts/check-pr-body-universals.sh` 다. body 의 참·거짓은 안 본다. 위와 같은
+payload 기전이라 해소는 새 commit 이다.
+
+**같은 job 은 body 와 무관한 계약도 검사한다 — body 가 깨끗해도 red 가 된다.**
+`CLAUDE.md import intact` (#2059) 는 `CLAUDE.md` 의 `@AGENTS.md` import 줄과
 `AGENTS.md` 존재를 본다. `grep -q` + `test -f` 라 로그엔 exit code 만 남으니,
-red 면 그 줄과 파일이 그대로인지(들여쓰기·트레일링 CR 도 red) 직접 봐라. ②
+red 면 그 줄과 파일이 그대로인지(들여쓰기·트레일링 CR 도 red) 직접 봐라.
 `memory/ doc size cap` (#2128) 은 `memory/**/memory.md` 를 200줄 / 12,000
 **문자**로 잡고 `FAIL <path>: <실측> lines > 200` 을 찍는다 — fix 는 긴 절차를
-`.agents/skills/` 로 내리거나 방을 쪼개는 것이다. ③
+`.agents/skills/` 로 내리거나 방을 쪼개는 것이다.
 `src-tauri test binaries called or allowlisted` (#2113) 는 workflow 의 `--test`
 밖에 있는 `src-tauri/tests` target 을 `ci-uncalled-tests.txt` 와 대조한다 — fix
-는 그 테스트를 부르거나 사유를 적는 것이다. 셋 다 body 뒤라 body 가 red 면
-나머지는 skip 된다.
+는 그 테스트를 부르거나 사유를 적는 것이다.
+`no review-round narrative in source comments` (#2114) 는 `src/` · `src-tauri/` ·
+`e2e/` 주석의 리뷰 라운드 표기를, `(non-blocking) job names carry
+continue-on-error` (#2174) 는 그 접미사를 단 job 의 `continue-on-error: true`
+누락을 본다. 이 스텝들은 body 경로 검사 뒤라 그것이 red 면 뒤가 skip 된다 —
+지금 도는 스텝 목록은 `.github/workflows/ci.yml` 의 `pr-body` job 이 SOT 다.
 
 ## 계약 — 어기면 열린 PR 전부가 막힌다
 
