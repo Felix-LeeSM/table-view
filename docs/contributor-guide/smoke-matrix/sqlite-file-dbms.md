@@ -22,7 +22,9 @@ GitHub Runtime Happy Path now runs a SQLite desktop smoke for deterministic file
 create/open, table browse, read query, writable DML, row edit, read-only write
 rejection, and internal app-state DB rejection. The DDL #1804 opened is proved
 by adapter-level tests against real SQLite files, and extension-boundary
-non-claims stay routed to #460/#461, rather than broadening this smoke.
+non-claims stay routed to `docs/product/known-limitations-rdbms.md` (SQLite
+section) and `docs/product/query-language-support.md` (SQLite completion
+bullet), rather than broadening this smoke.
 
 ## File connection lifecycle
 

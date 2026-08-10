@@ -81,8 +81,14 @@ Last checked against live GitHub milestones/issues on 2026-06-12.
 
 These rows are GitHub execution buckets, not `docs/PLAN.md` backlog rows.
 `docs/ROADMAP.md` keeps sequencing and boundary summaries; GitHub milestones and
-parent issues own child closure state. Compatibility ledger work stays in #758.
-Product support-claim wording stays in #759.
+parent issues own child closure state. The compatibility-row classification rule
+(`migration-only` / `permanent-wire-compatibility` / `removable-debt`) lives in
+`memory/engineering/conventions/refactoring/memory.md`; the rows it classified
+are the frozen audit
+`docs/archives/audits/refactor-05-compatibility-ledger-2026-06-12.md` (#758).
+Product support-claim wording lives in `docs/product/**` — the `README.md`,
+`known-limitations.md`, and `query-language-support.md` indexes plus their child
+pages (#759).
 
 | Bucket | Parent | Live GitHub state | Routing boundary |
 |---|---|---|---|
@@ -90,7 +96,7 @@ Product support-claim wording stays in #759.
 | 09.20 Refactor 02 - Frontend Domain Strangler | #573 | closed; 0 open / 17 closed issues | IPC boundary, frontend compatibility inventory, typed wrapper routing, connection/completion/query/catalog/result/workspace splits, import-boundary enforcement, and docs/memory SOT. |
 | 09.30 Refactor 03 - Backend Adapter Contracts | #574 | closed; 0 open / 12 closed issues | TS/Rust profile parity, typed error envelopes, contract-test matrix, query/result/catalog/explain/completion/safety capability contracts, representative adapter topology, and docs/memory SOT. |
 | 09.40 Refactor 04 - Fixtures And Test Topology | #575 | closed; 0 open / 13 closed issues | Fixture/test inventory, representative fixture/test slices, SQL and Document/KV/Search fixture topology, loader shim, SQL-core/UI test splits, smoke routing, unsupported-boundary fixtures, and docs/memory SOT. Fixture existence alone is not support evidence. |
-| 09.50 Refactor 05 - Docs/Memory SOT Alignment | #576 | closed; 0 open / 7 closed issues | Memory-only SOT is closed by #756/PR #845; #757 audited docs/routing; #758 owns the compatibility ledger; #759 owns the product support-claim ledger; #760 closed the final link/format/index readiness gate and handoff to milestones 10.00, 10.10, and 11.00. #809 already closed the PR body contract gate. Parent #576 and milestone #41 are closed. |
+| 09.50 Refactor 05 - Docs/Memory SOT Alignment | #576 | closed; 0 open / 7 closed issues | Memory-only SOT is closed by #756/PR #845; #757 audited docs/routing; #758 reconciled the compatibility ledger; #759 audited the product support-claim ledger; #760 closed the final link/format/index readiness gate and handoff to milestones 10.00, 10.10, and 11.00. #809 already closed the PR body contract gate. Parent #576 and milestone #41 are closed. |
 
 ## 트랙 맵
 

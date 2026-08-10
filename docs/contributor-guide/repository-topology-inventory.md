@@ -130,8 +130,9 @@ The short form:
 - Tests, fixtures, and committed generated inputs move only with the behavior or
   generator contract they prove.
 - Each migration PR lists moved roots, compatibility exports, old/new path
-  search evidence, selected checks, and an explicit statement that #729 fence
-  behavior was not weakened.
+  search evidence, selected checks, and an explicit statement that the
+  generated/cache/tmp/worktree fence behavior (`.gitignore`, #729) was not
+  weakened.
 
 ## Ownership Inventory
 
