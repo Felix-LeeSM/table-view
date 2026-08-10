@@ -53,8 +53,8 @@ cd "$DEST" && pnpm install --frozen-lockfile --prefer-offline
   무시하고 거기까지만 복제한다. 2026-08-10 실측:
   `git rev-list --count 0da61f06` 이 그렇게 뜬 사본에선 778, GitHub clone 에선
   1921 이다. 잘려도 에러가 안 나고 정상적인 숫자가 나오니 위 `test` 로 판정한다.
-  `--depth` 도 같은 금지다 — 얕으면 `scripts/sweep/core-split-prose.mjs` 의 고정
-  커밋을 못 읽어 `pnpm test` 가 죽는다 (CI 도 `frontend-shard` 잡에 `fetch-depth: 0`).
+  `--depth` 도 같은 금지다 — `--depth 1` 이면 `scripts/sweep/core-split-prose.mjs` 의
+  고정 커밋이 없어 `pnpm test` 가 죽는다 (CI 도 `frontend-shard` 잡에 `fetch-depth: 0`).
 - 위치: primary **밖** 형제 디렉토리 `../table-view-clones/`. repo 안에 두면
   rg·Tailwind source scan·lint 글롭이 사본을 훑는 함정이 생기고 `.gitignore`
   로는 도구 전부를 못 막는다.
@@ -175,7 +175,7 @@ spawner 가 이 스니펫을 prompt 의 첫 명령 슬롯에 넣는다. 불일�
 `git reset --hard FETCH_HEAD/ORIG_HEAD/origin/*/@{u}`, `git pull` (모든 변종)
 **절대 금지**. 훅이 막아 주지 않는다. **`git fetch` 는 금지가 아니다** — 위
 `FETCH_HEAD` 는 `reset --hard` 의 대상이지 `fetch` 명령이 아니고, 이 방의
-「생성」·「리뷰어 사본」이 `git fetch` 를 절차로 처방한다.
+「리뷰어 사본」이 `git fetch` 를 절차로 처방한다.
 
 push reject 시 회복 정답 4-step:
 
