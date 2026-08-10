@@ -50,10 +50,11 @@ test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
 - **severity 를 붙이지 않는다.** blocking / non-blocking 판정은 coordinator
   단독 권한이다. 관점을 늘려도 blocking 이 늘지 않는다.
 - **처방을 쓰지 않는다.** 어떻게 고칠지는 저자가 정한다 — 발견과 근거만 낸다.
-  리뷰가 준 처방이 다음 라운드 blocking 의 원인이 된 사례는 #2231 이 모아 뒀다.
+  리뷰가 준 처방이 다음 라운드 blocking 을 낳은 사례가 있다 (#2146 · #2097).
 - **수는 목록으로 낸다.** 「N곳」 대신 그 자리를 나열한다. 개수만 적으면
   coordinator 가 확인할 자리를 못 찾고, 틀린 수가 scorecard 를 거쳐 PR body 로
-  옮겨간다. 규약의 SOT 는 #2229.
+  옮겨간다. 규약의 SOT 는 `memory/workflow/documentation/memory.md`
+  「개수 서술 대신 자리를 나열한다」.
 
 출처: `memory/workflow/review/memory.md` 「행동 계약」.
 
