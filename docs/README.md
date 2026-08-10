@@ -155,30 +155,67 @@ ARGV0=ugrep "$_cc_bin" -G --ignore-files --hidden -I --exclude-dir=.git …
 `The default FILE is '.gitignore'.`). 함수가 인자를 안 주므로 **루트 `.ignore` 는
 아예 안 읽힌다.** 거기에 `--hidden` 이 붙어 dot 디렉터리까지 본다. 그래서 위
 「검색 팁」 첫머리의 「기본 검색이 곧 active 문서 검색」은 `rg` 에만 참이고,
-`grep` 은 두 축 다 `git grep` 과 같은 값을 낸다.
+`grep` 은 아래 두 필터 다 `git grep` 과 같은 값을 낸다.
 
 ```sh
-grep -rl lefthook    | /usr/bin/grep -cE '^docs/(archives|explorations)/'  # 7
-rg   -l  lefthook    | /usr/bin/grep -cE '^docs/(archives|explorations)/'  # 0
-git grep -l lefthook | /usr/bin/grep -cE '^docs/(archives|explorations)/'  # 7
+grep -rl lefthook | /usr/bin/grep -cE '^docs/(archives|explorations)/'    # 7
+rg   -l  lefthook | /usr/bin/grep -cE '^docs/(archives|explorations)/'    # 0
+git grep -l lefthook 46b3d26c -- docs/archives docs/explorations | wc -l  # 7
 
-grep -rl issue-implement    | /usr/bin/grep -c '^\.agents/'   # 2
-rg   -l  issue-implement    | /usr/bin/grep -c '^\.agents/'   # 0
-git grep -l issue-implement | /usr/bin/grep -c '^\.agents/'   # 2
+grep -rl issue-implement | /usr/bin/grep -c '^\.agents/'    # 2
+rg   -l  issue-implement | /usr/bin/grep -c '^\.agents/'    # 0
+git grep -l issue-implement 46b3d26c -- .agents | wc -l     # 2
 ```
 
-값은 2026-08-10 에 `46b3d26c` 를 체크아웃해 잰 것이다 (ugrep 7.5.0 / zsh 5.9). 두
-필터가 이 문서 자신을 빼므로 위 「둘은 근사지 등식이 아니다」의 자기-계수 문제는
-여기 없다. 판별에 쓰는 것은 절대값이 아니라 **`grep` 값이 `rg` 값과 갈리는가** 다.
+값은 2026-08-10 에 `46b3d26c` 를 체크아웃해 잰 것이다 (ugrep 7.5.0 / zsh 5.9).
+`git grep` 은 커밋을 인자로 받아 못 박았고, `grep -rl`·`rg -l` 은 워킹트리를 읽어
+못 박는다. 두 필터가 이 문서 자신을 빼므로 위 「둘은 근사지 등식이 아니다」의
+자기-계수 문제는 여기 없다.
 
-**경로를 직접 주는 형태로는 이것을 못 가른다.** `grep -rl <패턴> docs/` 는 루트
-`.ignore` 가 원래 안 걸리는 자리라(그 파일 자신이 그렇게 적어 뒀다) 참인 시험과
-같은 값을 낸다. **두 시험이 안 갈리는 것 자체가 「`.ignore` 가 애초에 안 걸린다」는
-신호다** — 그 자리에서 반대 결론이 한 번 나왔다 (#2262).
+**판별에 쓰는 것은 절대값이 아니라 갈림이고, 갈리는 방향이 어느 함정인지를 말해
+준다** — `rg` 보다 **많으면** `.ignore`·dot 디렉터리를 본 것이고, `git grep` 보다
+**적으면** `-I` 가 추적 바이너리를 건너뛴 것이다. 위 두 검색어는 `grep` 과
+`git grep` 의 파일 집합이 같지만 그것이 일반 성질은 아니다.
 
-**둘째 축 — `-I` 가 binary 판정 입력을 통째로 건너뛴다.** 거짓 0 보다 나쁘다:
+```sh
+diff <(grep -rl lefthook | sort) <(git grep -l lefthook | sort)   # 차이 0
+diff <(grep -rl sql_parser_core | sort) <(git grep -l sql_parser_core | sort)
+# > src/lib/sql/wasm/sql_parser_core_bg.wasm — git grep 만 맞힌다 (21 대 22)
+```
+
+**가르는 시험은 「제외 대상 자신을 이름으로 주느냐」다** — 「경로를 주느냐」가
+아니다. 루트 `.ignore` 는 **상위 경로를 줘도 그대로 걸린다** —
+`rg -l lefthook docs/` 가 0 을 내는 것이 그 증거다. 안 걸리는 것은 제외 대상
+디렉터리 자신을 이름으로 준 때이고, 루트 `.ignore` 자신의 예시
+(`rg <패턴> docs/archives/`)도 그 경우를 말한다.
+
+| 형태 | 함수 `grep` | `rg` | 두 도구가 갈리나 |
+|---|---|---|---|
+| 경로 없음 | 7 | 0 | 갈린다 |
+| 상위 경로 `docs/` | 7 | 0 | 갈린다 |
+| 제외 대상 `docs/archives/` | 6 | 6 | 안 갈린다 |
+
+```sh
+grep -rl lefthook docs/          | /usr/bin/grep -cE 'docs/(archives|explorations)/'  # 7
+rg   -l  lefthook docs/          | /usr/bin/grep -cE 'docs/(archives|explorations)/'  # 0
+grep -rl lefthook docs/archives/ | /usr/bin/grep -c .                                 # 6
+rg   -l  lefthook docs/archives/ | /usr/bin/grep -c .                                 # 6
+```
+
+**두 `grep` 끼리 대조하면 신호가 없다.** 함수 `grep` 과 `command grep`
+(=`/usr/bin/grep`)은 이 갈림에서 같은 쪽이다 — 경로를 안 준 형태도 `docs/` 를 준
+형태도 둘 다 7 이다. 갈라야 할 상대는 `rg` 다. 이 자리에서 반대 결론이 한 번
+나왔다 (#2262).
+
+```sh
+grep         -rl lefthook docs/ | /usr/bin/grep -cE 'docs/(archives|explorations)/'  # 7
+command grep -rl lefthook docs/ | /usr/bin/grep -cE 'docs/(archives|explorations)/'  # 7
+```
+
+**둘째 함정 — `-I` 가 binary 판정 입력을 통째로 건너뛴다.** 거짓 0 보다 나쁘다:
 `0` 조차 안 찍고 rc=1 이라 **진짜 0건과 구분이 안 된다.** 커밋 메시지를 `tr` 로
-정규화해 `grep -c` 로 세는 자리가 이 저장소에 있어 실제로 닿는 경로다.
+정규화해 `grep -c` 로 세는 자리가 실제로 닿는 경로다 —
+`memory/workflow/review/memory.md:57` 과 `.agents/prompts/pr-finalize.md:137`.
 
 ```sh
 printf 'hello\0world needle here\n' | grep -c needle            # 출력 없음, rc=1
@@ -188,9 +225,19 @@ printf 'hello\0world needle here\n' | /usr/bin/grep -c needle   # 1, rc=0
 bash -c 'printf "hello\0world needle here\n" | grep -c needle'  # 1, rc=0
 ```
 
-**커밋되는 스크립트와 CI 는 두 축 다 안 물린다** — 비대화형 bash 는 프로필을 안
-읽어 함수가 없고 `/usr/bin/grep` 이 잡힌다. 위 마지막 줄이 그 근거다. 물리는 것은
-agent 가 손으로 도는 측정이고, 그 값이 이슈 body · PR body · scorecard 로 옮겨진다.
+**커밋되는 스크립트와 CI 는 두 함정 다 안 물린다.** 근거는 대화형 여부도, 프로필을
+읽느냐도 아니다 — **Claude Code 의 Bash 도구가 source 하는 셸 스냅샷**에서 함수가
+오고, 직접 띄운 bash·zsh 에는 대화형이든 로그인 셸이든 그 함수가 없다.
+
+```sh
+echo "$-"                     # 569JNRXghkl — i 가 없다(비대화형)는데 함수가 있다
+/bin/bash -i -c 'type grep'   # /usr/bin/grep — 대화형인데 함수가 없다
+/bin/zsh  -lc 'type grep'     # /usr/bin/grep — 로그인 셸로 프로필을 읽는데도 없다
+```
+
+**한 줄 판별은 `type grep` 이다** — 셸 함수라고 답하면 물리는 셸이고, 경로를
+답하면 안 물린다. 물리는 것은 agent 가 손으로 도는 측정이고, 그 값이 이슈 body ·
+PR body · scorecard 로 옮겨진다.
 
 ### 변수에 담은 pathspec — zsh 에서 조용히 0건
 
