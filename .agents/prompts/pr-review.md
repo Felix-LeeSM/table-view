@@ -9,7 +9,7 @@
 
 **memory 계약 본문을 복제하지 않는다.** 여기 있는 것은 절차 고정부뿐이고,
 정의 · 사유 · 예외의 SOT 는 아래 read 목록의 방이다. 어긋나면 memory 가 이긴다.
-특히 **blocking 3사유의 정의 본문은 여기 없다** —
+특히 **blocking 사유의 목록도 정의 본문도 여기 없다** —
 `memory/workflow/review/memory.md` 「행동 계약」 을 열어서 읽어라.
 
 ## MANDATORY 첫 명령
