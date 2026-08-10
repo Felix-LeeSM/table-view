@@ -27,15 +27,11 @@ or clone paths are not valid evidence.
 
 ## Red / Green Rule
 
-A finding blocks the merge only when it makes `main` worse. These are the cases
-and there are no others — `memory/workflow/review/memory.md` 「행동 계약」 is the
-source of truth for this list, and this page does not restate its wording:
-
-- Runtime behaviour is wrong, or user data or security is at risk.
-- A false statement this PR is responsible for lands in a source of truth.
-- An automatic gate (required check) fails.
-- The documentation impact gate is violated. The detail lives in
-  `memory/workflow/documentation/memory.md` 「Reviewer 판정」.
+A finding blocks the merge only when it makes `main` worse. Which findings do
+that is a closed list owned by `memory/workflow/review/memory.md` 「행동 계약」 —
+read it there. This page keeps no copy of the list, not even a reworded one:
+whoever edits that Korean source of truth is not reading this English page, so
+a copy here turns false the moment an item is added, dropped, or reordered.
 
 Everything else is non-blocking. The reviewer records it on the scorecard only
 — the reviewer does not file issues. Type-level issue emission happens in a
