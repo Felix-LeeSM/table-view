@@ -105,10 +105,19 @@ pub enum BackendAdapterContractKind {
     Kv,
 }
 
+// Issue #2211 — a third `DeclaredOnly` state (identity declared, no adapter at
+// all) lived here from #114 until #2211. Its only ever carrier was
+// `DECLARED_RDB_CONTRACT` for MSSQL and Oracle; that const died with the Oracle
+// promotion in `f32677e2` (2026-06-17) and nothing has used the state since. No
+// ADR, roadmap entry, or memory room reserves it: the pre-adapter stage this
+// repo documents is the *marker* contract (ADR 0046 적용 순서 3), which is
+// `MarkerOnly` below, and ADR 0060 gates the five wider candidates behind a
+// Required Contract lock whose Adapter item must be answered before
+// implementation starts. Reintroduce the state if a source ever needs to ship an
+// identity with no adapter contract at all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendAdapterContractState {
     FactoryBacked,
-    DeclaredOnly,
     MarkerOnly,
 }
 

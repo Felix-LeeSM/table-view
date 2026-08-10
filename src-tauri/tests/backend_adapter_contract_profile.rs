@@ -63,10 +63,21 @@ fn backend_adapter_contract_profiles_are_encoded() {
         assert_eq!(profile.paradigm, db_type.paradigm());
         assert!(!profile.languages.is_empty());
         assert!(!profile.result_kinds.is_empty());
+        // Issue #2211 — this used to read
+        // `has(Lifecycle) == (state != BackendAdapterContractState::DeclaredOnly)`.
+        // The right-hand side lost its second case when the last `DeclaredOnly`
+        // profiles (MSSQL, Oracle) were promoted in `f32677e2`, so it compared
+        // against a state no profile carried and the assertion silently decayed
+        // into the two checks below. Every profile contract is `FactoryBacked`
+        // today — `MarkerOnly` lives only on the standalone `KV_MARKER_CONTRACT`
+        // / `SEARCH_MARKER_CONTRACT`, which no `get_data_source_profile` result
+        // points at — so both sides are asserted directly instead of being tied
+        // together by an equality that can no longer separate them.
         assert_eq!(
-            profile.has_backend_capability(BackendAdapterCapability::Lifecycle),
-            profile.adapter_contract.state != BackendAdapterContractState::DeclaredOnly
+            profile.adapter_contract.state,
+            BackendAdapterContractState::FactoryBacked
         );
+        assert!(profile.has_backend_capability(BackendAdapterCapability::Lifecycle));
     }
 }
 
