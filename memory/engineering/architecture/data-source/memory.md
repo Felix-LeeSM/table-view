@@ -67,8 +67,9 @@ normalizer 로만 확장한다. Error boundary 는 `AppError` 다. `Cancel` /
 문자열만 맞추지 말고 variant/envelope 를 단언한다.
 
 Contract/delta test ownership 은 `src/types/adapterContractTestMatrix.ts` 가 고정한다 —
-query · result · catalog · explain · completion · safety 가 그 파일의 행이고, 축을
-더하거나 옮기면 거기를 고친다 (축 도입 #765~#768). Common expectation 은
+query · result · catalog · explain · completion · safety 가 그 파일의 행이고 행마다
+`childIssue` (#765~#768) 를 단다. 행을 더하거나 순서를 옮기면 그 파일과 함께
+`src/types/adapterConformance.test.ts` 의 고정 목록도 고친다. Common expectation 은
 DBMS delta 가 아니며, delta 는 DBMS/version/dialect/paradigm/capability/evidence
 축과 fixture/live/support-claim boundary 를 명시해야 한다.
 
