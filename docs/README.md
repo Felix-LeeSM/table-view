@@ -23,14 +23,77 @@ updated: 2026-05-28
 
 ## 분량 cap
 
-지속 참조 문서(`product/`, `contributor-guide/`, `roadmap/`, `ROADMAP.md`,
-`phases/`, docs root)는 120,000 chars 분량 cap 을 둔다 — agent 가
-읽을 때 context 부하를 가두기 위함. 일회성 산출물(`archives/`, `explorations/`)은
-cap 에서 제외한다 (다시 읽을 일이 거의 없음). `decisions/` 도 제외한다 — cap 은 살아
-있는 산문이 비대해지는 것을 막는 장치인데 ADR 본문은 동결이라 줄일 수 없다.
-`archives/` 밑에 있던 시절에도 cap 밖이었지만 그때 사유는 동결이 아니라 `archives/`
-포괄 제외, 곧 재독 빈도였다.
-cap 은 규율로만 남았고 자동 검사가 없다.
+**cap 은 파일 하나마다 걸린다 — 묶음 합계가 아니다.** 상한은 파일당 **33,000
+chars**, 단위는 `wc -m` 의 문자(code point)이고 바이트가 아니다. 목적은 agent 가
+한 파일을 열었을 때의 context 부하를 가두는 것이다. 규율로만 남고 자동 검사는
+없다 (아래 「자동 검사를 두지 않는 이유」).
+
+### 모집단은 이 명령이 정의한다
+
+산문으로 「지속 참조 문서」라고만 쓰던 자리다. 읽는 사람마다 다른 집합을 잡아 값이
+갈렸으므로(#2266) 명령을 SOT 로 둔다.
+
+```sh
+REV=HEAD   # 워킹트리가 아니라 커밋을 잰다 — dirty 트리에서 값이 갈리지 않게
+git ls-tree -r --name-only "$REV" -- docs \
+  | grep -E '^docs/((product|contributor-guide|roadmap|phases)/.*|[^/]+)\.md$' \
+  | while IFS= read -r f; do
+      echo "$(git show "$REV:$f" | LC_ALL=en_US.UTF-8 wc -m | tr -d ' ') $f"
+    done | sort -rn
+```
+
+- 드는 것: `docs/` 바로 아래 `.md`, 그리고 `product/` · `contributor-guide/` ·
+  `roadmap/` · `phases/` 아래 `.md`. 정규식의 `/.*` 가 재귀라
+  `contributor-guide/smoke-matrix/` 와 `contributor-guide/release/` 도 든다.
+- 빠지는 것: `archives/` · `explorations/` (일회성 산출물이라 다시 읽을 일이 거의
+  없다), `decisions/` (ADR 본문은 동결이라 줄일 수 없다 — `archives/` 밑에 있던
+  시절에도 cap 밖이었지만 그때 사유는 동결이 아니라 `archives/` 포괄 제외였다).
+- 전수 도구가 `git ls-tree` 인 이유는 루트 `.ignore` 가
+  `docs/{archives,explorations}` 를 빼기 때문이다 — `rg` 로 세면 모집단이 아니다
+  (아래 「검색 팁」).
+- 로케일이 UTF-8 이 아니면 `wc -m` 이 문자가 아니라 바이트를 센다. 한 줄로
+  확인한다 — `printf '가나다' | LC_ALL=en_US.UTF-8 wc -m` 이 `3` 이 아니면 그
+  로케일로는 못 잰다.
+
+### 현재 값 — `47eb7e00`
+
+| 무엇 | 값 |
+|---|---|
+| 파일당 최대 | 29,472 `docs/roadmap/h5.md` (다음이 29,350 `docs/roadmap/h2.md`) |
+| cap 초과 파일 | 0 |
+| 묶음 합계 | 564,569 chars / 46 파일 — **cap 이 재는 값이 아니다** |
+
+합계는 위 명령 뒤에 `| awk '{s+=$1} END {print s, NR}'` 를 붙이면 나온다. 합계를
+같이 적어 두는 이유는 이 값을 cap 과 견주던 오독이 실제로 있었기 때문이다 (#2266).
+
+### 왜 33,000 인가
+
+앞선 값은 120,000 이었고 본문에 근거가 없었다. 근거는 히스토리에 있다. 도입 커밋
+`3b3d38d2` (#970) 이 파일당 검사 스크립트 `scripts/hooks/check-doc-size.sh` 를 같이
+넣었고, 그 스크립트는 파일마다 `wc -m` 을 재 threshold 와 견줬다. 숫자는 **그때의
+최대 파일이 여유를 두고 통과하도록** 잡은 것이다 — 위 명령을 `3b3d38d2` 에 대고
+재면 최대가 106,766 (`docs/contributor-guide/testing-and-quality.md`) 이고 120,000
+은 그것의 1.124 배다.
+
+그 스크립트는 2026-07-30 `6cced3ab` (#2033) 의 workflow 철거에 딸려 지워졌고, 남은
+산문에서 **「파일당」이 빠졌다.** 그래서 이 자리가 묶음 합계로 읽혔다.
+
+같은 구성을 오늘의 최대에 다시 적용한다 — 29,472 × 1.124 = 33,125 → **33,000**.
+도입 커밋이 「threshold ratchet 은 후속 Phase」로 미뤄 둔 그 ratchet 이다. 120,000
+을 그대로 두면 오늘 최대의 4.07 배라 어느 문서도 닿지 못해 장치가 아니고, 33,000
+에서 초과 파일은 0 이라 이 값은 어느 문서도 줄이라고 요구하지 않는다. 다음에 또
+조일 때도 같은 구성(그때의 최대 × 그때의 여유율)을 쓰면 숫자가 근거를 갖고 이어진다.
+
+### 자동 검사를 두지 않는 이유
+
+이 자리가 실제로 낸 실패는 「파일이 몰래 cap 을 넘었다」가 아니라 「cap 이 무엇을
+재는지가 읽는 사람마다 갈렸다」다 — 위 명령이 그것을 닫고 CI 잡은 안 닫는다. 지금
+초과가 0 이고 최대가 cap 보다 3,528 chars 낮아, 게이트를 넣어도 당분간 늘 green 인
+잡이 하나 는다.
+
+다시 볼 조건: 위 명령에서 33,000 을 넘은 파일이 나왔는데 리뷰가 그것을 못 잡은
+사례가 생기면 그때 만든다. 베낄 형태는 `scripts/check-memory-doc-size.sh` 다 —
+로케일 자기검사, 0개 가드, `::error::` 주석이 거기 있다.
 
 ## 유지할 최상위 묶음
 
