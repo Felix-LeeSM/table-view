@@ -1,9 +1,9 @@
 ---
 title: 작업 사본 격리 — clone
 type: runbook
-updated: 2026-08-07
+updated: 2026-08-10
 task: clone, worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
-keywords: index.lock, FETCH_HEAD, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject, stalled, timeout, respawn, npx, pnpm exec, cargo clean, stale path, 일회용 사본, 리뷰어 사본, PR head, headRefOid, gh pr checkout, checkout --detach, review__, --depth, shallow clone, bad object
+keywords: index.lock, FETCH_HEAD, git fetch, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject, stalled, timeout, respawn, npx, pnpm exec, cargo clean, stale path, 일회용 사본, 리뷰어 사본, PR head, headRefOid, gh pr checkout, checkout --detach, review__, --depth, shallow clone, bad object
 ---
 
 # 작업 사본 격리 — clone
@@ -75,7 +75,7 @@ OID="$(gh pr view "$PR" --repo Felix-LeeSM/table-view --json headRefOid -q .head
 DEST="$(dirname "$AUTHOR")/review__${PR}__${OID:0:12}"
 git init -q "$DEST"
 git -C "$DEST" remote add origin https://github.com/Felix-LeeSM/table-view.git
-git -C "$DEST" fetch origin "$OID"   # 평범한 fetch — hard block 이 아니다
+git -C "$DEST" fetch origin "$OID"
 git -C "$DEST" -c advice.detachedHead=false checkout --detach "$OID"
 test "$(git -C "$DEST" rev-parse HEAD)" = "$OID" \
   || { echo "ABORT: PR head 가 아니다" >&2; exit 1; }
@@ -167,10 +167,14 @@ spawner 가 이 스니펫을 prompt 의 첫 명령 슬롯에 넣는다. 불일�
   만들지 않고 같은 사본에 다음 구현자를 붙인다 — 쪼개면 죽은 구현자의 미푸시
   커밋을 못 이어받는다.
 
-## Agent hard rule — fetch/reset/pull 금지
+## Agent hard rule — reset --hard (remote/upstream target) · pull 금지
 
 `git reset --hard FETCH_HEAD/ORIG_HEAD/origin/*/@{u}`, `git pull` (모든 변종)
-**절대 금지**. 훅이 막아 주지 않는다. push reject 시 회복 정답 4-step:
+**절대 금지**. 훅이 막아 주지 않는다. **`git fetch` 는 금지가 아니다** — 위
+`FETCH_HEAD` 는 `reset --hard` 의 대상이지 `fetch` 명령이 아니고, 이 방의
+「생성」·「리뷰어 사본」이 `git fetch` 를 절차로 처방한다.
+
+push reject 시 회복 정답 4-step:
 
 ```bash
 git ls-remote origin <branch>                    # 1) remote SHA 진단
