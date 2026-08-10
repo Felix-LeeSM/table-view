@@ -125,10 +125,10 @@ finding 이 그 하나뿐인 커밋 메시지를 지목할 수 있다. 커밋이
 메시지에서 찾는다.**
 
 ```bash
-# 커밋 메시지 원문. REST 라 headline 이 안 잘린다. --paginate 가 없애는 것은 페이지당
-# 100 뿐이고 이 엔드포인트 자체의 250 상한은 남는다 — 넘으면 rc=0 · stderr 0바이트로
-# 조용히 잘린다. #2254 의 「잘려도 아무 표시가 없다」는 사라진 게 아니라
-# 임계가 100 에서 250 으로 올라간 것이다
+# 커밋 메시지 원문. REST 라 headline 이 안 잘린다. --paginate 가 없애는 것은 페이지
+# 절단(기본 30 · per_page 로 요청해야 100)이고 이 엔드포인트 자체의 250 상한은 남는다
+# — 넘으면 rc=0 · stderr 0바이트로 조용히 잘린다. #2254 의 「잘려도 아무 표시가 없다」는
+# 사라진 게 아니라 임계가 30 에서 250 으로 올라간 것이다
 gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
   --jq '.[].commit.message'
 gh pr view <N> --json comments -q '.comments[].body'   # 라운드별 scorecard
