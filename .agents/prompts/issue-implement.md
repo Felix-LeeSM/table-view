@@ -79,7 +79,7 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
    리뷰 부착은 orchestrator 가 label 을 보고 한다.
 
 수정 라운드도 같은 사본, 같은 브랜치에서 이 절차를 다시 밟는다. 이번 라운드의 변경으로
-PR body 의 기존 주장이 낡았으면 fix commit 과 같은 턴에 body 도 갱신한다.
+PR body 의 기존 주장이 낡았을 때 무엇을 하는지는 그 방이 갖는다 — 옮겨 적지 않는다.
 출처: `memory/workflow/delivery/memory.md` 「PR body」.
 
 ## 중단 조건
