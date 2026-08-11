@@ -1,15 +1,22 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-// Purpose: `scripts/mcp/repo-recon/server.mjs` 의 시그니처를 잠근다 — issue #2289.
+// Purpose: `scripts/mcp/repo-recon/server.mjs` 를 잠근다 — issue #2289.
 //
-// 이 서버의 값은 "돈다" 가 아니라 **틀린 형태를 표현할 수 없다** 는 쪽이라, 아래
-// 단언은 전부 그 성질 하나씩을 문다: mode 가 세는 단위를 실제로 가르는가, 셸을
-// 안 거치는가, `rev` 없이 부를 수 있는가, `perl` 이 PCRE 에 닿는가.
+// 서버는 git 의 얇은 래퍼이므로 단언도 그 성질을 문다: 응답이 실행한 argv 와 git 의
+// stdout 그대로인가, 서버가 지어낸 필드가 없는가, `rev` 슬롯이 git 옵션을 삼키지
+// 않는가, 판단이 필요한 자리에 경고가 붙는가.
+//
+// **개수 비교로 성질을 세우지 않는다.** 라운드 1 은 `-E` 와 `-P` 의 일치 건수 차이를
+// 단언해 CI(glibc ERE)에서 red 였다 — 같은 정규식이 플랫폼마다 다르게 물기 때문이다.
+// 대신 만들어진 argv 를 본다: 서버가 고르는 것은 git 플래그뿐이고, 그 플래그가 무엇을
+// 무는지는 서버의 주장이 아니다.
 //
 // 왕복은 실물 프로세스다 — `.mcp.json` 이 선언한 command/args 를 그대로 spawn 해
 // stdio JSON-RPC 로 initialize → tools/list → tools/call 을 돈다. 서버 함수를
@@ -24,7 +31,7 @@ const mcpConfig = JSON.parse(readFileSync(mcpConfigPath, "utf8")) as {
 const repoRecon = mcpConfig.mcpServers["repo-recon"];
 
 type ToolResult = Awaited<ReturnType<Client["callTool"]>>;
-type Payload = { count: number; truncated: boolean; lines: string[] };
+type Payload = { argv: string[]; stdout: string; warnings: string[] };
 
 function textOf(result: ToolResult): string {
   const content = result.content as { text?: string }[] | undefined;
@@ -35,6 +42,21 @@ function payloadOf(result: ToolResult): Payload {
   expect(result.isError ?? false, textOf(result)).toBe(false);
   return JSON.parse(textOf(result)) as Payload;
 }
+
+function gitOutput(argv: string[]): string {
+  return execFileSync("git", argv, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+}
+
+const headOid = gitOutput(["rev-parse", "HEAD"]).trim();
+
+// `rev` 로 들어가는 git 옵션이 파일을 만드는지 보는 자리. 저장소 안에 두면 그 실패가
+// 트리를 더럽히므로 임시 디렉토리에 둔다.
+const probeDir = mkdtempSync(join(tmpdir(), "repo-recon-"));
+const probeFile = join(probeDir, "MARKER");
 
 let client: Client;
 
@@ -53,6 +75,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await client?.close();
+  rmSync(probeDir, { recursive: true, force: true });
 });
 
 describe("repo-recon MCP server", () => {
@@ -70,38 +93,116 @@ describe("repo-recon MCP server", () => {
 
   // Reason: 이름은 호출자가 손으로 적는 유일한 문자열이다. 하나라도 바뀌면 그
   // 노드의 호출이 통째로 죽는데, 서버 쪽만 고치면 아무 데서도 안 걸린다.
-  it("answers initialize and lists exactly the three recon tools", async () => {
+  it("answers initialize and lists the recon tools by name", async () => {
     expect(client.getServerVersion()?.name).toBe("repo-recon");
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name).sort()).toEqual([
+      "repo_git",
       "repo_grep",
       "repo_ls",
       "repo_show",
     ]);
   });
 
-  // Reason: 이 저장소가 반복해서 틀린 자리 — `grep -c` 가 낸 줄 수를 파일 수로
-  // 옮겨 적는 것 — 를 시그니처가 가르는지 본다. 세 mode 가 같은 플래그로 붕괴하면
-  // 여기가 red 다. 절대값 대신 엄격 부등식인 이유는 산문이 자라도 관계는 유지되기
-  // 때문이고, files 만 1 로 못박는 것은 pathspec 이 파일 하나라서다.
-  it("counts a different unit per mode over the same pattern", async () => {
-    const counts: Record<string, number> = {};
-    for (const mode of ["files", "lines", "matches"] as const) {
+  // Reason: 응답 계약 자체를 문다. 서버가 세거나 자르는 필드를 되살리면 여기가 red 다 —
+  // 서버가 세면 서버가 오계수를 만든다. argv 를 통째로 고정해 `--end-of-options` 가
+  // rev 앞에 서는 것도 같은 단언에 넣는다.
+  it("answers with the argv it ran, git stdout, and nothing it made up", async () => {
+    const result = await client.callTool({
+      name: "repo_grep",
+      arguments: {
+        pattern: "memory",
+        rev: "HEAD",
+        pathspec: ["AGENTS.md"],
+        mode: "files",
+        regex: "fixed",
+      },
+    });
+    const payload = payloadOf(result);
+    expect(Object.keys(payload).sort()).toEqual(["argv", "stdout", "warnings"]);
+    expect(payload.argv).toEqual([
+      "grep",
+      "-l",
+      "-F",
+      "-e",
+      "memory",
+      "--end-of-options",
+      "HEAD",
+      "--",
+      "AGENTS.md",
+    ]);
+    expect(payload.stdout).toBe("HEAD:AGENTS.md\n");
+  });
+
+  // Reason: 이 저장소가 반복해서 틀린 자리 — `grep -c` 가 낸 줄 수를 파일 수로 옮겨
+  // 적는 것 — 를 시그니처가 가르는지 본다. 결과 개수가 아니라 만들어진 플래그를 보는
+  // 이유는 위 파일 머리에 적었다: 개수는 플랫폼과 산문에 흔들린다.
+  it("picks a different git flag per mode and per regex kind", async () => {
+    const flagsFor = async (over: Record<string, string>) => {
       const result = await client.callTool({
         name: "repo_grep",
         arguments: {
           pattern: "memory",
           rev: "HEAD",
           pathspec: ["AGENTS.md"],
-          mode,
+          mode: "lines",
           regex: "fixed",
+          ...over,
         },
       });
-      counts[mode] = payloadOf(result).count;
+      return payloadOf(result).argv.slice(1, 3);
+    };
+    expect(await flagsFor({ mode: "files" })).toEqual(["-l", "-F"]);
+    expect(await flagsFor({ mode: "lines" })).toEqual(["-n", "-F"]);
+    expect(await flagsFor({ mode: "matches" })).toEqual(["-o", "-F"]);
+    expect(await flagsFor({ regex: "extended" })).toEqual(["-n", "-E"]);
+    expect(await flagsFor({ regex: "perl" })).toEqual(["-n", "-P"]);
+  });
+
+  // Reason: 라운드 1 의 blocking — 서버가 파일 내용에서 빈 줄을 지워 줄 번호가
+  // 어긋났다. `path:line` 이 이 저장소의 리뷰 근거 형식이라 그 어긋남이 그대로
+  // 거짓 근거가 된다. 바이트 동일성으로 문다.
+  it("returns git stdout byte for byte, blank lines included", async () => {
+    const expected = gitOutput(["show", `${headOid}:AGENTS.md`]);
+    // 이 파일에 빈 줄이 없으면 위 단언이 아무것도 증명하지 않는다.
+    expect(expected).toContain("\n\n");
+    const result = await client.callTool({
+      name: "repo_show",
+      arguments: { rev: "HEAD", path: "AGENTS.md" },
+    });
+    expect(payloadOf(result).stdout).toBe(expected);
+  });
+
+  // Reason: 라운드 1 의 blocking — `rev` 가 자유 문자열인 채 git 의 옵션 파싱 구간에
+  // 놓여, `-O` 는 pager 로 셸을 돌리고 `--output=` 은 파일을 썼다. 응답이 정상
+  // JSON 이라 호출자 쪽에서는 안 보였다. 그래서 "에러가 났다" 와 "파일이 안 생겼다"
+  // 를 같이 문다.
+  it("refuses a rev that smuggles git options, and writes no file", async () => {
+    const hostileRevs = [
+      `-Osh -c "touch ${probeFile}"`,
+      `--output=${probeFile}`,
+    ];
+    for (const rev of hostileRevs) {
+      const calls: { name: string; arguments: Record<string, unknown> }[] = [
+        {
+          name: "repo_grep",
+          arguments: {
+            pattern: "memory",
+            rev,
+            pathspec: ["AGENTS.md"],
+            mode: "files",
+            regex: "fixed",
+          },
+        },
+        { name: "repo_show", arguments: { rev, path: "AGENTS.md" } },
+        { name: "repo_ls", arguments: { rev, pathspec: ["AGENTS.md"] } },
+      ];
+      for (const call of calls) {
+        const result = await client.callTool(call);
+        expect(result.isError, `${call.name} / ${rev}`).toBe(true);
+      }
     }
-    expect(counts.files).toBe(1);
-    expect(counts.lines).toBeGreaterThan(counts.files);
-    expect(counts.matches).toBeGreaterThan(counts.lines);
+    expect(existsSync(probeFile)).toBe(false);
   });
 
   // Reason: 셸이 glob 을 삼켜 명령이 안 돌았는데 exit 0 이던 유형을 죽였는지 본다.
@@ -113,24 +214,14 @@ describe("repo-recon MCP server", () => {
       name: "repo_ls",
       arguments: { rev: "HEAD", pathspec: ["*.md"] },
     });
-    const { lines } = payloadOf(result);
+    const lines = payloadOf(result).stdout.split("\n");
     expect(lines).toContain("AGENTS.md");
     expect(lines).toContain("memory/workflow/delivery/memory.md");
-    expect(lines.every((path) => path.endsWith(".md"))).toBe(true);
   });
 
-  // Reason: 위 단언의 짝. 아무것도 안 무는 glob 은 셸(zsh nomatch)에서 명령 자체를
-  // 죽여 「0건」과 구분이 안 됐다. 여기서는 0 이 결과로 돌아와야 한다.
-  it("answers zero for a pathspec that matches nothing", async () => {
-    const result = await client.callTool({
-      name: "repo_ls",
-      arguments: { rev: "HEAD", pathspec: ["*.no-such-extension"] },
-    });
-    expect(payloadOf(result).count).toBe(0);
-  });
-
-  // Reason: `rev` 가 선택이 되는 순간 이 서버는 작업 트리를 읽는 도구로 되돌아간다.
-  // 거부가 스키마 단계라는 것까지 문다 — 핸들러가 돌았다면 메시지가 git 쪽 문구다.
+  // Reason: `rev` 가 선택이 되는 순간 이 서버는 작업 트리를 조용히 읽는 도구로
+  // 되돌아간다. 거부가 스키마 단계라는 것까지 문다 — 핸들러가 돌았다면 메시지가
+  // git 쪽 문구다.
   it("rejects a call that omits rev before the handler runs", async () => {
     const result = await client.callTool({
       name: "repo_grep",
@@ -146,43 +237,121 @@ describe("repo-recon MCP server", () => {
     expect(textOf(result)).toContain("rev");
   });
 
-  // Reason: `perl` 이 실제로 PCRE 엔진에 닿는지는 "죽지 않았다" 로 증명이 안 된다 —
-  // `-E` 도 죽지 않고 0건을 낸다. 그래서 같은 패턴을 두 문법으로 돌려 갈리는 것을
-  // 본다. `.mcp.json` 의 `"repo-recon": {` 에 대해 PCRE 는 `\s` 를 공백류로 읽어
-  // 물고, ERE 는 리터럴 `s` 로 읽어 못 문다.
-  it("routes regex kinds to the engine each one names", async () => {
-    const counts: Record<string, number> = {};
-    for (const regex of ["perl", "extended"] as const) {
+  // Reason: 움직이는 ref 로 읽은 결과는 사본이 밀린 만큼 밀린다. 막지 않는 설계이므로
+  // 남는 장치가 이 경고뿐이고, 고정 oid 에 붙으면 경고가 배경 소음이 된다.
+  it("warns on a moving ref and stays quiet on a fixed oid", async () => {
+    const warningsFor = async (rev: string) => {
       const result = await client.callTool({
         name: "repo_grep",
         arguments: {
-          pattern: 'repo-recon"\\s*:\\s*\\{',
-          rev: "HEAD",
-          pathspec: [".mcp.json"],
-          mode: "lines",
-          regex,
+          pattern: "memory",
+          rev,
+          pathspec: ["AGENTS.md"],
+          mode: "files",
+          regex: "fixed",
         },
       });
-      counts[regex] = payloadOf(result).count;
-    }
-    expect(counts.perl).toBe(1);
-    expect(counts.extended).toBe(0);
+      return payloadOf(result).warnings.join("\n");
+    };
+    expect(await warningsFor("HEAD")).toMatch(/움직이는 ref/);
+    expect(await warningsFor(headOid)).not.toMatch(/움직이는 ref/);
   });
 
-  // Reason: `rev` 를 받아 놓고 안 태우면 `repo_show` 는 작업 트리를 읽는 도구로
-  // 되돌아가고, 내용이 대개 같아서 안 드러난다. 없는 커밋을 주면 실패해야 그 인자가
-  // 실제로 git 에 간다는 뜻이다 — 읽기만 단언하면 무시해도 green 이다. 두 번째 커밋을
-  // 안 쓰는 이유는 얕은 체크아웃에서 조상 rev 가 없을 수 있어서다.
-  it("passes rev through to git instead of reading the work tree", async () => {
-    const head = await client.callTool({
-      name: "repo_show",
-      arguments: { rev: "HEAD", path: "package.json" },
-    });
-    expect(payloadOf(head).lines.join("\n")).toContain("mcp:repo-recon");
-    const missing = await client.callTool({
-      name: "repo_show",
-      arguments: { rev: "0".repeat(40), path: "package.json" },
-    });
-    expect(missing.isError).toBe(true);
+  // Reason: 작업 트리 읽기를 막으면 노드는 우회를 발명한다. 정식 값으로 받되 읽었다는
+  // 사실이 응답에 남는지를 문다 — 막는 대신 보이게 하는 쪽이 이 설계다.
+  it("reads the work tree on rev WORKTREE and says so", async () => {
+    const calls: { name: string; arguments: Record<string, unknown> }[] = [
+      {
+        name: "repo_grep",
+        arguments: {
+          pattern: "memory",
+          rev: "WORKTREE",
+          pathspec: ["AGENTS.md"],
+          mode: "files",
+          regex: "fixed",
+        },
+      },
+      {
+        name: "repo_ls",
+        arguments: { rev: "WORKTREE", pathspec: ["AGENTS.md"] },
+      },
+      { name: "repo_show", arguments: { rev: "WORKTREE", path: "AGENTS.md" } },
+    ];
+    for (const call of calls) {
+      const payload = payloadOf(await client.callTool(call));
+      expect(payload.warnings.join("\n"), call.name).toMatch(/작업 트리/);
+      // rev 토큰이 실제로 빠졌다 — 붙어 있으면 git 이 커밋을 읽는다.
+      expect(payload.argv, call.name).not.toContain("WORKTREE");
+    }
+    const shown = payloadOf(
+      await client.callTool({
+        name: "repo_show",
+        arguments: { rev: "WORKTREE", path: "AGENTS.md" },
+      }),
+    );
+    expect(shown.stdout).toBe(
+      readFileSync(resolve(repoRoot, "AGENTS.md"), "utf8"),
+    );
+  });
+
+  // Reason: 아무것도 안 무는 glob 은 셸(zsh nomatch)에서 명령 자체를 죽여 「0건」과
+  // 구분이 안 됐다. 여기서는 0 이 에러가 아니라 결과로 돌아오고, 그 0 이 오타인지
+  // 실제인지 확인하라는 경고가 붙어야 한다.
+  it("answers zero with a warning instead of an error", async () => {
+    const payload = payloadOf(
+      await client.callTool({
+        name: "repo_ls",
+        arguments: { rev: "HEAD", pathspec: ["*.no-such-extension"] },
+      }),
+    );
+    expect(payload.stdout).toBe("");
+    expect(payload.warnings.join("\n")).toMatch(/0건/);
+  });
+
+  // Reason: 상한을 없앤 대신 큰 출력에 경고를 얹는다. 자르는 쪽으로 되돌리면 그
+  // 절단값이 다시 전수처럼 읽힌다.
+  it("warns when the output is large instead of truncating it", async () => {
+    const payload = payloadOf(
+      await client.callTool({
+        name: "repo_show",
+        arguments: { rev: "HEAD", path: "pnpm-lock.yaml" },
+      }),
+    );
+    expect(payload.warnings.join("\n")).toMatch(/줄이다/);
+    expect(payload.stdout).toBe(
+      gitOutput(["show", `${headOid}:pnpm-lock.yaml`]),
+    );
+  });
+
+  // Reason: 탈출구가 없으면 노드가 우회를 발명한다. 타입이 안 잡혔다는 사실이
+  // 응답에 남는지를 문다.
+  it("runs arbitrary argv through repo_git and marks it untyped", async () => {
+    const payload = payloadOf(
+      await client.callTool({
+        name: "repo_git",
+        arguments: { argv: ["rev-parse", "--verify", "HEAD"] },
+      }),
+    );
+    expect(payload.stdout.trim()).toBe(headOid);
+    expect(payload.warnings.join("\n")).toMatch(/타입 안 잡힌 호출/);
+    expect(payload.warnings.join("\n")).not.toMatch(/Hard block/);
+  });
+
+  // Reason: 오늘 git-policy 「Hard block」을 호출 시점에 알려 주는 장치가 없다. 막지는
+  // 않으므로 이 경고가 유일한 신호다. 확인용 호출은 아무것도 안 바꾸는 `status` 이고
+  // hard block 어휘(`commit.gpgsign=false`)만 실어 보낸다.
+  it("names git-policy Hard block on a call that hits it, and still runs it", async () => {
+    const payload = payloadOf(
+      await client.callTool({
+        name: "repo_git",
+        arguments: {
+          argv: ["-c", "commit.gpgsign=false", "status", "--porcelain"],
+        },
+      }),
+    );
+    expect(payload.warnings.join("\n")).toMatch(
+      /memory\/workflow\/git-policy\/memory\.md/,
+    );
+    expect(payload.warnings.join("\n")).toMatch(/실행은 한다/);
   });
 });
