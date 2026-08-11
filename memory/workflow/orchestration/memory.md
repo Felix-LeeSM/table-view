@@ -1,9 +1,9 @@
 ---
 title: Orchestration — 병렬 작업 spawn · 리뷰 큐 · 사이클 정지
 type: workflow-rule
-updated: 2026-08-01
+updated: 2026-08-11
 task: orchestration, parallel-pr, spawn, review-queue, cycle-detection, issue-authoring
-keywords: spawn, slot, 병렬, 파일 교집합, 리뷰 큐, 수용 기준, 접수 조건, 사이클, needs:user, 이슈 발행, 유형 단위, raw, task, 보고 검증, 도달 검증, 세션 스냅샷, 묶음 이슈, 해악별 값
+keywords: spawn, slot, slot 상한, 동시 활성, 병렬, 파일 교집합, 리뷰 큐, 수용 기준, 접수 조건, 사이클, needs:user, 이슈 발행, 유형 단위, raw, task, 보고 검증, 도달 검증, 세션 스냅샷, 묶음 이슈, 해악별 값, 겸무, 정지 조건, 사용자 산문, 고정부 첨부, origin/main 판
 trigger:
   signal: 여러 작업을 동시에 돌리거나, 이슈를 발행하거나, 리뷰 라운드가 안 끝날 때
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -11,13 +11,21 @@ trigger:
 
 # Orchestration
 
-Orchestrator 의 행동 계약 — interface 가 `.agents/prompts/orchestrator.md`
-파일 그대로 spawn 하는 subagent 다. 개별 작업 방법의 SOT 는 없고, 이
+Orchestrator 의 행동 계약 — **이 계약을 지는 주체는 이렇다.** interface 가
+`.agents/prompts/orchestrator.md` 파일 그대로 spawn 하는 subagent, 그리고
+orchestration 을 직접 겸무하는 interface 세션. 겸무의 허용 여부 · 조건 ·
+겸무해도 유지되는 규율은 [interface](../interface/memory.md) §3 이 SOT 이고 여기
+옮겨 적지 않는다. 개별 작업 방법의 SOT 는 없고, 이
 방은 **작업 사이의 결정** 만 둔다 — 무엇을 언제 spawn 하는가, 리뷰를 어떤 순서로
 붙이는가, 언제 멈추는가.
 
 **입력은 task 티켓과 label 뿐이다.** 사용자 산문은 접수하지 않는다 — 설계·범위
 발화가 오면 [interface](../interface/memory.md) 가 티켓으로 만들어야 한다.
+**금지하는 것은 사용자 산문이 승격 절차 없이 스케줄링에 직행하는 것이지 대화
+자체가 아니다.** spawn 된 노드는 사용자와 이어진 채널이 없어 이 금지가 곧
+"멈추고 돌려보내라" 다. 겸무 세션은 대화하면서도 [interface](../interface/memory.md)
+§1(반대 근거) · §2(승격)를 지나 나온 티켓과 label 만 이 방의 입력으로 쓴다 — 그
+절차를 건너뛴 발화는 겸무 세션에서도 스케줄링 입력이 아니다.
 
 ## 1. 파일 범위는 착수 전에 티켓이 갖는다
 
@@ -43,7 +51,13 @@ Orchestrator 의 행동 계약 — interface 가 `.agents/prompts/orchestrator.m
 (`docs/ROADMAP.md` 4개, `docs/product/known-limitations.md` 3개). 겹침은 예외가
 아니라 기본값이라 재지 않으면 리뷰 한 라운드가 통째로 버려진다.
 
-## 2. 작업은 병렬로, 리뷰를 직렬화한다
+## 2. 동시 slot 상한 · 작업은 병렬로, 리뷰를 직렬화한다
+
+**동시 활성 노드 총합 ≤ 5. 리뷰어도 차감한다.** 재개 메시지에 `상한: N` 지시자가
+오면 그 값을 쓴다 — [interface](../interface/memory.md) §3 이 그것을 interface 가
+보낼 수 있는 유일한 비포인터 입력으로 정한다. **상한값이 방에 있어야 고정부를 안
+받는 겸무 세션에 닿는다** — `.agents/prompts/orchestrator.md` 는 이 값을 스스로 갖지
+않고 여기를 가리킨다.
 
 충돌 비용은 작업이 아니라 리뷰다. 겹침이 있으면 작업을 막는 게 아니라 **리뷰 큐
 순서** 를 준다. 판단이 0 인 계산이라 원래 script 가 맡던 자리인데, 지금은 그
@@ -117,6 +131,14 @@ script 도 대체물도 없다.
 읽는 것이 노드의 첫 행동이다. spawn 메시지는 가변부만 싣는다. 형식은
 `.agents/prompts/orchestrator.md` 의 "Spawn 규칙".
 
+**첨부할 고정부는 `origin/main` 의 판이어야 한다.** 밀린 트리에서 읽으면 옛 계약이
+그대로 노드에 실린다 — `.agents/prompts/pr-finalize.md` 의 3단계 명령이 통째로 옛
+판이던 것이 실측이다(#2284). Claude Code 네이티브 spawn 은 `.claude/agents/<role>.md`
+정의가 경로를 `git show origin/main:` 으로 고정해 읽어 이 해악을 스스로 피하지만,
+**손으로 첨부하는 쪽에는 그 장치가 없다** — 겸무 세션이 그 자리다. 트리를
+`origin/main` 에 맞춘 뒤 읽거나 `git show origin/main:<path>` 로 읽는다. 갱신 명령과
+그 블록이 재지 **않는** 것은 `.agents/prompts/orchestrator.md` 「첫 명령」이 갖는다.
+
 **나가는 프롬프트만이 아니라 돌아오는 보고도 spawn 한 쪽 책임이다.** subagent 의
 보고를 다음 노드의 전제로 넣기 전에 검증한다 — 모호한 문장을 그대로 넘기면 뜻이
 뒤집힌 채 전파된다 (2026-07-25 실측). 인용은 원문 그대로 하고 해석은 검증 뒤에 붙인다.
@@ -125,6 +147,24 @@ script 도 대체물도 없다.
 정의 레지스트리는 **세션 시작 시점 스냅샷**이다 — 이 파일들을 바꾸는 PR 의 도달
 검증은 머지 뒤 **새 세션**에서만 유효하다. 같은 세션에서 띄운 probe 가 옛 문장을
 인용하는 것은 실패 증거가 아니라 스냅샷 증거다 (2026-08-01 실측).
+
+## 8. 정지 조건 — spawn 을 멈추고 보고한다
+
+아래 중 하나면 노드를 더 띄우지 말고 상태 표와 이유를 보고하고 멈춘다. 판단해서
+넘기지 않는다. **겸무 세션도 같다** — 멈추는 것은 스케줄링이고 사용자 대화는
+[interface](../interface/memory.md) 계약으로 이어 간다.
+
+- `needs:user` 가 붙은 이슈/PR 발견 (§3 사이클 정지가 그 label 을 붙인다).
+- 첨부할 고정부를 `origin/main` 판으로 읽을 수 없음 (§7).
+- GPG · push 이상. [git-policy](../git-policy/memory.md) hard block 을 우회하지
+  않는다 — **force / reset 으로 primary 를 밀지 않는다.**
+- 같은 노드 중복 활성 의심. 사망 미확인 respawn 금지
+  ([worktree](../../runbook/worktree/memory.md) 「점유」).
+- slot 계산 불가.
+
+명령 시퀀스와 그 시퀀스가 만드는 ABORT 자리는 `.agents/prompts/orchestrator.md`
+「첫 명령」·「정지 조건」이 갖는다 — 무엇이 계약이고 무엇이 절차인지의 판정은
+[runbook](../../runbook/memory.md) 「계약 / 절차 경계」다.
 
 ## 관련
 
