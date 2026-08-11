@@ -11,21 +11,34 @@ GitHub 상태를 읽고, 빈 slot 에 다음 노드를 spawn 하고, 결과를 �
 보고한다. 판단하지 않는다 — 코멘트 본문을 읽지 않고, verdict 를 재단하지
 않고, 머지 여부를 정하지 않는다(각각 리뷰어·pr-finalize 소관).
 
-## 첫 명령 (primary 갱신 + 상태 수집)
+## 첫 명령 (트리 갱신 + 상태 수집)
 
-**spawn 전에 primary 를 당긴다.** 아래 「Spawn 규칙」의 고정부 첨부는 이 노드가
-서 있는 working tree 에서 읽어 가므로, primary 가 밀려 있으면 **옛 역할 계약**을
-첨부하게 된다 — `.agents/prompts/pr-finalize.md` 가 3단계 명령 형태 통째로 옛 판이던
-것이 실측이고 이슈 #2284 가 그 명령과 출력을 갖는다.
+**spawn 전에 이 노드가 서 있는 트리를 `origin/main` 에 맞춘다.** 아래 「Spawn 규칙」의
+고정부 첨부는 그 트리에서 읽어 가므로, 밀려 있으면 **옛 역할 계약**을 첨부하게 된다 —
+`.agents/prompts/pr-finalize.md` 가 3단계 명령 형태 통째로 옛 판이던 것이 실측이고
+이슈 #2284 가 그 명령과 출력을 갖는다.
 
 ```bash
 test "$(git rev-parse --abbrev-ref HEAD)" = main \
-  || { echo "ABORT: primary(main) 가 아니다" >&2; exit 1; }
-git fetch --quiet origin main
-git merge --ff-only origin/main   # 실패(dirty · 분기)하면 아래 「정지 조건」이다
+  || { echo "ABORT: main 체크아웃이 아니다" >&2; exit 1; }
+git fetch --quiet origin main \
+  || { echo "ABORT: fetch 실패 — 로컬 origin/main ref 가 밀린 채다" >&2; exit 1; }
+git merge --ff-only origin/main \
+  || { echo "ABORT: ff 실패 — 갈렸거나 들어오는 커밋이 건드리는 경로가 수정됨" >&2; exit 1; }
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" \
+  || { echo "ABORT: HEAD 가 origin/main 과 다르다" >&2; exit 1; }
 gh pr list --state open --json number,title,labels,headRefName,mergeStateStatus
 gh issue list --state open --label task --json number,title,labels
 ```
+
+**이 블록이 재는 것은 「HEAD 가 `origin/main` 과 같은 커밋인가」뿐이다 — 트리가
+primary 인지는 안 잰다.** `main` 이 체크아웃된 사본도 통과하며, 첨부 해악을 막는 성질은
+트리의 정체가 아니라 읽히는 고정부의 rev 라 그것으로 족하다. ABORT 자리는 각각 다른
+실패를 잡는다 — 다른 브랜치 / `fetch` 실패(`--ff-only` 는 네트워크를 안 타고 로컬
+`origin/main` ref 로만 판정해서, fetch 가 죽어도 밀린 트리에서 `Already up to date.` 와
+rc=0 을 낸다) / 분기 / `Already up to date.` 로 지나가는 앞선 HEAD(미push 로컬 커밋).
+**`--ff-only` 는 dirty 라는 이유만으로는 실패하지 않는다** — untracked 나 들어오는
+커밋이 안 건드리는 tracked 파일이 수정된 트리에서 ff 는 성공한다.
 
 ## Slot 규칙
 
@@ -78,7 +91,8 @@ gh issue list --state open --label task --json number,title,labels
 
 ## 정지 조건
 
-`needs:user` 발견 / primary 갱신 실패(위 `--ff-only`) / GPG·push 이상 / 같은 노드
+`needs:user` 발견 / 위 「첫 명령」 블록의 ABORT (체크아웃 · `fetch` · ff · HEAD 대조
+어느 자리든) / GPG·push 이상 / 같은 노드
 중복 활성 의심(사망 미확인 respawn 금지) / slot 계산 불가. 정지 시 상태 표와 이유를
 보고하고 종료한다. **force / reset 으로 primary 를 밀지 않는다.**
 
