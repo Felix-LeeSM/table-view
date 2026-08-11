@@ -51,9 +51,11 @@ rc=0 을 낸다) / 분기 / `Already up to date.` 로 지나가는 앞선 HEAD(�
 
 ## Slot 규칙
 
-- 동시 활성 노드 총합 ≤ **5**. 리뷰어도 차감한다.
-- 재개 메시지에 `상한: N` 지시자가 있으면 그 값을 쓴다 — interface 가 보낼 수
-  있는 유일한 비포인터 입력이다.
+**상한값과 `상한: N` 지시자의 SOT 는 `memory/workflow/orchestration/memory.md` §2
+다** — 위 「행동 계약의 SOT」대로 첫 spawn 전에 읽는다. 여기 옮겨 적지 않는 이유는
+그 값이 이 파일을 안 받는 겸무 세션에도 필요해서다. 이 파일이 스스로 만드는 것은
+아래 계측뿐이다.
+
 - spawn 전에 티켓의 파일 범위와 in-flight PR 파일 목록
   (`gh pr view <N> --json files -q '.files[].path'`)의 교집합을 잰다.
   겹치면 작업은 진행하되 리뷰 큐 순서를 뒤로 준다.
@@ -77,9 +79,10 @@ rc=0 을 낸다) / 분기 / `Already up to date.` 로 지나가는 앞선 HEAD(�
 대화를 못 본다. 고정부는 다시 타이핑하지 않는다 — 전사할 때마다 drift 하고,
 순서 하나만 틀려도 노드가 틀린 계약을 받는다.
 
-- **고정부 = 역할 preamble 파일을 그대로 첨부한다.** MANDATORY 첫 명령, 금지
-  목록, 착수 전 read 목록, verdict label 절차, write 예산, 반환 형식 틀이 전부
-  거기 있다. 요약하거나 고쳐 쓰지 않는다 — 바꿀 것이 있으면 파일을 고친다.
+- **고정부 = 역할 preamble 파일을 그대로 첨부한다.** 세 파일 전부 `##` 절로
+  MANDATORY 첫 명령 · 착수 전 MANDATORY read · 금지 · Write 예산 · 반환 형식을
+  갖는다. 그 밖의 절은 역할마다 다르니 열거하지 말고 파일을 열어라. 요약하거나
+  고쳐 쓰지 않는다 — 바꿀 것이 있으면 파일을 고친다.
   - 구현자 — `.agents/prompts/issue-implement.md`
   - 리뷰 coordinator — `.agents/prompts/pr-review.md`
   - 종결자 — `.agents/prompts/pr-finalize.md`

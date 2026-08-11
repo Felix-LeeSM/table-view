@@ -3,7 +3,7 @@ title: Orchestration — 병렬 작업 spawn · 리뷰 큐 · 사이클 정지
 type: workflow-rule
 updated: 2026-08-11
 task: orchestration, parallel-pr, spawn, review-queue, cycle-detection, issue-authoring
-keywords: spawn, slot, 병렬, 파일 교집합, 리뷰 큐, 수용 기준, 접수 조건, 사이클, needs:user, 이슈 발행, 유형 단위, raw, task, 보고 검증, 도달 검증, 세션 스냅샷, 묶음 이슈, 해악별 값, 겸무, 정지 조건, 사용자 산문, 고정부 첨부, origin/main 판
+keywords: spawn, slot, slot 상한, 동시 활성, 병렬, 파일 교집합, 리뷰 큐, 수용 기준, 접수 조건, 사이클, needs:user, 이슈 발행, 유형 단위, raw, task, 보고 검증, 도달 검증, 세션 스냅샷, 묶음 이슈, 해악별 값, 겸무, 정지 조건, 사용자 산문, 고정부 첨부, origin/main 판
 trigger:
   signal: 여러 작업을 동시에 돌리거나, 이슈를 발행하거나, 리뷰 라운드가 안 끝날 때
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -51,7 +51,13 @@ orchestration 을 직접 겸무하는 interface 세션. 겸무의 허용 여부 
 (`docs/ROADMAP.md` 4개, `docs/product/known-limitations.md` 3개). 겹침은 예외가
 아니라 기본값이라 재지 않으면 리뷰 한 라운드가 통째로 버려진다.
 
-## 2. 작업은 병렬로, 리뷰를 직렬화한다
+## 2. 동시 slot 상한 · 작업은 병렬로, 리뷰를 직렬화한다
+
+**동시 활성 노드 총합 ≤ 5. 리뷰어도 차감한다.** 재개 메시지에 `상한: N` 지시자가
+오면 그 값을 쓴다 — [interface](../interface/memory.md) §3 이 그것을 interface 가
+보낼 수 있는 유일한 비포인터 입력으로 정한다. **상한값이 방에 있어야 고정부를 안
+받는 겸무 세션에 닿는다** — `.agents/prompts/orchestrator.md` 는 이 값을 스스로 갖지
+않고 여기를 가리킨다.
 
 충돌 비용은 작업이 아니라 리뷰다. 겹침이 있으면 작업을 막는 게 아니라 **리뷰 큐
 순서** 를 준다. 판단이 0 인 계산이라 원래 script 가 맡던 자리인데, 지금은 그
