@@ -520,6 +520,27 @@ export function analyzeStatement(
     };
   }
 
+  // Issue #2272 — SQLite spells the same destructive upsert
+  // `INSERT OR REPLACE INTO …`: the conflict algorithm DELETEs the
+  // conflicting row before inserting, so a column the new row omits is reset
+  // to its default. Neither anchor above catches it (`^REPLACE\b` sees INSERT
+  // as the leading keyword, `^INSERT\s+INTO\b` below sees OR as the next
+  // word), so it used to reach the fail-open `other`/info default. The AST
+  // gate above cannot classify it either — the grammar's `parse_insert`
+  // expects INTO right after INSERT and returns `error`, which falls through
+  // to here. Only REPLACE deletes the conflicting row; the four other
+  // conflict algorithms (ROLLBACK / ABORT / FAIL / IGNORE) abort the
+  // statement or skip the row and are deliberately left where they are.
+  if (/^INSERT\s+OR\s+REPLACE\b/.test(upper)) {
+    return {
+      kind: "dml-replace",
+      severity: "danger",
+      reasons: [
+        "INSERT OR REPLACE — 기존 행 덮어쓰기 (충돌 행 DELETE 후 INSERT)",
+      ],
+    };
+  }
+
   if (/^DELETE\s+FROM\b/.test(upper)) {
     if (
       !hasOuterWhere(

@@ -319,6 +319,26 @@ fn classify_by_keyword(stmt: &str, dialect: SqlDialect) -> Severity {
     if starts_with_keyword(upper, "REPLACE") {
         return Severity::Danger;
     }
+    // SQLite `INSERT OR REPLACE INTO …` (issue #2272) — the same destructive
+    // upsert under a different spelling: the conflict algorithm DELETEs the
+    // conflicting row before inserting. The branch above is a leading-keyword
+    // test so it does not see this form, and `parse` rejects it (the grammar's
+    // INSERT rule expects INTO right after INSERT), so it used to fall out of
+    // this function as `Info`. Whitespace is not collapsed here (only comments
+    // are, into a single space), so the three leading words are compared
+    // token-wise. Only REPLACE deletes the conflicting row — `INSERT OR
+    // ROLLBACK|ABORT|FAIL` fail the statement and `INSERT OR IGNORE` skips the
+    // row, so those stay `Info` (mirrors the frontend `^INSERT\s+OR\s+REPLACE\b`
+    // branch in `src/lib/sql/sqlSafetyClassifier.ts`).
+    {
+        let mut words = upper.split_whitespace();
+        if words.next() == Some("INSERT")
+            && words.next() == Some("OR")
+            && words.next() == Some("REPLACE")
+        {
+            return Severity::Danger;
+        }
+    }
     if starts_with_keyword(upper, "RESTORE") {
         return Severity::Danger;
     }

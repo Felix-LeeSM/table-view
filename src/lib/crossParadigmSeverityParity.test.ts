@@ -184,6 +184,15 @@ const PARITY_TABLE: ParityBucket[] = [
         actual: sql("DELETE FROM users"),
       },
       {
+        // Issue #2272 — SQLite's destructive upsert. The conflicting row is
+        // DELETEd and re-INSERTed, so a column the new row omits is reset:
+        // row-level FULL reset on this axis, unlike `INSERT … ON CONFLICT
+        // DO UPDATE` (targeted columns) two buckets up.
+        paradigm: "sql",
+        label: "INSERT OR REPLACE (SQLite row replace)",
+        actual: sql("INSERT OR REPLACE INTO users VALUES (1)"),
+      },
+      {
         paradigm: "mongo-op",
         label: "updateMany({})",
         actual: analyzeMongoOperation({
