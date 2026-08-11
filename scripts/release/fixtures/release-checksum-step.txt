@@ -1,0 +1,53 @@
+      - name: Upload SHA256 checksums
+        if: steps.tauri.outputs.artifactPaths != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('manual-{0}', github.sha) }}
+          ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
+        run: |
+          set -euo pipefail
+
+          # Git Bash cannot stat `D:\a\...`; `cygpath -u` turns it into
+          # `/d/a/...`. It ships with Git for Windows and exists nowhere else,
+          # and the macOS/Linux runners already report POSIX paths, so the
+          # absence of the binary is the "nothing to convert" case.
+          to_posix() {
+            if command -v cygpath >/dev/null 2>&1; then
+              cygpath -u "$1"
+            else
+              printf '%s' "$1"
+            fi
+          }
+
+          # `done < <(...)` and not `jq … | while`: a pipe would put the loop in
+          # a subshell and the counters below would come back zero however many
+          # bundles were hashed.
+          entries=0
+          hashed=0
+          while IFS= read -r raw; do
+            entries=$((entries + 1))
+            f="$(to_posix "$raw")"
+            if [ -d "$f" ]; then
+              echo "::notice::no sidecar for a directory bundle: $raw"
+              continue
+            fi
+            if [ ! -f "$f" ]; then
+              echo "::error::artifactPaths entry resolves to nothing: $raw (read as '$f'). Refusing to end green with a bundle that has no checksum." >&2
+              exit 1
+            fi
+            (cd "$(dirname "$f")" && shasum -a 256 "$(basename "$f")") > "${f}.sha256"
+            gh release upload "$TAG" "${f}.sha256" --clobber
+            hashed=$((hashed + 1))
+          done < <(printf '%s' "$ARTIFACT_PATHS" | jq -r '.[]')
+
+          if [ "$entries" -eq 0 ]; then
+            echo "::error::artifactPaths carried no entries, so nothing was hashed. Do not publish this draft — its bundles have no checksums." >&2
+            exit 1
+          fi
+          if [ "$hashed" -eq 0 ]; then
+            echo "::error::every artifactPaths entry was skipped, so no .sha256 was uploaded for $TAG." >&2
+            exit 1
+          fi
+          echo "::notice::uploaded $hashed .sha256 sidecar(s) for $TAG"
+
