@@ -1,9 +1,9 @@
 ---
 title: Documentation Impact Gate
 type: workflow-rule
-updated: 2026-08-10
+updated: 2026-08-11
 task: documentation, docs, pr, review, delivery
-keywords: 문서화, documentation impact, 문서화 impact 게이트, Reviewer 판정, SOT 라우팅, evidence portability, repo-relative, retire 조건, 개수 서술, 닫힌 개수, 자리 나열, scorecard 수치
+keywords: 문서화, documentation impact, 문서화 impact 게이트, Reviewer 판정, SOT 라우팅, evidence portability, repo-relative, retire 조건, 개수 서술, 닫힌 개수, 자리 나열, scorecard 수치, 가변 상태, 조회 명령, 움직이는 ref, head SHA, 현재형 단정, 옮겨 적은 값, 앵커, 종점, merge-base
 trigger:
   signal: PR 작성 / 문서 추가 / workflow·contract·user-facing 변경
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -86,6 +86,54 @@ PR #2232 의 squash body 를 이 규약에 맞게 고친 것은 저자도 리뷰
 목록은 줄마다 대조되고, 빠진 자리가 있어도 틀린 수가 아니라 참인 부분집합이다.
 옮겨 적을 수가 애초에 안 생긴다. 수 자체가 결론이면 그것을 만든 명령을 붙인다 —
 [implementation](../implementation/memory.md) §5 「수치가 추론으로 생산됨」이 SOT 다.
+
+## 가변 상태는 값이 아니라 조회 명령으로 쓴다
+
+**판정은 물음 둘이다 — ① 그 문장의 값이 내 diff 안에서 나오나, 다른 산출물을
+열어야 나오나. ② 열어야 나온다면 그 값이 앵커에 걸려 있나.** 열어야 나오는데
+앵커가 없으면 **가변 상태**다. 그것을 움직이는 쪽이 내가 아니므로, 값을 산문에
+박는 순간 남의 다음 행동이 내 문장을 거짓으로 만든다. **내가 안 만든 값은 내가
+못 지킨다 — 값을 쓰지 말고 그 값을 낸 명령을 쓴다.** 위 「개수 서술」이 이
+규칙의 한 사례다: 개수는 열어 봐야 아는 가변 상태 중 세어서 얻는 것이고, 이 절은
+같은 처방을 상태 일반으로 넓힌다.
+
+**판정 단위는 문장이 아니라 절이다.** 한 문장이 종점 사실과 가변 상태를 접속사로
+잇는 것이 흔하고, 그때 고칠 것은 가변인 절뿐이다 — 아래 ❌ 가 그 형태다.
+
+가변 상태는 최소한 이것들이다:
+
+- 다른 PR · 이슈가 지금 `open` 인가, 그리고 닫힌 것이 다시 열렸나. **`merged` 는
+  종점이라 안 움직인다**
+- 움직이는 ref(`origin/main` · 브랜치 이름)의 **head SHA**, 그리고 **앵커 없이**
+  그것으로 잰 분기점 · diff 수치
+- 「지금 …이다」 · 「열린 …」 · 「아직 …가 잡고 있다」 류의 **현재형 단정**
+- 다른 노드의 산출물(scorecard · 앞 라운드 body · spawn 프롬프트)에서 **옮겨 적은 값**
+  — 커밋 SHA · 분기점 · 줄 번호 · 개수. 옮길 때 그 값을 낸 명령을 같이 옮긴다
+
+**앵커**는 나중에 다시 열어도 같은 값을 내는 지점이다. 앵커에 걸린 값은 해당 없다:
+
+- rev 를 박은 조회 — `git show <rev>:<path>` · `git grep <rev>`
+- 브랜치가 갈린 지점 `"$(git merge-base origin/main HEAD)"` — diff 계열의 **처방**이
+  거기 있다 ([delivery](../delivery/memory.md) 「PR body」). 같은 diff 를
+  `origin/main` 에 대고 재면 앵커가 없어 위 목록 2번째로 걸린다
+- **머지된** PR 의 필드 — `mergeCommit` · `base.sha`. 그 PR 은 더 안 움직인다
+  (`gh api repos/<owner>/<repo>/pulls/<N> --jq '.merged, .base.sha'`)
+
+**「그 자리에서 돌렸다」는 앵커가 아니다.** 판정자는 돌렸는지 볼 수 없고, 같은
+명령이 나중에 다른 값을 내면 그 출력은 이미 낡았다. 앵커 없는 출력을 인용해야 하면
+어느 커밋에서 나왔는지를 같이 적는다 —
+[worktree](../../runbook/worktree/memory.md) 「결과를 인용하는 법」이 그 형태를 갖는다.
+
+```
+❌ #2259 는 3c16b24c 로 머지됐고 그 커밋이 지금의 origin/main head 다.
+   앞 절은 종점이다 — 머지는 되돌아가지 않는다. 가변인 것은 뒤 절뿐이다.
+
+✅ #2259 의 머지 커밋은 3c16b24c 다 (gh pr view 2259 --json mergeCommit).
+   그 커밋이 지금 origin/main head 인지는 읽는 시점마다 다르다 — 안 쓴다.
+```
+
+값이 아니라 명령이 남으면 읽는 노드가 스스로 돌려 그 시점의 값을 얻는다. 옮겨
+적힌 값이 다음 라운드의 거짓 전제가 되는 사슬은 그 자리에서 끊긴다.
 
 ## Reviewer 판정
 
