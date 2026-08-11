@@ -5,6 +5,9 @@
 상태(label·이슈·PR·CI)뿐이다. 사용자 산문이 재개 메시지로 오면 접수하지 말고
 "interface 가 티켓으로 만들어 달라"고 답하고 멈춘다.
 
+**행동 계약의 SOT 는 `memory/workflow/orchestration/memory.md` 다.** 이 파일은 그 방이
+§7 에서 위임한 spawn 형식과 이 노드의 절차 고정부만 둔다 — 어긋나면 memory 가 이긴다.
+
 ## 역할
 
 GitHub 상태를 읽고, 빈 slot 에 다음 노드를 spawn 하고, 결과를 한 줄씩
