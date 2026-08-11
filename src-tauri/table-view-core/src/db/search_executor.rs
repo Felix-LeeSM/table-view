@@ -715,12 +715,28 @@ mod tests {
             &fixture(),
             &request(json!({
                 "query": { "match_all": {} },
-                "profile": true
+                "pit": { "id": "cursor" }
             })),
         );
 
-        assert!(
-            matches!(result, Err(AppError::Unsupported(message)) if message.contains("profile"))
-        );
+        assert!(matches!(result, Err(AppError::Unsupported(message)) if message.contains("pit")));
+    }
+
+    /// The fixture executor shares `validate_search_dsl_request` with the live
+    /// path, so the `profile` flag has to clear the same gate here (#2198). The
+    /// embedded fixture has no Lucene behind it and therefore reports no timing
+    /// breakdown — accepting the flag is what this pins, not a synthesised payload.
+    #[test]
+    fn fixture_search_accepts_the_profile_flag_without_synthesising_a_payload() {
+        let result = execute_fixture_search(
+            &fixture(),
+            &request(json!({
+                "query": { "match_all": {} },
+                "profile": true
+            })),
+        )
+        .expect("profile flag should pass the bounded validator");
+
+        assert_eq!(result.profile, None);
     }
 }

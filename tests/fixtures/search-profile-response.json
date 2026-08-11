@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 1,
+  "description": "Real `_search` responses captured from local single-node containers after the bounded Search DSL validator started accepting the `profile` boolean (#2198). Only the `profile` section of each response is kept. Nothing here promotes runtime support: it is contract evidence for the payload shape the result view renders.",
+  "capture": {
+    "command": "bash scripts/capture-search-profile-fixture.sh",
+    "capturedOn": "2026-08-11",
+    "index": "table-view-<product>-2026.05.24",
+    "seedDocuments": [
+      {
+        "_id": "doc-1",
+        "@timestamp": "2026-05-24T00:00:00Z",
+        "message": "fixture log",
+        "status": "ok"
+      },
+      {
+        "_id": "doc-2",
+        "@timestamp": "2026-05-24T00:01:00Z",
+        "message": "fixture error",
+        "status": "error"
+      }
+    ],
+    "requestBody": {
+      "query": {
+        "match": {
+          "message": "fixture"
+        }
+      },
+      "aggs": {
+        "by_status": {
+          "terms": {
+            "field": "status"
+          }
+        }
+      },
+      "profile": true
+    }
+  },
+  "nonBooleanProfileIsRejectedByBothClusters": {
+    "requestBody": {
+      "query": {
+        "match_all": {}
+      },
+      "profile": {
+        "deep": true
+      }
+    },
+    "httpStatus": 400,
+    "errorType": "parsing_exception",
+    "reason": "Unknown key for a START_OBJECT in [profile]."
+  },
+  "captures": [
+    {
+      "product": "elasticsearch",
+      "image": "docker.elastic.co/elasticsearch/elasticsearch:8.12.2",
+      "version": "8.12.2",
+      "luceneVersion": "9.9.2",
+      "profile": {
+        "shards": [
+          {
+            "id": "[7x-jZ0SRTvaD55_7IYycig][table-view-elastic-2026.05.24][0]",
+            "node_id": "7x-jZ0SRTvaD55_7IYycig",
+            "shard_id": 0,
+            "index": "table-view-elastic-2026.05.24",
+            "cluster": "(local)",
+            "searches": [
+              {
+                "query": [
+                  {
+                    "type": "TermQuery",
+                    "description": "message:fixture",
+                    "time_in_nanos": 27130958,
+                    "breakdown": {
+                      "set_min_competitive_score_count": 0,
+                      "match_count": 0,
+                      "shallow_advance_count": 0,
+                      "set_min_competitive_score": 0,
+                      "next_doc": 9125,
+                      "match": 0,
+                      "next_doc_count": 3,
+                      "score_count": 2,
+                      "compute_max_score_count": 0,
+                      "compute_max_score": 0,
+                      "advance": 0,
+                      "advance_count": 0,
+                      "score": 9583,
+                      "count_weight_count": 0,
+                      "build_scorer_count": 2,
+                      "create_weight": 21005542,
+                      "shallow_advance": 0,
+                      "count_weight": 0,
+                      "create_weight_count": 1,
+                      "build_scorer": 6106708
+                    }
+                  }
+                ],
+                "rewrite_time": 5227250,
+                "collector": [
+                  {
+                    "name": "QueryPhaseCollector",
+                    "reason": "search_query_phase",
+                    "time_in_nanos": 5114833,
+                    "children": [
+                      {
+                        "name": "SimpleTopScoreDocCollector",
+                        "reason": "search_top_hits",
+                        "time_in_nanos": 1245955
+                      },
+                      {
+                        "name": "AggregatorCollector: [by_status]",
+                        "reason": "aggregation",
+                        "time_in_nanos": 2818293
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "aggregations": [
+              {
+                "type": "GlobalOrdinalsStringTermsAggregator",
+                "description": "by_status",
+                "time_in_nanos": 5420123,
+                "breakdown": {
+                  "reduce": 0,
+                  "build_aggregation_count": 1,
+                  "post_collection": 3666,
+                  "initialize_count": 1,
+                  "reduce_count": 0,
+                  "collect_count": 2,
+                  "post_collection_count": 1,
+                  "build_leaf_collector": 1923833,
+                  "build_aggregation": 2957167,
+                  "build_leaf_collector_count": 1,
+                  "initialize": 66000,
+                  "collect": 469457
+                },
+                "debug": {
+                  "segments_with_multi_valued_ords": 0,
+                  "collection_strategy": "dense",
+                  "segments_with_single_valued_ords": 1,
+                  "total_buckets": 2,
+                  "built_buckets": 1,
+                  "result_strategy": "terms",
+                  "has_filter": false
+                }
+              }
+            ],
+            "fetch": {
+              "type": "fetch",
+              "description": "",
+              "time_in_nanos": 73526334,
+              "breakdown": {
+                "load_stored_fields": 2861625,
+                "load_source": 1716999,
+                "load_stored_fields_count": 2,
+                "next_reader_count": 1,
+                "load_source_count": 2,
+                "next_reader": 9829166
+              },
+              "debug": {
+                "stored_fields": ["_id", "_routing", "_source"]
+              },
+              "children": [
+                {
+                  "type": "FetchSourcePhase",
+                  "description": "",
+                  "time_in_nanos": 460291,
+                  "breakdown": {
+                    "process_count": 2,
+                    "process": 459291,
+                    "next_reader": 1000,
+                    "next_reader_count": 1
+                  },
+                  "debug": {
+                    "fast_path": 2
+                  }
+                },
+                {
+                  "type": "StoredFieldsPhase",
+                  "description": "",
+                  "time_in_nanos": 130125,
+                  "breakdown": {
+                    "process_count": 2,
+                    "process": 128250,
+                    "next_reader": 1875,
+                    "next_reader_count": 1
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "product": "opensearch",
+      "image": "opensearchproject/opensearch:2.13.0",
+      "version": "2.13.0",
+      "luceneVersion": "9.10.0",
+      "profile": {
+        "shards": [
+          {
+            "id": "[-oTQc700T9OhIJfZx5UBqA][table-view-opensearch-2026.05.24][0]",
+            "inbound_network_time_in_millis": 0,
+            "outbound_network_time_in_millis": 0,
+            "searches": [
+              {
+                "query": [
+                  {
+                    "type": "TermQuery",
+                    "description": "message:fixture",
+                    "time_in_nanos": 22801583,
+                    "breakdown": {
+                      "set_min_competitive_score_count": 0,
+                      "match_count": 0,
+                      "shallow_advance_count": 0,
+                      "next_doc": 13083,
+                      "score_count": 2,
+                      "compute_max_score_count": 0,
+                      "advance": 0,
+                      "advance_count": 0,
+                      "score": 12084,
+                      "shallow_advance": 0,
+                      "create_weight_count": 1,
+                      "build_scorer": 11319041,
+                      "set_min_competitive_score": 0,
+                      "match": 0,
+                      "next_doc_count": 3,
+                      "compute_max_score": 0,
+                      "build_scorer_count": 2,
+                      "create_weight": 11457375
+                    }
+                  }
+                ],
+                "rewrite_time": 43208,
+                "collector": [
+                  {
+                    "name": "MultiCollector",
+                    "reason": "search_multi",
+                    "time_in_nanos": 6223583,
+                    "children": [
+                      {
+                        "name": "SimpleTopScoreDocCollector",
+                        "reason": "search_top_hits",
+                        "time_in_nanos": 452459
+                      },
+                      {
+                        "name": "ProfilingAggregator: [by_status]",
+                        "reason": "aggregation",
+                        "time_in_nanos": 831832
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "aggregations": [
+              {
+                "type": "GlobalOrdinalsStringTermsAggregator",
+                "description": "by_status",
+                "time_in_nanos": 68559042,
+                "breakdown": {
+                  "reduce": 0,
+                  "build_aggregation_count": 1,
+                  "post_collection": 3125,
+                  "initialize_count": 1,
+                  "reduce_count": 0,
+                  "collect_count": 2,
+                  "post_collection_count": 1,
+                  "build_leaf_collector": 757792,
+                  "build_aggregation": 67706958,
+                  "build_leaf_collector_count": 1,
+                  "initialize": 43750,
+                  "collect": 47417
+                },
+                "debug": {
+                  "segments_with_multi_valued_ords": 0,
+                  "collection_strategy": "dense",
+                  "segments_with_single_valued_ords": 1,
+                  "result_strategy": "terms",
+                  "has_filter": false
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

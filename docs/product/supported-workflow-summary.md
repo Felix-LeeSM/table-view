@@ -56,8 +56,8 @@
   settings/analyzers, composable/legacy templates, field paths, bounded live
   `_search` dispatch, hits/source/fields/highlights/sort/shards/aggs response
   parsing, sample documents, cancellation, scoped redacted HTTP error surfacing,
-  bounded Search DSL safety validation for query/filter/aggs/sort/source request
-  shapes, and mapping-aware Search DSL editor completion 을 지원한다.
+  bounded Search DSL safety validation for query/filter/aggs/sort/source/profile
+  request shapes, and mapping-aware Search DSL editor completion 을 지원한다.
   Elasticsearch/OpenSearch Runtime Happy Path smoke 는 live runtime evidence 이고
   live service connect/auth/TLS contract, catalog summary, selected metadata,
   bounded render, delete-by-query preview + live execution, and error surface 를

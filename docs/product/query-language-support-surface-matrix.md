@@ -264,7 +264,8 @@ live catalog reads indexes, aliases, data streams, mappings, settings/analyzers,
 templates, and field paths, bounded live `_search` dispatch validates
 `match_all`, `term`, `terms`, `match`, `bool` filter clauses, `range`, `exists`,
 `terms`/`value_count` aggregations, pagination, `track_total_hits`, bounded
-field sort, and bounded `_source` filters before HTTP dispatch, and
+field sort, bounded `_source` filters, and the boolean `profile` flag before
+HTTP dispatch, and
 delete-by-query safety planning estimates matching documents through a safe
 `_search` request as a preview plan, then executes a live `_delete_by_query`
 behind a Safe Mode confirmation (backend IPC chokepoint). OpenSearch
@@ -287,7 +288,10 @@ detail, search/render, delete-plan, live delete-execution, and error-surface
 workflows on Ubuntu.
 
 **Current boundary**: Full language-core parser/completion ownership, broader
-admin APIs (index/settings create/delete), profile/explain request workflow,
+admin APIs (index/settings create/delete), the `_explain` endpoint, a dedicated
+profile/explain request workflow with its own viewer (#2198 accepts the
+`profile` flag through the raw DSL and renders the payload in the existing
+result panel; it ships no viewer),
 observability, and full query-language support are deferred. Unsupported Search
 DSL body keys, unsupported aggregation kinds/options, raw/admin targets,
 wildcard targets, unsupported delete-by-query body keys, script sort, broad

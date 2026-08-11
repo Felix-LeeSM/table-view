@@ -137,7 +137,8 @@ auth/TLS/network/timeout/permission/server/shard failure surfacing, live catalog
 reads for indexes, aliases, data streams, mappings, settings/analyzers,
 templates, and field paths, bounded live `_search` execution with backend
 validation for supported query/filter/aggs, pagination, `track_total_hits`,
-bounded field sort, and bounded `_source` request clauses plus
+bounded field sort, bounded `_source`, and the boolean `profile` flag request
+clauses plus
 hits/source/fields/highlights/sort/shards/aggs response parsing, a wired Runtime
 Happy Path smoke for live connect/auth/TLS, catalog metadata, selected-index
 detail, search/render, delete-plan, and error-surface evidence, and

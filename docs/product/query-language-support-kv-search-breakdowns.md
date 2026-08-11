@@ -62,9 +62,13 @@ Child page of
   delete-execution, and error-surface paths on Ubuntu.
 - Parser / safety: Search DSL handling is a backend request validator plus
   source-specific safety policy, not language-core parser ownership. The live
-  validator allows only the documented query/filter/aggs subset and rejects
-  unsupported body keys, unsupported aggregations, raw/admin targets, and
-  unsupported delete-by-query request shapes before dispatch.
+  validator allows only the documented query/filter/aggs subset plus the boolean
+  `profile` flag, and rejects unsupported body keys, unsupported aggregations,
+  raw/admin targets, and unsupported delete-by-query request shapes before
+  dispatch. `profile` is a value-type check only: the flag selects no target,
+  evaluates no script and reaches no admin API, and both clusters answer a
+  non-boolean `profile` with HTTP 400, so the validator rejects the same shapes
+  one hop earlier (#2198).
 - Completion / autocomplete: bounded TypeScript editor completion is active for
   Elasticsearch/OpenSearch catalog and mapping context. It suggests
   product-scoped indexes, aliases, data streams, fields, field types, `sort`,
@@ -80,7 +84,10 @@ Child page of
   streams, mappings, settings/analyzers, templates, field paths, bounded
   `_search` dispatch/rendering, sample documents, error handling, cancellation,
   and safe `_search` delete-by-query estimates.
-- Remaining unsupported work: profile/explain request workflow, broader admin
+- Remaining unsupported work: the `_explain` endpoint, a dedicated
+  profile/explain request workflow with its own viewer — a `profile` payload
+  requested through the raw DSL renders in the existing result panel and that is
+  the whole of what #2198 shipped — broader admin
   APIs (index/settings create/delete), broader observability workflows, and
   product-specific destructive deltas remain future gates. Search
   live HTTP/admin promotion remains owned by the Search roadmap/milestone, not

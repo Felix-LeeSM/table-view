@@ -3,6 +3,24 @@ use crate::models::SearchAggregationEnvelope;
 use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
 
+/// Recorded `_search` `profile` sections from local Elasticsearch and OpenSearch
+/// containers (#2198). Shared with the frontend, which reads the same file — the
+/// fixture convention forbids a second copy per language.
+const PROFILE_RESPONSE_FIXTURE: &str =
+    include_str!("../../../../../../tests/fixtures/search-profile-response.json");
+
+fn captured_profile(product: &str) -> Value {
+    let fixture: Value =
+        serde_json::from_str(PROFILE_RESPONSE_FIXTURE).expect("profile fixture must parse");
+    fixture["captures"]
+        .as_array()
+        .expect("profile fixture must carry a captures array")
+        .iter()
+        .find(|capture| capture["product"] == json!(product))
+        .unwrap_or_else(|| panic!("profile fixture has no capture for {product}"))["profile"]
+        .clone()
+}
+
 #[tokio::test]
 async fn elasticsearch_live_search_dispatches_request_and_parses_result_envelope() {
     let routes = vec![
@@ -1064,8 +1082,13 @@ async fn elasticsearch_live_search_blocks_raw_or_destructive_paths() {
     }
 }
 
+// The server below serves only `/`, so a body key that reaches HTTP fails with a
+// transport error instead of `Unsupported` — that difference is what proves the
+// rejection happened before dispatch. `profile` used to stand here; #2198 moved it
+// into the accepted set, so the key is now one that really does pull in a surface
+// the bounded parser does not model.
 #[tokio::test]
-async fn elasticsearch_live_search_rejects_unsupported_admin_body_features_before_http() {
+async fn elasticsearch_live_search_rejects_unsupported_body_features_before_http() {
     let (port, server) = spawn_search_http_server(vec![route(
         "/ ",
         r#"{
@@ -1085,7 +1108,7 @@ async fn elasticsearch_live_search_rejects_unsupported_admin_body_features_befor
                 index: "logs-elastic-2026.05.24".into(),
                 body: json!({
                     "query": { "match_all": {} },
-                    "profile": true
+                    "script_fields": { "cost": { "script": "doc['price'].value * 2" } }
                 }),
                 from: None,
                 size: None,
@@ -1095,5 +1118,107 @@ async fn elasticsearch_live_search_rejects_unsupported_admin_body_features_befor
         )
         .await;
 
-    assert!(matches!(result, Err(AppError::Unsupported(message)) if message.contains("profile")));
+    assert!(
+        matches!(result, Err(AppError::Unsupported(message)) if message.contains("script_fields"))
+    );
+}
+
+/// #2198 — the two halves the bounded parser used to make untestable: the `profile`
+/// flag survives into the dispatched body, and the payload the cluster answers with
+/// survives into the result envelope.
+///
+/// The `profile` section is a recorded Elasticsearch 8.12.2 response from
+/// `tests/fixtures/search-profile-response.json`, not a hand-written stub —
+/// regenerate it with `bash scripts/capture-search-profile-fixture.sh`. Its timings
+/// and node ids differ on every capture, so nothing here asserts them; the
+/// assertions below name the structural keys the result view has to be able to show.
+#[tokio::test]
+async fn elasticsearch_live_search_dispatches_the_profile_flag_and_parses_the_real_payload() {
+    let profile = captured_profile("elasticsearch");
+    let response = json!({
+        "took": 4,
+        "timed_out": false,
+        "_shards": { "total": 1, "successful": 1, "skipped": 0, "failed": 0, "failures": [] },
+        "hits": { "total": { "value": 2, "relation": "eq" }, "hits": [] },
+        "profile": profile,
+    })
+    .to_string();
+
+    let (port, server) = spawn_search_http_server(vec![
+        route(
+            "/ ",
+            r#"{
+                "cluster_name": "elastic-dev",
+                "version": { "number": "8.12.2" }
+            }"#,
+        ),
+        post_route(
+            "/logs-elastic-2026.05.24/_search",
+            r#"{
+                "query": { "match_all": {} },
+                "profile": true
+            }"#,
+            response,
+        ),
+    ])
+    .await;
+    let adapter = SearchEngineAdapter::new_elasticsearch();
+    let config = search_config(port);
+
+    let result = async {
+        adapter.connect(&config).await?;
+        adapter
+            .search(
+                &SearchQueryRequest {
+                    index: "logs-elastic-2026.05.24".into(),
+                    body: json!({
+                        "query": { "match_all": {} },
+                        "profile": true
+                    }),
+                    from: None,
+                    size: None,
+                    track_total_hits: None,
+                },
+                None,
+            )
+            .await
+    }
+    .await
+    .expect("profile search should dispatch and parse");
+    server.await.unwrap();
+
+    let carried = result
+        .profile
+        .expect("profile payload should reach the envelope");
+    assert_eq!(carried, captured_profile("elasticsearch"));
+
+    let query = &carried["shards"][0]["searches"][0]["query"][0];
+    assert!(query["breakdown"].is_object(), "captured breakdown missing");
+    assert!(
+        query["time_in_nanos"].is_number(),
+        "captured time_in_nanos missing"
+    );
+    assert!(
+        carried["shards"][0]["searches"][0]["collector"].is_array(),
+        "captured collector list missing"
+    );
+}
+
+/// OpenSearch 2.13.0 answers the same flag with a differently shaped shard entry —
+/// it reports `inbound_network_time_in_millis` where Elasticsearch 8.12.2 reports
+/// `node_id`/`shard_id`/`index`/`cluster`. Both captures live in the same fixture so
+/// the delta stays visible instead of being flattened into one assumed shape.
+#[tokio::test]
+async fn opensearch_profile_capture_differs_from_elasticsearch_at_the_shard_entry() {
+    let elasticsearch = captured_profile("elasticsearch");
+    let opensearch = captured_profile("opensearch");
+
+    for shared in ["id", "searches", "aggregations"] {
+        assert!(!elasticsearch["shards"][0][shared].is_null(), "es {shared}");
+        assert!(!opensearch["shards"][0][shared].is_null(), "os {shared}");
+    }
+    assert!(elasticsearch["shards"][0]["node_id"].is_string());
+    assert!(opensearch["shards"][0]["node_id"].is_null());
+    assert!(opensearch["shards"][0]["inbound_network_time_in_millis"].is_number());
+    assert!(elasticsearch["shards"][0]["inbound_network_time_in_millis"].is_null());
 }

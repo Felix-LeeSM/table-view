@@ -359,7 +359,8 @@ stats for both products, and sample documents fetch only after the Samples tab
 is requested. Search-hit/explain/profile/destructive-plan fetches stay out of
 the shell. Elasticsearch/OpenSearch live query uses bounded backend DSL
 validation for query/filter/aggs, pagination, `track_total_hits`, field sort,
-and `_source` filters plus the shared Search-native result renderer;
+`_source` filters, and the boolean `profile` flag plus the shared Search-native
+result renderer;
 OpenSearch-specific tests lock raw/admin/destructive target rejection,
 unsupported body feature rejection, safe `_search` delete-by-query estimates,
 and wildcard target rejection before dispatch. Delete-by-query planning produces
