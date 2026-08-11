@@ -229,10 +229,13 @@ describe("SearchResultView", () => {
     ({ profile }) => {
       render(<SearchResultView result={{ ...result, profile }} />);
 
-      const payload = screen.getByText(/time_in_nanos/);
+      // The key names are matched with their JSON punctuation on purpose. A bare
+      // `/time_in_nanos/` also matches `time_in_nanoseconds`, so renaming the key
+      // in the shared fixture left this test green while the Rust side went red.
+      const payload = screen.getByText(/"time_in_nanos":/);
       expect(payload).toBeInTheDocument();
-      expect(payload.textContent).toContain("breakdown");
-      expect(payload.textContent).toContain("collector");
+      expect(payload.textContent).toContain('"breakdown":');
+      expect(payload.textContent).toContain('"collector":');
       expectNoGrid();
     },
   );
