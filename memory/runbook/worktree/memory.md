@@ -1,7 +1,7 @@
 ---
 title: 작업 사본 격리 — clone
 type: runbook
-updated: 2026-08-10
+updated: 2026-08-11
 task: clone, worktree, multi-agent, parallel, spawn-verify, agent-hard-rule
 keywords: index.lock, FETCH_HEAD, git fetch, git clone --local, 사본, 격리, cross-worktree, getcwd, 회수, dirty, 브랜치 점유, non-fast-forward, push reject, stalled, timeout, respawn, npx, pnpm exec, cargo clean, stale path, 일회용 사본, 리뷰어 사본, PR head, headRefOid, gh pr checkout, checkout --detach, review__, --depth, shallow clone, is-shallow-repository, --unshallow, bad object
 ---
@@ -28,7 +28,7 @@ worktree 는 `.git` 을 공유해 index.lock 겹침·FETCH_HEAD 등 공유 자�
   회복 절차는 [recovering-push-rejects](../../../.agents/skills/recovering-push-rejects/SKILL.md) 소유.
 - 리뷰어의 **일회용 사본**도 본 파일 소유다 — 만드는 법은 아래 「리뷰어 사본」,
   지우는 의무는 아래 「책임」. [review](../../workflow/review/memory.md) 「행동 계약」은
-  언제 만드는지만 정한다. 작업 사본과 별개다.
+  언제 · 어느 노드가 만드는지를 정한다. 작업 사본과 별개다.
 
 ## 생성
 

@@ -60,11 +60,15 @@ test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
 
 test · lint · build 를 돌릴지는 스스로 정한다 — 의무가 아니다. 다만 **`pnpm
 install` 이나 cargo 빌드를 요구하는 검증은 이 노드가 돌리지 않는다** — 돌려야 할
-명령을 아래 「coordinator 가 돌릴 검증」에 그대로 적어 넘긴다. **읽기와 `<rev>` 범위
-git/gh 로 끝나면 사본을 만들지 마라** — `git fetch origin pull/<N>/head` 로 head 를
-들이고 `git show <rev>:<path>` · `git grep <rev>` 로 읽으면 트리가 없어도 답이 나온다.
-트리가 있어야 도는 나머지(설치를 안 부르는 `scripts/*.sh`)만 저자 사본이 아니라 자기
-일회용 사본에서 돌리고 **만들었으면 같은 턴에 지운다.** 만드는 법은
+명령을 아래 「coordinator 가 돌릴 검증」에 그대로 적어 넘긴다. **피연산자가 전부 rev 나
+API 로 이름 붙는 관점이면 사본을 만들지 마라** — `git fetch origin pull/<N>/head` 로
+head 를 들인 뒤 `git show <rev>:<path>` · `git grep <rev>` · 두 rev 를 다 적은
+`git diff <base> <head>` · `gh` 조회는 트리가 없어도 답을 낸다. 서 있는 체크아웃을
+읽거나 새로 만들어야 하는 나머지(`rg` · `grep` · `bash scripts/*.sh` · 사본 절차
+재현)만 저자 사본이 아니라 자기 일회용 사본에서 돌리고 **만들었으면 같은 턴에
+지운다.** `git diff --stat <rev>` 처럼 rev 를 받으면서 나머지 한쪽이 서 있는 트리인
+형태는 사본 없이 돌리면 에러 없이 선 자리의 답을 낸다 — rev 인자 유무로 가르지 마라.
+만드는 법은
 `memory/runbook/worktree/memory.md` 「리뷰어 사본」, 회수 의무의 주인은 그 방
 「책임」, 이 갈래를 그 자리에서 가르는 사유는
 `memory/workflow/review/memory.md` 「행동 계약」이 갖는다.
