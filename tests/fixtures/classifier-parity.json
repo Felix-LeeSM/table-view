@@ -28,6 +28,11 @@
       "sql": "CREATE TABLE t (id int)",
       "expectedSeverity": "info"
     },
+    {
+      "name": "sqlite_insert_or_ignore",
+      "sql": "INSERT OR IGNORE INTO users VALUES (1)",
+      "expectedSeverity": "info"
+    },
 
     {
       "name": "update_where",
@@ -78,6 +83,11 @@
     {
       "name": "replace_into",
       "sql": "REPLACE INTO users VALUES (1)",
+      "expectedSeverity": "danger"
+    },
+    {
+      "name": "sqlite_insert_or_replace",
+      "sql": "INSERT OR REPLACE INTO users VALUES (1)",
       "expectedSeverity": "danger"
     },
     {

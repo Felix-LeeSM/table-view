@@ -534,6 +534,74 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   });
 
   // -------------------------------------------------------------------------
+  // Issue #2272 (2026-08-11) — SQLite spells the same destructive upsert
+  // `INSERT OR REPLACE INTO …`: on a uniqueness conflict SQLite DELETEs the
+  // existing row and INSERTs the new one, so column data the new row omits is
+  // gone. It fell between the two anchors above — `^REPLACE\b` (the leading
+  // keyword is INSERT) and `^INSERT\s+INTO\b` (the next word is OR) — and
+  // landed on the `{ kind: "other", severity: "info" }` fail-open default,
+  // i.e. no dialog in any mode, while the app's own SQLite completion
+  // vocabulary suggests the syntax. Tier follows the one axis
+  // (`memory/product/memory.md` §2): the conflict algorithm decides. Only
+  // REPLACE deletes an existing row. ABORT / FAIL abort the statement,
+  // IGNORE skips the row, and ROLLBACK also rolls back the open
+  // transaction — but only its own uncommitted work, nothing already
+  // durable — so those stay where they are; re-tiering them is out of
+  // scope for this ticket.
+  // -------------------------------------------------------------------------
+  describe("Issue #2272 — SQLite INSERT OR REPLACE destructive upsert → danger", () => {
+    it("[AC-2272-01] INSERT OR REPLACE INTO … VALUES → dml-replace / danger", () => {
+      const a = analyzeStatement("INSERT OR REPLACE INTO t (id) VALUES (1)");
+      expect(a).toEqual({
+        kind: "dml-replace",
+        severity: "danger",
+        reasons: [
+          "INSERT OR REPLACE — 기존 행 덮어쓰기 (충돌 행 DELETE 후 INSERT)",
+        ],
+      });
+      expect(isDangerous(a)).toBe(true);
+    });
+
+    it("[AC-2272-02] lower-case and multi-whitespace/newline forms → danger", () => {
+      for (const sql of [
+        "insert or replace into t values (1)",
+        "INSERT   OR\n  REPLACE INTO t VALUES (1)",
+        "INSERT /* c */ OR REPLACE INTO t VALUES (1)",
+      ]) {
+        expect(analyzeStatement(sql).severity).toBe("danger");
+      }
+    });
+
+    // ── false-positive guards ────────────────────────────────────────────
+    it("[AC-2272-03] the four non-deleting conflict algorithms do NOT escalate", () => {
+      // SQLite's other `INSERT OR <algorithm>` forms never delete the
+      // conflicting row, so the danger branch must not swallow them.
+      for (const algorithm of ["ROLLBACK", "ABORT", "FAIL", "IGNORE"]) {
+        const a = analyzeStatement(
+          `INSERT OR ${algorithm} INTO t (id) VALUES (1)`,
+        );
+        expect(a.severity).not.toBe("danger");
+        expect(isDangerous(a)).toBe(false);
+      }
+    });
+
+    it("[AC-2272-04] the phrase inside a string literal → still dml-insert / info", () => {
+      const a = analyzeStatement(
+        "INSERT INTO notes (body) VALUES ('INSERT OR REPLACE')",
+      );
+      expect(a.kind).toBe("dml-insert");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-2272-05] trailing INSERT OR REPLACE in a batch → danger (worst tier wins)", () => {
+      expect(
+        analyzeStatement("SELECT 1; INSERT OR REPLACE INTO t VALUES (1)")
+          .severity,
+      ).toBe("danger");
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Sprint 255 (2026-05-09) — `isInfoStatement` 휴리스틱은 raw editor 의 WARN
   // dialog mount 직전에 INFO (read-only / metadata) statement 을 식별해
   // dialog skip → 직접 IPC 로 우회하는 분기를 위해 신설. INFO corpus =
