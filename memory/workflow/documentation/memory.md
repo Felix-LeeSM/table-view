@@ -1,9 +1,9 @@
 ---
 title: Documentation Impact Gate
 type: workflow-rule
-updated: 2026-08-10
+updated: 2026-08-11
 task: documentation, docs, pr, review, delivery
-keywords: 문서화, documentation impact, 문서화 impact 게이트, Reviewer 판정, SOT 라우팅, evidence portability, repo-relative, retire 조건, 개수 서술, 닫힌 개수, 자리 나열, scorecard 수치
+keywords: 문서화, documentation impact, 문서화 impact 게이트, Reviewer 판정, SOT 라우팅, evidence portability, repo-relative, retire 조건, 개수 서술, 닫힌 개수, 자리 나열, scorecard 수치, 가변 상태, 조회 명령, 움직이는 ref, head SHA, 현재형 단정, 옮겨 적은 값, 분기점
 trigger:
   signal: PR 작성 / 문서 추가 / workflow·contract·user-facing 변경
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -86,6 +86,38 @@ PR #2232 의 squash body 를 이 규약에 맞게 고친 것은 저자도 리뷰
 목록은 줄마다 대조되고, 빠진 자리가 있어도 틀린 수가 아니라 참인 부분집합이다.
 옮겨 적을 수가 애초에 안 생긴다. 수 자체가 결론이면 그것을 만든 명령을 붙인다 —
 [implementation](../implementation/memory.md) §5 「수치가 추론으로 생산됨」이 SOT 다.
+
+## 가변 상태는 값이 아니라 조회 명령으로 쓴다
+
+**판정은 하나다 — 그 문장의 값이 내 diff 안에서 나오나, 다른 산출물을 열어야
+나오나.** 열어야 나오면 **가변 상태**다. 그것을 움직이는 쪽이 내가 아니므로,
+값을 산문에 박는 순간 남의 다음 행동이 내 문장을 거짓으로 만든다. **내가 안
+만든 값은 내가 못 지킨다 — 값을 쓰지 말고 그 값을 낸 명령을 쓴다.** 위 「개수
+서술」이 이 규칙의 한 사례다: 개수는 열어 봐야 아는 가변 상태 중 세어서 얻는
+것이고, 이 절은 같은 처방을 상태 일반으로 넓힌다.
+
+가변 상태는 최소한 이것들이다:
+
+- 다른 PR · 이슈의 open / merged / closed 상태
+- `origin/main` 을 비롯한 **움직이는 ref 의 head SHA**, 그리고 그 ref 로 잰
+  분기점 · diff 수치
+- 「지금 …이다」 · 「열린 …」 · 「아직 …가 잡고 있다」 류의 **현재형 단정**
+- 다른 노드의 산출물(scorecard · 앞 라운드 body · spawn 프롬프트)에서 **옮겨 적은
+  값** — 커밋 SHA · 분기점 · 줄 번호 · 개수
+
+**해당 없는 것**: rev 를 박은 조회(`git show <rev>:<path>` · `git grep <rev>`)와 그
+자리에서 돌린 재현 명령의 출력. rev 가 박히면 나중에 다시 열어도 같은 값이 나오니
+가변이 아니다.
+
+```
+❌ #2259 는 3c16b24c 로 머지됐고 그 커밋이 지금의 origin/main head 다.
+
+✅ 머지 커밋: gh pr view 2259 --json mergeCommit -q .mergeCommit.oid
+   origin/main head 는 이 문장을 읽는 시점마다 다르다 — 값을 박지 않는다.
+```
+
+값이 아니라 명령이 남으면 읽는 노드가 스스로 돌려 그 시점의 값을 얻는다. 옮겨
+적힌 값이 다음 라운드의 거짓 전제가 되는 사슬은 그 자리에서 끊긴다.
 
 ## Reviewer 판정
 
