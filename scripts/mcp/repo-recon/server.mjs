@@ -25,7 +25,7 @@
 // `--output=` 이 파일을 쓴다 — 라운드 1 리뷰가 실물 MCP 왕복으로 재현했다.
 
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -34,12 +34,15 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 // 서버 파일 위치에서 파생한다 — cwd 를 안 읽으므로 어디서 spawn 되든 같은 트리를 본다.
-const REPO_ROOT = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "..",
+// 심링크까지 푸는 이유는 아래 `worktreeFile` 이 이 값과 realpath 를 문자열로 대조하기
+// 때문이다 — 루트 자신이 심링크 뒤에 있으면 안 푼 쪽과 푼 쪽이 안 맞는다.
+const REPO_ROOT = await realpath(
+  resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", ".."),
 );
+
+// `.git` 은 작업 트리가 아니다. `git show <oid>:.git/config` 는 `exists on disk, but not
+// in '<oid>'` 로 거절하므로, WORKTREE 분기가 그것을 읽으면 두 분기의 범위가 갈린다.
+const GIT_DIR = resolve(REPO_ROOT, ".git");
 
 // `rev` 의 정식 값. 이 값이면 rev 인자 없이 git 을 불러 작업 트리를 읽고 경고를 단다 —
 // 못 읽게 막는 대신 읽으면 보이게 한다.
@@ -53,8 +56,9 @@ const REGEX_FLAG = { fixed: "-F", extended: "-E", perl: "-P" };
 // ponytail: 자르지 않고 경고만 얹는 문턱. 호출자가 이 줄 수를 넘겨 받아도 응답은 전량이다.
 const BIG_OUTPUT_LINES = 2000;
 
-// `memory/workflow/git-policy/memory.md` 「Hard block」의 사본이다 — SOT 는 그 방이고
-// 이쪽은 호출 시점에 알려 주는 경고일 뿐이다. 놓쳐도 실행은 원래 되던 대로 된다.
+// `git reset --hard` 의 remote-upstream target — `memory/workflow/git-policy/memory.md`
+// 「Hard block」이 SOT 이고 이 정규식은 그 줄의 표기를 문자 그대로 옮긴 것이라 같은 뜻의
+// 다른 표기(`@{upstream}` · `main@{upstream}`)는 안 문다. 아래 `hitsHardBlock` 참조.
 const UPSTREAM_TARGET =
   /^(FETCH_HEAD|ORIG_HEAD|@\{u\}|origin\/|refs\/remotes\/)/;
 
@@ -128,8 +132,43 @@ function revArgv(rev) {
 }
 
 /**
- * git-policy 「Hard block」에 걸리는 형태인가. 문자열 대조뿐이라 넓게 문다 —
- * 경고이지 게이트가 아니므로 헛경고가 못 잡는 것보다 싸다.
+ * `rev: "WORKTREE"` 로 읽어도 되는 절대 경로인가. 두 번 대조한다 — 문자열 대조가 `..` 와
+ * 절대경로를 끊고, `realpath` 가 심링크를 푼 뒤 같은 대조를 다시 한다. `resolve()` 는
+ * 심링크를 안 푸는데 `readFile` 은 따라가므로 앞 대조만 있으면 트리 밖이 열린다
+ * (라운드 2 리뷰가 실물 MCP 왕복으로 재현했다).
+ * @param {string} path
+ * @returns {Promise<string>} 읽어도 되는 절대 경로
+ */
+async function worktreeFile(path) {
+  const inside = (file) =>
+    file.startsWith(REPO_ROOT + sep) &&
+    file !== GIT_DIR &&
+    !file.startsWith(GIT_DIR + sep);
+  const file = resolve(REPO_ROOT, path);
+  if (!inside(file)) {
+    throw new Error(`path ${JSON.stringify(path)} 는 작업 트리 밖이다`);
+  }
+  const real = await realpath(file);
+  if (!inside(real)) {
+    throw new Error(
+      `path ${JSON.stringify(path)} 는 작업 트리 밖을 가리키는 심링크다`,
+    );
+  }
+  return real;
+}
+
+/**
+ * git-policy 「Hard block」에 걸리는 형태인가. **아래 리터럴 표기만 보므로 좁게 문다** —
+ * 같은 금지의 다른 표기는 지나간다: `git commit -n`, `git -c commit.gpgSign=false` 와
+ * `=0`·`=off`, `git --config-env=commit.gpgsign=<VAR>`, `--force-with-lease=<ref>:<expect>`,
+ * `git push -uf`, `git push origin +HEAD:refs/heads/main`, `git reset --hard @{upstream}`.
+ * SOT 의 「소스/앱 자산을 지우는 destructive command」(`git rm -rf` · `git clean -fdx`)에는
+ * 대응 분기가 아예 없다. 반대 방향으로는 낱말을 pathspec 으로 실은 호출이 헛경고를
+ * 받는다 — `git grep -e pull` · `git log -- pull` · `git checkout --force`.
+ *
+ * 완전성은 이슈 #2289 가 범위 밖으로 뒀다(「경고까지가 범위다」). 이것은 게이트가 아니라
+ * 호출 시점 표시이고, 집행자는 `memory/workflow/git-policy/memory.md` 가 적은 대로
+ * agent 자신이다.
  * @param {string[]} argv
  */
 function hitsHardBlock(argv) {
@@ -217,12 +256,9 @@ server.registerTool(
   },
   async (args) => {
     if (args.rev === WORKTREE) {
-      // `git show` 는 트리 밖을 못 읽는다. 작업 트리 읽기도 같은 범위로 둔다 —
-      // 저장소 정찰 도구가 임의 파일 리더가 되지 않게.
-      const file = resolve(REPO_ROOT, args.path);
-      if (!file.startsWith(REPO_ROOT + sep)) {
-        throw new Error(`path ${JSON.stringify(args.path)} 는 저장소 밖이다`);
-      }
+      // `git show` 는 트리 밖도 `.git` 안도 못 읽는다. 작업 트리 읽기를 같은 범위로
+      // 두는 것이 `worktreeFile` 이다 — 저장소 정찰 도구가 임의 파일 리더가 되지 않게.
+      const file = await worktreeFile(args.path);
       return reply([], await readFile(file, "utf8"), [
         ...revWarnings(args.rev),
         `git 에는 작업 트리 파일을 그대로 내는 명령이 없어 파일을 직접 읽었다 — 재현은 \`cat ${args.path}\``,

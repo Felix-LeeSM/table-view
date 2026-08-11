@@ -1,5 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,6 +65,20 @@ const headOid = gitOutput(["rev-parse", "HEAD"]).trim();
 const probeDir = mkdtempSync(join(tmpdir(), "repo-recon-"));
 const probeFile = join(probeDir, "MARKER");
 
+// 저장소 밖을 가리키는 심링크와 커밋 안 된 파일. 둘 다 저장소 루트에 실물로 있어야 뜻이
+// 있는 단언이라 여기서 만들고 afterAll 에서 지운다 — 앞 실행이 죽어 남았을 수 있으니
+// 만들기 전에 지운다.
+const outsideMarker = "repo-recon outside-the-tree marker";
+const outsideFile = join(probeDir, "OUTSIDE");
+const symlinkProbe = "RR_SYMLINK_PROBE";
+const untrackedProbe = "RR_UNTRACKED_PROBE";
+writeFileSync(outsideFile, outsideMarker);
+for (const probe of [symlinkProbe, untrackedProbe]) {
+  rmSync(join(repoRoot, probe), { force: true });
+}
+symlinkSync(outsideFile, join(repoRoot, symlinkProbe));
+writeFileSync(join(repoRoot, untrackedProbe), "uncommitted\n");
+
 let client: Client;
 
 beforeAll(async () => {
@@ -76,6 +97,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await client?.close();
   rmSync(probeDir, { recursive: true, force: true });
+  for (const probe of [symlinkProbe, untrackedProbe]) {
+    rmSync(join(repoRoot, probe), { force: true });
+  }
 });
 
 describe("repo-recon MCP server", () => {
@@ -102,6 +126,26 @@ describe("repo-recon MCP server", () => {
       "repo_ls",
       "repo_show",
     ]);
+  });
+
+  // Reason: 이름만 보면 description 축이 통째로 단언 밖이다 — 라운드 1 이 blocking 으로
+  // 지운 문장(정규식 엔진 동작 서술)을 그 자리에 되살려도 전부 green 이었다. 범위 수정
+  // 코멘트가 문자 그대로 정한 첫 줄이라 문자열 동일성으로 문다. 무는 것은 문구이지 그
+  // 문구가 서술하는 플랫폼 동작이 아니므로 엔진마다 갈리지 않는다.
+  it("puts the contract sentence first in every tool description", async () => {
+    const { tools } = await client.listTools();
+    const firstLine = (name: string) =>
+      (tools.find((tool) => tool.name === name)?.description ?? "").split(
+        "\n",
+      )[0];
+    const thin =
+      "git 의 얇은 래퍼다. 권한 범위를 좁히고 인자 모양을 고정할 뿐, 결과를 해석하거나 보정하지 않는다.";
+    expect(firstLine("repo_grep")).toBe(thin);
+    expect(firstLine("repo_show")).toBe(thin);
+    expect(firstLine("repo_ls")).toBe(thin);
+    expect(firstLine("repo_git")).toBe(
+      "타입도 가드도 없는 탈출구다. argv 를 그대로 git 에 넘긴다 — 인자는 부르는 쪽 책임이다.",
+    );
   });
 
   // Reason: 응답 계약 자체를 문다. 서버가 세거나 자르는 필드를 되살리면 여기가 red 다 —
@@ -171,6 +215,19 @@ describe("repo-recon MCP server", () => {
       arguments: { rev: "HEAD", path: "AGENTS.md" },
     });
     expect(payloadOf(result).stdout).toBe(expected);
+  });
+
+  // Reason: `argv` 는 실제로 실행된 배열이라는 것이 응답 계약이고, `repo_show` 는 rev 를
+  // oid 로 먼저 푼 뒤 그 oid 로 돈다. 보고만 `<rev>:<path>` 로 되돌리면 받는 쪽이 붙여
+  // 넣는 명령이 움직이는 ref 를 다시 가리키는데 응답 어디에도 그 사실이 안 남는다.
+  it("reports the resolved oid in argv, not the rev it was called with", async () => {
+    const payload = payloadOf(
+      await client.callTool({
+        name: "repo_show",
+        arguments: { rev: "HEAD", path: "AGENTS.md" },
+      }),
+    );
+    expect(payload.argv).toEqual(["show", `${headOid}:AGENTS.md`]);
   });
 
   // Reason: 라운드 1 의 blocking — `rev` 가 자유 문자열인 채 git 의 옵션 파싱 구간에
@@ -255,6 +312,11 @@ describe("repo-recon MCP server", () => {
     };
     expect(await warningsFor("HEAD")).toMatch(/움직이는 ref/);
     expect(await warningsFor(headOid)).not.toMatch(/움직이는 ref/);
+    // 축약 oid 는 git 이 커밋으로 풀지만 판정식이 7자리부터라 「고정」으로 안 센다.
+    // 그 아래까지 고정으로 세면 hex 로만 된 짧은 ref 이름(`beef` · `dead`)이 경고를 잃는다.
+    const shortOid = headOid.slice(0, 6);
+    expect(gitOutput(["rev-parse", "--verify", shortOid]).trim()).toBe(headOid);
+    expect(await warningsFor(shortOid)).toMatch(/움직이는 ref/);
   });
 
   // Reason: 작업 트리 읽기를 막으면 노드는 우회를 발명한다. 정식 값으로 받되 읽었다는
@@ -294,6 +356,64 @@ describe("repo-recon MCP server", () => {
     );
   });
 
+  // Reason: `rev: "WORKTREE"` 는 git 을 안 부르고 파일을 직접 읽는 유일한 경로다. 문자열
+  // 대조만 하던 라운드 2 head 에서는 심링크와 `.git/**` 이 그대로 통과해 저장소 정찰
+  // 도구가 임의 파일 리더였다. `..` 와 절대경로는 그때도 막혔고 지금도 막힌다 — 세
+  // 형태를 같이 무는 이유는 봉쇄 블록이 통째로 사라지는 회귀를 잡기 위해서다.
+  it("keeps rev WORKTREE inside the work tree — symlink, .git, and ..", async () => {
+    // 가드가 없었다면 실제로 읽혔을 파일이라는 것을 먼저 확인한다. 안 그러면 심링크가
+    // 깨져 있어도 (읽기 실패로) 이 단언이 green 이라 아무것도 증명하지 않는다.
+    expect(readFileSync(join(repoRoot, symlinkProbe), "utf8")).toBe(
+      outsideMarker,
+    );
+    for (const path of [symlinkProbe, ".git/config", "../AGENTS.md"]) {
+      const result = await client.callTool({
+        name: "repo_show",
+        arguments: { rev: "WORKTREE", path },
+      });
+      expect(result.isError, path).toBe(true);
+      expect(textOf(result), path).not.toContain(outsideMarker);
+    }
+    // 봉쇄가 작업 트리 안까지 잠그면 도구가 죽는다 — 정상 경로가 그대로 읽히는지 같이 문다.
+    const inside = payloadOf(
+      await client.callTool({
+        name: "repo_show",
+        arguments: { rev: "WORKTREE", path: "AGENTS.md" },
+      }),
+    );
+    expect(inside.stdout).toBe(
+      readFileSync(resolve(repoRoot, "AGENTS.md"), "utf8"),
+    );
+  });
+
+  // Reason: `rev: "WORKTREE"` 의 목록은 커밋 안 된 파일이 들어오는 쪽이 그 값의 뜻이다.
+  // `--others --exclude-standard` 가 빠지면 같은 이름의 tool 이 조용히 커밋된 것만 내고,
+  // 호출자는 「그 파일이 없다」로 읽는다.
+  it("lists uncommitted files on rev WORKTREE and committed ones on a rev", async () => {
+    const worktree = payloadOf(
+      await client.callTool({
+        name: "repo_ls",
+        arguments: { rev: "WORKTREE", pathspec: [untrackedProbe] },
+      }),
+    );
+    expect(worktree.argv).toEqual([
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "--",
+      untrackedProbe,
+    ]);
+    expect(worktree.stdout.split("\n")).toContain(untrackedProbe);
+    const committed = payloadOf(
+      await client.callTool({
+        name: "repo_ls",
+        arguments: { rev: "HEAD", pathspec: [untrackedProbe] },
+      }),
+    );
+    expect(committed.stdout).toBe("");
+  });
+
   // Reason: 아무것도 안 무는 glob 은 셸(zsh nomatch)에서 명령 자체를 죽여 「0건」과
   // 구분이 안 됐다. 여기서는 0 이 에러가 아니라 결과로 돌아오고, 그 0 이 오타인지
   // 실제인지 확인하라는 경고가 붙어야 한다.
@@ -306,6 +426,22 @@ describe("repo-recon MCP server", () => {
     );
     expect(payload.stdout).toBe("");
     expect(payload.warnings.join("\n")).toMatch(/0건/);
+    // `git grep` 만 0건을 rc 1 로 낸다 — 위 `repo_ls` 의 `git diff-tree` 는 rc 0 이라 그
+    // 분기를 안 탄다. rc 1 을 에러로 올리면 「없다」와 「호출이 실패했다」가 다시 섞인다.
+    const grepped = payloadOf(
+      await client.callTool({
+        name: "repo_grep",
+        arguments: {
+          pattern: "ZZ_repo_recon_no_such_string_ZZ",
+          rev: "HEAD",
+          pathspec: ["AGENTS.md"],
+          mode: "files",
+          regex: "fixed",
+        },
+      }),
+    );
+    expect(grepped.stdout).toBe("");
+    expect(grepped.warnings.join("\n")).toMatch(/0건/);
   });
 
   // Reason: 상한을 없앤 대신 큰 출력에 경고를 얹는다. 자르는 쪽으로 되돌리면 그
@@ -321,6 +457,17 @@ describe("repo-recon MCP server", () => {
     expect(payload.stdout).toBe(
       gitOutput(["show", `${headOid}:pnpm-lock.yaml`]),
     );
+    // 문턱을 낮추면 작은 출력에도 붙어 경고가 배경 소음이 된다. 줄 수를 저장소 파일에 안
+    // 기대게 `-n 5` 로 만든 출력을 쓴다 — 특정 파일의 줄 수는 다음 커밋이 바꾼다.
+    const small = payloadOf(
+      await client.callTool({
+        name: "repo_git",
+        arguments: { argv: ["log", "--oneline", "-n", "5"] },
+      }),
+    );
+    // 한 줄짜리 출력이면 문턱을 1 로 낮춰도 안 걸려 아래 단언이 항진명제가 된다.
+    expect(small.stdout.trimEnd()).toContain("\n");
+    expect(small.warnings.join("\n")).not.toMatch(/줄이다/);
   });
 
   // Reason: 탈출구가 없으면 노드가 우회를 발명한다. 타입이 안 잡혔다는 사실이
@@ -353,5 +500,27 @@ describe("repo-recon MCP server", () => {
       /memory\/workflow\/git-policy\/memory\.md/,
     );
     expect(payload.warnings.join("\n")).toMatch(/실행은 한다/);
+    // `reset --hard` + upstream target 은 별도 분기라 위 호출이 안 덮는다. 확인용 호출은
+    // 아무것도 안 바꾸는 `git log` 이고 그 표기는 `--` 뒤 pathspec 으로 싣는다 — 진짜로
+    // 돌리면 이 사본이 날아간다. 판정이 문자열 대조라 이렇게 실어도 걸리고, 그 성질은
+    // `scripts/mcp/repo-recon/server.mjs` 의 `hitsHardBlock` 주석이 적는다.
+    const upstream = payloadOf(
+      await client.callTool({
+        name: "repo_git",
+        arguments: {
+          argv: [
+            "log",
+            "--oneline",
+            "-n",
+            "1",
+            "--",
+            "reset",
+            "--hard",
+            "origin/main",
+          ],
+        },
+      }),
+    );
+    expect(upstream.warnings.join("\n")).toMatch(/Hard block/);
   });
 });
