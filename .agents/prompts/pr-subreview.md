@@ -60,11 +60,14 @@ test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
 
 test · lint · build 를 돌릴지는 스스로 정한다 — 의무가 아니다. 다만 **`pnpm
 install` 이나 cargo 빌드를 요구하는 검증은 이 노드가 돌리지 않는다** — 돌려야 할
-명령을 아래 「coordinator 가 돌릴 검증」에 그대로 적어 넘긴다. 그 둘을 안 부르는
-검증은 직접 돌리되, 저자 사본이 아니라 자기 일회용 사본에서 돌리고 **만들었으면
-같은 턴에 지운다.** 만드는 법은 `memory/runbook/worktree/memory.md`
-「리뷰어 사본」, 회수 의무의 주인은 그 방 「책임」, 티어를 그 자리에서 가르는
-사유는 `memory/workflow/review/memory.md` 「행동 계약」이 갖는다.
+명령을 아래 「coordinator 가 돌릴 검증」에 그대로 적어 넘긴다. **읽기와 `<rev>` 범위
+git/gh 로 끝나면 사본을 만들지 마라** — `git fetch origin pull/<N>/head` 로 head 를
+들이고 `git show <rev>:<path>` · `git grep <rev>` 로 읽으면 트리가 없어도 답이 나온다.
+트리가 있어야 도는 나머지(설치를 안 부르는 `scripts/*.sh`)만 저자 사본이 아니라 자기
+일회용 사본에서 돌리고 **만들었으면 같은 턴에 지운다.** 만드는 법은
+`memory/runbook/worktree/memory.md` 「리뷰어 사본」, 회수 의무의 주인은 그 방
+「책임」, 이 갈래를 그 자리에서 가르는 사유는
+`memory/workflow/review/memory.md` 「행동 계약」이 갖는다.
 
 ## 반환 형식
 
