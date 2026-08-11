@@ -543,9 +543,11 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   // i.e. no dialog in any mode, while the app's own SQLite completion
   // vocabulary suggests the syntax. Tier follows the one axis
   // (`memory/product/memory.md` §2): the conflict algorithm decides. Only
-  // REPLACE deletes the conflicting row; ROLLBACK / ABORT / FAIL fail the
-  // statement and IGNORE skips the row, so those four stay where they are —
-  // re-tiering them is out of scope for this ticket.
+  // REPLACE deletes an existing row. ABORT / FAIL abort the statement,
+  // IGNORE skips the row, and ROLLBACK also rolls back the open
+  // transaction — but only its own uncommitted work, nothing already
+  // durable — so those stay where they are; re-tiering them is out of
+  // scope for this ticket.
   // -------------------------------------------------------------------------
   describe("Issue #2272 — SQLite INSERT OR REPLACE destructive upsert → danger", () => {
     it("[AC-2272-01] INSERT OR REPLACE INTO … VALUES → dml-replace / danger", () => {

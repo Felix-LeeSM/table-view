@@ -528,9 +528,10 @@ export function analyzeStatement(
   // word), so it used to reach the fail-open `other`/info default. The AST
   // gate above cannot classify it either — the grammar's `parse_insert`
   // expects INTO right after INSERT and returns `error`, which falls through
-  // to here. Only REPLACE deletes the conflicting row; the four other
-  // conflict algorithms (ROLLBACK / ABORT / FAIL / IGNORE) abort the
-  // statement or skip the row and are deliberately left where they are.
+  // to here. Only REPLACE deletes an existing row. ABORT / FAIL abort the
+  // statement, IGNORE skips the row, and ROLLBACK also rolls back the open
+  // transaction — but only its own uncommitted work, nothing already
+  // durable — so they are deliberately left where they are.
   if (/^INSERT\s+OR\s+REPLACE\b/.test(upper)) {
     return {
       kind: "dml-replace",

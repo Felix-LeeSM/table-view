@@ -326,10 +326,12 @@ fn classify_by_keyword(stmt: &str, dialect: SqlDialect) -> Severity {
     // INSERT rule expects INTO right after INSERT), so it used to fall out of
     // this function as `Info`. Whitespace is not collapsed here (only comments
     // are, into a single space), so the three leading words are compared
-    // token-wise. Only REPLACE deletes the conflicting row — `INSERT OR
-    // ROLLBACK|ABORT|FAIL` fail the statement and `INSERT OR IGNORE` skips the
-    // row, so those stay `Info` (mirrors the frontend `^INSERT\s+OR\s+REPLACE\b`
-    // branch in `src/lib/sql/sqlSafetyClassifier.ts`).
+    // token-wise. Only REPLACE deletes an existing row — `INSERT OR ABORT|FAIL`
+    // abort the statement, `INSERT OR IGNORE` skips the row, and `INSERT OR
+    // ROLLBACK` also rolls back the open transaction, but only that
+    // transaction's own uncommitted work, so those stay `Info` (mirrors the
+    // frontend `^INSERT\s+OR\s+REPLACE\b` branch in
+    // `src/lib/sql/sqlSafetyClassifier.ts`).
     {
         let mut words = upper.split_whitespace();
         if words.next() == Some("INSERT")
