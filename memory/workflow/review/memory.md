@@ -1,9 +1,9 @@
 ---
 title: PR Review Behavior
 type: workflow-rule
-updated: 2026-08-10
+updated: 2026-08-11
 task: review, pr, delivery
-keywords: scorecard, verdict, blocking, non-blocking, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상
+keywords: scorecard, verdict, blocking, non-blocking, 사본이 필요한가, 설치가 필요한가, 판정 입력, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -41,15 +41,25 @@ trigger:
   #2195), 그 둘은 저자 표에 없던 변형이라 「저자 표를 표본 재현하라」 형태의
   의무로는 못 잡았을 것들이다(#2196). 판정 입력은 자동 gate 결과, PR diff, PR
   body, sprint contract, 필요한 active SOT 이고, 직접 돌렸으면 그 결과도 근거가 된다.
-- **그 사본의 티어는 「설치가 필요한가」로 가른다.** `pnpm install` 도 cargo 빌드도
-  안 부르는 검증(읽기 · `<rev>` 범위 git/gh · `pnpm` 을 안 부르는 `scripts/*.sh`)은
-  subreviewer 가 자기 사본에서 직접 돌린다. 둘 중 하나를 요구하는 검증은 돌리지 말고
-  **돌려야 할 명령을 coordinator 에게 반환한다** — coordinator 는 그것을 자기 사본에서
-  돌리거나, 안 돌리기로 하고 scorecard 에 그 사실을 적는다. 형용사가 아니라 명령으로
-  가르는 이유는 사본 디스크가 설치에서 자릿수를 바꾸기 때문이고(`du -sh <사본>` 로
-  잰다), fan-out 은 그 사본을 관점 수만큼 복제한다. 반환 자리는
-  [pr-subreview preamble](../../../.agents/prompts/pr-subreview.md) 「반환 형식」의
-  독립 항목이다 — 「판단 못 한 것」은 기록이라 섞으면 실행 지시가 안 보인다.
+- **먼저 「사본이 필요한가」를 답하고, 예가 나온 검증에만 「설치가 필요한가」가 누가
+  돌리는지를 가른다.** 앞의 답이 뒤의 답을 함의하지 않으니 축마다 따로 답한다.
+  - **「사본이 필요한가」 — 아니오가 나온 검증은 subreviewer 도 coordinator 도 사본을
+    만들지 않고 선 자리에서 그대로 돌린다.** 어떤 명령이 어느 쪽인지 판정하는 규칙은
+    이 방에 아직 없다 — 이슈 #2299 가 세운다. 그때까지 **못 가르면 사본 쪽으로 간다**:
+    틀렸을 때 값이 한쪽으로만 크다 — 사본 하나 대 조용히 틀린 판정이다.
+  - **「설치가 필요한가」의 판정 입력 — 그 명령이 `pnpm install` 이나 cargo 빌드를
+    부르는가.** 안 부르는 검증(`pnpm` 을 안 부르는 `scripts/*.sh`)은 subreviewer 가
+    일회용 사본을 만들어 거기서 돌린다. 부르는 검증은 돌리지 말고 **돌려야 할 명령을
+    coordinator 에게 반환한다** — coordinator 는 그것을 자기 사본에서 돌리거나, 안
+    돌리기로 하고 scorecard 에 그 사실을 적는다. 반환 자리는
+    [pr-subreview preamble](../../../.agents/prompts/pr-subreview.md) 「반환 형식」의
+    독립 항목이다 — 「판단 못 한 것」은 기록이라 섞으면 실행 지시가 안 보인다.
+
+  형용사가 아니라 명령으로 가르는 이유는 사본 디스크가 설치에서 자릿수를 바꾸기
+  때문이고(`du -sh <사본>` 로 잰다), fan-out 은 그 사본을 관점 수만큼 복제한다.
+  만드는 절차와 회수 의무의 SOT 는
+  [worktree](../../runbook/worktree/memory.md) 「리뷰어 사본」·「책임」이고, 이 방은
+  그 방이 넘긴 「언제 · 어느 노드가 만드는가」를 답한다.
 - Subreview 결과는 coordinator의 입력이다. Coordinator는 PR에 직접 하나의
   통합 scorecard와 action items를 repo-relative evidence로 comment한다.
 - Blocking은 아래 사유뿐이다: 런타임·보안 / 이 PR 귀책의 거짓이 SOT에 들어감 /
