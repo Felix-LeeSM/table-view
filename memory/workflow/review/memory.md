@@ -3,7 +3,7 @@ title: PR Review Behavior
 type: workflow-rule
 updated: 2026-08-11
 task: review, pr, delivery
-keywords: scorecard, verdict, blocking, non-blocking, 사본이 필요한가, 설치가 필요한가, 판정 입력, argv, 피연산자, 열린 자리, 닫힌 자리, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상
+keywords: scorecard, verdict, blocking, non-blocking, 사본이 필요한가, 설치가 필요한가, 판정 입력, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -43,30 +43,10 @@ trigger:
   body, sprint contract, 필요한 active SOT 이고, 직접 돌렸으면 그 결과도 근거가 된다.
 - **먼저 「사본이 필요한가」를 답하고, 예가 나온 검증에만 「설치가 필요한가」가 누가
   돌리는지를 가른다.** 앞의 답이 뒤의 답을 함의하지 않으니 축마다 따로 답한다.
-  - **「사본이 필요한가」 — 명령을 미리 두 통에 갈라 두지 않는다. 돌릴 argv 를 놓고
-    피연산자 자리마다 「이 자리를 무엇이 정하나」를 묻는다.** argv 에 적힌 rev ·
-    저장소 · 경로가 정하면 **닫힌 자리**, 서 있는 체크아웃이 채우면 **열린 자리**다.
-    한 자리라도 열렸으면 사본이 필요하다 — 열린 자리는 다른 데 서서 돌려도 에러 없이
-    그 자리의 답을 내준다. `git fetch origin pull/<N>/head` 로 head 를 들인 뒤 **닫힌
-    argv 로만 끝나는 관점은 사본을 요구하지 않는다** — subreviewer 도 coordinator 도
-    만들지 않고 선 자리에서 그대로 돌린다. 닫힌 argv 도 그 객체를 가진 저장소에서
-    돌아야 하지만, 없으면 `bad object` 로 rc≠0 이라 조용히 틀리지 않는다.
-    판정 단위가 프로그램 이름이 아닌 이유는 같은 프로그램이 argv 에 따라 양쪽에 다
-    서기 때문이다:
-
-    ```
-    gh pr view <N>                                        # 저장소 ← 선 자리의 remote
-    gh pr view <N> --repo Felix-LeeSM/table-view          # 저장소 ← argv
-    git diff --stat "$(git merge-base origin/main HEAD)"  # 한쪽 ← 선 자리의 트리
-    git diff <base> <head>                                # 양쪽 ← argv
-    ```
-
-    둘째 쌍의 앞 형태는 이 저장소가 PR body 의 diff 수치에 처방하는 것이라
-    ([delivery](../delivery/memory.md) 「PR body」) 리뷰어가 상시 만난다. argv 에 rev
-    자리가 아예 없는 도구(`rg` · harness `grep` · `bash scripts/*.sh`)는 그 자리를
-    닫을 수 없고, 사본 절차를 재현하는 검증은 트리를 새로 만들어야 한다.
-    **자리가 닫혔는지 못 가르면 사본 쪽으로 간다** — 틀렸을 때 값이 한쪽으로만 크다:
-    사본 하나 대 조용히 틀린 판정이다.
+  - **「사본이 필요한가」 — 아니오가 나온 검증은 subreviewer 도 coordinator 도 사본을
+    만들지 않고 선 자리에서 그대로 돌린다.** 어떤 명령이 어느 쪽인지 판정하는 규칙은
+    이 방에 아직 없다 — 이슈 #2299 가 세운다. 그때까지 **못 가르면 사본 쪽으로 간다**:
+    틀렸을 때 값이 한쪽으로만 크다 — 사본 하나 대 조용히 틀린 판정이다.
   - **「설치가 필요한가」의 판정 입력 — 그 명령이 `pnpm install` 이나 cargo 빌드를
     부르는가.** 안 부르는 검증(`pnpm` 을 안 부르는 `scripts/*.sh`)은 subreviewer 가
     일회용 사본을 만들어 거기서 돌린다. 부르는 검증은 돌리지 말고 **돌려야 할 명령을
