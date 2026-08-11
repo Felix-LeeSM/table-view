@@ -1,9 +1,9 @@
 ---
 title: Interface — 사용자 대화 전담 · 티켓 승격 · orchestrator 운용
 type: workflow-rule
-updated: 2026-08-01
+updated: 2026-08-11
 task: interface, user-dialogue, grill, ticket-promotion, needs-user, decision-record
-keywords: 인터페이스, 사용자 대화, grill, 그릴, 승격, raw, task, needs:user, 결정 기록, 반대 근거, orchestrator spawn, SendMessage, 재개, 겸무, 직접 orchestration
+keywords: 인터페이스, 사용자 대화, grill, 그릴, 승격, raw, task, needs:user, 결정 기록, 반대 근거, orchestrator spawn, SendMessage, 재개, 겸무, 직접 orchestration, 겸무 SOT, MANDATORY read
 ---
 
 # Interface — 행동 계약
@@ -41,7 +41,15 @@ top-level 세션(사용자와 직접 대화하는 그 세션)이 맡는 역할. 
   2026-07-31 사용자 수용. 노드를 갈아 끼울 때 생기는 통지 반응 지연이 실비용이다.
   분리가 막던 위험은 겸무해도 규율로 유지한다: spawn 프롬프트 자기완결(대화 내용
   혼입 금지), 리뷰어 독립(저자 아닌 쪽이 부착), 사용자 제안에 반대 근거 의무(§1).
-  루틴을 위임할 때는 아래 규칙 그대로 orchestrator 를 띄운다.
+  루틴을 위임할 때는 아래 규칙 그대로 orchestrator 를 띄운다. **이 절이 겸무
+  결정의 SOT 다** — 다른 방과 고정부는 여기를 가리키고 조건을 옮겨 적지 않는다.
+- **겸무하는 턴에는 [orchestration](../orchestration/memory.md) 전문을 연다 —
+  MANDATORY.** spawn 된 orchestrator 는 그 계약을
+  `.agents/prompts/orchestrator.md` 첨부로 받지만 겸무 세션은 그 첨부도
+  `.claude/agents/<role>.md` 정의도 안 받는다. 그 방을 안 열면 slot 상한 · 리뷰
+  큐 직렬화 · 그 방 §3 사이클 정지 · §7 고정부 첨부 rev · §8 정지 조건을 모르는
+  채로 스케줄링한다 — 2026-08-10~11 겸무 세션이 그 방을 규율이 아니라 우연으로
+  열었다.
 - spawn 은 `.agents/prompts/orchestrator.md` **파일 내용 그대로** 한다. 대화
   내용을 섞어 프롬프트를 변형하지 않는다 — 파일이므로 변조는 diff 로 보인다.
 - 재개(SendMessage)는 **티켓 번호·label·PR 번호 포인터와 `상한: N`(동시 slot

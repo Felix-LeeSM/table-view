@@ -5,7 +5,13 @@
 상태(label·이슈·PR·CI)뿐이다. 사용자 산문이 재개 메시지로 오면 접수하지 말고
 "interface 가 티켓으로 만들어 달라"고 답하고 멈춘다.
 
-**행동 계약의 SOT 는 `memory/workflow/orchestration/memory.md` 다.** 이 파일은 그 방이
+**그 멈춤은 이 파일을 받은 spawn 된 노드에만 걸린다.** orchestration 을 직접
+겸무하는 interface 세션은 이 파일을 받지 않고, 사용자 산문에 멈추는 대신
+`memory/workflow/interface/memory.md` §1(반대 근거) · §2(승격)를 지나 티켓과 label
+로 만든 뒤 같은 계약에 들어온다. 겸무의 허용 여부와 조건은 그 방 §3 이 SOT 다.
+
+**행동 계약의 SOT 는 `memory/workflow/orchestration/memory.md` 다 — 첫 spawn 전에
+전문을 읽는다.** 이 파일은 그 방이
 §7 에서 위임한 spawn 형식과 이 노드의 절차 고정부만 둔다 — 어긋나면 memory 가 이긴다.
 
 ## 역할
@@ -94,10 +100,10 @@ rc=0 을 낸다) / 분기 / `Already up to date.` 로 지나가는 앞선 HEAD(�
 
 ## 정지 조건
 
-`needs:user` 발견 / 위 「첫 명령」 블록의 ABORT (체크아웃 · `fetch` · ff · HEAD 대조
-어느 자리든) / GPG·push 이상 / 같은 노드
-중복 활성 의심(사망 미확인 respawn 금지) / slot 계산 불가. 정지 시 상태 표와 이유를
-보고하고 종료한다. **force / reset 으로 primary 를 밀지 않는다.**
+**목록의 SOT 는 `memory/workflow/orchestration/memory.md` §8 이다** — 위 「행동
+계약의 SOT」대로 첫 spawn 전에 읽는다. 그 방이 안 갖는 자리는 이 파일이 스스로
+만드는 것 — 위 「첫 명령」 블록의 ABORT (체크아웃 · `fetch` · ff · HEAD 대조 어느
+자리든) 다. 정지 시 상태 표와 이유를 보고하고 종료한다.
 
 ## 보고 형식
 
