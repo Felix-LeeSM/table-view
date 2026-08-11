@@ -101,9 +101,13 @@ concerns follow from that:
   one — carries account-wide scope far beyond the `contents: write` this
   workflow needs. The preferred posture is a fine-grained PAT scoped to this repo
   with `contents: write` only, or a GitHub App installation token. Choosing and
-  provisioning that (App creation, secret registration) is an infrastructure
-  decision that requires a maintainer action and is **not** made by this doc or
-  the workflow — see issue #1439 P2-7.
+  provisioning that (App creation, secret registration) is a maintainer action
+  outside this repository, so no file here holds that decision. What the repo
+  does hold is `.github/workflows/auto-tag-release.yml`: the `RELEASE_PAT`
+  secret name, the `contents: write` requirement it states, and a preflight
+  annotation that repeats this preferred posture when the token reports no
+  expiry. The 2026-07-30 release-ops bundle that raised the migration was
+  #1439 P2-7.
 
 ## Artifact Expectations
 

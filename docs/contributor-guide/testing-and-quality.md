@@ -89,7 +89,7 @@ one-line notice instead of the log.
 | macOS smoke | Keep macOS E2E deferred until tauri-driver WKWebView support or an alternate mac smoke path exists. |
 | Right-click E2E | Add an alternate context-menu trigger or wait for tauri-driver W3C Actions support. |
 | E2E isolation | App-local state (`connections.json`, prefs, safe-mode flags) is emptied per session by `beforeSession` in `wdio.smoke.conf.ts` (`e2e/support/smoke-data-dir.ts`), so a `specFileRetries` retry no longer inherits the previous attempt's connections (#1836). Remaining: DB-server fixtures are still seeded once per spec-file run, not per retry. |
-| Masked E2E flakes | `wdio.smoke.conf.ts` sets `specFileRetries: 1`, so a first-attempt `no such window` crash is recovered in the same run and never shows in that run's pass/fail tally. No flake tally exists — nothing counts `no such window` or `RETRYING` markers; tracked in #1293. |
+| Masked E2E flakes | `wdio.smoke.conf.ts` sets `specFileRetries: 1`, so a first-attempt `no such window` crash is recovered in the same run and never shows in that run's pass/fail tally. No flake tally exists — nothing counts `no such window` or `RETRYING` markers, so detection stays a hand-run `grep "no such window"` over a green run's log; the `specFileRetries` comment in `wdio.smoke.conf.ts` owns that instruction. The 2026-07-04 census that named the class was #1293. |
 | Dependency security | Track `hickory-proto` advisory exposure through `mongodb 3.6.0`, `rustls-pemfile` exposure through `oracle-rs 0.1.7`, and `quick-xml` DoS advisories (RUSTSEC-2026-0194/0195) through `plist 1.8.0`; remove deny ignores when upstream dependency updates make it possible. |
 
 ## Static Lint Gate
@@ -119,9 +119,14 @@ carries the last measured frontend total and `scripts/check-coverage-ratchet.mjs
 fails `Frontend Checks` when the merged report drops below it — that script's
 header owns the tolerance and the procedure for raising the baseline. So a
 frontend coverage red the `vite.config.ts` numbers cannot explain is the
-ratchet: look for `FAIL <metric>` in the job log. E2E breadth stays with #581, and
-CI cache or parallelism with #582. Static lint changes should not edit those
-gates.
+ratchet: look for `FAIL <metric>` in the job log. E2E breadth stays with
+`e2e/scope-map.mjs` (the spec universe and the changed-path routing) and the
+`Runtime Happy Path` job in `.github/workflows/e2e-smoke.yml`; CI cache and
+parallelism stay with `.github/workflows/ci.yml` and
+`.github/workflows/e2e-smoke.yml` — read each file's own cache steps and job
+matrices rather than a list here, including the in-file notes on why one CI job
+deliberately has no `Swatinem/rust-cache` and why the smoke job stays serial.
+Static lint changes should not edit those gates.
 
 ## Smoke Matrix Bands
 

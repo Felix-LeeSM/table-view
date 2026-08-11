@@ -171,8 +171,12 @@ Current evidence:
 
 Gap routing:
 
-#765 owns query/result, #766 owns catalog/explain, #767 owns completion
-metadata, and #768 owns safety/capability unsupported deltas. Common
+`src/types/adapterContractTestMatrix.ts` owns the area split — query, result,
+catalog, explain, completion, and safety are rows in that file and each row
+names the `childIssue` that owns it, several rows to one issue (six rows,
+#765~#768). Adding or reordering a row also changes the fixed list in
+`src/types/adapterConformance.test.ts`, which pins every area-to-issue pair
+alongside the row order. Common
 expectations stay separate from
 DBMS/version/dialect/paradigm/capability/evidence deltas; fixture-only evidence
 does not widen support claims.

@@ -26,9 +26,10 @@ roots, compatibility exports, and committed generated inputs.
 ## Inputs
 
 - Refactor 01 final repository topology and lifecycle SOT: [`repository-topology-inventory.md`](repository-topology-inventory.md).
-- #729 generated/cache/tmp/worktree fencing is a prerequisite when a later move
+- Generated/cache/tmp/worktree fencing (#729) is a prerequisite when a later move
   relies on root-local cache/tmp/worktree paths staying outside source routing.
-  This document does not duplicate #729 ignore rules.
+  This document does not duplicate those rules: the ignore entries are in
+  `.gitignore` and the per-path lifecycle rows are in the inventory above.
 - Refactor 02 was the domain-first frontend migration. Its final SOT is the
   frontend/react/refactoring memory listed above; this document remains the
   Refactor 01 phase contract.
@@ -117,8 +118,11 @@ Generated-artifact constraints:
   fixture-owned issue changes that routing.
 - Fixture-only evidence does not widen runtime support claims. Smoke wiring or
   focused runtime tests must prove any support-claim change.
-- Local generated/cache/tmp/worktree paths stay outside source ownership per
-  #729; committed generated inputs stay tracked source-visible paths per #728.
+- Local generated/cache/tmp/worktree paths stay outside source ownership and
+  committed generated inputs stay tracked source-visible paths; `.gitignore`
+  carries the ignore entries and
+  [`repository-topology-inventory.md`](repository-topology-inventory.md) carries
+  the per-path lifecycle rows (#728/#729).
 - A source-root migration PR must list all moved test, fixture, and generated
   committed-input paths in its PR body.
 
@@ -132,5 +136,5 @@ Every Refactor 02 or Refactor 03 migration PR must include:
 - Targeted frontend, backend, parser, fixture, or smoke checks selected by the
   moved roots.
 - `git diff --check` and docs formatting checks for touched docs.
-- Explicit statement that generated/cache/tmp/worktree fence behavior from #729
-  was not weakened.
+- Explicit statement that the generated/cache/tmp/worktree fence behavior
+  (`.gitignore`, #729) was not weakened.
