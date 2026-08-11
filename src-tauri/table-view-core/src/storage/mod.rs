@@ -1972,11 +1972,36 @@ mod tests {
 
         // A save is what used to destroy it. This one does not reach the rename —
         // the document it replaces is the empty one the restore just wrote, and
-        // that holds nothing — but the set-aside file has to survive it anyway,
-        // and the name it was moved to is what keeps that true for the saves after
-        // it as well.
+        // that holds nothing — but the set-aside file has to survive it anyway.
         save_conn(sample_connection("c1", "DB1")).unwrap();
         assert_eq!(fs::read_to_string(&kept[0]).unwrap(), "{ half a file");
+
+        // #2222 — and the rename itself, which is the step the set-aside was moved
+        // out of the way of. Nothing above reaches it, so nothing above says the
+        // move actually bought anything. Two more saves do: the first replaces a
+        // `connections.json` holding `c1`, the second one holding `c1` and `c2`.
+        //
+        // The assertion is on the second because the first is ambiguous — with the
+        // slot empty, `seed_backup_if_absent` copies the same document into it on
+        // the way in, so a build that had lost the rename entirely would still
+        // leave `["c1"]` there and this test would pass proving nothing. By the
+        // second save the slot is occupied, the seed is skipped, and the rename in
+        // `save_storage_raw` is the only writer left that can have put `["c1",
+        // "c2"]` in it.
+        save_conn(sample_connection("c2", "DB2")).unwrap();
+        save_conn(sample_connection("c3", "DB3")).unwrap();
+        assert_eq!(
+            ids(&read_json(&backup)),
+            ["c1", "c2"],
+            "this save has to reach the rename or the assertion below is vacuous"
+        );
+        assert_eq!(
+            fs::read_to_string(&kept[0]).unwrap(),
+            "{ half a file",
+            "a save that renames a generation into the backup slot must leave the set-aside \
+             copy beside it untouched — those bytes are the user's last copy of a file that \
+             never parsed, and nothing else on disk holds them"
+        );
 
         cleanup_test_env();
     }
