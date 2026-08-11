@@ -185,6 +185,21 @@ nothing makes the two runs comparable. Sibling steps in that job carry figures
 written the same way and were not re-measured. Pin the measurement conditions
 or drop the figures.
 
+### Agent tooling — repo-recon MCP
+
+**Follow-up**: #2289 이 `scripts/mcp/repo-recon/server.mjs` 와 루트 `.mcp.json` 으로
+정찰 tool (`repo_grep` · `repo_show` · `repo_ls` · `repo_git`) 만 올렸고, 아래는 그
+티켓이 범위 밖으로 못박아 소유 이슈 없이 남았다. 승격은 노드가 이 서버를 실제로 쓰기
+시작할 때다.
+
+- `.claude/agents/*.md` 에 `tools:` 를 선언해 노드별 권한을 좁히는 것. 지금 그 정의들은
+  `tools:` 를 안 적어 전체 tool 을 상속하므로, 서버가 등록돼도 노드가 정찰을 이쪽으로
+  돌릴 이유가 없다. 이 배선이 오기 전까지 서버의 값은 "쓸 수 있다" 까지다.
+- `gh` 읽기 tool (PR body · 체크 상태 · 코멘트). 지금은 노드가 `gh` 를 셸로 부르므로
+  `repo_grep` 이 없앤 인용 · glob 삼킴 유형이 그 경로에는 그대로 남는다.
+- 쓰기 tool (scorecard 게시 · verdict label). 읽기 tool 과 달리 권한 경계가 붙으므로
+  별도 결정이 필요하다.
+
 ### Refactor backlog
 
 **Follow-up**: Promote code-smell audit candidates only when they intersect

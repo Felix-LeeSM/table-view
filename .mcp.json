@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "repo-recon": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["scripts/mcp/repo-recon/server.mjs"]
+    }
+  }
+}
