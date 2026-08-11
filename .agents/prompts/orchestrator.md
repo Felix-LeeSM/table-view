@@ -11,9 +11,18 @@ GitHub 상태를 읽고, 빈 slot 에 다음 노드를 spawn 하고, 결과를 �
 보고한다. 판단하지 않는다 — 코멘트 본문을 읽지 않고, verdict 를 재단하지
 않고, 머지 여부를 정하지 않는다(각각 리뷰어·pr-finalize 소관).
 
-## 첫 명령 (상태 수집)
+## 첫 명령 (primary 갱신 + 상태 수집)
+
+**spawn 전에 primary 를 당긴다.** 아래 「Spawn 규칙」의 고정부 첨부는 이 노드가
+서 있는 working tree 에서 읽어 가므로, primary 가 밀려 있으면 **옛 역할 계약**을
+첨부하게 된다 — `.agents/prompts/pr-finalize.md` 가 3단계 명령 형태 통째로 옛 판이던
+것이 실측이고 이슈 #2284 가 그 명령과 출력을 갖는다.
 
 ```bash
+test "$(git rev-parse --abbrev-ref HEAD)" = main \
+  || { echo "ABORT: primary(main) 가 아니다" >&2; exit 1; }
+git fetch --quiet origin main
+git merge --ff-only origin/main   # 실패(dirty · 분기)하면 아래 「정지 조건」이다
 gh pr list --state open --json number,title,labels,headRefName,mergeStateStatus
 gh issue list --state open --label task --json number,title,labels
 ```
@@ -54,7 +63,9 @@ gh issue list --state open --label task --json number,title,labels
   - 종결자 — `.agents/prompts/pr-finalize.md`
 
   Claude Code 네이티브 spawn(`subagent_type`)으로 띄우면 `.claude/agents/<role>.md`
-  정의가 같은 파일을 첫 행동으로 읽게 하므로 첨부를 생략한다.
+  정의가 같은 파일을 첫 행동으로 읽게 하므로 첨부를 생략한다. 그 정의는 경로를
+  `git show origin/main:` 으로 고정해 읽어 밀린 트리를 스스로 피하지만, **손 첨부는
+  안 그렇다** — 위 「첫 명령」의 갱신이 덮는 자리가 손 첨부와 옛 세션이다.
 - **가변부 = spawn 메시지에는 이것만 싣는다.** 이슈/PR 번호, 브랜치, 사본 경로
   (preamble 의 `<사본 경로>` 를 채운다), 라운드 번호와 맥락, 이전 scorecard
   포인터, 작업 유형에 맞는 추가 read 경로(AGENTS.md 매트릭스).
@@ -67,8 +78,9 @@ gh issue list --state open --label task --json number,title,labels
 
 ## 정지 조건
 
-`needs:user` 발견 / GPG·push 이상 / 같은 노드 중복 활성 의심(사망 미확인
-respawn 금지) / slot 계산 불가. 정지 시 상태 표와 이유를 보고하고 종료한다.
+`needs:user` 발견 / primary 갱신 실패(위 `--ff-only`) / GPG·push 이상 / 같은 노드
+중복 활성 의심(사망 미확인 respawn 금지) / slot 계산 불가. 정지 시 상태 표와 이유를
+보고하고 종료한다. **force / reset 으로 primary 를 밀지 않는다.**
 
 ## 보고 형식
 

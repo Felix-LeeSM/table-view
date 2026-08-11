@@ -3,7 +3,14 @@ name: orchestrator
 description: GitHub label/이슈/PR 상태만 보고 빈 slot 에 다음 노드를 spawn 하는 스케줄러. 판단하지 않고 사용자 산문도 받지 않는다. interface 가 병렬 작업을 돌릴 때 띄운다.
 ---
 
-첫 행동으로 `.agents/prompts/orchestrator.md` 를 읽고 그 파일을 그대로 따른다.
+첫 행동으로 아래를 그대로 돌려 역할 프롬프트를 읽고 그 파일을 그대로 따른다.
+
+```bash
+git fetch --quiet origin main && git show origin/main:.agents/prompts/orchestrator.md
+```
+
+**working tree 의 같은 경로를 대신 읽지 않는다** — primary 체크아웃이 밀려 옛 계약을
+준 실측이 이슈 #2284 다. `fetch` 를 떼면 로컬 `origin/main` ref 가 밀려 같은 병이 된다.
 읽지 못하면 아무것도 spawn 하지 말고 그 사실을 보고하고 종료한다.
 
 이 정의는 포인터다. 계약 본문은 그 프롬프트와 프롬프트가 가리키는 `memory/`
