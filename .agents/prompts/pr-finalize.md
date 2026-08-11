@@ -134,8 +134,8 @@ gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
 gh pr view <N> --json comments -q '.comments[].body'   # 라운드별 scorecard
 
 # scorecard 가 지목한 문구 하나가 커밋 메시지에 있는지. tr 이 하드랩을 이어 붙인다.
-# LC_ALL=C 는 GNU tr 이 UTF-8 로케일에서 바이트 0xA0 을 공백으로 접어 한국어 문구를
-# 통째로 0 으로 만드는 것을 막는다 (BSD tr 은 안 그런다 — 어느 tr 이 잡힐지 모른다)
+# LC_ALL=C 를 빼면 한국어 문구가 통째로 0 이 된다 — 기전과 표적 음절은
+# memory/workflow/review/memory.md 「행동 계약」이 갖는다
 # 조각에도 같은 정규화를 건다 — 안 걸면 아래 문단의 탭·개행·연속 공백에 뚫린다
 NEEDLE="$(printf '%s' '<문구>' | LC_ALL=C tr -s '[:space:]' ' ')"
 gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
