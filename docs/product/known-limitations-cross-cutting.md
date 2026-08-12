@@ -340,14 +340,23 @@ header action (gated on the engine's `intelligence.erd` capability), not from a
 per-table sub-tab. The diagram is a `@xyflow/react` canvas with `elkjs`
 `layered` auto-layout: referenced tables rank above the tables that reference
 them, and nodes can be dragged, but positions are not persisted across tab
-reopen. A foreign-key edge attaches to the row of the column it leaves from and
-the row of the column it points at, falling back to the card edge for a column
-the card is not drawing. Each edge carries a cardinality mark — 1:1, 1:N or N:M
-— decided by whether the columns at each end cover a unique index
-(`IndexInfo.is_unique`) or the primary key; a composite foreign key anchors on
-its first column pair. A reference onto a column that carries no key reads N:M,
-and so does an edge whose table has not had its index metadata fetched yet.
-Data compare remains a future promotion gate in the H4 smoke matrix.
+reopen. How much of a table a card spells out follows the viewport zoom in three
+steps — the table box alone, then the primary-key and foreign-key columns, then
+every column — and a card that leaves columns out says how many it hid. There is
+no fixed cap on rendered columns. Zoom never re-runs the layout: elkjs is handed
+the full-detail height of every card, so a card only ever shrinks inside the slot
+it was given, and zooming out does not pack the diagram tighter. A foreign-key
+edge attaches to the row of the column it leaves from and the row of the column
+it points at, falling back to the card edge for a column the current zoom step
+leaves out. Each edge carries a cardinality mark — 1:1, 1:N or N:M — counting how
+many of its two ends have columns that cover a unique index (`IndexInfo.is_unique`)
+or the primary key: both ends covered reads 1:1, exactly one reads 1:N, neither
+reads N:M. The mark does not say which end is the 1. A composite foreign key
+anchors on its first column pair. Primary keys come from `ColumnInfo`, not from
+the index list, so an ordinary foreign key onto a primary key reads 1:N from
+first paint; index metadata arriving later can only raise a mark that depends on
+a unique index. Data compare remains a future promotion gate in the H4 smoke
+matrix.
 
 ### FK navigation
 

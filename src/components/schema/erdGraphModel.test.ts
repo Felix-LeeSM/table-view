@@ -6,10 +6,13 @@ import {
   buildErdElkGraph,
   buildErdModel,
   buildErdNeighborhood,
-  ERD_MAX_VISIBLE_COLUMNS,
+  ERD_DETAIL_ZOOM_FULL,
+  ERD_DETAIL_ZOOM_KEYS,
   ERD_SCHEMA_TONE_COUNT,
   ERD_TABLE_WIDTH,
+  erdCardShape,
   erdColumnHandleId,
+  erdDetailLevel,
   erdModelFingerprint,
   erdReferenceCounts,
   erdTableHeight,
@@ -46,25 +49,26 @@ describe("buildErdModel", () => {
     ]);
   });
 
-  it("orders columns and sizes the card from the rows it will draw", () => {
+  it("orders columns and reserves a slot sized for every one of them", () => {
     const model = buildErdModel(extractSchemaGraph(wideTableSnapshot()));
     const table = model.tables[0]!;
 
-    expect(table.columns).toHaveLength(9);
-    expect(table.visibleColumns.map((column) => column.column)).toEqual([
+    expect(table.columns.map((column) => column.column)).toEqual([
       "c1",
       "c2",
       "c3",
       "c4",
       "c5",
       "c6",
+      "c7",
+      "c8",
+      "c9",
     ]);
-    expect(table.visibleColumns).toHaveLength(ERD_MAX_VISIBLE_COLUMNS);
-    expect(table.hiddenColumnCount).toBe(3);
     expect(table.width).toBe(ERD_TABLE_WIDTH);
-    // 6 column rows + the "+3 more columns" row.
-    expect(table.height).toBe(erdTableHeight(6, 3));
-    expect(erdTableHeight(6, 3)).toBeGreaterThan(erdTableHeight(2, 0));
+    // No six-column cap any more: the slot elkjs gets is the full-detail card,
+    // which is the tallest semantic zoom can ever make it.
+    expect(table.layoutHeight).toBe(erdTableHeight(9, 0));
+    expect(erdTableHeight(9, 0)).toBeGreaterThan(erdTableHeight(2, 0));
   });
 
   it("drops FK edges whose endpoint table is absent from the graph", () => {
@@ -102,18 +106,18 @@ describe("column anchors", () => {
     ]);
   });
 
-  it("keeps an anchor for a column the card is too small to draw", () => {
+  it("keeps an anchor for a column no detail level draws", () => {
     const model = buildErdModel(extractSchemaGraph(lateColumnFkSnapshot()));
     const wide = model.tables.find(
       (entry) => entry.qualifiedName === "public.wide",
-    );
+    )!;
 
-    // React Flow drops an edge whose handle id is missing, so the anchor has
-    // to survive the column cap that keeps `c7` off the card.
-    expect(wide?.visibleColumns.map((column) => column.column)).not.toContain(
-      "owner_id",
-    );
-    expect(wide?.anchorColumns).toEqual(["owner_id"]);
+    // ADR 0054 (2) retired the six-column cap, so the level that draws no
+    // column row at all is what now hides an anchor column. React Flow drops
+    // an edge whose handle id is missing, so the anchor list must not follow
+    // the level down.
+    expect(erdCardShape(wide, "compact").visibleColumns).toEqual([]);
+    expect(wide.anchorColumns).toEqual(["owner_id"]);
   });
 
   it("keeps the two handles of one column apart", () => {
@@ -180,6 +184,69 @@ describe("cardinality", () => {
   });
 });
 
+// ADR 0054 (2): the fixed six-column cap is retired and the zoom step decides
+// how much of a table a card spells out.
+describe("semantic zoom", () => {
+  it("maps zoom onto the three detail levels at the published thresholds", () => {
+    expect(erdDetailLevel(0.15)).toBe("compact");
+    expect(erdDetailLevel(ERD_DETAIL_ZOOM_KEYS - 0.01)).toBe("compact");
+    expect(erdDetailLevel(ERD_DETAIL_ZOOM_KEYS)).toBe("keys");
+    expect(erdDetailLevel(ERD_DETAIL_ZOOM_FULL - 0.01)).toBe("keys");
+    expect(erdDetailLevel(ERD_DETAIL_ZOOM_FULL)).toBe("full");
+    expect(erdDetailLevel(2)).toBe("full");
+    // An unmeasured viewport must not blank every card out.
+    expect(erdDetailLevel(Number.NaN)).toBe("full");
+  });
+
+  it("draws the box, then the key columns, then every column", () => {
+    const table = buildErdModel(extractSchemaGraph(keyedTableSnapshot()))
+      .tables[0]!;
+
+    expect(erdCardShape(table, "compact").visibleColumns).toEqual([]);
+    expect(erdCardShape(table, "compact").hiddenColumnCount).toBe(4);
+    expect(
+      erdCardShape(table, "keys").visibleColumns.map((column) => column.column),
+    ).toEqual(["id", "order_id"]);
+    expect(erdCardShape(table, "keys").hiddenColumnCount).toBe(2);
+    // `extractSchemaGraph` sorts columns by name, and every level keeps that
+    // order — the key filter must not reshuffle the rows.
+    expect(
+      erdCardShape(table, "full").visibleColumns.map((column) => column.column),
+    ).toEqual(["amount", "id", "note", "order_id"]);
+    expect(erdCardShape(table, "full").hiddenColumnCount).toBe(0);
+  });
+
+  // The layout input is what a re-run keys on, and a re-run resets every node
+  // position — so zooming must shrink the card without touching the slot.
+  it("shrinks the card with the level and leaves the elkjs slot alone", () => {
+    const model = buildErdModel(extractSchemaGraph(keyedTableSnapshot()));
+    const table = model.tables[0]!;
+
+    expect(erdCardShape(table, "compact").height).toBeLessThan(
+      erdCardShape(table, "keys").height,
+    );
+    expect(erdCardShape(table, "keys").height).toBeLessThan(
+      erdCardShape(table, "full").height,
+    );
+    expect(erdCardShape(table, "full").height).toBe(table.layoutHeight);
+    for (const child of buildErdElkGraph(model).children ?? []) {
+      expect(child.height).toBe(table.layoutHeight);
+    }
+  });
+
+  // Every column is a key here, so the mid-range card hides nothing and the
+  // overflow marker must stay away.
+  it("reports no hidden columns when the keys are the whole table", () => {
+    const table = buildErdModel(extractSchemaGraph(hubSnapshot())).tables.find(
+      (entry) => entry.qualifiedName === "public.a",
+    )!;
+
+    expect(table.columns.map((column) => column.column)).toEqual(["ref_id"]);
+    expect(erdCardShape(table, "keys").hiddenColumnCount).toBe(0);
+    expect(erdCardShape(table, "keys").height).toBe(table.layoutHeight);
+  });
+});
+
 describe("erdModelFingerprint", () => {
   // The ERD panel keeps fetching indexes/constraints per table after first
   // paint, so a fresh SchemaGraph object arrives many times for the same
@@ -191,8 +258,8 @@ describe("erdModelFingerprint", () => {
       extractSchemaGraph(ordersSnapshotWithMetadata()),
     );
 
-    expect(enriched.tables.map((entry) => entry.height)).toEqual(
-      bare.tables.map((entry) => entry.height),
+    expect(enriched.tables.map((entry) => entry.layoutHeight)).toEqual(
+      bare.tables.map((entry) => entry.layoutHeight),
     );
     // The FK constraint landing renames the edge id (synthetic -> real
     // constraint name) without changing which tables the edge joins.
@@ -219,7 +286,9 @@ describe("erdModelFingerprint", () => {
     expect(afterColumns.relationships).toEqual([]);
     expect(afterColumns.tables).toHaveLength(3);
     for (const [index, entry] of afterColumns.tables.entries()) {
-      expect(entry.height).toBeGreaterThan(beforeColumns.tables[index]!.height);
+      expect(entry.layoutHeight).toBeGreaterThan(
+        beforeColumns.tables[index]!.layoutHeight,
+      );
     }
 
     expect(erdModelFingerprint(afterColumns)).not.toBe(
@@ -310,7 +379,7 @@ describe("buildErdElkGraph", () => {
     ]);
   });
 
-  it("gives elkjs the height each card will actually occupy", () => {
+  it("gives elkjs the slot each card can grow into", () => {
     const model = buildErdModel(extractSchemaGraph(mixedColumnCountSnapshot()));
     const heightById = new Map(
       (buildErdElkGraph(model).children ?? []).map((child) => [
@@ -322,7 +391,7 @@ describe("buildErdElkGraph", () => {
     // A two-column card and a nine-column card must not be handed over as the
     // same box, or elkjs spaces the layers for the wrong size.
     expect(heightById.get("table:main.narrow")).toBe(erdTableHeight(2, 0));
-    expect(heightById.get("table:main.wide")).toBe(erdTableHeight(6, 3));
+    expect(heightById.get("table:main.wide")).toBe(erdTableHeight(9, 0));
     expect(heightById.get("table:main.narrow")).not.toBe(
       heightById.get("table:main.wide"),
     );
@@ -391,7 +460,7 @@ describe("layoutErdModel", () => {
         left: position?.x ?? 0,
         top: position?.y ?? 0,
         right: (position?.x ?? 0) + entry.width,
-        bottom: (position?.y ?? 0) + entry.height,
+        bottom: (position?.y ?? 0) + entry.layoutHeight,
       };
     });
 
@@ -685,6 +754,30 @@ function wideTableSnapshot(): SchemaGraphCatalogSnapshot {
   };
 }
 
+/** Two key columns and two plain ones, so each detail level differs. */
+function keyedTableSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: { public: [table("public", "orders")] },
+    columnsByTable: {
+      public: {
+        orders: [
+          column("id", { is_primary_key: true }),
+          column("order_id", {
+            is_foreign_key: true,
+            fk_reference: "public.orders(id)",
+          }),
+          column("note", { data_type: "text" }),
+          column("amount", { data_type: "numeric" }),
+        ],
+      },
+    },
+    indexesByTable: {},
+    constraintsByTable: {},
+  };
+}
+
 function emptySnapshot(): SchemaGraphCatalogSnapshot {
   return {
     source: { dbType: "sqlite", database: "empty.sqlite" },
@@ -857,7 +950,7 @@ function looseReferenceSnapshot({
   };
 }
 
-/** The FK column sits past the column cap, so the card never draws it. */
+/** A wide table whose only key column is the FK the edge anchors on. */
 function lateColumnFkSnapshot(): SchemaGraphCatalogSnapshot {
   return {
     source: { dbType: "postgresql", database: "app" },
@@ -869,7 +962,7 @@ function lateColumnFkSnapshot(): SchemaGraphCatalogSnapshot {
       public: {
         owners: [column("id", { is_primary_key: true })],
         wide: [
-          ...Array.from({ length: ERD_MAX_VISIBLE_COLUMNS }, (_unused, index) =>
+          ...Array.from({ length: 6 }, (_unused, index) =>
             column(`c${index + 1}`),
           ),
           column("owner_id", {
