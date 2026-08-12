@@ -27,12 +27,20 @@ export const ERD_DIFF_CHANGE_KINDS: readonly SchemaGraphDiffChangeKind[] = [
 export interface ErdDiffHighlight {
   /** Table node id -> every change kind whose entry named it in `tableIds`. */
   readonly tables: ReadonlyMap<string, ReadonlySet<SchemaGraphDiffChangeKind>>;
+  /**
+   * Table node id -> the kind of the diff entry for the table *itself*
+   * (`entityKind === "table"`). `tables` cannot tell a brand-new table from a
+   * surviving one that merely gained a column — both carry `added` there — so
+   * the card outline reads this map instead.
+   */
+  readonly tableSelfKinds: ReadonlyMap<string, SchemaGraphDiffChangeKind>;
   /** Column node id -> its kind. A column sits in exactly one of the three. */
   readonly columns: ReadonlyMap<string, SchemaGraphDiffChangeKind>;
 }
 
 export const EMPTY_ERD_DIFF_HIGHLIGHT: ErdDiffHighlight = {
   tables: new Map(),
+  tableSelfKinds: new Map(),
   columns: new Map(),
 };
 
@@ -42,12 +50,16 @@ export function buildErdDiffHighlight(
   if (!diff) return EMPTY_ERD_DIFF_HIGHLIGHT;
 
   const tables = new Map<string, Set<SchemaGraphDiffChangeKind>>();
+  const tableSelfKinds = new Map<string, SchemaGraphDiffChangeKind>();
   const columns = new Map<string, SchemaGraphDiffChangeKind>();
 
   for (const group of Object.values(diff.groups)) {
     for (const kind of ERD_DIFF_CHANGE_KINDS) {
       for (const entry of group[kind]) {
         if (entry.entityKind === "column") columns.set(entry.id, kind);
+        // A table entry's `id` is the table node id, and `selectSchemaGraphDiff`
+        // puts a table in at most one of added/removed/changed.
+        if (entry.entityKind === "table") tableSelfKinds.set(entry.id, kind);
         // `tableIds` is optional. An entry without it highlights nothing —
         // never every card, which would read as "the whole schema changed".
         for (const tableId of entry.tableIds ?? []) {
@@ -59,7 +71,7 @@ export function buildErdDiffHighlight(
     }
   }
 
-  return { tables, columns };
+  return { tables, tableSelfKinds, columns };
 }
 
 /** Kinds on one table node, in {@link ERD_DIFF_CHANGE_KINDS} order. */

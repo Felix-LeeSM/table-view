@@ -17,10 +17,11 @@ const SCHEMA_TONE_CLASSES = [
 ] as const;
 
 /**
- * Diff marks carry three channels per change kind — hue, icon shape, and the
- * card outline's line pattern — so the kind survives a greyscale or
- * colour-blind reading (ADR 0054 decision 6 bans colour-only encoding). Whole
- * class names for the same Tailwind-scanner reason as the tones above.
+ * Presentation per change kind. A badge pairs a hue with its own icon shape and
+ * the card outline pairs the same hue with its own line pattern, so either mark
+ * survives a greyscale or colour-blind reading (ADR 0054 decision 6 bans
+ * colour-only encoding). Whole class names for the same Tailwind-scanner reason
+ * as the tones above.
  */
 const DIFF_KIND_PRESENTATION = {
   added: {
@@ -82,17 +83,32 @@ export default function SchemaErdTableNode({
   const toneClass =
     SCHEMA_TONE_CLASSES[model.schemaToneIndex] ?? SCHEMA_TONE_CLASSES[0];
   const diffKinds = erdDiffTableKinds(diffHighlight, id);
-  // Outline follows the first kind: a brand-new table reads as new even when its
-  // own columns also register as additions.
-  const diffOutlineClass = diffKinds[0]
-    ? DIFF_KIND_PRESENTATION[diffKinds[0]].outlineClass
+  // The badges list every kind that touched the table. The outline instead
+  // follows the entry for the table *itself*, which is the only channel that
+  // separates a brand-new table (solid `added`) from a surviving one that just
+  // gained a column (dotted `changed`) — both carry an `added` badge.
+  const tableSelfKind = diffHighlight.tableSelfKinds.get(id);
+  const diffOutlineClass = tableSelfKind
+    ? DIFF_KIND_PRESENTATION[tableSelfKind].outlineClass
     : "";
+  // `button` is children-presentational in ARIA, so the accessibility tree drops
+  // the marks' own labels below. The card's name has to repeat the kinds — the
+  // workaround `ConnectionItem` already uses for its row status word.
+  const diffKindLabel = diffKinds
+    .map((kind) => t(DIFF_KIND_PRESENTATION[kind].labelKey))
+    .join(", ");
+  const cardLabel = diffKindLabel
+    ? `${model.qualifiedName} table, ${t("erdDiffTableMark", { kind: diffKindLabel })}`
+    : `${model.qualifiedName} table`;
+  // The diff outline is author-origin and unconditional, so it would paint over
+  // the UA focus ring on a card `SchemaErdCanvas` focuses programmatically. The
+  // card carries the same `focus-visible` ring the schema tree rows use.
 
   return (
     <button
       ref={(element) => registerTableButton(id, element)}
       type="button"
-      aria-label={`${model.qualifiedName} table`}
+      aria-label={cardLabel}
       aria-pressed={isSelected}
       aria-current={isSelected ? "true" : undefined}
       data-related={isRelated}
@@ -100,7 +116,7 @@ export default function SchemaErdTableNode({
       data-diff-kinds={diffKinds.length > 0 ? diffKinds.join(" ") : undefined}
       onClick={() => onToggleSelect(id)}
       style={{ width: model.width, height: model.height }}
-      className={`flex flex-col overflow-hidden rounded border bg-card text-left shadow-sm transition-colors ${
+      className={`flex flex-col overflow-hidden rounded border bg-card text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
         isSelected
           ? "border-primary ring-2 ring-primary/20"
           : isRelated
@@ -185,7 +201,12 @@ export default function SchemaErdTableNode({
   );
 }
 
-/** Change-kind mark on the card header. Icon shape carries the kind, not hue. */
+/**
+ * Change-kind mark on the card header. The icon shape carries the kind, so hue
+ * is never the only channel. The accessibility tree drops this `aria-label` —
+ * `button` is children-presentational — so the card's own name repeats the kinds
+ * and this one stays for the hover `title`.
+ */
 function ErdDiffMark({ kind }: { kind: SchemaGraphDiffChangeKind }) {
   const { t } = useTranslation("schema");
   const { Icon, labelKey, badgeClass } = DIFF_KIND_PRESENTATION[kind];
@@ -204,9 +225,10 @@ function ErdDiffMark({ kind }: { kind: SchemaGraphDiffChangeKind }) {
 }
 
 /**
- * Change-kind mark on one column row. Renders nothing for an untouched column —
- * and for a column the comparison dropped, which the current schema has no row
- * for at all (see `erdDiffHighlight`).
+ * Change-kind mark on one column row. Renders nothing for an untouched column.
+ * Two touched columns get no row to mark at all: one the comparison dropped, so
+ * the current schema has none (see `erdDiffHighlight`), and one past
+ * `ERD_MAX_VISIBLE_COLUMNS`, which the "more columns" line only counts.
  */
 function ErdColumnDiffMark({
   kind,

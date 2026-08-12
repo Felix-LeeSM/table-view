@@ -28,9 +28,8 @@ import type { DatabaseType } from "@/types/connection";
 import type { ColumnInfo } from "@/types/schema";
 import type { SchemaGraphSource } from "@/types/schemaGraph";
 
-// Counting elkjs runs is how ADR 0056's reconcile promise stays reachable: a
-// re-layout resets every node position, so a diff mark — pure presentation —
-// must never trigger one.
+// A re-layout resets every node position, so a diff mark — pure presentation —
+// must never trigger one. Counting elkjs runs is how that stays pinned.
 vi.mock("./erdGraphModel", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./erdGraphModel")>();
   return { ...actual, layoutErdModel: vi.fn(actual.layoutErdModel) };
@@ -104,8 +103,13 @@ describe("SchemaErdPanel diff highlight", () => {
         conn1: {
           app: {
             public: {
-              // `id` differs by type from the comparison, `email` is new.
-              users: [column("id", { is_primary_key: true }), column("email")],
+              // `id` differs by type from the comparison, `email` is new, and
+              // `name` is byte-identical on both sides so it stays unmarked.
+              users: [
+                column("id", { is_primary_key: true }),
+                column("email"),
+                column("name"),
+              ],
               audit_log: [column("id", { is_primary_key: true })],
             },
           },
@@ -116,6 +120,7 @@ describe("SchemaErdPanel diff highlight", () => {
               users: [
                 column("id", { is_primary_key: true, data_type: "bigint" }),
                 column("legacy_note"),
+                column("name"),
               ],
               orders: [column("id", { is_primary_key: true })],
             },
@@ -143,15 +148,17 @@ describe("SchemaErdPanel diff highlight", () => {
   });
 
   it(
-    "marks each canvas card with the change kinds its diff entries carry",
+    "marks each canvas card with its change kinds — badge, accessible name, outline",
     async () => {
       render(<SchemaErdPanel connectionId="conn1" database="app" />);
       const users = await findTableCard(/public\.users table/i);
       expect(users).not.toHaveAttribute("data-diff-kinds");
+      expect(users).not.toHaveClass("outline-success");
 
       await selectComparison();
 
-      // Added table: only its own creation registers, so one kind and one mark.
+      // Added table: its own creation and its one new column both register as
+      // `added`, so the card ends up with a single kind and a single mark.
       const auditLog = await screen.findByRole("button", {
         name: /public\.audit_log table/i,
       });
@@ -172,12 +179,30 @@ describe("SchemaErdPanel diff highlight", () => {
           within(users).getByRole("img", { name: `Schema diff: ${kind}` }),
         ).toBeInTheDocument();
       }
+
+      // `button` is children-presentational in ARIA, so the accessibility tree
+      // drops the marks above — the card's own name has to carry the kinds.
+      expect(auditLog).toHaveAccessibleName(
+        "public.audit_log table, Schema diff: Added",
+      );
+      expect(users).toHaveAccessibleName(
+        "public.users table, Schema diff: Added, Removed, Changed",
+      );
+
+      // Both cards carry an `added` badge, so the outline is the only channel
+      // left that says which table is the new one. Class literals because jsdom
+      // loads no Tailwind stylesheet; whether `outline-dotted` paints dotted is
+      // a build question, answered by `pnpm build` instead.
+      expect(auditLog).toHaveClass("outline-success");
+      expect(auditLog).not.toHaveClass("outline-dotted");
+      expect(users).toHaveClass("outline-warning", "outline-dotted");
+      expect(users).not.toHaveClass("outline-success");
     },
     ERD_TEST_TIMEOUT_MS,
   );
 
   it(
-    "marks the individual columns the diff touched",
+    "marks the individual columns the diff touched and leaves the rest bare",
     async () => {
       render(<SchemaErdPanel connectionId="conn1" database="app" />);
       const users = await findTableCard(/public\.users table/i);
@@ -196,6 +221,10 @@ describe("SchemaErdPanel diff highlight", () => {
           name: /column id, schema diff: changed/i,
         }),
       ).toBeInTheDocument();
+      // `name` is byte-identical on both sides, so its row carries no mark.
+      expect(
+        within(users).queryByRole("img", { name: /column name,/i }),
+      ).toBeNull();
     },
     ERD_TEST_TIMEOUT_MS,
   );
@@ -222,8 +251,10 @@ describe("SchemaErdPanel diff highlight", () => {
     ERD_TEST_TIMEOUT_MS,
   );
 
-  // ADR 0056 (3) reconcile: new tables get auto-placed and hand-dragged ones are
-  // restored. A mark that re-ran the layout would throw both away.
+  // A re-layout would move every card, including one the user dragged this
+  // session. Nothing restores placement afterwards — ADR 0056 (3)'s reconcile is
+  // a decision, not shipped code, and `docs/product/known-limitations.md` records
+  // that dragged positions are lost when the ERD tab is reopened.
   it(
     "keeps the diff mark out of the layout input",
     async () => {
