@@ -24,6 +24,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { prefersReducedMotion } from "@/lib/prefersReducedMotion";
+import type { SchemaGraphDiffSummary } from "@/lib/schemaGraphDiff";
 import {
   type SchemaGraphIntelligenceSelectors,
   selectSchemaGraphIntelligence,
@@ -36,6 +37,7 @@ import {
   type ErdCanvasView,
   type ErdTableFlowNode,
 } from "./erdCanvasContext";
+import { buildErdDiffHighlight } from "./erdDiffHighlight";
 import {
   buildErdModel,
   buildErdNeighborhood,
@@ -53,6 +55,12 @@ interface SchemaErdCanvasProps {
   intelligence?: SchemaGraphIntelligenceSelectors;
   selectedTableId?: string;
   onSelectedTableIdChange?: (tableId: string | null) => void;
+  /**
+   * Schema diff to mark on the cards (ADR 0054 decision 6). Presentation only —
+   * it stays out of `buildErdModel`, so picking a comparison never re-runs the
+   * elkjs layout and never moves a node the user dragged.
+   */
+  diff?: SchemaGraphDiffSummary | null;
 }
 
 const ERD_RELATIONSHIP_EDGE_TYPE = "erdRelationship";
@@ -101,6 +109,7 @@ function ErdCanvasSurface({
   intelligence,
   selectedTableId,
   onSelectedTableIdChange,
+  diff,
 }: SchemaErdCanvasProps) {
   const { t } = useTranslation("schema");
   const [internalSelectedTableId, setInternalSelectedTableId] = useState<
@@ -144,6 +153,7 @@ function ErdCanvasSurface({
   const selectedTable = activeSelected
     ? selectors.tablesById.get(activeSelected)
     : undefined;
+  const diffHighlight = useMemo(() => buildErdDiffHighlight(diff), [diff]);
 
   const setSelection = useCallback(
     (tableId: string | null) => {
@@ -249,6 +259,7 @@ function ErdCanvasSurface({
       searchMatchTableIds,
       onToggleSelect,
       registerTableButton,
+      diffHighlight,
     }),
     [
       activeSelected,
@@ -258,6 +269,7 @@ function ErdCanvasSurface({
       registerTableButton,
       searchMatchTableIds,
       tablesById,
+      diffHighlight,
     ],
   );
 

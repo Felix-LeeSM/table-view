@@ -1,5 +1,9 @@
 import type { Node } from "@xyflow/react";
 import { createContext, useContext } from "react";
+import {
+  EMPTY_ERD_DIFF_HIGHLIGHT,
+  type ErdDiffHighlight,
+} from "./erdDiffHighlight";
 import type { ErdDetailLevel, ErdTableModel } from "./erdGraphModel";
 
 export const ERD_TABLE_NODE_TYPE = "erdTable";
@@ -28,6 +32,8 @@ export interface ErdCanvasView {
     tableId: string,
     element: HTMLButtonElement | null,
   ) => void;
+  /** Schema diff marks. Empty maps while no comparison snapshot is picked. */
+  readonly diffHighlight: ErdDiffHighlight;
 }
 
 const EMPTY_VIEW: ErdCanvasView = {
@@ -38,6 +44,7 @@ const EMPTY_VIEW: ErdCanvasView = {
   searchMatchTableIds: null,
   onToggleSelect: () => {},
   registerTableButton: () => {},
+  diffHighlight: EMPTY_ERD_DIFF_HIGHLIGHT,
 };
 
 export const ErdCanvasContext = createContext<ErdCanvasView>(EMPTY_VIEW);

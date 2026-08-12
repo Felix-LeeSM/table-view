@@ -314,6 +314,7 @@ export default function SchemaErdPanel({
         onSelectedTableIdChange={(tableId) =>
           setSelectedTableId(tableId ?? undefined)
         }
+        diff={schemaDiff}
       />
     </div>
   );
