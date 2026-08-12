@@ -205,17 +205,21 @@ describe("cardinality", () => {
  * per-schema column prefetch and the per-table index fetch in separate effects,
  * neither waiting on the other, so every row below is a state a user can see.
  *
- * Each edge isolates a different pinning path, so no cell needs both producers
- * to explain it:
+ * The three edges differ in which ends a producer can reach, and that is what
+ * spreads the marks across the table:
  *
  * - `orders.user_id -> users.id` — an ordinary FK onto a primary key. Either
- *   producer pins the referenced end.
+ *   producer pins the referenced end. `orders.user_id` is not its own table's
+ *   key, so no row below reads 1:1 for this edge.
  * - `events.actor -> actors.handle` — an FK onto a unique column that is not
- *   the key. Only the index producer can pin that end, so a missing index costs
- *   this edge its 1:N.
- * - `profiles.id -> users.id` — a shared-primary-key 1:1. No unique index is
- *   involved on either end, so this edge is the one that moves with the column
- *   prefetch alone.
+ *   the key. `actors_handle_key` is the only set that covers `handle`, so this
+ *   edge's column below is a function of the index axis alone: N:M on every
+ *   `missing` row, 1:N on every `landed` row.
+ * - `profiles.id -> users.id` — its FK column is also `profiles`' own primary
+ *   key, so it is the one edge below that gets both ends pinned and the only
+ *   one that reads 1:1. Both producers reach both of its ends: `users_pkey`
+ *   with `profiles_pkey` reads 1:1 with no columns at all, and the two column
+ *   sides read 1:1 with no indexes at all.
  */
 describe("cardinality arrival states", () => {
   const ONTO_PRIMARY_KEY = "public.orders.user_id references public.users.id";
@@ -1058,9 +1062,11 @@ function lateColumnFkSnapshot(): SchemaGraphCatalogSnapshot {
  * The FK shapes of `cardinality arrival states`, under a controllable arrival
  * state.
  *
- * The index lists are shaped the way an adapter reports them: the index backing
- * a primary key comes back from `get_table_indexes` with `is_unique: true` and
- * an adapter-style name, because Postgres reads `idx.indisunique`
+ * The index lists are shaped the way the Postgres and MySQL adapters report
+ * them, which is the scope this fixture claims — its `dbType` is `postgresql`.
+ * The index backing a primary key comes back from `get_table_indexes` with
+ * `is_unique: true` and an adapter-style name, because Postgres reads
+ * `idx.indisunique`
  * (`src-tauri/table-view-core/src/db/postgres/schema.rs`) and MySQL reads
  * `non_unique == 0` (`src-tauri/table-view-core/src/db/mysql/schema.rs`), and
  * neither filters the primary key back out. Leaving those entries out of a
@@ -1167,7 +1173,7 @@ function table(schema: string, name: string): TableInfo {
   return { schema, name, row_count: null };
 }
 
-/** What an adapter reports for the index backing a primary key. */
+/** What the Postgres and MySQL adapters report for the index backing a primary key. */
 function primaryKeyIndex(name: string): IndexInfo {
   return {
     name,
