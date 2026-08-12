@@ -5,22 +5,50 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { extractSchemaGraph } from "@/lib/schemaGraph";
 import { selectSchemaGraphIntelligence } from "@/lib/schemaGraphSelectors";
 import { installReactFlowJsdomShims } from "@/test-utils/reactFlow";
 import type { ColumnInfo, TableInfo } from "@/types/schema";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
+import type { ErdDetailLevel } from "./erdGraphModel";
+
+/**
+ * Semantic-zoom level the canvas sees, pinned rather than fitted.
+ *
+ * jsdom measures the React Flow pane as 0x0, so React Flow substitutes its
+ * 500x500 fallback and the mount-time `fitView` settles at `ERD_MIN_ZOOM`
+ * (measured: 100% right after the first card paints, 15% ~100ms later). That
+ * number is an artifact of the fallback size, not of anything a user would see,
+ * and racing it would make every column assertion in this file depend on how
+ * fast the machine is. So each test states the level it is standing at;
+ * `null` hands the resolution back to the real function.
+ */
+const detail = vi.hoisted(() => ({ level: null as ErdDetailLevel | null }));
 
 // Counting elkjs runs is the only way to assert the invariant that protects a
 // user's dragged layout: re-running the layout resets every node position, so
 // it must happen once per table/FK-set change and not once per metadata fetch.
 vi.mock("./erdGraphModel", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./erdGraphModel")>();
-  return { ...actual, layoutErdModel: vi.fn(actual.layoutErdModel) };
+  return {
+    ...actual,
+    layoutErdModel: vi.fn(actual.layoutErdModel),
+    erdDetailLevel: vi.fn((zoom: number) =>
+      detail.level === null ? actual.erdDetailLevel(zoom) : detail.level,
+    ),
+  };
 });
 
-import { layoutErdModel } from "./erdGraphModel";
+import { erdDetailLevel, layoutErdModel } from "./erdGraphModel";
 import SchemaErdCanvas from "./SchemaErdCanvas";
 
 let restoreShims: () => void;
@@ -46,6 +74,10 @@ beforeAll(() => {
 
 afterAll(() => {
   restoreShims();
+});
+
+beforeEach(() => {
+  detail.level = "full";
 });
 
 describe("SchemaErdCanvas", () => {
@@ -351,13 +383,66 @@ describe("SchemaErdCanvas", () => {
     );
   });
 
-  it("caps the rendered columns and reports the remainder", async () => {
+  // ADR 0054 (2) retires the six-column cap: at the zoom jsdom reports (1) the
+  // canvas resolves the `full` level and a nine-column table draws all nine.
+  it("draws every column at close zoom instead of capping at six", async () => {
     render(<SchemaErdCanvas graph={extractSchemaGraph(wideTableSnapshot())} />);
 
     const wide = await findTableCard(/main\.wide table/i);
-    expect(within(wide).getByText("c6")).toBeInTheDocument();
-    expect(within(wide).queryByText("c7")).not.toBeInTheDocument();
-    expect(within(wide).getByText(/\+3 more columns/i)).toBeInTheDocument();
+    for (let index = 1; index <= 9; index += 1) {
+      expect(within(wide).getByText(`c${index}`)).toBeInTheDocument();
+    }
+    expect(within(wide).queryByText(/columns hidden/i)).not.toBeInTheDocument();
+    // The level comes from the live viewport zoom, not from a constant.
+    expect(erdDetailLevel).toHaveBeenCalledWith(1);
+  });
+
+  it("keeps only the PK/FK columns at mid zoom and marks the rest hidden", async () => {
+    detail.level = "keys";
+    render(
+      <SchemaErdCanvas graph={extractSchemaGraph(keyedTableSnapshot())} />,
+    );
+
+    const orders = await findTableCard(/public\.orders table/i);
+    expect(within(orders).getByText("id")).toBeInTheDocument();
+    expect(within(orders).getByText("order_id")).toBeInTheDocument();
+    expect(within(orders).queryByText("note")).not.toBeInTheDocument();
+    expect(within(orders).queryByText("amount")).not.toBeInTheDocument();
+    expect(within(orders).getByText(/2 columns hidden/i)).toBeInTheDocument();
+  });
+
+  // A canvas that resolved the level once, or from a constant, would still pass
+  // the two tests above — this is what makes the level follow the viewport.
+  it("resolves the detail level from the live viewport zoom", async () => {
+    vi.mocked(erdDetailLevel).mockClear();
+    render(<SchemaErdCanvas graph={extractSchemaGraph(ordersSnapshot())} />);
+    await findTableCard(/public\.users table/i);
+
+    await waitFor(
+      () => {
+        const zooms = vi
+          .mocked(erdDetailLevel)
+          .mock.calls.map(([zoom]) => zoom);
+        // React Flow mounts at 1, then the auto-fit moves the viewport.
+        expect(zooms).toContain(1);
+        expect(zooms.some((zoom) => zoom !== 1)).toBe(true);
+      },
+      { timeout: ERD_LAYOUT_TIMEOUT_MS },
+    );
+  });
+
+  it("shows the table box alone at far zoom", async () => {
+    detail.level = "compact";
+    render(
+      <SchemaErdCanvas graph={extractSchemaGraph(keyedTableSnapshot())} />,
+    );
+
+    const orders = await findTableCard(/public\.orders table/i);
+    expect(within(orders).getByText("public.orders")).toBeInTheDocument();
+    for (const name of ["id", "order_id", "note", "amount"]) {
+      expect(within(orders).queryByText(name)).not.toBeInTheDocument();
+    }
+    expect(within(orders).getByText(/4 columns hidden/i)).toBeInTheDocument();
   });
 
   it("re-runs the elkjs layout only when the layout input changes", async () => {
@@ -631,6 +716,30 @@ function isolatedSnapshot(): SchemaGraphCatalogSnapshot {
         events: [
           column("id", { is_primary_key: true }),
           column("payload", { data_type: "json" }),
+        ],
+      },
+    },
+    constraintsByTable: {},
+    indexesByTable: {},
+  };
+}
+
+/** Two key columns and two plain ones, so each detail level renders differently. */
+function keyedTableSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: { public: [table("public", "orders")] },
+    columnsByTable: {
+      public: {
+        orders: [
+          column("id", { is_primary_key: true }),
+          column("order_id", {
+            is_foreign_key: true,
+            fk_reference: "public.orders(id)",
+          }),
+          column("note", { data_type: "text" }),
+          column("amount", { data_type: "numeric" }),
         ],
       },
     },

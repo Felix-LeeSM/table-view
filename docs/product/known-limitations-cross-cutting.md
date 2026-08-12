@@ -328,7 +328,13 @@ header action (gated on the engine's `intelligence.erd` capability), not from a
 per-table sub-tab. The diagram is a `@xyflow/react` canvas with `elkjs`
 `layered` auto-layout: referenced tables rank above the tables that reference
 them, and nodes can be dragged, but positions are not persisted across tab
-reopen. Data compare remains a future promotion gate in the H4 smoke matrix.
+reopen. How much of a table a card spells out follows the viewport zoom in three
+steps — the table box alone, then the primary-key and foreign-key columns, then
+every column — and a card that leaves columns out says how many it hid. There is
+no fixed cap on rendered columns. Zoom never re-runs the layout: elkjs is handed
+the full-detail height of every card, so a card only ever shrinks inside the slot
+it was given, and zooming out does not pack the diagram tighter. Data compare
+remains a future promotion gate in the H4 smoke matrix.
 
 ### FK navigation
 
