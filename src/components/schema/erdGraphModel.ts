@@ -1,4 +1,8 @@
 import { logger } from "@lib/logger";
+import {
+  VIRTUAL_FOREIGN_KEY_EDGE_KIND,
+  virtualForeignKeyLabel,
+} from "@lib/schemaGraphVirtualFk";
 import type { ELK, ElkNode, LayoutOptions } from "elkjs/lib/elk-api";
 import type {
   SchemaGraph,
@@ -340,4 +344,33 @@ export function erdRelationshipLabel(edge: SchemaGraphEdge): string {
   )} references ${relationship.target.schema}.${relationship.target.table}.${relationship.target.columns.join(
     ", ",
   )}`;
+}
+
+/**
+ * Hand-drawn links (#2150) as canvas relationships, one per target so a
+ * polymorphic link fans out of its single source table (ADR 0055).
+ *
+ * Deliberately not part of `ErdModel`: `buildErdElkGraph` and
+ * `erdModelFingerprint` read that, so feeding a hand-drawn link into it would
+ * re-run the whole layout and discard the positions the user dragged — the
+ * implicit re-layout ADR 0056 (2) forbids.
+ */
+export function erdVirtualRelationships(
+  graph: SchemaGraph,
+  tablesById: ReadonlyMap<string, ErdTableModel>,
+): readonly ErdRelationshipModel[] {
+  return graph.edges.flatMap((edge) => {
+    if (edge.kind !== VIRTUAL_FOREIGN_KEY_EDGE_KIND) return [];
+    if (!tablesById.has(edge.from) || !tablesById.has(edge.to)) return [];
+    return [
+      {
+        edge,
+        sourceTableId: edge.from,
+        targetTableId: edge.to,
+        label: edge.virtualForeignKey
+          ? virtualForeignKeyLabel(edge.virtualForeignKey)
+          : erdRelationshipLabel(edge),
+      },
+    ];
+  });
 }

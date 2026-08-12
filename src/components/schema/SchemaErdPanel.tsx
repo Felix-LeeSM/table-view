@@ -6,6 +6,11 @@ import {
   SelectValue,
 } from "@components/ui/select";
 import { useConnectionStore } from "@stores/connectionStore";
+import {
+  erdVirtualFkSettingKey,
+  NO_VIRTUAL_FOREIGN_KEYS,
+  useErdVirtualFkStore,
+} from "@stores/erdVirtualFkStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import { Network } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -13,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import { selectSchemaGraphDiff } from "@/lib/schemaGraphDiff";
 import { selectSchemaGraphIntelligence } from "@/lib/schemaGraphSelectors";
 import { buildSchemaGraphCatalogSnapshot } from "@/lib/schemaGraphSnapshot";
+import { applyVirtualForeignKeys } from "@/lib/schemaGraphVirtualFk";
 import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 import {
   RUNTIME_RDBMS_DATABASE_TYPES,
@@ -83,7 +89,25 @@ export default function SchemaErdPanel({
   const getTableConstraints = useSchemaStore(
     (state) => state.getTableConstraints,
   );
+  const virtualFks = useErdVirtualFkStore(
+    (state) =>
+      state.linksByScope[erdVirtualFkSettingKey(connectionId, database)] ??
+      NO_VIRTUAL_FOREIGN_KEYS,
+  );
+  const hydrateVirtualFks = useErdVirtualFkStore(
+    (state) => state.hydrateVirtualFks,
+  );
+  const resetVirtualFks = useErdVirtualFkStore(
+    (state) => state.resetVirtualFks,
+  );
   const runtimeDbType = isRuntimeRdbmsDatabaseType(dbType) ? dbType : null;
+
+  // The panel unmounts whenever the ERD tab is closed or switched away from
+  // (`MainArea` keys the boundary by tab id), so this is what makes a
+  // hand-drawn link survive a close/reopen: it is re-read from SQLite here.
+  useEffect(() => {
+    void hydrateVirtualFks(connectionId, database);
+  }, [connectionId, database, hydrateVirtualFks]);
 
   useEffect(() => {
     if (!runtimeDbType || schemas.length > 0) return;
@@ -203,11 +227,15 @@ export default function SchemaErdPanel({
     schemas,
     tablesBySchema,
   ]);
-  const intelligence = useMemo(
-    () =>
-      currentSnapshot ? selectSchemaGraphIntelligence(currentSnapshot) : null,
-    [currentSnapshot],
-  );
+  const intelligence = useMemo(() => {
+    if (!currentSnapshot) return null;
+    const selectors = selectSchemaGraphIntelligence(currentSnapshot);
+    // Only `graph` gains the hand-drawn edges. The FK/index/constraint maps
+    // stay derived from catalog truth on purpose — a virtual FK is not a
+    // constraint, so it must not turn up in the dependency view as one.
+    const graph = applyVirtualForeignKeys(selectors.graph, virtualFks);
+    return graph === selectors.graph ? selectors : { ...selectors, graph };
+  }, [currentSnapshot, virtualFks]);
   const cachedSnapshotOptions = useMemo(
     () =>
       buildCachedSchemaGraphSnapshotOptions({
@@ -313,6 +341,11 @@ export default function SchemaErdPanel({
         selectedTableId={selectedTableId}
         onSelectedTableIdChange={(tableId) =>
           setSelectedTableId(tableId ?? undefined)
+        }
+        onResetVirtualFks={
+          virtualFks.length > 0
+            ? () => void resetVirtualFks(connectionId, database)
+            : undefined
         }
       />
     </div>

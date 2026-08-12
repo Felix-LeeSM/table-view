@@ -342,6 +342,26 @@ per-table sub-tab. The diagram is a `@xyflow/react` canvas with `elkjs`
 them, and nodes can be dragged, but positions are not persisted across tab
 reopen. Data compare remains a future promotion gate in the H4 smoke matrix.
 
+Hand-drawn relationships ("virtual foreign keys", ADR 0055) are a stored model
+rather than a drawing: `{ source, targets[], discriminator? }`, where several
+targets express a polymorphic association and the discriminator names the source
+column that decides which target a row points at. They persist per
+`(connection, database)` in the SQLite `settings` row keyed
+`erd_virtual_fk:<connection>:<database>`, so unlike node positions they survive
+closing and reopening the ERD tab. They draw dashed with an open arrow head next
+to the solid, filled-head catalog FKs, and both kinds are named in the canvas
+legend, so the distinction never rests on colour alone. Reconcile against the
+current schema is a projection, not a delete: a link whose source column, target
+column, or discriminator column is absent from the current graph stops drawing
+that part while the stored link is kept, because a graph whose metadata has not
+finished loading is indistinguishable from a dropped column. Drawing a link from
+the canvas, editing or deleting one link, and undo/redo of link edits are not
+included — the legend offers only a confirmed reset that clears every link on
+that diagram (ADR 0056 (4) owns undo). A virtual FK is not a constraint: it stays
+out of the selected-table dependency view, out of the cached schema diff, and out
+of join completion, which ADR 0055 lists as explicit non-scope. A second window
+picks up another window's virtual FK edits the next time its ERD panel mounts.
+
 ### FK navigation
 
 Current FK navigation is the DataGrid foreign-key cell/icon path that opens the

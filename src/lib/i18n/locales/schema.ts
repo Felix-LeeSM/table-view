@@ -128,6 +128,17 @@ export const en = {
   noConstraints: "No constraints.",
   schemaGraphDiagnostics: "SchemaGraph diagnostics",
 
+  // SchemaErdLegend / virtual foreign keys
+  erdLegendAria: "ERD relationship legend",
+  erdLegendForeignKey: "Foreign key (solid)",
+  erdLegendVirtualForeignKey: "Virtual foreign key (dashed)",
+  resetVirtualFks: "Reset links",
+  resetVirtualFksAria: "Reset hand-drawn relationships",
+  resetVirtualFksTitle: "Reset hand-drawn relationships",
+  resetVirtualFksMessage:
+    "Every virtual foreign key drawn on this diagram is removed. This cannot be undone.",
+  resetVirtualFksConfirm: "Reset",
+
   // SchemaGraphDiffPanel
   schemaDiffTitle: "Schema diff",
   readOnlyCachedDiff: "read-only cached SchemaGraph diff",
@@ -365,6 +376,17 @@ export const ko = {
   noRelatedIndexes: "관련 인덱스 없음.",
   noConstraints: "제약조건 없음.",
   schemaGraphDiagnostics: "SchemaGraph 진단",
+
+  // SchemaErdLegend / virtual foreign keys
+  erdLegendAria: "ERD 관계 범례",
+  erdLegendForeignKey: "외래 키 (실선)",
+  erdLegendVirtualForeignKey: "가상 외래 키 (점선)",
+  resetVirtualFks: "링크 초기화",
+  resetVirtualFksAria: "직접 그린 관계 초기화",
+  resetVirtualFksTitle: "직접 그린 관계 초기화",
+  resetVirtualFksMessage:
+    "이 다이어그램에 그린 가상 외래 키를 모두 지웁니다. 되돌릴 수 없습니다.",
+  resetVirtualFksConfirm: "초기화",
 
   // SchemaGraphDiffPanel
   schemaDiffTitle: "스키마 비교",
