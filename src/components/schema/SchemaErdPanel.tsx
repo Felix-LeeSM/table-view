@@ -347,6 +347,7 @@ export default function SchemaErdPanel({
             ? () => void resetVirtualFks(connectionId, database)
             : undefined
         }
+        diff={schemaDiff}
       />
     </div>
   );
