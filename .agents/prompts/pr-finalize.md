@@ -180,18 +180,43 @@ gh pr merge <N> --squash --delete-branch --body-file <교정본 경로>  # 교�
 
 1. **브랜치** — `--delete-branch` 가 remote 를 지운다. 사본에 체크아웃돼 있어
    로컬 브랜치 삭제가 실패하면 경고만 나온다. **무해하므로 보고만 하고 넘어간다.**
-2. **사본** — 머지된 PR 의 head OID 와 사본 tip 을 대조한다. 판정 규칙 · dirty
-   보존 · 절대 안 지우는 대상의 SOT 는 `memory/runbook/worktree/memory.md`
-   「회수」이고, 이 preamble 은 그 판정에 필요한 값을 모으는 데까지다.
+2. **사본** — **`$CLONE` 하나가 아니라 그 사본이 사는 루트 디렉토리를 훑는다.**
+   `$CLONE` 만 보면 리뷰어 일회용 사본과 다른 세션이 남긴 사본이 장부에 아예 안
+   들어온다 — 종결자는 그것들의 경로를 spawn 에서 받지 않는다. 판정 규칙 · dirty
+   보존 · 절대 안 지우는 대상 · `review__` 축의 SOT 는
+   `memory/runbook/worktree/memory.md` 「회수」이고, 이 preamble 은 그 판정에 필요한
+   값을 **디렉토리마다** 모으는 데까지다.
 
    ```bash
-   gh pr view <N> --json headRefOid -q .headRefOid
-   git -C "$CLONE" rev-parse HEAD
-   git -C "$CLONE" status --porcelain    # 비어 있지 않으면 dirty
+   case "$CLONE" in /*) ;; *) echo "ABORT: CLONE 은 절대경로여야 한다" >&2; exit 1;; esac
+   # 사본 루트는 규약상 `table-view-clones` 다. 리터럴로 박지 않고 `$CLONE` 에서 뽑는
+   # 이유는 규약이 바뀌어도 이 스윕이 따라오게 하려는 것 — 규약의 SOT 는 그 방 「생성」
+   ROOT="$(dirname "$CLONE")"
+   MERGED_OID="$(gh pr view <N> --json headRefOid -q .headRefOid)"
+   HERE="$(git rev-parse --show-toplevel 2>/dev/null)"    # 서 있는 사본 — 방이 보존을 요구
+   for d in "$ROOT"/*/; do
+     d="${d%/}"; name="${d##*/}"; pr_state=-
+     # rev-parse 와 status 는 실패를 값으로 남긴다 — 빈 출력으로 접으면 판정 불가가
+     # clean 으로 강등돼 방이 보존하라는 사본을 지우게 된다
+     tip="$(git -C "$d" rev-parse HEAD 2>/dev/null)"      || tip=UNREADABLE
+     st="$(git -C "$d" status --porcelain 2>/dev/null)"   || st=UNREADABLE
+     case "$name" in review__*)                           # 이름에 박힌 PR 번호
+       pr="${name#review__}"; pr="${pr%%__*}"
+       pr_state="$(gh pr view "$pr" --repo Felix-LeeSM/table-view --json state \
+                   -q .state 2>/dev/null)" || pr_state=UNREADABLE ;;
+     esac
+     case "$st" in "") dirty=no ;; UNREADABLE) dirty=UNREADABLE ;; *) dirty=yes ;; esac
+     case "$d" in "$HERE") here=yes ;; *) here=no ;; esac
+     printf '%s\ttip=%s\tdirty=%s\tpr_state=%s\there=%s\n' \
+       "$name" "$tip" "$dirty" "$pr_state" "$here"
+   done
+   du -sh "$ROOT"/*/     # 회수량. 지우기 전에 재야 보고에 숫자가 남는다
    ```
 
-   세 값을 방의 판정에 넣는다. 판정이 서지 않으면 지우지 말고 보존 사유를
-   보고에 남긴다.
+   각 행의 값을 `MERGED_OID` 와 함께 방의 판정에 넣고, **지우기로 판정된 것만**
+   `rm -rf` 한다. 판정이 서지 않으면 지우지 말고 보존 사유를 보고에 남긴다.
+   **행 하나도 빠뜨리지 않고 보고한다** — 아래 반환 형식이 자리를 나열하게 하는
+   이유가 이것이다. 자리 수가 `du` 출력보다 적으면 스윕이 잘린 것이다.
 3. **이슈** — PR body 의 `Closes #<이슈>` 로 자동 종결됐는지 확인하고, 안 됐으면
    `gh issue close <이슈>`. 삭제가 큰 머지였으면 지운 경로를 참조하는 열린 이슈를
    `git grep` · `gh issue list` 로 훑어 보고에 싣는다.
@@ -205,7 +230,9 @@ gh pr merge <N> --squash --delete-branch --body-file <교정본 경로>  # 교�
 - required: 머지 시점 충족 — `mergeStateStatus` = CLEAN / UNSTABLE
 - PR body 재검사: clean / dirty → 머지 중단하고 새 commit 요구
 - 브랜치: remote 삭제 완료 / 로컬 삭제 실패(무해)
-- 사본: 삭제 / 보존(사유)
+- 사본: 사본 루트를 훑은 결과를 **자리마다 한 줄** — `<디렉토리 이름> <du 크기>
+  삭제 | 보존(사유)`. 개수로 요약하지 않는다. 줄이 루트의 디렉토리보다 적으면
+  스윕이 잘린 것이고, 그것을 다음 노드가 알아보는 장치는 이 나열뿐이다
 - 이슈: #<번호> closed / 이미 closed / 수동 종결 필요
 - 정지 필요: 있으면 사유
 ```
