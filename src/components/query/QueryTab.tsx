@@ -40,6 +40,7 @@ import MongoQueryEditor from "./MongoQueryEditor";
 import QueryHistoryPanel from "./QueryHistoryPanel";
 import QueryResultGrid from "./QueryResultGrid";
 import { deriveMongoExplainSpec } from "./QueryTab/queryHelpers";
+import { deriveSearchExplainSpec } from "./QueryTab/searchQueryExecution";
 import QueryTabToolbar from "./QueryTab/Toolbar";
 import { useQueryEvents } from "./QueryTab/useQueryEvents";
 import { useQueryExecution } from "./QueryTab/useQueryExecution";
@@ -293,14 +294,16 @@ export default function QueryTab({ tab }: QueryTabProps) {
     indexNames: mongoIndexNames,
   });
   const isDocument = tab.paradigm === "document";
+  const isSearch = tab.paradigm === "search";
   // #1041 — Explain visibility follows the `capabilities.query.explain`
-  // contract instead of a hardcoded dbType. ExplainViewer only renders rdb
-  // (table) and document plans, so paradigms it can't display stay excluded
-  // even if a future source flips the flag. Today PG (rdb) and Mongo
-  // (document) are the only sources declaring the flag, and both have a
-  // backend `explain_query`.
+  // contract instead of a hardcoded dbType. Paradigms the ExplainViewer can't
+  // display stay excluded even if a future source flips the flag; #2153 added
+  // search to what it displays, so the paradigm list now names rdb (table),
+  // document and search. The plan source differs per paradigm — rdb and
+  // document call a backend `explain_query`, search re-runs `_search` with
+  // the bounded `profile` flag (#1818/#2198) — but the gate is the same flag.
   const canExplainQuery =
-    (tab.paradigm === "rdb" || tab.paradigm === "document") &&
+    (tab.paradigm === "rdb" || isDocument || isSearch) &&
     !!connection &&
     getDataSourceProfile(connection.dbType).capabilities.query.explain;
   const explainMongo = useMemo(
@@ -310,6 +313,11 @@ export default function QueryTab({ tab }: QueryTabProps) {
         : null,
     [isDocument, explainSql, tab.database],
   );
+  const explainSearch = useMemo(() => {
+    if (!isSearch || !explainSql) return null;
+    const derived = deriveSearchExplainSpec(explainSql, tab.searchTarget);
+    return "request" in derived ? derived.request : null;
+  }, [isSearch, explainSql, tab.searchTarget]);
 
   const favorites = useQueryFavorites({ tab });
   const {
@@ -398,12 +406,24 @@ export default function QueryTab({ tab }: QueryTabProps) {
       toast.info("Explain is only available for find() queries in MongoDB.");
       return;
     }
+    // #2153 — the search plan comes from re-running the request, so a body the
+    // bounded parser rejects has no plan. Surface the parser's own reason
+    // (bad JSON, missing index target) instead of a blank result area.
+    if (isSearch) {
+      const derived = deriveSearchExplainSpec(sql, tab.searchTarget);
+      if ("error" in derived) {
+        toast.info(derived.error);
+        return;
+      }
+    }
     setExplainSql(sql);
   }, [
     canExplainQuery,
     isDocument,
+    isSearch,
     tab.database,
     tab.queryState.status,
+    tab.searchTarget,
     tab.sql,
   ]);
 
@@ -420,14 +440,17 @@ export default function QueryTab({ tab }: QueryTabProps) {
         database: tab.database,
         tabId: tab.id,
         // #1041 — record the explain under the tab's own paradigm so Mongo
-        // explains aren't logged as rdb/sql.
+        // explains aren't logged as rdb/sql. #2153 — same for search, whose
+        // single backend query mode the recorder fills in itself.
         ...(isDocument
           ? {
               paradigm: "document" as const,
               queryMode: "find" as const,
               collection: tab.collection,
             }
-          : { paradigm: "rdb" as const, queryMode: "sql" as const }),
+          : isSearch
+            ? { paradigm: "search" as const }
+            : { paradigm: "rdb" as const, queryMode: "sql" as const }),
         source: "explain",
         sql: explainSql,
         status: result.status,
@@ -439,6 +462,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     [
       explainSql,
       isDocument,
+      isSearch,
       tab.collection,
       tab.connectionId,
       tab.database,
@@ -597,7 +621,18 @@ export default function QueryTab({ tab }: QueryTabProps) {
             mongoSpec={explainMongo}
             onPlanSettled={handleExplainSettled}
           />
-        ) : connection && explainSql && canExplainQuery && !isDocument ? (
+        ) : connection && explainSql && canExplainQuery && explainSearch ? (
+          <ExplainViewer
+            connectionId={tab.connectionId}
+            dbType={connection.dbType}
+            searchSpec={explainSearch}
+            onPlanSettled={handleExplainSettled}
+          />
+        ) : connection &&
+          explainSql &&
+          canExplainQuery &&
+          !isDocument &&
+          !isSearch ? (
           <ExplainViewer
             connectionId={tab.connectionId}
             dbType={connection.dbType}
@@ -605,7 +640,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
             expectedDatabase={explainExpectedDatabase ?? undefined}
             onPlanSettled={handleExplainSettled}
           />
-        ) : tab.paradigm === "search" ? (
+        ) : isSearch ? (
           <SearchResultView queryState={tab.queryState} />
         ) : (
           <QueryResultGrid

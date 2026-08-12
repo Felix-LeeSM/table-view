@@ -209,7 +209,8 @@ export default function QueryTabToolbar({
       )}
       {/* #1041 — Explain visibility is driven by `canExplain` (the
           capability contract), not the paradigm. `canExplain` is only true
-          for sources whose `query.explain` flag is set (PG + Mongo today). */}
+          for sources whose `query.explain` flag is set — PG, Mongo, and
+          since #2153 Elasticsearch/OpenSearch. */}
       {canExplain && (
         <Button
           variant="ghost"

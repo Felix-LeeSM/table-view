@@ -831,6 +831,11 @@ export const ELASTICSEARCH_CAPABILITIES = capabilities({
   query: {
     query: true,
     cancel: true,
+    // #2153 — an execution plan for this paradigm is the `_search` `profile`
+    // section (#1818), which the bounded DSL validator accepts since #2198
+    // and the ExplainViewer renders. There is no `_explain` endpoint behind
+    // this flag: per-document score explanation stays unsupported.
+    explain: true,
   },
   catalog: {
     indexes: true,
@@ -844,6 +849,9 @@ export const OPENSEARCH_CAPABILITIES = capabilities({
   query: {
     query: true,
     cancel: true,
+    // #2153 — same `_search` `profile` plan source as Elasticsearch; both
+    // captures behind it live in `tests/fixtures/search-profile-response.json`.
+    explain: true,
   },
   catalog: {
     indexes: true,
