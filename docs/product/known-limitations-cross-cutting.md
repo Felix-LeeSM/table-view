@@ -369,14 +369,11 @@ many of its two ends have columns that cover a unique index (`IndexInfo.is_uniqu
 or the primary key: both ends covered reads 1:1, exactly one reads 1:N, neither
 reads N:M. The mark does not say which end is the 1. A composite foreign key
 anchors on its first column pair. The mark reads only the metadata that has
-arrived, and the diagram paints first: the panel prefetches columns one schema
-at a time after that first paint, and fetches indexes and constraints per table
-without waiting for those columns. An end whose table has no columns yet counts
-as unpinned, so an ordinary foreign key onto a primary key reads N:M inside that
-window and settles on 1:N once the referenced table's columns land. Arriving
-metadata only adds unique column sets, so a mark tightens — N:M, then 1:N, then
-1:1 — and never loosens. Data compare remains a future promotion gate in the H4
-smoke matrix.
+arrived, and the diagram paints before that metadata does, so a mark can change
+while a schema loads. Which mark each arrival state produces is pinned by the
+`cardinality arrival states` table in
+`src/components/schema/erdGraphModel.test.ts` rather than restated here. Data
+compare remains a future promotion gate in the H4 smoke matrix.
 
 ### FK navigation
 

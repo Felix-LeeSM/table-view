@@ -71,9 +71,11 @@ catalog parsing 금지.
 
 **Follow-up (cardinality 표기, #2151 이 남긴 상한)**: 표기는 고정된 끝의 개수만
 세므로 어느 쪽이 `1` 인지 배지가 말하지 않는다. composite FK 는 관계 하나가 엣지
-하나를 그리는 동안 첫 컬럼 쌍에만 앵커한다. 표현식 · partial unique index 는
-어댑터가 표현식 슬롯을 버리고 술어를 실을 자리가 `IndexInfo` 에 없어 unique 집합에
-안 들어오거나 좁게 들어온다. 그리고 같은 FK 에 cardinality 구현이 둘이다 — ERD 는
+하나를 그리는 동안 첫 컬럼 쌍에만 앵커한다. 표현식 index 는 어댑터가 표현식 슬롯을
+버려 unique 집합에 좁게 들어온다. partial unique index 는 방향이 반대다 — 술어를
+실을 자리가 `IndexInfo` 에 없어 `WHERE` 절이 사라진 채 컬럼 폭 그대로
+`is_unique: true` 로 들어오고, 그래서 스키마가 보장하지 않는 uniqueness 를 마크가
+주장한다. 그리고 같은 FK 에 cardinality 구현이 둘이다 — ERD 는
 uniqueness 로(`src/components/schema/erdGraphModel.ts`), mermaid export 는
 nullability 로(`src/lib/schemaGraphTextExport.ts`) 판정한다. 어느 쪽을 정본으로
 삼을지는 설계 결정이라 별도 티켓 몫이다. 승격은 사용자가 표기를 오해했다는 신호가

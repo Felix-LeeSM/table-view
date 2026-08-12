@@ -241,12 +241,13 @@ function erdEndIsUnique(
  * unpinned — a reference onto a keyless column still reads 1:N when the
  * referencing columns cover their own table's key.
  *
- * Both halves of `uniqueColumnSets` fill in after first paint and they do not
- * arrive together: `SchemaErdPanel` prefetches columns a schema at a time while
- * fetching indexes per table, neither waiting on the other. A table whose
- * columns have not landed has no entry here at all, so both its ends read
- * unpinned and its edges read N:M until they do. Missing indexes alone are the
- * milder case: they can cost the 1:1, never the 1:N.
+ * `uniqueColumnSets` holds whatever metadata has arrived, and its two halves
+ * hang off different fetches — the loop above over `columnsByTable` needs a
+ * table's columns, the loop over `graph.nodes` needs its indexes. What each
+ * arrival state reads is pinned by the `cardinality arrival states` table in
+ * `erdGraphModel.test.ts` and is deliberately not restated here: one sentence
+ * has to hold for every cell of that table at once, and each sentence written
+ * for #2151 was falsified by a cell of it.
  */
 function erdEdgeCardinality(
   edge: SchemaGraphEdge,
