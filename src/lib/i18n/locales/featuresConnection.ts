@@ -296,9 +296,14 @@ export const en = {
     oracleMethodService: "Service name",
     oracleMethodSid: "SID",
     labelSid: "SID",
+    labelOracleDescriptor: "TNS connect descriptor",
+    oracleServiceFieldHint:
+      "A service name, a SID, or a whole `(DESCRIPTION=...)` connect descriptor pasted from tnsnames.ora. A descriptor supplies host, port, service and connect method, so those inputs stop applying. tnsnames.ora aliases are not resolved for you — paste the alias's descriptor. Clauses this client cannot honor (SSL_SERVER_DN_MATCH, multi-address failover, proxies) are refused rather than ignored.",
+    oracleDescriptorOverridesHint:
+      "Host and port come from the descriptor below.",
     labelWalletDir: "Wallet directory (optional)",
     walletDirHint:
-      "Path to an Oracle wallet directory containing ewallet.pem — enables mTLS (Oracle Cloud Autonomous DB). TNS descriptors, tnsnames.ora aliases, and wallet-less 1-way TCPS+CA are not supported: extract host, port, and service name manually. If your wallet only has ewallet.p12 / cwallet.sso, re-download a newer wallet or convert it to ewallet.pem with openssl — the converted key is unencrypted, so delete it once imported.",
+      "Path to an Oracle wallet directory containing ewallet.pem — enables mTLS (Oracle Cloud Autonomous DB). Leave it empty for wallet-less 1-way TLS and pick Verify full instead; the two are separate TLS paths and setting both is rejected. Require (skip verification) is unavailable on Oracle — the driver cannot skip certificate verification. If your wallet only has ewallet.p12 / cwallet.sso, re-download a newer wallet or convert it to ewallet.pem with openssl — the converted key is unencrypted, so delete it once imported.",
     labelWalletPassword: "Wallet password",
     walletPasswordSet: "Wallet password set",
     noWalletPassword: "No wallet password",
@@ -655,9 +660,14 @@ export const ko = {
     oracleMethodService: "서비스 이름",
     oracleMethodSid: "SID",
     labelSid: "SID",
+    labelOracleDescriptor: "TNS 접속 디스크립터",
+    oracleServiceFieldHint:
+      "서비스 이름, SID, 또는 tnsnames.ora 에서 복사한 `(DESCRIPTION=...)` 디스크립터 전체를 넣습니다. 디스크립터는 호스트·포트·서비스·접속 방식을 스스로 지정하므로 그 입력란은 적용되지 않습니다. tnsnames.ora 별칭은 앱이 대신 찾아 주지 않습니다 — 별칭의 디스크립터를 붙여 넣으세요. 이 클라이언트가 지킬 수 없는 절(SSL_SERVER_DN_MATCH, 다중 주소 failover, 프록시)은 무시하지 않고 거부합니다.",
+    oracleDescriptorOverridesHint:
+      "호스트와 포트는 아래 디스크립터에서 읽습니다.",
     labelWalletDir: "월렛 디렉터리 (선택)",
     walletDirHint:
-      "ewallet.pem 을 포함한 Oracle 월렛 디렉터리 경로 — mTLS 를 활성화합니다 (Oracle Cloud Autonomous DB). TNS 디스크립터, tnsnames.ora 별칭, 월렛 없는 1-way TCPS+CA 는 지원하지 않습니다: host, port, 서비스 이름을 직접 추출하세요. 월렛에 ewallet.p12 / cwallet.sso 만 있으면 최신 월렛을 다시 받거나 openssl 로 ewallet.pem 으로 변환하세요 — 변환된 키는 암호화되지 않으므로 가져온 뒤 삭제하세요.",
+      "ewallet.pem 을 포함한 Oracle 월렛 디렉터리 경로 — mTLS 를 활성화합니다 (Oracle Cloud Autonomous DB). 월렛 없는 1-way TLS 로 붙으려면 비워 두고 Verify full 을 고르세요. 둘은 별개 TLS 경로라 함께 지정하면 거부합니다. Require(검증 생략)는 Oracle 에서 쓸 수 없습니다 — 드라이버가 인증서 검증을 건너뛰지 못합니다. 월렛에 ewallet.p12 / cwallet.sso 만 있으면 최신 월렛을 다시 받거나 openssl 로 ewallet.pem 으로 변환하세요 — 변환된 키는 암호화되지 않으므로 가져온 뒤 삭제하세요.",
     labelWalletPassword: "월렛 비밀번호",
     walletPasswordSet: "월렛 비밀번호 설정됨",
     noWalletPassword: "월렛 비밀번호 없음",

@@ -82,6 +82,33 @@ describe("ConnectionDialog validation-state exposure (#1135)", () => {
     expect(screen.getByLabelText("Database (optional)")).not.toBeRequired();
   });
 
+  it("drops the Host requirement when the Oracle identifier field holds a TNS descriptor", async () => {
+    // Reason: #2154 — a TNS descriptor carries its own HOST/PORT and the
+    // backend dials those, so demanding the form's Host would block the save on
+    // a value nothing reads. `usesTnsDescriptor` is the single predicate: the
+    // Oracle form disables the input, this check stands down, and they cannot
+    // drift apart. (2026-08-12)
+    renderDialog(
+      makeConnection({
+        dbType: "oracle",
+        port: 1521,
+        host: "",
+        database:
+          "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dial-host.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)))",
+      }),
+    );
+
+    const hostInput = screen.getByLabelText("Host");
+    expect(hostInput).toBeDisabled();
+    expect(hostInput).not.toBeRequired();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Update"));
+    });
+
+    expect(mockUpdateConnection).toHaveBeenCalled();
+  });
+
   it("flags the empty Name field and moves focus to it on save", async () => {
     renderDialog();
     const nameInput = screen.getByLabelText("Name") as HTMLInputElement;

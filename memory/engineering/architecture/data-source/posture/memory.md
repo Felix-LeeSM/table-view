@@ -25,12 +25,16 @@ discovery, and full T-SQL semantic parity remain separate contracts.
 
 Oracle is active for service-name lifecycle plus bounded catalog/query/cancel/
 tabular runtime: catalog metadata, SELECT/DML batch execution, cooperative
-cancellation, and table-data query through the bounded runtime wrapper. SID/TNS/
-wallet/TLS, advanced auth, switch database, editRows, structured DDL, raw
-DDL/admin, parser/completion, runtime smoke, triggers, PL/SQL source/body/
-package authoring, sequences/synonyms DDL/admin, import/export, profiler/
-activity, users/roles/grants/session/storage, full workbench parity, and full
-PL/SQL executable semantics remain separate contracts.
+cancellation, and table-data query through the bounded runtime wrapper. The dial
+also takes a SID and a wallet-mTLS directory (#1065) and, since #2154, a TNS
+connect descriptor and wallet-less 1-way TCPS off the shared sslmode posture —
+all through the one `connect_config` trust boundary. tnsnames.ora alias
+resolution, skip-verify TLS (the driver cannot express it), advanced auth,
+switch database, editRows, structured DDL, raw DDL/admin, parser/completion,
+runtime smoke, triggers, PL/SQL source/body/package authoring,
+sequences/synonyms DDL/admin, import/export, profiler/activity,
+users/roles/grants/session/storage, full workbench parity, and full PL/SQL
+executable semantics remain separate contracts.
 
 Redis and Valkey are active KV profiles with bounded connection/key browse/value
 preview and command-query slices. Redis has direct key mutation controls for the

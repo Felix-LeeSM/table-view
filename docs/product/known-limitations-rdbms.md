@@ -331,8 +331,24 @@ into a TNS descriptor with zero escaping) and with the wallet path/password
 following the existing path-reference + keyring-envelope + IPC-masking +
 export-strip contracts; live SID round-trip and wallet-mTLS TCPS verification
 remain a docker/ADB integration residual (config assembly, guards, and redaction
-are unit-covered). Free-form TNS descriptors and tnsnames.ora aliases,
-wallet-less 1-way TLS (TCPS + CA cert), `cwallet.sso`/`ewallet.p12` wallet
+are unit-covered). #2154 opens the remaining dial paths onto that same
+`connect_config` boundary. A TNS connect descriptor pasted into the identifier
+field is parsed down to `PROTOCOL`/`HOST`/`PORT` and `SERVICE_NAME` or `SID`,
+and every other clause — DN matching, multi-address failover, proxies, server
+mode — is refused rather than dropped, because a clause the driver cannot
+honor would otherwise leave the user believing the descriptor pinned a posture
+the dial never applied; the parsed coordinates still pass the #1065 character
+whitelist, and the descriptor itself never reaches the driver. Wallet-less
+1-way TLS (TCPS) runs off the shared `sslmode` posture, with `verify-ca`'s CA
+file as the trust anchor and `verify-full` on the driver's bundled public
+roots. The wallet and the `sslmode` posture are mutually exclusive trust
+anchors and a connection naming both is rejected; `require` (encrypt without
+verifying) is rejected as well, because the driver's client-config builder
+never reads the skip-verify flag its API exposes. Live TCPS/mTLS handshake
+verification stays a docker/ADB integration residual — descriptor parsing,
+clause refusal, protocol/posture agreement, CA-path redaction, and TLS config
+assembly are unit-covered. tnsnames.ora alias resolution (reading the file to
+expand an alias into its descriptor), `cwallet.sso`/`ewallet.p12` wallet
 formats, advanced/external auth, users/roles/grants/session/storage/admin paths,
 DB-level import/backup-restore, profiler/activity, full parser/completion
 promotion, and full Oracle semantic behavior remain out of scope until

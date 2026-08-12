@@ -24,8 +24,9 @@ export type DatabaseType =
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
  * Oracle is exposed for service-name lifecycle plus bounded catalog/query/cancel
- * runtime. Edit/DDL, parser/completion, PL/SQL, SID/TNS/wallet/TLS remain
- * unclaimed.
+ * runtime. The dial also takes a SID and a wallet (#1065), a TNS connect
+ * descriptor and wallet-less 1-way TCPS (#2154). Edit/DDL, parser/completion,
+ * PL/SQL, tnsnames.ora alias resolution and advanced auth remain unclaimed.
  */
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",
@@ -363,6 +364,40 @@ export const SSL_MODE_OPTIONS: readonly SslMode[] = [
   "verify-full",
 ];
 
+/**
+ * #2154 — the postures Oracle offers. `require` is dropped on top of the
+ * `verify-ca` exclusion above: "encrypt without verifying" is not expressible
+ * on the Oracle driver, whose `danger_accept_invalid_certs` sets a flag its
+ * client-config builder never reads, so the backend rejects that posture
+ * outright rather than relabelling it. Offering an option that can only fail
+ * would be the same lie one level up.
+ *
+ * A connection stored as `require` (an import, a hand-edited file) still
+ * renders its own value through `sslModeChoices` — the dropdown never silently
+ * rewrites a stored posture — and fails at connect with the backend's guidance.
+ */
+export const ORACLE_SSL_MODE_OPTIONS: readonly SslMode[] = [
+  "disable",
+  "prefer",
+  "verify-full",
+];
+
+/**
+ * #2154 — whether the Oracle service field carries a TNS connect descriptor
+ * rather than a bare service name or SID.
+ *
+ * A descriptor names host, port, service and connect method itself, so the
+ * backend reads all four out of it and ignores the form's host/port/method.
+ * The form disables those inputs and the dialog drops its host-required check
+ * on the same signal, so exactly one rule decides which fields are live.
+ * Matches the backend trigger in `connect_config`: a leading `(` after trim.
+ */
+export function usesTnsDescriptor(
+  source: Pick<ConnectionDraft, "dbType" | "database">,
+): boolean {
+  return source.dbType === "oracle" && source.database.trim().startsWith("(");
+}
+
 /** Whether the posture negotiates TLS at all. Mirrors `SslMode::tls_on`. */
 export function sslModeTlsOn(mode: SslMode | undefined): boolean {
   return mode !== undefined && mode !== "disable" && mode !== "prefer";
@@ -405,15 +440,20 @@ export function draftVerifyingSslMode(
 }
 
 /**
- * The options a dropdown must render for `current` — `SSL_MODE_OPTIONS` plus
- * `current` itself when it is not offered. Without this a connection stored as
+ * The options a dropdown must render for `current` — the offered list plus
+ * `current` itself when it is not in it. Without this a connection stored as
  * `verify-ca` would render with an empty select and a save would silently
  * rewrite its posture.
+ *
+ * #2154 — `offered` defaults to the shared `SSL_MODE_OPTIONS`; Oracle passes
+ * `ORACLE_SSL_MODE_OPTIONS`. The re-add rule is what keeps a narrower list from
+ * turning into a silent rewrite of the postures it drops.
  */
-export function sslModeChoices(current: SslMode): readonly SslMode[] {
-  return SSL_MODE_OPTIONS.includes(current)
-    ? SSL_MODE_OPTIONS
-    : [...SSL_MODE_OPTIONS, current];
+export function sslModeChoices(
+  current: SslMode,
+  offered: readonly SslMode[] = SSL_MODE_OPTIONS,
+): readonly SslMode[] {
+  return offered.includes(current) ? offered : [...offered, current];
 }
 
 /** True for the engines that render the sslmode dropdown (pg/mysql/mariadb). */

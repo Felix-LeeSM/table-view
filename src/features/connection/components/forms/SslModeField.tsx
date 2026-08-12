@@ -40,6 +40,15 @@ export interface SslModeFieldProps {
   onChange: (patch: Partial<ConnectionDraft>) => void;
   inputClass: string;
   labelClass: string;
+  /**
+   * #2154 — the postures this engine can author, defaulting to the shared
+   * `SSL_MODE_OPTIONS`. Oracle passes a narrower list: its driver cannot
+   * express `require` (encrypt without verifying), so the backend rejects that
+   * posture and offering it here would only produce a draft that fails to
+   * connect. A stored value outside the list still renders — `sslModeChoices`
+   * re-adds the current one.
+   */
+  options?: readonly SslMode[];
 }
 
 export default function SslModeField({
@@ -47,6 +56,7 @@ export default function SslModeField({
   onChange,
   inputClass,
   labelClass,
+  options,
 }: SslModeFieldProps) {
   const { t } = useTranslation("featuresConnection");
   const mode = draftSslMode(draft);
@@ -77,7 +87,7 @@ export default function SslModeField({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {sslModeChoices(mode).map((option) => (
+          {sslModeChoices(mode, options).map((option) => (
             <SelectItem key={option} value={option}>
               {t(SSL_MODE_LABEL_KEYS[option])}
             </SelectItem>
