@@ -144,29 +144,36 @@ fails loudly against a server with no TLS. Recovery is to set that connection's
 posture back to `disable` or `prefer` by hand; on
 PostgreSQL/MySQL/MariaDB/SQL Server/Oracle the pair was already refused at
 connect time, so nothing that previously connected changed there. `verify-ca`
-adds the CA file the user selects to the driver's trust anchors *in addition to*
-the roots that driver already trusts, with hostname verification kept on; it is
-wired that way on PostgreSQL/MySQL/MariaDB and SQL Server only, and what it
-widens differs by driver — PostgreSQL/MySQL/MariaDB go through sqlx/rustls and
-add the CA on top of the bundled public root list, SQL Server goes through
-tiberius/native-tls and adds it on top of the OS system trust store. On MongoDB,
+hands the CA file the user selects to the driver as a trust anchor, with
+hostname verification kept on, on PostgreSQL/MySQL/MariaDB, SQL Server and —
+since #2154 — Oracle. What it does to the rest of that driver's anchor set
+differs — PostgreSQL/MySQL/MariaDB go through sqlx/rustls and add the CA on top
+of the bundled public root list, SQL Server goes through tiberius/native-tls and
+adds it on top of the OS system trust store, and Oracle goes through oracle-rs,
+which seeds its root store from the CA file *instead of* the bundled roots.
+Oracle is therefore the one engine where naming a CA narrows the anchor set;
+elsewhere it can only widen it. On MongoDB,
 Redis/Valkey, and Elasticsearch/OpenSearch the CA file is ignored and
 `verify-ca` verifies
 against the built-in public roots alone — never weaker than `verify-full`, but a
 private-CA server stays unreachable on those five until their drivers' own CA
 options are wired (#1649 follow-up). A `verify-ca` posture with no CA file is
 rejected at the storage write boundary for every engine, and again at connect
-time on PostgreSQL/MySQL/MariaDB and SQL Server — the three adapters that
+time on PostgreSQL/MySQL/MariaDB, SQL Server and Oracle — the adapters that
 resolve the full posture. The five on/off TLS engines have only the
 write-boundary rejection, so a row hand-edited into `connections.json` still
 reaches those drivers as plain `verify-full`; the connection *test* action also
 runs without the write-boundary check, so on those five it can report success
 for a posture the save then rejects. The sslmode
-dropdown for PostgreSQL/MySQL/MariaDB offers four of the five values
-(`disable`/`prefer`/`require`/`verify-full`); `verify-ca` renders only for a
+dropdown renders for PostgreSQL/MySQL/MariaDB and, since #2154, for Oracle.
+PostgreSQL/MySQL/MariaDB offer `disable`/`prefer`/`require`/`verify-full`;
+Oracle drops `require` on top of that, because its driver cannot encrypt without
+verifying. `verify-ca` renders only for a
 connection already stored with it, because the CA file picker is the follow-up
-slice, so URL paste still reports `sslmode=verify-ca` as a parameter it could not
-reflect rather than dropping it silently. The on/off TLS engines
+slice. A pasted URL that names a posture the engine's dropdown does not
+offer — `sslmode=verify-ca` anywhere, and `sslmode=require` on Oracle — is
+reported as a parameter that could not be reflected rather than dropped
+silently. The on/off TLS engines
 (MongoDB/Redis/Valkey/Elasticsearch/OpenSearch) expose an explicit opt-in "trust
 server certificate" (skip-verify) checkbox, gated on TLS being on and carrying an
 in-form warning; SQL Server keeps its skip-verify default when the engine is
@@ -176,8 +183,11 @@ the dbType never carries a skip-verify choice onto the next engine. Export strip
 `caCertPath` the way it strips the Oracle wallet path, and import folds a
 `verify-ca` envelope to `verify-full` and drops the CA reference, so the CA file
 is re-selected on the importing machine exactly as the password is re-entered.
-Oracle rejects any posture above `prefer` — its mTLS wallet is the only Oracle
-TLS trigger. The CA reference follows the posture that named it: the sslmode
+Oracle reads that same posture since #2154: `verify-full` and
+`verify-ca` dial TCPS, `require` is rejected at connect, and the #1065 mTLS
+wallet is a separate trust anchor that cannot be combined with a TLS-enabling
+posture — naming both is rejected rather than resolved one way.
+The CA reference follows the posture that named it: the sslmode
 dropdown, the engine TLS on/off checkboxes (both directions), a dbType switch,
 and a pasted URL that states a posture all clear `caCertPath` whenever they move
 the posture. The skip-verify checkbox is the deliberate exception — it keeps the

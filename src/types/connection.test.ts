@@ -10,7 +10,9 @@ import {
   SSL_MODE_OPTIONS,
   SUPPORTED_DATABASE_TYPES,
   sslModeChoices,
+  sslModeOptionsFor,
   unreflectedTlsParam,
+  usesSslModeSelect,
 } from "./connection";
 
 describe("parseConnectionUrl", () => {
@@ -618,5 +620,60 @@ describe("parseConnectionUrl TLS parameters (#1063)", () => {
   it("keeps the rediss:// scheme meaning TLS on regardless of params", () => {
     const result = parseConnectionUrl("rediss://h:6379");
     expect(result).toMatchObject({ sslMode: "verify-full" });
+  });
+});
+
+// Purpose: #2154 — Oracle became an sslmode-dropdown engine, so a pasted
+// `oracle://…?sslmode=` must land on the same contract as pg/mysql instead of
+// falling through to the boolean `tls`/`ssl` branch, where the key is not found
+// and the parameter disappears with no notice. The postures Oracle cannot
+// author are reported, never seeded. (2026-08-12)
+describe("Oracle URL sslmode reflection (#2154)", () => {
+  it("routes Oracle through the sslmode branch", () => {
+    expect(usesSslModeSelect("oracle")).toBe(true);
+  });
+
+  it("offers Oracle the postures its driver can dial, without require", () => {
+    expect([...sslModeOptionsFor("oracle")]).toEqual([
+      "disable",
+      "prefer",
+      "verify-full",
+    ]);
+    expect(sslModeOptionsFor("postgresql")).toBe(SSL_MODE_OPTIONS);
+  });
+
+  it("reflects an Oracle sslmode the form can author", () => {
+    for (const [value, expected] of [
+      ["verify-full", "verify-full"],
+      ["disable", "disable"],
+    ] as const) {
+      const url = `oracle://system:p@h:1521/FREEPDB1?sslmode=${value}`;
+      expect(parseConnectionUrl(url)).toMatchObject({ sslMode: expected });
+      expect(unreflectedTlsParam(url)).toBeNull();
+    }
+  });
+
+  it("reports an Oracle sslmode=require instead of seeding a draft that cannot connect", () => {
+    // The backend rejects `require` on Oracle outright — its driver cannot
+    // encrypt without verifying — so reflecting it would build a draft whose
+    // only outcome is a connect error.
+    const url = "oracle://system:p@h:1521/FREEPDB1?sslmode=require";
+    expect(parseConnectionUrl(url)).not.toHaveProperty("sslMode");
+    expect(unreflectedTlsParam(url)).toBe("sslmode=require");
+  });
+
+  it("reports an Oracle sslmode=verify-ca like every other engine", () => {
+    const url = "oracle://system:p@h:1521/FREEPDB1?sslmode=verify-ca";
+    expect(parseConnectionUrl(url)).not.toHaveProperty("sslMode");
+    expect(unreflectedTlsParam(url)).toBe("sslmode=verify-ca");
+  });
+
+  it("still reflects require on the engines whose driver expresses it", () => {
+    // The offered-list gate must not narrow pg/mysql/mariadb by accident.
+    for (const scheme of ["postgresql", "mysql", "mariadb"]) {
+      expect(
+        parseConnectionUrl(`${scheme}://u:p@h/db?sslmode=require`),
+      ).toMatchObject({ sslMode: "require" });
+    }
   });
 });

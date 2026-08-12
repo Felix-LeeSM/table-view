@@ -64,6 +64,7 @@ import type { ConnectionConfig, ConnectionDraft } from "../model";
 import {
   DATABASE_DEFAULTS,
   getMssqlConnectionUnsupportedMessage,
+  usesTnsDescriptor,
 } from "../model";
 import { useConnectionStore } from "../store";
 import ConnectionDialogBody from "./ConnectionDialog/ConnectionDialogBody";
@@ -235,7 +236,12 @@ export default function ConnectionDialog({
     }
     // File-backed DBMSes use `database` as the file path; host is irrelevant.
     // The host check applies only to network DBMSes.
-    if (!isFileConnection && !trimmed.host) {
+    //
+    // #2154 — an Oracle TNS descriptor carries its own HOST/PORT and the
+    // backend dials those, so requiring the form's host too would demand a
+    // value nothing reads. `OracleFormFields` disables that input on the same
+    // predicate.
+    if (!isFileConnection && !usesTnsDescriptor(trimmed) && !trimmed.host) {
       failValidation("host", t("dialog.errorHostRequired"));
       return;
     }

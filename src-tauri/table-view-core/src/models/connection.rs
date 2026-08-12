@@ -92,13 +92,14 @@ pub enum Paradigm {
 /// | `VerifyCa`   | `verify-ca`    | always                         | yes           | yes (`ca_cert_path`) |
 /// | `VerifyFull` | `verify-full`  | always                         | yes           | no (public roots)    |
 ///
-/// `VerifyCa` is the new advanced-depth posture: it adds a user-supplied
-/// private/self-signed CA (`ca_cert_path`) to the trust anchors so a server no
+/// `VerifyCa` is the new advanced-depth posture: it names a user-supplied
+/// private/self-signed CA (`ca_cert_path`) as a trust anchor so a server no
 /// public CA signs can still be authenticated, closing the MITM-substitution gap
-/// that `Require` (skip-verify) leaves open. It is an **addition**, not a
-/// restriction — see the [`crate::db::tls`] module docs for why sqlx cannot
-/// narrow the anchor set, and why both verifying postures keep hostname
-/// verification on.
+/// that `Require` (skip-verify) leaves open. Whether that anchor is **added** to
+/// the driver's existing roots or **replaces** them is the adapter's, not this
+/// enum's: sqlx and tiberius can only widen, while oracle-rs seeds its root
+/// store from the CA file alone (#2154). Both directions keep hostname
+/// verification on — see the [`crate::db::tls`] module docs.
 ///
 /// It is the one variant with a companion requirement: `ca_cert_path` must be
 /// set. That is enforced at the storage write boundary and again at connect
@@ -119,8 +120,9 @@ pub enum SslMode {
     /// MITM-exposed: encrypts but does not authenticate the server.
     Require,
     /// Force encryption + full chain **and hostname** verification, with the CA
-    /// at `ca_cert_path` (**required** for this posture) trusted in addition to
-    /// the built-in public roots (`sslmode=verify-ca`).
+    /// at `ca_cert_path` (**required** for this posture) as a trust anchor
+    /// beside the built-in public roots on PostgreSQL/MySQL/MariaDB and SQL
+    /// Server, and in place of them on Oracle (`sslmode=verify-ca`).
     VerifyCa,
     /// Force encryption + full chain + hostname verification against the
     /// built-in public roots only (`sslmode=verify-full`).

@@ -6,8 +6,9 @@ import {
   SelectValue,
 } from "@components/ui/select";
 import { useTranslation } from "react-i18next";
-import type { ConnectionDraft } from "../../model";
+import { type ConnectionDraft, usesTnsDescriptor } from "../../model";
 import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
+import SslModeField from "./SslModeField";
 
 export interface OracleFormFieldsProps {
   draft: ConnectionDraft;
@@ -49,6 +50,12 @@ export default function OracleFormFields({
 }: OracleFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
   const useSid = draft.oracleUseSid === true;
+  // #2154 — a TNS descriptor in the identifier field carries host, port,
+  // service and connect method, and the backend dials those. Disabling the
+  // inputs it overrides is what keeps the form from showing a host we never
+  // dial; `usesTnsDescriptor` is the same rule the dialog's host-required
+  // check reads, so the two cannot drift apart.
+  const descriptorDial = usesTnsDescriptor(draft);
   return (
     <>
       <div className="flex gap-3">
@@ -60,9 +67,10 @@ export default function OracleFormFields({
             id="conn-host"
             className={inputClass}
             value={draft.host}
+            disabled={descriptorDial}
             onChange={(e) => onChange({ host: e.target.value })}
             placeholder="localhost"
-            {...fieldValidationProps("host", true, invalidField)}
+            {...fieldValidationProps("host", !descriptorDial, invalidField)}
           />
         </div>
         <div className="w-24">
@@ -74,12 +82,18 @@ export default function OracleFormFields({
             className={inputClass}
             type="number"
             value={draft.port}
+            disabled={descriptorDial}
             onChange={(e) =>
               onChange({ port: parseInt(e.target.value, 10) || 0 })
             }
           />
         </div>
       </div>
+      {descriptorDial && (
+        <p className="text-2xs text-muted-foreground">
+          {t("form.oracleDescriptorOverridesHint")}
+        </p>
+      )}
 
       <div>
         <label htmlFor="conn-user" className={labelClass}>
@@ -142,13 +156,16 @@ export default function OracleFormFields({
       </div>
 
       {/* #1065 — connection method: service name (default) or SID. Both route
-          to the same `database` field; the flag selects the driver method. */}
+          to the same `database` field; the flag selects the driver method.
+          #2154 — a descriptor's CONNECT_DATA names the method itself, so the
+          toggle stops applying while one is pasted. */}
       <div>
         <label htmlFor="conn-oracle-method" className={labelClass}>
           {t("form.oracleConnectMethod")}
         </label>
         <Select
           value={useSid ? "sid" : "service"}
+          disabled={descriptorDial}
           onValueChange={(v) => onChange({ oracleUseSid: v === "sid" })}
         >
           <SelectTrigger
@@ -169,7 +186,11 @@ export default function OracleFormFields({
 
       <div>
         <label htmlFor="conn-database" className={labelClass}>
-          {useSid ? t("form.labelSid") : t("form.labelServiceName")}
+          {descriptorDial
+            ? t("form.labelOracleDescriptor")
+            : useSid
+              ? t("form.labelSid")
+              : t("form.labelServiceName")}
         </label>
         <input
           id="conn-database"
@@ -179,7 +200,21 @@ export default function OracleFormFields({
           placeholder={useSid ? "ORCL" : "FREEPDB1"}
           {...fieldValidationProps("database", true, invalidField)}
         />
+        <p className="mt-1 text-2xs text-muted-foreground">
+          {t("form.oracleServiceFieldHint")}
+        </p>
       </div>
+
+      {/* #2154 — wallet-less 1-way TLS (TCPS). The wallet below is the mTLS
+          path and the two are mutually exclusive; the backend rejects a
+          connection that names both. The narrowed posture list (no `require`)
+          comes from `sslModeOptionsFor`, which the URL-paste path reads too. */}
+      <SslModeField
+        draft={draft}
+        onChange={onChange}
+        inputClass={inputClass}
+        labelClass={labelClass}
+      />
 
       {/* #1065 — Oracle wallet (mTLS) for Oracle Cloud ADB. */}
       <div>

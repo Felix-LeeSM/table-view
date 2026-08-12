@@ -1,8 +1,9 @@
 /**
- * #1063 — shared sslmode dropdown for the trust-dependent RDB engines
- * (PostgreSQL / MySQL / MariaDB). These route through the backend
- * `resolve_tls_decision` boundary, so their TLS posture is a multi-way choice
- * rather than the plain on/off + trust checkbox the on/off engines use.
+ * #1063 — shared sslmode dropdown for the RDB engines that resolve the whole
+ * posture rather than a plain on/off toggle: PostgreSQL / MySQL / MariaDB and,
+ * since #2154, Oracle. These route through the backend `resolve_tls_decision`
+ * boundary, so their TLS posture is a multi-way choice rather than the on/off +
+ * trust checkbox the other engines use.
  *
  * #1649 — the dropdown now binds directly to the persisted `sslMode` field
  * instead of deriving a view over a boolean pair. `verify-ca` is not among the
@@ -10,6 +11,10 @@
  * slice. A connection already stored as `verify-ca` still renders its own
  * value (see `sslModeChoices`) so opening the dialog cannot silently rewrite
  * a posture the form cannot yet author.
+ *
+ * #2154 — the offered list is read from `sslModeOptionsFor(draft.dbType)`
+ * rather than passed in, so the dropdown and the URL-paste path cannot offer
+ * different sets for the same engine.
  */
 
 import {
@@ -25,6 +30,7 @@ import {
   draftSslMode,
   type SslMode,
   sslModeChoices,
+  sslModeOptionsFor,
 } from "../../model";
 
 const SSL_MODE_LABEL_KEYS: Record<SslMode, string> = {
@@ -77,11 +83,13 @@ export default function SslModeField({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {sslModeChoices(mode).map((option) => (
-            <SelectItem key={option} value={option}>
-              {t(SSL_MODE_LABEL_KEYS[option])}
-            </SelectItem>
-          ))}
+          {sslModeChoices(mode, sslModeOptionsFor(draft.dbType)).map(
+            (option) => (
+              <SelectItem key={option} value={option}>
+                {t(SSL_MODE_LABEL_KEYS[option])}
+              </SelectItem>
+            ),
+          )}
         </SelectContent>
       </Select>
       <p className="mt-1 text-2xs text-muted-foreground">

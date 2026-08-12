@@ -129,6 +129,15 @@ pub fn run() {
     // handler, so `cargo tauri dev` still prints the panic to stderr.
     diagnostics::install_panic_hook();
 
+    // #2154 — pick the process-wide rustls crypto provider here, before any
+    // adapter exists. rustls is compiled with both provider features on, so
+    // `ClientConfig::builder()` panics until a default is installed, and the
+    // Oracle, Redis and Search(reqwest) transports all resolve that default
+    // rather than naming a provider. Installing it on the first Oracle dial
+    // instead would let connection order decide the Redis/Search crypto
+    // backend. See `db::tls::install_rustls_crypto_provider`.
+    db::tls::install_rustls_crypto_provider();
+
     // `info!` (NOT `debug!`) so the message survives a release build's
     // default log filter; `target: "boot"` so the protocol script can grep
     // for the literal token regardless of binary name.
