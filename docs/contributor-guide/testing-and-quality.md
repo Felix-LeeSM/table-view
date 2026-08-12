@@ -296,13 +296,18 @@ git grep -n '| *grep -q' -- 'scripts/**/*.sh'
 
 2026-08-12 실측으로는 `scripts/release/` 의 세 스위트
 (`cargo-package-version.test.sh` · `checksum-sidecars.test.sh` ·
-`verify-tag-ci.test.sh`)가 걸린다. 지금 안 고치는 이유 둘: 그 자리들이 먹는 payload
-가 파이프 버퍼보다 한 자릿수 이상 작아(가장 큰 것이
-`scripts/release/fixtures/release-verify-tag-ci-job.txt` 로 `wc -c` 6662) 결정론적
-뒤집힘 구간에 못 들어가고, 세 파일이 저마다 mutation harness 를 가져 회귀 가드를
-파일별로 따로 설계해야 한다. 착수하면 「없어야 한다」쪽 부호를 쓰는 자리 — 즉 조용한
-거짓 green 이 가능한 자리 — 부터 간다: `checksum-sidecars.test.sh` 의 `${{` 가드와
-`verify-tag-ci.test.sh` 의 `continue-on-error` 가드다.
+`verify-tag-ci.test.sh`)가 걸린다. payload 가 파이프 버퍼보다 작아 결정론 구간에는
+못 들어가지만 **확률로는 뒤집힌다.** 가장 큰
+`scripts/release/fixtures/release-verify-tag-ci-job.txt`(`wc -c` 6662)를 8-way 동시로
+1000 회씩 돌리면, needle 이 첫 줄일 때 0 · 3 · 7/8000 이 뒤집혔고 needle 이 마지막
+줄일 때는 0/8000 이었다. `grep` 이 늦게 빠질수록 왼쪽 writer 가 쓸 것을 다 밀어 넣고
+끝나기 때문이다 — **위험한 자리는 일치가 앞쪽에서 날 수 있는 판정이다.**
+
+지금 안 고치는 이유: 세 파일이 저마다 mutation harness 와 자기 재호출을 가져 회귀
+가드를 파일별로 따로 설계해야 하고, 오늘 CI 를 막고 있는 자리가 아니다. 착수하면
+「없어야 한다」쪽 부호를 쓰는 자리 — 즉 조용한 거짓 green 이 가능한 자리 — 부터
+간다: `checksum-sidecars.test.sh` 의 `${{` 가드와 `verify-tag-ci.test.sh` 의
+`continue-on-error` 가드다.
 
 ## Refactor Follow-Up
 
