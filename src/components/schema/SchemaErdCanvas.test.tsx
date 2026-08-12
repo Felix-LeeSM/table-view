@@ -445,6 +445,30 @@ describe("SchemaErdCanvas", () => {
     expect(within(orders).getByText(/4 columns hidden/i)).toBeInTheDocument();
   });
 
+  // The two tests above read the columns a card spells out; this one reads the
+  // box. Both halves have to move together: the card is what shrinks, and React
+  // Flow places the FK handles off the node element, so a card that shrank
+  // while the node kept the taller height would leave every edge pointing at
+  // where the card used to end.
+  it("shrinks the card and its React Flow node together when the zoom step changes", async () => {
+    const graph = extractSchemaGraph(keyedTableSnapshot());
+    const { rerender } = render(<SchemaErdCanvas graph={graph} />);
+
+    const orders = await findTableCard(/public\.orders table/i);
+    const wrapper = orders.closest(".react-flow__node");
+    expect(wrapper).not.toBeNull();
+    // erdTableHeight(4 visible, 0 hidden) — also the slot elkjs reserved.
+    expect(orders).toHaveStyle({ height: "166px" });
+    expect(wrapper).toHaveStyle({ height: "166px" });
+
+    detail.level = "compact";
+    rerender(<SchemaErdCanvas graph={graph} />);
+
+    // erdTableHeight(0 visible, 4 hidden) — the header plus the hidden-count row.
+    await waitFor(() => expect(orders).toHaveStyle({ height: "88px" }));
+    expect(wrapper).toHaveStyle({ height: "88px" });
+  });
+
   it("re-runs the elkjs layout only when the layout input changes", async () => {
     vi.mocked(layoutErdModel).mockClear();
     const { rerender } = render(
