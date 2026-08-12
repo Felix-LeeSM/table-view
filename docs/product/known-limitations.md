@@ -133,6 +133,23 @@ smoke or measurement gates:
   is reopened. Semantic zoom does ship, but elkjs keeps reserving each card's
   full-detail height, so zooming out shrinks the cards without drawing the
   diagram any tighter.
+- Background failures that never reach a React ErrorBoundary raise a toast
+  (`src/lib/runtime/globalErrorToast.ts`, installed once from
+  `src/AppRouter.tsx`), and one report is deliberately dropped instead: a
+  message starting `ResizeObserver loop`. The user agent raises that on `window`
+  when a resize callback resizes something and the remaining observations spill
+  into the next frame. Every surface that measures with a `ResizeObserver` and
+  stores the result can raise it — the ERD canvas through React Flow, the
+  virtualized grids (`DataGridTable`, `DocumentDataGrid`), the schema trees —
+  and none of them is broken when it arrives. The match is anchored at the start
+  of the message, so a real throw that merely names ResizeObserver still reaches
+  the user. What the drop costs is the record: it logs through `logger.warn`,
+  which `src/lib/logger.ts` gates behind `import.meta.env.DEV`, so a packaged
+  build keeps neither the toast nor the log line, and the webview console has no
+  file channel (the rotating file in `src-tauri/src/lib.rs` carries Rust
+  `tracing` output only). Reproducing a dropped report needs `pnpm dev`. Giving
+  it a signal that survives a release build, and asserting the toast anywhere
+  outside `src/lib/runtime/globalErrorToast.test.ts`, are both untaken work.
 - Node package audit is deferred. Internal-doc link checking is not: a blocking
   frontend test (`scripts/docs-links.ts`) fails a PR whose markdown points at a
   file or heading that does not exist. What it still leaves open is external
