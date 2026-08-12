@@ -99,6 +99,29 @@ describe("virtual FK model — polymorphic targets + discriminator", () => {
       catalog.edges.filter((edge) => edge.kind === "foreign-key-table"),
     );
   });
+
+  it("calls a single-target link what it is, and hands back the same graph", () => {
+    const singleTarget: VirtualForeignKeyLink = {
+      id: "vfk-author",
+      source: { schema: "public", table: "comments", column: "commentable_id" },
+      targets: [{ schema: "public", table: "posts", column: "id" }],
+    };
+    const graph = applyVirtualForeignKeys(catalogGraph(), [singleTarget]);
+
+    // One target is an ordinary reference, and calling it polymorphic would put
+    // a discriminator caption on an edge that has nothing to discriminate.
+    expect(
+      virtualEdges(graph.edges).map(
+        (edge) => edge.virtualForeignKey?.polymorphic,
+      ),
+    ).toEqual([false]);
+
+    // Reference identity when nothing is drawn is load-bearing, not incidental:
+    // `SchemaErdPanel` compares the returned graph with the one it passed in to
+    // decide whether the ERD needs a new intelligence object at all.
+    const catalog = catalogGraph();
+    expect(applyVirtualForeignKeys(catalog, [])).toBe(catalog);
+  });
 });
 
 describe("virtual FK persistence — close the tab, open it again", () => {

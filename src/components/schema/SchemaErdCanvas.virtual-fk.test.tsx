@@ -62,7 +62,7 @@ async function findVirtualEdge(target: string) {
 }
 
 describe("SchemaErdCanvas — virtual foreign keys (#2150)", () => {
-  it("draws a hand-drawn link dashed and a catalog FK solid", async () => {
+  it("draws a hand-drawn link dashed with an open head, a catalog FK solid with a filled one", async () => {
     renderCanvas([POLYMORPHIC_LINK]);
 
     const virtualEdge = await findVirtualEdge("posts");
@@ -71,12 +71,17 @@ describe("SchemaErdCanvas — virtual foreign keys (#2150)", () => {
       "virtual-foreign-key",
     );
     expect(edgeStyle(virtualEdge)).toMatch(/stroke-dasharray:\s*6\s+4/);
+    // The arrow head is the second non-colour channel the ADR asks for, and it
+    // is the one the docs advertise. React Flow spells the head into the marker
+    // url it generates, so pinning both kinds to one head fails right here.
+    expect(edgeMarker(virtualEdge)).toMatch(/type=arrow(&|')/);
 
     const realEdge = screen.getByLabelText(
       "public.comments.author_id references public.users.id",
     );
     expect(realEdge).toHaveAttribute("data-relationship-kind", "foreign-key");
     expect(edgeStyle(realEdge)).not.toMatch(/stroke-dasharray:\s*\d/);
+    expect(edgeMarker(realEdge)).toMatch(/type=arrowclosed(&|')/);
   });
 
   it("fans a polymorphic link out to one edge per target", async () => {
@@ -101,6 +106,16 @@ describe("SchemaErdCanvas — virtual foreign keys (#2150)", () => {
     expect(
       within(legend).getByText(/virtual foreign key \(dashed\)/i),
     ).toBeVisible();
+    // The swatches have to carry the same heads the canvas draws, or the legend
+    // captions a diagram it does not describe: filled `polygon` for the catalog
+    // FK, open `polyline` for the hand-drawn one.
+    const swatch = (kind: string) =>
+      legend.querySelector(`[data-relationship-kind="${kind}"]`);
+    expect(swatch("foreign-key")?.querySelector("polygon")).not.toBeNull();
+    expect(
+      swatch("virtual-foreign-key")?.querySelector("polyline"),
+    ).not.toBeNull();
+    expect(swatch("virtual-foreign-key")?.querySelector("polygon")).toBeNull();
   });
 
   it("leaves the virtual entry out of the legend when nothing is drawn", async () => {
@@ -118,9 +133,7 @@ describe("SchemaErdCanvas — virtual foreign keys (#2150)", () => {
     expect(
       within(legend).queryByText(/virtual foreign key \(dashed\)/i),
     ).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: /reset hand-drawn relationships/i }),
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: /^reset links$/i })).toBeNull();
   });
 
   it("confirms before clearing the stored links", async () => {
@@ -128,9 +141,10 @@ describe("SchemaErdCanvas — virtual foreign keys (#2150)", () => {
     renderCanvas([POLYMORPHIC_LINK], onReset);
     await findVirtualEdge("posts");
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /reset hand-drawn relationships/i }),
-    );
+    // Queried by the visible label on purpose: an accessible name that does not
+    // contain the visible one leaves speech input with nothing to say (WCAG
+    // 2.5.3), so an `aria-label` that overrides it has to fail here.
+    fireEvent.click(screen.getByRole("button", { name: /^reset links$/i }));
     // Destructive and not undoable yet (ADR 0056 (4) undo is a later issue),
     // so the click must not reach the store on its own.
     expect(onReset).not.toHaveBeenCalled();
@@ -146,7 +160,7 @@ describe("SchemaErdCanvas — virtual foreign keys (#2150)", () => {
     render(<SchemaErdLegend kinds={[]} onResetVirtualFks={onReset} />);
 
     expect(
-      screen.getByRole("button", { name: /reset hand-drawn relationships/i }),
+      screen.getByRole("button", { name: /^reset links$/i }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("list")).toBeNull();
   });
@@ -156,6 +170,14 @@ function edgeStyle(edge: HTMLElement): string {
   return (
     edge.querySelector("path.react-flow__edge-path")?.getAttribute("style") ??
     ""
+  );
+}
+
+function edgeMarker(edge: HTMLElement): string {
+  return (
+    edge
+      .querySelector("path.react-flow__edge-path")
+      ?.getAttribute("marker-end") ?? ""
   );
 }
 

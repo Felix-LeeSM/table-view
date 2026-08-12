@@ -133,7 +133,7 @@ export const en = {
   erdLegendForeignKey: "Foreign key (solid)",
   erdLegendVirtualForeignKey: "Virtual foreign key (dashed)",
   resetVirtualFks: "Reset links",
-  resetVirtualFksAria: "Reset hand-drawn relationships",
+  // Serves both the button's `title` and the confirm dialog heading.
   resetVirtualFksTitle: "Reset hand-drawn relationships",
   resetVirtualFksMessage:
     "Every virtual foreign key drawn on this diagram is removed. This cannot be undone.",
@@ -382,7 +382,6 @@ export const ko = {
   erdLegendForeignKey: "외래 키 (실선)",
   erdLegendVirtualForeignKey: "가상 외래 키 (점선)",
   resetVirtualFks: "링크 초기화",
-  resetVirtualFksAria: "직접 그린 관계 초기화",
   resetVirtualFksTitle: "직접 그린 관계 초기화",
   resetVirtualFksMessage:
     "이 다이어그램에 그린 가상 외래 키를 모두 지웁니다. 되돌릴 수 없습니다.",
