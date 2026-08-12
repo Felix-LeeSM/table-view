@@ -18,9 +18,12 @@ import { useTranslation } from "react-i18next";
  * `ERD_RELATIONSHIP_ENCODINGS` at all — `currentColor` here, canvas palette
  * there.
  *
- * It also hosts the reset affordance for the persisted virtual FKs, which is
- * the "그 entity 의 헤더" slot of `memory/product/memory.md` §1: the ERD header
- * is where the links are visible, so it is where they are cleared.
+ * It also hosts the reset affordance for the persisted virtual FKs. The rule is
+ * `memory/product/memory.md` 「위치 룰」, whose per-entity row reads "그 entity 의
+ * 헤더 우클릭 메뉴" — this is that entity's header, but the control is a plain
+ * button, not a right-click menu: the ERD header strip carries no context menu,
+ * and stored links the current schema cannot draw are invisible, so the way out
+ * of them has to be visible too.
  */
 export interface SchemaErdLegendProps {
   /** Relationship kinds currently on the canvas. */
@@ -37,7 +40,10 @@ export default function SchemaErdLegend({
   const [confirming, setConfirming] = useState(false);
   // The reset control keeps the strip alive even with nothing to caption: a
   // schema change can leave stored links that draw nothing, and hiding the
-  // control then would strand persisted state with no way to clear it.
+  // control then would strand persisted state with no way to clear it. One
+  // stranding is left over: a stored row this build cannot parse hydrates to no
+  // links, so `SchemaErdPanel` never passes the prop and the strip never gets
+  // the chance (`src/lib/schemaGraphVirtualFk.ts` drops what it cannot read).
   if (kinds.length === 0 && !onResetVirtualFks) return null;
 
   return (
@@ -66,11 +72,13 @@ export default function SchemaErdLegend({
             variant="ghost"
             size="xs"
             className="ml-auto text-3xs"
-            aria-label={t("resetVirtualFksAria")}
-            title={t("resetVirtualFksAria")}
+            // No `aria-label`: an accessible name that does not contain the
+            // visible one breaks speech input (WCAG 2.5.3 Label in Name). The
+            // longer wording rides `title`, which names nothing and describes.
+            title={t("resetVirtualFksTitle")}
             onClick={() => setConfirming(true)}
           >
-            <RotateCcw size={12} />
+            <RotateCcw size={12} aria-hidden="true" />
             {t("resetVirtualFks")}
           </Button>
           {confirming && (

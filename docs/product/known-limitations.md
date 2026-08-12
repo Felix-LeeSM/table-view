@@ -127,10 +127,13 @@ smoke or measurement gates:
 - Tauri production shortcut audit for `Cmd+Shift+I`.
 - `MainArea` empty-state MRU policy.
 - Narrow-column display for `pendingEditErrors`.
-- ERD layout persistence, semantic zoom, viewport virtualization, virtual FKs,
-  focus filters, and diagram export. The React Flow + elkjs canvas ships without
-  them; each is a separate follow-up issue. Dragged node positions are lost when
-  the ERD tab is reopened.
+- ERD layout persistence, semantic zoom, viewport virtualization, focus filters,
+  and diagram export. The React Flow + elkjs canvas ships without them; each is a
+  separate follow-up issue. Dragged node positions are lost when the ERD tab is
+  reopened. Hand-drawn virtual FKs do ship — stored per connection and database,
+  drawn dashed, named in the legend — but the only edit the canvas offers is a
+  confirmed reset of every link on that diagram: drawing, editing, or deleting
+  one link, undo/redo, and cross-window convergence on a reset are follow-ups.
 - Node package audit is deferred. Internal-doc link checking is not: a blocking
   frontend test (`scripts/docs-links.ts`) fails a PR whose markdown points at a
   file or heading that does not exist. What it still leaves open is external

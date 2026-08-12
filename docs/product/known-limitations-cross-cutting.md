@@ -290,7 +290,8 @@ SQL/MongoDB/Redis/Valkey/Search seed contracts, but other specs under
 `e2e/smoke/**`, reset-to-default audits, additional file analytics scenarios
 beyond the wired `duckdb-file-analytics` spec, broader Search scenarios, and
 macOS/Windows runtime smoke are future promotion gates unless a smoke runner
-wires them. The dense ERD scenario is wired — see the ERD paragraph below.
+wires them. The dense ERD scenario is wired — see the ERD / SchemaGraph section
+below.
 
 ### Adapter / workspace boundary
 
@@ -351,16 +352,21 @@ column that decides which target a row points at. They persist per
 closing and reopening the ERD tab. They draw dashed with an open arrow head next
 to the solid, filled-head catalog FKs, and both kinds are named in the canvas
 legend, so the distinction never rests on colour alone. Reconcile against the
-current schema is a projection, not a delete: a link whose source column, target
-column, or discriminator column is absent from the current graph stops drawing
-that part while the stored link is kept, because a graph whose metadata has not
-finished loading is indistinguishable from a dropped column. Drawing a link from
+current schema is a projection, not a delete, and it treats the three column
+roles differently: a link whose source column is gone draws nothing, a target
+whose column is gone drops out while the link's other targets keep drawing, and
+a discriminator whose column is gone leaves every edge in place and only its
+name out of them. The stored link survives all three, because a graph whose
+metadata has not finished loading is indistinguishable from a dropped column.
+Drawing a link from
 the canvas, editing or deleting one link, and undo/redo of link edits are not
 included — the legend offers only a confirmed reset that clears every link on
 that diagram (ADR 0056 (4) owns undo). A virtual FK is not a constraint: it stays
 out of the selected-table dependency view, out of the cached schema diff, and out
-of join completion, which ADR 0055 lists as explicit non-scope. A second window
-picks up another window's virtual FK edits the next time its ERD panel mounts.
+of join completion, which ADR 0055 lists as explicit non-scope. Two windows open
+on the same diagram do not converge on a reset: deleting the row leaves the other
+window's next read with nothing to answer, so that window keeps drawing the links
+it read earlier. A window opened after the reset finds no row and draws none.
 
 ### FK navigation
 

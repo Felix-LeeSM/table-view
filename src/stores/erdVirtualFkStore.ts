@@ -15,10 +15,18 @@
  * Writes are optimistic — the canvas updates first, then the IPC fires and a
  * rejection surfaces as a toast, because nothing reconciles a lost write later.
  *
- * ponytail: no cross-window `state-changed` route, same ceiling as
- * `themeFavoritesStore` — a second window picks the change up the next time its
- * ERD panel mounts and hydrates. Wire a `setting.onUpdated` handler if two
- * windows editing one ERD at once turns out to matter.
+ * ponytail: no cross-window `state-changed` route, and the ceiling is uneven the
+ * same way `themeFavoritesStore` spells out. An added link reaches a second
+ * window the next time its ERD panel mounts, because `persist_setting` leaves a
+ * row for the hydrate below to read. A *reset* does not: it deletes the row,
+ * `getSetting` then answers null, the hydrate keeps the list it already had, and
+ * that window goes on drawing links the user cleared. Nothing repairs it later
+ * either — `src/lib/runtime/settings/settingsReceiver.ts` registers
+ * `setting.onUpdated` only, and its dispatcher does not know the
+ * `erd_virtual_fk:` keys. Since #2150 ships no way to draw a link, the reset is
+ * the only edit a user can reach, so the half that does not converge is the half
+ * they get. Wire a `setting.onReset` handler if two windows on one ERD turns out
+ * to matter.
  */
 
 import i18n from "@lib/i18n";
