@@ -30,6 +30,11 @@ import {
   type SchemaGraphIntelligenceSelectors,
   selectSchemaGraphIntelligence,
 } from "@/lib/schemaGraphSelectors";
+import {
+  ERD_RELATIONSHIP_ENCODINGS,
+  type ErdRelationshipKind,
+  VIRTUAL_FOREIGN_KEY_EDGE_KIND,
+} from "@/lib/schemaGraphVirtualFk";
 import type { SchemaGraph } from "@/types/schemaGraph";
 import "@xyflow/react/dist/style.css";
 import {
@@ -49,10 +54,12 @@ import {
   erdColumnHandleId,
   erdDetailLevel,
   erdModelFingerprint,
+  erdVirtualRelationships,
   filterErdTables,
   layoutErdModel,
 } from "./erdGraphModel";
 import SchemaErdDependencyView from "./SchemaErdDependencyView";
+import SchemaErdLegend from "./SchemaErdLegend";
 import SchemaErdTableNode from "./SchemaErdTableNode";
 
 interface SchemaErdCanvasProps {
@@ -60,6 +67,11 @@ interface SchemaErdCanvasProps {
   intelligence?: SchemaGraphIntelligenceSelectors;
   selectedTableId?: string;
   onSelectedTableIdChange?: (tableId: string | null) => void;
+  /**
+   * Clears every stored virtual FK on this ERD (#2150). Omitted when none are
+   * stored, which is what hides the reset control in the legend.
+   */
+  onResetVirtualFks?: () => void;
   /**
    * Schema diff to mark on the cards (ADR 0054 decision 6). Presentation only —
    * it stays out of `buildErdModel`, so picking a comparison never re-runs the
@@ -88,7 +100,12 @@ function erdTransitionMs(): number {
 }
 
 type ErdRelationshipFlowEdge = Edge<
-  { highlighted: boolean; cardinality: ErdCardinality },
+  {
+    highlighted: boolean;
+    /** `null` for a hand-drawn link — the mark reads schema-declared uniqueness. */
+    cardinality: ErdCardinality | null;
+    kind: ErdRelationshipKind;
+  },
   "erdRelationship"
 >;
 
@@ -114,6 +131,7 @@ function ErdCanvasSurface({
   intelligence,
   selectedTableId,
   onSelectedTableIdChange,
+  onResetVirtualFks,
   diff,
 }: SchemaErdCanvasProps) {
   const { t } = useTranslation("schema");
@@ -140,9 +158,30 @@ function ErdCanvasSurface({
     [model],
   );
   const activeSelected = selected && tablesById.has(selected) ? selected : null;
+  // Hand-drawn links (#2150) ride alongside the model instead of inside it, so
+  // adding one never re-runs the elk layout — see `erdVirtualRelationships`.
+  const virtualRelationships = useMemo(
+    () => erdVirtualRelationships(selectors.graph, tablesById),
+    [selectors.graph, tablesById],
+  );
+  const relationships = useMemo(
+    () => [...model.relationships, ...virtualRelationships],
+    [model.relationships, virtualRelationships],
+  );
+  const legendKinds = useMemo<readonly ErdRelationshipKind[]>(
+    () => [
+      ...(model.relationships.length > 0
+        ? (["foreign-key"] as const)
+        : ([] as const)),
+      ...(virtualRelationships.length > 0
+        ? (["virtual-foreign-key"] as const)
+        : ([] as const)),
+    ],
+    [model.relationships.length, virtualRelationships.length],
+  );
   const neighborhood = useMemo(
-    () => buildErdNeighborhood(model.relationships, activeSelected),
-    [model.relationships, activeSelected],
+    () => buildErdNeighborhood(relationships, activeSelected),
+    [relationships, activeSelected],
   );
   const searchMatches = useMemo(
     () => filterErdTables(model.tables, searchTerm),
@@ -280,10 +319,15 @@ function ErdCanvasSurface({
 
   const edges = useMemo<ErdRelationshipFlowEdge[]>(
     () =>
-      model.relationships.map((relationship) => {
+      relationships.map((relationship) => {
         const highlighted =
           !activeSelected ||
           neighborhood.highlightedEdgeIds.has(relationship.edge.id);
+        const kind: ErdRelationshipKind =
+          relationship.edge.kind === VIRTUAL_FOREIGN_KEY_EDGE_KIND
+            ? "virtual-foreign-key"
+            : "foreign-key";
+        const encoding = ERD_RELATIONSHIP_ENCODINGS[kind];
         return {
           id: relationship.edge.id,
           type: ERD_RELATIONSHIP_EDGE_TYPE,
@@ -303,15 +347,23 @@ function ErdCanvasSurface({
           // one relationship is announced once. The cardinality rides along
           // because its own badge is `aria-hidden` — reading "1:N" on its own,
           // detached from the relationship it counts, says nothing.
-          ariaLabel: `${relationship.label} (${relationship.cardinality})`,
+          ariaLabel: relationship.cardinality
+            ? `${relationship.label} (${relationship.cardinality})`
+            : relationship.label,
           // React's SVGAttributes has no index signature, so a `data-*`
           // attribute needs the cast to pass through the escape hatch.
           domAttributes: {
             "data-highlighted": String(highlighted),
+            "data-relationship-kind": kind,
           } as ErdRelationshipFlowEdge["domAttributes"],
-          data: { highlighted, cardinality: relationship.cardinality },
+          data: { highlighted, cardinality: relationship.cardinality, kind },
           markerEnd: {
-            type: MarkerType.ArrowClosed,
+            // Arrow head is the second non-colour channel that tells a
+            // hand-drawn link from a real FK (ADR 0055).
+            type:
+              encoding.marker === "arrow"
+                ? MarkerType.Arrow
+                : MarkerType.ArrowClosed,
             width: 16,
             height: 16,
             color: highlighted
@@ -320,7 +372,7 @@ function ErdCanvasSurface({
           },
         };
       }),
-    [activeSelected, model.relationships, neighborhood.highlightedEdgeIds],
+    [activeSelected, relationships, neighborhood.highlightedEdgeIds],
   );
 
   const focusTable = (tableId: string) => {
@@ -372,7 +424,7 @@ function ErdCanvasSurface({
           <span className="text-3xs text-muted-foreground">
             {t("erdTablesRelationships", {
               tables: model.tables.length,
-              relationships: model.relationships.length,
+              relationships: relationships.length,
             })}
           </span>
         </div>
@@ -477,7 +529,7 @@ function ErdCanvasSurface({
         </div>
       )}
 
-      {model.relationships.length === 0 && (
+      {relationships.length === 0 && (
         <div
           role="status"
           className="border-b border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
@@ -485,6 +537,11 @@ function ErdCanvasSurface({
           {t("noRelationshipsYet")}
         </div>
       )}
+
+      <SchemaErdLegend
+        kinds={legendKinds}
+        onResetVirtualFks={onResetVirtualFks}
+      />
 
       <div
         role="figure"
@@ -533,6 +590,10 @@ function ErdCanvasSurface({
 /**
  * FK edge. Stroke and marker colour are inline so they beat React Flow's own
  * `.react-flow__edge-path` rule regardless of stylesheet order.
+ *
+ * `strokeDasharray` comes from the shared encoding table rather than from a
+ * local branch, so the dashed line here and the dashed swatch in
+ * `SchemaErdLegend` cannot drift apart (ADR 0055 "색 단독 인코딩 금지").
  */
 function SchemaErdRelationshipEdge({
   sourceX,
@@ -553,6 +614,7 @@ function SchemaErdRelationshipEdge({
     targetPosition,
   });
   const highlighted = data?.highlighted ?? true;
+  const encoding = ERD_RELATIONSHIP_ENCODINGS[data?.kind ?? "foreign-key"];
 
   return (
     <>
@@ -565,6 +627,7 @@ function SchemaErdRelationshipEdge({
             ? "var(--tv-primary)"
             : "var(--tv-muted-foreground)",
           strokeWidth: highlighted ? 2.5 : 1.5,
+          strokeDasharray: encoding.strokeDasharray ?? undefined,
           opacity: highlighted ? 1 : 0.4,
         }}
       />

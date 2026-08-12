@@ -127,17 +127,23 @@ smoke or measurement gates:
 - Tauri production shortcut audit for `Cmd+Shift+I`.
 - `MainArea` empty-state MRU policy.
 - Narrow-column display for `pendingEditErrors`.
-- ERD layout persistence, viewport virtualization, virtual FKs, focus filters,
-  and diagram export. The React Flow + elkjs canvas ships without them; each is
-  a separate follow-up issue. Dragged node positions are lost when the ERD tab
-  is reopened. Semantic zoom does ship, but elkjs keeps reserving each card's
+- ERD layout persistence, viewport virtualization, focus filters, and diagram
+  export. The React Flow + elkjs canvas ships without them; each is a separate
+  follow-up issue. Dragged node positions are lost when the ERD tab is
+  reopened. Semantic zoom does ship, but elkjs keeps reserving each card's
   full-detail height, so zooming out shrinks the cards without drawing the
-  diagram any tighter. FK edges do anchor on the column rows and each carries a
-  1:1/1:N/N:M mark, but the mark only counts how many of the two ends a single
-  row is pinned to: it never says which end is the 1, and it reads only the
-  metadata that has arrived, so it can change while a schema loads. Which mark
-  each arrival state produces is pinned by the `cardinality arrival states`
-  table in `src/components/schema/erdGraphModel.test.ts`.
+  diagram any tighter. Hand-drawn virtual FKs ship too — stored per connection
+  and database, drawn dashed, named in the legend — but the only edit the
+  canvas offers is a confirmed reset of every link on that diagram: drawing,
+  editing, or deleting one link, undo/redo, and cross-window convergence on a
+  reset are follow-ups. A schema FK anchors on the column rows it names and
+  carries a 1:1/1:N/N:M mark. A hand-drawn link does neither: it meets the card
+  edge, and it carries no mark because the mark reads uniqueness the schema
+  declares. The mark only counts how many of the two ends a single row is
+  pinned to: it never says which end is the 1, and it reads only the metadata
+  that has arrived, so it can change while a schema loads. Which mark each
+  arrival state produces is pinned by the `cardinality arrival states` table in
+  `src/components/schema/erdGraphModel.test.ts`.
 - Background failures that never reach a React ErrorBoundary raise a toast
   (`src/lib/runtime/globalErrorToast.ts`, installed once from
   `src/AppRouter.tsx`), and one report is deliberately dropped instead: a

@@ -1,4 +1,8 @@
 import { logger } from "@lib/logger";
+import {
+  VIRTUAL_FOREIGN_KEY_EDGE_KIND,
+  virtualForeignKeyLabel,
+} from "@lib/schemaGraphVirtualFk";
 import type { ELK, ElkNode, LayoutOptions } from "elkjs/lib/elk-api";
 import type {
   SchemaGraph,
@@ -136,7 +140,12 @@ export interface ErdRelationshipModel {
    */
   readonly sourceColumn: string | null;
   readonly targetColumn: string | null;
-  readonly cardinality: ErdCardinality;
+  /**
+   * `null` for a hand-drawn link (#2150): the mark counts ends that the
+   * schema's own keys and unique indexes pin, and a hand-drawn link declares
+   * neither. Every relationship `buildErdModel` produces carries a mark.
+   */
+  readonly cardinality: ErdCardinality | null;
 }
 
 export interface ErdModel {
@@ -554,4 +563,42 @@ export function erdRelationshipLabel(edge: SchemaGraphEdge): string {
   )} references ${relationship.target.schema}.${relationship.target.table}.${relationship.target.columns.join(
     ", ",
   )}`;
+}
+
+/**
+ * Hand-drawn links (#2150) as canvas relationships, one per target so a
+ * polymorphic link fans out of its single source table (ADR 0055).
+ *
+ * Deliberately not part of `ErdModel`: `buildErdElkGraph` and
+ * `erdModelFingerprint` read that, so feeding a hand-drawn link into it would
+ * re-run the whole layout and discard the positions the user dragged — the
+ * implicit re-layout ADR 0056 (2) forbids.
+ */
+export function erdVirtualRelationships(
+  graph: SchemaGraph,
+  tablesById: ReadonlyMap<string, ErdTableModel>,
+): readonly ErdRelationshipModel[] {
+  return graph.edges.flatMap((edge) => {
+    if (edge.kind !== VIRTUAL_FOREIGN_KEY_EDGE_KIND) return [];
+    if (!tablesById.has(edge.from) || !tablesById.has(edge.to)) return [];
+    return [
+      {
+        edge,
+        sourceTableId: edge.from,
+        targetTableId: edge.to,
+        label: edge.virtualForeignKey
+          ? virtualForeignKeyLabel(edge.virtualForeignKey)
+          : erdRelationshipLabel(edge),
+        // Meets the card edge, not a column row, even though the link names a
+        // column on each end. The per-column handles come from a table's
+        // `anchorColumns`, which is part of `ErdModel` — and a hand-drawn link
+        // deliberately stays out of `ErdModel` so adding one never re-runs the
+        // elk layout (ADR 0056 (2)). Anchoring it on a row needs a second
+        // channel for those columns, which is its own issue, not this one.
+        sourceColumn: null,
+        targetColumn: null,
+        cardinality: null,
+      },
+    ];
+  });
 }

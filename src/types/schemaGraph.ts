@@ -109,7 +109,8 @@ export type SchemaGraphEdgeKind =
   | "constraint-column"
   | "primary-key-column"
   | "foreign-key-table"
-  | "foreign-key-column";
+  | "foreign-key-column"
+  | "virtual-foreign-key-table";
 
 export interface SchemaGraphEdge {
   readonly id: string;
@@ -120,6 +121,7 @@ export interface SchemaGraphEdge {
   readonly columns?: readonly string[];
   readonly referenceColumns?: readonly string[];
   readonly foreignKey?: SchemaGraphForeignKeyRelationship;
+  readonly virtualForeignKey?: SchemaGraphVirtualForeignKeyRelationship;
 }
 
 export interface SchemaGraphForeignKeyEndpoint {
@@ -144,6 +146,24 @@ export interface SchemaGraphForeignKeyRelationship {
   readonly source: SchemaGraphForeignKeyEndpoint;
   readonly target: SchemaGraphForeignKeyEndpoint;
   readonly rawMetadata: SchemaGraphForeignKeyRawMetadata;
+}
+
+/**
+ * One drawn arm of a user-authored relationship (ADR 0055). Not DB truth: it
+ * carries no constraint metadata, and a link with several targets — a
+ * polymorphic association such as Rails' `commentable_id` + `commentable_type` —
+ * produces one of these per target, all sharing `linkId`.
+ */
+export interface SchemaGraphVirtualForeignKeyRelationship {
+  readonly kind: "virtual-foreign-key";
+  /** Id of the stored link this arm belongs to. */
+  readonly linkId: string;
+  readonly source: SchemaGraphForeignKeyEndpoint;
+  readonly target: SchemaGraphForeignKeyEndpoint;
+  /** Source column that decides which target a row points at, when set. */
+  readonly discriminator?: string;
+  /** The stored link fans out to more than one target. */
+  readonly polymorphic: boolean;
 }
 
 export type SchemaGraphDiagnosticKind =
