@@ -277,7 +277,7 @@ only index/alias/data-stream summaries, while selected-index detail tabs fetch
 mapping/settings/templates/sample documents/field stats only after explicit user
 action. Live query covers bounded `_search` dispatch, backend request validation
 for `match_all`, `term`, `terms`, `match`, `bool` filter, `range`, `exists`, and
-`terms`/`value_count` aggs, sample-doc match_all,
+`terms`/`value_count` aggs, the boolean `profile` flag, sample-doc match_all,
 hits/source/fields/highlights/sort/shards/aggs response parsing, scoped/redacted
 HTTP error body surfacing, and in-flight cancel token behavior. Delete-by-query
 planning covers fixture estimates, live safe `_search` estimates,

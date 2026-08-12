@@ -231,6 +231,34 @@ export function runSearchRuntimeSmoke(options: SearchRuntimeSmokeOptions) {
         );
       });
 
+      // #2198 — the bounded validator accepts a `profile` boolean, so the payload
+      // the cluster answers with has to reach the result view. The assertions name
+      // keys from the response body rather than the panel label, which is
+      // translated: `time_in_nanos` and `breakdown` come straight from the cluster
+      // and are the same on Elasticsearch and OpenSearch. A recorded copy of this
+      // payload lives in `tests/fixtures/search-profile-response.json`.
+      await step("render the live _search profile payload", async () => {
+        await setCodeMirrorText(
+          JSON.stringify(
+            {
+              index,
+              body: {
+                query: { match: { message: "fixture" } },
+                profile: true,
+              },
+            },
+            null,
+            2,
+          ),
+        );
+        await runQuery();
+        await waitForWorkspaceTextAll(
+          ["time_in_nanos", "breakdown"],
+          30000,
+          `${productLabel} live _search profile payload did not render`,
+        );
+      });
+
       await step(
         "surface bounded Search DSL errors in the result view",
         async () => {
@@ -240,7 +268,7 @@ export function runSearchRuntimeSmoke(options: SearchRuntimeSmokeOptions) {
                 index,
                 body: {
                   query: { match_all: {} },
-                  profile: true,
+                  script_fields: { doubled: { script: "1 * 2" } },
                 },
               },
               null,
@@ -249,7 +277,7 @@ export function runSearchRuntimeSmoke(options: SearchRuntimeSmokeOptions) {
           );
           await runQuery();
           await waitForWorkspaceTextAll(
-            ["Search query failed", "profile"],
+            ["Search query failed", "script_fields"],
             30000,
             `${productLabel} unsupported Search DSL feature did not surface in the UI`,
           );

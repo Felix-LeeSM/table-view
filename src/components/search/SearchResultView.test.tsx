@@ -8,7 +8,17 @@ import {
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SearchResultEnvelope } from "@/types/search";
+// Recorded Elasticsearch/OpenSearch `_search` profile sections (#2198). The Rust
+// live-query test reads the same file, so a capture that stops matching one side
+// fails on both instead of drifting into two hand-copied shapes.
+import profileFixtureRaw from "../../../tests/fixtures/search-profile-response.json?raw";
 import { SearchResultView } from "./SearchResultView";
+
+const capturedProfiles = (
+  JSON.parse(profileFixtureRaw) as {
+    captures: Array<{ product: string; profile: unknown }>;
+  }
+).captures;
 
 const writeText = vi.fn<(text: string) => Promise<void>>(() =>
   Promise.resolve(),
@@ -209,6 +219,26 @@ describe("SearchResultView", () => {
     expect(screen.getByText(/hit explanation/)).toBeInTheDocument();
     expectNoGrid();
   });
+
+  // The test above renders a two-key stub. That stub proved the panel exists but
+  // said nothing about what a cluster actually sends, which is why #2198 recorded
+  // the real responses. This renders those and names the keys a reader needs to
+  // read a timing breakdown.
+  it.each(capturedProfiles)(
+    "renders the recorded $product profile payload",
+    ({ profile }) => {
+      render(<SearchResultView result={{ ...result, profile }} />);
+
+      // The key names are matched with their JSON punctuation on purpose. A bare
+      // `/time_in_nanos/` also matches `time_in_nanoseconds`, so renaming the key
+      // in the shared fixture left this test green while the Rust side went red.
+      const payload = screen.getByText(/"time_in_nanos":/);
+      expect(payload).toBeInTheDocument();
+      expect(payload.textContent).toContain('"breakdown":');
+      expect(payload.textContent).toContain('"collector":');
+      expectNoGrid();
+    },
+  );
 
   it("renders Search-native loading, error, and cancelled states", () => {
     const { rerender } = render(

@@ -220,7 +220,8 @@ failures, live catalog reads for indexes, aliases, data streams, mappings,
 settings/analyzers, templates, and field paths, bounded live `_search` execution
 with backend validation for `match_all`, `term`, `terms`, `match`, `bool`
 filters, `range`, `exists`, `terms`/`value_count` aggregations, pagination,
-`track_total_hits`, bounded field sort, and bounded `_source` filtering plus
+`track_total_hits`, bounded field sort, bounded `_source` filtering, and the
+boolean `profile` flag plus
 hits/source/fields/highlights/sort/shards/aggs response parsing, and
 delete-by-query safety planning that estimates matching documents through a safe
 `_search` request, then executes a live `_delete_by_query` behind a Safe Mode
@@ -244,7 +245,10 @@ wildcard targets, and destructive/admin APIs reject before live Search dispatch
 or destructive planning. Search live HTTP/admin promotion remains owned by the
 Search roadmap/milestone, not non-RDBMS lazy-loading workbench hardening.
 Broader Search admin APIs (index/settings create/delete), global
-audit/admin/security dashboards, profile/explain request workflow, and
+audit/admin/security dashboards, the `_explain` endpoint, a dedicated
+profile/explain request workflow with its own viewer (#2198 accepts the
+`profile` flag through the raw DSL and renders the payload in the existing
+result panel; it ships no viewer), and
 product-specific live deltas beyond these slices are deferred
 
 ## MSSQL

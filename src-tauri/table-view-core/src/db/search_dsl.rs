@@ -86,6 +86,15 @@ fn validate_search_body(body: &Map<String, Value>) -> Result<(), AppError> {
             "_source" => validate_source_filter(value)?,
             "from" | "size" => validate_u64_field(key, value)?,
             "track_total_hits" => validate_track_total_hits(value)?,
+            // `profile` is a read-only boolean switch on `_search`: the cluster
+            // answers with a timing breakdown of the query it was already going
+            // to run. It selects no target, evaluates no script and reaches no
+            // admin API, so the bounded parser has nothing to bound beyond the
+            // value type. Elasticsearch 8.12.2 and OpenSearch 2.13.0 both answer
+            // a non-boolean `profile` with HTTP 400 `parsing_exception`, so the
+            // boolean check below is the cluster's own contract enforced one hop
+            // earlier (#2198).
+            "profile" => validate_bool_field(key, value)?,
             other => {
                 return Err(AppError::Unsupported(format!(
                     "Search DSL feature '{}' is not supported by the bounded Search DSL parser",
@@ -502,6 +511,16 @@ fn validate_u64_field(name: &str, value: &Value) -> Result<(), AppError> {
     )))
 }
 
+fn validate_bool_field(name: &str, value: &Value) -> Result<(), AppError> {
+    if value.as_bool().is_some() {
+        return Ok(());
+    }
+    Err(AppError::Validation(format!(
+        "Search DSL {} must be a boolean",
+        name
+    )))
+}
+
 fn validate_track_total_hits(value: &Value) -> Result<(), AppError> {
     if value.as_bool().is_some() || value.as_u64().is_some() {
         return Ok(());
@@ -661,8 +680,12 @@ mod tests {
 
     #[test]
     fn unsupported_search_body_features_reject_before_http_dispatch() {
-        // Reason: #504 documents that admin/profile/plugin DSL extensions stay outside the bounded parser (2026-06-05).
-        for key in ["profile", "suggest", "knn", "script_fields", "pit"] {
+        // Reason: #504 requires unsupported admin APIs to be rejected or deferred, and
+        // these keys each pull in a surface the bounded parser does not model — plugin
+        // and script evaluation, vector search, and server-side cursor state (2026-06-05).
+        // `profile` used to sit in this list under the same citation, but #504 never ruled
+        // on it and it opens none of those surfaces — see `profile_flag_is_accepted_as_a_bounded_boolean` (#2198).
+        for key in ["suggest", "knn", "script_fields", "pit"] {
             let mut body = json!({ "query": { "match_all": {} } });
             body.as_object_mut()
                 .unwrap()
@@ -673,6 +696,36 @@ mod tests {
                     Err(AppError::Unsupported(message)) if message.contains(key)
                 ),
                 "body key should be rejected: {key}"
+            );
+        }
+    }
+
+    #[test]
+    fn profile_flag_is_accepted_as_a_bounded_boolean() {
+        for flag in [json!(true), json!(false)] {
+            let body = json!({ "query": { "match_all": {} }, "profile": flag });
+            assert!(
+                validate_search_dsl_request(&request(body)).is_ok(),
+                "boolean profile flag should be accepted"
+            );
+        }
+
+        // Elasticsearch 8.12.2 and OpenSearch 2.13.0 both answer a non-boolean
+        // `profile` with HTTP 400 `parsing_exception`, so the parser rejects the
+        // same shapes instead of dispatching a request that cannot succeed.
+        for value in [
+            json!({ "deep": true }),
+            json!("true"),
+            json!(1),
+            json!(null),
+        ] {
+            let body = json!({ "query": { "match_all": {} }, "profile": value });
+            assert!(
+                matches!(
+                    validate_search_dsl_request(&request(body.clone())),
+                    Err(AppError::Validation(message)) if message.contains("profile")
+                ),
+                "non-boolean profile value should be rejected: {body}"
             );
         }
     }
