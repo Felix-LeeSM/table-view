@@ -1,8 +1,10 @@
 // #2153 — the parser is pinned to the recorded `_search` profile sections
 // (#2198) rather than a hand-written stub, so a capture that stops matching
-// fails here instead of drifting. Timing values and node ids differ per
-// capture, so nothing below asserts one; the assertions are on structure,
-// labels and units.
+// fails here instead of drifting. No assertion against a capture reads a
+// timing value out of it; those assertions are on structure, labels and units.
+// The arithmetic rules — unit factor, slowest-first ranking, breakdown cap,
+// zero filter — run on synthetic payloads built in this file instead, because
+// the two single-shard captures do not exercise them.
 
 import { describe, expect, it } from "vitest";
 import profileFixtureRaw from "../../../tests/fixtures/search-profile-response.json?raw";
@@ -58,6 +60,22 @@ function shardsOf(product: string): SearchProfileNode[] {
   return plan.shards;
 }
 
+/**
+ * A profile whose only Lucene node is `raw`. Synthetic on purpose: the rules
+ * below (unit factor, slowest-first ranking, breakdown cap, zero filter) are
+ * about arithmetic the captures happen not to exercise, and pinning them to a
+ * capture's timings would make a re-capture red instead of the parser.
+ */
+function queryNodeOf(raw: Record<string, unknown>): SearchProfileNode {
+  const plan = extractSearchProfilePlan({
+    shards: [{ id: "[n][i][0]", searches: [{ query: [raw] }] }],
+  });
+  if (plan === null) {
+    throw new Error("synthetic profile did not parse");
+  }
+  return requireNode(plan.shards, String(raw.type));
+}
+
 describe("extractSearchProfilePlan", () => {
   it.each(fixture.captures.map((entry) => entry.product))(
     "reads the recorded %s profile into a shard tree",
@@ -111,6 +129,68 @@ describe("extractSearchProfilePlan", () => {
     // Time + at most 5 breakdown timers. A full breakdown is ~20 entries and
     // belongs in the raw JSON panel, not in the summary rows.
     expect(query.metrics.length).toBeLessThanOrEqual(6);
+  });
+
+  it("reads every shard, not just the first", () => {
+    const shard = (
+      capturedProfile("elasticsearch") as { shards: Record<string, unknown>[] }
+    ).shards[0] as Record<string, unknown>;
+
+    const plan = extractSearchProfilePlan({
+      shards: [
+        { ...shard, id: "[n][i][0]" },
+        { ...shard, id: "[n][i][1]" },
+      ],
+    });
+
+    // A cluster reports one profile section per shard. Both captures are
+    // single-shard containers, so nothing above notices a parser that stops
+    // after the first section — and on a real index that is most of the plan.
+    expect(plan?.shards.map((node) => node.title)).toEqual([
+      "[n][i][0]",
+      "[n][i][1]",
+    ]);
+  });
+
+  it("converts nanosecond timers with the nanosecond factor", () => {
+    const node = queryNodeOf({
+      type: "TermQuery",
+      time_in_nanos: 2_500_000,
+      breakdown: { create_weight: 1_000_000 },
+    });
+
+    // Both conversion sites — the node's own `time_in_nanos` and the breakdown
+    // timers. A wrong factor still renders a ` ms` suffix, so only the value
+    // separates milliseconds from microseconds.
+    expect(node.metrics).toEqual([
+      { label: "Time", value: "2.5 ms" },
+      { label: "create_weight", value: "1 ms" },
+    ]);
+  });
+
+  it("keeps only the slowest breakdown timers", () => {
+    const breakdown: Record<string, number> = { slow_count: 99e6 };
+    for (let rank = 1; rank <= 9; rank += 1) {
+      breakdown[`timer_${rank}`] = rank * 1e6;
+    }
+
+    // The cap needs a node that exceeds it: the captures' nodes are down to
+    // four timers once the counters and the zeroes are dropped, so they pass
+    // whatever the cap is set to.
+    expect(metricLabels(queryNodeOf({ type: "TermQuery", breakdown }))).toEqual(
+      ["timer_9", "timer_8", "timer_7", "timer_6", "timer_5"],
+    );
+  });
+
+  it("drops timers that never ran", () => {
+    const node = queryNodeOf({
+      type: "TermQuery",
+      breakdown: { create_weight: 1_000_000, build_scorer: 0, match: 0 },
+    });
+
+    // A zero timer answers nothing about where the time went, and it would
+    // take a row the slowest timers need.
+    expect(metricLabels(node)).toEqual(["create_weight"]);
   });
 
   it("keeps the Elasticsearch-only shard fields and fetch phase", () => {
