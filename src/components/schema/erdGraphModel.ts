@@ -241,9 +241,12 @@ function erdEndIsUnique(
  * unpinned — a reference onto a keyless column still reads 1:N when the
  * referencing columns cover their own table's key.
  *
- * Only the unique-index half of `uniqueColumnSets` arrives late: primary keys
- * come off `ColumnInfo.is_primary_key` and are there from first paint, so a
- * fetch that has not returned indexes yet cannot by itself produce N:M.
+ * Both halves of `uniqueColumnSets` fill in after first paint and they do not
+ * arrive together: `SchemaErdPanel` prefetches columns a schema at a time while
+ * fetching indexes per table, neither waiting on the other. A table whose
+ * columns have not landed has no entry here at all, so both its ends read
+ * unpinned and its edges read N:M until they do. Missing indexes alone are the
+ * milder case: they can cost the 1:1, never the 1:N.
  */
 function erdEdgeCardinality(
   edge: SchemaGraphEdge,

@@ -137,14 +137,14 @@ describe("SchemaErdCanvas", () => {
       <SchemaErdCanvas graph={extractSchemaGraph(anchorFallbackSnapshot())} />,
     );
 
-    const wide = await findTableCard(/public\.wide table/i);
-    expect(within(wide).queryByText("owner_id")).not.toBeInTheDocument();
+    const shipments = await findTableCard(/public\.shipments table/i);
+    expect(within(shipments).queryByText("owner_id")).not.toBeInTheDocument();
     expect(
-      wide.querySelector('[data-handleid="erd-source:owner_id"]'),
+      shipments.querySelector('[data-handleid="erd-source:owner_id"]'),
     ).not.toBeNull();
     expect(
       screen.getByLabelText(
-        "public.wide.owner_id references public.owners.id (1:N)",
+        "public.shipments.owner_id references public.owners.id (1:N)",
       ),
     ).toBeInTheDocument();
   });
@@ -923,21 +923,23 @@ function wideTableSnapshot(): SchemaGraphCatalogSnapshot {
   };
 }
 
-/** A wide table whose FK column is the anchor a shrunken card has to keep. */
+/**
+ * A table with a plain column and one FK column, so a card the zoom step has
+ * shrunk to the table box still has to keep the FK anchor. Column *count* pins
+ * nothing here — ADR 0054 (2) retired the six-column cap.
+ */
 function anchorFallbackSnapshot(): SchemaGraphCatalogSnapshot {
   return {
     source: { dbType: "postgresql", database: "app" },
     schemas: [{ name: "public" }],
     tablesBySchema: {
-      public: [table("public", "owners"), table("public", "wide")],
+      public: [table("public", "owners"), table("public", "shipments")],
     },
     columnsByTable: {
       public: {
         owners: [column("id", { is_primary_key: true })],
-        wide: [
-          ...Array.from({ length: 6 }, (_unused, index) =>
-            column(`c${index + 1}`),
-          ),
+        shipments: [
+          column("code"),
           column("owner_id", {
             is_foreign_key: true,
             fk_reference: "public.owners(id)",

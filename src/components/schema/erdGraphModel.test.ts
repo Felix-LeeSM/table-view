@@ -108,16 +108,16 @@ describe("column anchors", () => {
 
   it("keeps an anchor for a column no detail level draws", () => {
     const model = buildErdModel(extractSchemaGraph(lateColumnFkSnapshot()));
-    const wide = model.tables.find(
-      (entry) => entry.qualifiedName === "public.wide",
+    const shipments = model.tables.find(
+      (entry) => entry.qualifiedName === "public.shipments",
     )!;
 
     // ADR 0054 (2) retired the six-column cap, so the level that draws no
     // column row at all is what now hides an anchor column. React Flow drops
     // an edge whose handle id is missing, so the anchor list must not follow
     // the level down.
-    expect(erdCardShape(wide, "compact").visibleColumns).toEqual([]);
-    expect(wide.anchorColumns).toEqual(["owner_id"]);
+    expect(erdCardShape(shipments, "compact").visibleColumns).toEqual([]);
+    expect(shipments.anchorColumns).toEqual(["owner_id"]);
   });
 
   it("keeps the two handles of one column apart", () => {
@@ -141,7 +141,7 @@ describe("cardinality", () => {
 
   // The property this pins is that `IndexInfo.is_unique` — not the presence of
   // an index, not the column name — is what separates 1:1 from 1:N.
-  it("turns 1:N into 1:1 only when the FK column's index is unique", () => {
+  it("reads 1:1 when the FK column's index is unique and 1:N when it is not", () => {
     const unique = buildErdModel(
       extractSchemaGraph(
         profileSnapshot({ index: ["user_id"], isUnique: true }),
@@ -169,7 +169,10 @@ describe("cardinality", () => {
     expect(model.relationships[0]?.cardinality).toBe("1:N");
   });
 
-  it("reads a reference onto a column with no key as N:M", () => {
+  // A keyless referenced column is not on its own enough for N:M: the
+  // referencing end still pins the edge at 1:N when its own columns cover a
+  // key, and the primary-key path reaches 1:1 without any unique index.
+  it("reads N:M only while neither end covers a unique column set", () => {
     const loose = buildErdModel(
       extractSchemaGraph(looseReferenceSnapshot({ uniqueHandle: false })),
     );
@@ -181,6 +184,27 @@ describe("cardinality", () => {
     // The same graph with a unique index on the referenced column pins that
     // end, which is the only difference between N:M and 1:N here.
     expect(keyed.relationships[0]?.cardinality).toBe("1:N");
+  });
+
+  // `SchemaErdPanel` fetches constraints per table without waiting for the
+  // per-schema column prefetch, so an FK edge exists before either end has
+  // columns. A table with no columns has no primary key to pin its end, which
+  // is what makes the transitional reading N:M rather than 1:N.
+  it("reads a foreign key as N:M until the referenced columns land", () => {
+    const settledSnapshot = ordersSnapshotWithMetadata();
+    const columnsInFlight = buildErdModel(
+      extractSchemaGraph({ ...settledSnapshot, columnsByTable: {} }),
+    );
+    const settled = buildErdModel(extractSchemaGraph(settledSnapshot));
+
+    expect(
+      columnsInFlight.relationships.map((entry) => entry.cardinality),
+    ).toEqual(["N:M", "N:M"]);
+    // Same constraints, same indexes — only the columns differ.
+    expect(settled.relationships.map((entry) => entry.cardinality)).toEqual([
+      "1:N",
+      "1:N",
+    ]);
   });
 });
 
@@ -950,21 +974,23 @@ function looseReferenceSnapshot({
   };
 }
 
-/** A wide table whose only key column is the FK the edge anchors on. */
+/**
+ * A table with a plain column and one FK column, so a detail level that draws
+ * no row at all still has to keep the FK anchor. Column *count* pins nothing
+ * here — ADR 0054 (2) retired the six-column cap.
+ */
 function lateColumnFkSnapshot(): SchemaGraphCatalogSnapshot {
   return {
     source: { dbType: "postgresql", database: "app" },
     schemas: [{ name: "public" }],
     tablesBySchema: {
-      public: [table("public", "owners"), table("public", "wide")],
+      public: [table("public", "owners"), table("public", "shipments")],
     },
     columnsByTable: {
       public: {
         owners: [column("id", { is_primary_key: true })],
-        wide: [
-          ...Array.from({ length: 6 }, (_unused, index) =>
-            column(`c${index + 1}`),
-          ),
+        shipments: [
+          column("code"),
           column("owner_id", {
             is_foreign_key: true,
             fk_reference: "public.owners(id)",

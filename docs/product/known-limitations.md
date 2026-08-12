@@ -132,7 +132,10 @@ smoke or measurement gates:
   a separate follow-up issue. Dragged node positions are lost when the ERD tab
   is reopened. Semantic zoom does ship, but elkjs keeps reserving each card's
   full-detail height, so zooming out shrinks the cards without drawing the
-  diagram any tighter.
+  diagram any tighter. FK edges do anchor on the column rows and each carries a
+  1:1/1:N/N:M mark, but the mark only counts how many of the two ends a single
+  row is pinned to: it never says which end is the 1, and it reads N:M until
+  both tables' columns have arrived.
 - Background failures that never reach a React ErrorBoundary raise a toast
   (`src/lib/runtime/globalErrorToast.ts`, installed once from
   `src/AppRouter.tsx`), and one report is deliberately dropped instead: a
