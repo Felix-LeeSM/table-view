@@ -20,12 +20,16 @@ const TABLE_LABELS = [
   "public.erd_payments table",
   "public.erd_refunds table",
 ] as const;
+// Issue #2151 put the cardinality inside the edge's accessible name, because
+// the visible badge is `aria-hidden` and "1:N" on its own says nothing. Every
+// referenced end below is a PRIMARY KEY and no FK column carries a unique
+// index (`e2e/fixtures/postgresql/query/seed.sql`), so all five read 1:N.
 const EDGE_LABELS = [
-  "public.erd_orders.customer_id references public.erd_customers.id",
-  "public.erd_order_items.order_id references public.erd_orders.id",
-  "public.erd_shipments.order_id references public.erd_orders.id",
-  "public.erd_payments.order_id references public.erd_orders.id",
-  "public.erd_refunds.payment_id references public.erd_payments.id",
+  "public.erd_orders.customer_id references public.erd_customers.id (1:N)",
+  "public.erd_order_items.order_id references public.erd_orders.id (1:N)",
+  "public.erd_shipments.order_id references public.erd_orders.id (1:N)",
+  "public.erd_payments.order_id references public.erd_orders.id (1:N)",
+  "public.erd_refunds.payment_id references public.erd_payments.id (1:N)",
 ] as const;
 
 // React Flow keys each node element by the SchemaGraph table id.
