@@ -74,7 +74,11 @@ export function ExplainViewer({
 }: ExplainViewerProps) {
   const { t } = useTranslation("query");
   const paradigm = paradigmOf(dbType);
-  const [plan, setPlan] = useState<unknown>(null);
+  // #2153 — `undefined` is "no fetch has settled" (mount, or a first fetch the
+  // user stopped); `null` is "the source settled and handed back no plan". The
+  // search empty state below speaks about the cluster's answer, so it must not
+  // be reachable from a state where there was never an answer.
+  const [plan, setPlan] = useState<unknown>(undefined);
   // The mount effect always starts a fetch, so idle-before-first-fetch is not
   // a state this component is ever in. Starting at `false` rendered one frame
   // claiming a settled empty plan.
@@ -240,6 +244,7 @@ export function ExplainViewer({
       {!loading &&
         error === null &&
         plan !== null &&
+        plan !== undefined &&
         (postgresPlan !== null ? (
           <PostgresPlanView plan={postgresPlan} rawPlan={plan} />
         ) : searchProfile !== null ? (

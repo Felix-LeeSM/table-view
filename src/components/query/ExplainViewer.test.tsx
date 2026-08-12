@@ -314,6 +314,39 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  // #2153 regression — the Stop button renders for every paradigm, so a search
+  // explain can be cancelled before the cluster answers. "Answered without a
+  // profile" must not be what the user sees for a request they stopped: the
+  // empty state above asserts something about the cluster's answer, and after
+  // a cancel there is no answer to assert.
+  it("does not claim a missing profile when a search explain is cancelled", async () => {
+    let rejectExplain: (reason: unknown) => void = () => {};
+    explainSearchMock.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectExplain = reject;
+      }),
+    );
+    const user = userEvent.setup();
+    render(
+      <ExplainViewer
+        connectionId="conn-es"
+        dbType="opensearch"
+        searchSpec={{ index: "logs", body: {} }}
+      />,
+    );
+
+    await user.click(await screen.findByTestId("explain-cancel"));
+    expect(cancelQueryMock).toHaveBeenCalledTimes(1);
+
+    rejectExplain(new Error("Database error: Operation cancelled"));
+    await waitFor(() =>
+      expect(screen.getByTestId("explain-refresh")).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("explain-empty")).toBeNull();
+    expect(screen.queryByTestId("explain-plan")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("re-fetches when Refresh is clicked", async () => {
     explainRdbMock.mockResolvedValue([{ Plan: { "Node Type": "Index Scan" } }]);
     const user = userEvent.setup();
