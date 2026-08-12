@@ -276,6 +276,34 @@ Deferred or non-blocking checks must stay explicit:
 | Test data shape | Reuse production types/builders rather than duplicating `ConnectionConfigLike` shapes. |
 | Drag and drop | Add behavior-level DnD coverage for dragged connection state. |
 
+## Shell Suite Harness Quality
+
+`scripts/**/*.test.sh` 는 `set -uo pipefail` 아래에서 단언을 돌린다. 그 안에서
+`printf '%s\n' "$X" | grep -q …` 로 부분 문자열을 판정하면 **판정이 파이프 status 에
+실린다**. `grep -q` 는 첫 일치에서 stdin 을 안 비우고 빠지고, 왼쪽 writer 가 파이프
+버퍼(64KiB)를 넘겨 써야 하면 EPIPE → SIGPIPE 로 141 이 되며, `pipefail` 이 그 141 을
+파이프라인 status 로 올린다. 부호가 양인 헬퍼(「있어야 한다」)에서는 거짓 red 로
+나타나고, 부호가 반대인 헬퍼(「없어야 한다」)에서는 **조용한 거짓 green** 이 된다 —
+후자는 red 를 안 남겨 로그로 못 찾는다. 기전·경계 실측·처방은 issue #2314 와
+`scripts/review/measure-rounds.test.sh` 의 `contains()` 주석에 있다.
+
+`scripts/review/measure-rounds.test.sh` 는 #2314 가 고쳤다. 같은 형태가 남은 파일과
+그 자리는 이 명령이 낸다:
+
+```
+git grep -n '| *grep -q' -- 'scripts/**/*.sh'
+```
+
+2026-08-12 실측으로는 `scripts/release/` 의 세 스위트
+(`cargo-package-version.test.sh` · `checksum-sidecars.test.sh` ·
+`verify-tag-ci.test.sh`)가 걸린다. 지금 안 고치는 이유 둘: 그 자리들이 먹는 payload
+가 파이프 버퍼보다 한 자릿수 이상 작아(가장 큰 것이
+`scripts/release/fixtures/release-verify-tag-ci-job.txt` 로 `wc -c` 6662) 결정론적
+뒤집힘 구간에 못 들어가고, 세 파일이 저마다 mutation harness 를 가져 회귀 가드를
+파일별로 따로 설계해야 한다. 착수하면 「없어야 한다」쪽 부호를 쓰는 자리 — 즉 조용한
+거짓 green 이 가능한 자리 — 부터 간다: `checksum-sidecars.test.sh` 의 `${{` 가드와
+`verify-tag-ci.test.sh` 의 `continue-on-error` 가드다.
+
 ## Refactor Follow-Up
 
 The code smell audit Part A candidates remain archived at
