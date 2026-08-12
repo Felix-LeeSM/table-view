@@ -104,7 +104,7 @@ TypeScript Search DSL editor assistance, and representative Runtime Happy Path
 smoke are active; the smoke covers connect/auth/TLS contract, selected metadata,
 bounded render, delete-plan preview, live delete execution, and error surface.
 Promote broader live HTTP only after index/settings admin execution policy,
-broader observability/profile workflows, full language-core parser/completion
+broader observability workflows, full language-core parser/completion
 ownership, and product-specific delta contracts are explicit.
 
 ### MSSQL/Oracle
@@ -117,9 +117,12 @@ Mode/editor assistance and #907 representative smoke. Future promotion must add
 matching DDL, full parser/completion, docs, and smoke evidence without hiding
 SQL Server and Oracle auth/dialect differences behind a shared abstraction. Keep
 full admin parity, import/export, profiler/activity, role/user/permission UI,
-broad scripting, MSSQL admin/full T-SQL semantics, and Oracle
-SID/TNS/wallet/advanced auth/structured DDL/raw DDL/admin/TLS/PLSQL semantics
-out of scope until separately proven.
+broad scripting, MSSQL admin/full T-SQL semantics, and the Oracle axes still
+unproven — advanced auth, raw DDL/admin, full PL/SQL semantics, and the
+tnsnames.ora alias resolver — out of scope until separately proven. The Oracle
+axes that have since been proven are not on this list: SID and the wallet
+(#1065), structured DDL (#1072), and TNS descriptor plus 1-way TCPS (#2154) —
+see the *Connection TLS/SSH/Oracle* entry below.
 
 ### Wider source candidates
 
@@ -139,7 +142,10 @@ Advanced TLS depth-step — CA 파일·클라이언트 인증서·1단 엔진 ss
 1단 엔진 sslmode 확장은 #1649 1차 (ADR 0058) 로 실렸다. 남은 것은 클라이언트 인증서, TOFU 인증서
 핀, 폼 안의 CA 파일 피커, 1단 엔진 5종(MongoDB·Redis/Valkey·Elasticsearch/OpenSearch)의 사설
 트러스트 앵커다 — `docs/product/known-limitations-cross-cutting.md` 의 TLS 문단과 같은 목록이다.
-Oracle 1-way TLS (TCPS + CA cert) 는 #1650 으로 advanced TLS CA 지원(#1649)에 의존해 묶는다.
+Oracle 1-way TLS (TCPS + CA cert) 는 #1650 으로 열렸고, TNS descriptor (#2102) 와 함께
+#2154 가 `connect_config` 한 축에 실었다 — `verify-ca` 의 CA 파일이 신뢰 앵커이고,
+wallet mTLS 와는 상호 배타다. 남은 것은 tnsnames.ora 별칭을 파일에서 펴 주는 resolver 와,
+드라이버가 표현하지 못하는 skip-verify(`require`) 자세다.
 
 ### Security / ops policy
 

@@ -241,14 +241,15 @@ describe("DataSourceProfile registry", () => {
       query: { query: true, cancel: true },
       edit: { editKeys: true },
     }),
+    // #2153 — `explain` is the `_search` `profile` plan, not `_explain`.
     elasticsearch: expectedCapabilities({
       connection: { test: true },
-      query: { query: true, cancel: true },
+      query: { query: true, cancel: true, explain: true },
       catalog: { indexes: true },
     }),
     opensearch: expectedCapabilities({
       connection: { test: true },
-      query: { query: true, cancel: true },
+      query: { query: true, cancel: true, explain: true },
       catalog: { indexes: true },
     }),
   };
@@ -468,17 +469,19 @@ describe("DataSourceProfile registry", () => {
     expect(profile.capabilities.connection.test).toBe(true);
     expect(profile.capabilities.query.query).toBe(true);
     expect(profile.capabilities.query.cancel).toBe(true);
-    expect(profile.capabilities.query.explain).toBe(false);
+    // #2153 — the plan behind this flag is the `_search` `profile` section,
+    // not `_explain`, which is still unbuilt.
+    expect(profile.capabilities.query.explain).toBe(true);
   });
 
-  it("exposes OpenSearch live connection, catalog, and bounded query while keeping explain/admin deferred", () => {
+  it("exposes OpenSearch live connection, catalog, bounded query, and the _search profile plan while admin stays deferred", () => {
     const profile = getDataSourceProfile("opensearch");
 
     expect(profile.capabilities.connection.test).toBe(true);
     expect(profile.capabilities.catalog.indexes).toBe(true);
     expect(profile.capabilities.query.query).toBe(true);
     expect(profile.capabilities.query.cancel).toBe(true);
-    expect(profile.capabilities.query.explain).toBe(false);
+    expect(profile.capabilities.query.explain).toBe(true);
   });
 
   it("keeps legacy URL supported DBMS list aligned with profile-supported DBMS", () => {

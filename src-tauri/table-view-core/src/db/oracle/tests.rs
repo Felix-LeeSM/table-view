@@ -29,6 +29,44 @@ fn oracle_config() -> ConnectionConfig {
     }
 }
 
+/// #2154 — a self-signed CA certificate, valid to 2126, used only as a
+/// `verify-ca` trust anchor in these tests. `rustls::RootCertStore::add`
+/// parses the DER, so the `verify-ca` dial path cannot be asserted with a
+/// placeholder string; embedding one certificate is cheaper than a
+/// certificate-generating dev-dependency. It signs nothing and no test
+/// completes a handshake with it.
+///
+/// Regenerate with:
+/// `openssl req -x509 -newkey rsa:2048 -keyout /dev/null -nodes -days 36500
+///  -subj "/CN=table-view oracle test CA" -addext "basicConstraints=critical,CA:TRUE"`
+const TEST_CA_PEM: &str = "\
+-----BEGIN CERTIFICATE-----
+MIIDKzCCAhOgAwIBAgIUV3CjVueyDIz/FkfqVKnavjmMyoAwDQYJKoZIhvcNAQEL
+BQAwJDEiMCAGA1UEAwwZdGFibGUtdmlldyBvcmFjbGUgdGVzdCBDQTAgFw0yNjA4
+MTIwMTUwMzlaGA8yMTI2MDcxOTAxNTAzOVowJDEiMCAGA1UEAwwZdGFibGUtdmll
+dyBvcmFjbGUgdGVzdCBDQTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEB
+AKc3vnI3JdLxtb98L+auN467fpr9EBFpA/U8K+VJ0xbsFnvmj9xQEO/XP72yypn1
+sI0bC6G01hTa5iWtbJTPjVkRY0kDxcFH6G2JIk0wLqueobgoHXcL/4wjDjI6b08a
+nbo+uObJB/lYUpUxGoD20UeaCZxv7MCMv5pGLv/ujvsC6FNEqQNINBg+hrEboe+S
+hZ35QncS207GD4xvMnDgC3pF6njl1BmcaTrs/AZB1/OtXeTbZzuUACewsn5zlpXE
+YdBBSxNrdMs6xs5mwkSdKEGfwBrwItS/BMmk5F5729alKQEG6ryOBoxcIhdR1cr0
+iOSIYimWXxnbbRiyDspA1Q0CAwEAAaNTMFEwHQYDVR0OBBYEFKdcvohAMZmroqb2
+OiW37BoyDvD8MB8GA1UdIwQYMBaAFKdcvohAMZmroqb2OiW37BoyDvD8MA8GA1Ud
+EwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBABO+co9aK47MW1sEam99wzl7
+8RmJ0y0CTFJJy/ikJKQ1MZwpcoLoCfu64NCE5c/mR2ieZn6ECBzCDsgOwltI3/jw
+LSEqMES0UIcUIuOZCkLY4jCaMZ1kVYxh0oHEWUJ1ISqIsO2/+GdxPhgx3ZOzHrhR
+5L74cdJGFDRzuIG4J4s4Qpc5F/jx+gq463NoSgae6yZwQ0b4uBUvGFCiP09GFTqB
+aMzD3dojUMUurTaSYwW+uIXlHdiuW3qNbm9wPIm1wTTqW87AA7N4tL87HzgKVhYv
++dwPbHEC7XRX3cN7BVOeSwX6g35LmsIJQwvdknAjOTyELNgt8FW7ntHa8Hh3bm8=
+-----END CERTIFICATE-----
+";
+
+/// A single-address TCP descriptor for `svc`, the shape a `tnsnames.ora` entry
+/// carries. `dial_host.example.com` never resolves — nothing here connects.
+const TCP_DESCRIPTOR: &str = "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dial-host.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)))";
+/// The same descriptor over TCPS, the ADB / on-prem TLS listener shape.
+const TCPS_DESCRIPTOR: &str = "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCPS)(HOST=dial-host.example.com)(PORT=1522))(CONNECT_DATA=(SERVICE_NAME=svc)))";
+
 fn assert_oracle_not_open<T>(result: Result<T, AppError>) {
     assert!(matches!(
         result,
@@ -98,10 +136,12 @@ fn connect_config_rejects_empty_required_fields() {
 }
 
 #[test]
-fn connect_config_still_rejects_advanced_auth_and_tls_enabling_ssl_modes() {
+fn connect_config_still_rejects_advanced_auth_and_unexpressible_tls_postures() {
     // Reason: #1065 opens SID + wallet but keeps rejecting password-less
-    // external auth and any TLS-enabling posture (Oracle exposes no sslmode
-    // toggle; the wallet field is the only Oracle TLS trigger). (2026-07-17)
+    // external auth and the routing fields Oracle never reads. It also rejected
+    // every TLS-enabling posture, which #2154 undoes — the postures that survive
+    // that reversal are pinned in the second half of this test. (2026-07-17,
+    // rewritten 2026-08-12)
     let mut advanced = oracle_config();
     advanced.password.clear();
     assert!(matches!(
@@ -124,25 +164,363 @@ fn connect_config_still_rejects_advanced_auth_and_tls_enabling_ssl_modes() {
         Err(AppError::Validation(_))
     ));
 
-    // Reason: #1649 — the rejection now keys off `SslMode::tls_on()` instead of
-    // the `(tls_enabled, trust_server_certificate)` pair, so the boundary moved:
-    // every TLS-enabling posture is rejected, while `disable`/`prefer` stay
-    // accepted (asserted in
-    // `connect_config_uses_service_name_without_sid_wallet_or_tls`). The old
-    // "trust without TLS" case folds to `prefer` and is therefore no longer a
-    // rejection at all. (2026-08-02)
-    for ssl_mode in [SslMode::Require, SslMode::VerifyCa, SslMode::VerifyFull] {
-        let mut tls = oracle_config();
-        tls.ssl_mode = ssl_mode;
-        // `.err()` drops the Ok config: the crate's derived `Debug` prints
-        // `password` verbatim (threat model §0.1/§2.5), so it must never reach a
-        // panic message.
-        match OracleAdapter::connect_config(&tls, 5).err() {
-            Some(AppError::Validation(message)) => assert!(
-                message.contains("mTLS wallet") && message.contains("sslmode toggle"),
-                "{ssl_mode:?} rejected with the wrong guidance: {message}"
+    // Reason: #2154 — the posture boundary moved again. `verify-ca`/`verify-full`
+    // now dial TCPS (`connect_config_dials_wallet_less_tcps_for_verifying_postures`),
+    // so `require` is the only posture still rejected: "encrypt without
+    // verifying" is not expressible on this driver — `TlsConfig`'s
+    // `danger_accept_invalid_certs` sets a `verify_server` flag that
+    // `build_client_config` never reads (oracle-rs 0.1.7, threat model
+    // §0.1/D1) — and accepting it would silently relabel the user's posture as
+    // a verifying one. `verify-ca` with no CA file keeps failing closed on the
+    // shared `db::tls` message. `disable`/`prefer` stay accepted (asserted in
+    // `connect_config_uses_service_name_without_sid_wallet_or_tls`).
+    // (2026-08-12)
+    let mut skip_verify = oracle_config();
+    skip_verify.ssl_mode = SslMode::Require;
+    // `.err()` drops the Ok config: the crate's derived `Debug` prints
+    // `password` verbatim (threat model §0.1/§2.5), so it must never reach a
+    // panic message.
+    match OracleAdapter::connect_config(&skip_verify, 5).err() {
+        Some(AppError::Validation(message)) => assert!(
+            message.contains("cannot skip certificate verification"),
+            "require rejected with the wrong guidance: {message}"
+        ),
+        other => panic!("require must be rejected, got {other:?}"),
+    }
+
+    let mut unanchored = oracle_config();
+    unanchored.ssl_mode = SslMode::VerifyCa;
+    match OracleAdapter::connect_config(&unanchored, 5).err() {
+        Some(AppError::Validation(message)) => assert!(
+            message.contains("requires a CA certificate file"),
+            "verify-ca without a CA file rejected with the wrong guidance: {message}"
+        ),
+        other => panic!("verify-ca without a CA file must be rejected, got {other:?}"),
+    }
+}
+
+#[test]
+fn connect_config_dials_wallet_less_tcps_for_verifying_postures() {
+    // Reason: #2154 (#1650) — the wallet-less 1-way TLS dial path. `verify-full`
+    // anchors on the driver's webpki bundle and `verify-ca` on the user's CA
+    // file; both must reach the driver as TCPS with no client identity, which
+    // is what separates 1-way TLS from the #1065 wallet mTLS path. (2026-08-12)
+    let mut verify_full = oracle_config();
+    verify_full.ssl_mode = SslMode::VerifyFull;
+    let config = OracleAdapter::connect_config(&verify_full, 5).unwrap();
+    assert!(config.is_tls_enabled());
+    let tls = config
+        .tls_config
+        .expect("verify-full must attach a TLS config");
+    assert_eq!(
+        tls.ca_cert_path, None,
+        "verify-full anchors on public roots"
+    );
+    assert_eq!(tls.wallet_path, None);
+    assert_eq!(
+        tls.client_cert_path, None,
+        "1-way TLS must send no client certificate"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let ca_path = dir.path().join("test-ca.pem");
+    std::fs::write(&ca_path, TEST_CA_PEM).unwrap();
+    let ca_path = ca_path.to_string_lossy().into_owned();
+    let mut verify_ca = oracle_config();
+    verify_ca.ssl_mode = SslMode::VerifyCa;
+    verify_ca.ca_cert_path = Some(ca_path.clone());
+    let config = OracleAdapter::connect_config(&verify_ca, 5).unwrap();
+    assert!(config.is_tls_enabled());
+    let tls = config
+        .tls_config
+        .expect("verify-ca must attach a TLS config");
+    assert_eq!(
+        tls.ca_cert_path.as_deref(),
+        Some(ca_path.as_str()),
+        "the user's CA must reach the driver as the trust anchor"
+    );
+    assert_eq!(
+        tls.client_cert_path, None,
+        "1-way TLS must send no client certificate"
+    );
+    // The anchor has to load: building eagerly in `connect_config` is what
+    // turns an unusable CA into a config-time refusal instead of a handshake
+    // failure minutes later.
+    tls.build_client_config()
+        .expect("the test CA must be a usable trust anchor");
+}
+
+#[test]
+fn connect_config_unusable_ca_file_fails_closed_without_leaking_path() {
+    // Reason: #2154 — same contract the wallet path has had since #1065: a
+    // trust anchor that cannot be loaded must fail closed, and the error must
+    // not echo the filesystem path (leaks the home-directory username /
+    // internal topology; redact contract §2.5 / #1453). (2026-08-12)
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("no-such-ca.pem");
+    let junk = dir.path().join("not-a-ca.pem");
+    std::fs::write(&junk, "this file is not a certificate\n").unwrap();
+
+    for ca_path in [missing, junk] {
+        let ca_path = ca_path.to_string_lossy().into_owned();
+        let mut verify_ca = oracle_config();
+        verify_ca.ssl_mode = SslMode::VerifyCa;
+        verify_ca.ca_cert_path = Some(ca_path.clone());
+        match OracleAdapter::connect_config(&verify_ca, 5).err() {
+            Some(AppError::Connection(message)) => assert!(
+                !message.contains(&ca_path),
+                "CA path leaked into error: {message}"
             ),
-            other => panic!("{ssl_mode:?} must be rejected, got {other:?}"),
+            other => panic!("expected a redacted Connection error, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn connect_config_wallet_mtls_reaches_a_built_tls_config() {
+    // Reason: #2154 — a wallet that actually loads reaches
+    // `rustls::ClientConfig::builder()`, which resolves the process-level
+    // `CryptoProvider`. This workspace compiles rustls with both provider
+    // features on, so before #2154 installed one that call **panicked** rather
+    // than erroring: the #1065 wallet mTLS dial could not complete at all. No
+    // pre-#2154 test reached it because none supplied a loadable wallet — the
+    // wallet tests all stop at a missing/blank path. This one loads.
+    // (2026-08-12)
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("ewallet.pem"), TEST_CA_PEM).unwrap();
+    let wallet_path = dir.path().to_string_lossy().into_owned();
+    let mut wallet = oracle_config();
+    wallet.wallet_path = Some(wallet_path.clone());
+
+    let config = OracleAdapter::connect_config(&wallet, 5).unwrap();
+    assert!(config.is_tls_enabled());
+    let tls = config
+        .tls_config
+        .expect("a loadable wallet must attach a TLS config");
+    assert_eq!(tls.wallet_path.as_deref(), Some(wallet_path.as_str()));
+    assert_eq!(
+        tls.ca_cert_path, None,
+        "the wallet is its own trust store; no sslmode CA is mixed in"
+    );
+    tls.build_client_config()
+        .expect("the wallet trust store must build");
+}
+
+#[test]
+fn connect_config_refuses_a_wallet_and_an_sslmode_posture_together() {
+    // Reason: #2154 — the wallet is its own trust store *and* client identity
+    // (#1065), so a wallet plus a verifying sslmode posture names two anchors
+    // for one handshake. That is an ambiguous instruction, not a stronger one:
+    // resolving it silently in either direction would connect in a posture the
+    // user did not pick. (2026-08-12)
+    let dir = tempfile::tempdir().unwrap();
+    let mut both = oracle_config();
+    both.wallet_path = Some(dir.path().to_string_lossy().into_owned());
+    both.ssl_mode = SslMode::VerifyFull;
+    match OracleAdapter::connect_config(&both, 5).err() {
+        Some(AppError::Validation(message)) => assert!(
+            message.contains("separate TLS paths"),
+            "wallet + posture rejected with the wrong guidance: {message}"
+        ),
+        other => panic!("a wallet plus a TLS posture must be rejected, got {other:?}"),
+    }
+}
+
+#[test]
+fn connect_config_dials_a_tns_descriptor_through_the_same_axis() {
+    // Reason: #2154 (#2102) — a descriptor pasted into the service field
+    // supplies host, port, service and connect method, so it overrides the form
+    // fields rather than sitting beside them. The descriptor itself never
+    // reaches the driver (oracle-rs rejects descriptors outright): it is parsed
+    // here and the driver rebuilds its own connect string from the parts.
+    // (2026-08-12)
+    let mut tns = oracle_config();
+    tns.host = "form-host-is-unused.example.com".into();
+    tns.port = 1;
+    tns.database = format!("  {TCP_DESCRIPTOR}  ");
+    let config = OracleAdapter::connect_config(&tns, 5).unwrap();
+    assert_eq!(config.host, "dial-host.example.com");
+    assert_eq!(config.port, 1521);
+    assert!(matches!(
+        config.service,
+        ServiceMethod::ServiceName(ref service) if service == "svc"
+    ));
+    assert!(!config.is_tls_enabled(), "PROTOCOL=TCP is a plaintext dial");
+
+    // CONNECT_DATA picks the connect method — the form's service/SID toggle
+    // does not get a second vote.
+    let mut sid = oracle_config();
+    sid.oracle_use_sid = Some(false);
+    sid.database = "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dial-host.example.com)(PORT=1521))(CONNECT_DATA=(SID=ORCL)))".into();
+    let config = OracleAdapter::connect_config(&sid, 5).unwrap();
+    assert!(matches!(
+        config.service,
+        ServiceMethod::Sid(ref sid) if sid == "ORCL"
+    ));
+
+    // The #1065 character whitelist still guards the parsed coordinates, so a
+    // descriptor is not a way around it.
+    let mut injected = oracle_config();
+    injected.database = "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=evil host)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)))".into();
+    assert!(matches!(
+        OracleAdapter::connect_config(&injected, 5).err(),
+        Some(AppError::Validation(message)) if message.contains("host contains unsupported characters")
+    ));
+}
+
+#[test]
+fn connect_config_accepts_a_descriptor_in_tnsnames_ora_layout() {
+    // Reason: #2154 — the malformed-descriptor error and both form hints tell
+    // the user to paste "the whole `(DESCRIPTION=...)` entry from tnsnames.ora",
+    // and that file is written with newlines, indentation and spaces around
+    // `=`. Rejecting exactly the layout the instruction asks for left the user
+    // with no way out of the error. Clause keys are matched case-insensitively,
+    // so a lowercase entry parses to the same dial. (2026-08-12)
+    let laid_out = "\
+(description =
+    (address = (protocol = tcp)(host = dial-host.example.com)(port = 1521))
+    (connect_data =
+      (service_name = svc)
+    )
+  )";
+    let mut config = oracle_config();
+    config.database = laid_out.into();
+    let built = OracleAdapter::connect_config(&config, 5).unwrap();
+    assert_eq!(built.host, "dial-host.example.com");
+    assert_eq!(built.port, 1521);
+    assert!(matches!(
+        built.service,
+        ServiceMethod::ServiceName(ref service) if service == "svc"
+    ));
+    assert!(!built.is_tls_enabled(), "PROTOCOL=tcp is a plaintext dial");
+
+    // A single space after a `)` is the smallest form of the same rejection.
+    let mut spaced = oracle_config();
+    spaced.database = TCP_DESCRIPTOR.replace(")(CONNECT_DATA", ") (CONNECT_DATA");
+    assert_ne!(
+        spaced.database, TCP_DESCRIPTOR,
+        "the spacing rewrite matched nothing"
+    );
+    let built = OracleAdapter::connect_config(&spaced, 5).unwrap();
+    assert_eq!(built.host, "dial-host.example.com");
+
+    // Whitespace between clauses is layout, not a licence for anything else:
+    // junk there is still malformed.
+    let mut junk = oracle_config();
+    junk.database = TCP_DESCRIPTOR.replace(")(CONNECT_DATA", ") junk (CONNECT_DATA");
+    assert!(
+        matches!(
+            OracleAdapter::connect_config(&junk, 5).err(),
+            Some(AppError::Validation(message)) if message.contains("malformed")
+        ),
+        "text between clauses must stay malformed"
+    );
+}
+
+#[test]
+fn connect_config_keeps_descriptor_protocol_and_tls_posture_in_step() {
+    // Reason: #2154 — the driver rebuilds the connect string from its own
+    // `tls_mode`, so a descriptor's PROTOCOL and the connection's TLS posture
+    // must agree or the dial contradicts the descriptor. Dialing plaintext
+    // where the user pasted TCPS is exactly the silent downgrade the #1065
+    // threat model rejected free-form descriptors over (§2.1). (2026-08-12)
+    let mut matched = oracle_config();
+    matched.database = TCPS_DESCRIPTOR.into();
+    matched.ssl_mode = SslMode::VerifyFull;
+    let config = OracleAdapter::connect_config(&matched, 5).unwrap();
+    assert!(config.is_tls_enabled());
+    assert_eq!(config.host, "dial-host.example.com");
+    assert_eq!(config.port, 1522);
+
+    for posture in [SslMode::Prefer, SslMode::Disable] {
+        let mut downgraded = oracle_config();
+        downgraded.database = TCPS_DESCRIPTOR.into();
+        downgraded.ssl_mode = posture;
+        match OracleAdapter::connect_config(&downgraded, 5).err() {
+            Some(AppError::Validation(message)) => assert!(
+                message.contains("PROTOCOL=TCPS"),
+                "{posture:?} rejected with the wrong guidance: {message}"
+            ),
+            other => {
+                panic!("a TCPS descriptor must not dial plaintext under {posture:?}, got {other:?}")
+            }
+        }
+    }
+
+    let mut upgraded = oracle_config();
+    upgraded.database = TCP_DESCRIPTOR.into();
+    upgraded.ssl_mode = SslMode::VerifyFull;
+    assert!(
+        matches!(
+            OracleAdapter::connect_config(&upgraded, 5).err(),
+            Some(AppError::Validation(message)) if message.contains("enables TLS")
+        ),
+        "a TCP descriptor must not be silently upgraded to a TCPS dial"
+    );
+}
+
+#[test]
+fn connect_config_refuses_tns_clauses_it_cannot_honor() {
+    // Reason: #2154 implements option A2 of the #1065 threat model (§5-A):
+    // extract host/port/service/protocol and hard-fail on every other clause.
+    // §2.1 rejected the free-form option (A3) because a parser that drops
+    // clauses leaves the user believing the descriptor pinned a posture the
+    // dial never applied — DN matching is the sharpest case, since oracle-rs
+    // 0.1.7 stores `ssl_server_dn_match` and never reads it. (2026-08-12)
+    let unhonored = [
+        // DN pinning the driver cannot enforce.
+        "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCPS)(HOST=dial-host.example.com)(PORT=1522))(CONNECT_DATA=(SERVICE_NAME=svc))(SECURITY=(SSL_SERVER_DN_MATCH=yes)))",
+        // Failover / load-balancing list — this client dials one address.
+        "(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=dial-host.example.com)(PORT=1521)))(CONNECT_DATA=(SERVICE_NAME=svc)))",
+        // Server-mode request.
+        "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dial-host.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)(SERVER=DEDICATED)))",
+        // Retry/timeout knobs the driver does not take.
+        "(DESCRIPTION=(RETRY_COUNT=3)(ADDRESS=(PROTOCOL=TCP)(HOST=dial-host.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)))",
+        // Two addresses: refused as a repeat, never resolved to the first one.
+        "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dial-host.example.com)(PORT=1521))(ADDRESS=(PROTOCOL=TCP)(HOST=other.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)))",
+        // Neither coordinate set is optional.
+        "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dial-host.example.com))(CONNECT_DATA=(SERVICE_NAME=svc)))",
+        "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dial-host.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)(SID=ORCL)))",
+        "(DESCRIPTION=(ADDRESS=(PROTOCOL=IPC)(HOST=dial-host.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)))",
+        "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dial-host.example.com)(PORT=not-a-port))(CONNECT_DATA=(SERVICE_NAME=svc)))",
+    ];
+    for descriptor in unhonored {
+        let mut config = oracle_config();
+        config.database = descriptor.into();
+        assert!(
+            matches!(
+                OracleAdapter::connect_config(&config, 5).err(),
+                Some(AppError::Validation(_))
+            ),
+            "descriptor accepted despite a clause this client cannot honor: {descriptor}"
+        );
+    }
+}
+
+#[test]
+fn connect_config_rejects_malformed_descriptors_without_echoing_their_contents() {
+    // Reason: #2154 — the descriptor field is where a user can paste a whole
+    // `user/password@host` connect string (threat model §4-4), and descriptor
+    // values carry internal topology besides. Parse errors may name a clause
+    // key; they may never repeat a value. (2026-08-12)
+    let secret = "hunter2-must-not-be-echoed";
+    let malformed = [
+        "(DESCRIPTION=".to_string(),
+        format!("{TCP_DESCRIPTOR}trailing-junk"),
+        format!("{TCP_DESCRIPTOR}{TCP_DESCRIPTOR}"),
+        "(DESCRIPTION=(ADDRESS))".to_string(),
+        "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dial-host.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)".to_string(),
+        format!("(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=dial-host.example.com)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)(PASSWORD={secret})))"),
+    ];
+    for descriptor in &malformed {
+        let mut config = oracle_config();
+        config.database = descriptor.clone();
+        match OracleAdapter::connect_config(&config, 5).err() {
+            Some(AppError::Validation(message)) => assert!(
+                !message.contains(secret) && !message.contains("dial-host.example.com"),
+                "descriptor contents leaked into the error: {message}"
+            ),
+            other => panic!("malformed descriptor was not rejected: {other:?}"),
         }
     }
 }
@@ -279,9 +657,10 @@ fn connect_config_wallet_password_without_path_fails_closed() {
 
 #[test]
 fn connect_config_without_wallet_leaves_tls_disabled() {
-    // Reason: #1065 — no wallet path means plain TCP; the wallet field is the
-    // only Oracle TLS trigger (1-way TLS / trust toggles are out of scope).
-    // (2026-07-17)
+    // Reason: #1065 — no wallet path means plain TCP. #2154 adds the sslmode
+    // posture as a second TLS trigger, so this now pins the default: neither
+    // trigger present (`prefer`, no wallet) still dials plaintext.
+    // (2026-07-17, restated 2026-08-12)
     let config = OracleAdapter::connect_config(&oracle_config(), 5).unwrap();
     assert!(!config.is_tls_enabled());
     assert!(config.tls_config.is_none());

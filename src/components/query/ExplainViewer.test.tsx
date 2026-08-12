@@ -9,23 +9,35 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const explainRdbMock = vi.fn();
 const explainMongoMock = vi.fn();
+const explainSearchMock = vi.fn();
 const cancelQueryMock = vi.fn();
 
 vi.mock("@/lib/api/explain", () => ({
   explainRdbQuery: (...args: unknown[]) => explainRdbMock(...args),
   explainMongoFind: (...args: unknown[]) => explainMongoMock(...args),
+  explainSearchQuery: (...args: unknown[]) => explainSearchMock(...args),
 }));
 
 vi.mock("@/lib/tauri", () => ({
   cancelQuery: (...args: unknown[]) => cancelQueryMock(...args),
 }));
 
+// #2153 — the search branch is asserted against the recorded cluster profile
+// (#2198), the same file the parser test and the Rust live-query test read.
+import profileFixtureRaw from "../../../tests/fixtures/search-profile-response.json?raw";
 import { ExplainViewer } from "./ExplainViewer";
+
+const elasticsearchProfile = (
+  JSON.parse(profileFixtureRaw) as {
+    captures: Array<{ product: string; profile: unknown }>;
+  }
+).captures.find((capture) => capture.product === "elasticsearch")?.profile;
 
 describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
   beforeEach(() => {
     explainRdbMock.mockReset();
     explainMongoMock.mockReset();
+    explainSearchMock.mockReset();
     cancelQueryMock.mockReset();
     cancelQueryMock.mockResolvedValue("cancelled");
   });
@@ -235,6 +247,103 @@ describe("ExplainViewer (Sprint 337 U2 live wire)", () => {
     await waitFor(() =>
       expect(screen.getByTestId("explain-refresh")).toBeInTheDocument(),
     );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  // ── #2153: the search paradigm renders the `_search` profile section ──
+
+  it("dispatches the search request with profile and renders the recorded shard tree", async () => {
+    explainSearchMock.mockResolvedValueOnce(elasticsearchProfile);
+    const searchSpec = {
+      index: "table-view-elastic-2026.05.24",
+      body: { query: { match: { message: "fixture" } } },
+    };
+    render(
+      <ExplainViewer
+        connectionId="conn-es"
+        dbType="elasticsearch"
+        searchSpec={searchSpec}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("explain-plan")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("explain-viewer")).toHaveAttribute(
+      "data-paradigm",
+      "search",
+    );
+    expect(explainSearchMock).toHaveBeenCalledWith(
+      "conn-es",
+      searchSpec,
+      expect.stringMatching(/^explain-/),
+    );
+    expect(explainRdbMock).not.toHaveBeenCalled();
+    expect(explainMongoMock).not.toHaveBeenCalled();
+
+    expect(screen.getByTestId("explain-plan-summary")).toHaveTextContent(
+      "Profile Summary",
+    );
+    expect(screen.getByText("TermQuery")).toBeInTheDocument();
+    expect(screen.getByText("message:fixture")).toBeInTheDocument();
+    expect(screen.getByText("create_weight")).toBeInTheDocument();
+    expect(
+      screen.getByText("GlobalOrdinalsStringTermsAggregator"),
+    ).toBeInTheDocument();
+    // The untouched payload stays reachable — the smoke step and the result
+    // panel both read the cluster's own key names out of it.
+    expect(screen.getByTestId("explain-raw-json")).toHaveTextContent(
+      '"time_in_nanos":',
+    );
+  });
+
+  it("says so when the cluster answers a search explain without a profile", async () => {
+    explainSearchMock.mockResolvedValueOnce(null);
+    render(
+      <ExplainViewer
+        connectionId="conn-es"
+        dbType="opensearch"
+        searchSpec={{ index: "logs", body: {} }}
+      />,
+    );
+
+    expect(await screen.findByTestId("explain-empty")).toHaveTextContent(
+      /without a profile section/,
+    );
+    expect(screen.queryByTestId("explain-plan")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  // #2153 regression — the Stop button renders for every paradigm, so a search
+  // explain can be cancelled before the cluster answers. "Answered without a
+  // profile" must not be what the user sees for a request they stopped: the
+  // empty state above asserts something about the cluster's answer, and after
+  // a cancel there is no answer to assert.
+  it("does not claim a missing profile when a search explain is cancelled", async () => {
+    let rejectExplain: (reason: unknown) => void = () => {};
+    explainSearchMock.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectExplain = reject;
+      }),
+    );
+    const user = userEvent.setup();
+    render(
+      <ExplainViewer
+        connectionId="conn-es"
+        dbType="opensearch"
+        searchSpec={{ index: "logs", body: {} }}
+      />,
+    );
+
+    await user.click(await screen.findByTestId("explain-cancel"));
+    expect(cancelQueryMock).toHaveBeenCalledTimes(1);
+
+    rejectExplain(new Error("Database error: Operation cancelled"));
+    await waitFor(() =>
+      expect(screen.getByTestId("explain-refresh")).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("explain-empty")).toBeNull();
+    expect(screen.queryByTestId("explain-plan")).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
   });
 

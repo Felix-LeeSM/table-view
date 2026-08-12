@@ -76,6 +76,24 @@ export function parseSearchDslRequest(
   };
 }
 
+/**
+ * #2153 — Explain on a search tab re-runs the same request with the bounded
+ * `profile` flag, so it needs the same parse the run path does. A body the
+ * bounded parser can't shape has no plan to show; the parse failure is
+ * returned rather than thrown so the caller can surface the reason instead of
+ * leaving the result area blank (the Mongo explain path does the same).
+ */
+export function deriveSearchExplainSpec(
+  sql: string,
+  searchTarget?: QueryTab["searchTarget"],
+): { request: SearchQueryRequest } | { error: string } {
+  try {
+    return { request: parseSearchDslRequest(sql, searchTarget) };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function executeSearchDslQuery({
   tab,
   sql,

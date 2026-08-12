@@ -1,5 +1,11 @@
-//! Shared TLS/encryption decision for the sqlx-based RDB adapters
-//! (PostgreSQL, MySQL/MariaDB).
+//! Shared TLS/encryption decision for the RDB adapters that resolve the whole
+//! `sslmode` posture rather than a plain on/off toggle: PostgreSQL and
+//! MySQL/MariaDB (sqlx), SQL Server (tiberius) and — since #2154 — Oracle
+//! (oracle-rs). Every one of them reads [`resolve_tls_decision`]; the on/off
+//! engines read [`SslMode::tls_on`] / [`SslMode::skip_verify`] instead and never
+//! reach this module. It also owns the process-wide rustls provider install
+//! ([`install_rustls_crypto_provider`]), because that is a property of the
+//! process rather than of any one adapter.
 //!
 //! Issue #1062 wired the model's TLS posture onto the sqlx connect options so a
 //! user who turns TLS on is never silently downgraded to plaintext by the driver
@@ -12,7 +18,7 @@
 //! This helper resolves the model into an explicit, driver-neutral decision that
 //! each adapter maps onto its concrete driver `SslMode`.
 //!
-//! ## Why `verify-ca` is never handed to the driver as `VerifyCa`
+//! ## Why `verify-ca` is never handed to the sqlx drivers as `VerifyCa`
 //!
 //! Two facts, both read out of the versions this repo pins in
 //! `src-tauri/Cargo.lock` (sqlx 0.8.6, rustls 0.23.39):
@@ -43,21 +49,86 @@
 //!
 //! Because fact 1 is not fixable inside sqlx 0.8.6, a certificate issued by any
 //! public CA **for the real database hostname** is still accepted under
-//! `verify-ca`. That residual is inherent to the anchor-widening design, not to
-//! this mapping.
+//! `verify-ca` on PostgreSQL/MySQL/MariaDB. That residual is inherent to the
+//! anchor-widening design, not to this mapping.
+//!
+//! ## The anchor direction is the driver's, not this module's
+//!
+//! `RequireVerifyFull { extra_ca_cert_path }` says "verify, and here is a CA the
+//! user named". What each adapter does with the rest of its root store differs
+//! and this module does not decide it. SQL Server widens the OS trust store the
+//! same way sqlx widens the webpki bundle (`db::mssql`). Oracle is the one
+//! consumer that goes the other way: oracle-rs seeds its root store *either*
+//! from the CA file *or* from the webpki bundle, never both, so naming a CA
+//! there **narrows** the anchor set (`db::oracle`, the `RequireVerifyFull` arm).
+//! Narrower is never looser, and hostname verification stays on in every
+//! branch — but "`verify-ca` only ever adds anchors" is a sqlx/tiberius fact,
+//! not a posture-wide one.
 
 use crate::error::AppError;
 use crate::models::{ConnectionConfig, SslMode};
 
+/// Install the process-wide rustls [`CryptoProvider`] once, so that every
+/// rustls consumer in this process resolves the same one.
+///
+/// [`CryptoProvider`]: rustls::crypto::CryptoProvider
+///
+/// #2154 — this workspace compiles rustls 0.23 with *both* provider features on
+/// (`src-tauri/Cargo.lock` lists `aws-lc-rs` and `ring` in the rustls dependency
+/// array), so `from_crate_features()` can infer neither and
+/// `rustls::ClientConfig::builder()` **panics** instead of returning an error
+/// (`rustls-0.23.39/src/crypto/mod.rs:248-286`).
+///
+/// Three consumers in this process resolve the process default rather than
+/// naming a provider, so the install binds all three at once:
+///
+/// * `oracle-rs` — `TlsConfig::build_client_config` calls
+///   `ClientConfig::builder()` (`oracle-rs-0.1.7/src/transport/tls.rs:142`) for
+///   both the #2154 TCPS path and the #1065 wallet mTLS path, which reaches it
+///   through `Config::with_wallet` (`oracle-rs-0.1.7/src/config.rs:252-255`).
+///   That wallet path has been panicking since #1065 wherever a wallet was
+///   actually readable; no unit test caught it because none supplies a loadable
+///   wallet.
+/// * `redis` — `rustls::ClientConfig::builder()`
+///   (`redis-0.32.7/src/connection.rs:988`), a direct dependency through
+///   `tokio-rustls-comp` (`src-tauri/table-view-core/Cargo.toml:80`).
+/// * `reqwest` — `CryptoProvider::get_default()` first, `ring` only as the
+///   fallback (`reqwest-0.12.28/src/async_impl/client.rs:763-771`), a direct
+///   dependency through `rustls-tls`
+///   (`src-tauri/table-view-core/Cargo.toml:81`); it carries the Search
+///   adapter's HTTPS (`db::search_http`).
+///
+/// sqlx is the one rustls user here that does name its provider explicitly
+/// (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:99`·`:104`·`:107`
+/// `builder_with_provider`), which is why pg/mysql never needed this.
+///
+/// **Call it from process startup, not from a dial.** Installing it lazily on
+/// the first Oracle connection would leave the redis and reqwest backends
+/// decided by whether an Oracle connection happened to be assembled first, and
+/// would leave redis' `builder()` panicking until it was. The app calls this in
+/// `table_view_lib::run()` before any adapter exists; adapters call it too so
+/// library consumers and unit tests are covered. `install_default` is itself
+/// idempotent — it returns `Err` when a provider is already installed, which
+/// satisfies the same need — so repeat calls are free and no `Once` is needed.
+///
+/// `aws-lc-rs` is the choice because it is rustls' own default feature and
+/// sqlx's default branch, so nothing in the process gets a backend it would not
+/// have had on a single-provider build.
+pub fn install_rustls_crypto_provider() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}
+
 /// Fail-closed rejection for `verify-ca` without a CA file. Surfaced verbatim
-/// by the storage write boundary and by the pg/mysql connect path, so the user
-/// reads the same actionable sentence wherever the posture is caught.
+/// by the storage write boundary and by every connect path that reads
+/// [`resolve_tls_decision`], so the user reads the same actionable sentence
+/// wherever the posture is caught.
 pub(crate) const VERIFY_CA_REQUIRES_CA_MESSAGE: &str =
     "sslmode=verify-ca requires a CA certificate file: select the CA that signs the server \
      certificate, or switch to verify-full to verify against the built-in public CA list";
 
-/// Driver-neutral outcome of the [`SslMode`] posture. Each sqlx adapter maps
-/// this onto its own driver enum:
+/// Driver-neutral outcome of the [`SslMode`] posture, consumed by
+/// `db::postgres`, `db::mysql`, `db::mssql` and `db::oracle`. The two sqlx
+/// adapters map it onto their own driver enum:
 ///
 /// | decision                           | `PgSslMode`                    | `MySqlSslMode`              | [`SslMode`]   |
 /// |------------------------------------|--------------------------------|-----------------------------|---------------|
@@ -67,11 +138,11 @@ pub(crate) const VERIFY_CA_REQUIRES_CA_MESSAGE: &str =
 /// | `RequireVerifyFull { Some(path) }` | `VerifyFull` + `ssl_root_cert` | `VerifyIdentity` + `ssl_ca` | `verify-ca`   |
 /// | `RequireVerifyFull { None }`       | `VerifyFull`                   | `VerifyIdentity`            | `verify-full` |
 ///
-/// There is deliberately **no** variant that selects the drivers' own `VerifyCa`
-/// mode — see the module docs. Collapsing the two verifying postures into one
-/// variant makes the unsafe mapping unrepresentable in both adapters at once
-/// rather than relying on each of them to remember. `Clone` (not `Copy`) because
-/// of the owned path.
+/// There is deliberately **no** variant that selects the sqlx drivers' own
+/// `VerifyCa` mode — see the module docs. Collapsing the two verifying postures
+/// into one variant makes the unsafe mapping unrepresentable in `db::postgres`
+/// and `db::mysql` at once rather than relying on each of them to remember.
+/// `Clone` (not `Copy`) because of the owned path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TlsDecision {
     /// #1063 — explicitly force plaintext (`sslmode=disable`). Distinct from
@@ -87,9 +158,10 @@ pub(crate) enum TlsDecision {
     /// Force encryption with full chain **and hostname** verification.
     ///
     /// `extra_ca_cert_path` is the `verify-ca` posture: the user's
-    /// private/self-signed CA, handed to the driver's root-certificate option so
-    /// rustls trusts it *in addition to* the bundled public roots. `None` is
-    /// plain `verify-full`.
+    /// private/self-signed CA, handed to the driver's root-certificate option.
+    /// Whether that anchor lands *beside* the driver's existing roots (sqlx,
+    /// tiberius) or *instead of* them (oracle-rs) is the adapter's business —
+    /// see the module docs. `None` is plain `verify-full`.
     ///
     /// The path is **not** optional for `verify-ca`: a posture that names a
     /// trust anchor it does not have is indistinguishable from `verify-full`, so

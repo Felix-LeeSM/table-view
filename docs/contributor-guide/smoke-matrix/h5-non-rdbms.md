@@ -372,7 +372,7 @@ suggestions plus shared snippets. Runtime Happy Path now wires representative
 Elasticsearch and OpenSearch connect/auth/TLS root-probe, catalog metadata,
 selected-index detail, search render, delete-plan, live delete-execution, and
 error-surface smoke, but this does not claim actual live index/settings admin
-execution, broader observability, profile/explain request workflow, or full
+execution, broader observability, the `_explain` request workflow, or full
 language-core Search DSL parser/completion ownership.
 
 ## Elasticsearch/OpenSearch product delta
@@ -408,7 +408,7 @@ delete-by-query planning estimates through safe `_search` as a preview plan
 before the confirmed live `_delete_by_query` runs, Runtime Happy Path covers the
 representative product workflow, and Search DSL completion keeps catalog
 candidates product-scoped. Broader live promotion still requires index/settings
-admin execution policy, broader observability/profile-explain workflows, and
+admin execution policy, broader observability and `_explain` workflows, and
 product-specific destructive deltas.
 
 ## Elasticsearch support-claim closure audit
@@ -427,7 +427,7 @@ Elasticsearch claim: live URL/auth/TLS root probe, catalog/index detail, bounded
 live `_delete_by_query` execution promoted by #1076, visible error surface, and
 wired Runtime Happy Path smoke. Static Search fixtures remain contract evidence,
 OpenSearch query is now a focused runtime slice, and actual live index/settings
-admin execution, broader observability/profile-explain workflow, and full
+admin execution, broader observability and the `_explain` workflow, and full
 language-core editor parser/completion ownership remain separate future gates.
 
 ## Elasticsearch documentation recheck
@@ -445,7 +445,7 @@ runtime/parser-safety/autocomplete boundaries, known limitations, and testing
 matrix match shipped Elasticsearch behavior. Runtime smoke, backend request
 validation, bounded TypeScript editor assistance, fixture-only Search contracts,
 OpenSearch connection/catalog focused evidence, and remaining unsupported live
-admin/observability/profile-explain/full-language-core-completion work stay
+admin/observability/`_explain`/full-language-core-completion work stay
 separated before parity closure.
 
 ## OpenSearch documentation recheck
@@ -463,7 +463,7 @@ runtime/parser-safety/autocomplete boundaries, known limitations, and testing
 matrix match shipped OpenSearch behavior. Runtime smoke, backend request
 validation, bounded TypeScript editor assistance, fixture-only Search contracts,
 live service evidence, and remaining unsupported live
-admin/observability/profile-explain/full-language-core-completion work stay
+admin/observability/`_explain`/full-language-core-completion work stay
 separated before parity closure.
 
 ## OpenSearch test coverage recheck
@@ -514,7 +514,7 @@ delete-by-query safety planning plus the live `_delete_by_query` execution
 promoted by #1076, mapping-aware editor assistance, visible error surface, and
 wired Runtime Happy Path smoke. Static Search fixtures remain contract evidence,
 Elasticsearch claims stay separate, and actual live index/settings admin
-execution, broader observability/profile-explain workflow, product-specific
+execution, broader observability and the `_explain` workflow, product-specific
 destructive deltas, and full language-core editor parser/completion ownership
 remain separate future gates.
 
@@ -562,6 +562,6 @@ connect/auth/TLS contract, catalog/index detail metadata, bounded search
 rendering, delete-by-query safety planning, live `_delete_by_query` execution
 behind the Safe Mode confirm gate, and visible error surface. Future Search
 promotion still includes index/settings admin execution policy, broader
-observability/profile workflows, and product-specific destructive deltas. Future
+observability workflows, and product-specific destructive deltas. Future
 Redis/Valkey smoke expansion can add DB switch, stream-specific coverage, and
 confirmed Valkey delete/persist success without widening full CLI/admin parity.

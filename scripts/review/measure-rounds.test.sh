@@ -83,8 +83,34 @@ got : $got"
 	fi
 }
 
+# 부분 문자열 판정. "있다/없다" 를 파이프라인 status 로 받던 자리를 여기로 모았다 —
+# 판정이 한 군데서만 나야 다음 편집이 그 형태를 되살릴 자리가 없다. 이 파일에서 안
+# 지나는 자리와 그 이유:
+#   - `grep -qF … "$SCRIPT"` · `grep -cF … "$dst"` — grep 이 파일을 직접 열어
+#     파이프도 writer 도 없다.
+#   - `grep -nF … "$GATE_WORKFLOW" | head -1 | cut …` — 파이프이고 왼쪽이 writer
+#     이지만 status 가 아니라 값을 쓴다. head 가 일찍 빠져도 판정이 안 뒤집힌다.
+#
+# **파이프를 쓰지 않는다.** 옛 구현 `printf '%s\n' "$OUT" | grep -qF -- "$1"` 은
+# grep -q 가 첫 일치에서 stdin 을 안 비우고 빠지는 동안 왼쪽 printf 가 아직 쓸 것을
+# 갖고 있으면 EPIPE → SIGPIPE 로 141 이 되고, 위 `set -o pipefail` 이 그 141 을
+# 파이프라인 status 로 올려 **판정을 뒤집었다** (#2314). assert_has 는 있는 문자열을
+# 못 찾은 것처럼 red 가 됐고, 부호가 반대인 assert_lacks 는 같은 141 을 "없음" =
+# 통과로 등록해 조용한 거짓 green 을 냈다.
+#
+# `case` 패턴 안의 따옴표 친 확장은 glob 메타문자까지 리터럴이라 `grep -F` 와 뜻이
+# 같고, 프로세스도 파이프도 안 만든다. 다른 점은 needle 에 개행이 있을 때뿐이다 —
+# grep -F 는 줄 단위 OR, case 는 그 연속열 그대로다. 개행을 품은 needle 을 넘기려면
+# 이 함수부터 다시 봐라. 회귀 가드는 아래 "assertion helpers (#2314)" 절이다.
+contains() {
+	case "$1" in
+	*"$2"*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
 assert_has() {
-	if printf '%s\n' "$OUT" | grep -qF -- "$1"; then
+	if contains "$OUT" "$1"; then
 		pass "$2"
 	else
 		fail "$2" "찾는 문자열: $1
@@ -93,7 +119,7 @@ $OUT"
 }
 
 assert_lacks() {
-	if printf '%s\n' "$OUT" | grep -qF -- "$1"; then
+	if contains "$OUT" "$1"; then
 		fail "$2" "없어야 할 문자열: $1"
 	else
 		pass "$2"
@@ -179,7 +205,7 @@ check_gate_signal() {
 	if [ -z "$(gate_condition)" ]; then
 		fail "gate coupling: 'Stop at review round 3' 스텝의 if: 조건을 못 찾았다" \
 			"스텝 이름이나 워크플로 구조가 바뀌었다. 이 스위트의 gate_condition() 을 같이 고쳐라."
-	elif gate_condition | grep -qF 'steps.rounds.outputs.rounds'; then
+	elif contains "$(gate_condition)" 'steps.rounds.outputs.rounds'; then
 		pass "게이트 집행 조건이 head-oid 라운드 수를 읽는다 (기본 round_def 의 짝)"
 	else
 		fail "gate coupling: 게이트 집행 조건이 라운드 집계 output 을 안 읽는다" \
@@ -193,7 +219,7 @@ $(gate_condition)"
 	if [ -z "$(gate_count_step)" ]; then
 		fail "gate coupling: 'Count review rounds by head OID' 스텝의 run: 블록을 못 찾았다" \
 			"스텝 이름이나 워크플로 구조가 바뀌었다. 이 스위트의 gate_count_step() 을 같이 고쳐라."
-	elif gate_count_step | grep -qF "$HEAD_ASSIGN_JQ" && gate_count_step | grep -qF 'unique | length'; then
+	elif contains "$(gate_count_step)" "$HEAD_ASSIGN_JQ" && contains "$(gate_count_step)" 'unique | length'; then
 		pass "게이트 집계 스텝이 서로 다른 head OID 를 센다"
 	else
 		fail "gate coupling: 게이트 집계 스텝이 head OID 를 세지 않는다" \
@@ -272,7 +298,7 @@ check_reflect_release() {
 
 	# ② 그 뒤에서 실제로 도는가. dismissal 이 exit 1 한 뒤라 `always()` 가 없으면
 	#    이 스텝은 영영 안 돌고 label 이 영구히 남는다. 순서만으로는 부족하다.
-	if gate_release_condition | grep -qF 'always()'; then
+	if contains "$(gate_release_condition)" 'always()'; then
 		pass "해제 스텝이 always() 라 dismissal 의 exit 1 뒤에도 돈다"
 	else
 		fail "gate coupling: reflect:done 해제 스텝의 if: 에 always() 가 없다" \
@@ -409,6 +435,59 @@ assert_rc 2 "값 없는 --top 이 마지막 인자"
 OUT="$(bash "$SCRIPT" --since 2026-07-25 --wat 2>&1)"
 RC=$?
 assert_rc 2 "모르는 인자"
+
+# ── assertion helpers (#2314) ────────────────────────────────────────────
+# contains() 가 파이프를 안 쓴다는 것의 회귀 가드. 옛 형태로 되돌리면 여기가 red 다.
+#
+# 옛 구현은 `printf '%s\n' "$OUT" | grep -qF -- "$1"` 이었다. grep -q 는 첫 일치에서
+# stdin 을 안 비우고 빠지고, 왼쪽 printf 가 파이프 버퍼(64KiB)보다 큰 것을 써야 하면
+# grep 이 비워 주기를 기다리며 막혔다가 이미 빠진 grep 때문에 EPIPE → SIGPIPE 로 141
+# 이 된다. `set -o pipefail` 이 그 141 을 파이프라인 status 로 올려 판정을 뒤집는다.
+#
+# payload 를 파이프 버퍼의 두 배로 잡는 이유: 버퍼 바로 위는 아직 확률이다.
+# 2026-08-12 macOS 실측 한 판(4-way 동시 × 200, 첫 줄 일치, 옛 구현,
+# flip = 있는 문자열을 "없음" 으로 낸 횟수. 전부 printf 쪽 141):
+#   1543B 0/800 · 8041B 0/800 · 40037B 133/800 · 70057B 799/800 ·
+#   200055B 800/800 · 600043B 800/800
+# 70057B 는 판마다 흔들린다 — 같은 명령이 800/800 · 791/800 · 799/800 을 냈다.
+# 800/800 이 흔들리지 않은 것은 200055B 부터라 아래 하한을 131072 로 잡는다.
+# 재현 명령은 PR #2318 body 「기전의 경계」절에 있다.
+# 이 절은 $OUT 을 덮어쓴다 — 여기 아래에서 위 measure() 의 출력을 읽는 단언이 없다.
+echo "assertion helpers (#2314):"
+
+SIGPIPE_PAD='filler-line-for-issue-2314'
+while [ "${#SIGPIPE_PAD}" -lt 200000 ]; do
+	SIGPIPE_PAD="$SIGPIPE_PAD
+$SIGPIPE_PAD"
+done
+OUT="NEEDLE-2314
+$SIGPIPE_PAD"
+
+# ① payload 가 실제로 파이프 버퍼를 넘는가. 이게 깨지면 아래 둘은 green 이어도
+#    아무것도 안 지킨다 — 옛 구현이 여기서 안 죽는 크기로 줄어든 것이다.
+if [ "${#OUT}" -ge 131072 ]; then
+	pass "SIGPIPE 가드 payload 가 파이프 버퍼(64KiB)의 두 배를 넘는다 (${#OUT}, ASCII)"
+else
+	fail "SIGPIPE 가드 payload 가 너무 작다: ${#OUT}" \
+		"131072 를 못 넘으면 결정론 구간 밖이다 — 버퍼 바로 위(70057B)는 위 실측대로 아직 확률이라 가드가 무력해진다."
+fi
+
+# ② assert_has — 있는 문자열을 SIGPIPE 로 놓치지 않는다. 옛 구현에서는 141 이
+#    pipefail 을 타고 올라와 이 단언이 red 였다 (눈에 띄는 쪽).
+assert_has "NEEDLE-2314" "assert_has: 파이프 버퍼보다 큰 출력의 첫 줄 일치를 놓치지 않는다"
+
+# ③ assert_lacks — 있는 문자열이 조용한 거짓 통과가 되지 않는다. **이쪽이 더
+#    위험하다**: 부호가 반대라 같은 141 이 "없음" = 통과로 등록되어 red 조차 안
+#    남겼다. 여기서 올바른 동작은 FAIL 이라 서브셸에서 불러 출력만 본다 —
+#    total/fails 증가는 서브셸과 함께 버려진다.
+sigpipe_probe="$(assert_lacks "NEEDLE-2314" "probe" 2>&1)"
+if contains "$sigpipe_probe" "FAIL probe"; then
+	pass "assert_lacks: 파이프 버퍼보다 큰 출력에 있는 문자열을 통과로 등록하지 않는다"
+else
+	fail "assert_lacks: 있는 문자열이 통과로 등록됐다 — 조용한 거짓 green" \
+		"assert_lacks 가 낸 것:
+$sigpipe_probe"
+fi
 
 # ── mutation — 이 스위트가 실제로 잡는지 ─────────────────────────────────
 # 변조본을 만들고, 그 변조가 파일에 착지했는지 확인한 뒤, 같은 스위트를 변조본에

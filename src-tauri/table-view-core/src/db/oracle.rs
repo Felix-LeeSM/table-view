@@ -8,9 +8,14 @@
 //! (`Config::with_wallet`, `ewallet.pem`) with a host/service/SID injection
 //! whitelist. Issue #1072 (2차) also wires read-only trigger listing
 //! (`list_triggers` over `all_triggers`, header-only definition — the LONG
-//! body is not read). Raw DDL/admin execution, switch-database, trigger DDL
-//! (create/drop) and single-trigger source, TNS descriptors, 1-way TLS
-//! (TCPS+CA), and advanced auth remain unsupported or unclaimed.
+//! body is not read). Issue #2154 opens the two remaining dial paths onto the
+//! same `connect_config` axis: a pasted TNS connect descriptor (parsed down to
+//! host/port/service/protocol, every other clause rejected) and wallet-less
+//! 1-way TLS (TCPS) driven by the shared [`crate::db::tls`] posture, with the
+//! CA file of `verify-ca` as the trust anchor. Raw DDL/admin execution,
+//! switch-database, trigger DDL (create/drop) and single-trigger source,
+//! tnsnames.ora alias resolution, and advanced auth remain unsupported or
+//! unclaimed.
 
 mod admin;
 mod catalog;
@@ -26,11 +31,12 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::time::Duration;
 
-use oracle_rs::{Config as OracleConfig, Connection as OracleConnection};
+use oracle_rs::{Config as OracleConfig, Connection as OracleConnection, TlsConfig};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+use crate::db::tls::{install_rustls_crypto_provider, resolve_tls_decision, TlsDecision};
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
@@ -78,7 +84,15 @@ impl OracleAdapter {
 
     async fn connect_session(&self, config: &ConnectionConfig) -> Result<(), AppError> {
         let timeout_secs = connection_timeout_secs(config);
-        let connection = Self::open_connection(config, timeout_secs).await?;
+        // #2154 — read the dial target off the resolved driver config, not off
+        // `config.host`/`config.port`: a TNS descriptor supplies its own
+        // coordinates and the form's host/port are unused in that branch, so
+        // logging the form fields would name a server we never dialed.
+        let oracle_config = Self::connect_config(config, timeout_secs)?;
+        let (dialed_host, dialed_port) = (oracle_config.host.clone(), oracle_config.port);
+        let connection = OracleConnection::connect_with_config(oracle_config)
+            .await
+            .map_err(map_oracle_connection_error)?;
         if let Err(err) = connection.ping().await {
             let _ = connection.close().await;
             return Err(map_oracle_connection_error(err));
@@ -91,7 +105,7 @@ impl OracleAdapter {
         guard.connected_config = Some(config.clone());
         guard.connection = Some(connection);
 
-        info!("Connected to Oracle at {}:{}", config.host, config.port);
+        info!("Connected to Oracle at {dialed_host}:{dialed_port}");
         Ok(())
     }
 
@@ -147,16 +161,38 @@ impl OracleAdapter {
         config: &ConnectionConfig,
         timeout_secs: u64,
     ) -> Result<OracleConfig, AppError> {
-        let host = config.host.trim();
-        // `database` carries the service name, or the SID when `oracle_use_sid`.
-        let service = config.database.trim();
+        // `database` carries the service name, the SID when `oracle_use_sid`,
+        // or — since #2154 — a whole TNS connect descriptor.
+        let dial_source = config.database.trim();
+        let descriptor = if dial_source.starts_with('(') {
+            Some(parse_tns_descriptor(dial_source)?)
+        } else {
+            None
+        };
+        // #2154 — a descriptor names host, port, service and connect method
+        // itself, so it owns all four: honoring the form's host/port beside it
+        // would leave two sources of truth for one dial. The Oracle form
+        // disables those inputs while a descriptor is present.
+        let (host, port, service, use_sid) = match &descriptor {
+            Some(target) => (
+                target.host.as_str(),
+                target.port,
+                target.service.as_str(),
+                target.use_sid,
+            ),
+            None => (
+                config.host.trim(),
+                config.port,
+                dial_source,
+                config.oracle_use_sid.unwrap_or(false),
+            ),
+        };
         let username = config.user.trim();
-        let use_sid = config.oracle_use_sid.unwrap_or(false);
 
         if host.is_empty() {
             return Err(AppError::Validation("Oracle host is required".into()));
         }
-        if config.port == 0 {
+        if port == 0 {
             return Err(AppError::Validation("Oracle port is required".into()));
         }
         if service.is_empty() {
@@ -184,6 +220,9 @@ impl OracleAdapter {
         // threat model §2.1). This also subsumes the old TNS/`//` substring
         // rejections. Oracle identifiers are `[A-Za-z0-9_$#.-]` in practice
         // (service names carry `.`/`-`, e.g. ADB `..._high.adb.oraclecloud.com`).
+        // #2154 — descriptor-sourced coordinates land here too: the descriptor
+        // is parsed, never forwarded, so the driver still rebuilds its own
+        // connect string out of values this whitelist has cleared.
         if !is_oracle_identifier_safe(host) {
             return Err(AppError::Validation(
                 "Oracle host contains unsupported characters; use a plain hostname or IP".into(),
@@ -192,7 +231,7 @@ impl OracleAdapter {
         if !is_oracle_identifier_safe(service) {
             return Err(AppError::Validation(
                 format!(
-                    "Oracle {} contains unsupported characters; TNS/easy-connect descriptors are not supported (#1065)",
+                    "Oracle {} contains unsupported characters; use a plain identifier, or paste the whole TNS connect descriptor (#2154)",
                     if use_sid { "SID" } else { "service name" }
                 ),
             ));
@@ -209,32 +248,10 @@ impl OracleAdapter {
                     .into(),
             ));
         }
-        // The MSSQL-only trust/tls toggles are never exposed for Oracle — the
-        // driver's `danger_accept_invalid_certs` is a no-op (threat model
-        // §0.1/D1), so honoring them would be a lie. The wallet field is the
-        // only Oracle TLS trigger.
-        if config.ssl_mode.tls_on() {
-            return Err(AppError::Validation(
-                "Oracle uses an mTLS wallet, not the sslmode toggle; leave the TLS posture at disable or prefer (#1065)".into(),
-            ));
-        }
-
         let mut oracle_config = if use_sid {
-            OracleConfig::with_sid(
-                host,
-                config.port,
-                service,
-                username,
-                config.password.as_str(),
-            )
+            OracleConfig::with_sid(host, port, service, username, config.password.as_str())
         } else {
-            OracleConfig::new(
-                host,
-                config.port,
-                service,
-                username,
-                config.password.as_str(),
-            )
+            OracleConfig::new(host, port, service, username, config.password.as_str())
         };
 
         // #1065 — Oracle wallet (mTLS): reference the user's wallet directory.
@@ -254,7 +271,27 @@ impl OracleAdapter {
                 "Oracle wallet password requires a wallet directory path; set the wallet path or clear the wallet password (#1065)".into(),
             ));
         }
-        if let Some(wallet_path) = wallet_path {
+
+        // ── TLS ────────────────────────────────────────────────────────────
+        // Both branches below reach `rustls::ClientConfig::builder()`, which
+        // panics with no process default installed. The app installs one at
+        // startup; this repeat call covers unit tests and library consumers
+        // that never run `table_view_lib::run()`. See
+        // `db::tls::install_rustls_crypto_provider` for why it is a process
+        // property and not an Oracle one.
+        install_rustls_crypto_provider();
+        // Two anchors can drive an Oracle handshake and they are mutually
+        // exclusive: the wallet (#1065 mTLS — the wallet's own certificate is
+        // both trust store and client identity) and the shared sslmode posture
+        // (#2154 wallet-less 1-way TCPS). Naming both is an ambiguous
+        // instruction, not a stronger one, so it is rejected rather than
+        // silently resolved in one direction.
+        let tls_enabled = if let Some(wallet_path) = wallet_path {
+            if config.ssl_mode.tls_on() {
+                return Err(AppError::Validation(
+                    "Oracle wallet mTLS and the sslmode posture are separate TLS paths; leave the TLS posture at disable or prefer while a wallet directory is set (#2154)".into(),
+                ));
+            }
             warn_on_loose_wallet_permissions(wallet_path);
             let wallet_password = if config.wallet_password.is_empty() {
                 None
@@ -263,7 +300,73 @@ impl OracleAdapter {
             };
             oracle_config = oracle_config
                 .with_wallet(wallet_path, wallet_password)
-                .map_err(|error| map_oracle_wallet_error(wallet_path, error))?;
+                .map_err(|error| map_oracle_tls_path_error(wallet_path, error))?;
+            true
+        } else {
+            // #2154 — the same `resolve_tls_decision` the pg/mysql/mssql
+            // adapters read, so `verify-ca` fails closed without a CA file
+            // here too (`db::tls::VERIFY_CA_REQUIRES_CA_MESSAGE`).
+            match resolve_tls_decision(config)? {
+                // oracle-rs has no opportunistic mode: `prefer` is plain TCP,
+                // the same wire `disable` forces. They are distinguishable only
+                // for engines whose driver negotiates.
+                TlsDecision::Disable | TlsDecision::Default => false,
+                // `require` = encrypt without verifying. The driver cannot
+                // express it: `TlsConfig::danger_accept_invalid_certs` sets a
+                // `verify_server` flag that `build_client_config` never reads
+                // (oracle-rs 0.1.7, threat model §0.1/D1). Accepting it would
+                // relabel the user's posture as a verifying one behind their
+                // back, so it is refused with the postures that do work.
+                TlsDecision::RequireSkipVerify => {
+                    return Err(AppError::Validation(
+                        "Oracle cannot skip certificate verification; use verify-full, or verify-ca with the CA that signs the server certificate (#2154)".into(),
+                    ))
+                }
+                TlsDecision::RequireVerifyFull { extra_ca_cert_path } => {
+                    // Unlike sqlx (see `db::tls` module docs), naming a CA here
+                    // *narrows* the anchors: oracle-rs seeds its root store from
+                    // the CA file when one is set and from the webpki bundle
+                    // otherwise, never both. That is stricter than the pg/mysql
+                    // mapping, never looser. rustls verifies the hostname in
+                    // both branches — the driver passes the dial host as the
+                    // SNI name and installs no custom verifier.
+                    let tls_config = match extra_ca_cert_path.as_deref() {
+                        Some(ca_cert_path) => TlsConfig::new().with_ca_cert(ca_cert_path),
+                        None => TlsConfig::new(),
+                    };
+                    // Build eagerly — `Config::tls_config` stores without
+                    // validating, so an unreadable CA file would otherwise
+                    // surface as a handshake failure at connect time. The
+                    // driver echoes the path in that error, so redact it.
+                    tls_config.build_client_config().map_err(|error| {
+                        match extra_ca_cert_path.as_deref() {
+                            Some(ca_cert_path) => map_oracle_tls_path_error(ca_cert_path, error),
+                            None => map_oracle_connection_error(error),
+                        }
+                    })?;
+                    oracle_config = oracle_config.tls_config(tls_config);
+                    true
+                }
+            }
+        };
+
+        // #2154 — a descriptor's `PROTOCOL` is an instruction, not a hint. The
+        // driver rebuilds the connect string from `tls_mode`, so a mismatch
+        // here would dial the opposite protocol from the one the descriptor
+        // spells out — plaintext where the user pasted TCPS is exactly the
+        // silent downgrade the #1065 threat model rejected free-form
+        // descriptors over (§2.1). Fail closed in both directions.
+        if let Some(target) = &descriptor {
+            if target.tcps && !tls_enabled {
+                return Err(AppError::Validation(
+                    "Oracle TNS descriptor asks for PROTOCOL=TCPS; set the TLS posture to verify-full or verify-ca, or point at a wallet directory (#2154)".into(),
+                ));
+            }
+            if !target.tcps && tls_enabled {
+                return Err(AppError::Validation(
+                    "Oracle TNS descriptor asks for PROTOCOL=TCP but the connection enables TLS; paste the TCPS descriptor or turn the TLS posture off (#2154)".into(),
+                ));
+            }
         }
 
         Ok(oracle_config.connect_timeout(Duration::from_secs(timeout_secs)))
@@ -614,13 +717,182 @@ fn map_oracle_connection_error(error: oracle_rs::Error) -> AppError {
     AppError::connection_redacted(masked)
 }
 
-/// #1065 — wallet-load failures from the driver echo the wallet path (leaks
-/// the home-directory username / internal topology). Mask the exact path plus
-/// any residual path/DN before routing through the redacting constructor.
-fn map_oracle_wallet_error(wallet_path: &str, error: oracle_rs::Error) -> AppError {
-    let masked = error.to_string().replace(wallet_path, "***");
+/// #1065 — TLS-material load failures from the driver echo the file path
+/// (leaks the home-directory username / internal topology): the wallet
+/// directory, and since #2154 the `verify-ca` CA certificate. Mask the exact
+/// path plus any residual path/DN before routing through the redacting
+/// constructor.
+fn map_oracle_tls_path_error(path: &str, error: oracle_rs::Error) -> AppError {
+    let masked = error.to_string().replace(path, "***");
     let masked = crate::storage::sql_redact::redact_paths_and_dn(&masked);
     AppError::connection_redacted(masked)
+}
+
+/// #2154 — the dial coordinates a TNS connect descriptor carries. Everything a
+/// descriptor can express beyond these four is rejected, never dropped.
+struct TnsDialTarget {
+    host: String,
+    port: u16,
+    /// Service name, or SID when `use_sid` — whichever `CONNECT_DATA` named.
+    service: String,
+    use_sid: bool,
+    /// `PROTOCOL=TCPS`: the descriptor asks for a TLS dial.
+    tcps: bool,
+}
+
+/// The only clause keys this client honors inside a descriptor.
+///
+/// #2154 implements option A2 of the #1065 threat model
+/// (`docs/explorations/oracle-wallet-tns-threat-model-2026-07-17.md` §5-A):
+/// pull host/port/service/protocol out of the descriptor and hard-fail on
+/// every other clause. §2.1 rejected free-form descriptors (A3) precisely
+/// because a partial parser silently drops clauses that carry security
+/// semantics — `SECURITY`/`SSL_SERVER_DN_MATCH` (oracle-rs 0.1.7 stores
+/// `ssl_server_dn_match` and never reads it), `ADDRESS_LIST` failover,
+/// proxies — leaving the user believing the descriptor pinned a posture the
+/// dial never applied. Refusing the clause keeps that belief impossible.
+const TNS_HONORED_CLAUSES: [&str; 8] = [
+    "DESCRIPTION",
+    "ADDRESS",
+    "CONNECT_DATA",
+    "PROTOCOL",
+    "HOST",
+    "PORT",
+    "SERVICE_NAME",
+    "SID",
+];
+
+/// Parse a TNS connect descriptor down to the coordinates the driver can dial.
+///
+/// The descriptor is **never forwarded** — `oracle-rs` rejects descriptors
+/// outright (`Config::from_str` errors on a leading `(`) and rebuilds its own
+/// connect string from host/port/service, so the parsed parts still pass the
+/// `connect_config` character whitelist before the driver sees them.
+///
+/// Error messages name clause *keys*, never clause values: a descriptor field
+/// is where a user can paste a whole `user/password@host` connect string
+/// (threat model §4-4), and values also carry internal topology.
+fn parse_tns_descriptor(descriptor: &str) -> Result<TnsDialTarget, AppError> {
+    let malformed = || {
+        AppError::Validation(
+            "Oracle TNS descriptor is malformed; paste the whole `(DESCRIPTION=...)` entry from tnsnames.ora (#2154)".into(),
+        )
+    };
+
+    // One balanced top-level group. Closing to depth 0 before the end would
+    // mean two descriptors concatenated, of which only the first is read.
+    let mut depth = 0i32;
+    for (index, ch) in descriptor.char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth < 0 || (depth == 0 && index + 1 != descriptor.len()) {
+                    return Err(malformed());
+                }
+            }
+            _ => {}
+        }
+    }
+    if depth != 0 {
+        return Err(malformed());
+    }
+
+    // Every clause starts at a `(`, so each `(`-delimited fragment is
+    // `KEY=VALUE` followed only by the `)` that close it and its parents, plus
+    // whatever layout whitespace separates them.
+    let mut fragments = descriptor.split('(');
+    if fragments.next() != Some("") {
+        return Err(malformed());
+    }
+    let mut clauses: Vec<(String, &str)> = Vec::new();
+    for fragment in fragments {
+        let (head, closers) = match fragment.find(')') {
+            Some(close) => fragment.split_at(close),
+            None => (fragment, ""),
+        };
+        // Whitespace is allowed between the closers: a tnsnames.ora entry
+        // written by Net Configuration Assistant puts newlines and indentation
+        // there, and the error message plus both form hints tell the user to
+        // paste exactly that file's entry. Rejecting it made the instruction
+        // impossible to follow. Anything else between clauses is still
+        // malformed, and the injection guard is elsewhere — `(HOST=evil host)`
+        // is caught by the `connect_config` character whitelist, not here.
+        if closers.chars().any(|ch| ch != ')' && !ch.is_whitespace()) {
+            return Err(malformed());
+        }
+        let (key, value) = head.split_once('=').ok_or_else(malformed)?;
+        let key = key.trim().to_ascii_uppercase();
+        if !TNS_HONORED_CLAUSES.contains(&key.as_str()) {
+            // Render the key defensively — it is untrusted input, and it is the
+            // one part of the descriptor an error may repeat.
+            let named: String = key
+                .chars()
+                .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+                .take(32)
+                .collect();
+            return Err(AppError::Validation(format!(
+                "Oracle TNS descriptor clause `{named}` is not supported; this client dials one address with PROTOCOL, HOST, PORT and SERVICE_NAME or SID, and refuses clauses it cannot honor rather than ignoring them (#2154)"
+            )));
+        }
+        if clauses.iter().any(|(seen, _)| seen == &key) {
+            return Err(AppError::Validation(format!(
+                "Oracle TNS descriptor repeats the `{key}` clause; this client dials a single address, so a failover/load-balanced descriptor must be split into one connection per address (#2154)"
+            )));
+        }
+        clauses.push((key, value.trim()));
+    }
+
+    let clause = |name: &str| {
+        clauses
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| *value)
+            .filter(|value| !value.is_empty())
+    };
+    let required = |name: &'static str| {
+        clause(name).ok_or_else(move || {
+            AppError::Validation(format!(
+                "Oracle TNS descriptor must carry a `{name}` clause (#2154)"
+            ))
+        })
+    };
+
+    let tcps = match required("PROTOCOL")?.to_ascii_uppercase().as_str() {
+        "TCP" => false,
+        "TCPS" => true,
+        _ => {
+            return Err(AppError::Validation(
+                "Oracle TNS descriptor PROTOCOL must be TCP or TCPS (#2154)".into(),
+            ))
+        }
+    };
+    let host = required("HOST")?.to_string();
+    let port = required("PORT")?.parse::<u16>().map_err(|_| {
+        AppError::Validation("Oracle TNS descriptor PORT is not a valid port number (#2154)".into())
+    })?;
+    let (service, use_sid) = match (clause("SERVICE_NAME"), clause("SID")) {
+        (Some(service_name), None) => (service_name.to_string(), false),
+        (None, Some(sid)) => (sid.to_string(), true),
+        (Some(_), Some(_)) => {
+            return Err(AppError::Validation(
+                "Oracle TNS descriptor names both SERVICE_NAME and SID; keep the one the database expects (#2154)".into(),
+            ))
+        }
+        (None, None) => {
+            return Err(AppError::Validation(
+                "Oracle TNS descriptor must carry a `SERVICE_NAME` or `SID` clause (#2154)".into(),
+            ))
+        }
+    };
+
+    Ok(TnsDialTarget {
+        host,
+        port,
+        service,
+        use_sid,
+        tcps,
+    })
 }
 
 /// #1065 — character whitelist for Oracle host / service name / SID at the

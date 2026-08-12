@@ -24,8 +24,9 @@ export type DatabaseType =
  * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
  *
  * Oracle is exposed for service-name lifecycle plus bounded catalog/query/cancel
- * runtime. Edit/DDL, parser/completion, PL/SQL, SID/TNS/wallet/TLS remain
- * unclaimed.
+ * runtime. The dial also takes a SID and a wallet (#1065), a TNS connect
+ * descriptor and wallet-less 1-way TCPS (#2154). Edit/DDL, parser/completion,
+ * PL/SQL, tnsnames.ora alias resolution and advanced auth remain unclaimed.
  */
 export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
   "postgresql",
@@ -295,10 +296,12 @@ export const isSearchFamily = (dbType: DatabaseType): boolean =>
  * consumer special-cases `dbType === "mssql"` first (encrypt-by-default seed),
  * so that branch wins before `exposesTlsToggle` is ever consulted.
  *
- * `postgresql` renders a TLS control (#1526) but is deliberately kept OUT,
- * along with the no-TLS-control types (mysql/mariadb/oracle/sqlite/duckdb):
- * a posture must not be carried onto — or persisted for — those drafts, so the
- * switch resets them to `prefer`.
+ * The sslmode-dropdown engines are deliberately kept OUT — `postgresql`
+ * (#1526), `mysql`/`mariadb` (#1063) and `oracle` (#2154) — along with the
+ * no-TLS-control types (sqlite/duckdb): a posture must not be carried onto —
+ * or persisted for — those drafts, so the switch resets them to `prefer`.
+ * Membership here is "renders a plain on/off toggle", not "renders no TLS
+ * control at all"; those stopped being the same set when the dropdown spread.
  *
  * #1649 note: the pre-#1649 rationale for this split was the
  * `tls_enabled=true, trust=None` combination that the backend hard-rejected
@@ -363,6 +366,40 @@ export const SSL_MODE_OPTIONS: readonly SslMode[] = [
   "verify-full",
 ];
 
+/**
+ * #2154 — the postures Oracle offers. `require` is dropped on top of the
+ * `verify-ca` exclusion above: "encrypt without verifying" is not expressible
+ * on the Oracle driver, whose `danger_accept_invalid_certs` sets a flag its
+ * client-config builder never reads, so the backend rejects that posture
+ * outright rather than relabelling it. Offering an option that can only fail
+ * would be the same lie one level up.
+ *
+ * A connection stored as `require` (an import, a hand-edited file) still
+ * renders its own value through `sslModeChoices` — the dropdown never silently
+ * rewrites a stored posture — and fails at connect with the backend's guidance.
+ */
+export const ORACLE_SSL_MODE_OPTIONS: readonly SslMode[] = [
+  "disable",
+  "prefer",
+  "verify-full",
+];
+
+/**
+ * #2154 — whether the Oracle service field carries a TNS connect descriptor
+ * rather than a bare service name or SID.
+ *
+ * A descriptor names host, port, service and connect method itself, so the
+ * backend reads all four out of it and ignores the form's host/port/method.
+ * The form disables those inputs and the dialog drops its host-required check
+ * on the same signal, so exactly one rule decides which fields are live.
+ * Matches the backend trigger in `connect_config`: a leading `(` after trim.
+ */
+export function usesTnsDescriptor(
+  source: Pick<ConnectionDraft, "dbType" | "database">,
+): boolean {
+  return source.dbType === "oracle" && source.database.trim().startsWith("(");
+}
+
 /** Whether the posture negotiates TLS at all. Mirrors `SslMode::tls_on`. */
 export function sslModeTlsOn(mode: SslMode | undefined): boolean {
   return mode !== undefined && mode !== "disable" && mode !== "prefer";
@@ -405,20 +442,54 @@ export function draftVerifyingSslMode(
 }
 
 /**
- * The options a dropdown must render for `current` — `SSL_MODE_OPTIONS` plus
- * `current` itself when it is not offered. Without this a connection stored as
+ * The options a dropdown must render for `current` — the offered list plus
+ * `current` itself when it is not in it. Without this a connection stored as
  * `verify-ca` would render with an empty select and a save would silently
  * rewrite its posture.
+ *
+ * #2154 — `offered` defaults to the shared `SSL_MODE_OPTIONS`; callers that
+ * know the engine pass `sslModeOptionsFor(dbType)`. The re-add rule is what
+ * keeps a narrower list from turning into a silent rewrite of the postures it
+ * drops.
  */
-export function sslModeChoices(current: SslMode): readonly SslMode[] {
-  return SSL_MODE_OPTIONS.includes(current)
-    ? SSL_MODE_OPTIONS
-    : [...SSL_MODE_OPTIONS, current];
+export function sslModeChoices(
+  current: SslMode,
+  offered: readonly SslMode[] = SSL_MODE_OPTIONS,
+): readonly SslMode[] {
+  return offered.includes(current) ? offered : [...offered, current];
 }
 
-/** True for the engines that render the sslmode dropdown (pg/mysql/mariadb). */
+/**
+ * True for the engines that render the sslmode dropdown, and therefore for the
+ * engines whose pasted URL carries an `sslmode=` value rather than a boolean
+ * `tls`/`ssl`.
+ *
+ * #2154 — Oracle joined the dropdown, so it joins here. While it did not, a
+ * pasted `oracle://…?sslmode=verify-full` fell through to the boolean branch of
+ * `resolveUrlTls`, found no `tls`/`ssl` key, and was dropped without even being
+ * reported as unreflected — the exact silent loss `unreflectedTlsParam` exists
+ * to prevent.
+ */
 export function usesSslModeSelect(dbType: DatabaseType): boolean {
-  return dbType === "postgresql" || dbType === "mysql" || dbType === "mariadb";
+  return (
+    dbType === "postgresql" ||
+    dbType === "mysql" ||
+    dbType === "mariadb" ||
+    dbType === "oracle"
+  );
+}
+
+/**
+ * The postures `dbType`'s dropdown offers — the shared list, narrowed for the
+ * engines that cannot author all of it.
+ *
+ * #2154 — one place answers "can this engine author this posture?", so the form
+ * and the URL-paste path cannot drift into offering different sets. Drift is
+ * what made a pasted Oracle `sslmode=require` reflectable in principle while
+ * the dropdown refused to show it.
+ */
+export function sslModeOptionsFor(dbType: DatabaseType): readonly SslMode[] {
+  return dbType === "oracle" ? ORACLE_SSL_MODE_OPTIONS : SSL_MODE_OPTIONS;
 }
 
 export type FileConnectionDatabaseType = Extract<
@@ -591,21 +662,32 @@ function resolveUrlTls(
     const found = findParamCaseInsensitive(searchParams, SSLMODE_PARAM_KEYS);
     if (!found) return { fields: {}, unreflected: null };
     const [key, rawValue] = found;
+    // #2154 — reflect only a posture this engine's dropdown can author;
+    // anything else is reported, never applied. For pg/mysql/mariadb the
+    // offered list already covers every value the switch below produces, so
+    // this gate changes nothing there. It is what keeps Oracle's `require` —
+    // a posture the backend rejects outright — from being seeded into a draft
+    // that could only fail to connect.
+    const offered = sslModeOptionsFor(dbType);
+    const reflectable = (sslMode: SslMode): UrlTlsResolution =>
+      offered.includes(sslMode)
+        ? reflected(sslMode)
+        : { fields: {}, unreflected: `${key}=${rawValue}` };
     switch (rawValue.toLowerCase()) {
       case "disable":
       case "disabled":
-        return reflected("disable");
+        return reflectable("disable");
       case "prefer":
       case "preferred":
         return { fields: {}, unreflected: null };
       case "require":
       case "required":
-        return reflected("require");
+        return reflectable("require");
       case "verify-full":
       case "verify_full":
       case "verify-identity":
       case "verify_identity":
-        return reflected("verify-full");
+        return reflectable("verify-full");
       default:
         // verify-ca (no CA picker yet), allow, and any unknown value.
         return { fields: {}, unreflected: `${key}=${rawValue}` };

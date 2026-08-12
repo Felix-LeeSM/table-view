@@ -84,10 +84,14 @@ Child page of
   streams, mappings, settings/analyzers, templates, field paths, bounded
   `_search` dispatch/rendering, sample documents, error handling, cancellation,
   and safe `_search` delete-by-query estimates.
-- Remaining unsupported work: the `_explain` endpoint, a dedicated
-  profile/explain request workflow with its own viewer — a `profile` payload
-  requested through the raw DSL renders in the existing result panel and that is
-  the whole of what #2198 shipped — broader admin
+- The `_search` `profile` plan has a request workflow and a viewer: the search
+  query tab's Explain button re-runs the request with the bounded `profile`
+  flag and renders the response's profile section as a shard → search →
+  query/collector/aggregation/fetch tree, raw payload retained (#2153, on the
+  flag #2198 unlocked).
+- Remaining unsupported work: the `_explain` endpoint (per-document score
+  explanation — the bounded validator still rejects the `explain` key and no
+  adapter method calls it), broader admin
   APIs (index/settings create/delete), broader observability workflows, and
   product-specific destructive deltas remain future gates. Search
   live HTTP/admin promotion remains owned by the Search roadmap/milestone, not

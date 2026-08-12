@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { SchemaGraphDiffChangeKind } from "@/lib/schemaGraphDiff";
 import { type ErdTableFlowNode, useErdCanvasView } from "./erdCanvasContext";
 import { erdDiffTableKinds } from "./erdDiffHighlight";
+import { erdCardShape } from "./erdGraphModel";
 
 /**
  * One badge tone per index of `erdSchemaToneIndex`. Written out as whole class
@@ -65,6 +66,7 @@ export default function SchemaErdTableNode({
   const { t } = useTranslation("schema");
   const {
     tablesById,
+    detailLevel,
     selectedTableId,
     relatedTableIds,
     searchMatchTableIds,
@@ -75,6 +77,9 @@ export default function SchemaErdTableNode({
   const model = tablesById.get(id);
   if (!model) return null;
 
+  // ADR 0054 (2): the zoom step decides how much of the table a card spells
+  // out. The card shrinks inside the slot elkjs reserved; it never moves.
+  const card = erdCardShape(model, detailLevel);
   const isSelected = selectedTableId === id;
   const isRelated = !selectedTableId || isSelected || relatedTableIds.has(id);
   const isSearchMatch = searchMatchTableIds
@@ -115,7 +120,7 @@ export default function SchemaErdTableNode({
       data-search-match={isSearchMatch}
       data-diff-kinds={diffKinds.length > 0 ? diffKinds.join(" ") : undefined}
       onClick={() => onToggleSelect(id)}
-      style={{ width: model.width, height: model.height }}
+      style={{ width: model.width, height: card.height }}
       className={`flex flex-col overflow-hidden rounded border bg-card text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
         isSelected
           ? "border-primary ring-2 ring-primary/20"
@@ -167,7 +172,7 @@ export default function SchemaErdTableNode({
         </div>
       </div>
       <div className="flex flex-1 flex-col py-1">
-        {model.visibleColumns.map((column) => (
+        {card.visibleColumns.map((column) => (
           <div
             key={column.id}
             className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-2 px-3 py-0.5 text-xs"
@@ -191,9 +196,9 @@ export default function SchemaErdTableNode({
             />
           </div>
         ))}
-        {model.hiddenColumnCount > 0 && (
+        {card.hiddenColumnCount > 0 && (
           <div className="px-3 py-0.5 text-xs text-muted-foreground">
-            {t("moreColumns", { count: model.hiddenColumnCount })}
+            {t("hiddenColumns", { count: card.hiddenColumnCount })}
           </div>
         )}
       </div>
@@ -227,8 +232,9 @@ function ErdDiffMark({ kind }: { kind: SchemaGraphDiffChangeKind }) {
 /**
  * Change-kind mark on one column row. Renders nothing for an untouched column.
  * Two touched columns get no row to mark at all: one the comparison dropped, so
- * the current schema has none (see `erdDiffHighlight`), and one past
- * `ERD_MAX_VISIBLE_COLUMNS`, which the "more columns" line only counts.
+ * the current schema has none (see `erdDiffHighlight`), and one the zoom step
+ * left out of the card (`erdCardShape`), which the hidden-columns line only
+ * counts.
  */
 function ErdColumnDiffMark({
   kind,

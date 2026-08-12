@@ -30,9 +30,19 @@ import type { SchemaGraphSource } from "@/types/schemaGraph";
 
 // A re-layout resets every node position, so a diff mark — pure presentation —
 // must never trigger one. Counting elkjs runs is how that stays pinned.
+//
+// The detail level is pinned for the reason `SchemaErdCanvas.test.tsx` states:
+// jsdom measures the React Flow pane as 0x0, so the mount-time `fitView`
+// settles at `ERD_MIN_ZOOM` shortly after the first card paints. Left alone,
+// every column-row assertion below would race that drop to `compact`, which
+// draws no column rows at all.
 vi.mock("./erdGraphModel", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./erdGraphModel")>();
-  return { ...actual, layoutErdModel: vi.fn(actual.layoutErdModel) };
+  return {
+    ...actual,
+    layoutErdModel: vi.fn(actual.layoutErdModel),
+    erdDetailLevel: () => "full" as const,
+  };
 });
 
 import { buildErdDiffHighlight } from "./erdDiffHighlight";

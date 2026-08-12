@@ -59,6 +59,29 @@ describe("installGlobalErrorToast", () => {
     expect(errorMessages()).toHaveLength(2);
   });
 
+  it("ignores the browser's benign ResizeObserver loop notification", () => {
+    // #2149 — semantic zoom resizes ERD cards, so React Flow resizes nodes
+    // from inside its own ResizeObserver callback and the browser reports the
+    // deferred observations on `window`. Nothing failed, but the toast it
+    // raised covered the ERD toolbar and swallowed a click (PR #2309).
+    for (const message of [
+      "ResizeObserver loop completed with undelivered notifications.",
+      "ResizeObserver loop limit exceeded",
+    ]) {
+      window.dispatchEvent(new ErrorEvent("error", { message }));
+    }
+    expect(errorMessages()).toHaveLength(0);
+
+    // Only the loop notification is benign. A real failure that happens to
+    // name ResizeObserver still has to reach the user.
+    window.dispatchEvent(
+      new ErrorEvent("error", {
+        error: new TypeError("ResizeObserver is not a constructor"),
+      }),
+    );
+    expect(errorMessages()).toHaveLength(1);
+  });
+
   it("removes both listeners on uninstall", () => {
     // Assert via spy rather than dispatching a real error post-uninstall:
     // with our listener gone, a dispatched ErrorEvent would escape to

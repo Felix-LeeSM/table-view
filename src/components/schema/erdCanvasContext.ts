@@ -4,7 +4,7 @@ import {
   EMPTY_ERD_DIFF_HIGHLIGHT,
   type ErdDiffHighlight,
 } from "./erdDiffHighlight";
-import type { ErdTableModel } from "./erdGraphModel";
+import type { ErdDetailLevel, ErdTableModel } from "./erdGraphModel";
 
 export const ERD_TABLE_NODE_TYPE = "erdTable";
 
@@ -20,6 +20,8 @@ export type ErdTableFlowNode = Node<Record<string, never>, "erdTable">;
 
 export interface ErdCanvasView {
   readonly tablesById: ReadonlyMap<string, ErdTableModel>;
+  /** Semantic-zoom step the canvas derived from the current viewport zoom. */
+  readonly detailLevel: ErdDetailLevel;
   readonly selectedTableId: string | null;
   /** Tables one FK hop from the selection. Empty while nothing is selected. */
   readonly relatedTableIds: ReadonlySet<string>;
@@ -36,6 +38,7 @@ export interface ErdCanvasView {
 
 const EMPTY_VIEW: ErdCanvasView = {
   tablesById: new Map(),
+  detailLevel: "full",
   selectedTableId: null,
   relatedTableIds: new Set(),
   searchMatchTableIds: null,

@@ -91,6 +91,16 @@ keyring = { version = "3", default-features = false }
 sqlparser = "0.62.0"
 duckdb = { version = "1.10503.1", features = ["bundled", "json", "parquet"] }
 oracle-rs = "0.1.7"
+# #2154 — `db/oracle.rs` installs a process-level rustls `CryptoProvider`.
+# oracle-rs builds its TLS config with `rustls::ClientConfig::builder()`, which
+# reads that process default, and this workspace compiles rustls with *both*
+# provider features on (redis pulls `aws-lc-rs`, hyper-rustls pulls `ring`), so
+# rustls cannot pick one on its own and `builder()` panics. Already locked at
+# 0.23.x through those crates, so this direct dep adds no build cost.
+# `default-features = false` on purpose: rustls 0.23's default set also carries
+# `prefer-post-quantum`, which is *not* enabled in this graph today, and turning
+# it on here would change the key exchange every other rustls user negotiates.
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "std"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", default-features = false, features = ["apple-native"] }

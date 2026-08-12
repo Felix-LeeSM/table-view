@@ -144,29 +144,36 @@ fails loudly against a server with no TLS. Recovery is to set that connection's
 posture back to `disable` or `prefer` by hand; on
 PostgreSQL/MySQL/MariaDB/SQL Server/Oracle the pair was already refused at
 connect time, so nothing that previously connected changed there. `verify-ca`
-adds the CA file the user selects to the driver's trust anchors *in addition to*
-the roots that driver already trusts, with hostname verification kept on; it is
-wired that way on PostgreSQL/MySQL/MariaDB and SQL Server only, and what it
-widens differs by driver — PostgreSQL/MySQL/MariaDB go through sqlx/rustls and
-add the CA on top of the bundled public root list, SQL Server goes through
-tiberius/native-tls and adds it on top of the OS system trust store. On MongoDB,
+hands the CA file the user selects to the driver as a trust anchor, with
+hostname verification kept on, on PostgreSQL/MySQL/MariaDB, SQL Server and —
+since #2154 — Oracle. What it does to the rest of that driver's anchor set
+differs — PostgreSQL/MySQL/MariaDB go through sqlx/rustls and add the CA on top
+of the bundled public root list, SQL Server goes through tiberius/native-tls and
+adds it on top of the OS system trust store, and Oracle goes through oracle-rs,
+which seeds its root store from the CA file *instead of* the bundled roots.
+Oracle is therefore the one engine where naming a CA narrows the anchor set;
+elsewhere it can only widen it. On MongoDB,
 Redis/Valkey, and Elasticsearch/OpenSearch the CA file is ignored and
 `verify-ca` verifies
 against the built-in public roots alone — never weaker than `verify-full`, but a
 private-CA server stays unreachable on those five until their drivers' own CA
 options are wired (#1649 follow-up). A `verify-ca` posture with no CA file is
 rejected at the storage write boundary for every engine, and again at connect
-time on PostgreSQL/MySQL/MariaDB and SQL Server — the three adapters that
+time on PostgreSQL/MySQL/MariaDB, SQL Server and Oracle — the adapters that
 resolve the full posture. The five on/off TLS engines have only the
 write-boundary rejection, so a row hand-edited into `connections.json` still
 reaches those drivers as plain `verify-full`; the connection *test* action also
 runs without the write-boundary check, so on those five it can report success
 for a posture the save then rejects. The sslmode
-dropdown for PostgreSQL/MySQL/MariaDB offers four of the five values
-(`disable`/`prefer`/`require`/`verify-full`); `verify-ca` renders only for a
+dropdown renders for PostgreSQL/MySQL/MariaDB and, since #2154, for Oracle.
+PostgreSQL/MySQL/MariaDB offer `disable`/`prefer`/`require`/`verify-full`;
+Oracle drops `require` on top of that, because its driver cannot encrypt without
+verifying. `verify-ca` renders only for a
 connection already stored with it, because the CA file picker is the follow-up
-slice, so URL paste still reports `sslmode=verify-ca` as a parameter it could not
-reflect rather than dropping it silently. The on/off TLS engines
+slice. A pasted URL that names a posture the engine's dropdown does not
+offer — `sslmode=verify-ca` anywhere, and `sslmode=require` on Oracle — is
+reported as a parameter that could not be reflected rather than dropped
+silently. The on/off TLS engines
 (MongoDB/Redis/Valkey/Elasticsearch/OpenSearch) expose an explicit opt-in "trust
 server certificate" (skip-verify) checkbox, gated on TLS being on and carrying an
 in-form warning; SQL Server keeps its skip-verify default when the engine is
@@ -176,8 +183,11 @@ the dbType never carries a skip-verify choice onto the next engine. Export strip
 `caCertPath` the way it strips the Oracle wallet path, and import folds a
 `verify-ca` envelope to `verify-full` and drops the CA reference, so the CA file
 is re-selected on the importing machine exactly as the password is re-entered.
-Oracle rejects any posture above `prefer` — its mTLS wallet is the only Oracle
-TLS trigger. The CA reference follows the posture that named it: the sslmode
+Oracle reads that same posture since #2154: `verify-full` and
+`verify-ca` dial TCPS, `require` is rejected at connect, and the #1065 mTLS
+wallet is a separate trust anchor that cannot be combined with a TLS-enabling
+posture — naming both is rejected rather than resolved one way.
+The CA reference follows the posture that named it: the sslmode
 dropdown, the engine TLS on/off checkboxes (both directions), a dbType switch,
 and a pasted URL that states a posture all clear `caCertPath` whenever they move
 the posture. The skip-verify checkbox is the deliberate exception — it keeps the
@@ -258,7 +268,9 @@ smoke covers live service connect/auth/TLS contract, catalog/index detail
 metadata, bounded `_search` rendering, delete-by-query safety planning plus live
 `_delete_by_query` execution behind a Safe Mode confirmation, and visible error
 surface; it does not widen actual live admin (index/settings) execution, broader
-Search observability/profile workflows, or product-specific destructive deltas.
+Search observability workflows, or product-specific destructive deltas. The
+`_search` `profile` plan is separate and does ship — see
+[known-limitations-non-rdbms.md](known-limitations-non-rdbms.md).
 MySQL catalog metadata has integration evidence for databases/schemas, tables,
 views, columns, indexes, constraints/FKs, and live version-gated column CHECK
 hints. MySQL row-edit generated SQL parity, catalog-aware completion context,
@@ -331,8 +343,9 @@ colour alone: a badge pairs its hue with an icon shape and the outline pairs the
 same hue with a line pattern. The card's accessible name repeats its kinds,
 because the card is a button and ARIA drops a button's contents from the
 accessibility tree. A column the diff touched carries the same badge on its row
-when the card draws that row; the card caps how many column rows it draws, and a
-touched column past that cap is only counted in the "more columns" line. The
+when the card draws that row; the viewport zoom decides which columns a card
+draws, and a touched column it leaves out is only counted in the hidden-columns
+line. The
 canvas draws the current schema, so a table or a column that exists only in the
 comparison snapshot has no card or row to mark and stays a diff-panel row; a
 surviving table whose column was dropped is what carries the removed badge.
@@ -343,7 +356,13 @@ header action (gated on the engine's `intelligence.erd` capability), not from a
 per-table sub-tab. The diagram is a `@xyflow/react` canvas with `elkjs`
 `layered` auto-layout: referenced tables rank above the tables that reference
 them, and nodes can be dragged, but positions are not persisted across tab
-reopen. Data compare remains a future promotion gate in the H4 smoke matrix.
+reopen. How much of a table a card spells out follows the viewport zoom in three
+steps — the table box alone, then the primary-key and foreign-key columns, then
+every column — and a card that leaves columns out says how many it hid. There is
+no fixed cap on rendered columns. Zoom never re-runs the layout: elkjs is handed
+the full-detail height of every card, so a card only ever shrinks inside the slot
+it was given, and zooming out does not pack the diagram tighter. Data compare
+remains a future promotion gate in the H4 smoke matrix.
 
 ### FK navigation
 

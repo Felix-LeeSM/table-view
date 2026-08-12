@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Real `_search` responses captured from local single-node containers after the bounded Search DSL validator started accepting the `profile` boolean (#2198). Only the `profile` section of each response is kept. Nothing here promotes runtime support: it is contract evidence for the payload shape the result view renders.",
+  "description": "Real `_search` responses captured from local single-node containers after the bounded Search DSL validator started accepting the `profile` boolean (#2198). Only the `profile` section of each response is kept. Nothing here promotes runtime support: it is contract evidence for the payload shape the result view and the ExplainViewer render.",
   "capture": {
     "command": "bash scripts/capture-search-profile-fixture.sh",
     "capturedOn": "2026-08-11",
