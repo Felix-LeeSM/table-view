@@ -5,6 +5,12 @@
 //! app's equivalent is `parseConnectionUrl` in
 //! `src/features/connection/model.ts`; this is the Rust half of the same
 //! contract, narrowed to ADR 0061's SQL core.
+//!
+//! The two do not read a DSN identically. `docs/roadmap/follow-up-queue.md`
+//! lists the divergences found so far under "CLI DSN parsing" — `sslmode=`,
+//! percent-decoding of the database name, repeated leading slashes. A DSN part
+//! this module cannot honour is refused rather than dropped, so the gap costs
+//! the user an error and never a posture they did not choose.
 
 use percent_encoding::percent_decode_str;
 use table_view_core::db::{ActiveAdapter, MysqlAdapter, PostgresAdapter, SqliteAdapter};
@@ -45,6 +51,16 @@ pub fn parse(raw: &str) -> Result<ConnectionConfig, CliError> {
         )));
     };
 
+    if let Some(part) = unread_part(&url) {
+        return Err(CliError::failed(format!(
+            "--url carries {part}, which tvw v0.1 does not read. Refusing it rather than \
+             connecting under a posture you did not choose: '?sslmode=verify-full' would \
+             silently become opportunistic encryption with no certificate check, and \
+             ADR 0053 counts that silent loss as a defect. Drop it, or use the desktop \
+             app, which does read 'sslmode='"
+        )));
+    }
+
     if matches!(db_type, DatabaseType::Sqlite) {
         return sqlite_config(&url);
     }
@@ -79,9 +95,9 @@ pub fn make_adapter(config: &ConnectionConfig) -> ActiveAdapter {
         DatabaseType::Mysql => ActiveAdapter::Rdb(Box::new(MysqlAdapter::new())),
         DatabaseType::Mariadb => ActiveAdapter::Rdb(Box::new(MysqlAdapter::new_mariadb())),
         DatabaseType::Sqlite => ActiveAdapter::Rdb(Box::new(SqliteAdapter::new())),
-        // `parse` is the only producer and its table has five rows mapping onto
-        // the four types above. Reaching here means someone widened that table
-        // and skipped this match.
+        // `parse` is the only producer and every row of its `SCHEMES` table
+        // maps onto an arm above. Reaching here means someone widened that
+        // table and skipped this match.
         ref other => unreachable!("{other:?} is not in tvw's scheme table"),
     }
 }
@@ -152,8 +168,10 @@ fn config(
         environment: None,
         auth_source: None,
         replica_set: None,
-        // The app's default for a connection that states no posture (ADR 0058).
-        // `sslmode=` in the DSN is not honoured yet — see the crate docs.
+        // The app's default for a connection that states no posture (ADR 0053
+        // decision 3, which ADR 0058 adds depth to without changing). Every DSN
+        // reaching here states no posture: `parse` refuses a query string
+        // rather than dropping the one it cannot read.
         ssl_mode: SslMode::default(),
         ca_cert_path: None,
         oracle_use_sid: None,
@@ -162,29 +180,56 @@ fn config(
     }
 }
 
+/// What a DSN states that [`parse`] never reads, named so the refusal can say
+/// which part it means.
+///
+/// The name only, never the value: a parameter can carry a credential
+/// (`?password=…`), and this string ends up in an error message that reaches
+/// logs and CI output.
+///
+/// `?` with nothing after it states nothing, so it is not a refusal.
+fn unread_part(url: &Url) -> Option<String> {
+    if let Some((name, _)) = url.query_pairs().next() {
+        return Some(format!("the parameter '{name}'"));
+    }
+    match url.fragment() {
+        Some(fragment) if !fragment.is_empty() => Some("a '#' fragment".to_string()),
+        _ => None,
+    }
+}
+
 fn decode(value: &str) -> String {
     percent_decode_str(value).decode_utf8_lossy().into_owned()
 }
 
-/// A DSN echoed back in an error message carries the password. Cut everything
-/// between `://` and the last `@` of the authority rather than trying to parse
-/// a string that already failed to parse.
+/// A DSN echoed back in an error message carries secrets. Cut them by position
+/// rather than trying to parse a string that already failed to parse:
+/// everything between `://` and the last `@` of the authority, and everything
+/// from the first `?`/`#` on — `?password=…` is as much a credential as the one
+/// in the authority, and this text reaches logs and CI output.
 fn redact(raw: &str) -> String {
     let Some(scheme_end) = raw.find("://") else {
         return raw.to_string();
     };
     let authority_start = scheme_end + 3;
-    let authority_end = raw[authority_start..]
-        .find(['/', '?', '#'])
+    // `…` marks that something was cut, so a truncated DSN is not read as the
+    // whole one the user typed.
+    let (body, cut) = match raw[authority_start..].find(['?', '#']) {
+        Some(i) => (&raw[..authority_start + i], "…"),
+        None => (raw, ""),
+    };
+    let authority_end = body[authority_start..]
+        .find('/')
         .map(|i| authority_start + i)
-        .unwrap_or(raw.len());
-    match raw[authority_start..authority_end].rfind('@') {
+        .unwrap_or(body.len());
+    match body[authority_start..authority_end].rfind('@') {
         Some(at) => format!(
-            "{}***@{}",
-            &raw[..authority_start],
-            &raw[authority_start + at + 1..]
+            "{}***@{}{}",
+            &body[..authority_start],
+            &body[authority_start + at + 1..],
+            cut
         ),
-        None => raw.to_string(),
+        None => format!("{body}{cut}"),
     }
 }
 
@@ -262,6 +307,76 @@ mod tests {
         let error = parse("mongodb://h/db").expect_err("mongo is not in the v0.1 CLI surface");
         assert!(error.message().contains("mongodb"));
         assert!(error.message().contains("sqlite"));
+    }
+
+    #[test]
+    fn test_parse_refuses_a_dsn_parameter_rather_than_dropping_the_tls_posture() {
+        // The silent path is the defect. `config` pins `ssl_mode` to
+        // `SslMode::default()` — `Prefer`, opportunistic encryption with no
+        // certificate check — so connecting anyway would put a user who typed
+        // `verify-full` on a weaker posture than they asked for, with the
+        // password on the wire and no message anywhere.
+        let error = parse("postgres://u:s3cret@h/db?sslmode=verify-full")
+            .expect_err("an unread TLS parameter must not turn into a connection");
+        assert!(
+            error.message().contains("sslmode"),
+            "the refusal should name the parameter, got: {}",
+            error.message()
+        );
+        assert!(
+            !error.message().contains("s3cret"),
+            "password leaked into: {}",
+            error.message()
+        );
+    }
+
+    #[test]
+    fn test_parse_refuses_sqlite_parameters_before_the_sqlite_branch_drops_them() {
+        // Same root, second victim: `sqlite_config` reads `url.path()` only and
+        // `config` pins `read_only: false`, so a dropped `?mode=ro` hands back a
+        // writable handle. The guard has to run before that branch.
+        let error = parse("sqlite:///tmp/shop.db?mode=ro")
+            .expect_err("a sqlite parameter is dropped by url.path(), so it must be refused");
+        assert!(error.message().contains("mode"), "{}", error.message());
+    }
+
+    #[test]
+    fn test_parse_refusal_names_the_parameter_but_never_its_value() {
+        // A parameter can hold a credential and the refusal reaches logs and CI
+        // output, so the name travels and the value does not.
+        let error = parse("mysql://h/db?password=hunter2").expect_err("an unread parameter");
+        assert!(error.message().contains("password"));
+        assert!(
+            !error.message().contains("hunter2"),
+            "the value leaked into: {}",
+            error.message()
+        );
+    }
+
+    #[test]
+    fn test_parse_refuses_a_fragment_it_would_otherwise_drop() {
+        parse("postgres://h/db#anchor").expect_err("no getter here reads the fragment");
+    }
+
+    #[test]
+    fn test_parse_accepts_a_query_that_states_nothing() {
+        // `?` with nothing after it loses nothing, and refusing it would reject
+        // a DSN that means exactly what it says.
+        assert_eq!(parse_ok("postgres://h/db?").database, "db");
+    }
+
+    #[test]
+    fn test_parse_error_message_never_echoes_a_password_carried_as_a_parameter() {
+        // A DSN that fails `Url::parse` never reaches the guard above, so the
+        // echo path has to cut the query itself.
+        let error = parse("postgres://alice:hunter2@h:99999/db?password=leaked")
+            .expect_err("99999 does not fit a u16 port");
+        assert!(
+            !error.message().contains("leaked"),
+            "parameter credential leaked into: {}",
+            error.message()
+        );
+        assert!(!error.message().contains("hunter2"));
     }
 
     #[test]

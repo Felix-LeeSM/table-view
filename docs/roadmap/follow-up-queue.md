@@ -141,6 +141,25 @@ Advanced TLS depth-step — CA 파일·클라이언트 인증서·1단 엔진 ss
 트러스트 앵커다 — `docs/product/known-limitations-cross-cutting.md` 의 TLS 문단과 같은 목록이다.
 Oracle 1-way TLS (TCPS + CA cert) 는 #1650 으로 advanced TLS CA 지원(#1649)에 의존해 묶는다.
 
+### CLI DSN parsing
+
+**Follow-up**: `tvw` 의 `--url` 파서(`src-tauri/tvw/src/dsn.rs`)는 앱의
+`parseConnectionUrl`(`src/features/connection/model.ts`)과 같은 계약을 자처하는데
+읽는 범위가 더 좁다. #1770 은 못 읽는 부분을 조용히 버리는 대신 거부하도록 닫았고,
+읽게 만드는 쪽은 소유 티켓 없이 남는다. 승격 시점은 `tvw` 가 배포 대상이 될 때다(#1775).
+
+- `sslmode=`: 앱은 posture 로 반영하고 반영 못 한 값은 사용자에게 고지한다
+  (ADR 0053 결정 4). `tvw` 는 그 파라미터를 실은 DSN 을 거부한다 — 한 문장을 돌리고
+  죽는 프로세스라 고지를 놓을 자리가 없고, 그냥 연결하면 사용자가 고른 적 없는
+  `SslMode::Prefer`(기회적 암호화, 인증서 검증 없음)로 붙는다.
+- sqlite DSN 의 `?mode=ro` 류: `ConnectionConfig.read_only` 가 늘 `false` 라 반영할
+  자리가 없다. 같은 이유로 거부한다.
+- database 이름 percent-decoding: 앱은 user·password 만 디코드하고 database 는 원문을
+  남기는데 `tvw` 는 디코드한다. `postgres://h/d%20b` 가 앱에서 `d%20b`, `tvw` 에서
+  `d b` 다.
+- 앞 슬래시: 앱은 하나만 떼고 `tvw` 는 전부 뗀다. `postgres://h//db` 가 앱에서 `/db`,
+  `tvw` 에서 `db` 다.
+
 ### Security / ops policy
 
 **Follow-up**: Keep destructive/admin/security claims source-specific until a

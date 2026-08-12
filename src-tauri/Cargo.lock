@@ -7944,8 +7944,6 @@ dependencies = [
  "sqlx",
  "table-view-core",
  "tempfile",
- "testcontainers",
- "testcontainers-modules",
  "tokio",
  "url",
 ]

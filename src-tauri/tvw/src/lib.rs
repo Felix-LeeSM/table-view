@@ -10,9 +10,12 @@
 //!   `tvw conn add/ls/rm` are #1772 and #1773.
 //! - **Safe Mode.** [`EXIT_SAFE_MODE_BLOCKED`] is reserved and nothing returns
 //!   it — the destructive-statement gate is #1771.
-//! - **`sslmode=` in the DSN.** Every connection takes the app's default TLS
-//!   posture (`SslMode::Prefer`, ADR 0058). The app's paste handler does honour
-//!   the parameter, so this is a gap between the two, not a decision.
+//! - **`sslmode=` in the DSN.** A DSN carrying any parameter is refused by
+//!   [`dsn::parse`] rather than connected under the app's default posture
+//!   (`SslMode::Prefer` — opportunistic encryption with no certificate check,
+//!   ADR 0053 decision 3). The app's paste handler does honour the parameter;
+//!   reading it here is tracked under "CLI DSN parsing" in
+//!   `docs/roadmap/follow-up-queue.md`.
 //!
 //! # Boundaries inherited from the core adapters
 //!
@@ -270,8 +273,10 @@ mod tests {
 
     #[test]
     fn test_exit_codes_are_distinct_and_pinned() {
-        // The contract ADR 0061 states. A caller that branches on these must
-        // not have the ground move under it.
+        // ADR 0061 fixes 0 for success, 1 for error and "a code of its own" for
+        // a Safe Mode refusal without saying which; 3 is this crate's choice
+        // for that code, argued at `EXIT_SAFE_MODE_BLOCKED`. A caller that
+        // branches on these must not have the ground move under it.
         assert_eq!(EXIT_SUCCESS, 0);
         assert_eq!(EXIT_ERROR, 1);
         assert_eq!(EXIT_SAFE_MODE_BLOCKED, 3);

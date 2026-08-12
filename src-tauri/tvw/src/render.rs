@@ -17,10 +17,13 @@ pub fn render(result: &QueryResult, format: Format) -> Result<String, CliError> 
     // set rather than the absence of one; `run` reports the row count on stderr
     // instead, so stdout stays a clean data channel for a pipe.
     if result.columns.is_empty() {
-        return Ok(match format {
-            Format::Json => format!("{}\n", json!({ "columns": [], "rows": [] })),
-            Format::Table | Format::Csv => String::new(),
-        });
+        return match format {
+            // Through the same writer as a result set, so `--format json` has
+            // one shape: an empty document here and a pretty-printed one there
+            // would make the data, not the flag, decide the output.
+            Format::Json => json(result),
+            Format::Table | Format::Csv => Ok(String::new()),
+        };
     }
 
     match format {
@@ -276,9 +279,11 @@ mod tests {
         let dml = empty_result(QueryType::Dml { rows_affected: 3 });
         assert_eq!(render(&dml, Format::Table).expect("table"), "");
         assert_eq!(render(&dml, Format::Csv).expect("csv"), "");
+        // Pretty-printed like every other `--format json` output: the flag
+        // decides the shape, the result does not.
         assert_eq!(
             render(&dml, Format::Json).expect("json"),
-            "{\"columns\":[],\"rows\":[]}\n"
+            "{\n  \"columns\": [],\n  \"rows\": []\n}\n"
         );
     }
 

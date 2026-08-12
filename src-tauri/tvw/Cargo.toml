@@ -15,7 +15,7 @@ publish = false
 # is what makes a new workspace member "arrive already tested", and it reaches
 # `--lib` targets only. A bin-only crate would put every test here outside CI
 # until someone hand-added a `--test` line, which is the omission that comment
-# records happening three times (#1769, sprint-390, #2098).
+# records happening at #1769, sprint-390 and #2098.
 [lib]
 name = "tvw"
 path = "src/lib.rs"
@@ -56,11 +56,6 @@ tempfile = "3"
 # it with the driver directly. Same features the app already resolves, so this
 # adds a manifest line and no build.
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"] }
-# Same versions the app already dev-depends on, so no new resolve. Only the
-# three server engines in ADR 0061's SQL core need an image; SQLite is a file.
-testcontainers = "0.27"
-testcontainers-modules = { version = "0.15", features = [
-  "postgres",
-  "mysql",
-  "mariadb",
-] }
+# No `testcontainers` here on purpose. `tests/query_url_live.rs` starts no
+# container — ADR 0024 leaves that lifecycle to the app crate and a second owner
+# would leave strays — so it reads endpoints from the environment instead.

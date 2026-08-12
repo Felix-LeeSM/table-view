@@ -11,11 +11,12 @@ async fn main() -> ExitCode {
     // `tvw query … | head` closes the pipe early. Left to `print!`, that is a
     // panic — a Rust backtrace on stderr and exit 101, which is not one of the
     // three codes the contract defines. A reader that stopped reading is not a
-    // query failure, so it exits 0.
-    if emit(io::stdout(), &outcome.stdout).is_err() {
-        return ExitCode::from(tvw::EXIT_SUCCESS);
+    // query failure, so the run's own code stands either way: a successful run
+    // still exits 0, and a failed one keeps its code rather than being laundered
+    // into success because stdout went away.
+    if emit(io::stdout(), &outcome.stdout).is_ok() {
+        let _ = emit(io::stderr(), &outcome.stderr);
     }
-    let _ = emit(io::stderr(), &outcome.stderr);
 
     ExitCode::from(outcome.code)
 }
