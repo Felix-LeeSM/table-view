@@ -444,6 +444,13 @@ mod tests {
         );
     }
 
+    /// Careful with the window this opens. `row_cap::set` is production API over
+    /// a process-global `AtomicUsize` (`table_view_core::db::row_cap`), not a
+    /// test hook, and the other `#[tokio::test]`s in this binary run in parallel
+    /// inside it. They survive only because each asserts on a single-row result,
+    /// which a cap of 2 cannot truncate. A test in this crate that asserts three
+    /// rows or more has to serialise against this one — or the cap has to become
+    /// per-call — before it can be trusted.
     #[tokio::test]
     async fn test_truncation_warns_on_stderr_instead_of_returning_a_short_answer_silently() {
         let dir = tempfile::tempdir().expect("tempdir");
