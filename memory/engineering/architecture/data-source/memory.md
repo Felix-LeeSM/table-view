@@ -136,7 +136,7 @@ capability claims during topology moves.
   destructive-plan contracts, and the live `_delete_by_query` execution #1076
   promoted behind the Safe Mode backend gate. Fixture harness remains contract
   evidence. Index/settings admin APIs, wildcard/`_all` delete targets,
-  observability/profile/explain workflows, and product-specific widening need
+  observability and `_explain` workflows, and product-specific widening need
   separate promotion gates.
 - `WideColumnAdapter`, `CloudDocumentAdapter`, `GraphAdapter`, `VectorAdapter`,
   `StreamAdapter`: future contracts only.

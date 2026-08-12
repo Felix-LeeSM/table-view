@@ -9,7 +9,16 @@ import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { ConnectionId, TabId } from "@/types/branded";
 import type { ConnectionConfig } from "@/types/connection";
 import type { SearchCatalogSummary, SearchIndexMapping } from "@/types/search";
+// #2153 — the Explain route is asserted against the recorded cluster profile
+// (#2198) so the tree this test reads is a real response, not a stub.
+import profileFixtureRaw from "../../../tests/fixtures/search-profile-response.json?raw";
 import QueryTab from "./QueryTab";
+
+const elasticsearchProfile = (
+  JSON.parse(profileFixtureRaw) as {
+    captures: Array<{ product: string; profile: unknown }>;
+  }
+).captures.find((capture) => capture.product === "elasticsearch")?.profile;
 
 const invokeMock = vi.hoisted(() => vi.fn());
 
@@ -486,6 +495,102 @@ describe("QueryTab search route", () => {
         index: "logs-opensearch-2026.05.24",
       });
     });
+  });
+
+  // ── #2153: Explain on a search tab. The paradigm has no plan endpoint, so
+  // the plan is the same request re-run with the bounded `profile` flag
+  // (#1818/#2198) and the response's `profile` section rendered as a tree. ──
+
+  it("[#2153] runs Explain as a profiled _search and renders the shard tree", async () => {
+    const tab = makeSearchTab();
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id, "search-1", "db1"));
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_history" || command === "add_history_entry") {
+        return Promise.resolve({ rows: [] });
+      }
+      if (command === "list_search_catalog_summary") {
+        return Promise.resolve(searchCatalog);
+      }
+      if (command === "get_search_index_mapping") {
+        return Promise.resolve(searchMapping);
+      }
+      if (command === "execute_search_query") {
+        return Promise.resolve({
+          tookMs: 3,
+          timedOut: false,
+          total: { value: 2, relation: "eq" },
+          hits: [],
+          aggregations: [],
+          profile: elasticsearchProfile,
+        });
+      }
+      throw new Error(`unexpected invoke: ${command}`);
+    });
+
+    render(<LiveQueryTab />);
+    fireEvent.click(screen.getByRole("button", { name: /explain query/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith("execute_search_query", {
+        connectionId: "search-1",
+        request: {
+          index: "logs-elastic-2026.05.24",
+          body: {
+            query: { match_all: {} },
+            aggs: {
+              by_status: { terms: { field: "status.keyword" } },
+            },
+            profile: true,
+          },
+          from: undefined,
+          size: 10,
+          trackTotalHits: true,
+        },
+        queryId: expect.stringMatching(/^explain-/),
+      });
+    });
+
+    const viewer = await screen.findByTestId("explain-viewer");
+    expect(viewer).toHaveAttribute("data-paradigm", "search");
+    expect(await screen.findByTestId("explain-plan-summary")).toHaveTextContent(
+      "Profile Summary",
+    );
+    expect(screen.getByText("TermQuery")).toBeInTheDocument();
+    expect(screen.getByText("create_weight")).toBeInTheDocument();
+    // Explain replaces the result surface here exactly as it does for rdb and
+    // document tabs.
+    expect(screen.queryByLabelText("Search hits")).not.toBeInTheDocument();
+    expect(screen.queryByRole("grid")).not.toBeInTheDocument();
+  });
+
+  it("[#2153] refuses Explain when the body is not a parseable Search DSL request", async () => {
+    const tab: QueryTabType = {
+      ...makeSearchTab(),
+      sql: "{ not json",
+    };
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id, "search-1", "db1"));
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "list_history") {
+        return Promise.resolve({ rows: [] });
+      }
+      if (command === "list_search_catalog_summary") {
+        return Promise.resolve(searchCatalog);
+      }
+      if (command === "get_search_index_mapping") {
+        return Promise.resolve(searchMapping);
+      }
+      throw new Error(`unexpected invoke: ${command}`);
+    });
+
+    render(<LiveQueryTab />);
+    fireEvent.click(screen.getByRole("button", { name: /explain query/i }));
+
+    expect(
+      invokeMock.mock.calls.some(
+        ([command]) => command === "execute_search_query",
+      ),
+    ).toBe(false);
+    expect(screen.queryByTestId("explain-viewer")).not.toBeInTheDocument();
   });
 
   it("surfaces destructive Search target rejects through the Search-native error view", async () => {

@@ -168,8 +168,11 @@ and do not promote unwired Search paths to live runtime support. Search live
 HTTP/admin promotion remains owned by the Search roadmap/milestone, not
 non-RDBMS lazy-loading workbench hardening. Elasticsearch and OpenSearch closure
 claims stay product-separated even when shared Search validator, renderer, and
-smoke helpers provide common bounded behavior. Full language-core
-parser/completion ownership, profile/explain request workflow, broader admin
+smoke helpers provide common bounded behavior. The `_search` `profile` plan is
+requestable from the search query tab's Explain button and rendered as a plan
+tree (#2153); the `_explain` endpoint behind the same wording is not, and the
+bounded validator still rejects the `explain` key. Full language-core
+parser/completion ownership, `_explain` request workflow, broader admin
 APIs (index/settings create/delete), global audit/admin/security dashboards,
 unsupported DSL clauses beyond the validator, and product-specific live deltas
 beyond the current Search

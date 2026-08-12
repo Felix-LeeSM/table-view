@@ -2,11 +2,11 @@
 # capture-search-profile-fixture.sh — regenerate tests/fixtures/search-profile-response.json (issue #2198).
 #
 # The bounded Search DSL validator accepts a `profile` boolean, and the result
-# view renders whatever `profile` section the cluster returns. Before #2198 no
-# struct, interface or fixture in this repository described that section, so the
-# only samples were two hand-written stubs with a single key each. This script
-# captures the real thing so the next person reads a recorded response instead
-# of guessing at one.
+# view and the ExplainViewer render whatever `profile` section the cluster
+# returns. Before #2198 no struct, interface or fixture in this repository
+# described that section, so the only samples were two hand-written stubs with
+# a single key each. This script captures the real thing so the next person
+# reads a recorded response instead of guessing at one.
 #
 # It starts throwaway single-node containers on ports that do not collide with
 # the e2e smoke ports (19200 / 29200 in .github/workflows/e2e-smoke.yml), seeds
@@ -145,7 +145,8 @@ document = {
         "Real `_search` responses captured from local single-node containers after the "
         "bounded Search DSL validator started accepting the `profile` boolean (#2198). "
         "Only the `profile` section of each response is kept. Nothing here promotes runtime "
-        "support: it is contract evidence for the payload shape the result view renders."
+        "support: it is contract evidence for the payload shape the result view and the "
+        "ExplainViewer render."
     ),
     "capture": {
         "command": "bash scripts/capture-search-profile-fixture.sh",

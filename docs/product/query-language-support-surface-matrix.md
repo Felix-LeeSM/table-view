@@ -288,11 +288,13 @@ detail, search/render, delete-plan, live delete-execution, and error-surface
 workflows on Ubuntu.
 
 **Current boundary**: Full language-core parser/completion ownership, broader
-admin APIs (index/settings create/delete), the `_explain` endpoint, a dedicated
-profile/explain request workflow with its own viewer (#2198 accepts the
-`profile` flag through the raw DSL and renders the payload in the existing
-result panel; it ships no viewer),
-observability, and full query-language support are deferred. Unsupported Search
+admin APIs (index/settings create/delete), the `_explain` endpoint
+(per-document score explanation — the bounded validator still rejects the
+`explain` key and no adapter method calls it),
+observability, and full query-language support are deferred. The `_search`
+`profile` plan is not: the search query tab's Explain button re-runs the
+request with the bounded `profile` flag and renders the response's profile
+section as a plan tree (#2153). Unsupported Search
 DSL body keys, unsupported aggregation kinds/options, raw/admin targets,
 wildcard targets, unsupported delete-by-query body keys, script sort, broad
 source options, and destructive/admin APIs are rejected before live Search

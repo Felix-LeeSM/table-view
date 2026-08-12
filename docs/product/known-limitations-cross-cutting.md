@@ -268,7 +268,9 @@ smoke covers live service connect/auth/TLS contract, catalog/index detail
 metadata, bounded `_search` rendering, delete-by-query safety planning plus live
 `_delete_by_query` execution behind a Safe Mode confirmation, and visible error
 surface; it does not widen actual live admin (index/settings) execution, broader
-Search observability/profile workflows, or product-specific destructive deltas.
+Search observability workflows, or product-specific destructive deltas. The
+`_search` `profile` plan is separate and does ship — see
+[known-limitations-non-rdbms.md](known-limitations-non-rdbms.md).
 MySQL catalog metadata has integration evidence for databases/schemas, tables,
 views, columns, indexes, constraints/FKs, and live version-gated column CHECK
 hints. MySQL row-edit generated SQL parity, catalog-aware completion context,

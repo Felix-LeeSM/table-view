@@ -263,17 +263,21 @@ const DEFERRED_FEATURES = Object.freeze({
     edit: ["edit.bulkWrite"],
     ddl: [],
   },
+  // #2153 — `query.explain` left both deferred lists: the `_search` `profile`
+  // section is a live plan source (#1818/#2198) and the ExplainViewer renders
+  // it. `_explain` (per-document score explanation) is a different endpoint
+  // and is still unbuilt, so nothing else moved.
   elasticsearch: {
     connection: ["connection.switchDatabase"],
     catalog: [],
-    query: ["query.explain"],
+    query: [],
     edit: ["edit.editDocuments", "edit.bulkWrite"],
     ddl: [],
   },
   opensearch: {
     connection: ["connection.switchDatabase"],
     catalog: ["catalog.indexes"],
-    query: ["query.query", "query.explain"],
+    query: ["query.query"],
     edit: ["edit.editDocuments", "edit.bulkWrite"],
     ddl: [],
   },
