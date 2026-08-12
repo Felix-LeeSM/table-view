@@ -139,6 +139,8 @@ export const en = {
   changed: "Changed",
   none: "None.",
   schemaChangesAria: "{{title}} schema changes",
+  erdDiffTableMark: "Schema diff: {{kind}}",
+  erdDiffColumnMark: "Column {{column}}, schema diff: {{kind}}",
 
   // SchemaGraphMigrationImpactSummary
   migrationImpact: "Migration impact",
@@ -378,6 +380,8 @@ export const ko = {
   changed: "변경됨",
   none: "없음.",
   schemaChangesAria: "{{title}} 스키마 변경사항",
+  erdDiffTableMark: "스키마 비교: {{kind}}",
+  erdDiffColumnMark: "{{column}} 컬럼, 스키마 비교: {{kind}}",
 
   // SchemaGraphMigrationImpactSummary
   migrationImpact: "마이그레이션 영향",
