@@ -53,11 +53,12 @@ pub fn parse(raw: &str) -> Result<ConnectionConfig, CliError> {
 
     if let Some(part) = unread_part(&url) {
         return Err(CliError::failed(format!(
-            "--url carries {part}, which tvw v0.1 does not read. Refusing it rather than \
-             connecting under a posture you did not choose: '?sslmode=verify-full' would \
-             silently become opportunistic encryption with no certificate check, and \
-             ADR 0053 counts that silent loss as a defect. Drop it, or use the desktop \
-             app, which does read 'sslmode='"
+            "--url carries {part}, which tvw v0.1 does not read. Dropping it would open a \
+             connection you did not ask for — a dropped '?sslmode=verify-full' is \
+             opportunistic encryption with no certificate check, a dropped '?mode=ro' is a \
+             writable handle — and ADR 0053 counts that silent loss as a defect, so it is \
+             refused instead. Remove the parameter, or use the desktop app, which does \
+             read 'sslmode='"
         )));
     }
 
@@ -319,7 +320,7 @@ mod tests {
         let error = parse("postgres://u:s3cret@h/db?sslmode=verify-full")
             .expect_err("an unread TLS parameter must not turn into a connection");
         assert!(
-            error.message().contains("sslmode"),
+            error.message().contains("the parameter 'sslmode'"),
             "the refusal should name the parameter, got: {}",
             error.message()
         );
@@ -337,7 +338,11 @@ mod tests {
         // writable handle. The guard has to run before that branch.
         let error = parse("sqlite:///tmp/shop.db?mode=ro")
             .expect_err("a sqlite parameter is dropped by url.path(), so it must be refused");
-        assert!(error.message().contains("mode"), "{}", error.message());
+        assert!(
+            error.message().contains("the parameter 'mode'"),
+            "the refusal should name the parameter, got: {}",
+            error.message()
+        );
     }
 
     #[test]
