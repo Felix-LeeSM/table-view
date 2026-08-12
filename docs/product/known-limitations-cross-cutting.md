@@ -323,7 +323,15 @@ summaries for table/column/constraint/index removals without changing backend
 SQL generation or execution semantics. Cached same-source and cross-source RDBMS
 schema diff is read-only; it does not apply migrations, compare data,
 import/export, expose admin workflows, or include DuckDB registered file
-aliases. The ERD is opened as a database-level diagram tab from the schema-tree
+aliases. That diff also marks the diagram: a card whose table a diff entry names
+carries one badge per change kind — added, removed, changed — and an outline
+whose line pattern matches, and a column the diff touched carries the same badge
+on its row, so no mark is read from colour alone. The canvas draws the current
+schema, so a table or a column that exists only in the comparison snapshot has
+no card or row to mark and stays a diff-panel row; a surviving table whose
+column was dropped is what carries the removed badge. Marking is presentation
+only and never re-runs the layout, so picking a comparison leaves every node
+where it was. The ERD is opened as a database-level diagram tab from the schema-tree
 header action (gated on the engine's `intelligence.erd` capability), not from a
 per-table sub-tab. The diagram is a `@xyflow/react` canvas with `elkjs`
 `layered` auto-layout: referenced tables rank above the tables that reference
