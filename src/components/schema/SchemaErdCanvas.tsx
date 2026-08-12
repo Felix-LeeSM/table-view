@@ -39,6 +39,8 @@ import {
 import {
   buildErdModel,
   buildErdNeighborhood,
+  erdCardShape,
+  erdDetailLevel,
   erdModelFingerprint,
   filterErdTables,
   layoutErdModel,
@@ -110,6 +112,7 @@ function ErdCanvasSurface({
   const { fitView, getNode, setCenter, zoomIn, zoomOut } = useReactFlow();
   const nodesInitialized = useNodesInitialized();
   const zoom = useStore((state) => state.transform[2]);
+  const detailLevel = erdDetailLevel(zoom);
 
   const selected = selectedTableId ?? internalSelectedTableId;
   const selectors = useMemo(
@@ -153,11 +156,14 @@ function ErdCanvasSurface({
   // The model object is rebuilt on every metadata fetch, so the layout effect
   // reads it through a ref and re-runs only on `fingerprint`. This effect is
   // declared first so the ref is already fresh when the layout effect runs in
-  // the same commit.
+  // the same commit. The detail level rides along for the same reason: the
+  // user can zoom while an elkjs run is still in flight.
   const modelRef = useRef(model);
+  const detailLevelRef = useRef(detailLevel);
   useEffect(() => {
     modelRef.current = model;
-  }, [model]);
+    detailLevelRef.current = detailLevel;
+  }, [detailLevel, model]);
 
   useEffect(() => {
     let cancelled = false;
@@ -170,7 +176,7 @@ function ErdCanvasSurface({
           type: ERD_TABLE_NODE_TYPE,
           position: positions.get(entry.table.id) ?? { x: 0, y: 0 },
           width: entry.width,
-          height: entry.height,
+          height: erdCardShape(entry, detailLevelRef.current).height,
           data: {},
         })),
       );
@@ -180,21 +186,27 @@ function ErdCanvasSurface({
     };
   }, [fingerprint, setNodes]);
 
-  // Columns can arrive after the layout ran (the panel prefetches them per
-  // schema), which changes how tall a card is. Resize in place — moving the node
-  // would discard a drag the user already made.
+  // Two things change how tall a card is: columns arriving after the layout ran
+  // (the panel prefetches them per schema) and the semantic-zoom level. Resize
+  // in place — moving the node would discard a drag the user already made, and
+  // elkjs already reserved the full-detail slot, so neither can overlap.
+  // Writing the height back is also what makes React Flow re-measure the card's
+  // handles; leaving it stale would keep the FK edges pointing at where the
+  // taller card used to end.
   useEffect(() => {
     setNodes((current) => {
       let changed = false;
       const next = current.map((node) => {
         const entry = tablesById.get(node.id);
-        if (!entry || node.height === entry.height) return node;
+        if (!entry) return node;
+        const height = erdCardShape(entry, detailLevel).height;
+        if (node.height === height) return node;
         changed = true;
-        return { ...node, height: entry.height };
+        return { ...node, height };
       });
       return changed ? next : current;
     });
-  }, [tablesById, setNodes]);
+  }, [detailLevel, tablesById, setNodes]);
 
   const fittedFingerprint = useRef<string | null>(null);
   useEffect(() => {
@@ -231,6 +243,7 @@ function ErdCanvasSurface({
   const canvasView = useMemo<ErdCanvasView>(
     () => ({
       tablesById,
+      detailLevel,
       selectedTableId: activeSelected,
       relatedTableIds: neighborhood.relatedTableIds,
       searchMatchTableIds,
@@ -239,6 +252,7 @@ function ErdCanvasSurface({
     }),
     [
       activeSelected,
+      detailLevel,
       neighborhood.relatedTableIds,
       onToggleSelect,
       registerTableButton,
