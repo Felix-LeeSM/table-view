@@ -3,7 +3,7 @@ title: Fixture And Test Topology Inventory
 type: refactor-evidence
 issue: 750
 closure_issue: 755
-updated: 2026-08-03
+updated: 2026-08-12
 ---
 
 # Fixture And Test Topology Inventory
@@ -34,7 +34,7 @@ Required inventory commands:
 
 | Command | Result |
 |---|---|
-| `rg --files fixtures tests/fixtures e2e/fixtures` | 31 tracked fixture-root paths, measured 2026-08-03. The #755 baseline was 23, not the 26 this row carried until then — the two supporting checks below measure both ends. |
+| `rg --files fixtures tests/fixtures e2e/fixtures` | The tracked fixture-root paths. No total is recorded here — any PR that lands or deletes a fixture moves it, and a stale total is exactly what this row carried before (see the 26 below). When you need a number, name a rev so it stays put: `git ls-tree -r --name-only <rev> -- fixtures tests/fixtures e2e/fixtures \| wc -l`. |
 | `rg -n "FixtureHarness\|dbms-seeds\|seed\\." src-tauri tests e2e --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | 71 tracked-source matches; cache and dependency hits are excluded from topology decisions by the repository topology SOT. |
 | `pnpm exec vitest run tests/fixtures/*.test.ts` | Fixture contract tests. |
 
@@ -42,32 +42,42 @@ Supporting checks:
 
 | Command | Result |
 |---|---|
-| `git ls-files fixtures tests/fixtures e2e/fixtures` | Same 31 tracked fixture-root paths. |
+| `git ls-files fixtures tests/fixtures e2e/fixtures` | Cross-check on the `rg --files` row above: `rg` honours the root `.ignore` and `git ls-files` does not, so the two outputs agreeing is the check itself. A path in only one of them means `.ignore` is hiding a tracked fixture. |
 | `git ls-tree -r --name-only 6f3b7d52 -- fixtures tests/fixtures e2e/fixtures \| wc -l` | 23 at 6f3b7d52, the commit that made this page the #755 closure SOT. The 26 this row carried came from 46ca4799 (PR #2034, 2026-07-31), which measured that day's tree but left `updated:` at 2026-06-12 — so it read as a #755-era value and was never one. |
-| `git diff --name-status 6f3b7d52 -- fixtures tests/fixtures e2e/fixtures` | 9 added and 1 deleted (`e2e/fixtures/smoke-routing-decisions.json`) since the baseline, so 23 + 9 − 1 = 31. Net growth is 8; the count of new paths is 9. |
+| `git diff --name-status 6f3b7d52 -- fixtures tests/fixtures e2e/fixtures` | The `A`/`D`/`M` lines since the baseline. Only the left end is anchored; the right end is whatever tree you run it in, so this row records no arithmetic. `e2e/fixtures/smoke-routing-decisions.json` shows as `D`. An `A` path with no row in the topology table below is a gap. |
 | `git check-ignore -v fixtures tests/fixtures e2e/fixtures tests/fixtures/data-source-profile-parity.report.json` | No ignored tracked fixture roots reported. |
 | `rg -n "data-source-profile-parity\\.report\|PROFILE_PARITY_REPORT\|profile parity report\|reportVersion" . --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | Report fixture is consumed by TS and Rust parity tests; no writer was found in the repo. |
-| `rg -n "writeFile\|writeFileSync\|fixture.*report\|report\\.json" src src-tauri tests package.json --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | No `writeFile`/`writeFileSync` hit at all; the four matches are the parity report's own consumers and two unrelated Rust test names. Nothing in tracked source writes a fixture-root file. |
+| `rg -n "writeFile\|writeFileSync\|fixture.*report\|report\\.json" src src-tauri tests package.json --glob '!src-tauri/target/**' --glob '!target/**' --glob '!node_modules/**'` | No `writeFile`/`writeFileSync` hit at all; the matches are the parity report's own consumers plus unrelated Rust test and comment names. Nothing under the paths this command searches writes a fixture-root file — `scripts/` is not one of them, and `scripts/capture-search-profile-fixture.sh:31` does write `tests/fixtures/search-profile-response.json` (the `generated` row below). |
 
 ## Classification Summary
 
 | Classification | Current paths | Evidence |
 |---|---:|---|
-| consumed | tracked paths under `tests/fixtures/**` and `e2e/fixtures/**`, plus `src-tauri/table-view-core/src/db/fixtures.rs` harness source | Each is read by a loader test, smoke seed path, smoke spec, parity test, support-boundary test, or product support matrix test. |
+| consumed | tracked paths under `tests/fixtures/**` and `e2e/fixtures/**`, plus `src-tauri/table-view-core/src/db/fixtures.rs` harness source | Each is read by a loader test, smoke seed path, smoke spec, parity test, support-boundary test, product support matrix test, or a shared Rust/TS payload test — `tests/fixtures/search-profile-response.json` is that last kind. |
 | dormant | `fixtures/profiles/e2e.yaml` | Documented in the file itself as a compiled but currently dormant static contract. |
-| generated | none in tracked fixture roots | No tracked fixture-root writer found. Generator/runtime outputs are DB rows, local SQLite/DuckDB files, or app-storage connection state outside these roots. |
+| generated | none written by a test or app run | `scripts/capture-search-profile-fixture.sh:31` rewrites `tests/fixtures/search-profile-response.json` from live containers, but a person runs that script and commits the result — `git grep -n capture-search-profile-fixture` finds no test, package script, or workflow that calls it. Other generator/runtime outputs are DB rows, local SQLite/DuckDB files, or app-storage connection state outside these roots. |
 | unread | `fixtures/base.yaml`, `fixtures/profiles/development.yaml`, `fixtures/profiles/e2e.yaml` | Nothing in the repo loads the generator specs under `fixtures/**`. Keep or delete them through an owning issue, not as incidental cleanup. |
 
 ## Fixture Topology Table
 
-Rows cover 25 of the 31 tracked fixture-root paths. The other six landed after
-the #755 inventory and have no row yet:
-`e2e/fixtures/duckdb/file-analytics/sales.csv`,
-`e2e/fixtures/duckdb/schema-filter/seed.sql`, `e2e/fixtures/seed-paths.ts`,
-`tests/fixtures/classifier-parity.json`, and the
-`tests/fixtures/capability_claim_registry.ts` / `.test.ts` pair from #2122.
-Nothing checks this table against the enumeration above; re-running those two
-commands is what finds the gap.
+Every fixture-root path from the #755 baseline that still exists has a row below.
+Paths that landed after that baseline and have no row yet:
+
+- `e2e/fixtures/duckdb/file-analytics/sales.csv`
+- `e2e/fixtures/duckdb/schema-filter/seed.sql`
+- `e2e/fixtures/seed-paths.ts`
+- `tests/fixtures/capability_claim_registry.ts` and
+  `tests/fixtures/capability_claim_registry.test.ts` (#2122)
+- `tests/fixtures/classifier-parity.json`
+- `tests/fixtures/search-profile-response.json` (#2198)
+
+The `tests/fixtures/docs-links/**` trio landed after the baseline as well and
+does have rows. Nothing checks this list against the enumeration above, and it
+goes stale the same way a total would — the difference is that a missing entry
+leaves an incomplete list instead of a wrong number. Diffing the first column of
+the table below against
+`git ls-tree -r --name-only <rev> -- fixtures tests/fixtures e2e/fixtures` is
+what finds the gap.
 
 | fixture path | dbms/profile | lifecycle | consumed by tests | evidence tier | product docs row | smoke routing | action |
 |---|---|---|---|---|---|---|---|
