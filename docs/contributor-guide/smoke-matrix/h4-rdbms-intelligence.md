@@ -158,7 +158,8 @@ This matrix, `.github/workflows/e2e-smoke.yml`,
 Current gap / routing:
 
 The wired dense ERD smoke opens a seeded PostgreSQL schema, verifies table
-nodes, FK edges, elkjs FK-direction layering, search, selection, node drag,
-canvas zoom and fit, desktop and narrow viewport behavior, metadata fetch
-stability, and non-empty screenshot artifacts. It does not claim FK row
+nodes, FK edges, the accessible name each edge carries (relationship sentence
+plus its cardinality mark), elkjs FK-direction layering, search, selection,
+node drag, canvas zoom and fit, desktop and narrow viewport behavior, metadata
+fetch stability, and non-empty screenshot artifacts. It does not claim FK row
 navigation through ERD, schema diff, migration impact, or data compare.
