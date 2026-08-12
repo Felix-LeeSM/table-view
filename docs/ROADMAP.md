@@ -178,7 +178,7 @@ Roadmap item 을 active implementation 으로 승격하기 전 필요한 것:
 |---|---|---|
 | MariaDB | MySQL adapter reuse 를 단순하게 유지할 수 있나? | Dialect flag 로 reuse. Evidence 있을 때만 split. |
 | DuckDB | File analytics 를 RDBMS 로 볼지 separate file-sql paradigm 으로 볼지? | Evidence 가 split 을 요구하기 전까지 RDBMS + `file` connection kind. |
-| Redis/Search | Redis full UI/editor parity 와 Search index/settings admin execution 을 언제 승격할 수 있나? | 둘 다 freeze 밖이라 lane 통과를 기다리지 않는다 (ADR 0060). Search 는 admin destructive 실행 정책과 observability/profile-explain 계약이 선행이다 (ADR 0060 문면) — 그중 `_search` `profile` 계획 뷰어는 #2153 으로, live `_delete_by_query` 는 #1076 으로 이미 shipped 고, `_explain` 과 observability 가 남았다. Redis full parity, broader Search smoke, remaining MSSQL/Oracle widening 은 evidence/smoke 비용 기준으로 고른다. |
+| Redis/Search | Redis full UI/editor parity 와 Search index/settings admin execution 을 언제 승격할 수 있나? | 둘 다 freeze 밖이라 lane 통과를 기다리지 않는다 (ADR 0060). Search 는 admin destructive 실행 정책과 observability/profile-explain 계약이 선행이다 (ADR 0060 문면) — 그중 profile-explain 계약은 `_search` `profile` 계획 뷰어를 #2153 이 실었고 `_explain` 이 남았다. observability 와 admin destructive 실행 정책은 아직 선행 조건이다: live `_delete_by_query` 실행은 #1076 으로 승격됐지만 index/settings admin 실행은 그 범위 밖이라 deferred 로 남았다 (ADR 0060 문면). Redis full parity, broader Search smoke, remaining MSSQL/Oracle widening 은 evidence/smoke 비용 기준으로 고른다. |
 | 더 넓은 paradigm | Cassandra/DynamoDB/graph/vector/stream 중 무엇을 먼저 승격하나? | H6 기본값은 candidate-only. Workflow value, contract readiness, fixture/live evidence, smoke/E2E cost, safety risk 가 분명해질 때까지 승격 금지. |
 | App state | State-management migration 은 언제 재개하나? | DB support 작업이 storage/schema surface 와 충돌하지 않을 때. |
 | Security | Users/roles/auth mechanism UI 는 언제 추가하나? | RDBMS/DuckDB/non-RDBMS source order 가 명확해진 뒤. |
