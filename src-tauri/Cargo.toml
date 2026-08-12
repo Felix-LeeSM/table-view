@@ -6,7 +6,7 @@
 # `cargo test --workspace --lib` / `cargo fmt --all` / `cargo clippy --workspace`
 # 로 도는 근거가 이 목록이다.
 # `tvw` 는 #1770 (ADR 0061) 의 CLI 다. 앱이 아니라 `table-view-core` 만 링크하고,
-# 여기 없으면 그 crate 는 fmt · clippy · `--workspace --lib` 셋 모두 밖에 남는다.
+# 여기 없으면 그 crate 는 fmt · clippy · `--workspace --lib` 밖에 남는다.
 [workspace]
 members = ["table-view-core", "sql-parser-core", "mongosh-parser-core", "tvw"]
 # root manifest 가 패키지라 resolver 는 아래 `edition = "2021"` 에서 2 로 풀린다.
