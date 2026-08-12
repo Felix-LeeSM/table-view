@@ -287,27 +287,42 @@ Deferred or non-blocking checks must stay explicit:
 후자는 red 를 안 남겨 로그로 못 찾는다. 기전·경계 실측·처방은 issue #2314 와
 `scripts/review/measure-rounds.test.sh` 의 `contains()` 주석에 있다.
 
-`scripts/review/measure-rounds.test.sh` 는 #2314 가 고쳤다. 같은 형태가 남은 파일과
-그 자리는 이 명령이 낸다:
+`scripts/review/measure-rounds.test.sh` 는 #2314 가 고쳤다. 같은 형태가 남은
+**후보**는 이 명령이 낸다. 낸 줄이 곧 결함은 아니다 — 파이프 왼쪽이 writer 인지,
+그 자리에 `pipefail` 이 걸렸는지를 줄마다 따로 봐야 한다:
 
 ```
-git grep -n '| *grep -q' -- 'scripts/**/*.sh'
+git grep -n '| *grep -q'
 ```
 
-2026-08-12 실측으로는 `scripts/release/` 의 세 스위트
+pathspec 을 안 건다. `scripts/**/*.sh` 로 좁히면 `scripts/` 바로 아래 `.sh` 일곱
+개와 `.github/workflows/` 가 통째로 빠진다.
+
+2026-08-12 실측으로 `scripts/release/` 의 세 스위트
 (`cargo-package-version.test.sh` · `checksum-sidecars.test.sh` ·
-`verify-tag-ci.test.sh`)가 걸린다. payload 가 파이프 버퍼보다 작아 결정론 구간에는
-못 들어가지만 **확률로는 뒤집힌다.** 가장 큰
+`verify-tag-ci.test.sh`)가 남은 대상이다. payload 가 파이프 버퍼보다 작아 결정론
+구간에는 못 들어가지만 **확률로는 뒤집힌다.**
 `scripts/release/fixtures/release-verify-tag-ci-job.txt`(`wc -c` 6662)를 8-way 동시로
 1000 회씩 돌리면, needle 이 첫 줄일 때 0 · 3 · 7/8000 이 뒤집혔고 needle 이 마지막
 줄일 때는 0/8000 이었다. `grep` 이 늦게 빠질수록 왼쪽 writer 가 쓸 것을 다 밀어 넣고
 끝나기 때문이다 — **위험한 자리는 일치가 앞쪽에서 날 수 있는 판정이다.**
 
-지금 안 고치는 이유: 세 파일이 저마다 mutation harness 와 자기 재호출을 가져 회귀
-가드를 파일별로 따로 설계해야 하고, 오늘 CI 를 막고 있는 자리가 아니다. 착수하면
-「없어야 한다」쪽 부호를 쓰는 자리 — 즉 조용한 거짓 green 이 가능한 자리 — 부터
-간다: `checksum-sidecars.test.sh` 의 `${{` 가드와 `verify-tag-ci.test.sh` 의
-`continue-on-error` 가드다.
+세 스위트는 **issue #2319** 가 소유한다. #2314 가 같이 안 고친 이유는 하나다 — 세
+파일이 저마다 mutation harness 와 자기 재호출을 가져 회귀 가드를 파일별로 따로
+설계해야 한다.
+
+착수 순서를 정하는 축이 둘이고 서로 다른 파일을 가리킬 수 있다. **위험도** 축에서는
+「없어야 한다」쪽 부호가 먼저다 — 조용한 거짓 green 은 red 를 안 남겨 로그로 못
+찾는다. 그 자리는 `checksum-sidecars.test.sh` 의 `${{` 가드와
+`verify-tag-ci.test.sh` 의 `continue-on-error` 가드다. **실제로 무엇이 CI 를 막고
+있는가** 축은 여기 안 적는다 — 산문에 박으면 그날 안에 낡는다. #2314 의 PR 이
+「오늘 CI 를 막고 있는 자리가 아니다」를 커밋한 지 6분 뒤, 부호가 양인
+`verify-tag-ci.test.sh` 의 `assert_has` 가 바로 그 PR 의 required check 를 red 로
+만들었다. 그 축의 값은 이 명령이 낸다:
+
+```
+gh run list -R Felix-LeeSM/table-view --workflow ci.yml --status failure --limit 20
+```
 
 ## Refactor Follow-Up
 
