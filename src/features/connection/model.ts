@@ -296,10 +296,12 @@ export const isSearchFamily = (dbType: DatabaseType): boolean =>
  * consumer special-cases `dbType === "mssql"` first (encrypt-by-default seed),
  * so that branch wins before `exposesTlsToggle` is ever consulted.
  *
- * `postgresql` renders a TLS control (#1526) but is deliberately kept OUT,
- * along with the no-TLS-control types (mysql/mariadb/oracle/sqlite/duckdb):
- * a posture must not be carried onto — or persisted for — those drafts, so the
- * switch resets them to `prefer`.
+ * The sslmode-dropdown engines are deliberately kept OUT — `postgresql`
+ * (#1526), `mysql`/`mariadb` (#1063) and `oracle` (#2154) — along with the
+ * no-TLS-control types (sqlite/duckdb): a posture must not be carried onto —
+ * or persisted for — those drafts, so the switch resets them to `prefer`.
+ * Membership here is "renders a plain on/off toggle", not "renders no TLS
+ * control at all"; those stopped being the same set when the dropdown spread.
  *
  * #1649 note: the pre-#1649 rationale for this split was the
  * `tls_enabled=true, trust=None` combination that the backend hard-rejected
@@ -445,9 +447,10 @@ export function draftVerifyingSslMode(
  * `verify-ca` would render with an empty select and a save would silently
  * rewrite its posture.
  *
- * #2154 — `offered` defaults to the shared `SSL_MODE_OPTIONS`; Oracle passes
- * `ORACLE_SSL_MODE_OPTIONS`. The re-add rule is what keeps a narrower list from
- * turning into a silent rewrite of the postures it drops.
+ * #2154 — `offered` defaults to the shared `SSL_MODE_OPTIONS`; callers that
+ * know the engine pass `sslModeOptionsFor(dbType)`. The re-add rule is what
+ * keeps a narrower list from turning into a silent rewrite of the postures it
+ * drops.
  */
 export function sslModeChoices(
   current: SslMode,
@@ -456,9 +459,37 @@ export function sslModeChoices(
   return offered.includes(current) ? offered : [...offered, current];
 }
 
-/** True for the engines that render the sslmode dropdown (pg/mysql/mariadb). */
+/**
+ * True for the engines that render the sslmode dropdown, and therefore for the
+ * engines whose pasted URL carries an `sslmode=` value rather than a boolean
+ * `tls`/`ssl`.
+ *
+ * #2154 — Oracle joined the dropdown, so it joins here. While it did not, a
+ * pasted `oracle://…?sslmode=verify-full` fell through to the boolean branch of
+ * `resolveUrlTls`, found no `tls`/`ssl` key, and was dropped without even being
+ * reported as unreflected — the exact silent loss `unreflectedTlsParam` exists
+ * to prevent.
+ */
 export function usesSslModeSelect(dbType: DatabaseType): boolean {
-  return dbType === "postgresql" || dbType === "mysql" || dbType === "mariadb";
+  return (
+    dbType === "postgresql" ||
+    dbType === "mysql" ||
+    dbType === "mariadb" ||
+    dbType === "oracle"
+  );
+}
+
+/**
+ * The postures `dbType`'s dropdown offers — the shared list, narrowed for the
+ * engines that cannot author all of it.
+ *
+ * #2154 — one place answers "can this engine author this posture?", so the form
+ * and the URL-paste path cannot drift into offering different sets. Drift is
+ * what made a pasted Oracle `sslmode=require` reflectable in principle while
+ * the dropdown refused to show it.
+ */
+export function sslModeOptionsFor(dbType: DatabaseType): readonly SslMode[] {
+  return dbType === "oracle" ? ORACLE_SSL_MODE_OPTIONS : SSL_MODE_OPTIONS;
 }
 
 export type FileConnectionDatabaseType = Extract<
@@ -631,21 +662,32 @@ function resolveUrlTls(
     const found = findParamCaseInsensitive(searchParams, SSLMODE_PARAM_KEYS);
     if (!found) return { fields: {}, unreflected: null };
     const [key, rawValue] = found;
+    // #2154 — reflect only a posture this engine's dropdown can author;
+    // anything else is reported, never applied. For pg/mysql/mariadb the
+    // offered list already covers every value the switch below produces, so
+    // this gate changes nothing there. It is what keeps Oracle's `require` —
+    // a posture the backend rejects outright — from being seeded into a draft
+    // that could only fail to connect.
+    const offered = sslModeOptionsFor(dbType);
+    const reflectable = (sslMode: SslMode): UrlTlsResolution =>
+      offered.includes(sslMode)
+        ? reflected(sslMode)
+        : { fields: {}, unreflected: `${key}=${rawValue}` };
     switch (rawValue.toLowerCase()) {
       case "disable":
       case "disabled":
-        return reflected("disable");
+        return reflectable("disable");
       case "prefer":
       case "preferred":
         return { fields: {}, unreflected: null };
       case "require":
       case "required":
-        return reflected("require");
+        return reflectable("require");
       case "verify-full":
       case "verify_full":
       case "verify-identity":
       case "verify_identity":
-        return reflected("verify-full");
+        return reflectable("verify-full");
       default:
         // verify-ca (no CA picker yet), allow, and any unknown value.
         return { fields: {}, unreflected: `${key}=${rawValue}` };

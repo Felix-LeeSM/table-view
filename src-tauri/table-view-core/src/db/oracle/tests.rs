@@ -138,8 +138,10 @@ fn connect_config_rejects_empty_required_fields() {
 #[test]
 fn connect_config_still_rejects_advanced_auth_and_unexpressible_tls_postures() {
     // Reason: #1065 opens SID + wallet but keeps rejecting password-less
-    // external auth and any TLS-enabling posture (Oracle exposes no sslmode
-    // toggle; the wallet field is the only Oracle TLS trigger). (2026-07-17)
+    // external auth and the routing fields Oracle never reads. It also rejected
+    // every TLS-enabling posture, which #2154 undoes — the postures that survive
+    // that reversal are pinned in the second half of this test. (2026-07-17,
+    // rewritten 2026-08-12)
     let mut advanced = oracle_config();
     advanced.password.clear();
     assert!(matches!(
@@ -364,6 +366,55 @@ fn connect_config_dials_a_tns_descriptor_through_the_same_axis() {
         OracleAdapter::connect_config(&injected, 5).err(),
         Some(AppError::Validation(message)) if message.contains("host contains unsupported characters")
     ));
+}
+
+#[test]
+fn connect_config_accepts_a_descriptor_in_tnsnames_ora_layout() {
+    // Reason: #2154 — the malformed-descriptor error and both form hints tell
+    // the user to paste "the whole `(DESCRIPTION=...)` entry from tnsnames.ora",
+    // and that file is written with newlines, indentation and spaces around
+    // `=`. Rejecting exactly the layout the instruction asks for left the user
+    // with no way out of the error. Clause keys are matched case-insensitively,
+    // so a lowercase entry parses to the same dial. (2026-08-12)
+    let laid_out = "\
+(description =
+    (address = (protocol = tcp)(host = dial-host.example.com)(port = 1521))
+    (connect_data =
+      (service_name = svc)
+    )
+  )";
+    let mut config = oracle_config();
+    config.database = laid_out.into();
+    let built = OracleAdapter::connect_config(&config, 5).unwrap();
+    assert_eq!(built.host, "dial-host.example.com");
+    assert_eq!(built.port, 1521);
+    assert!(matches!(
+        built.service,
+        ServiceMethod::ServiceName(ref service) if service == "svc"
+    ));
+    assert!(!built.is_tls_enabled(), "PROTOCOL=tcp is a plaintext dial");
+
+    // A single space after a `)` is the smallest form of the same rejection.
+    let mut spaced = oracle_config();
+    spaced.database = TCP_DESCRIPTOR.replace(")(CONNECT_DATA", ") (CONNECT_DATA");
+    assert_ne!(
+        spaced.database, TCP_DESCRIPTOR,
+        "the spacing rewrite matched nothing"
+    );
+    let built = OracleAdapter::connect_config(&spaced, 5).unwrap();
+    assert_eq!(built.host, "dial-host.example.com");
+
+    // Whitespace between clauses is layout, not a licence for anything else:
+    // junk there is still malformed.
+    let mut junk = oracle_config();
+    junk.database = TCP_DESCRIPTOR.replace(")(CONNECT_DATA", ") junk (CONNECT_DATA");
+    assert!(
+        matches!(
+            OracleAdapter::connect_config(&junk, 5).err(),
+            Some(AppError::Validation(message)) if message.contains("malformed")
+        ),
+        "text between clauses must stay malformed"
+    );
 }
 
 #[test]

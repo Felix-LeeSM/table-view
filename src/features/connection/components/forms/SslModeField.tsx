@@ -1,8 +1,9 @@
 /**
- * #1063 — shared sslmode dropdown for the trust-dependent RDB engines
- * (PostgreSQL / MySQL / MariaDB). These route through the backend
- * `resolve_tls_decision` boundary, so their TLS posture is a multi-way choice
- * rather than the plain on/off + trust checkbox the on/off engines use.
+ * #1063 — shared sslmode dropdown for the RDB engines that resolve the whole
+ * posture rather than a plain on/off toggle: PostgreSQL / MySQL / MariaDB and,
+ * since #2154, Oracle. These route through the backend `resolve_tls_decision`
+ * boundary, so their TLS posture is a multi-way choice rather than the on/off +
+ * trust checkbox the other engines use.
  *
  * #1649 — the dropdown now binds directly to the persisted `sslMode` field
  * instead of deriving a view over a boolean pair. `verify-ca` is not among the
@@ -10,6 +11,10 @@
  * slice. A connection already stored as `verify-ca` still renders its own
  * value (see `sslModeChoices`) so opening the dialog cannot silently rewrite
  * a posture the form cannot yet author.
+ *
+ * #2154 — the offered list is read from `sslModeOptionsFor(draft.dbType)`
+ * rather than passed in, so the dropdown and the URL-paste path cannot offer
+ * different sets for the same engine.
  */
 
 import {
@@ -25,6 +30,7 @@ import {
   draftSslMode,
   type SslMode,
   sslModeChoices,
+  sslModeOptionsFor,
 } from "../../model";
 
 const SSL_MODE_LABEL_KEYS: Record<SslMode, string> = {
@@ -40,15 +46,6 @@ export interface SslModeFieldProps {
   onChange: (patch: Partial<ConnectionDraft>) => void;
   inputClass: string;
   labelClass: string;
-  /**
-   * #2154 — the postures this engine can author, defaulting to the shared
-   * `SSL_MODE_OPTIONS`. Oracle passes a narrower list: its driver cannot
-   * express `require` (encrypt without verifying), so the backend rejects that
-   * posture and offering it here would only produce a draft that fails to
-   * connect. A stored value outside the list still renders — `sslModeChoices`
-   * re-adds the current one.
-   */
-  options?: readonly SslMode[];
 }
 
 export default function SslModeField({
@@ -56,7 +53,6 @@ export default function SslModeField({
   onChange,
   inputClass,
   labelClass,
-  options,
 }: SslModeFieldProps) {
   const { t } = useTranslation("featuresConnection");
   const mode = draftSslMode(draft);
@@ -87,11 +83,13 @@ export default function SslModeField({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {sslModeChoices(mode, options).map((option) => (
-            <SelectItem key={option} value={option}>
-              {t(SSL_MODE_LABEL_KEYS[option])}
-            </SelectItem>
-          ))}
+          {sslModeChoices(mode, sslModeOptionsFor(draft.dbType)).map(
+            (option) => (
+              <SelectItem key={option} value={option}>
+                {t(SSL_MODE_LABEL_KEYS[option])}
+              </SelectItem>
+            ),
+          )}
         </SelectContent>
       </Select>
       <p className="mt-1 text-2xs text-muted-foreground">

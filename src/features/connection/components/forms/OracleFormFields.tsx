@@ -6,11 +6,7 @@ import {
   SelectValue,
 } from "@components/ui/select";
 import { useTranslation } from "react-i18next";
-import {
-  type ConnectionDraft,
-  ORACLE_SSL_MODE_OPTIONS,
-  usesTnsDescriptor,
-} from "../../model";
+import { type ConnectionDraft, usesTnsDescriptor } from "../../model";
 import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
 import SslModeField from "./SslModeField";
 
@@ -211,13 +207,13 @@ export default function OracleFormFields({
 
       {/* #2154 — wallet-less 1-way TLS (TCPS). The wallet below is the mTLS
           path and the two are mutually exclusive; the backend rejects a
-          connection that names both. */}
+          connection that names both. The narrowed posture list (no `require`)
+          comes from `sslModeOptionsFor`, which the URL-paste path reads too. */}
       <SslModeField
         draft={draft}
         onChange={onChange}
         inputClass={inputClass}
         labelClass={labelClass}
-        options={ORACLE_SSL_MODE_OPTIONS}
       />
 
       {/* #1065 — Oracle wallet (mTLS) for Oracle Cloud ADB. */}

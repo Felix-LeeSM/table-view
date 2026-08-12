@@ -117,9 +117,12 @@ Mode/editor assistance and #907 representative smoke. Future promotion must add
 matching DDL, full parser/completion, docs, and smoke evidence without hiding
 SQL Server and Oracle auth/dialect differences behind a shared abstraction. Keep
 full admin parity, import/export, profiler/activity, role/user/permission UI,
-broad scripting, MSSQL admin/full T-SQL semantics, and Oracle
-SID/TNS/wallet/advanced auth/structured DDL/raw DDL/admin/TLS/PLSQL semantics
-out of scope until separately proven.
+broad scripting, MSSQL admin/full T-SQL semantics, and the Oracle axes still
+unproven — advanced auth, raw DDL/admin, full PL/SQL semantics, and the
+tnsnames.ora alias resolver — out of scope until separately proven. The Oracle
+axes that have since been proven are not on this list: SID and the wallet
+(#1065), structured DDL (#1072), and TNS descriptor plus 1-way TCPS (#2154) —
+see the *Connection TLS/SSH/Oracle* entry below.
 
 ### Wider source candidates
 

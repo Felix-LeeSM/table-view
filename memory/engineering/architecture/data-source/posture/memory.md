@@ -28,11 +28,13 @@ tabular runtime: catalog metadata, SELECT/DML batch execution, cooperative
 cancellation, and table-data query through the bounded runtime wrapper. The dial
 also takes a SID and a wallet-mTLS directory (#1065) and, since #2154, a TNS
 connect descriptor and wallet-less 1-way TCPS off the shared sslmode posture —
-all through the one `connect_config` trust boundary. tnsnames.ora alias
-resolution, skip-verify TLS (the driver cannot express it), advanced auth,
-switch database, editRows, structured DDL, raw DDL/admin, parser/completion,
-runtime smoke, triggers, PL/SQL source/body/package authoring,
-sequences/synonyms DDL/admin, import/export, profiler/activity,
+all through the one `connect_config` trust boundary. Active beyond the dial:
+key-projected editRows, bounded structured table/index/constraint DDL, read-only
+trigger listing and PL/SQL body/package source (#1072), plus representative
+Runtime Happy Path smoke (#907). tnsnames.ora alias resolution, skip-verify TLS
+(the driver cannot express it), advanced auth, switch database, raw DDL/admin,
+trigger DDL, PL/SQL body/package authoring, full parser/completion,
+sequences/synonyms DDL/admin, DB-level import/backup-restore, profiler/activity,
 users/roles/grants/session/storage, full workbench parity, and full PL/SQL
 executable semantics remain separate contracts.
 

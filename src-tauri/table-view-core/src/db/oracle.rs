@@ -36,7 +36,7 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::db::tls::{resolve_tls_decision, TlsDecision};
+use crate::db::tls::{install_rustls_crypto_provider, resolve_tls_decision, TlsDecision};
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
@@ -273,6 +273,12 @@ impl OracleAdapter {
         }
 
         // ── TLS ────────────────────────────────────────────────────────────
+        // Both branches below reach `rustls::ClientConfig::builder()`, which
+        // panics with no process default installed. The app installs one at
+        // startup; this repeat call covers unit tests and library consumers
+        // that never run `table_view_lib::run()`. See
+        // `db::tls::install_rustls_crypto_provider` for why it is a process
+        // property and not an Oracle one.
         install_rustls_crypto_provider();
         // Two anchors can drive an Oracle handshake and they are mutually
         // exclusive: the wallet (#1065 mTLS — the wallet's own certificate is
@@ -722,36 +728,6 @@ fn map_oracle_tls_path_error(path: &str, error: oracle_rs::Error) -> AppError {
     AppError::connection_redacted(masked)
 }
 
-/// Install the process-level rustls `CryptoProvider` every Oracle TLS dial
-/// needs, once.
-///
-/// #2154 — `oracle-rs` 0.1.7 builds its client config with
-/// `rustls::ClientConfig::builder()`, which resolves the **process default**
-/// provider. This workspace compiles rustls 0.23 with *both* provider features
-/// on (`redis` pulls `aws-lc-rs`, `hyper-rustls` pulls `ring`), so rustls
-/// cannot infer one and `builder()` **panics** — it does not return an error.
-/// Nothing else in the process installs a default: sqlx picks its provider
-/// explicitly with `builder_with_provider`, so pg/mysql never needed one.
-///
-/// That makes this a fix for the #1065 wallet path too, not only the #2154
-/// TCPS path: a wallet that loads reaches the same `builder()`, so the mTLS
-/// dial has been panicking since #1065 wherever a wallet was actually
-/// readable. No unit test caught it (none supply a loadable wallet) and the
-/// live ADB/TCPS run is the residual the #1065 threat model §6-1 recorded.
-///
-/// `aws-lc-rs` matches rustls' own default and sqlx's default branch. The
-/// choice only ever binds oracle-rs: every other rustls user here names its
-/// provider explicitly.
-fn install_rustls_crypto_provider() {
-    static INSTALL: std::sync::Once = std::sync::Once::new();
-    INSTALL.call_once(|| {
-        // `install_default` returns `Err` only when a provider is already
-        // installed, which satisfies the same need — any installed provider
-        // makes `builder()` deterministic instead of panicking.
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-    });
-}
-
 /// #2154 — the dial coordinates a TNS connect descriptor carries. Everything a
 /// descriptor can express beyond these four is rejected, never dropped.
 struct TnsDialTarget {
@@ -823,7 +799,8 @@ fn parse_tns_descriptor(descriptor: &str) -> Result<TnsDialTarget, AppError> {
     }
 
     // Every clause starts at a `(`, so each `(`-delimited fragment is
-    // `KEY=VALUE` followed only by the `)` that close it and its parents.
+    // `KEY=VALUE` followed only by the `)` that close it and its parents, plus
+    // whatever layout whitespace separates them.
     let mut fragments = descriptor.split('(');
     if fragments.next() != Some("") {
         return Err(malformed());
@@ -834,7 +811,14 @@ fn parse_tns_descriptor(descriptor: &str) -> Result<TnsDialTarget, AppError> {
             Some(close) => fragment.split_at(close),
             None => (fragment, ""),
         };
-        if closers.chars().any(|ch| ch != ')') {
+        // Whitespace is allowed between the closers: a tnsnames.ora entry
+        // written by Net Configuration Assistant puts newlines and indentation
+        // there, and the error message plus both form hints tell the user to
+        // paste exactly that file's entry. Rejecting it made the instruction
+        // impossible to follow. Anything else between clauses is still
+        // malformed, and the injection guard is elsewhere — `(HOST=evil host)`
+        // is caught by the `connect_config` character whitelist, not here.
+        if closers.chars().any(|ch| ch != ')' && !ch.is_whitespace()) {
             return Err(malformed());
         }
         let (key, value) = head.split_once('=').ok_or_else(malformed)?;

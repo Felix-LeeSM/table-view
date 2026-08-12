@@ -340,11 +340,19 @@ honor would otherwise leave the user believing the descriptor pinned a posture
 the dial never applied; the parsed coordinates still pass the #1065 character
 whitelist, and the descriptor itself never reaches the driver. Wallet-less
 1-way TLS (TCPS) runs off the shared `sslmode` posture, with `verify-ca`'s CA
-file as the trust anchor and `verify-full` on the driver's bundled public
-roots. The wallet and the `sslmode` posture are mutually exclusive trust
-anchors and a connection naming both is rejected; `require` (encrypt without
-verifying) is rejected as well, because the driver's client-config builder
-never reads the skip-verify flag its API exposes. Live TCPS/mTLS handshake
+file as the trust anchor *in place of* the driver's bundled public roots (the
+opposite direction from PostgreSQL/MySQL/MariaDB, where the CA is added to
+them) and `verify-full` on those bundled roots. The wallet and a TLS-enabling
+posture are mutually exclusive trust anchors: a connection naming a wallet
+together with `verify-ca` or `verify-full` is rejected, while a wallet beside
+`disable`/`prefer` is the ordinary wallet connection and is not. `require`
+(encrypt without verifying) is rejected outright, because the driver's
+client-config builder never reads the skip-verify flag its API exposes, so the
+Oracle dropdown offers only `disable`/`prefer`/`verify-full`. As on the other
+engines, `verify-ca` is not selectable in the form until the CA file picker
+lands — it renders only for a connection already stored with it, and a pasted
+`oracle://…?sslmode=verify-ca` or `?sslmode=require` is reported as an
+unreflected parameter rather than dropped. Live TCPS/mTLS handshake
 verification stays a docker/ADB integration residual — descriptor parsing,
 clause refusal, protocol/posture agreement, CA-path redaction, and TLS config
 assembly are unit-covered. tnsnames.ora alias resolution (reading the file to

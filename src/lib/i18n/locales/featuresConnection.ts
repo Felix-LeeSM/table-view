@@ -319,7 +319,7 @@ export const en = {
     trustServerCert: "Trust server certificate",
     trustWarning:
       "Certificate verification is skipped — an attacker able to intercept the connection can present any certificate. Use only on trusted networks.",
-    // sslmode dropdown (pg/mysql/mariadb) — #1063
+    // sslmode dropdown (pg/mysql/mariadb — #1063, oracle — #2154)
     labelSslMode: "SSL mode",
     sslModeDisable: "Disable (no encryption)",
     sslModePrefer: "Prefer (opportunistic)",
@@ -682,7 +682,7 @@ export const ko = {
     trustServerCert: "서버 인증서 신뢰",
     trustWarning:
       "인증서 검증을 건너뜁니다 — 연결을 가로챌 수 있는 공격자가 임의의 인증서를 제시할 수 있습니다. 신뢰할 수 있는 네트워크에서만 사용하세요.",
-    // sslmode 드롭다운 (pg/mysql/mariadb) — #1063
+    // sslmode 드롭다운 (pg/mysql/mariadb — #1063, oracle — #2154)
     labelSslMode: "SSL 모드",
     sslModeDisable: "Disable (암호화 없음)",
     sslModePrefer: "Prefer (기회적)",

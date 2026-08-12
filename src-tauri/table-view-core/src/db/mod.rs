@@ -40,7 +40,10 @@ pub(crate) mod search_http;
 pub(crate) mod search_live_destructive;
 pub(crate) mod search_live_query;
 pub mod sqlite;
-pub(crate) mod tls;
+// #2154 — `pub` only so the app crate can install the process-wide rustls
+// crypto provider at startup (`tls::install_rustls_crypto_provider`). The
+// posture types (`TlsDecision`, `resolve_tls_decision`) stay `pub(crate)`.
+pub mod tls;
 pub mod traits;
 pub mod types;
 pub(crate) mod version;

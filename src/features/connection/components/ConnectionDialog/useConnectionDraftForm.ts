@@ -95,8 +95,9 @@ export interface UseConnectionDraftFormReturn {
  * (`applyDbTypeChange`) and the URL-paste path (`applyParsedConnection`).
  * MSSQL forces its encrypt-by-default posture; the other on/off engines
  * (mongo/redis/valkey/search) carry whether encryption was on but never a
- * skip-verify choice; the sslmode engines (pg/mysql/mariadb) and the no-TLS
- * engines reset to the driver default. The surviving invariant is #1063's: a
+ * skip-verify choice; the sslmode engines (pg/mysql/mariadb, and oracle since
+ * #2154) and the no-TLS engines reset to the driver default. The surviving
+ * invariant is #1063's: a
  * skip-verify posture never leaks onto the new engine.
  *
  * #1649 — MSSQL seeds `require` because the pre-#1649 rule seeded
