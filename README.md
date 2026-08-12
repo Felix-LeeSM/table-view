@@ -37,7 +37,7 @@ TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 
 
 ### 4. 스키마/구조 편집 UI
 
-- PostgreSQL/MySQL 계열, MSSQL, Oracle에서 테이블/컬럼 생성, 이름 변경, 삭제, 인덱스 생성/삭제, FK/CHECK/UNIQUE 제약 추가/삭제를 UI에서 다룹니다. DuckDB는 테이블/컬럼/인덱스까지 다루고 제약 추가/삭제와 identity 컬럼은 아직 제외입니다(ADR 0051 Stage 2b).
+- PostgreSQL/MySQL 계열, MSSQL, Oracle에서 테이블/컬럼 생성, 이름 변경, 삭제, 인덱스 생성/삭제, FK/CHECK/UNIQUE 제약 추가/삭제를 UI에서 다룹니다. DuckDB는 테이블/컬럼/인덱스까지 다루고 제약 추가/삭제와 identity 컬럼은 아직 제외입니다(ADR 0051 Stage 2b). SQLite도 테이블/컬럼/인덱스까지 다루고, 제약 추가/삭제와 identity 컬럼, 이미 있는 컬럼 정의 변경은 제공하지 않습니다(#1804).
 - 실행 전 DDL statement preview와 Safe Mode 게이트를 거쳐 destructive 변경을 한 번 더 확인합니다.
 
 ### 5. Safe Mode

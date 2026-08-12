@@ -298,6 +298,23 @@ const HIDDEN_CONSTRAINT_CONTROLS: readonly ClaimFact[] = [
  */
 export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   {
+    path: "README.md",
+    phrases: [],
+    disposition: "ledger-dependent",
+    claims: SQLITE_DDL_BOUNDARY,
+    reason:
+      "Issue #2131 — the repo's first page, and the one SQLite claim surface " +
+      "outside the frozen #2116 inventory. The `**SQLite**` bullet names the " +
+      "DDL the adapter runs natively and the two changes it refuses, and the " +
+      "`### 4. 스키마/구조 편집 UI` list places SQLite next to DuckDB for the " +
+      "same reason. Phrase-less by construction, not by retirement: both " +
+      "sentences are Korean and match no pattern class (the classes' one " +
+      "Korean alternative, `가려져 있다`, is hidden-affordance wording this " +
+      "page does not use), so the sweep cannot reach the page and only these " +
+      "facts can. #1804 moved the ledger and left the bullet stale with " +
+      "nothing to name the file — that is the drift this row closes.",
+  },
+  {
     path: "docs/contributor-guide/release/release-notes-support-matrix.md",
     phrases: [],
     disposition: "ledger-dependent",
