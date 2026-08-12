@@ -211,11 +211,12 @@ jobs:
       # every Windows entry was skipped and the step still ended green: v0.7.0
       # and v0.7.1 both published .msi/.exe bundles with no checksum while the
       # release body told Windows users to verify against a `.sha256` that was
-      # never there. Two edits keep that shape from coming back — `cygpath -u`
-      # converts the path, and an entry that resolves to neither a file nor a
-      # directory now fails the step instead of being skipped. The macOS `.app`
-      # bundle is a directory and is the one legitimate skip; it is logged, and
-      # a run where EVERY entry was skipped is red.
+      # never there. What keeps that shape from coming back: `cygpath -u`
+      # converts the path; an entry that resolves to neither a file nor a
+      # directory fails the step instead of being skipped; an artifactPaths
+      # array that carried no entry is red; and a run where EVERY entry was
+      # skipped is red. Directory entries are the legitimate skip — the macOS
+      # `.app` bundle is one — and each one is logged.
       #
       # The `run:` body carries no `${{ }}` expressions on purpose: the
       # regression suite (scripts/release/checksum-sidecars.test.sh) extracts it
@@ -234,8 +235,8 @@ jobs:
           set -euo pipefail
 
           # Git Bash cannot stat `D:\a\...`; `cygpath -u` turns it into
-          # `/d/a/...`. It ships with Git for Windows and exists nowhere else,
-          # and the macOS/Linux runners already report POSIX paths, so the
+          # `/d/a/...`. It ships with Git for Windows and is absent from the
+          # macOS/Linux runners, which already report POSIX paths, so the
           # absence of the binary is the "nothing to convert" case.
           to_posix() {
             if command -v cygpath >/dev/null 2>&1; then

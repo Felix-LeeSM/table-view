@@ -9,8 +9,8 @@
           set -euo pipefail
 
           # Git Bash cannot stat `D:\a\...`; `cygpath -u` turns it into
-          # `/d/a/...`. It ships with Git for Windows and exists nowhere else,
-          # and the macOS/Linux runners already report POSIX paths, so the
+          # `/d/a/...`. It ships with Git for Windows and is absent from the
+          # macOS/Linux runners, which already report POSIX paths, so the
           # absence of the binary is the "nothing to convert" case.
           to_posix() {
             if command -v cygpath >/dev/null 2>&1; then

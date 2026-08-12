@@ -35,9 +35,10 @@ node -e 'const c=require("./src-tauri/tauri.conf.json");const b=Buffer.from(Buff
 ```
 
 Nothing compares that ID against the produced `.sig` files. The release run has
-no such check (`release.yml:196`), so a signing key that stops matching the
-committed pubkey still builds a green draft — one that every installed client
-will reject. Compare the ID by hand whenever either side of the pair changes.
+no such check (the `UNGUARDED (#1430)` comment in `release.yml`), so a signing
+key that stops matching the committed pubkey still builds a green draft — one
+that every installed client will reject. Compare the ID by hand whenever either
+side of the pair changes.
 
 ## The reason this key is special: clients trust one baked-in public key
 
@@ -235,11 +236,11 @@ Response:
 ## Periodic checks (fold into the release runbook)
 
 - **Every release, by hand.** No job checks key health. Nothing compares the
-  signing key against the committed pubkey (`release.yml:196`), and
-  `Verify latest.json is present` only fails when the draft carries no manifest
-  at all (`release.yml:251`) — a manifest missing a platform passes. Run both
-  checks yourself before publishing a draft; skipping them ships a silently
-  broken updater (see
+  signing key against the committed pubkey (the `UNGUARDED (#1430)` comment in
+  `release.yml`), and `Verify latest.json is present` only fails when the draft
+  carries no manifest at all (`release.yml`, the `UNGUARDED` comment under that
+  job) — a manifest missing a platform passes. Run both checks yourself before
+  publishing a draft; skipping them ships a silently broken updater (see
   [`versioning-and-artifacts.md`](versioning-and-artifacts.md) Post-Release
   Verification).
 - **Quarterly (or when the release-maintainer list changes):** confirm both
