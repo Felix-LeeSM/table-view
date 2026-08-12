@@ -54,8 +54,9 @@ fn table(result: &QueryResult) -> String {
 
 fn json(result: &QueryResult) -> Result<String, CliError> {
     // Rows stay positional arrays rather than becoming objects keyed by column
-    // name. `SELECT 1, 1` returns two columns with the same name on PostgreSQL
-    // and MySQL alike, and an object would silently drop one of them.
+    // name. Two columns can share a name — `tvw query --url sqlite:///…
+    // --format json 'SELECT 1, 1'` prints `"name": "1"` twice — and an object
+    // would silently drop one of them.
     let columns: Vec<Value> = result
         .columns
         .iter()
@@ -68,8 +69,9 @@ fn json(result: &QueryResult) -> Result<String, CliError> {
 }
 
 fn csv(result: &QueryResult) -> Result<String, CliError> {
-    // LF, not the crate's default CRLF: the format has to be byte-identical on
-    // every platform for a snapshot or a `diff` in CI to mean anything.
+    // The `csv` crate's default terminator already is `\n`; stating it means a
+    // future default of CRLF cannot make this output platform-dependent, the
+    // same reason the table format states its arrangement above.
     let mut writer = csv::WriterBuilder::new()
         .terminator(csv::Terminator::Any(b'\n'))
         .from_writer(Vec::new());

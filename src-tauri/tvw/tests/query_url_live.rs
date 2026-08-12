@@ -10,21 +10,31 @@
 //!   cargo test -p tvw --test query_url_live -- --nocapture
 //! ```
 //!
-//! The variable names and their defaults are the ones
-//! `src-tauri/tests/common/mod.rs` already uses for its external-endpoint
-//! branch, so an environment that runs the app's integration tests runs these
-//! too. No container is started from here: `tvw` is not the crate that owns the
-//! testcontainer lifecycle (ADR 0024), and a second owner would leave strays.
+//! The variable names are `src-tauri/tests/common/mod.rs`'s, and the MySQL and
+//! MariaDB defaults below are the same as that file's. PostgreSQL is where the
+//! two part: its external-endpoint branch there takes no defaults at all and
+//! needs `PGHOST` `PGPORT` `PGUSER` `PGPASSWORD` `PGDATABASE` together, so the
+//! command above runs these tests against docker-compose while the app's own
+//! integration tests still fall through to testcontainers.
+//!
+//! No container is started from here. That is this crate's choice, not a rule
+//! from anywhere: ADR 0024 assigns no owner — it pins an owner-pid label and a
+//! dead-PID sweep, whose stated property is being race-safe between concurrent
+//! owners — and a CLI whose live coverage is one `SELECT 1` per engine is
+//! cheaper to point at a running server than to give a container lifecycle to.
 //!
 //! # Not wired into CI yet
 //!
-//! `.github/workflows/ci.yml`'s `Integration Tests (Docker)` job runs its
-//! suite through `cargo llvm-cov nextest`, and a plain `cargo test` step beside
-//! it recompiles the whole dependency graph — DuckDB is `bundled`, i.e. built
-//! from C++ source — because the coverage run sets its own `RUSTFLAGS`. Adding
-//! `-p tvw` to the coverage command instead pulls this crate into the
-//! `--fail-under-*` denominator, which that job's own comment warns against.
-//! Tracked in `docs/contributor-guide/testing-and-quality.md`.
+//! `.github/workflows/ci.yml`'s `Integration Tests (Docker)` job runs its suite
+//! through `cargo llvm-cov nextest`, which sets its own instrumentation
+//! `RUSTFLAGS` — cargo-llvm-cov's, not a line in `ci.yml` — so a plain `cargo
+//! test` step beside it builds under different flags and reuses none of those
+//! artifacts. Nothing in this repository measures what that second build costs;
+//! DuckDB being `bundled` C++ source is why nobody has tried. Adding `-p tvw`
+//! to the coverage command instead pulls this crate into the `--fail-under-*`
+//! denominator, which that job's own comment warns against for `--workspace` by
+//! the same mechanism. Tracked in
+//! `docs/contributor-guide/testing-and-quality.md`.
 
 use std::process::Command;
 

@@ -479,7 +479,7 @@ jobs:
     # dependency set (duckdb bundled dominates it) once rather than once per
     # manifest. 35 stays as headroom for that one cold run; warm runs were
     # 4m14s on main before and have less to rebuild now. Adding a member (#1770
-    # added `tvw`) does not touch this list and so does not evict the cache.
+    # added `tvw`) needs no line here — it joins through the workspace.
     timeout-minutes: 35
 
     steps:
