@@ -62,6 +62,10 @@ export const en = {
     cancelTooltip: "Stop explain",
     planSummary: "Plan Summary",
     rawJson: "Raw JSON",
+    searchProfileSummary: "Profile Summary",
+    searchShards: "Shards: {{shards}}",
+    noSearchProfile:
+      "The cluster answered without a profile section for this query.",
   },
 
   // ── FavoritesPanel ────────────────────────────────────────────────────────
@@ -366,6 +370,9 @@ export const ko = {
     cancelTooltip: "실행 계획 중지",
     planSummary: "계획 요약",
     rawJson: "원본 JSON",
+    searchProfileSummary: "프로파일 요약",
+    searchShards: "샤드: {{shards}}",
+    noSearchProfile: "클러스터가 이 쿼리의 profile 섹션 없이 응답했습니다.",
   },
 
   favorites: {

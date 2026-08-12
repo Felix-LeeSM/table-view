@@ -2,6 +2,9 @@
 // Mongo runCommand({explain: …}) wrapped behind a single
 // component. PostgreSQL plans render a compact summary/tree, with raw JSON
 // retained for fallback and troubleshooting.
+// #2153 — the search paradigm joined through the same component: its plan is
+// the `profile` section of a `_search` re-run (#1818), rendered as the same
+// summary/tree shape.
 
 import { Loader2, RefreshCw, Square } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -11,6 +14,7 @@ import {
   type ExplainMongoFindArgs,
   explainMongoFind,
   explainRdbQuery,
+  explainSearchQuery,
 } from "@/lib/api/explain";
 import {
   describePostgresPlanNode,
@@ -20,6 +24,11 @@ import {
   type PlanMetric,
   type PostgresPlanNode,
 } from "@/lib/explain/postgresPlan";
+import {
+  extractSearchProfilePlan,
+  type SearchProfileNode,
+  type SearchProfilePlan,
+} from "@/lib/explain/searchProfile";
 import { safeStringifyCell } from "@/lib/jsonCell";
 import { cancelQuery } from "@/lib/tauri";
 import {
@@ -27,6 +36,7 @@ import {
   type DatabaseType,
   paradigmOf,
 } from "@/types/connection";
+import type { SearchQueryRequest } from "@/types/search";
 
 export interface ExplainViewerProps {
   connectionId: string;
@@ -40,6 +50,11 @@ export interface ExplainViewerProps {
    * body carries filter/sort/projection/skip/limit so the plan matches the
    * real find execution). */
   mongoSpec?: ExplainMongoFindArgs;
+  /** Search only — the parsed `_search` request (#2153). Elasticsearch and
+   * OpenSearch have no plan endpoint: the plan is the `profile` section of
+   * the same request re-run with `profile: true` (#1818), so the viewer needs
+   * the request itself rather than a statement to explain. */
+  searchSpec?: SearchQueryRequest;
   onPlanSettled?: (result: {
     status: "success" | "error";
     durationMs: number;
@@ -54,12 +69,16 @@ export function ExplainViewer({
   rdbSql,
   expectedDatabase,
   mongoSpec,
+  searchSpec,
   onPlanSettled,
 }: ExplainViewerProps) {
   const { t } = useTranslation("query");
   const paradigm = paradigmOf(dbType);
   const [plan, setPlan] = useState<unknown>(null);
-  const [loading, setLoading] = useState(false);
+  // The mount effect always starts a fetch, so idle-before-first-fetch is not
+  // a state this component is ever in. Starting at `false` rendered one frame
+  // claiming a settled empty plan.
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // #1269 — id of the in-flight plan so the Stop button can fire the same
   // cooperative `cancelQuery` the query tab uses. Held in a ref (not state) so
@@ -74,21 +93,27 @@ export function ExplainViewer({
     setError(null);
     try {
       const next =
-        paradigm === "document"
-          ? await explainMongoFind(
+        paradigm === "search"
+          ? await explainSearchQuery(
               connectionId,
-              mongoSpec ?? {
-                database: "",
-                collection: "",
-              },
+              searchSpec ?? { index: "", body: {} },
               queryId,
             )
-          : await explainRdbQuery(
-              connectionId,
-              rdbSql ?? "",
-              expectedDatabase,
-              queryId,
-            );
+          : paradigm === "document"
+            ? await explainMongoFind(
+                connectionId,
+                mongoSpec ?? {
+                  database: "",
+                  collection: "",
+                },
+                queryId,
+              )
+            : await explainRdbQuery(
+                connectionId,
+                rdbSql ?? "",
+                expectedDatabase,
+                queryId,
+              );
       setPlan(next);
       await onPlanSettled?.({
         status: "success",
@@ -119,6 +144,7 @@ export function ExplainViewer({
     rdbSql,
     expectedDatabase,
     mongoSpec,
+    searchSpec,
     onPlanSettled,
   ]);
 
@@ -140,6 +166,12 @@ export function ExplainViewer({
   // non-PG payload — no engine is claimed that isn't actually parsed.
   const postgresPlan =
     paradigm === "rdb" ? extractPostgresExplainPlan(plan) : null;
+
+  // #2153 — the search plan is the cluster's own `profile` section. Anything
+  // without shards falls through to the raw JSON view for the same reason the
+  // PG branch does: no engine is claimed that isn't actually parsed.
+  const searchProfile =
+    paradigm === "search" ? extractSearchProfilePlan(plan) : null;
 
   return (
     <section
@@ -193,11 +225,25 @@ export function ExplainViewer({
         </div>
       )}
 
+      {/* #2153 — a cluster can answer a `profile: true` request without a
+          profile section (the built-in fixture source does; it has no Lucene
+          behind it). Say so instead of leaving the pane blank. */}
+      {!loading && error === null && paradigm === "search" && plan === null && (
+        <p
+          data-testid="explain-empty"
+          className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground"
+        >
+          {t("explain.noSearchProfile")}
+        </p>
+      )}
+
       {!loading &&
         error === null &&
         plan !== null &&
         (postgresPlan !== null ? (
           <PostgresPlanView plan={postgresPlan} rawPlan={plan} />
+        ) : searchProfile !== null ? (
+          <SearchProfileView plan={searchProfile} rawPlan={plan} />
         ) : (
           <pre
             data-testid="explain-plan"
@@ -287,6 +333,96 @@ function PostgresPlanNodeView({ node, depth }: PostgresPlanNodeViewProps) {
           {children.map((child, index) => (
             <PostgresPlanNodeView
               key={`${String(child["Node Type"] ?? "node")}-${index}`}
+              node={child}
+              depth={depth + 1}
+            />
+          ))}
+        </ol>
+      )}
+    </li>
+  );
+}
+
+interface SearchProfileViewProps {
+  plan: SearchProfilePlan;
+  rawPlan: unknown;
+}
+
+// #2153 — same summary / tree / raw-JSON layout the PG branch uses, so the
+// two paradigms read the same way. The parser already flattened the cluster's
+// per-section vocabulary, so one recursive node view covers shards, searches,
+// Lucene query nodes, collectors, aggregators and fetch phases.
+function SearchProfileView({ plan, rawPlan }: SearchProfileViewProps) {
+  const { t } = useTranslation("query");
+
+  return (
+    <div
+      data-testid="explain-plan"
+      className="max-h-96 overflow-auto rounded-md border border-border bg-secondary/20 text-xs text-foreground"
+    >
+      <div
+        data-testid="explain-plan-summary"
+        className="border-b border-border bg-background/70 px-3 py-2"
+      >
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="font-medium text-foreground">
+            {t("explain.searchProfileSummary")}
+          </span>
+          <span className="text-muted-foreground">
+            {t("explain.searchShards", { shards: plan.shards.length })}
+          </span>
+        </div>
+      </div>
+
+      <ol className="space-y-2 p-2">
+        {plan.shards.map((shard, index) => (
+          <SearchProfileNodeView
+            key={`${shard.title}-${index}`}
+            node={shard}
+            depth={0}
+          />
+        ))}
+      </ol>
+
+      <details className="border-t border-border bg-background/60 px-3 py-2">
+        <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground">
+          {t("explain.rawJson")}
+        </summary>
+        <pre
+          data-testid="explain-raw-json"
+          className="mt-2 overflow-auto rounded border border-border bg-secondary/30 p-2 font-mono text-xs leading-relaxed text-foreground"
+        >
+          {safeStringifyCell(rawPlan, 2)}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
+interface SearchProfileNodeViewProps {
+  node: SearchProfileNode;
+  depth: number;
+}
+
+function SearchProfileNodeView({ node, depth }: SearchProfileNodeViewProps) {
+  return (
+    <li
+      data-depth={depth}
+      className="rounded border border-border bg-background/80 px-3 py-2"
+    >
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="font-medium text-foreground">{node.title}</span>
+        {node.subtitle !== undefined && (
+          <span className="text-muted-foreground">{node.subtitle}</span>
+        )}
+      </div>
+      <MetricList metrics={node.metrics} />
+
+      {node.children.length > 0 && (
+        <ol className="mt-2 space-y-2 border-l border-border pl-3">
+          {node.children.map((child, index) => (
+            <SearchProfileNodeView
+              key={`${child.title}-${index}`}
               node={child}
               depth={depth + 1}
             />
