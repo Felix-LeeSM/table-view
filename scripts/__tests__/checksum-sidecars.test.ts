@@ -35,9 +35,18 @@ describe("checksum-sidecars", () => {
     // spawnSync + status 검사: execFileSync 는 0 이 아닌 종료에서 던지는데 그
     // Error.message 에 stdout 이 안 붙어, 어느 단언에서 깨졌는지가 vitest 출력에서
     // 사라진다 (scripts/__tests__/verify-tag-ci.test.ts 와 같은 이유, issue #2085).
+    // 스위트가 읽는 두 env 스위치를 상속하면 이 래퍼가 green 인 채로 검사가
+    // 줄어든다: SKIP_MUTATION 은 변조 케이스와 양성 대조·픽스처 핀을 통째로
+    // 빼고(SUMMARY 가 20/20 이 되는데 아래 정규식은 그것도 통과한다),
+    // RELEASE_WORKFLOW 는 검사 대상을 저장소의 release.yml 이 아닌 다른
+    // 파일로 돌린다. 러너 환경에 그 값이 서 있어도 여기서는 안 보게 한다.
+    const env = { ...process.env };
+    delete env.CHECKSUM_SIDECARS_SKIP_MUTATION;
+    delete env.CHECKSUM_SIDECARS_RELEASE_WORKFLOW;
     const run = spawnSync("bash", [suite], {
       cwd: repoRoot,
       encoding: "utf8",
+      env,
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 50_000,
     });
@@ -47,6 +56,10 @@ describe("checksum-sidecars", () => {
       `--- child stdout ---\n${run.stdout ?? "(none)"}`,
       `--- child stderr ---\n${run.stderr ?? "(none)"}`,
     ].join("\n");
-    expect(run.stdout, report).toMatch(/\nSUMMARY: (\d+)\/\1 PASS\n$/);
+    // rc 를 같이 단언한다 — SUMMARY 줄만 보면 스위트가 그 줄을 찍은 뒤 죽어도
+    // green 이다. 앞자리를 `[1-9]\d*` 로 묶은 것은 `0/0 PASS` 를 막는다: 아무
+    // 단언도 안 돈 실행이 이 래퍼를 통과하던 자리다.
+    expect(run.status, report).toBe(0);
+    expect(run.stdout, report).toMatch(/\nSUMMARY: ([1-9]\d*)\/\1 PASS\n$/);
   });
 });
