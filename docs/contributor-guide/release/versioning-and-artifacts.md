@@ -58,9 +58,10 @@ Two workflows drive a release:
   build pipeline.
   - A `v*.*.*` tag push (from auto-tag, or a deliberate manual push) starts the
     real release build. **It does not recheck the tag against the checked-out
-    `tauri.conf.json` version** (#1431, `release.yml:68`), so a hand-pushed tag
-    ships whatever bundle it points at, under a mismatched version. Confirm the
-    match yourself before pushing a tag by hand.
+    `tauri.conf.json` version** (the `UNGUARDED (#1431)` comment in
+    `release.yml`), so a hand-pushed tag ships whatever bundle it points at,
+    under a mismatched version. Confirm the match yourself before pushing a tag
+    by hand.
   - `workflow_dispatch` is a dry-run path. It creates a draft release named
     `manual-<sha>` instead of a version tag.
   - Once the build legs finish, the `Verify tag SHA CI is green` job reads the
@@ -116,7 +117,7 @@ concerns follow from that:
 | macOS arm64 | `macOS arm64`, `aarch64-apple-darwin` | Apple Silicon `.dmg` plus `.sha256`. Current packages are unsigned, so first launch may require right-click -> Open or quarantine removal. |
 | Windows x86_64 | `Windows x86_64`, `x86_64-pc-windows-msvc` | Windows installer bundle, normally `.msi`, plus `.sha256`. Current packages are unsigned, so SmartScreen may warn. |
 | Linux x64 | `Linux x64`, `x86_64-unknown-linux-gnu` | Linux bundles produced by Tauri, such as `.deb`, `.rpm`, or `.AppImage`, plus `.sha256`. This lane is automation packaging evidence, not the primary supported desktop distribution target. |
-| Checksums | `Upload SHA256 checksums` step | Every uploaded bundle should have a sibling `.sha256` file in standard `shasum -a 256` format. |
+| Checksums | `Upload SHA256 checksums` step | The step hashes each `artifactPaths` entry that is a file and uploads a `.sha256` for it in standard `shasum -a 256` format, under the file's pre-upload name. It ends the leg red when an entry resolves to neither a file nor a directory, and when nothing was hashed at all (#2207: Git Bash cannot stat the backslash paths `tauri-action` reports on Windows, and `[ -f "$f" ] || continue` turned that into a silent skip — `v0.7.0` and `v0.7.1` published `.msi` and `.exe` with no checksum under a green step). A green leg does not mean every published asset has a sidecar it pairs with: a directory bundle (the macOS `.app`) gets none by design and is logged as skipped, and `tauri-action` renames the macOS updater tarball on upload, so its sidecar publishes under the pre-upload name and pairs with no asset. Pair them yourself against the published assets — Post-Release Verification below carries the command. `scripts/release/checksum-sidecars.test.sh` pins the step's shape. |
 | Updater artifacts | `createUpdaterArtifacts: true` in `tauri.conf.json`; `tauri-action` signs each with the minisign key | Each platform's updater bundle plus a sibling minisign `.sig` (macOS: `<app>.app.tar.gz` + `<app>.app.tar.gz.sig`), aggregated into one `latest.json` manifest on the draft release. This is the auto-update path — no job verifies it; check it by hand in Post-Release Verification. |
 | Homebrew cask | [`homebrew-cask.md`](homebrew-cask.md) after release publish | No workflow updates the tap. After publishing, edit `Casks/table-view.rb` in the tap repo by hand from the macOS arm64 `.dmg` and its checksum, and open the tap PR. |
 
@@ -128,8 +129,17 @@ After the draft release is created:
   SHA.
 - Confirm macOS, Windows, and Linux bundle assets are present for the workflow
   lanes above.
-- Confirm each bundle has a sibling `.sha256`, then verify at least one checksum
-  locally with the command shown in the generated release body.
+- List the assets that carry no sibling `.sha256`, then verify at least one
+  checksum locally with the command shown in the generated release body. The
+  updater manifest `latest.json` and the macOS updater tarball
+  `<app>_aarch64.app.tar.gz` with its `.sig` are expected in that list — see the
+  Checksums row in Artifact Expectations above for why. A `.msi`, `.exe`,
+  `.dmg`, or Linux bundle in that list is a defect.
+
+  ```sh
+  gh release view <TAG> --json assets -q '.assets[].name' \
+    | awk '{n[$0]=1} END {for (a in n) if (a !~ /\.sha256$/ && !((a ".sha256") in n)) print "NO SIDECAR: " a}'
+  ```
 - Confirm release notes link to
   [`release-notes-support-matrix.md`](release-notes-support-matrix.md),
   [`docs/product/README.md`](../../product/README.md), and
@@ -159,15 +169,16 @@ so a broken one is silent (updater errors are DEV-log-only, ADR 0036):
   platform key (`darwin-aarch64`, `windows-x86_64`, `linux-x86_64`), each with a
   non-empty `url` and `signature`. The release run's `Verify latest.json is
   present` job only fails when the draft carries no `latest.json` at all
-  (`release.yml:251`); **nothing checks completeness**, and a dropped key makes
-  `check()` on that OS report "up to date" forever.
+  (`release.yml`, the `UNGUARDED` comment under that job); **nothing checks
+  completeness**, and a dropped key makes `check()` on that OS report "up to
+  date" forever.
 - Confirm each platform's updater bundle and its sibling `.sig` are attached
   (macOS: `<app>.app.tar.gz` + `<app>.app.tar.gz.sig`). **Nothing verifies those
   `.sig` files against the pubkey committed in `tauri.conf.json`**
-  (`release.yml:196`) — if the signing key and that pubkey drift, every client
-  rejects the update silently. Verify by hand. Key backup, rotation, and loss
-  handling live in [`updater-signing-key.md`](updater-signing-key.md) — do not
-  repeat them here.
+  (the `UNGUARDED (#1430)` comment in `release.yml`) — if the signing key and
+  that pubkey drift, every client rejects the update silently. Verify by hand.
+  Key backup, rotation, and loss handling live in
+  [`updater-signing-key.md`](updater-signing-key.md) — do not repeat them here.
 - Both checks above are yours to run. A green release proves only that the build
   legs finished; it proves nothing about updater manifest completeness or
   signature validity, and nothing about a live `check()` roundtrip (see the
