@@ -3,8 +3,29 @@ import { useSchemaStore } from "@stores/schemaStore";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SchemaGraphIntelligenceSelectors } from "@/lib/schemaGraphSelectors";
+import { __resetErdVirtualFkStoreForTests } from "@/stores/erdVirtualFkStore";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { SchemaGraph } from "@/types/schemaGraph";
+
+/**
+ * The panel's own IPC rides the `@lib/tauri` wrapper, which `src/test-setup.ts`
+ * already mocks. The virtual FK store instead reads the SQLite `settings` KV
+ * through `@tauri-apps/api/core`, so that one command is faked here — an absent
+ * row is `null`, exactly what `get_setting` answers for a key nobody wrote.
+ */
+const { settingsRows } = vi.hoisted(() => ({
+  settingsRows: new Map<string, string>(),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn((command: string, args: Record<string, unknown>) =>
+    Promise.resolve(
+      command === "get_setting"
+        ? (settingsRows.get(args.key as string) ?? null)
+        : null,
+    ),
+  ),
+}));
 
 vi.mock("./SchemaErdCanvas", () => ({
   default: ({
@@ -22,6 +43,12 @@ vi.mock("./SchemaErdCanvas", () => ({
         constraints: graph.nodes
           .filter((node) => node.kind === "constraint")
           .map((node) => node.id),
+        // Table pairs rather than edge ids: what this has to show is that the
+        // hand-drawn edges reached the canvas, which is the only path the
+        // stored links have onto the diagram.
+        virtualFks: graph.edges
+          .filter((edge) => edge.kind === "virtual-foreign-key-table")
+          .map((edge) => `${edge.from}->${edge.to}`),
         metadata: [...(intelligence?.metadataReadinessByTableId.values() ?? [])]
           .map((metadata) => ({
             tableId: metadata.tableId,
@@ -58,6 +85,8 @@ const CONSTRAINTS = [
 
 describe("SchemaErdPanel", () => {
   beforeEach(() => {
+    settingsRows.clear();
+    __resetErdVirtualFkStoreForTests();
     setupTauriMock({
       getTableIndexes: vi.fn(() => Promise.resolve(INDEXES)),
       getTableConstraints: vi.fn(() => Promise.resolve(CONSTRAINTS)),
@@ -136,6 +165,55 @@ describe("SchemaErdPanel", () => {
         missing: [],
       },
     ]);
+  });
+
+  it("puts the stored virtual FKs back on the diagram when the tab is reopened", async () => {
+    // Reopening the ERD tab remounts this panel with an empty store, so the
+    // links can only come back by being re-read from SQLite here. The key is
+    // spelled out rather than built with `erdVirtualFkSettingKey`: a key format
+    // that changes shape silently orphans every row a user already has.
+    settingsRows.set(
+      "erd_virtual_fk:conn1:app",
+      JSON.stringify([
+        {
+          id: "vfk-author",
+          source: { schema: "public", table: "posts", column: "author_id" },
+          targets: [{ schema: "public", table: "users", column: "id" }],
+        },
+      ]),
+    );
+    useSchemaStore.setState({
+      schemas: { conn1: { app: [{ name: "public" }] } },
+      tables: {
+        conn1: {
+          app: {
+            public: [
+              { name: "users", schema: "public", row_count: null },
+              { name: "posts", schema: "public", row_count: null },
+            ],
+          },
+        },
+      },
+      tableColumnsCache: {
+        conn1: {
+          app: {
+            public: {
+              users: [idColumn()],
+              posts: [idColumn(), authorIdColumn()],
+            },
+          },
+        },
+      },
+    });
+
+    render(<SchemaErdPanel connectionId="conn1" database="app" />);
+
+    expect(readGraphSummary().virtualFks).toEqual([]);
+    await waitFor(() => {
+      expect(readGraphSummary().virtualFks).toEqual([
+        "table:public.posts->table:public.users",
+      ]);
+    });
   });
 
   it("shows a read-only diff against another cached RDBMS snapshot", async () => {
@@ -339,23 +417,31 @@ function idColumn() {
   };
 }
 
-function readGraphSummary(): {
+function authorIdColumn() {
+  return {
+    name: "author_id",
+    data_type: "integer",
+    nullable: false,
+    default_value: null,
+    is_primary_key: false,
+    is_foreign_key: false,
+    fk_reference: null,
+    comment: null,
+  };
+}
+
+interface GraphSummary {
   indexes: string[];
   constraints: string[];
+  virtualFks: string[];
   metadata: {
     tableId: string;
     status: string;
     missing: string[];
   }[];
-} {
+}
+
+function readGraphSummary(): GraphSummary {
   const text = screen.getByLabelText("erd graph").textContent ?? "{}";
-  return JSON.parse(text) as {
-    indexes: string[];
-    constraints: string[];
-    metadata: {
-      tableId: string;
-      status: string;
-      missing: string[];
-    }[];
-  };
+  return JSON.parse(text) as GraphSummary;
 }

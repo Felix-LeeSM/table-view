@@ -127,12 +127,16 @@ smoke or measurement gates:
 - Tauri production shortcut audit for `Cmd+Shift+I`.
 - `MainArea` empty-state MRU policy.
 - Narrow-column display for `pendingEditErrors`.
-- ERD layout persistence, viewport virtualization, virtual FKs, focus filters,
-  and diagram export. The React Flow + elkjs canvas ships without them; each is
-  a separate follow-up issue. Dragged node positions are lost when the ERD tab
-  is reopened. Semantic zoom does ship, but elkjs keeps reserving each card's
+- ERD layout persistence, viewport virtualization, focus filters, and diagram
+  export. The React Flow + elkjs canvas ships without them; each is a separate
+  follow-up issue. Dragged node positions are lost when the ERD tab is
+  reopened. Semantic zoom does ship, but elkjs keeps reserving each card's
   full-detail height, so zooming out shrinks the cards without drawing the
-  diagram any tighter.
+  diagram any tighter. Hand-drawn virtual FKs ship too — stored per connection
+  and database, drawn dashed, named in the legend — but the only edit the
+  canvas offers is a confirmed reset of every link on that diagram: drawing,
+  editing, or deleting one link, undo/redo, and cross-window convergence on a
+  reset are follow-ups.
 - Background failures that never reach a React ErrorBoundary raise a toast
   (`src/lib/runtime/globalErrorToast.ts`, installed once from
   `src/AppRouter.tsx`), and one report is deliberately dropped instead: a
