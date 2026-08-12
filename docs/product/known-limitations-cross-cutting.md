@@ -340,7 +340,14 @@ header action (gated on the engine's `intelligence.erd` capability), not from a
 per-table sub-tab. The diagram is a `@xyflow/react` canvas with `elkjs`
 `layered` auto-layout: referenced tables rank above the tables that reference
 them, and nodes can be dragged, but positions are not persisted across tab
-reopen. Data compare remains a future promotion gate in the H4 smoke matrix.
+reopen. A foreign-key edge attaches to the row of the column it leaves from and
+the row of the column it points at, falling back to the card edge for a column
+the card is not drawing. Each edge carries a cardinality mark — 1:1, 1:N or N:M
+— decided by whether the columns at each end cover a unique index
+(`IndexInfo.is_unique`) or the primary key; a composite foreign key anchors on
+its first column pair. A reference onto a column that carries no key reads N:M,
+and so does an edge whose table has not had its index metadata fetched yet.
+Data compare remains a future promotion gate in the H4 smoke matrix.
 
 ### FK navigation
 

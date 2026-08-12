@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractSchemaGraph } from "@/lib/schemaGraph";
-import type { ColumnInfo, TableInfo } from "@/types/schema";
+import type { ColumnInfo, IndexInfo, TableInfo } from "@/types/schema";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
 import {
   buildErdElkGraph,
@@ -9,6 +9,7 @@ import {
   ERD_MAX_VISIBLE_COLUMNS,
   ERD_SCHEMA_TONE_COUNT,
   ERD_TABLE_WIDTH,
+  erdColumnHandleId,
   erdModelFingerprint,
   erdReferenceCounts,
   erdTableHeight,
@@ -71,6 +72,111 @@ describe("buildErdModel", () => {
 
     expect(model.tables).toHaveLength(1);
     expect(model.relationships).toEqual([]);
+  });
+});
+
+describe("column anchors", () => {
+  it("names the FK column at both ends and lists it on both cards", () => {
+    const model = buildErdModel(extractSchemaGraph(ordersSnapshot()));
+
+    expect(
+      model.relationships.map((relationship) => [
+        relationship.sourceTableId,
+        relationship.sourceColumn,
+        relationship.targetTableId,
+        relationship.targetColumn,
+      ]),
+    ).toEqual([
+      ["table:public.orders", "user_id", "table:public.users", "id"],
+      ["table:public.payments", "order_id", "table:public.orders", "id"],
+    ]);
+
+    // `orders` is both an FK holder and a reference target, so its card needs
+    // a handle for the column it points from and the one it is pointed at.
+    expect(
+      model.tables.map((entry) => [entry.qualifiedName, entry.anchorColumns]),
+    ).toEqual([
+      ["public.orders", ["id", "user_id"]],
+      ["public.payments", ["order_id"]],
+      ["public.users", ["id"]],
+    ]);
+  });
+
+  it("keeps an anchor for a column the card is too small to draw", () => {
+    const model = buildErdModel(extractSchemaGraph(lateColumnFkSnapshot()));
+    const wide = model.tables.find(
+      (entry) => entry.qualifiedName === "public.wide",
+    );
+
+    // React Flow drops an edge whose handle id is missing, so the anchor has
+    // to survive the column cap that keeps `c7` off the card.
+    expect(wide?.visibleColumns.map((column) => column.column)).not.toContain(
+      "owner_id",
+    );
+    expect(wide?.anchorColumns).toEqual(["owner_id"]);
+  });
+
+  it("keeps the two handles of one column apart", () => {
+    expect(erdColumnHandleId("source", "user_id")).not.toBe(
+      erdColumnHandleId("target", "user_id"),
+    );
+    expect(erdColumnHandleId("source", "user_id")).not.toBe(
+      erdColumnHandleId("source", "order_id"),
+    );
+  });
+});
+
+describe("cardinality", () => {
+  it("reads a foreign key onto a primary key as 1:N", () => {
+    const model = buildErdModel(extractSchemaGraph(ordersSnapshot()));
+
+    expect(
+      model.relationships.map((relationship) => relationship.cardinality),
+    ).toEqual(["1:N", "1:N"]);
+  });
+
+  // The property this pins is that `IndexInfo.is_unique` — not the presence of
+  // an index, not the column name — is what separates 1:1 from 1:N.
+  it("turns 1:N into 1:1 only when the FK column's index is unique", () => {
+    const unique = buildErdModel(
+      extractSchemaGraph(
+        profileSnapshot({ index: ["user_id"], isUnique: true }),
+      ),
+    );
+    const nonUnique = buildErdModel(
+      extractSchemaGraph(
+        profileSnapshot({ index: ["user_id"], isUnique: false }),
+      ),
+    );
+
+    expect(unique.relationships[0]?.cardinality).toBe("1:1");
+    expect(nonUnique.relationships[0]?.cardinality).toBe("1:N");
+  });
+
+  // A unique index over (user_id, tenant_id) permits many rows per user_id, so
+  // it must not be read as pinning the FK column on its own.
+  it("does not let a wider unique index pin the FK column", () => {
+    const model = buildErdModel(
+      extractSchemaGraph(
+        profileSnapshot({ index: ["user_id", "tenant_id"], isUnique: true }),
+      ),
+    );
+
+    expect(model.relationships[0]?.cardinality).toBe("1:N");
+  });
+
+  it("reads a reference onto a column with no key as N:M", () => {
+    const loose = buildErdModel(
+      extractSchemaGraph(looseReferenceSnapshot({ uniqueHandle: false })),
+    );
+    const keyed = buildErdModel(
+      extractSchemaGraph(looseReferenceSnapshot({ uniqueHandle: true })),
+    );
+
+    expect(loose.relationships[0]?.cardinality).toBe("N:M");
+    // The same graph with a unique index on the referenced column pins that
+    // end, which is the only difference between N:M and 1:N here.
+    expect(keyed.relationships[0]?.cardinality).toBe("1:N");
   });
 });
 
@@ -681,8 +787,119 @@ function manySchemaSnapshot(): SchemaGraphCatalogSnapshot {
   };
 }
 
+/** `profiles.user_id` references `users.id`, with one index over `profiles`. */
+function profileSnapshot({
+  index,
+  isUnique,
+}: {
+  index: string[];
+  isUnique: boolean;
+}): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [table("public", "users"), table("public", "profiles")],
+    },
+    columnsByTable: {
+      public: {
+        users: [column("id", { is_primary_key: true })],
+        profiles: [
+          column("id", { is_primary_key: true }),
+          column("user_id", {
+            is_foreign_key: true,
+            fk_reference: "public.users(id)",
+          }),
+          column("tenant_id"),
+        ],
+      },
+    },
+    indexesByTable: {
+      public: { profiles: [tableIndex("profiles_idx", index, isUnique)] },
+    },
+    constraintsByTable: {},
+  };
+}
+
+/** `events.actor` points at `actors.handle`, which is not the primary key. */
+function looseReferenceSnapshot({
+  uniqueHandle,
+}: {
+  uniqueHandle: boolean;
+}): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [table("public", "actors"), table("public", "events")],
+    },
+    columnsByTable: {
+      public: {
+        actors: [
+          column("id", { is_primary_key: true }),
+          column("handle", { data_type: "text" }),
+        ],
+        events: [
+          column("id", { is_primary_key: true }),
+          column("actor", {
+            is_foreign_key: true,
+            fk_reference: "public.actors(handle)",
+          }),
+        ],
+      },
+    },
+    indexesByTable: {
+      public: {
+        actors: [tableIndex("actors_handle_idx", ["handle"], uniqueHandle)],
+      },
+    },
+    constraintsByTable: {},
+  };
+}
+
+/** The FK column sits past the column cap, so the card never draws it. */
+function lateColumnFkSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [table("public", "owners"), table("public", "wide")],
+    },
+    columnsByTable: {
+      public: {
+        owners: [column("id", { is_primary_key: true })],
+        wide: [
+          ...Array.from({ length: ERD_MAX_VISIBLE_COLUMNS }, (_unused, index) =>
+            column(`c${index + 1}`),
+          ),
+          column("owner_id", {
+            is_foreign_key: true,
+            fk_reference: "public.owners(id)",
+          }),
+        ],
+      },
+    },
+    indexesByTable: {},
+    constraintsByTable: {},
+  };
+}
+
 function table(schema: string, name: string): TableInfo {
   return { schema, name, row_count: null };
+}
+
+function tableIndex(
+  name: string,
+  columns: string[],
+  isUnique: boolean,
+): IndexInfo {
+  return {
+    name,
+    columns,
+    index_type: "btree",
+    is_unique: isUnique,
+    is_primary: false,
+  };
 }
 
 function column(name: string, overrides: Partial<ColumnInfo> = {}): ColumnInfo {

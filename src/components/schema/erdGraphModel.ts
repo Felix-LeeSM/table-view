@@ -37,12 +37,26 @@ export interface ErdTableModel {
   readonly columns: readonly SchemaGraphColumnNode[];
   readonly visibleColumns: readonly SchemaGraphColumnNode[];
   readonly hiddenColumnCount: number;
+  /**
+   * Column names an FK edge anchors to on this table, sorted. The card renders
+   * a handle pair for each so an edge always has an endpoint to land on, even
+   * for a column the card is not currently drawing.
+   */
+  readonly anchorColumns: readonly string[];
   readonly qualifiedName: string;
   /** Index into the `--color-erd-schema-*` tones, assigned in `buildErdModel`. */
   readonly schemaToneIndex: number;
   readonly width: number;
   readonly height: number;
 }
+
+/**
+ * How many rows each end of a relationship may hold. Both ends pinned to a
+ * single row reads 1:1, one end reads 1:N, neither reads N:M. "Pinned" means
+ * the FK's columns on that side cover a unique index (`IndexInfo.is_unique`)
+ * or the primary key.
+ */
+export type ErdCardinality = "1:1" | "1:N" | "N:M";
 
 export interface ErdRelationshipModel {
   readonly edge: SchemaGraphEdge;
@@ -51,6 +65,16 @@ export interface ErdRelationshipModel {
   /** Table being referenced. elkjs puts this one in the layer above. */
   readonly targetTableId: string;
   readonly label: string;
+  /**
+   * Column the edge leaves from / lands on. `null` when the FK names none, and
+   * only the first column of a composite FK is used.
+   *
+   * ponytail: one anchor per end. A composite FK draws a single edge today, so
+   * a second anchor would need a second edge before it could show anything.
+   */
+  readonly sourceColumn: string | null;
+  readonly targetColumn: string | null;
+  readonly cardinality: ErdCardinality;
 }
 
 export interface ErdModel {
@@ -75,6 +99,107 @@ export function erdTableHeight(
   );
 }
 
+/** React Flow handle id for the FK anchor on one column row of a table card. */
+export function erdColumnHandleId(
+  role: "source" | "target",
+  column: string,
+): string {
+  return `erd-${role}:${column}`;
+}
+
+/**
+ * Card-edge handles, used by a relationship that names no column. Naming them
+ * is what keeps that fallback from meaning "whichever handle React Flow found
+ * first in the card" — an unnamed handle resolves by DOM order, so inserting
+ * anything above these two would silently move the fallback to a column row.
+ */
+export const ERD_TABLE_SOURCE_HANDLE_ID = "erd-source-table";
+export const ERD_TABLE_TARGET_HANDLE_ID = "erd-target-table";
+
+/** First column of each FK end, which is what an edge anchors to. */
+function erdEdgeAnchors(edge: SchemaGraphEdge): {
+  sourceColumn: string | null;
+  targetColumn: string | null;
+} {
+  return {
+    sourceColumn:
+      edge.columns?.[0] ?? edge.foreignKey?.source.columns[0] ?? null,
+    targetColumn:
+      edge.referenceColumns?.[0] ?? edge.foreignKey?.target.columns[0] ?? null,
+  };
+}
+
+/**
+ * Column sets that identify at most one row per table: every `is_unique` index
+ * plus the primary key. A unique index on `(a)` also pins `(a, b)`, while one
+ * on `(a, b)` does not pin `(a)` — so membership is a subset test, not equality.
+ */
+function erdUniqueColumnSets(
+  graph: SchemaGraph,
+  columnsByTable: ReadonlyMap<string, readonly SchemaGraphColumnNode[]>,
+): ReadonlyMap<string, readonly (readonly string[])[]> {
+  const sets = new Map<string, (readonly string[])[]>();
+  const add = (tableId: string, columns: readonly string[]) => {
+    if (columns.length === 0) return;
+    const existing = sets.get(tableId);
+    if (existing) existing.push(columns);
+    else sets.set(tableId, [columns]);
+  };
+
+  for (const [tableId, columns] of columnsByTable) {
+    add(
+      tableId,
+      columns
+        .filter((column) => column.data.is_primary_key)
+        .map((column) => column.column),
+    );
+  }
+  for (const node of graph.nodes) {
+    if (node.kind !== "index" || !node.data.is_unique) continue;
+    add(node.id.slice(0, node.id.lastIndexOf(".index:")), node.data.columns);
+  }
+  return sets;
+}
+
+function erdEndIsUnique(
+  uniqueSets: readonly (readonly string[])[] | undefined,
+  columns: readonly string[],
+): boolean {
+  if (!uniqueSets || columns.length === 0) return false;
+  const held = new Set(columns);
+  return uniqueSets.some((unique) =>
+    unique.every((column) => held.has(column)),
+  );
+}
+
+/**
+ * Counts the ends a single row is pinned on. The referenced end is pinned in
+ * any well-formed schema (an FK points at a key), so 1:N is the ordinary answer
+ * and 1:1 means the referencing columns are unique too. N:M is what is left
+ * when neither end is known to be unique — an FK inferred onto a column that
+ * carries no key, or a source whose index metadata has not arrived yet.
+ */
+function erdEdgeCardinality(
+  edge: SchemaGraphEdge,
+  uniqueColumnSets: ReadonlyMap<string, readonly (readonly string[])[]>,
+): ErdCardinality {
+  const pinnedEnds =
+    (erdEndIsUnique(
+      uniqueColumnSets.get(edge.from),
+      edge.columns ?? edge.foreignKey?.source.columns ?? [],
+    )
+      ? 1
+      : 0) +
+    (erdEndIsUnique(
+      uniqueColumnSets.get(edge.to),
+      edge.referenceColumns ?? edge.foreignKey?.target.columns ?? [],
+    )
+      ? 1
+      : 0);
+  if (pinnedEnds === 2) return "1:1";
+  return pinnedEnds === 1 ? "1:N" : "N:M";
+}
+
 export function buildErdModel(graph: SchemaGraph): ErdModel {
   const columnsByTable = new Map<string, SchemaGraphColumnNode[]>();
   for (const node of graph.nodes) {
@@ -84,6 +209,24 @@ export function buildErdModel(graph: SchemaGraph): ErdModel {
     columns.push(node);
     columnsByTable.set(tableId, columns);
   }
+
+  // Anchors come off the raw edges rather than off `relationships` below,
+  // because a card must carry the handle before its edge is filtered for a
+  // missing endpoint table — an anchor nobody uses costs one hidden span.
+  const anchorsByTable = new Map<string, Set<string>>();
+  const addAnchor = (tableId: string, column: string | null) => {
+    if (!column) return;
+    const existing = anchorsByTable.get(tableId);
+    if (existing) existing.add(column);
+    else anchorsByTable.set(tableId, new Set([column]));
+  };
+  for (const edge of graph.edges) {
+    if (edge.kind !== "foreign-key-table") continue;
+    const anchors = erdEdgeAnchors(edge);
+    addAnchor(edge.from, anchors.sourceColumn);
+    addAnchor(edge.to, anchors.targetColumn);
+  }
+  const uniqueColumnSets = erdUniqueColumnSets(graph, columnsByTable);
 
   // Tones go by position in the sorted list of schemas the graph actually
   // holds, so up to ERD_SCHEMA_TONE_COUNT schemas always get distinct badges.
@@ -114,6 +257,7 @@ export function buildErdModel(graph: SchemaGraph): ErdModel {
         columns,
         visibleColumns,
         hiddenColumnCount,
+        anchorColumns: [...(anchorsByTable.get(table.id) ?? [])].sort(),
         qualifiedName: `${table.schema}.${table.table}`,
         schemaToneIndex: schemaTones.get(String(table.schema)) ?? 0,
         width: ERD_TABLE_WIDTH,
@@ -126,12 +270,16 @@ export function buildErdModel(graph: SchemaGraph): ErdModel {
     .filter((edge) => edge.kind === "foreign-key-table")
     .flatMap((edge) => {
       if (!tableIds.has(edge.from) || !tableIds.has(edge.to)) return [];
+      const { sourceColumn, targetColumn } = erdEdgeAnchors(edge);
       return [
         {
           edge,
           sourceTableId: edge.from,
           targetTableId: edge.to,
           label: erdRelationshipLabel(edge),
+          sourceColumn,
+          targetColumn,
+          cardinality: erdEdgeCardinality(edge, uniqueColumnSets),
         },
       ];
     });

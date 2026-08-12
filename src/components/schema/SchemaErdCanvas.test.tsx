@@ -61,13 +61,99 @@ describe("SchemaErdCanvas", () => {
       screen.getByRole("button", { name: /public\.users table/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByLabelText("public.orders.user_id references public.users.id"),
+      screen.getByLabelText(
+        "public.orders.user_id references public.users.id (1:N)",
+      ),
     ).toBeInTheDocument();
 
     // elkjs positions land on the React Flow node wrapper, not on the card.
     const wrapper = orders.closest(".react-flow__node");
     expect(wrapper).not.toBeNull();
     expect(wrapper?.getAttribute("style")).toMatch(/translate\(/);
+  });
+
+  // Issue #2151: an edge that leaves the card as a whole cannot say which
+  // column it came from, so the handle has to live in the column's own row.
+  // jsdom measures every box as 0x0, so the row this asserts on is the DOM
+  // parent — the coordinates it produces are covered by e2e, not here.
+  it("anchors an FK edge on the column row rather than the card", async () => {
+    render(<SchemaErdCanvas graph={extractSchemaGraph(ordersSnapshot())} />);
+
+    const orders = await findTableCard(/public\.orders table/i);
+    const fkRow = within(orders).getByText("user_id").closest("div");
+    expect(
+      fkRow?.querySelector('[data-handleid="erd-source:user_id"]'),
+    ).not.toBeNull();
+
+    const users = screen.getByRole("button", { name: /public\.users table/i });
+    const pkRow = within(users).getByText("id").closest("div");
+    expect(
+      pkRow?.querySelector('[data-handleid="erd-target:id"]'),
+    ).not.toBeNull();
+    // The header block holds the qualified name and no anchor at all.
+    const header = within(users).getByTitle("public.users").parentElement;
+    expect(header?.querySelector('[data-handleid^="erd-"]')).toBeNull();
+  });
+
+  // A card that stops short of the FK column still has to keep its edge: React
+  // Flow drops any edge whose handle id it cannot find in the node.
+  it("keeps the FK edge when the card does not draw the anchor column", async () => {
+    render(
+      <SchemaErdCanvas graph={extractSchemaGraph(cappedColumnFkSnapshot())} />,
+    );
+
+    const wide = await findTableCard(/public\.wide table/i);
+    expect(within(wide).queryByText("owner_id")).not.toBeInTheDocument();
+    expect(
+      wide.querySelector('[data-handleid="erd-source:owner_id"]'),
+    ).not.toBeNull();
+    expect(
+      screen.getByLabelText(
+        "public.wide.owner_id references public.owners.id (1:N)",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  // The DOM check above proves the handle exists on the row; this proves the
+  // edge is the thing using it. jsdom measures every handle at 0x0, so the
+  // bezier control points are all that still separates a column anchor (leaves
+  // sideways, Left/Right) from the card fallback (leaves upward, Top/Bottom).
+  it("draws the FK edge out of the column anchor, not the card handle", async () => {
+    render(<SchemaErdCanvas graph={extractSchemaGraph(ordersSnapshot())} />);
+
+    await findTableCard(/public\.orders table/i);
+    const edge = screen.getByLabelText(
+      "public.orders.user_id references public.users.id (1:N)",
+    );
+    const drawn = edge
+      .querySelector("path.react-flow__edge-path")
+      ?.getAttribute("d");
+    const control =
+      /^M\s*(-?[\d.]+),(-?[\d.]+)\s*C\s*(-?[\d.]+),(-?[\d.]+)/.exec(
+        drawn ?? "",
+      );
+
+    // A Left/Right anchor puts the first control point level with the start
+    // (`[x1 + offset, y1]`); the Top/Bottom card handle pushes it off in y.
+    // elkjs stacks these two cards in one column, so x is equal either way and
+    // only y tells the two apart.
+    expect(control).not.toBeNull();
+    const [, , startY, , controlY] = control ?? [];
+    expect(controlY).toBe(startY);
+  });
+
+  it("marks each edge with the cardinality it read off the schema", async () => {
+    render(<SchemaErdCanvas graph={extractSchemaGraph(oneToOneSnapshot())} />);
+
+    await findTableCard(/public\.profiles table/i);
+    expect(
+      screen.getByLabelText(
+        "public.profiles.user_id references public.users.id (1:1)",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("1:1", { selector: "[data-cardinality]" }),
+    ).toBeInTheDocument();
   });
 
   it("shows the qualified name and the schema badge on each node", async () => {
@@ -179,11 +265,13 @@ describe("SchemaErdCanvas", () => {
 
     await findTableCard(/public\.users table/i);
     expect(
-      screen.getByLabelText("public.orders.user_id references public.users.id"),
+      screen.getByLabelText(
+        "public.orders.user_id references public.users.id (1:N)",
+      ),
     ).toHaveAttribute("data-highlighted", "true");
     expect(
       screen.getByLabelText(
-        "public.payments.order_id references public.orders.id",
+        "public.payments.order_id references public.orders.id (1:N)",
       ),
     ).toHaveAttribute("data-highlighted", "false");
     expect(
@@ -219,7 +307,9 @@ describe("SchemaErdCanvas", () => {
     }
 
     expect(
-      screen.getByLabelText("public.orders.user_id references public.users.id"),
+      screen.getByLabelText(
+        "public.orders.user_id references public.users.id (1:N)",
+      ),
     ).toHaveAttribute("data-highlighted", "true");
   });
 
@@ -653,6 +743,70 @@ function wideTableSnapshot(): SchemaGraphCatalogSnapshot {
     },
     constraintsByTable: {},
     indexesByTable: {},
+  };
+}
+
+/** The FK column sits past the six-column cap, so no card row draws it. */
+function cappedColumnFkSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [table("public", "owners"), table("public", "wide")],
+    },
+    columnsByTable: {
+      public: {
+        owners: [column("id", { is_primary_key: true })],
+        wide: [
+          ...Array.from({ length: 6 }, (_unused, index) =>
+            column(`c${index + 1}`),
+          ),
+          column("owner_id", {
+            is_foreign_key: true,
+            fk_reference: "public.owners(id)",
+          }),
+        ],
+      },
+    },
+    constraintsByTable: {},
+    indexesByTable: {},
+  };
+}
+
+/** A unique index over the FK column makes the relationship 1:1. */
+function oneToOneSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [table("public", "users"), table("public", "profiles")],
+    },
+    columnsByTable: {
+      public: {
+        users: [column("id", { is_primary_key: true })],
+        profiles: [
+          column("id", { is_primary_key: true }),
+          column("user_id", {
+            is_foreign_key: true,
+            fk_reference: "public.users(id)",
+          }),
+        ],
+      },
+    },
+    constraintsByTable: {},
+    indexesByTable: {
+      public: {
+        profiles: [
+          {
+            name: "profiles_user_id_key",
+            columns: ["user_id"],
+            index_type: "btree",
+            is_unique: true,
+            is_primary: false,
+          },
+        ],
+      },
+    },
   };
 }
 
