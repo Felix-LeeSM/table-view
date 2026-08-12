@@ -153,28 +153,27 @@ describe("SchemaErdCanvas", () => {
   // edge is the thing using it. jsdom measures every handle at 0x0, so the
   // bezier control points are all that still separates a column anchor (leaves
   // sideways, Left/Right) from the card fallback (leaves upward, Top/Bottom).
+  //
+  // Both ends are read: the edge attaching to the row it *leaves* and the row
+  // it *points at* are two independent facts, and `getBezierPath` writes them
+  // into two different control points.
   it("draws the FK edge out of the column anchor, not the card handle", async () => {
     render(<SchemaErdCanvas graph={extractSchemaGraph(ordersSnapshot())} />);
 
     await findTableCard(/public\.orders table/i);
-    const edge = screen.getByLabelText(
+    const bezier = readEdgeBezier(
       "public.orders.user_id references public.users.id (1:N)",
     );
-    const drawn = edge
-      .querySelector("path.react-flow__edge-path")
-      ?.getAttribute("d");
-    const control =
-      /^M\s*(-?[\d.]+),(-?[\d.]+)\s*C\s*(-?[\d.]+),(-?[\d.]+)/.exec(
-        drawn ?? "",
-      );
 
-    // A Left/Right anchor puts the first control point level with the start
-    // (`[x1 + offset, y1]`); the Top/Bottom card handle pushes it off in y.
+    // A Left/Right anchor puts its control point level with its own endpoint
+    // (`[x ± offset, y]`); the Top/Bottom card handle pushes it off in y.
     // elkjs stacks these two cards in one column, so x is equal either way and
     // only y tells the two apart.
-    expect(control).not.toBeNull();
-    const [, , startY, , controlY] = control ?? [];
-    expect(controlY).toBe(startY);
+    expect(bezier.sourceControlY).toBe(bezier.sourceY);
+    expect(bezier.targetControlY).toBe(bezier.targetY);
+    // Sanity: the two ends really are distinct points, so the pair above is
+    // not one coordinate read twice.
+    expect(bezier.sourceY).not.toBe(bezier.targetY);
   });
 
   it("marks each edge with the cardinality it read off the schema", async () => {
@@ -186,9 +185,13 @@ describe("SchemaErdCanvas", () => {
         "public.profiles.user_id references public.users.id (1:1)",
       ),
     ).toBeInTheDocument();
+    // The badge is the visual half of a fact the edge's accessible name
+    // already carries. Exposing it too would make a screen reader read the
+    // bare "1:1" a second time, detached from the relationship it counts —
+    // which is the reason the name carries the cardinality at all.
     expect(
       screen.getByText("1:1", { selector: "[data-cardinality]" }),
-    ).toBeInTheDocument();
+    ).toHaveAttribute("aria-hidden", "true");
   });
 
   it("shows the qualified name and the schema badge on each node", async () => {
@@ -682,6 +685,44 @@ function dependencyEmptySnapshotWithMetadata(): SchemaGraphCatalogSnapshot {
     },
     indexesByTable: { main: { event_log: [] } },
     constraintsByTable: { main: { event_log: [] } },
+  };
+}
+
+/**
+ * The four points `getBezierPath` writes into one edge path, as the strings
+ * they were serialized as: `M sx,sy C scx,scy tcx,tcy tx,ty`.
+ */
+function readEdgeBezier(ariaLabel: string) {
+  const drawn = screen
+    .getByLabelText(ariaLabel)
+    .querySelector("path.react-flow__edge-path")
+    ?.getAttribute("d");
+  const n = "(-?[\\d.]+)";
+  const points = new RegExp(
+    `^M\\s*${n},${n}\\s*C\\s*${n},${n}\\s+${n},${n}\\s+${n},${n}`,
+  ).exec(drawn ?? "");
+  if (!points) throw new Error(`edge path is not a cubic bezier: ${drawn}`);
+
+  const [
+    ,
+    sourceX,
+    sourceY,
+    sourceControlX,
+    sourceControlY,
+    targetControlX,
+    targetControlY,
+    targetX,
+    targetY,
+  ] = points;
+  return {
+    sourceX,
+    sourceY,
+    sourceControlX,
+    sourceControlY,
+    targetControlX,
+    targetControlY,
+    targetX,
+    targetY,
   };
 }
 
