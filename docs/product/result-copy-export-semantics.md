@@ -86,8 +86,9 @@ mappings/settings/templates/field stats/samples 는 lazy detail tab 또는 expli
 action 에서만 로드한다. Search live HTTP/admin promotion remains owned by the
 Search roadmap/milestone, not non-RDBMS lazy-loading workbench hardening.
 Elasticsearch/OpenSearch actual live index/settings admin execution, broader
-observability, profile/explain request workflow, full language-core
-parser/completion ownership 은 아직 deferred 다.
+observability, `_explain` request workflow, full language-core
+parser/completion ownership 은 아직 deferred 다. `_search` 의 `profile` 계획은
+search 쿼리 탭의 Explain 버튼으로 요청하고 계획 트리로 그린다 (#2153).
 
 Cassandra/Scylla, DynamoDB, graph, vector, stream 은 active `DatabaseType`,
 profile, runtime, parser/completion, fixture/live evidence, E2E smoke claim 이

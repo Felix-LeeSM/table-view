@@ -2,7 +2,7 @@
 # capture-search-profile-fixture.sh — regenerate tests/fixtures/search-profile-response.json (issue #2198).
 #
 # The bounded Search DSL validator accepts a `profile` boolean, and the result
-# view renders whatever `profile` section the cluster returns. Before #2198 no
+# view and the ExplainViewer render whatever `profile` section the cluster returns. Before #2198 no
 # struct, interface or fixture in this repository described that section, so the
 # only samples were two hand-written stubs with a single key each. This script
 # captures the real thing so the next person reads a recorded response instead

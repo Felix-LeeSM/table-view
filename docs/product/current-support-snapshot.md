@@ -244,11 +244,13 @@ aggregation kinds/options, script sort, broad source options, raw/admin targets,
 wildcard targets, and destructive/admin APIs reject before live Search dispatch
 or destructive planning. Search live HTTP/admin promotion remains owned by the
 Search roadmap/milestone, not non-RDBMS lazy-loading workbench hardening.
-Broader Search admin APIs (index/settings create/delete), global
-audit/admin/security dashboards, the `_explain` endpoint, a dedicated
-profile/explain request workflow with its own viewer (#2198 accepts the
-`profile` flag through the raw DSL and renders the payload in the existing
-result panel; it ships no viewer), and
+The `_search` `profile` plan has its own request workflow and viewer: the
+search query tab's Explain button re-runs the request with the bounded
+`profile` flag and renders the response's profile section as a plan tree
+(#2153, on top of the flag #2198 unlocked). Broader Search admin APIs
+(index/settings create/delete), global audit/admin/security dashboards, the
+`_explain` endpoint (per-document score explanation — the bounded validator
+still rejects the `explain` key and no adapter method calls it), and
 product-specific live deltas beyond these slices are deferred
 
 ## MSSQL

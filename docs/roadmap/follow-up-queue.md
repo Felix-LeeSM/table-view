@@ -104,7 +104,7 @@ TypeScript Search DSL editor assistance, and representative Runtime Happy Path
 smoke are active; the smoke covers connect/auth/TLS contract, selected metadata,
 bounded render, delete-plan preview, live delete execution, and error surface.
 Promote broader live HTTP only after index/settings admin execution policy,
-broader observability/profile workflows, full language-core parser/completion
+broader observability workflows, full language-core parser/completion
 ownership, and product-specific delta contracts are explicit.
 
 ### MSSQL/Oracle
