@@ -341,7 +341,13 @@ header action (gated on the engine's `intelligence.erd` capability), not from a
 per-table sub-tab. The diagram is a `@xyflow/react` canvas with `elkjs`
 `layered` auto-layout: referenced tables rank above the tables that reference
 them, and nodes can be dragged, but positions are not persisted across tab
-reopen. Data compare remains a future promotion gate in the H4 smoke matrix.
+reopen. How much of a table a card spells out follows the viewport zoom in three
+steps — the table box alone, then the primary-key and foreign-key columns, then
+every column — and a card that leaves columns out says how many it hid. There is
+no fixed cap on rendered columns. Zoom never re-runs the layout: elkjs is handed
+the full-detail height of every card, so a card only ever shrinks inside the slot
+it was given, and zooming out does not pack the diagram tighter. Data compare
+remains a future promotion gate in the H4 smoke matrix.
 
 Hand-drawn relationships ("virtual foreign keys", ADR 0055) are a stored model
 rather than a drawing: `{ source, targets[], discriminator? }`, where several
@@ -358,10 +364,9 @@ whose column is gone drops out while the link's other targets keep drawing, and
 a discriminator whose column is gone leaves every edge in place and only its
 name out of them. The stored link survives all three, because a graph whose
 metadata has not finished loading is indistinguishable from a dropped column.
-Drawing a link from
-the canvas, editing or deleting one link, and undo/redo of link edits are not
-included — the legend offers only a confirmed reset that clears every link on
-that diagram (ADR 0056 (4) owns undo). A virtual FK is not a constraint: it stays
+Drawing a link from the canvas, editing or deleting one link, and undo/redo of
+link edits are not included — the legend offers only a confirmed reset that
+clears every link on that diagram (ADR 0056 (4) owns undo). A virtual FK is not a constraint: it stays
 out of the selected-table dependency view, out of the cached schema diff, and out
 of join completion, which ADR 0055 lists as explicit non-scope. Two windows open
 on the same diagram do not converge on a reset: deleting the row leaves the other

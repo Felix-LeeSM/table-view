@@ -67,8 +67,13 @@ Table cards, FK edges, search, select, node drag, canvas zoom/pan, fit, focus,
 and highlight are local diagram interactions. The dense ERD smoke opens a seeded
 PostgreSQL graph on desktop and narrow viewports, asserts nodes, FK edges,
 FK-direction layering, search, selection, node drag, zoom and fit, and captures
-non-empty screenshot artifacts. Layout persistence, semantic zoom, viewport
-virtualization, and focus filters are separate follow-up issues.
+non-empty screenshot artifacts. Card detail follows the ADR 0054 (2) three-step
+semantic zoom (table box / key columns / every column); the step a card is
+standing at is asserted in `SchemaErdCanvas.test.tsx` by pinning the level,
+because jsdom gives React Flow no pane size and the fitted zoom it produces is
+an artifact of React Flow's fallback dimensions. No smoke asserts which step a
+real viewport lands on. Layout persistence, viewport virtualization, and focus
+filters are separate follow-up issues.
 
 ## Read-only dependency view
 

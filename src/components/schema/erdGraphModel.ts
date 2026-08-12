@@ -23,12 +23,6 @@ export const ERD_TABLE_WIDTH = 240;
 export const ERD_TABLE_HEADER_HEIGHT = 52;
 export const ERD_TABLE_ROW_HEIGHT = 26;
 export const ERD_TABLE_BODY_PADDING = 10;
-/**
- * Columns rendered per table node. ADR 0054 (2) retires this cap in favour of
- * 3-step semantic zoom, which issue #1655 lists as out of scope — the cap stays
- * until the semantic-zoom issue lands and replaces it.
- */
-export const ERD_MAX_VISIBLE_COLUMNS = 6;
 
 /** Number of distinct schema badge tones (`--color-erd-schema-*` in index.css). */
 export const ERD_SCHEMA_TONE_COUNT = 4;
@@ -36,16 +30,84 @@ export const ERD_SCHEMA_TONE_COUNT = 4;
 /** Vertical gap of the single-column fallback used when elkjs rejects. */
 const ERD_FALLBACK_STACK_GAP = 48;
 
+/**
+ * ADR 0054 (2) semantic zoom, which retires the fixed six-column cap: far away
+ * a card is the table box alone, mid-range it keeps the PK/FK columns, and up
+ * close it draws every column.
+ */
+export type ErdDetailLevel = "compact" | "keys" | "full";
+
+/**
+ * Zoom at which a card starts drawing key columns, then every column. Column
+ * rows are `text-xs` (12px), so under `ERD_DETAIL_ZOOM_KEYS` a column name
+ * paints below ~5px and only the table name is worth the space.
+ *
+ * ponytail: fixed thresholds — the canvas has no per-user detail control to
+ * hang them off. Turn them into state when one lands.
+ */
+export const ERD_DETAIL_ZOOM_KEYS = 0.45;
+export const ERD_DETAIL_ZOOM_FULL = 0.75;
+
+export function erdDetailLevel(zoom: number): ErdDetailLevel {
+  // A viewport that has not been measured yet must not blank every card out,
+  // so an unreadable zoom falls through to the level that hides nothing.
+  if (!Number.isFinite(zoom)) return "full";
+  if (zoom < ERD_DETAIL_ZOOM_KEYS) return "compact";
+  if (zoom < ERD_DETAIL_ZOOM_FULL) return "keys";
+  return "full";
+}
+
 export interface ErdTableModel {
   readonly table: SchemaGraphTableNode;
   readonly columns: readonly SchemaGraphColumnNode[];
-  readonly visibleColumns: readonly SchemaGraphColumnNode[];
-  readonly hiddenColumnCount: number;
   readonly qualifiedName: string;
   /** Index into the `--color-erd-schema-*` tones, assigned in `buildErdModel`. */
   readonly schemaToneIndex: number;
   readonly width: number;
+  /**
+   * The slot elkjs reserves for this table: the height of a card drawing every
+   * column, which is the tallest any detail level makes it. Semantic zoom only
+   * ever shrinks a card inside that slot, so changing zoom cannot change the
+   * layout input — and therefore cannot re-run the layout and throw away the
+   * positions a user dragged.
+   */
+  readonly layoutHeight: number;
+}
+
+/** What one card draws at a detail level, and how tall that makes it. */
+export interface ErdCardShape {
+  readonly visibleColumns: readonly SchemaGraphColumnNode[];
+  readonly hiddenColumnCount: number;
   readonly height: number;
+}
+
+export function erdCardShape(
+  table: ErdTableModel,
+  level: ErdDetailLevel,
+): ErdCardShape {
+  const visibleColumns = columnsAtDetailLevel(table.columns, level);
+  const hiddenColumnCount = table.columns.length - visibleColumns.length;
+  return {
+    visibleColumns,
+    hiddenColumnCount,
+    height: erdTableHeight(visibleColumns.length, hiddenColumnCount),
+  };
+}
+
+function columnsAtDetailLevel(
+  columns: readonly SchemaGraphColumnNode[],
+  level: ErdDetailLevel,
+): readonly SchemaGraphColumnNode[] {
+  switch (level) {
+    case "compact":
+      return [];
+    case "keys":
+      return columns.filter(
+        (column) => column.data.is_primary_key || column.data.is_foreign_key,
+      );
+    case "full":
+      return columns;
+  }
 }
 
 export interface ErdRelationshipModel {
@@ -111,17 +173,13 @@ export function buildErdModel(graph: SchemaGraph): ErdModel {
       const columns = (columnsByTable.get(table.id) ?? [])
         .slice()
         .sort((left, right) => left.ordinal - right.ordinal);
-      const visibleColumns = columns.slice(0, ERD_MAX_VISIBLE_COLUMNS);
-      const hiddenColumnCount = columns.length - visibleColumns.length;
       return {
         table,
         columns,
-        visibleColumns,
-        hiddenColumnCount,
         qualifiedName: `${table.schema}.${table.table}`,
         schemaToneIndex: schemaTones.get(String(table.schema)) ?? 0,
         width: ERD_TABLE_WIDTH,
-        height: erdTableHeight(visibleColumns.length, hiddenColumnCount),
+        layoutHeight: erdTableHeight(columns.length, 0),
       };
     });
 
@@ -229,7 +287,7 @@ export function buildErdElkGraph(model: ErdModel): ElkNode {
     .map((entry) => ({
       id: entry.table.id,
       width: entry.width,
-      height: entry.height,
+      height: entry.layoutHeight,
       layoutOptions: {
         "elk.priority": String(referenceCounts.get(entry.table.id) ?? 0),
       },
@@ -294,7 +352,7 @@ function stackErdTables(model: ErdModel): ReadonlyMap<string, ErdPosition> {
   let y = 0;
   for (const entry of model.tables) {
     positions.set(entry.table.id, { x: 0, y });
-    y += entry.height + ERD_FALLBACK_STACK_GAP;
+    y += entry.layoutHeight + ERD_FALLBACK_STACK_GAP;
   }
   return positions;
 }

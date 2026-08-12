@@ -1,6 +1,7 @@
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { useTranslation } from "react-i18next";
 import { type ErdTableFlowNode, useErdCanvasView } from "./erdCanvasContext";
+import { erdCardShape } from "./erdGraphModel";
 
 /**
  * One badge tone per index of `erdSchemaToneIndex`. Written out as whole class
@@ -24,6 +25,7 @@ export default function SchemaErdTableNode({
   const { t } = useTranslation("schema");
   const {
     tablesById,
+    detailLevel,
     selectedTableId,
     relatedTableIds,
     searchMatchTableIds,
@@ -33,6 +35,9 @@ export default function SchemaErdTableNode({
   const model = tablesById.get(id);
   if (!model) return null;
 
+  // ADR 0054 (2): the zoom step decides how much of the table a card spells
+  // out. The card shrinks inside the slot elkjs reserved; it never moves.
+  const card = erdCardShape(model, detailLevel);
   const isSelected = selectedTableId === id;
   const isRelated = !selectedTableId || isSelected || relatedTableIds.has(id);
   const isSearchMatch = searchMatchTableIds
@@ -51,7 +56,7 @@ export default function SchemaErdTableNode({
       data-related={isRelated}
       data-search-match={isSearchMatch}
       onClick={() => onToggleSelect(id)}
-      style={{ width: model.width, height: model.height }}
+      style={{ width: model.width, height: card.height }}
       className={`flex flex-col overflow-hidden rounded border bg-card text-left shadow-sm transition-colors ${
         isSelected
           ? "border-primary ring-2 ring-primary/20"
@@ -100,7 +105,7 @@ export default function SchemaErdTableNode({
         </div>
       </div>
       <div className="flex flex-1 flex-col py-1">
-        {model.visibleColumns.map((column) => (
+        {card.visibleColumns.map((column) => (
           <div
             key={column.id}
             className="grid grid-cols-[2.5rem_1fr] items-center gap-2 px-3 py-0.5 text-xs"
@@ -120,9 +125,9 @@ export default function SchemaErdTableNode({
             <span className="truncate text-foreground">{column.column}</span>
           </div>
         ))}
-        {model.hiddenColumnCount > 0 && (
+        {card.hiddenColumnCount > 0 && (
           <div className="px-3 py-0.5 text-xs text-muted-foreground">
-            {t("moreColumns", { count: model.hiddenColumnCount })}
+            {t("hiddenColumns", { count: card.hiddenColumnCount })}
           </div>
         )}
       </div>
