@@ -31,13 +31,17 @@
 //!
 //! # Why the logic is in a lib
 //!
-//! `src/main.rs` only forwards `argv` and turns the returned code into an
-//! `ExitCode`. Everything testable — argument parsing, the exit-code contract,
-//! the three formats — sits here, where CI's `cargo test --workspace --lib`
-//! already reaches it.
+//! `src/main.rs` hands `argv` to [`run_argv`], hands the result and the two
+//! real sinks to [`emit`], and turns the returned code into an `ExitCode`. It
+//! decides nothing else, because CI reaches `--lib` targets only
+//! (`cargo test --workspace --lib`) — a branch written in the shim is a branch
+//! no test in this repository can fail on. Argument parsing, the exit-code
+//! contract, the three formats and the closed-stdout path all sit here.
 
 pub mod dsn;
 pub mod render;
+
+use std::io::Write;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use table_view_core::db::{row_cap, ActiveAdapter};
@@ -190,6 +194,31 @@ where
     }
 }
 
+/// Write an [`Outcome`] to its two sinks and hand back the code to exit with.
+///
+/// Here rather than in `src/main.rs` because CI reaches `--lib` targets only
+/// (`cargo test --workspace --lib`): a branch written in the shim is a branch
+/// no test in this repository can fail on.
+///
+/// `tvw query … | head` closes the pipe early. Left to `print!`, that is a
+/// panic — a Rust backtrace on stderr and exit 101, which is not one of the
+/// three codes the contract defines. A reader that stopped reading is not a
+/// query failure, so the run's own code stands either way: a successful run
+/// still exits 0, and a failed one keeps its code rather than being laundered
+/// into success because stdout went away. Notices follow the rows or not at
+/// all — a sink that just refused the data is not asked for more.
+pub fn emit(outcome: &Outcome, stdout: impl Write, stderr: impl Write) -> u8 {
+    if write_all(stdout, &outcome.stdout).is_ok() {
+        let _ = write_all(stderr, &outcome.stderr);
+    }
+    outcome.code
+}
+
+fn write_all(mut sink: impl Write, text: &str) -> std::io::Result<()> {
+    sink.write_all(text.as_bytes())?;
+    sink.flush()
+}
+
 async fn run(cli: Cli) -> Result<Outcome, CliError> {
     let Command::Query(args) = cli.command;
 
@@ -301,6 +330,56 @@ mod tests {
         );
     }
 
+    /// stdout after the reader is gone: `tvw query … | head` in one struct.
+    struct ClosedPipe;
+
+    impl std::io::Write for ClosedPipe {
+        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe))
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe))
+        }
+    }
+
+    fn outcome(code: u8) -> Outcome {
+        Outcome {
+            stdout: "rows\n".to_string(),
+            stderr: "notice\n".to_string(),
+            code,
+        }
+    }
+
+    #[test]
+    fn test_emit_sends_rows_to_stdout_and_notices_to_stderr() {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        assert_eq!(
+            emit(&outcome(EXIT_SUCCESS), &mut out, &mut err),
+            EXIT_SUCCESS
+        );
+        assert_eq!(String::from_utf8(out).expect("utf8"), "rows\n");
+        assert_eq!(
+            String::from_utf8(err).expect("utf8"),
+            "notice\n",
+            "a notice on stdout would corrupt the data channel"
+        );
+    }
+
+    #[test]
+    fn test_a_closed_stdout_never_launders_the_exit_code() {
+        // The reader walking away is not a verdict on the query. Every code the
+        // contract defines has to survive it — a failure laundered into 0 is a
+        // script that thinks the statement ran.
+        for code in [EXIT_SUCCESS, EXIT_ERROR, EXIT_SAFE_MODE_BLOCKED] {
+            assert_eq!(
+                emit(&outcome(code), ClosedPipe, Vec::new()),
+                code,
+                "a broken pipe rewrote exit code {code}"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn test_help_exits_zero_on_stdout() {
         let outcome = run_cli(&["--help"]).await;
@@ -356,6 +435,12 @@ mod tests {
         .await;
         assert_eq!(outcome.code, EXIT_ERROR);
         assert!(
+            outcome.stderr.contains("Connection error"),
+            "this has to fail in connect, not in parsing, or it proves nothing \
+             about a driver error carrying the DSN: {}",
+            outcome.stderr
+        );
+        assert!(
             !outcome.stderr.contains("hunter2"),
             "password reached stderr: {}",
             outcome.stderr
@@ -379,7 +464,8 @@ mod tests {
     #[tokio::test]
     async fn test_sqlite_select_one_succeeds_in_every_format() {
         // ADR 0061's SQL core has four engines and this is the one that needs
-        // no container. The other three run in tests/query_url_live.rs.
+        // no container. The three that do need one run in
+        // tests/query_url_live.rs, which repeats this engine there too.
         let dir = tempfile::tempdir().expect("tempdir");
         let url = empty_sqlite_db(dir.path());
 
@@ -447,10 +533,13 @@ mod tests {
     /// Careful with the window this opens. `row_cap::set` is production API over
     /// a process-global `AtomicUsize` (`table_view_core::db::row_cap`), not a
     /// test hook, and the other `#[tokio::test]`s in this binary run in parallel
-    /// inside it. They survive only because each asserts on a single-row result,
-    /// which a cap of 2 cannot truncate. A test in this crate that asserts three
-    /// rows or more has to serialise against this one — or the cap has to become
-    /// per-call — before it can be trusted.
+    /// inside it. What keeps them out of the cap's way is not how few rows they
+    /// assert — the DML test above asserts two — but that the cap truncates a
+    /// *fetched* result set only: the adapter's DML branch hands back
+    /// `truncated: false` and no rows whatever the cap says
+    /// (`table-view-core/src/db/adapters/sqlite/queries.rs`). A test in this
+    /// crate that selects three rows or more has to serialise against this one —
+    /// or the cap has to become per-call — before it can be trusted.
     #[tokio::test]
     async fn test_truncation_warns_on_stderr_instead_of_returning_a_short_answer_silently() {
         let dir = tempfile::tempdir().expect("tempdir");

@@ -15,6 +15,7 @@
 use percent_encoding::percent_decode_str;
 use table_view_core::db::{ActiveAdapter, MysqlAdapter, PostgresAdapter, SqliteAdapter};
 use table_view_core::models::{ConnectionConfig, DatabaseType, SslMode};
+use table_view_core::storage::sql_redact::redact_connection_message;
 use url::Url;
 
 use crate::CliError;
@@ -126,9 +127,10 @@ fn sqlite_config(url: &Url) -> Result<ConnectionConfig, CliError> {
         ));
     }
 
-    // Absoluteness, existence and the app-data-directory refusal are
-    // `validate_user_database_path`'s in `table-view-core`; re-checking them
-    // here would fork the rule.
+    // Emptiness, absoluteness and the app-data-directory refusal are
+    // `validate_user_database_path`'s in `table-view-core`, and a missing file
+    // is refused a step later by that adapter's `create_if_missing(false)`.
+    // Re-checking either here would fork the rule.
     Ok(config(
         DatabaseType::Sqlite,
         String::new(),
@@ -186,12 +188,22 @@ fn config(
 ///
 /// The name only, never the value: a parameter can carry a credential
 /// (`?password=…`), and this string ends up in an error message that reaches
-/// logs and CI output.
+/// logs and CI output. Only the text before the first `=` travels, so a token
+/// that spells no name (`?s3cretlooking`, which `query_pairs` hands back as a
+/// name with an empty value) is described rather than quoted.
 ///
 /// `?` with nothing after it states nothing, so it is not a refusal.
 fn unread_part(url: &Url) -> Option<String> {
-    if let Some((name, _)) = url.query_pairs().next() {
-        return Some(format!("the parameter '{name}'"));
+    let first_token = url
+        .query()
+        .unwrap_or_default()
+        .split('&')
+        .find(|token| !token.is_empty());
+    if let Some(token) = first_token {
+        return Some(match token.split_once('=') {
+            Some((name, _)) if !name.is_empty() => format!("the parameter '{name}'"),
+            _ => "a query parameter".to_string(),
+        });
     }
     match url.fragment() {
         Some(fragment) if !fragment.is_empty() => Some("a '#' fragment".to_string()),
@@ -203,35 +215,53 @@ fn decode(value: &str) -> String {
     percent_decode_str(value).decode_utf8_lossy().into_owned()
 }
 
-/// A DSN echoed back in an error message carries secrets. Cut them by position
-/// rather than trying to parse a string that already failed to parse:
-/// everything between `://` and the last `@` of the authority, and everything
-/// from the first `?`/`#` on — `?password=…` is as much a credential as the one
-/// in the authority, and this text reaches logs and CI output.
+/// A DSN echoed back in an error message carries secrets, and this echo runs
+/// exactly when the string did not parse — so no structure in it can be
+/// assumed. The question is "does a credential shape survive", never "is there
+/// a `://`": a missing colon or a missing slash is the ordinary typo, and it
+/// leaves the password fully intact.
+///
+/// Three cuts, in order. Everything from the first `?`/`#` on, because
+/// `?password=…` is as much a credential as the one in the authority.
+/// Everything between the scheme and the last `@` that is left, because that is
+/// where userinfo sits however many slashes the user typed. Then core's own
+/// masker for `password=`/`pwd=`, which needs no URL shape at all and so covers
+/// a libpq conninfo string handed to `--url` by mistake.
+///
+/// Only the scheme survives in front of the mask, so an `@` further along the
+/// string costs the message its host too. That is over-redaction on a string
+/// that already failed to parse, which is the direction to err in here.
 fn redact(raw: &str) -> String {
-    let Some(scheme_end) = raw.find("://") else {
-        return raw.to_string();
-    };
-    let authority_start = scheme_end + 3;
     // `…` marks that something was cut, so a truncated DSN is not read as the
     // whole one the user typed.
-    let (body, cut) = match raw[authority_start..].find(['?', '#']) {
-        Some(i) => (&raw[..authority_start + i], "…"),
+    let (body, cut) = match raw.find(['?', '#']) {
+        Some(i) => (&raw[..i], "…"),
         None => (raw, ""),
     };
-    let authority_end = body[authority_start..]
-        .find('/')
-        .map(|i| authority_start + i)
-        .unwrap_or(body.len());
-    match body[authority_start..authority_end].rfind('@') {
-        Some(at) => format!(
-            "{}***@{}{}",
-            &body[..authority_start],
-            &body[authority_start + at + 1..],
-            cut
-        ),
-        None => format!("{body}{cut}"),
+    let kept = scheme_prefix(body);
+    let masked = match body[kept..].rfind('@') {
+        Some(at) => format!("{}***{}", &body[..kept], &body[kept + at..]),
+        None => body.to_string(),
+    };
+    redact_connection_message(&format!("{masked}{cut}"))
+}
+
+/// The `scheme:` a string opens with, plus the slashes after it — or nothing,
+/// when it opens with something else. RFC 3986 allows a scheme only ASCII
+/// letters, digits and `+-.`, so this is the one span of an unparseable DSN
+/// that cannot be holding a credential and can be shown back to the user.
+fn scheme_prefix(body: &str) -> usize {
+    let Some((scheme, rest)) = body.split_once(':') else {
+        return 0;
+    };
+    let is_scheme = scheme.starts_with(|c: char| c.is_ascii_alphabetic())
+        && scheme
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
+    if !is_scheme {
+        return 0;
     }
+    scheme.len() + 1 + (rest.len() - rest.trim_start_matches('/').len())
 }
 
 #[cfg(test)]
@@ -360,7 +390,12 @@ mod tests {
 
     #[test]
     fn test_parse_refuses_a_fragment_it_would_otherwise_drop() {
-        parse("postgres://h/db#anchor").expect_err("no getter here reads the fragment");
+        let error = parse("postgres://h/db#anchor").expect_err("no getter here reads the fragment");
+        assert!(
+            error.message().contains("a '#' fragment"),
+            "the refusal should name the part it means, got: {}",
+            error.message()
+        );
     }
 
     #[test]
@@ -385,8 +420,48 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_error_message_redacts_a_dsn_that_never_looked_like_a_url() {
+        // The echo happens exactly when the string did not parse, so nothing
+        // about its shape can be assumed — least of all the `://` an earlier
+        // cut keyed on. Each of these is one typo away from a working DSN and
+        // each still holds the password.
+        for raw in [
+            "h/db?password=s3cret",            // no scheme at all
+            "postgres//u:s3cret@h/db",         // the scheme's ':' missing
+            "postgres:/u:s3cret@h/db",         // parses; names no host
+            "host=h password=s3cret dbname=d", // libpq conninfo, not a URL
+            "postgres://u:s3cret@h:99999/db",  // the shape that already worked
+        ] {
+            let error = parse(raw).expect_err("none of these name a reachable server");
+            assert!(
+                !error.message().contains("s3cret"),
+                "{raw} put its credential in: {}",
+                error.message()
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_refusal_never_echoes_a_query_token_that_states_no_name() {
+        // `?token` with no `=` parses as a name with an empty value, so naming
+        // "the parameter" would hand back the whole token — user text of
+        // unknown shape, in a message that reaches logs and CI output.
+        let error = parse("postgres://h/db?s3cretlooking").expect_err("an unread parameter");
+        assert!(
+            !error.message().contains("s3cretlooking"),
+            "a nameless query token reached: {}",
+            error.message()
+        );
+    }
+
+    #[test]
     fn test_parse_hostless_server_dsn_is_rejected() {
-        parse("postgres:///db").expect_err("a server DSN without a host has no target");
+        let error = parse("postgres:///db").expect_err("a server DSN without a host has no target");
+        assert!(
+            error.message().contains("names no host"),
+            "a sqlite-style path under a server scheme must say what is missing, got: {}",
+            error.message()
+        );
     }
 
     #[test]

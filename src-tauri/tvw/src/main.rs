@@ -1,27 +1,12 @@
 //! Process shim. Every decision lives in the lib (`src/lib.rs`) so that CI's
-//! `cargo test --workspace --lib` covers it.
+//! `cargo test --workspace --lib` covers it — including which sink is written
+//! and what code survives a closed stdout, both of which are `tvw::emit`'s.
 
-use std::io::{self, Write};
+use std::io;
 use std::process::ExitCode;
 
 #[tokio::main]
 async fn main() -> ExitCode {
     let outcome = tvw::run_argv(std::env::args_os()).await;
-
-    // `tvw query … | head` closes the pipe early. Left to `print!`, that is a
-    // panic — a Rust backtrace on stderr and exit 101, which is not one of the
-    // three codes the contract defines. A reader that stopped reading is not a
-    // query failure, so the run's own code stands either way: a successful run
-    // still exits 0, and a failed one keeps its code rather than being laundered
-    // into success because stdout went away.
-    if emit(io::stdout(), &outcome.stdout).is_ok() {
-        let _ = emit(io::stderr(), &outcome.stderr);
-    }
-
-    ExitCode::from(outcome.code)
-}
-
-fn emit(mut sink: impl Write, text: &str) -> io::Result<()> {
-    sink.write_all(text.as_bytes())?;
-    sink.flush()
+    ExitCode::from(tvw::emit(&outcome, io::stdout(), io::stderr()))
 }
