@@ -1,0 +1,66 @@
+# ADR 0061 / #1770 — `tvw`, the one-shot CLI. It links `table-view-core` and
+# nothing from Tauri, which is the property `table-view-core/Cargo.toml`
+# promises and `src-tauri/Cargo.toml`'s `[workspace] members` list admits it to.
+[package]
+name = "tvw"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91.0"
+# Not on crates.io yet — #1775 owns the release pipe. The flag is also what
+# makes `deny.toml`'s `[licenses.private] ignore = true` skip our own crate.
+publish = false
+
+# The whole CLI lives in the lib and `src/main.rs` is a shim over it. That split
+# is not stylistic: `.github/workflows/ci.yml`'s `cargo test --workspace --lib`
+# is what makes a new workspace member "arrive already tested", and it reaches
+# `--lib` targets only. A bin-only crate would put every test here outside CI
+# until someone hand-added a `--test` line, which is the omission that comment
+# records happening three times (#1769, sprint-390, #2098).
+[lib]
+name = "tvw"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tvw"
+path = "src/main.rs"
+
+[dependencies]
+# `features` stays empty on purpose — `testing` would put the
+# `TABLE_VIEW_TEST_DATA_DIR` override into a shipped binary (#1454/#2184), and
+# ci.yml's `Test-only data-dir override stays out of the release graph` step
+# fails the build if it ever appears on a normal edge.
+table-view-core = { path = "../table-view-core", version = "0.1.0" }
+# Owner's call, 2026-08-05 (#1770): derive-based `clap` over argh/bpaf/lexopt,
+# because #1773 adds nested subcommands (`tvw conn add/ls/rm`) and the other
+# candidates generate no help for them.
+clap = { version = "4", features = ["derive"] }
+# `default-features = false` drops the `tty` feature. ADR 0061 fixes the output
+# format regardless of whether stdout is a terminal, so probing the terminal is
+# not just unused here, it is the behaviour the ADR rejects.
+comfy-table = { version = "7", default-features = false }
+csv = "1"
+serde_json = "1"
+# `rt-multi-thread` rather than `rt`: sqlx pools and the Oracle/DuckDB blocking
+# backends inside `table-view-core` expect to be able to `spawn_blocking`.
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+url = "2"
+# `Url::username()` / `password()` hand back percent-encoded text, and a DSN has
+# to encode `@ : /` in a password. Decoding matches what the app's own paste
+# handler does (`parseConnectionUrl` in src/features/connection/model.ts).
+percent-encoding = "2"
+
+[dev-dependencies]
+tempfile = "3"
+# Fixture seeding only. `table-view-core`'s SQLite adapter refuses raw DDL
+# (`validate_sqlite_write_guardrails`), so a test that needs a table has to make
+# it with the driver directly. Same features the app already resolves, so this
+# adds a manifest line and no build.
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"] }
+# Same versions the app already dev-depends on, so no new resolve. Only the
+# three server engines in ADR 0061's SQL core need an image; SQLite is a file.
+testcontainers = "0.27"
+testcontainers-modules = { version = "0.15", features = [
+  "postgres",
+  "mysql",
+  "mariadb",
+] }

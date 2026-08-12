@@ -475,10 +475,11 @@ jobs:
     # run 30658756471 a "No cache found" and two cold manifest compiles
     # (10m21s + 8m43s), which blew the old 20-minute cap at 20m20s and skipped
     # the steps behind it. #2161 shortens the list instead of growing it: the
-    # four crates now share one target dir, so the cold pass compiles the
+    # workspace members now share one target dir, so the cold pass compiles the
     # dependency set (duckdb bundled dominates it) once rather than once per
     # manifest. 35 stays as headroom for that one cold run; warm runs were
-    # 4m14s on main before and have less to rebuild now.
+    # 4m14s on main before and have less to rebuild now. Adding a member (#1770
+    # added `tvw`) does not touch this list and so does not evict the cache.
     timeout-minutes: 35
 
     steps:
@@ -493,10 +494,11 @@ jobs:
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          # #2161 — one entry, because the four crates are one Cargo workspace
-          # and share `src-tauri/target`. Until then each crate compiled into
-          # its own target dir and needed its own line here; miss one and that
-          # crate recompiled every run (audit 2026-07-03).
+          # #2161 — one entry, because the crates are one Cargo workspace and
+          # share `src-tauri/target`. Until then each crate compiled into its
+          # own target dir and needed its own line here; miss one and that
+          # crate recompiled every run (audit 2026-07-03). A new member joins
+          # through `src-tauri/Cargo.toml`'s `members`, not through this list.
           workspaces: src-tauri -> target
           cache-bin: false
           save-if: ${{ github.ref == 'refs/heads/main' }}

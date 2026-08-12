@@ -1,11 +1,14 @@
-# #2161 — 네 crate 가 한 Cargo workspace 다. root 는 이 manifest 이고, lock 은
-# `src-tauri/Cargo.lock` 이다. `table-view-core` / `sql-parser-core` 는 아래
-# `[dependencies]` 의 path dependency 라 적지 않아도 member 지만,
-# `mongosh-parser-core` 는 아무도 의존하지 않아 여기 적어야 들어온다 — 그래서 셋 다
-# 적는다. CI 가 crate 를 하나씩 호명하는 대신 `cargo test --workspace --lib` /
-# `cargo fmt --all` / `cargo clippy --workspace` 로 도는 근거가 이 목록이다.
+# #2161 — 이 저장소의 Rust crate 는 한 Cargo workspace 다. root 는 이 manifest
+# 이고, lock 은 `src-tauri/Cargo.lock` 이다. `table-view-core` / `sql-parser-core`
+# 는 아래 `[dependencies]` 의 path dependency 라 적지 않아도 member 지만,
+# `mongosh-parser-core` 와 `tvw` 는 아무도 의존하지 않아 여기 적어야 들어온다 —
+# 그래서 전부 적는다. CI 가 crate 를 하나씩 호명하는 대신
+# `cargo test --workspace --lib` / `cargo fmt --all` / `cargo clippy --workspace`
+# 로 도는 근거가 이 목록이다.
+# `tvw` 는 #1770 (ADR 0061) 의 CLI 다. 앱이 아니라 `table-view-core` 만 링크하고,
+# 여기 없으면 그 crate 는 fmt · clippy · `--workspace --lib` 셋 모두 밖에 남는다.
 [workspace]
-members = ["table-view-core", "sql-parser-core", "mongosh-parser-core"]
+members = ["table-view-core", "sql-parser-core", "mongosh-parser-core", "tvw"]
 # root manifest 가 패키지라 resolver 는 아래 `edition = "2021"` 에서 2 로 풀린다.
 # 그래도 명시하는 이유: 이 manifest 를 virtual manifest 로 바꾸는 리팩토링(앱
 # 패키지를 하위 디렉토리로 빼는 등)은 기본값을 1 로 떨어뜨리고, resolver 1 은
