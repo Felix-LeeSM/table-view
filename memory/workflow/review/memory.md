@@ -109,6 +109,9 @@ trigger:
   형식을 `review:approved`/`review:changes-requested` 한 줄로 좁게 지정해도,
   delta 재검증이어도 표를 출력한다.
   (2026-07-04 실제 회귀: 요청 프롬프트의 반환 형식 지정이 rubric을 밀어냄.)
+- **scorecard 의 「확인했고 참이던 주장」절은 항목 이름과 판정만 싣고 근거 인용을
+  뺀다** — 고칠 것이 없는 자리라, 근거까지 실으면 다음 라운드 구현자의 컨텍스트만
+  늘린다. 절 자체는 없애지 않는다.
 - Verdict는 label로 공표한다. add와 remove를 한 명령에 같이 쓰지 않는다 — 같은
   초에 label 이벤트가 둘 나면 `cancel-in-progress`가 `review-gate` run 하나를 죽이고,
   그 이름의 최신 suite가 non-success인 채 남아 BLOCKED가 고착된다(#1879 실측).

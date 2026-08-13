@@ -178,6 +178,9 @@ PR 코멘트로 남기는 통합 scorecard 하나. **차원별 판정 표를 빼
 ### Non-blocking
 - 발견 목록. 이슈 발행 없음.
 
+### 확인했고 참이던 주장
+- 무엇을 싣고 무엇을 빼는지는 `memory/workflow/review/memory.md` 「행동 계약」.
+
 ### Verdict
 - review:approved | review:changes-requested
 - fan-out: 관점 목록 / 불가로 단독 강등했으면 그 사실
