@@ -520,12 +520,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_a_select_matching_no_rows_still_writes_one_json_document() {
-        // The engine difference this crate closes, end to end through a real
-        // adapter. SQLite fills `columns` inside the row loop, so it reports
-        // none here while PostgreSQL describes the statement and reports the
-        // column — keyed on `columns`, the same SQL printed zero bytes on one
-        // engine and a document on the other (measured on PR #2313). Zero bytes
-        // is a parse error to `jq`, not an empty result set.
+        // End to end through a real adapter rather than a hand-built
+        // `QueryResult`: `render.rs` owns the same branch as a unit test.
         let dir = tempfile::tempdir().expect("tempdir");
         let url = seeded_sqlite_db(dir.path()).await;
 

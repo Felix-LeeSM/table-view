@@ -3,25 +3,6 @@
 //! Every format is chosen by `--format` alone. Nothing here reads the terminal,
 //! `$TERM`, `isatty` or the locale, because ADR 0061 rejected TTY-dependent
 //! output: "같은 명령이 환경마다 다른 출력이면 CI 디버깅 함정".
-//!
-//! # The engine axis
-//!
-//! The same rejection applies to the engine that answered. The adapters do not
-//! agree about a result set that matched no rows: SQLite and MySQL fill
-//! `columns` inside the row loop
-//! (`table-view-core/src/db/adapters/sqlite/queries.rs`,
-//! `table-view-core/src/db/mysql/queries.rs`), so they report none, while
-//! PostgreSQL describes the statement before running it
-//! (`table-view-core/src/db/postgres/queries.rs`) and reports them. `columns`
-//! therefore cannot decide whether stdout gets content — keyed on it, PR #2313
-//! measured `SELECT a FROM t WHERE 1=0` printing nothing on SQLite and `[]` on
-//! PostgreSQL 16. [`render`] keys on `rows` and on the format instead, both of
-//! which every adapter agrees about.
-//!
-//! What still differs is the *content* of `columns` in `--format json` for such
-//! a result: PostgreSQL names the columns it described and SQLite has none to
-//! name. That is the adapter reporting what it knows, and the CLI has nothing
-//! to reconstruct it from.
 
 use comfy_table::{presets, ContentArrangement, Table};
 use serde_json::{json, Value};
@@ -32,14 +13,8 @@ use crate::{CliError, Format};
 /// Rendered stdout for a result. Ends in a newline when it is not empty.
 pub fn render(result: &QueryResult, format: Format) -> Result<String, CliError> {
     match format {
-        // One document per run, whatever the statement was. An empty stdout is
-        // not JSON — `jq` reads it as a parse error rather than as zero rows —
-        // so this branch never hands back nothing.
+        // One document per run, whatever the statement was.
         Format::Json => json(result),
-        // A header with no rows under it is exactly where the adapters
-        // disagree, so it is never printed on its own. That also covers DML and
-        // DDL, which carry no result set to head: `execute` in `lib.rs` puts
-        // their row count on stderr and stdout stays a clean data channel.
         Format::Table | Format::Csv if result.rows.is_empty() => Ok(String::new()),
         Format::Table => Ok(table(result)),
         Format::Csv => csv(result),
@@ -193,8 +168,7 @@ mod tests {
     /// A SELECT that matched no rows, once per adapter family, plus a statement
     /// carrying no result set at all. The first two are the *same SQL against
     /// two engines*: PR #2313 ran `SELECT a FROM t WHERE 1=0` on both and
-    /// SQLite reported no columns where PostgreSQL 16 reported the described
-    /// one. Every format has to print the same bytes for the pair.
+    /// SQLite reported no columns where PostgreSQL 16 reported one.
     fn rowless() -> Vec<(&'static str, QueryResult)> {
         let mut described = empty_result(QueryType::Select);
         described.columns = vec![column("a", "int4", ColumnCategory::Int)];
@@ -312,10 +286,10 @@ mod tests {
 
     #[test]
     fn test_table_and_csv_print_nothing_whichever_adapter_described_the_columns() {
-        // The engine-independence assertion, and the reason `render` keys on
-        // `rows`: swap that predicate for `columns.is_empty()` and the
-        // PostgreSQL shape below prints a lone header while the SQLite one
-        // prints nothing — the same SQL, two outputs.
+        // The reason `render` keys on `rows`: swap that predicate for
+        // `columns.is_empty()` and the PostgreSQL shape below prints a lone
+        // header while the SQLite one prints nothing — the same SQL, two
+        // outputs.
         for (shape, result) in rowless() {
             assert_eq!(
                 render(&result, Format::Table).expect("table"),
@@ -332,10 +306,8 @@ mod tests {
 
     #[test]
     fn test_json_writes_one_document_per_run_never_zero_bytes() {
-        // `--format json` is the branch that must not go quiet: zero bytes is a
-        // parse error to every JSON reader, not an empty result set. The
-        // `columns` array is the one thing the adapters cannot agree on, so it
-        // is pinned per shape rather than asserted equal across them.
+        // `--format json` is the branch that must not go quiet. `columns` is
+        // pinned per shape rather than asserted equal across the shapes.
         let empty_columns = "{\n  \"columns\": [],\n  \"rows\": []\n}\n";
         assert_eq!(
             render(&empty_result(QueryType::Select), Format::Json).expect("json"),

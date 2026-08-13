@@ -206,9 +206,9 @@ wallet mTLS 와는 상호 배타다. 남은 것은 tnsnames.ora 별칭을 파일
   차이를 안 보인다. CLI 에서 되돌리려면 `ColumnCategory` 를 보고 문자열을 숫자
   토큰으로 승격하는 층이 필요한데, 그것은 어댑터 계약을 CLI 한쪽에서만 뒤집는
   일이라 별도 결정이다.
-- `--format json` 의 `columns` 배열: 행이 0인 SELECT 에서 PostgreSQL 은 describe 로
-  잡은 컬럼을 이름과 함께 내고 SQLite·MySQL 은 낼 것이 없다. CLI 가 재구성할 근거가
-  없어 어댑터가 아는 만큼 그대로 싣는다.
+- `--format json` 의 `columns` 배열: 행이 0인 SELECT 에서 PostgreSQL 은 컬럼을
+  이름과 함께 내고 SQLite·MySQL 은 낼 것이 없다. CLI 가 재구성할 근거가 없어
+  어댑터가 아는 만큼 그대로 싣는다.
 
 ### Security / ops policy
 
