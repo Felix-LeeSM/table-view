@@ -136,8 +136,31 @@ assert_rc() {
 	fi
 }
 
+# 부분 문자열 판정. "있다/없다" 를 파이프라인 status 로 받던 자리를 여기로 모았다 —
+# 판정이 한 군데서만 나야 다음 편집이 그 형태를 되살릴 자리가 없다 (#2319, 선행 #2314).
+#
+# **파이프를 쓰지 않는다.** 옛 구현 `printf '%s\n' "$OUT" | grep -qF -- "$1"` 은
+# grep -q 가 첫 일치에서 stdin 을 안 비우고 빠지는 동안 왼쪽 printf 가 아직 쓸 것을
+# 갖고 있으면 EPIPE → SIGPIPE 로 141 이 되고, 위 `set -o pipefail` 이 그 141 을
+# 파이프라인 status 로 올려 **판정을 뒤집었다.**
+#
+# `case` 패턴 안의 따옴표 친 확장은 glob 메타문자까지 리터럴이라 `grep -F` 와 뜻이
+# 같고, 프로세스도 파이프도 안 만든다. 다른 점은 needle 에 개행이 있을 때뿐이다 —
+# grep -F 는 줄 단위 OR, case 는 그 연속열 그대로다. 개행을 품은 needle 을 넘기려면
+# 이 함수부터 다시 봐라. 회귀 가드는 아래 "assertion helpers (#2319)" 절이다.
+#
+# 이 파일에서 여기를 안 지나는 파이프와 그 이유:
+#   - `printf '%s\n' "$2" | sed …` (fail) · `printf '%s\n' "$@" | jq …` (json_array)
+#     — 오른쪽이 입력을 끝까지 읽고, 파이프라인 status 가 아니라 출력을 쓴다.
+contains() {
+	case "$1" in
+	*"$2"*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
 assert_has() {
-	if printf '%s\n' "$OUT" | grep -qF -- "$1"; then
+	if contains "$OUT" "$1"; then
 		pass "$2"
 	else
 		fail "$2" "찾는 문자열: $1
@@ -175,12 +198,22 @@ if [ -z "$BODY" ]; then
 fi
 pass "체크섬 스텝의 run: 블록을 뽑았다"
 
-if printf '%s\n' "$BODY" | grep -qF '${{'; then
-	fail "$LBL_NO_TEMPLATE_EXPR" \
-		"러너가 먼저 치환해야 하는 식이 본문에 있으면 이 스위트에는 리터럴로 도착한다 — 아래 실행 단언이 전부 무의미해진다."
-else
-	pass "$LBL_NO_TEMPLATE_EXPR"
-fi
+# 본문에 있으면 안 되는 러너 치환식의 여는 표기. 이 가드와 아래 회귀 가드가 같은
+# 함수를 쓴다 — 손으로 두 번 적으면 문구를 고친 날 한쪽만 낡는다.
+TEMPLATE_EXPR='${{'
+
+# **부호가 반대인 가드다** — 있으면 fail 이라, 판정이 뒤집히면 red 가 아니라 조용한
+# 거짓 green 이 된다. 아래 "assertion helpers (#2319)" 절이 큰 payload 로 이 함수를
+# 다시 불러 그 뒤집힘을 재현한다.
+check_no_template_expr() {
+	if contains "$1" "$TEMPLATE_EXPR"; then
+		fail "$LBL_NO_TEMPLATE_EXPR" \
+			"러너가 먼저 치환해야 하는 식이 본문에 있으면 이 스위트에는 리터럴로 도착한다 — 아래 실행 단언이 전부 무의미해진다."
+	else
+		pass "$LBL_NO_TEMPLATE_EXPR"
+	fi
+}
+check_no_template_expr "$BODY"
 
 # ── ② 스텁 ──────────────────────────────────────────────────────────────
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/checksum-sidecars.XXXXXX")"
@@ -360,6 +393,60 @@ printf '1' >"$d/rc"
 run_step "$(json_array "$d/bundle/app.deb")" "$d"
 assert_rc 1 "$LBL_UPLOAD_FAILURE_RED"
 
+# ── assertion helpers (#2319) ────────────────────────────────────────────
+# contains() 가 판정을 파이프 status 에 안 싣는다는 것의 회귀 가드. 옛 형태로
+# 되돌리면 여기가 red 다.
+#
+# 옛 구현은 `printf '%s\n' "$X" | grep -qF …` 였다. grep -q 는 첫 일치에서 stdin 을
+# 안 비우고 빠지고, 왼쪽 printf 가 파이프 버퍼(64KiB)보다 큰 것을 써야 하면 grep 이
+# 비워 주기를 기다리며 막혔다가 이미 빠진 grep 때문에 EPIPE → SIGPIPE 로 141 이
+# 된다. `set -o pipefail` 이 그 141 을 파이프라인 status 로 올려 판정을 뒤집는다.
+#
+# payload 를 파이프 버퍼의 두 배로 잡는 이유: 버퍼 바로 위는 아직 확률이다.
+# 2026-08-13 macOS 실측 한 판(bash 3.2.57 + BSD grep 2.6.0, 4-way 동시 × 200,
+# 첫 줄 일치, 옛 파이프 형태, flip = 있는 것을 "없음" 으로 낸 횟수. 전부 printf 쪽 141):
+#   8041B 0/800 · 70057B 799/800 · 200055B 800/800
+# 같은 판에서 `case` 형태는 세 크기 모두 0/800 이었다. 재현 명령은 PR #2318 body
+# 「기전의 경계」절의 race.sh 다.
+# 이 절은 $OUT 을 덮어쓴다 — 여기 아래에서 위 run_step() 의 출력을 읽는 단언이 없다.
+echo "assertion helpers (#2319):"
+
+SIGPIPE_PAD='filler-line-for-issue-2319'
+while [ "${#SIGPIPE_PAD}" -lt 200000 ]; do
+	SIGPIPE_PAD="$SIGPIPE_PAD
+$SIGPIPE_PAD"
+done
+
+# ① payload 가 실제로 파이프 버퍼를 넘는가. 이게 깨지면 아래 둘은 green 이어도
+#    아무것도 안 지킨다 — 옛 구현이 여기서 안 죽는 크기로 줄어든 것이다.
+if [ "${#SIGPIPE_PAD}" -ge 131072 ]; then
+	pass "SIGPIPE 가드 payload 가 파이프 버퍼(64KiB)의 두 배를 넘는다 (${#SIGPIPE_PAD}, ASCII)"
+else
+	fail "SIGPIPE 가드 payload 가 너무 작다: ${#SIGPIPE_PAD}" \
+		"131072 를 못 넘으면 결정론 구간 밖이다 — 버퍼 바로 위(70057B)는 위 실측대로 아직 확률이라 가드가 무력해진다."
+fi
+
+# ② assert_has — 있는 문자열을 SIGPIPE 로 놓치지 않는다. 옛 구현에서는 141 이
+#    pipefail 을 타고 올라와 이 단언이 red 였다 (눈에 띄는 쪽).
+OUT="NEEDLE-2319
+$SIGPIPE_PAD"
+assert_has "NEEDLE-2319" "assert_has: 파이프 버퍼보다 큰 출력의 첫 줄 일치를 놓치지 않는다"
+
+# ③ `${{` 가드 — **이쪽이 더 위험하다.** 부호가 반대라 같은 141 이 「치환식 없음」
+#    = 통과로 등록되어 red 조차 안 남긴다. 여기서 올바른 동작이 곧 FAIL 이라
+#    서브셸에서 불러 출력만 본다 — total/fails 증가는 서브셸과 함께 버려진다.
+#    이 판정이 뒤집히면 러너 치환식이 든 본문을 리터럴로 실행하면서 아래 실행
+#    단언 전부가 무의미해진 채로 스위트가 green 을 찍는다.
+tmpl_probe="$(check_no_template_expr "          ARTIFACT_PATHS: \${{ steps.tauri.outputs.artifactPaths }}
+$SIGPIPE_PAD" 2>&1)"
+if contains "$tmpl_probe" "FAIL $LBL_NO_TEMPLATE_EXPR"; then
+	pass "\${{ 가드: 파이프 버퍼보다 큰 본문에 있는 치환식을 통과로 등록하지 않는다"
+else
+	fail "\${{ 가드: 있는 치환식이 통과로 등록됐다 — 조용한 거짓 green" \
+		"가드가 낸 것:
+$tmpl_probe"
+fi
+
 # ── ③ mutation — 위 단언들이 실제로 잡는지 ───────────────────────────────
 # 판정 대상이 저장소의 워크플로라서, 변조본을 만들어 env 로 물리고 이 스위트를
 # 다시 돌린다. 서브런은 이 단계를 끈다 (무한 재귀가 된다).
@@ -414,7 +501,7 @@ if [ "${CHECKSUM_SIDECARS_SKIP_MUTATION:-0}" != "1" ]; then
 		local name="$1" wf="$2" want="$3"
 		if run_suite_against "$wf"; then
 			fail "mutation[$name]: 변조본이 green — 이 스위트가 그 편집을 못 잡는다" "$SUB_OUT"
-		elif printf '%s\n' "$SUB_OUT" | grep -qF -- "$want"; then
+		elif contains "$SUB_OUT" "$want"; then
 			pass "mutation[$name]: '$want' 가 red 를 낸다"
 		else
 			fail "mutation[$name]: 스위트는 red 인데 기대한 단언이 아니다 (기대: $want)" "$SUB_OUT"

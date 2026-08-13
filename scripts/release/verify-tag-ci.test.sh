@@ -118,8 +118,41 @@ assert_rc() {
 	fi
 }
 
+# 부분 문자열 판정. "있다/없다" 를 파이프라인 status 로 받던 자리를 여기로 모았다 —
+# 판정이 한 군데서만 나야 다음 편집이 그 형태를 되살릴 자리가 없다 (#2319, 선행 #2314).
+#
+# **파이프를 쓰지 않는다.** 옛 구현 `printf '%s\n' "$OUT" | grep -qF -- "$1"` 은
+# grep -q 가 첫 일치에서 stdin 을 안 비우고 빠지는 동안 왼쪽 printf 가 아직 쓸 것을
+# 갖고 있으면 EPIPE → SIGPIPE 로 141 이 되고, 위 `set -o pipefail` 이 그 141 을
+# 파이프라인 status 로 올려 **판정을 뒤집었다.**
+#
+# `case` 패턴 안의 따옴표 친 확장은 glob 메타문자까지 리터럴이라 `grep -F` 와 뜻이
+# 같고, 프로세스도 파이프도 안 만든다. 다른 점은 needle 에 개행이 있을 때뿐이다 —
+# grep -F 는 줄 단위 OR, case 는 그 연속열 그대로다. 개행을 품은 needle 을 넘기려면
+# 이 함수부터 다시 봐라. 회귀 가드는 아래 "assertion helpers (#2319)" 절이다.
+#
+# 이 파일에서 여기를 안 지나는 grep 과 그 이유:
+#   - `grep -qF -- "$1" "$2"` (assert_file_has) · `grep -qE … "$AUTOTAG_WORKFLOW"`
+#     — grep 이 파일을 직접 열어 파이프도 writer 도 없다.
+#   - `printf '%s\n' "$2" | sed …` (fail) — 파이프이고 왼쪽이 writer 이지만 sed 가
+#     입력을 끝까지 읽고, status 가 아니라 출력을 쓴다.
+contains() {
+	case "$1" in
+	*"$2"*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+# 정규식 판정. `case` 로는 줄머리 앵커(`^`)를 못 써서 grep 을 그대로 두되
+# **파이프라인을 안 만든다** — here-string 은 파이프라인이 아니라 `pipefail` 이
+# 올릴 남의 status 가 애초에 없고, `$?` 는 grep 것 하나뿐이다. 아래
+# continue-on-error 가드가 이것을 쓴다.
+matches_ere() {
+	grep -qE -- "$2" <<<"$1"
+}
+
 assert_has() {
-	if printf '%s\n' "$OUT" | grep -qF -- "$1"; then
+	if contains "$OUT" "$1"; then
 		pass "$2"
 	else
 		fail "$2" "찾는 문자열: $1
@@ -154,13 +187,23 @@ assert_has "commits/\${GITHUB_SHA}/check-runs" "태그 SHA(GITHUB_SHA)의 check-
 LBL_NO_CONTINUE_ON_ERROR="커플링: job 에 continue-on-error 가 붙어 실패가 삼켜진다"
 LBL_NEEDS_BUILD="build 뒤에 돈다 (본 CI 가 완주할 시간을 벌어 준다)"
 LBL_IF_ALWAYS="build 레그가 죽어도 태그 SHA 의 판정은 낸다"
+# 줄머리 앵커라 `contains` 로 못 옮긴다 — 리터럴 판정은 `# continue-on-error:` 로
+# 주석 처리된 줄까지 잡아 거짓 red 를 낸다. 이 표기를 아래 가드와 회귀 가드가 같이
+# 쓴다. 손으로 두 번 적으면 문구를 고친 날 한쪽만 낡는다.
+COE_KEY_ERE='^[[:space:]]*continue-on-error:'
 
-if printf '%s\n' "$JOB" | grep -qE '^[[:space:]]*continue-on-error:'; then
-	fail "$LBL_NO_CONTINUE_ON_ERROR" \
-		"이 잡이 red 여도 릴리스 run 이 green 으로 끝난다 — #2168 이 만들려던 신호가 사라진다."
-else
-	pass "job 에 continue-on-error 가 없다 (실패가 릴리스 run 을 red 로 만든다)"
-fi
+# **부호가 반대인 가드다** — 키가 있으면 fail 이라, 판정이 뒤집히면 red 가 아니라
+# 조용한 거짓 green 이 된다. 아래 "assertion helpers (#2319)" 절이 큰 payload 로
+# 이 함수를 다시 불러 그 뒤집힘을 재현한다.
+check_continue_on_error() {
+	if matches_ere "$1" "$COE_KEY_ERE"; then
+		fail "$LBL_NO_CONTINUE_ON_ERROR" \
+			"이 잡이 red 여도 릴리스 run 이 green 으로 끝난다 — #2168 이 만들려던 신호가 사라진다."
+	else
+		pass "job 에 continue-on-error 가 없다 (실패가 릴리스 run 을 red 로 만든다)"
+	fi
+}
+check_continue_on_error "$JOB"
 
 assert_has "needs: build" "$LBL_NEEDS_BUILD"
 assert_has "if: always()" "$LBL_IF_ALWAYS"
@@ -379,6 +422,61 @@ row "Bundle (macOS arm64)" completed success "$SELF_URL" >"$d/default.out"
 run_gate "$d"
 assert_rc 1 "fail-closed: 자기 run 의 체크만 있으면 0건과 같다"
 
+# ── assertion helpers (#2319) ────────────────────────────────────────────
+# contains() · matches_ere() 가 판정을 파이프 status 에 안 싣는다는 것의 회귀 가드.
+# 옛 형태로 되돌리면 여기가 red 다.
+#
+# 옛 구현은 `printf '%s\n' "$X" | grep -q…` 였다. grep -q 는 첫 일치에서 stdin 을
+# 안 비우고 빠지고, 왼쪽 printf 가 파이프 버퍼(64KiB)보다 큰 것을 써야 하면 grep 이
+# 비워 주기를 기다리며 막혔다가 이미 빠진 grep 때문에 EPIPE → SIGPIPE 로 141 이
+# 된다. `set -o pipefail` 이 그 141 을 파이프라인 status 로 올려 판정을 뒤집는다.
+#
+# payload 를 파이프 버퍼의 두 배로 잡는 이유: 버퍼 바로 위는 아직 확률이다.
+# 2026-08-13 macOS 실측 한 판(bash 3.2.57 + BSD grep 2.6.0, 4-way 동시 × 200,
+# 첫 줄 일치, 옛 파이프 형태, flip = 있는 것을 "없음" 으로 낸 횟수. 전부 printf 쪽 141):
+#   8041B 0/800 · 70057B 799/800 · 200055B 800/800
+# 같은 판에서 `case` 형태와 here-string 형태는 세 크기 모두 0/800 이었다.
+# 재현 명령은 PR #2318 body 「기전의 경계」절의 race.sh 이고, `hs` 모드는 그것에
+# `grep -qE -- "$NEEDLE" <<<"$OUT"` 한 갈래를 더한 것이다.
+# 이 절은 $OUT 을 덮어쓴다 — 여기 아래에서 위 run_gate() 의 출력을 읽는 단언이 없다.
+echo "assertion helpers (#2319):"
+
+SIGPIPE_PAD='filler-line-for-issue-2319'
+while [ "${#SIGPIPE_PAD}" -lt 200000 ]; do
+	SIGPIPE_PAD="$SIGPIPE_PAD
+$SIGPIPE_PAD"
+done
+
+# ① payload 가 실제로 파이프 버퍼를 넘는가. 이게 깨지면 아래 둘은 green 이어도
+#    아무것도 안 지킨다 — 옛 구현이 여기서 안 죽는 크기로 줄어든 것이다.
+if [ "${#SIGPIPE_PAD}" -ge 131072 ]; then
+	pass "SIGPIPE 가드 payload 가 파이프 버퍼(64KiB)의 두 배를 넘는다 (${#SIGPIPE_PAD}, ASCII)"
+else
+	fail "SIGPIPE 가드 payload 가 너무 작다: ${#SIGPIPE_PAD}" \
+		"131072 를 못 넘으면 결정론 구간 밖이다 — 버퍼 바로 위(70057B)는 위 실측대로 아직 확률이라 가드가 무력해진다."
+fi
+
+# ② assert_has — 있는 문자열을 SIGPIPE 로 놓치지 않는다. 옛 구현에서는 141 이
+#    pipefail 을 타고 올라와 이 단언이 red 였다 (눈에 띄는 쪽).
+OUT="NEEDLE-2319
+$SIGPIPE_PAD"
+assert_has "NEEDLE-2319" "assert_has: 파이프 버퍼보다 큰 출력의 첫 줄 일치를 놓치지 않는다"
+
+# ③ continue-on-error 가드 — **이쪽이 더 위험하다.** 부호가 반대라 같은 141 이
+#    「키 없음」 = 통과로 등록되어 red 조차 안 남긴다. 여기서 올바른 동작이 곧
+#    FAIL 이라 서브셸에서 불러 출력만 본다 — total/fails 증가는 서브셸과 함께
+#    버려진다. 이 판정이 뒤집히면 릴리스 게이트에 continue-on-error 가 붙어
+#    실패가 통째로 삼켜져도 이 스위트가 green 을 찍는다.
+coe_probe="$(check_continue_on_error "    continue-on-error: true
+$SIGPIPE_PAD" 2>&1)"
+if contains "$coe_probe" "FAIL $LBL_NO_CONTINUE_ON_ERROR"; then
+	pass "continue-on-error 가드: 파이프 버퍼보다 큰 job 블록에 있는 키를 통과로 등록하지 않는다"
+else
+	fail "continue-on-error 가드: 있는 키가 통과로 등록됐다 — 조용한 거짓 green" \
+		"가드가 낸 것:
+$coe_probe"
+fi
+
 # ── ④ mutation — 위 단언들이 실제로 잡는지 ───────────────────────────────
 # 판정 대상이 저장소의 워크플로 · 문서라서, 변조본을 만들어 env 로 물리고 이
 # 스위트를 다시 돌린다. 서브런은 이 단계를 끈다 (무한 재귀가 된다).
@@ -435,7 +533,7 @@ if [ "${VERIFY_TAG_CI_SKIP_MUTATION:-0}" != "1" ]; then
 		local name="$1" wf="$2" doc="$3" want="$4"
 		if run_suite_against "$wf" "$doc"; then
 			fail "mutation[$name]: 변조본이 green — 이 스위트가 그 편집을 못 잡는다" "$SUB_OUT"
-		elif printf '%s\n' "$SUB_OUT" | grep -qF -- "$want"; then
+		elif contains "$SUB_OUT" "$want"; then
 			pass "mutation[$name]: '$want' 가 red 를 낸다"
 		else
 			fail "mutation[$name]: 스위트는 red 인데 기대한 단언이 아니다 (기대: $want)" "$SUB_OUT"

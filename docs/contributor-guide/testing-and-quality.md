@@ -284,41 +284,68 @@ Deferred or non-blocking checks must stay explicit:
 버퍼(64KiB)를 넘겨 써야 하면 EPIPE → SIGPIPE 로 141 이 되며, `pipefail` 이 그 141 을
 파이프라인 status 로 올린다. 부호가 양인 헬퍼(「있어야 한다」)에서는 거짓 red 로
 나타나고, 부호가 반대인 헬퍼(「없어야 한다」)에서는 **조용한 거짓 green** 이 된다 —
-후자는 red 를 안 남겨 로그로 못 찾는다. 기전·경계 실측·처방은 issue #2314 와
-`scripts/review/measure-rounds.test.sh` 의 `contains()` 주석에 있다.
+후자는 red 를 안 남겨 로그로 못 찾는다. 기전·경계 실측·처방은 issue #2314 · #2319 와
+`scripts/review/measure-rounds.test.sh` · `scripts/release/verify-tag-ci.test.sh` 의
+`contains()` 주석에 있다.
 
-`scripts/review/measure-rounds.test.sh` 는 #2314 가 고쳤다. 같은 형태가 남은
-**후보**는 이 명령이 낸다. 낸 줄이 곧 결함은 아니다 — 파이프 왼쪽이 writer 인지,
-그 자리에 `pipefail` 이 걸렸는지를 줄마다 따로 봐야 한다:
+`scripts/review/measure-rounds.test.sh` 는 #2314 가, `scripts/release/` 의
+`cargo-package-version.test.sh` · `checksum-sidecars.test.sh` ·
+`verify-tag-ci.test.sh` 는 #2319 가 닫았다. 같은 형태가 남은 **후보**는 이 명령이
+낸다. 낸 줄이 곧 결함은 아니다 — 파이프 왼쪽이 writer 인지, 그 자리에 `pipefail` 이
+걸렸는지, 그리고 실행되는 줄인지 기전을 설명하는 주석인지를 줄마다 따로 봐야 한다.
+닫힌 파일도 그 주석 때문에 계속 걸린다:
 
 ```
 git grep -n '| *grep -q'
 ```
 
 pathspec 을 안 건다. `scripts/**/*.sh` 로 좁히면 `scripts/` 바로 아래 `.sh` 일곱
-개와 `.github/workflows/` 가 통째로 빠진다.
+개와 `.github/workflows/` 가 통째로 빠진다. 주석을 빼고 보려면 뒤에
+`| grep -v ':[0-9]*:[[:space:]]*#'` 를 잇는다.
 
-2026-08-12 실측으로 `scripts/release/` 의 세 스위트
-(`cargo-package-version.test.sh` · `checksum-sidecars.test.sh` ·
-`verify-tag-ci.test.sh`)가 남은 대상이다. payload 가 파이프 버퍼보다 작아 결정론
-구간에는 못 들어가지만 **확률로는 뒤집힌다.**
+**위험한 자리는 일치가 앞쪽에서 날 수 있는 판정이다.** `grep` 이 늦게 빠질수록 왼쪽
+writer 가 쓸 것을 다 밀어 넣고 끝나 EPIPE 가 안 난다. #2314 의 PR 이
 `scripts/release/fixtures/release-verify-tag-ci-job.txt`(`wc -c` 6662)를 8-way 동시로
-1000 회씩 돌리면, needle 이 첫 줄일 때 0 · 3 · 7/8000 이 뒤집혔고 needle 이 마지막
-줄일 때는 0/8000 이었다. `grep` 이 늦게 빠질수록 왼쪽 writer 가 쓸 것을 다 밀어 넣고
-끝나기 때문이다 — **위험한 자리는 일치가 앞쪽에서 날 수 있는 판정이다.**
+1000 회씩 돌려 잰 값이 그것이다 — needle 이 첫 줄일 때 0 · 3 · 7/8000 이 뒤집혔고
+마지막 줄일 때는 0/8000 이었다. 버퍼보다 작은 payload 도 **확률로는 뒤집힌다.**
 
-세 스위트는 **issue #2319** 가 소유한다. #2314 가 같이 안 고친 이유는 하나다 — 세
-파일이 저마다 mutation harness 와 자기 재호출을 가져 회귀 가드를 파일별로 따로
-설계해야 한다.
+**처방은 판정을 헬퍼 하나로 모으고 그 안에서 파이프를 없애는 것이다.** 리터럴
+부분 문자열은 `case "$1" in *"$2"*)` 로 간다 — 따옴표 친 확장은 glob 메타문자까지
+리터럴이라 `grep -F` 와 뜻이 같고, 프로세스도 파이프도 안 만들어 SIGPIPE 가 성립할
+자리 자체가 없다. 줄머리 앵커처럼 `case` 로 못 옮기는 정규식은 grep 을 두되 파이프
+대신 here-string 으로 먹인다 (`grep -qE -- "$2" <<<"$1"`) — here-string 은
+파이프라인이 아니라서 `pipefail` 이 올릴 남의 status 가 애초에 없고 `$?` 는 grep
+것 하나뿐이다. **`set -o pipefail` 을 지우는 것은 답이 아니다** — 그 파일의 다른
+파이프라인 실패를 같이 놓친다.
 
-착수 순서를 정하는 축이 둘이고 서로 다른 파일을 가리킬 수 있다. **위험도** 축에서는
-「없어야 한다」쪽 부호가 먼저다 — 조용한 거짓 green 은 red 를 안 남겨 로그로 못
-찾는다. 그 자리는 `checksum-sidecars.test.sh` 의 `${{` 가드와
-`verify-tag-ci.test.sh` 의 `continue-on-error` 가드다. **실제로 무엇이 CI 를 막고
-있는가** 축은 여기 안 적는다 — 산문에 박으면 그날 안에 낡는다. #2314 의 PR 이
-「오늘 CI 를 막고 있는 자리가 아니다」를 커밋한 지 6분 뒤, 부호가 양인
-`verify-tag-ci.test.sh` 의 `assert_has` 가 바로 그 PR 의 required check 를 red 로
-만들었다. 그 축의 값은 이 명령이 낸다:
+**회귀 가드의 payload 는 파이프 버퍼(64KiB)의 두 배 위로 잡고 그 크기 자체를
+단언한다.** 버퍼 언저리는 아직 스케줄링 경합이라 확률로만 나타나고, 누가 payload 를
+줄이면 나머지 단언이 green 이어도 아무것도 안 지키기 때문이다. 2026-08-13 macOS 실측
+(bash 3.2.57 + BSD grep 2.6.0, 4-way 동시 × 200, 첫 줄 일치, 옛 파이프 형태,
+flip = 있는 것을 「없음」으로 낸 횟수): 8041B 0/800 · 70057B 799/800 · 200055B
+800/800. 같은 판에서 `case` 형태와 here-string 형태는 세 크기 모두 0/800 이었다.
+재현 명령은 PR #2318 body 「기전의 경계」절의 `race.sh` 다.
+
+**부호가 반대인 가드를 빠뜨리지 않는다.** 「없어야 한다」쪽은 뒤집혀도 red 를 안
+남기므로 「없어야 할 것이 실제로 있는데 통과」를 재현하는 단언을 따로 남긴다 —
+올바른 동작이 곧 FAIL 이라 서브셸에서 불러 출력만 보고 카운터 증가는 버린다. 그
+형태는 `scripts/release/verify-tag-ci.test.sh` 와
+`scripts/release/checksum-sidecars.test.sh` 의 `assertion helpers (#2319)` 절에 있다.
+
+**「실제로 무엇이 CI 를 막고 있는가」는 산문에 안 적는다** — 그날 안에 낡는다. #2314
+의 PR 이 「오늘 CI 를 막고 있는 자리가 아니다」를 커밋(`45a91592`, committer date
+`2026-08-12T06:52:54Z`)한 지 5분 28초 뒤, 부호가 양인 `verify-tag-ci.test.sh` 의
+`assert_has` 가 바로 그 PR 의 required check `Frontend Checks` 를 red 로 만들었다
+(`2026-08-12T06:58:22Z`). 두 종점을 내는 명령:
+
+```
+gh api repos/Felix-LeeSM/table-view/commits/45a91592 --jq .commit.committer.date
+gh api repos/Felix-LeeSM/table-view/actions/runs/31571727127/jobs --paginate \
+  --jq '.jobs[] | select(.conclusion!="success")
+        | [.name,.conclusion,.started_at,.completed_at] | @tsv'
+```
+
+지금 무엇이 red 인지는 이 명령이 낸다:
 
 ```
 gh run list -R Felix-LeeSM/table-view --workflow ci.yml --status failure --limit 20
