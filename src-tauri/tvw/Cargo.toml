@@ -10,13 +10,6 @@ rust-version = "1.91.0"
 # makes `deny.toml`'s `[licenses.private] ignore = true` skip our own crate.
 publish = false
 
-# The whole CLI lives in the lib and `src/main.rs` is a shim over it. That split
-# is not stylistic: `.github/workflows/ci.yml`'s `cargo test --workspace --lib`
-# is what makes a new workspace member "arrive already tested", and it reaches
-# `--lib` targets only. Tests in a bin target would need `--bins` on that line,
-# and an integration target `--test <name>`; either is a hand-added line CI does
-# not have, which is the omission that comment records happening at #1769,
-# sprint-390 and #2098.
 [lib]
 name = "tvw"
 path = "src/lib.rs"
@@ -36,15 +29,6 @@ table-view-core = { path = "../table-view-core", version = "0.1.0" }
 # add/ls/rm`) and the help text they need. The alternatives were not measured
 # here, so this line records the decision rather than a comparison.
 clap = { version = "4", features = ["derive"] }
-# `default-features = false` states what this crate asks for and does not settle
-# what gets built: `table-view-core`'s non-optional `duckdb` reaches the same
-# `comfy-table` through arrow's `prettyprint`, and cargo unions feature edges of
-# one target, so `tty` is resolved anyway — `cargo tree -p tvw -i comfy-table -e
-# features` prints that edge. What actually holds ADR 0061's "same output on a
-# terminal and in a pipe" is `src/render.rs`'s `ContentArrangement::Disabled`,
-# which never asks how wide the terminal is.
-comfy-table = { version = "7", default-features = false }
-csv = "1"
 serde_json = "1"
 # `rt-multi-thread` because `#[tokio::main]` in `src/main.rs` builds the
 # multi-thread runtime unless it is spelled `flavor = "current_thread"`. Not for
@@ -60,12 +44,4 @@ percent-encoding = "2"
 
 [dev-dependencies]
 tempfile = "3"
-# Fixture seeding only. `table-view-core`'s SQLite adapter refuses raw DDL
-# (`validate_sqlite_write_guardrails`), so a test that needs a table has to make
-# it with the driver directly. Both features are a subset of what
-# `table-view-core` already asks sqlx for, so the lock gains no edge from this.
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"] }
-# No `testcontainers` here on purpose: `tests/query_url_live.rs` reads endpoints
-# from the environment instead of starting anything. That is this crate's call
-# and not ADR 0024's, which assigns no owner — see the reasoning at the top of
-# that file.

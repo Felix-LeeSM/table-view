@@ -7937,8 +7937,6 @@ name = "tvw"
 version = "0.1.0"
 dependencies = [
  "clap",
- "comfy-table",
- "csv",
  "percent-encoding",
  "serde_json",
  "sqlx",

@@ -16,6 +16,8 @@
 //!   ADR 0053 decision 3). The app's paste handler does honour the parameter;
 //!   reading it here is tracked under "CLI DSN parsing" in
 //!   `docs/roadmap/follow-up-queue.md`.
+//! - **Output formats.** `--format table|json|csv` is #2322. Rows leave here as
+//!   one JSON document.
 //!
 //! # Boundaries inherited from the core adapters
 //!
@@ -23,30 +25,15 @@
 //!   `validate_sqlite_write_guardrails` in `table-view-core`. `tvw query --url
 //!   sqlite://… "CREATE TABLE …"` exits 1 and repeats that adapter's reason.
 //!   The server engines take DDL normally.
-//! - **`--format csv` cannot tell NULL from an empty string** — RFC 4180 has no
-//!   null and both come out as an empty field. `--format json` and the default
-//!   table format both keep the distinction. This matches the app's own CSV
-//!   export (`json_to_cell_string` in
-//!   `src-tauri/src/commands/export/grid_writers.rs`).
-//!
-//! # Why the logic is in a lib
-//!
-//! `src/main.rs` hands `argv` to [`run_argv`], hands the result and the two
-//! real sinks to [`emit`], and turns the returned code into an `ExitCode`. It
-//! decides nothing else, because CI reaches `--lib` targets only
-//! (`cargo test --workspace --lib`) — a branch written in the shim is a branch
-//! no test in this repository can fail on. Argument parsing, the exit-code
-//! contract, the three formats and the closed-stdout path all sit here.
 
 pub mod dsn;
-pub mod render;
 
 use std::io::Write;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand};
 use table_view_core::db::{row_cap, ActiveAdapter};
 use table_view_core::error::AppError;
-use table_view_core::models::QueryType;
+use table_view_core::models::{QueryResult, QueryType};
 
 /// The statement ran; its output is on stdout.
 pub const EXIT_SUCCESS: u8 = 0;
@@ -136,20 +123,9 @@ pub struct QueryArgs {
     #[arg(long, value_name = "DSN")]
     pub url: String,
 
-    /// Output format. Identical whether stdout is a terminal or a pipe.
-    #[arg(long, value_enum, default_value_t = Format::Table)]
-    pub format: Format,
-
     /// The SQL to run.
     #[arg(value_name = "SQL")]
     pub sql: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum Format {
-    Table,
-    Json,
-    Csv,
 }
 
 /// Parse `argv`, run it, and report what to print and what to exit with.
@@ -196,10 +172,6 @@ where
 
 /// Write an [`Outcome`] to its two sinks and hand back the code to exit with.
 ///
-/// Here rather than in `src/main.rs` because CI reaches `--lib` targets only
-/// (`cargo test --workspace --lib`): a branch written in the shim is a branch
-/// no test in this repository can fail on.
-///
 /// `tvw query … | head` closes the pipe early. Left to `print!`, that is a
 /// panic — a Rust backtrace on stderr and exit 101, which is not one of the
 /// three codes the contract defines. A reader that stopped reading is not a
@@ -237,7 +209,7 @@ async fn run(cli: Cli) -> Result<Outcome, CliError> {
 
 async fn execute(adapter: &ActiveAdapter, args: &QueryArgs) -> Result<Outcome, CliError> {
     let result = adapter.as_rdb()?.execute_sql(&args.sql, None).await?;
-    let stdout = render::render(&result, args.format)?;
+    let stdout = rows_as_json(&result)?;
 
     // Notices go to stderr so a pipe receives rows and nothing else.
     let mut stderr = String::new();
@@ -259,6 +231,21 @@ async fn execute(adapter: &ActiveAdapter, args: &QueryArgs) -> Result<Outcome, C
         stderr,
         code: EXIT_SUCCESS,
     })
+}
+
+/// The rows as one JSON array, ending in a newline.
+///
+/// `--format table|json|csv` and the writers behind it are #2322.
+///
+/// A result carrying no columns writes nothing at all, so stdout stays a data
+/// channel a pipe can read; `execute` above puts the row count on stderr.
+fn rows_as_json(result: &QueryResult) -> Result<String, CliError> {
+    if result.columns.is_empty() {
+        return Ok(String::new());
+    }
+    serde_json::to_string(&result.rows)
+        .map(|text| format!("{text}\n"))
+        .map_err(|e| CliError::failed(format!("could not serialise the result as JSON: {e}")))
 }
 
 #[cfg(test)]
@@ -394,14 +381,7 @@ mod tests {
             vec![],
             vec!["query"],
             vec!["query", "--url", "postgres://h/d"],
-            vec![
-                "query",
-                "--url",
-                "postgres://h/d",
-                "--format",
-                "yaml",
-                "SELECT 1",
-            ],
+            vec!["query", "--url", "postgres://h/d", "--nope", "SELECT 1"],
             vec!["nonsense"],
         ] {
             let outcome = run_cli(&args).await;
@@ -462,38 +442,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sqlite_select_one_succeeds_in_every_format() {
+    async fn test_sqlite_select_one_succeeds_and_prints_the_row() {
         // ADR 0061's SQL core has four engines and this is the one that needs
-        // no container. The three that do need one run in
-        // tests/query_url_live.rs, which repeats this engine there too.
+        // no server. Live coverage of all four is #2323.
         let dir = tempfile::tempdir().expect("tempdir");
         let url = empty_sqlite_db(dir.path());
 
-        for (format, expected) in [("table", "| 1 |"), ("json", "\"rows\""), ("csv", "1\n")] {
-            let outcome = run_cli(&["query", "--url", &url, "--format", format, "SELECT 1"]).await;
-            assert_eq!(
-                outcome.code, EXIT_SUCCESS,
-                "--format {format} failed: {}",
-                outcome.stderr
-            );
-            assert!(
-                outcome.stdout.contains(expected),
-                "--format {format} printed: {}",
-                outcome.stdout
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn test_default_format_is_table_regardless_of_the_environment() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let url = empty_sqlite_db(dir.path());
-
-        let default = run_cli(&["query", "--url", &url, "SELECT 1"]).await;
-        let explicit = run_cli(&["query", "--url", &url, "--format", "table", "SELECT 1"]).await;
-        assert_eq!(default.code, EXIT_SUCCESS, "{}", default.stderr);
-        assert_eq!(default.stdout, explicit.stdout);
-        assert!(default.stdout.starts_with('+'), "{}", default.stdout);
+        let outcome = run_cli(&["query", "--url", &url, "SELECT 1"]).await;
+        assert_eq!(outcome.code, EXIT_SUCCESS, "{}", outcome.stderr);
+        assert_eq!(outcome.stdout, "[[1]]\n");
     }
 
     #[tokio::test]
@@ -530,16 +487,6 @@ mod tests {
         );
     }
 
-    /// Careful with the window this opens. `row_cap::set` is production API over
-    /// a process-global `AtomicUsize` (`table_view_core::db::row_cap`), not a
-    /// test hook, and the other `#[tokio::test]`s in this binary run in parallel
-    /// inside it. What keeps them out of the cap's way is not how few rows they
-    /// assert — the DML test above asserts two — but that the cap truncates a
-    /// *fetched* result set only: the adapter's DML branch hands back
-    /// `truncated: false` and no rows whatever the cap says
-    /// (`table-view-core/src/db/adapters/sqlite/queries.rs`). A test in this
-    /// crate that selects three rows or more has to serialise against this one —
-    /// or the cap has to become per-call — before it can be trusted.
     #[tokio::test]
     async fn test_truncation_warns_on_stderr_instead_of_returning_a_short_answer_silently() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -551,8 +498,6 @@ mod tests {
             "query",
             "--url",
             &url,
-            "--format",
-            "csv",
             "SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3",
         ])
         .await;
