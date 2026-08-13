@@ -120,8 +120,43 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
+# 인자 형식 판정. 「맞나/아닌가」를 파이프라인 status 로 받던 자리를 이 둘로 모았다 —
+# 판정이 여기서만 나야 다음 편집이 그 형태를 되살릴 자리가 없다 (#2330, 선행 #2314·#2319).
+# 이 파일에서 여기를 안 지나는 파이프와 그 이유:
+#   - `printf '%s' "$out" | jq -r …` (fetch_pages) — jq 가 입력을 끝까지 읽고,
+#     status 가 아니라 값을 쓴다.
+#
+# **파이프를 쓰지 않는다.** 옛 구현 `printf '%s' "$1" | grep -qE …` 는 grep -q 가 첫
+# 일치에서 stdin 을 안 비우고 빠지는 동안 왼쪽 printf 가 아직 쓸 것을 갖고 있으면
+# EPIPE 를 맞고, 위 `set -o pipefail` 이 그 비영 status 를 파이프라인 status 로 올려
+# 판정을 뒤집는다. 그 값은 자리마다 갈린다 — EXIT trap 이 아직 안 걸린 자리에서만
+# SIGPIPE 로 141 이고, trap 이 걸린 뒤에는 bash 가 SIGPIPE 로 못 죽어 printf 가 rc=1 과
+# `printf: write error: Broken pipe` 로 돌아온다 (bash 3.2.57 arm64-apple-darwin25,
+# payload 221183 자에서 각각 141 · 1). 이 판정들은 아래 `trap … EXIT` 보다 위라 141
+# 쪽이었다. 순서가 바뀌면 이 서술이 낡는다 — trap 줄이 첫 호출 줄보다 아래인지로 재라:
+#   git grep -n -E '^trap .*EXIT|is_(date|uint) "\$' scripts/review/measure-rounds.sh
+#
+# `case` 는 문자열 전체를 본다. 이것이 `grep -E '^…$'` 와 다른 점이고, 옛 형태의
+# 두 번째 결함이다 — grep 은 줄 단위라 첫 줄만 맞으면 통과시켰다. origin/main
+# 6a41dc07 에서 `--limit '5<개행>garbage'` 는 rc=0 (bash 가 `[: integer expression
+# expected` 를 찍고 그대로 진행), `--since '2026-07-25<개행>garbage'` 는 rc=0 으로
+# 집계까지 냈다. 회귀 가드는 scripts/review/measure-rounds.test.sh 의
+# 「여러 줄 인자 (#2330)」 절이다.
 is_date() {
-	printf '%s' "$1" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)?$'
+	case "$1" in
+	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) return 0 ;;
+	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+# 음이 아닌 정수. 표기는 `.github/workflows/review-gate.yml` 의 라운드 집계 검증과
+# 같다 — 같은 것을 묻는 자리가 두 표기를 갖지 않게 맞춘다.
+is_uint() {
+	case "$1" in
+	'' | *[!0-9]*) return 1 ;;
+	*) return 0 ;;
+	esac
 }
 
 if [ -z "$SINCE" ]; then
@@ -144,11 +179,11 @@ comments | head-oid) ;;
 	exit 2
 	;;
 esac
-if ! printf '%s' "$LIMIT" | grep -qE '^[0-9]+$' || [ "$LIMIT" -lt 1 ]; then
+if ! is_uint "$LIMIT" || [ "$LIMIT" -lt 1 ]; then
 	echo "ERROR: --limit 은 1 이상의 정수여야 한다: $LIMIT" >&2
 	exit 2
 fi
-if ! printf '%s' "$TOP" | grep -qE '^[0-9]+$'; then
+if ! is_uint "$TOP"; then
 	echo "ERROR: --top 은 0 이상의 정수여야 한다: $TOP" >&2
 	exit 2
 fi
