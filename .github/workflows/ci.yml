@@ -927,10 +927,21 @@ jobs:
   # MariaDB coverage comes from testcontainers started inside its test binaries,
   # which expose nothing to a sibling process.
   #
-  # No apt step, unlike `Rust Static Analysis` and `Integration Tests (Docker)`:
-  # `tvw` links `table-view-core` and nothing from Tauri
-  # (src-tauri/tvw/Cargo.toml), so the WebKitGTK/GTK libraries those two install
-  # are not on this build's graph.
+  # One system library, not the WebKitGTK/GTK set `Rust Static Analysis` and
+  # `Integration Tests (Docker)` install. `tvw` links `table-view-core` and
+  # nothing from Tauri (src-tauri/tvw/Cargo.toml), but that core reaches
+  # `libdbus-sys` on Linux through keyring's secret-service backend:
+  #
+  #   cargo tree -p tvw --target x86_64-unknown-linux-gnu --edges normal \
+  #     --invert libdbus-sys
+  #   # libdbus-sys 0.2.7 <- dbus 0.9.11 <- dbus-secret-service 4.1.0
+  #   #                   <- keyring 3.6.3 <- table-view-core <- tvw
+  #
+  # The other two jobs never needed a line for it because `libgtk-3-dev` pulls
+  # it in. macOS resolves that edge to Security.framework instead, so a local
+  # build proves nothing about it — this job's first push compiled clean here
+  # and died on the missing `dbus-1.pc`:
+  # https://github.com/Felix-LeeSM/table-view/actions/runs/31698995240/job/94443268969
   #
   # This `name:` is NOT on the `pr_to_main` required-context list. That list is
   # live GitHub state a PR cannot edit, and a freshly registered context that has
@@ -1009,6 +1020,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      # Just the one library the job comment traces, not the Tauri set.
+      # Retry wrapper (#1293): transient apt mirror failures fail the whole
+      # setup. `Rust Static Analysis` and `Integration Tests (Docker)` run the
+      # same loop over their own package list.
+      - name: Install libdbus for keyring's Linux backend
+        run: |
+          install_deps() {
+            sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+          }
+          for i in 1 2 3; do
+            install_deps && exit 0
+            echo "apt install attempt $i failed; retrying in $((i * 10))s" >&2
+            sleep "$((i * 10))"
+          done
+          echo "apt install failed after 3 attempts" >&2
+          exit 1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
