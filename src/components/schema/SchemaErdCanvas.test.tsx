@@ -93,13 +93,105 @@ describe("SchemaErdCanvas", () => {
       screen.getByRole("button", { name: /public\.users table/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByLabelText("public.orders.user_id references public.users.id"),
+      screen.getByLabelText(
+        "public.orders.user_id references public.users.id (1:N)",
+      ),
     ).toBeInTheDocument();
 
     // elkjs positions land on the React Flow node wrapper, not on the card.
     const wrapper = orders.closest(".react-flow__node");
     expect(wrapper).not.toBeNull();
     expect(wrapper?.getAttribute("style")).toMatch(/translate\(/);
+  });
+
+  // Issue #2151: an edge that leaves the card as a whole cannot say which
+  // column it came from, so the handle has to live in the column's own row.
+  // jsdom measures every box as 0x0, so the row this asserts on is the DOM
+  // parent — the coordinates it produces are covered by e2e, not here.
+  it("anchors an FK edge on the column row rather than the card", async () => {
+    render(<SchemaErdCanvas graph={extractSchemaGraph(ordersSnapshot())} />);
+
+    const orders = await findTableCard(/public\.orders table/i);
+    const fkRow = within(orders).getByText("user_id").closest("div");
+    expect(
+      fkRow?.querySelector('[data-handleid="erd-source:user_id"]'),
+    ).not.toBeNull();
+
+    const users = screen.getByRole("button", { name: /public\.users table/i });
+    const pkRow = within(users).getByText("id").closest("div");
+    expect(
+      pkRow?.querySelector('[data-handleid="erd-target:id"]'),
+    ).not.toBeNull();
+    // The header block holds the qualified name and no anchor at all.
+    const header = within(users).getByTitle("public.users").parentElement;
+    expect(header?.querySelector('[data-handleid^="erd-"]')).toBeNull();
+  });
+
+  // A card that draws no row for the FK column still has to keep its edge:
+  // React Flow drops any edge whose handle id it cannot find in the node. ADR
+  // 0054 (2) retired the six-column cap, so the far zoom step — which draws the
+  // table box alone — is what now leaves an anchor column off the card.
+  it("keeps the FK edge when the card does not draw the anchor column", async () => {
+    detail.level = "compact";
+    render(
+      <SchemaErdCanvas graph={extractSchemaGraph(anchorFallbackSnapshot())} />,
+    );
+
+    const shipments = await findTableCard(/public\.shipments table/i);
+    expect(within(shipments).queryByText("owner_id")).not.toBeInTheDocument();
+    expect(
+      shipments.querySelector('[data-handleid="erd-source:owner_id"]'),
+    ).not.toBeNull();
+    expect(
+      screen.getByLabelText(
+        "public.shipments.owner_id references public.owners.id (1:N)",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  // The DOM check above proves the handle exists on the row; this proves the
+  // edge is the thing using it. jsdom measures every handle at 0x0, so the
+  // bezier control points are all that still separates a column anchor (leaves
+  // sideways, Left/Right) from the card fallback (leaves upward, Top/Bottom).
+  //
+  // Both ends are read: the edge attaching to the row it *leaves* and the row
+  // it *points at* are two independent facts, and `getBezierPath` writes them
+  // into two different control points.
+  it("draws the FK edge out of the column anchor, not the card handle", async () => {
+    render(<SchemaErdCanvas graph={extractSchemaGraph(ordersSnapshot())} />);
+
+    await findTableCard(/public\.orders table/i);
+    const bezier = readEdgeBezier(
+      "public.orders.user_id references public.users.id (1:N)",
+    );
+
+    // A Left/Right anchor puts its control point level with its own endpoint
+    // (`[x ± offset, y]`); the Top/Bottom card handle pushes it off in y.
+    // elkjs stacks these two cards in one column, so x is equal either way and
+    // only y tells the two apart.
+    expect(bezier.sourceControlY).toBe(bezier.sourceY);
+    expect(bezier.targetControlY).toBe(bezier.targetY);
+    // Sanity: the two ends really are distinct points, so the pair above is
+    // not one coordinate read twice.
+    expect(bezier.sourceY).not.toBe(bezier.targetY);
+  });
+
+  it("marks each edge with the cardinality it read off the schema", async () => {
+    render(<SchemaErdCanvas graph={extractSchemaGraph(oneToOneSnapshot())} />);
+
+    await findTableCard(/public\.profiles table/i);
+    expect(
+      screen.getByLabelText(
+        "public.profiles.user_id references public.users.id (1:1)",
+      ),
+    ).toBeInTheDocument();
+    // The badge is the visual half of a fact the edge's accessible name
+    // already carries. Exposing it too would make a screen reader read the
+    // bare "1:1" a second time, detached from the relationship it counts —
+    // which is the reason the name carries the cardinality at all.
+    expect(
+      screen.getByText("1:1", { selector: "[data-cardinality]" }),
+    ).toHaveAttribute("aria-hidden", "true");
   });
 
   it("shows the qualified name and the schema badge on each node", async () => {
@@ -211,11 +303,13 @@ describe("SchemaErdCanvas", () => {
 
     await findTableCard(/public\.users table/i);
     expect(
-      screen.getByLabelText("public.orders.user_id references public.users.id"),
+      screen.getByLabelText(
+        "public.orders.user_id references public.users.id (1:N)",
+      ),
     ).toHaveAttribute("data-highlighted", "true");
     expect(
       screen.getByLabelText(
-        "public.payments.order_id references public.orders.id",
+        "public.payments.order_id references public.orders.id (1:N)",
       ),
     ).toHaveAttribute("data-highlighted", "false");
     expect(
@@ -251,7 +345,9 @@ describe("SchemaErdCanvas", () => {
     }
 
     expect(
-      screen.getByLabelText("public.orders.user_id references public.users.id"),
+      screen.getByLabelText(
+        "public.orders.user_id references public.users.id (1:N)",
+      ),
     ).toHaveAttribute("data-highlighted", "true");
   });
 
@@ -592,6 +688,44 @@ function dependencyEmptySnapshotWithMetadata(): SchemaGraphCatalogSnapshot {
   };
 }
 
+/**
+ * The four points `getBezierPath` writes into one edge path, as the strings
+ * they were serialized as: `M sx,sy C scx,scy tcx,tcy tx,ty`.
+ */
+function readEdgeBezier(ariaLabel: string) {
+  const drawn = screen
+    .getByLabelText(ariaLabel)
+    .querySelector("path.react-flow__edge-path")
+    ?.getAttribute("d");
+  const n = "(-?[\\d.]+)";
+  const points = new RegExp(
+    `^M\\s*${n},${n}\\s*C\\s*${n},${n}\\s+${n},${n}\\s+${n},${n}`,
+  ).exec(drawn ?? "");
+  if (!points) throw new Error(`edge path is not a cubic bezier: ${drawn}`);
+
+  const [
+    ,
+    sourceX,
+    sourceY,
+    sourceControlX,
+    sourceControlY,
+    targetControlX,
+    targetControlY,
+    targetX,
+    targetY,
+  ] = points;
+  return {
+    sourceX,
+    sourceY,
+    sourceControlX,
+    sourceControlY,
+    targetControlX,
+    targetControlY,
+    targetX,
+    targetY,
+  };
+}
+
 function badgeToneClass(tableButton: HTMLElement): string {
   const badge = tableButton.querySelector('[class*="text-erd-schema-"]');
   const tone = badge?.getAttribute("class")?.match(/text-erd-schema-\d/)?.[0];
@@ -786,6 +920,72 @@ function wideTableSnapshot(): SchemaGraphCatalogSnapshot {
     },
     constraintsByTable: {},
     indexesByTable: {},
+  };
+}
+
+/**
+ * A table with a plain column and one FK column, so a card the zoom step has
+ * shrunk to the table box still has to keep the FK anchor. Column *count* pins
+ * nothing here — ADR 0054 (2) retired the six-column cap.
+ */
+function anchorFallbackSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [table("public", "owners"), table("public", "shipments")],
+    },
+    columnsByTable: {
+      public: {
+        owners: [column("id", { is_primary_key: true })],
+        shipments: [
+          column("code"),
+          column("owner_id", {
+            is_foreign_key: true,
+            fk_reference: "public.owners(id)",
+          }),
+        ],
+      },
+    },
+    constraintsByTable: {},
+    indexesByTable: {},
+  };
+}
+
+/** A unique index over the FK column makes the relationship 1:1. */
+function oneToOneSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [table("public", "users"), table("public", "profiles")],
+    },
+    columnsByTable: {
+      public: {
+        users: [column("id", { is_primary_key: true })],
+        profiles: [
+          column("id", { is_primary_key: true }),
+          column("user_id", {
+            is_foreign_key: true,
+            fk_reference: "public.users(id)",
+          }),
+        ],
+      },
+    },
+    constraintsByTable: {},
+    indexesByTable: {
+      public: {
+        profiles: [
+          {
+            name: "profiles_user_id_key",
+            columns: ["user_id"],
+            index_type: "btree",
+            is_unique: true,
+            is_primary: false,
+          },
+        ],
+      },
+    },
   };
 }
 

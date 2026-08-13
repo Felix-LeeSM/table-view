@@ -76,8 +76,11 @@ describe("SchemaErdCanvas — virtual foreign keys (#2150)", () => {
     // url it generates, so pinning both kinds to one head fails right here.
     expect(edgeMarker(virtualEdge)).toMatch(/type=arrow(&|')/);
 
+    // The mark is part of a catalog FK's name since #2151. `users.id` is a
+    // primary key so the referenced end is pinned, and `comments.author_id`
+    // covers no unique set of its own, which is one pinned end: 1:N.
     const realEdge = screen.getByLabelText(
-      "public.comments.author_id references public.users.id",
+      "public.comments.author_id references public.users.id (1:N)",
     );
     expect(realEdge).toHaveAttribute("data-relationship-kind", "foreign-key");
     expect(edgeStyle(realEdge)).not.toMatch(/stroke-dasharray:\s*\d/);

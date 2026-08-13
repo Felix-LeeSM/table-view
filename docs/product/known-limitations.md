@@ -136,7 +136,14 @@ smoke or measurement gates:
   and database, drawn dashed, named in the legend — but the only edit the
   canvas offers is a confirmed reset of every link on that diagram: drawing,
   editing, or deleting one link, undo/redo, and cross-window convergence on a
-  reset are follow-ups.
+  reset are follow-ups. A schema FK anchors on the column rows it names and
+  carries a 1:1/1:N/N:M mark. A hand-drawn link does neither: it meets the card
+  edge, and it carries no mark because the mark reads uniqueness the schema
+  declares. The mark only counts how many of the two ends a single row is
+  pinned to: it never says which end is the 1, and it reads only the metadata
+  that has arrived, so it can change while a schema loads. Which mark each
+  arrival state produces is pinned by the `cardinality arrival states` table in
+  `src/components/schema/erdGraphModel.test.ts`.
 - Background failures that never reach a React ErrorBoundary raise a toast
   (`src/lib/runtime/globalErrorToast.ts`, installed once from
   `src/AppRouter.tsx`), and one report is deliberately dropped instead: a

@@ -3,6 +3,7 @@ import {
   Background,
   BaseEdge,
   type Edge,
+  EdgeLabelRenderer,
   type EdgeProps,
   getBezierPath,
   MarkerType,
@@ -46,7 +47,11 @@ import { buildErdDiffHighlight } from "./erdDiffHighlight";
 import {
   buildErdModel,
   buildErdNeighborhood,
+  ERD_TABLE_SOURCE_HANDLE_ID,
+  ERD_TABLE_TARGET_HANDLE_ID,
+  type ErdCardinality,
   erdCardShape,
+  erdColumnHandleId,
   erdDetailLevel,
   erdModelFingerprint,
   erdVirtualRelationships,
@@ -95,7 +100,12 @@ function erdTransitionMs(): number {
 }
 
 type ErdRelationshipFlowEdge = Edge<
-  { highlighted: boolean; kind: ErdRelationshipKind },
+  {
+    highlighted: boolean;
+    /** `null` for a hand-drawn link — the mark reads schema-declared uniqueness. */
+    cardinality: ErdCardinality | null;
+    kind: ErdRelationshipKind;
+  },
   "erdRelationship"
 >;
 
@@ -323,18 +333,30 @@ function ErdCanvasSurface({
           type: ERD_RELATIONSHIP_EDGE_TYPE,
           source: relationship.sourceTableId,
           target: relationship.targetTableId,
+          // Anchor on the FK column row rather than the card. A relationship
+          // that names no column falls back to the card-edge handle.
+          sourceHandle: relationship.sourceColumn
+            ? erdColumnHandleId("source", relationship.sourceColumn)
+            : ERD_TABLE_SOURCE_HANDLE_ID,
+          targetHandle: relationship.targetColumn
+            ? erdColumnHandleId("target", relationship.targetColumn)
+            : ERD_TABLE_TARGET_HANDLE_ID,
           selectable: false,
           focusable: false,
           // React Flow labels the edge group; the drawn path stays unlabeled so
-          // one relationship is announced once.
-          ariaLabel: relationship.label,
+          // one relationship is announced once. The cardinality rides along
+          // because its own badge is `aria-hidden` — reading "1:N" on its own,
+          // detached from the relationship it counts, says nothing.
+          ariaLabel: relationship.cardinality
+            ? `${relationship.label} (${relationship.cardinality})`
+            : relationship.label,
           // React's SVGAttributes has no index signature, so a `data-*`
           // attribute needs the cast to pass through the escape hatch.
           domAttributes: {
             "data-highlighted": String(highlighted),
             "data-relationship-kind": kind,
           } as ErdRelationshipFlowEdge["domAttributes"],
-          data: { highlighted, kind },
+          data: { highlighted, cardinality: relationship.cardinality, kind },
           markerEnd: {
             // Arrow head is the second non-colour channel that tells a
             // hand-drawn link from a real FK (ADR 0055).
@@ -583,7 +605,7 @@ function SchemaErdRelationshipEdge({
   markerEnd,
   data,
 }: EdgeProps<ErdRelationshipFlowEdge>) {
-  const [path] = getBezierPath({
+  const [path, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -595,19 +617,38 @@ function SchemaErdRelationshipEdge({
   const encoding = ERD_RELATIONSHIP_ENCODINGS[data?.kind ?? "foreign-key"];
 
   return (
-    <BaseEdge
-      path={path}
-      markerEnd={markerEnd}
-      interactionWidth={0}
-      style={{
-        stroke: highlighted
-          ? "var(--tv-primary)"
-          : "var(--tv-muted-foreground)",
-        strokeWidth: highlighted ? 2.5 : 1.5,
-        strokeDasharray: encoding.strokeDasharray ?? undefined,
-        opacity: highlighted ? 1 : 0.4,
-      }}
-    />
+    <>
+      <BaseEdge
+        path={path}
+        markerEnd={markerEnd}
+        interactionWidth={0}
+        style={{
+          stroke: highlighted
+            ? "var(--tv-primary)"
+            : "var(--tv-muted-foreground)",
+          strokeWidth: highlighted ? 2.5 : 1.5,
+          strokeDasharray: encoding.strokeDasharray ?? undefined,
+          opacity: highlighted ? 1 : 0.4,
+        }}
+      />
+      {data?.cardinality && (
+        <EdgeLabelRenderer>
+          {/* The edge group already announces the relationship and its
+              cardinality, so this is the visual half of the same fact. */}
+          <div
+            aria-hidden="true"
+            data-cardinality={data.cardinality}
+            style={{
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              opacity: highlighted ? 1 : 0.4,
+            }}
+            className="pointer-events-none absolute rounded border border-border bg-background px-1 text-3xs font-semibold tabular-nums text-muted-foreground"
+          >
+            {data.cardinality}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
   );
 }
 

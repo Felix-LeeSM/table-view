@@ -362,8 +362,20 @@ steps — the table box alone, then the primary-key and foreign-key columns, the
 every column — and a card that leaves columns out says how many it hid. There is
 no fixed cap on rendered columns. Zoom never re-runs the layout: elkjs is handed
 the full-detail height of every card, so a card only ever shrinks inside the slot
-it was given, and zooming out does not pack the diagram tighter. Data compare
-remains a future promotion gate in the H4 smoke matrix.
+it was given, and zooming out does not pack the diagram tighter. A catalog
+foreign-key edge attaches to the row of the column it leaves from and the row of
+the column it points at, falling back to the card edge for a column the current
+zoom step leaves out. Each catalog FK edge carries a cardinality mark — 1:1, 1:N
+or N:M — counting how
+many of its two ends have columns that cover a unique index (`IndexInfo.is_unique`)
+or the primary key: both ends covered reads 1:1, exactly one reads 1:N, neither
+reads N:M. The mark does not say which end is the 1. A composite foreign key
+anchors on its first column pair. The mark reads only the metadata that has
+arrived, and the diagram paints before that metadata does, so a mark can change
+while a schema loads. Which mark each arrival state produces is pinned by the
+`cardinality arrival states` table in
+`src/components/schema/erdGraphModel.test.ts` rather than restated here. Data
+compare remains a future promotion gate in the H4 smoke matrix.
 
 Hand-drawn relationships ("virtual foreign keys", ADR 0055) are a stored model
 rather than a drawing: `{ source, targets[], discriminator? }`, where several
@@ -373,7 +385,10 @@ column that decides which target a row points at. They persist per
 `erd_virtual_fk:<connection>:<database>`, so unlike node positions they survive
 closing and reopening the ERD tab. They draw dashed with an open arrow head next
 to the solid, filled-head catalog FKs, and both kinds are named in the canvas
-legend, so the distinction never rests on colour alone. Reconcile against the
+legend, so the distinction never rests on colour alone. They meet the card edge
+rather than a column row, and they carry no cardinality mark — that mark counts
+ends pinned by the schema's own keys and unique indexes, and a hand-drawn link
+declares none. Reconcile against the
 current schema is a projection, not a delete, and it treats the three column
 roles differently: a link whose source column is gone draws nothing, a target
 whose column is gone drops out while the link's other targets keep drawing, and

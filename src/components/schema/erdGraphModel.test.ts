@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { extractSchemaGraph } from "@/lib/schemaGraph";
-import type { ColumnInfo, TableInfo } from "@/types/schema";
+import type {
+  ColumnInfo,
+  ConstraintInfo,
+  IndexInfo,
+  TableInfo,
+} from "@/types/schema";
 import type { SchemaGraphCatalogSnapshot } from "@/types/schemaGraph";
 import {
   buildErdElkGraph,
@@ -11,6 +16,7 @@ import {
   ERD_SCHEMA_TONE_COUNT,
   ERD_TABLE_WIDTH,
   erdCardShape,
+  erdColumnHandleId,
   erdDetailLevel,
   erdModelFingerprint,
   erdReferenceCounts,
@@ -76,6 +82,185 @@ describe("buildErdModel", () => {
     expect(model.tables).toHaveLength(1);
     expect(model.relationships).toEqual([]);
   });
+});
+
+describe("column anchors", () => {
+  it("names the FK column at both ends and lists it on both cards", () => {
+    const model = buildErdModel(extractSchemaGraph(ordersSnapshot()));
+
+    expect(
+      model.relationships.map((relationship) => [
+        relationship.sourceTableId,
+        relationship.sourceColumn,
+        relationship.targetTableId,
+        relationship.targetColumn,
+      ]),
+    ).toEqual([
+      ["table:public.orders", "user_id", "table:public.users", "id"],
+      ["table:public.payments", "order_id", "table:public.orders", "id"],
+    ]);
+
+    // `orders` is both an FK holder and a reference target, so its card needs
+    // a handle for the column it points from and the one it is pointed at.
+    expect(
+      model.tables.map((entry) => [entry.qualifiedName, entry.anchorColumns]),
+    ).toEqual([
+      ["public.orders", ["id", "user_id"]],
+      ["public.payments", ["order_id"]],
+      ["public.users", ["id"]],
+    ]);
+  });
+
+  it("keeps an anchor for a column no detail level draws", () => {
+    const model = buildErdModel(extractSchemaGraph(lateColumnFkSnapshot()));
+    const shipments = model.tables.find(
+      (entry) => entry.qualifiedName === "public.shipments",
+    )!;
+
+    // ADR 0054 (2) retired the six-column cap, so the level that draws no
+    // column row at all is what now hides an anchor column. React Flow drops
+    // an edge whose handle id is missing, so the anchor list must not follow
+    // the level down.
+    expect(erdCardShape(shipments, "compact").visibleColumns).toEqual([]);
+    expect(shipments.anchorColumns).toEqual(["owner_id"]);
+  });
+
+  it("keeps the two handles of one column apart", () => {
+    expect(erdColumnHandleId("source", "user_id")).not.toBe(
+      erdColumnHandleId("target", "user_id"),
+    );
+    expect(erdColumnHandleId("source", "user_id")).not.toBe(
+      erdColumnHandleId("source", "order_id"),
+    );
+  });
+});
+
+describe("cardinality", () => {
+  it("reads a foreign key onto a primary key as 1:N", () => {
+    const model = buildErdModel(extractSchemaGraph(ordersSnapshot()));
+
+    expect(
+      model.relationships.map((relationship) => relationship.cardinality),
+    ).toEqual(["1:N", "1:N"]);
+  });
+
+  // The property this pins is that `IndexInfo.is_unique` — not the presence of
+  // an index, not the column name — is what separates 1:1 from 1:N.
+  it("reads 1:1 when the FK column's index is unique and 1:N when it is not", () => {
+    const unique = buildErdModel(
+      extractSchemaGraph(
+        profileSnapshot({ index: ["user_id"], isUnique: true }),
+      ),
+    );
+    const nonUnique = buildErdModel(
+      extractSchemaGraph(
+        profileSnapshot({ index: ["user_id"], isUnique: false }),
+      ),
+    );
+
+    expect(unique.relationships[0]?.cardinality).toBe("1:1");
+    expect(nonUnique.relationships[0]?.cardinality).toBe("1:N");
+  });
+
+  // A unique index over (user_id, tenant_id) permits many rows per user_id, so
+  // it must not be read as pinning the FK column on its own.
+  it("does not let a wider unique index pin the FK column", () => {
+    const model = buildErdModel(
+      extractSchemaGraph(
+        profileSnapshot({ index: ["user_id", "tenant_id"], isUnique: true }),
+      ),
+    );
+
+    expect(model.relationships[0]?.cardinality).toBe("1:N");
+  });
+
+  // A keyless referenced column is not on its own enough for N:M: the
+  // referencing end still pins the edge at 1:N when its own columns cover a
+  // key, and the primary-key path reaches 1:1 without any unique index.
+  it("reads N:M only while neither end covers a unique column set", () => {
+    const loose = buildErdModel(
+      extractSchemaGraph(looseReferenceSnapshot({ uniqueHandle: false })),
+    );
+    const keyed = buildErdModel(
+      extractSchemaGraph(looseReferenceSnapshot({ uniqueHandle: true })),
+    );
+
+    expect(loose.relationships[0]?.cardinality).toBe("N:M");
+    // The same graph with a unique index on the referenced column pins that
+    // end, which is the only difference between N:M and 1:N here.
+    expect(keyed.relationships[0]?.cardinality).toBe("1:N");
+  });
+});
+
+/**
+ * State transition table for the cardinality mark, and the source of truth for
+ * "when is the mark trustworthy". The product docs point here instead of
+ * restating it: one prose sentence has to hold for every cell of this table at
+ * once, and each sentence written for #2151 was falsified by a cell of it.
+ *
+ * The axis is (which end's columns have arrived) x (have the indexes arrived),
+ * because the halves of `erdUniqueColumnSets` hang off different fetches — its
+ * `columnsByTable` loop reads primary keys off columns, its `graph.nodes` loop
+ * reads unique indexes and never looks at a column. `SchemaErdPanel` runs the
+ * per-schema column prefetch and the per-table index fetch in separate effects,
+ * neither waiting on the other, so every row below is a state a user can see.
+ *
+ * The three edges differ in which ends a producer can reach, and that is what
+ * spreads the marks across the table:
+ *
+ * - `orders.user_id -> users.id` — an ordinary FK onto a primary key. Either
+ *   producer pins the referenced end. `orders.user_id` is not its own table's
+ *   key, so no row below reads 1:1 for this edge.
+ * - `events.actor -> actors.handle` — an FK onto a unique column that is not
+ *   the key. `actors_handle_key` is the only set that covers `handle`, so this
+ *   edge's column below is a function of the index axis alone: N:M on every
+ *   `missing` row, 1:N on every `landed` row.
+ * - `profiles.id -> users.id` — its FK column is also `profiles`' own primary
+ *   key, so it is the one edge below that gets both ends pinned and the only
+ *   one that reads 1:1. Both producers reach both of its ends: `users_pkey`
+ *   with `profiles_pkey` reads 1:1 with no columns at all, and the two column
+ *   sides read 1:1 with no indexes at all.
+ */
+describe("cardinality arrival states", () => {
+  const ONTO_PRIMARY_KEY = "public.orders.user_id references public.users.id";
+  const ONTO_UNIQUE_COLUMN =
+    "public.events.actor references public.actors.handle";
+  const SHARED_PRIMARY_KEY = "public.profiles.id references public.users.id";
+
+  // columns | indexes | onto-primary-key | onto-unique-column | shared-key
+  const ARRIVAL_STATES = [
+    ["none", "missing", "N:M", "N:M", "N:M"],
+    ["none", "landed", "1:N", "1:N", "1:1"],
+    ["referencing", "missing", "N:M", "N:M", "1:N"],
+    ["referencing", "landed", "1:N", "1:N", "1:1"],
+    ["referenced", "missing", "1:N", "N:M", "1:N"],
+    ["referenced", "landed", "1:N", "1:N", "1:1"],
+    ["both", "missing", "1:N", "N:M", "1:1"],
+    ["both", "landed", "1:N", "1:N", "1:1"],
+  ] as const;
+
+  it.each(ARRIVAL_STATES)(
+    "columns=%s indexes=%s reads onto-primary-key %s / onto-unique-column %s / shared-primary-key %s",
+    (columns, indexes, ontoPrimaryKey, ontoUniqueColumn, sharedPrimaryKey) => {
+      const model = buildErdModel(
+        extractSchemaGraph(
+          arrivalSnapshot({ columns, indexes: indexes === "landed" }),
+        ),
+      );
+
+      // The whole mark set, so an edge that stops being produced fails here
+      // rather than passing as a subset.
+      expect(
+        Object.fromEntries(
+          model.relationships.map((entry) => [entry.label, entry.cardinality]),
+        ),
+      ).toEqual({
+        [ONTO_PRIMARY_KEY]: ontoPrimaryKey,
+        [ONTO_UNIQUE_COLUMN]: ontoUniqueColumn,
+        [SHARED_PRIMARY_KEY]: sharedPrimaryKey,
+      });
+    },
+  );
 });
 
 // ADR 0054 (2): the fixed six-column cap is retired and the zoom step decides
@@ -774,8 +959,258 @@ function manySchemaSnapshot(): SchemaGraphCatalogSnapshot {
   };
 }
 
+/** `profiles.user_id` references `users.id`, with one index over `profiles`. */
+function profileSnapshot({
+  index,
+  isUnique,
+}: {
+  index: string[];
+  isUnique: boolean;
+}): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [table("public", "users"), table("public", "profiles")],
+    },
+    columnsByTable: {
+      public: {
+        users: [column("id", { is_primary_key: true })],
+        profiles: [
+          column("id", { is_primary_key: true }),
+          column("user_id", {
+            is_foreign_key: true,
+            fk_reference: "public.users(id)",
+          }),
+          column("tenant_id"),
+        ],
+      },
+    },
+    indexesByTable: {
+      public: { profiles: [tableIndex("profiles_idx", index, isUnique)] },
+    },
+    constraintsByTable: {},
+  };
+}
+
+/** `events.actor` points at `actors.handle`, which is not the primary key. */
+function looseReferenceSnapshot({
+  uniqueHandle,
+}: {
+  uniqueHandle: boolean;
+}): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [table("public", "actors"), table("public", "events")],
+    },
+    columnsByTable: {
+      public: {
+        actors: [
+          column("id", { is_primary_key: true }),
+          column("handle", { data_type: "text" }),
+        ],
+        events: [
+          column("id", { is_primary_key: true }),
+          column("actor", {
+            is_foreign_key: true,
+            fk_reference: "public.actors(handle)",
+          }),
+        ],
+      },
+    },
+    indexesByTable: {
+      public: {
+        actors: [tableIndex("actors_handle_idx", ["handle"], uniqueHandle)],
+      },
+    },
+    constraintsByTable: {},
+  };
+}
+
+/**
+ * A table with a plain column and one FK column, so a detail level that draws
+ * no row at all still has to keep the FK anchor. Column *count* pins nothing
+ * here — ADR 0054 (2) retired the six-column cap.
+ */
+function lateColumnFkSnapshot(): SchemaGraphCatalogSnapshot {
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [table("public", "owners"), table("public", "shipments")],
+    },
+    columnsByTable: {
+      public: {
+        owners: [column("id", { is_primary_key: true })],
+        shipments: [
+          column("code"),
+          column("owner_id", {
+            is_foreign_key: true,
+            fk_reference: "public.owners(id)",
+          }),
+        ],
+      },
+    },
+    indexesByTable: {},
+    constraintsByTable: {},
+  };
+}
+
+/**
+ * The FK shapes of `cardinality arrival states`, under a controllable arrival
+ * state.
+ *
+ * The index lists are shaped the way the Postgres and MySQL adapters report
+ * them, which is the scope this fixture claims — its `dbType` is `postgresql`.
+ * The index backing a primary key comes back from `get_table_indexes` with
+ * `is_unique: true` and an adapter-style name, because Postgres reads
+ * `idx.indisunique`
+ * (`src-tauri/table-view-core/src/db/postgres/schema.rs`) and MySQL reads
+ * `non_unique == 0` (`src-tauri/table-view-core/src/db/mysql/schema.rs`), and
+ * neither filters the primary key back out. Leaving those entries out of a
+ * fixture is what let this suite read N:M in states where the app reads 1:N.
+ *
+ * The FK constraints are present in every state: they are what makes an edge
+ * exist before any column has landed. They feed no unique column set, so they
+ * are not an axis.
+ */
+function arrivalSnapshot({
+  columns,
+  indexes,
+}: {
+  columns: "none" | "referenced" | "referencing" | "both";
+  indexes: boolean;
+}): SchemaGraphCatalogSnapshot {
+  const referenced = columns === "referenced" || columns === "both";
+  const referencing = columns === "referencing" || columns === "both";
+  return {
+    source: { dbType: "postgresql", database: "app" },
+    schemas: [{ name: "public" }],
+    tablesBySchema: {
+      public: [
+        table("public", "users"),
+        table("public", "orders"),
+        table("public", "actors"),
+        table("public", "events"),
+        table("public", "profiles"),
+      ],
+    },
+    columnsByTable: {
+      public: {
+        ...(referenced
+          ? {
+              users: [column("id", { is_primary_key: true })],
+              actors: [
+                column("id", { is_primary_key: true }),
+                column("handle", { data_type: "text" }),
+              ],
+            }
+          : {}),
+        ...(referencing
+          ? {
+              orders: [
+                column("id", { is_primary_key: true }),
+                column("user_id", {
+                  is_foreign_key: true,
+                  fk_reference: "public.users(id)",
+                }),
+              ],
+              events: [
+                column("id", { is_primary_key: true }),
+                column("actor", {
+                  is_foreign_key: true,
+                  fk_reference: "public.actors(handle)",
+                }),
+              ],
+              profiles: [
+                column("id", {
+                  is_primary_key: true,
+                  is_foreign_key: true,
+                  fk_reference: "public.users(id)",
+                }),
+              ],
+            }
+          : {}),
+      },
+    },
+    indexesByTable: indexes
+      ? {
+          public: {
+            users: [primaryKeyIndex("users_pkey")],
+            orders: [primaryKeyIndex("orders_pkey")],
+            actors: [
+              primaryKeyIndex("actors_pkey"),
+              tableIndex("actors_handle_key", ["handle"], true),
+            ],
+            events: [primaryKeyIndex("events_pkey")],
+            profiles: [primaryKeyIndex("profiles_pkey")],
+          },
+        }
+      : {},
+    constraintsByTable: {
+      public: {
+        orders: [
+          foreignKeyConstraint("orders_user_id_fkey", ["user_id"], "users", [
+            "id",
+          ]),
+        ],
+        events: [
+          foreignKeyConstraint("events_actor_fkey", ["actor"], "actors", [
+            "handle",
+          ]),
+        ],
+        profiles: [
+          foreignKeyConstraint("profiles_id_fkey", ["id"], "users", ["id"]),
+        ],
+      },
+    },
+  };
+}
+
 function table(schema: string, name: string): TableInfo {
   return { schema, name, row_count: null };
+}
+
+/** What the Postgres and MySQL adapters report for the index backing a primary key. */
+function primaryKeyIndex(name: string): IndexInfo {
+  return {
+    name,
+    columns: ["id"],
+    index_type: "btree",
+    is_unique: true,
+    is_primary: true,
+  };
+}
+
+function foreignKeyConstraint(
+  name: string,
+  columns: string[],
+  referenceTable: string,
+  referenceColumns: string[],
+): ConstraintInfo {
+  return {
+    name,
+    constraint_type: "FOREIGN KEY",
+    columns,
+    reference_table: `public.${referenceTable}`,
+    reference_columns: referenceColumns,
+  };
+}
+
+function tableIndex(
+  name: string,
+  columns: string[],
+  isUnique: boolean,
+): IndexInfo {
+  return {
+    name,
+    columns,
+    index_type: "btree",
+    is_unique: isUnique,
+    is_primary: false,
+  };
 }
 
 function column(name: string, overrides: Partial<ColumnInfo> = {}): ColumnInfo {

@@ -4,7 +4,12 @@ import { useTranslation } from "react-i18next";
 import type { SchemaGraphDiffChangeKind } from "@/lib/schemaGraphDiff";
 import { type ErdTableFlowNode, useErdCanvasView } from "./erdCanvasContext";
 import { erdDiffTableKinds } from "./erdDiffHighlight";
-import { erdCardShape } from "./erdGraphModel";
+import {
+  ERD_TABLE_SOURCE_HANDLE_ID,
+  ERD_TABLE_TARGET_HANDLE_ID,
+  erdCardShape,
+  erdColumnHandleId,
+} from "./erdGraphModel";
 
 /**
  * One badge tone per index of `erdSchemaToneIndex`. Written out as whole class
@@ -87,6 +92,11 @@ export default function SchemaErdTableNode({
     : true;
   const toneClass =
     SCHEMA_TONE_CLASSES[model.schemaToneIndex] ?? SCHEMA_TONE_CLASSES[0];
+  // The detail level decides which rows exist, so which anchors need the
+  // card-level fallback changes with zoom — read it off the card, not the model.
+  const drawnColumns = new Set(
+    card.visibleColumns.map((column) => column.column),
+  );
   const diffKinds = erdDiffTableKinds(diffHighlight, id);
   // The badges list every kind that touched the table. The outline instead
   // follows the entry for the table *itself*, which is the only channel that
@@ -137,17 +147,27 @@ export default function SchemaErdTableNode({
           the referenced table above, so an edge leaves the top and lands on
           the bottom. */}
       <Handle
+        id={ERD_TABLE_SOURCE_HANDLE_ID}
         type="source"
         position={Position.Top}
         isConnectable={false}
         className="opacity-0"
       />
       <Handle
+        id={ERD_TABLE_TARGET_HANDLE_ID}
         type="target"
         position={Position.Bottom}
         isConnectable={false}
         className="opacity-0"
       />
+      {/* An anchor for a column this card is not drawing still has to exist:
+          React Flow drops an edge whose handle id it cannot find. Rendering it
+          at card level keeps the edge attached to the card edge instead. */}
+      {model.anchorColumns
+        .filter((column) => !drawnColumns.has(column))
+        .map((column) => (
+          <ErdColumnAnchor key={column} column={column} />
+        ))}
       <div className="w-full border-b border-border bg-secondary px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-1.5">
           <span
@@ -175,8 +195,11 @@ export default function SchemaErdTableNode({
         {card.visibleColumns.map((column) => (
           <div
             key={column.id}
-            className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-2 px-3 py-0.5 text-xs"
+            className="relative grid grid-cols-[2.5rem_1fr_auto] items-center gap-2 px-3 py-0.5 text-xs"
           >
+            {model.anchorColumns.includes(column.column) && (
+              <ErdColumnAnchor column={column.column} />
+            )}
             <span className="flex gap-1">
               {column.data.is_primary_key && (
                 <span className="rounded bg-primary/10 px-1 text-3xs font-semibold text-primary">
@@ -203,6 +226,33 @@ export default function SchemaErdTableNode({
         )}
       </div>
     </button>
+  );
+}
+
+/**
+ * Where an FK edge attaches for one column. Rendered inside the column row, so
+ * the browser decides the exact spot and no copy of the row geometry can drift
+ * from the CSS. The row is the positioning context (`relative`); the same pair
+ * rendered at card level falls back to the card edge.
+ */
+function ErdColumnAnchor({ column }: { column: string }) {
+  return (
+    <>
+      <Handle
+        id={erdColumnHandleId("target", column)}
+        type="target"
+        position={Position.Left}
+        isConnectable={false}
+        className="opacity-0"
+      />
+      <Handle
+        id={erdColumnHandleId("source", column)}
+        type="source"
+        position={Position.Right}
+        isConnectable={false}
+        className="opacity-0"
+      />
+    </>
   );
 }
 
