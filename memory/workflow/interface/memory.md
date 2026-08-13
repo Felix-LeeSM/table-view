@@ -1,9 +1,9 @@
 ---
 title: Interface — 사용자 대화 전담 · 티켓 승격 · orchestrator 운용
 type: workflow-rule
-updated: 2026-08-11
+updated: 2026-08-13
 task: interface, user-dialogue, grill, ticket-promotion, needs-user, decision-record, issue-authoring
-keywords: 인터페이스, 사용자 대화, grill, 그릴, 승격, raw, task, needs:user, 결정 기록, 반대 근거, orchestrator spawn, SendMessage, 재개, 겸무, 직접 orchestration, 겸무 SOT, MANDATORY read, non-blocking, scorecard, 이슈화, 이슈 발행, 머지 보고
+keywords: 인터페이스, 사용자 대화, grill, 그릴, 승격, raw, task, needs:user, 결정 기록, 반대 근거, orchestrator spawn, SendMessage, 재개, 겸무, 직접 orchestration, 겸무 SOT, MANDATORY read, non-blocking, scorecard, 이슈화, 이슈 발행, 머지 보고, orchestrator 교체, 인계
 ---
 
 # Interface — 행동 계약
@@ -40,9 +40,9 @@ top-level 세션(사용자와 직접 대화하는 그 세션)이 맡는 역할. 
   유형의 열린 이슈가 있으면 코멘트로 붙이고 없으면 새로 연다 — 유형으로 묶는 기준은
   [orchestration](../orchestration/memory.md) §4 다.
   리뷰어와 종결자는 이슈를 못 열어서, 이 턴을 놓치면 그 non-blocking 은 아무 데도 안 간다.
-  **§3 으로 orchestrator 에 위임한 세션에는 이 트리거가 안 온다** —
-  `.agents/prompts/orchestrator.md` 「보고 형식」에 머지 칸이 없어서다. 사고가 아니라 정상
-  경로이고, 그 채널 신설은 이슈 #2333 으로 나갔다.
+  **§3 으로 orchestrator 에 위임한 세션에는 그 반환이 orchestrator 에서 멈춘다** — 대신
+  `.agents/prompts/orchestrator.md` 「보고 형식」의 머지 칸이 번호와 머지 SHA 를 올려 같은
+  턴을 연다. 그 칸의 계약은 [orchestration](../orchestration/memory.md) §7 이다.
 
   ```bash
   gh pr view <N> --repo Felix-LeeSM/table-view --json comments -q '.comments[].body'
@@ -72,7 +72,11 @@ top-level 세션(사용자와 직접 대화하는 그 세션)이 맡는 역할. 
 - orchestrator 가 `needs:user` 로 멈추면: 보고를 사용자에게 올리고, 답을
   §1 절차로 티켓/코멘트로 만든 뒤 재개한다.
 - orchestrator 컨텍스트가 한계(실측 250k 부근)에 가까우면 새로 spawn 한다.
-  상태는 전부 GitHub 에 있으므로 인계 비용이 없다.
+  **교체 전에 마지막 pass 보고의 머지 칸과 `대기` 칸을 이어받는다** — 머지 칸은 이 세션이
+  §2 로 처리하고, `대기` 칸은 위 재개 규칙의 PR 번호 포인터로 새 orchestrator 에 넘긴다.
+  머지된 PR 은 새 노드의 상태 수집(`--state open`)에서 빠지고, 출처를 `--state merged` 로
+  바꾸는 것은 [orchestration](../orchestration/memory.md) §7 이 막는다 — 그 번호가
+  돌아오는 자리는 이 인계다. 나머지 상태는 GitHub 에 있어 새 노드가 스스로 모은다.
 
 ## 4. 쓰기 범위
 
