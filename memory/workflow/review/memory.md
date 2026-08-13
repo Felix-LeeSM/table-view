@@ -140,8 +140,8 @@ trigger:
   게이트가 통과한다 (2026-07-31 #2036 라운드 2 정리).
 - reviewer의 write는 scorecard comment 와 verdict label **둘이 전부다**
   (그 외 write 금지 — 이슈 발행 포함). non-blocking 발견은 scorecard 가
-  기록이고, 이슈화는 스윕이 유형 단위(10건=1이슈, [orchestration](../orchestration/memory.md) §4)로
-  한다. finding 별 개별 발행이 이슈 noise 의 주범이었다(#2005~#2022 연번,
+  기록이고, 이슈화는 [interface](../interface/memory.md) §2 가 소유한다.
+  finding 별 개별 발행이 이슈 noise 의 주범이었다(#2005~#2022 연번,
   2026-07-31 실측 — #2035).
   `review:approved`는 `review-gate` required check의 pass 조건이다
   (계정 1개 = GitHub review approval 불가의 label 우회). **label 만으로 pass 가
