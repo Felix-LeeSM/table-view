@@ -201,9 +201,12 @@ Required local evidence:
   `tvw`'s live engine coverage is a binary in another workspace member, so
   `--test` alone does not select it and it needs its own call plus the host
   variables that gate it — leave them unset and the three server engines print
-  `SKIP:` instead of running:
-  `cd src-tauri && PGHOST=127.0.0.1 MYSQL_HOST=127.0.0.1 MARIADB_HOST=127.0.0.1 cargo test -p tvw --test query_url_live`.
-  CI spells the same call in the `CLI Live Query (Docker)` job.
+  `SKIP:` instead of running. The skip still reports PASS, and libtest hides a
+  passing test's stdout unless the run carries `-- --nocapture`:
+  `cd src-tauri && PGHOST=127.0.0.1 MYSQL_HOST=127.0.0.1 MARIADB_HOST=127.0.0.1 cargo test -p tvw --test query_url_live -- --nocapture`.
+  CI spells the same cargo call in the `CLI Live Query (Docker)` job without
+  that flag; `skip()` asserts on `CI`, so with that variable set an unset gate
+  fails rather than printing.
 - Documentation lane: `git diff --check` on the touched docs plus
   `pnpm docs:links`, which fails on an internal markdown link whose file or
   heading does not exist and runs in CI inside the frontend test shards.
