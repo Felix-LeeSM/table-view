@@ -121,9 +121,12 @@ jobs:
       # binaries did exactly that until #1815. Which binaries count as uncalled
       # is decided by `scripts/check-ci-test-calls.sh` alone; its header states
       # the rule and running it prints the current tally. Every uncalled binary
-      # has to carry a reason in `ci-uncalled-tests.txt`, and one that does not
-      # fails here. Draining that file — wiring each binary in or deleting it —
-      # is a follow-up issue, not this one (owner's call, 2026-08-03).
+      # under that root has to carry a reason in `ci-uncalled-tests.txt`, and one
+      # that does not fails here. A workspace member's own tests directory is
+      # outside the scan root, so this contract does not reach it (#2336) — see
+      # the `cli-live-query` job. Draining that file — wiring each binary in or
+      # deleting it — is a follow-up issue, not this one (owner's call,
+      # 2026-08-03).
       # It lands in this job rather than one of its own because a required
       # context is registered in the `pr_to_main` ruleset, live GitHub state a
       # PR cannot change, and a freshly registered context that has never
@@ -517,8 +520,11 @@ jobs:
       # --workspace` would pull in every `src-tauri/tests/*.rs` binary,
       # including the Docker-backed ones that belong to `Integration Tests
       # (Docker)` and cannot run on this runner. `scripts/check-ci-test-calls.sh`
-      # is the gate on that list: every integration target is either named here
-      # (or in the coverage job) or carries a reason in `ci-uncalled-tests.txt`.
+      # is the gate on that list: every integration target under `src-tauri/tests`
+      # is either named here (or in the coverage job) or carries a reason in
+      # `ci-uncalled-tests.txt`. That scan root stops there — a workspace member's
+      # own tests directory is outside what this gate grades (#2336, and the
+      # `cli-live-query` job's comment).
       #
       # `keyring_*` (#1815) sits in this job rather than the coverage job on
       # purpose — that job carries `--fail-under-*` ratchets and adding targets
@@ -954,10 +960,12 @@ jobs:
   cli-live-query:
     name: CLI Live Query (Docker)
     runs-on: ubuntu-latest
-    # Every PR run of this job is cold: `Swatinem/rust-cache` keys its entries by
-    # job, so this one opens entries of its own and `save-if` lets only main
-    # write them. The graph is `table-view-core`'s, whose `duckdb` is bundled C++
-    # source — the same cost that holds the `rust` job at 35, over a smaller
+    # The run measured below was cold, and PR runs stay cold only until this job
+    # has run on main: `Swatinem/rust-cache` keys its entries by job, so this one
+    # opens entries of its own and `save-if` lets only main write them. Restore
+    # is attempted either way, so once main has saved, a PR run starts from
+    # main's entry. The graph is `table-view-core`'s, whose `duckdb` is bundled
+    # C++ source — the same cost that holds the `rust` job at 35, over a smaller
     # graph here because the Tauri app is not in it.
     #
     # 25 is roughly twice one measured cold run, not a guess: on

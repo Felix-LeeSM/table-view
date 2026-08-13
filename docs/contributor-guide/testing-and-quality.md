@@ -187,10 +187,15 @@ Required local evidence:
   the integration targets under `src-tauri/tests` against the `--test` names CI
   calls, and fails unless each uncalled one carries a reason in
   `ci-uncalled-tests.txt`. It runs in the `PR Body Contract` job, so adding a
-  test binary without wiring it in is red. That script's header states what it
-  counts as a target and as a call, and running it prints the current tally —
-  quote that output rather than re-deriving the comparison by hand. Closing the
-  entries the file was seeded with is a separate issue.
+  test binary **under that root** without wiring it in is red. The scan root is
+  `src-tauri/tests` alone, so a workspace member's own `src-tauri/<member>/tests`
+  binary sits outside the population it grades: leaving that one uncalled stays
+  green, and `ci-uncalled-tests.txt` cannot absorb it either — the gate fails a
+  listed name whose target it cannot find. #2336 owns widening the scan; until it
+  lands, this gate does not hold a member crate's `--test` line. That script's
+  header states what it counts as a target and as a call, and running it prints
+  the current tally — quote that output rather than re-deriving the comparison by
+  hand. Closing the entries the file was seeded with is a separate issue.
 - Docker integration lane: with required services available,
   `cd src-tauri && cargo test --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
 - Documentation lane: `git diff --check` on the touched docs plus

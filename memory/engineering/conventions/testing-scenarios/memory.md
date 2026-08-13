@@ -7,7 +7,8 @@ keywords: 9 가지 원칙, 레이어 분리, getByRole, vi.clearAllMocks(), mock
 
 # 비-E2E 테스트 시나리오 설계 원칙
 
-E2E 외 모든 테스트(`*.test.{ts,tsx}`, Rust `#[cfg(test)]`, `src-tauri/tests/`)
+E2E 외 모든 테스트(`*.test.{ts,tsx}`, Rust `#[cfg(test)]`, `src-tauri/tests/`,
+`src-tauri/<member>/tests/`)
 를 새로 작성·수정하기 전에 이 방을 읽는다.
 자동 로드는 없다 — 직접 열어야 한다.
 
@@ -132,7 +133,8 @@ suite green, (c) 보안·데이터무결성 테스트(redact/injection/escape/cr
 ## 레이어별 부록
 
 ### Rust unit / integration
-- 단위: 같은 파일 하단 `#[cfg(test)] mod tests {}`. 통합: `src-tauri/tests/`.
+- 단위: 같은 파일 하단 `#[cfg(test)] mod tests {}`. 통합: 앱 패키지는
+  `src-tauri/tests/`, workspace member 는 `src-tauri/<member>/tests/`.
 - 분기 매트릭스는 table-driven: `for (input, expected) in &[...] { ... }`.
 - `mockall` for trait, `#[tokio::test]` for async, `assert_matches!` for `Result::Err`.
 - 커버리지: frontend 전역 gate 는 `vite.config.ts` 의 고정 바닥(statements 85 /
@@ -156,7 +158,7 @@ suite green, (c) 보안·데이터무결성 테스트(redact/injection/escape/cr
 - hook 자체가 아닌 *hook이 일으키는 부수효과* (state set, callback 호출, ref
   변동, side-effect cleanup) 를 검증.
 
-### Integration (Rust `src-tauri/tests/`)
+### Integration (Rust `src-tauri/tests/` · `src-tauri/<member>/tests/`)
 - 실 DB가 필요한 시나리오는 docker compose `test` profile (sprint-169 결과물).
 - mock DB 는 *contract* 검증 전용 — 실 DB 대용으로 쓰지 않는다 (sprint-169 이전
   프로젝트가 빠진 함정).
