@@ -198,6 +198,12 @@ Required local evidence:
   hand. Closing the entries the file was seeded with is a separate issue.
 - Docker integration lane: with required services available,
   `cd src-tauri && cargo test --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
+  `tvw`'s live engine coverage is a binary in another workspace member, so
+  `--test` alone does not select it and it needs its own call plus the host
+  variables that gate it — leave them unset and the three server engines print
+  `SKIP:` instead of running:
+  `cd src-tauri && PGHOST=127.0.0.1 MYSQL_HOST=127.0.0.1 MARIADB_HOST=127.0.0.1 cargo test -p tvw --test query_url_live`.
+  CI spells the same call in the `CLI Live Query (Docker)` job.
 - Documentation lane: `git diff --check` on the touched docs plus
   `pnpm docs:links`, which fails on an internal markdown link whose file or
   heading does not exist and runs in CI inside the frontend test shards.

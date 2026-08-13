@@ -40,7 +40,7 @@ table-view/
 │   │   ├── storage/          # 연결 설정 I/O + 암호화
 │   │   ├── models/           # 데이터 모델 (struct)
 │   │   └── error.rs          # 공통 에러 타입 (AppError)
-│   └── tests/                # 통합 테스트 (앱 crate 소속)
+│   └── tests/                # 통합 테스트 (앱 crate 소속 — member 는 자기 tests/)
 ├── src/                 # React 프론트엔드
 │   ├── components/      # UI 컴포넌트 (PascalCase, 1파일=1컴포넌트)
 │   ├── hooks/           # 커스텀 훅
@@ -86,11 +86,13 @@ core 는 Tauri 에 의존하지 않는 것이 계약이다 —
 한다 (빈 출력이 아니라 에러가 통과 신호다). workspace 는 의존 그래프를 안 바꾸니
 member 가 돼도 그대로다 (#2161).
 
-**테스트 명령은 `src-tauri` 에서 `--workspace` 로 닫힌다** —
+**lib 테스트 명령은 `src-tauri` 에서 `--workspace` 로 닫힌다** —
 `cargo test --workspace --lib` 이 member 전부의 lib 테스트를 돌린다. crate 별
-호출을 손으로 나열하던 시절에는 빠뜨려도 exit 0 이라 세 번 놓쳤다. 통합 테스트까지
-포함한 순서의 SOT 는 `docs/contributor-guide/testing-and-quality.md` 의
-Pre-Release Verification Gate Rust lane 이다.
+호출을 손으로 나열하던 시절에는 빠뜨려도 exit 0 이라 세 번 놓쳤다. 통합 테스트는
+`--lib` 밖이라 target 이름을 손으로 나열해야 하고 그 자리는 지금도 조용히 빠질 수
+있다. 통합 테스트까지 포함한 순서의 SOT 는
+`docs/contributor-guide/testing-and-quality.md` 의 Pre-Release Verification Gate
+Rust lane · Docker integration lane 이다.
 
 ## Frontend 상태 관리
 
