@@ -305,16 +305,28 @@ SIGPIPE 로 못 죽어 printf 가 rc=1 과 `printf: write error: Broken pipe` �
 `scripts/review/measure-rounds.test.sh` · `scripts/release/verify-tag-ci.test.sh` 의
 `contains()` 주석에 있다.
 
+**스위트 밖에도 같은 축이 있다.** `set -uo pipefail` 을 건 도구 스크립트의 인자
+검사가 그렇고, `shell:` 없이 `bash -e {0}` 로 도는 workflow 인라인도 그렇다. 뒤쪽은
+pipefail 이 없는 동안 닫혀 있지만 그 스텝에 `shell: bash` 나 `defaults:` 가 붙으면
+열린다 — 이 저장소는 `e2e-smoke.yml` · `platform-smoke-canary.yml` · `release.yml`
+에서 이미 `shell: bash` 를 쓴다 (#2330).
+
 `scripts/review/measure-rounds.test.sh` 는 #2314 가, `scripts/release/` 의
 `cargo-package-version.test.sh` · `checksum-sidecars.test.sh` ·
-`verify-tag-ci.test.sh` 는 #2319 가 닫았다. 같은 형태가 남은 **후보**는 이 명령이
-낸다. 낸 줄이 곧 결함은 아니다 — 파이프 왼쪽이 writer 인지, 그 자리에 `pipefail` 이
-걸렸는지, 그리고 실행되는 줄인지 기전을 설명하는 주석인지를 줄마다 따로 봐야 한다.
-닫힌 파일도 그 주석 때문에 계속 걸린다:
+`verify-tag-ci.test.sh` 는 #2319 가, `scripts/review/measure-rounds.sh` 의 인자
+판정과 `.github/workflows/review-gate.yml` · `.github/workflows/ci.yml` 의 인라인은
+#2330 이 닫았다. 같은 형태가 남은 **후보**는 이 명령이 낸다. 낸 줄이 곧 결함은
+아니다 — 파이프 왼쪽이 writer 인지, 그 자리에 `pipefail` 이 걸렸는지, 그리고
+실행되는 줄인지 기전을 설명하는 주석인지를 줄마다 따로 봐야 한다. 닫힌 파일도 그
+주석 때문에 계속 걸린다:
 
 ```
-git grep -n '| *grep -q'
+git grep -n -E '\| *(grep -q|head -)'
 ```
+
+`head -` 를 같이 거는 이유: 앞쪽만 읽고 빠져 왼쪽 writer 가 EPIPE 를 받는 것은
+`grep -q` 와 같은 축인데, `| *grep -q` 만 돌리면 `.github/workflows/ci.yml` 의
+`… | head -1` 한 자리가 안 나온다 (#2330).
 
 pathspec 을 안 건다. `scripts/**/*.sh` 로 좁히면 `scripts/` 바로 아래 `.sh` 일곱
 개와 `.github/workflows/` 가 통째로 빠진다. 주석을 빼고 보려면 뒤에
@@ -342,6 +354,17 @@ writer 가 쓸 것을 다 밀어 넣고 끝나 EPIPE 가 안 난다. #2314 의 P
 flip = 있는 것을 「없음」으로 낸 횟수): 8041B 0/800 · 70057B 799/800 · 200055B
 800/800. 같은 판에서 `case` 형태와 here-string 형태는 세 크기 모두 0/800 이었다.
 재현 명령은 PR #2318 body 「기전의 경계」절의 `race.sh` 다.
+
+**다만 payload 를 키우기 전에 그 payload 의 판별력을 먼저 재라.** 뒤집힘이
+성립하려면 `grep` 이 앞쪽에서 빠져야 하고, 그러려면 입력이 여러 줄이면서 첫 줄이
+맞아야 한다. 판정이 문자열 **전체**를 보는 자리 — `^…$` 로 감싼 인자 형식 검사 —
+에서는 그런 입력의 올바른 답이 이미 「거절」이라, 옛 형태가 EPIPE 로 거절하든 새
+`case` 형태가 문자열 전체를 보고 거절하든 답이 같다. 큰 payload 의 판별력이 0 이
+된다. #2330 이 `scripts/review/measure-rounds.sh` 의 `is_uint()` 에서 잰 값: 첫 줄
+`5` 뒤에 숫자 327682 자를 붙여 5회 돌리면 옛 REJECT · 새 REJECT 이고, 같은 입력을
+11 자로 줄이면 옛 ACCEPT · 새 REJECT 다. 그래서 그 자리의 회귀 가드는 **작은** 여러
+줄 입력이고, 큰 payload 가 필요한 자리는 부호가 반대인 쪽 — 뒤집힘이 「없음」 =
+통과를 만드는 자리다.
 
 **부호가 반대인 가드를 빠뜨리지 않는다.** 「없어야 한다」쪽은 뒤집혀도 red 를 안
 남기므로 「없어야 할 것이 실제로 있는데 통과」를 재현하는 단언을 따로 남긴다 —
