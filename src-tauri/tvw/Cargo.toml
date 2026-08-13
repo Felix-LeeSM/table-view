@@ -29,6 +29,15 @@ table-view-core = { path = "../table-view-core", version = "0.1.0" }
 # add/ls/rm`) and the help text they need. The alternatives were not measured
 # here, so this line records the decision rather than a comparison.
 clap = { version = "4", features = ["derive"] }
+# `--format table`, ADR 0061's default. `default-features = false` states that
+# this crate asks for no terminal probing of its own; it does not settle what
+# gets built, because cargo unions the feature edges of one target. What holds
+# ADR 0061's "same output on a terminal and in a pipe" is `src/render.rs`'s
+# `ContentArrangement::Disabled`, which never asks how wide the terminal is.
+comfy-table = { version = "7", default-features = false }
+# `--format csv`. RFC 4180 quoting, and `src/render.rs` states the `\n` record
+# terminator so a future CRLF default cannot make the output platform-dependent.
+csv = "1"
 serde_json = "1"
 # `rt-multi-thread` because `#[tokio::main]` in `src/main.rs` builds the
 # multi-thread runtime unless it is spelled `flavor = "current_thread"`. Not for
