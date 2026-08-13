@@ -1,0 +1,47 @@
+# ADR 0061 / #1770 — `tvw`, the one-shot CLI. It links `table-view-core` and
+# nothing from Tauri, which is the property `table-view-core/Cargo.toml`
+# promises and `src-tauri/Cargo.toml`'s `[workspace] members` list admits it to.
+[package]
+name = "tvw"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91.0"
+# Not on crates.io yet — #1775 owns the release pipe. The flag is also what
+# makes `deny.toml`'s `[licenses.private] ignore = true` skip our own crate.
+publish = false
+
+[lib]
+name = "tvw"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tvw"
+path = "src/main.rs"
+
+[dependencies]
+# `features` stays empty on purpose — `testing` would put the
+# `TABLE_VIEW_TEST_DATA_DIR` override into a shipped binary (#1454/#2184), and
+# ci.yml's `Test-only data-dir override stays out of the release graph` step
+# fails the build if it ever appears on a normal edge.
+table-view-core = { path = "../table-view-core", version = "0.1.0" }
+# Owner's call, 2026-08-05 (#1770): derive-based `clap` over argh/bpaf/lexopt.
+# The reason recorded there is the nested subcommands #1773 adds (`tvw conn
+# add/ls/rm`) and the help text they need. The alternatives were not measured
+# here, so this line records the decision rather than a comparison.
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"
+# `rt-multi-thread` because `#[tokio::main]` in `src/main.rs` builds the
+# multi-thread runtime unless it is spelled `flavor = "current_thread"`. Not for
+# `spawn_blocking`, which the `rt` feature alone provides — and which the four
+# schemes this CLI speaks never reach anyway (`table-view-core` calls it from
+# the DuckDB backend and the storage corrupt-recovery probe).
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+url = "2"
+# `Url::username()` / `password()` hand back percent-encoded text, and a DSN has
+# to encode `@ : /` in a password. Decoding matches what the app's own paste
+# handler does (`parseConnectionUrl` in src/features/connection/model.ts).
+percent-encoding = "2"
+
+[dev-dependencies]
+tempfile = "3"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"] }
