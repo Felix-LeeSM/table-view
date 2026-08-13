@@ -16,8 +16,6 @@
 //!   ADR 0053 decision 3). The app's paste handler does honour the parameter;
 //!   reading it here is tracked under "CLI DSN parsing" in
 //!   `docs/roadmap/follow-up-queue.md`.
-//! - **Output formats.** `--format table|json|csv` is #2322. Rows leave here as
-//!   one JSON document.
 //!
 //! # Boundaries inherited from the core adapters
 //!
@@ -25,15 +23,30 @@
 //!   `validate_sqlite_write_guardrails` in `table-view-core`. `tvw query --url
 //!   sqlite://… "CREATE TABLE …"` exits 1 and repeats that adapter's reason.
 //!   The server engines take DDL normally.
+//! - **`--format csv` cannot tell NULL from an empty string** — RFC 4180 has no
+//!   null and both come out as an empty field. `--format json` and the default
+//!   table format both keep the distinction. This matches the app's own CSV
+//!   export (`json_to_cell_string` in
+//!   `src-tauri/src/commands/export/grid_writers.rs`).
+//! - **`--format json` types a SQLite INTEGER cell as a quoted string.** The
+//!   `rows` array of `SELECT a FROM t ORDER BY a` is `[["1"],["2"]]` on SQLite
+//!   and `[[1],[2]]` on PostgreSQL 16 — the second half measured on PR #2313.
+//!   The SQLite adapter serialises that storage class as a JSON string on
+//!   purpose (ADR 0026: a value over 2^53 is corrupted by a reader's `f64`) and
+//!   the app undoes it in `wrapNumericCells`, where the CLI has no such layer.
+//!   `--format table` and `--format csv` print the bare token on either engine,
+//!   so only the JSON branch shows it. Tracked under "CLI output typing" in
+//!   `docs/roadmap/follow-up-queue.md`.
 
 pub mod dsn;
+pub mod render;
 
 use std::io::Write;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use table_view_core::db::{row_cap, ActiveAdapter};
 use table_view_core::error::AppError;
-use table_view_core::models::{QueryResult, QueryType};
+use table_view_core::models::QueryType;
 
 /// The statement ran; its output is on stdout.
 pub const EXIT_SUCCESS: u8 = 0;
@@ -123,9 +136,20 @@ pub struct QueryArgs {
     #[arg(long, value_name = "DSN")]
     pub url: String,
 
+    /// Output format. Identical whether stdout is a terminal or a pipe.
+    #[arg(long, value_enum, default_value_t = Format::Table)]
+    pub format: Format,
+
     /// The SQL to run.
     #[arg(value_name = "SQL")]
     pub sql: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum Format {
+    Table,
+    Json,
+    Csv,
 }
 
 /// Parse `argv`, run it, and report what to print and what to exit with.
@@ -209,7 +233,7 @@ async fn run(cli: Cli) -> Result<Outcome, CliError> {
 
 async fn execute(adapter: &ActiveAdapter, args: &QueryArgs) -> Result<Outcome, CliError> {
     let result = adapter.as_rdb()?.execute_sql(&args.sql, None).await?;
-    let stdout = rows_as_json(&result)?;
+    let stdout = render::render(&result, args.format)?;
 
     // Notices go to stderr so a pipe receives rows and nothing else.
     let mut stderr = String::new();
@@ -231,21 +255,6 @@ async fn execute(adapter: &ActiveAdapter, args: &QueryArgs) -> Result<Outcome, C
         stderr,
         code: EXIT_SUCCESS,
     })
-}
-
-/// The rows as one JSON array, ending in a newline.
-///
-/// `--format table|json|csv` and the writers behind it are #2322.
-///
-/// A result carrying no columns writes nothing at all, so stdout stays a data
-/// channel a pipe can read; `execute` above puts the row count on stderr.
-fn rows_as_json(result: &QueryResult) -> Result<String, CliError> {
-    if result.columns.is_empty() {
-        return Ok(String::new());
-    }
-    serde_json::to_string(&result.rows)
-        .map(|text| format!("{text}\n"))
-        .map_err(|e| CliError::failed(format!("could not serialise the result as JSON: {e}")))
 }
 
 #[cfg(test)]
@@ -381,6 +390,14 @@ mod tests {
             vec![],
             vec!["query"],
             vec!["query", "--url", "postgres://h/d"],
+            vec![
+                "query",
+                "--url",
+                "postgres://h/d",
+                "--format",
+                "yaml",
+                "SELECT 1",
+            ],
             vec!["query", "--url", "postgres://h/d", "--nope", "SELECT 1"],
             vec!["nonsense"],
         ] {
@@ -442,15 +459,83 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sqlite_select_one_succeeds_and_prints_the_row() {
+    async fn test_sqlite_select_one_is_pinned_byte_for_byte_in_every_format() {
         // ADR 0061's SQL core has four engines and this is the one that needs
-        // no server. Live coverage of all four is #2323.
+        // no server. Live coverage of all four is #2323. The literals are what
+        // a caller's script parses, so they are spelled out here rather than
+        // matched loosely; `render.rs` owns the same pinning for the cells the
+        // one row here cannot reach.
         let dir = tempfile::tempdir().expect("tempdir");
         let url = empty_sqlite_db(dir.path());
 
-        let outcome = run_cli(&["query", "--url", &url, "SELECT 1"]).await;
+        for (format, expected) in [
+            (
+                "table",
+                concat!("+---+\n", "| 1 |\n", "+===+\n", "| 1 |\n", "+---+\n"),
+            ),
+            (
+                "json",
+                concat!(
+                    "{\n",
+                    "  \"columns\": [\n",
+                    "    {\n",
+                    "      \"name\": \"1\",\n",
+                    "      \"type\": \"NULL\"\n",
+                    "    }\n",
+                    "  ],\n",
+                    "  \"rows\": [\n",
+                    "    [\n",
+                    "      1\n",
+                    "    ]\n",
+                    "  ]\n",
+                    "}\n",
+                ),
+            ),
+            ("csv", "1\n1\n"),
+        ] {
+            let outcome = run_cli(&["query", "--url", &url, "--format", format, "SELECT 1"]).await;
+            assert_eq!(
+                outcome.code, EXIT_SUCCESS,
+                "--format {format} failed: {}",
+                outcome.stderr
+            );
+            assert_eq!(outcome.stdout, expected, "--format {format}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_default_format_is_table_regardless_of_the_environment() {
+        // ADR 0061 fixes `table` as the default and rejects deciding it from
+        // the environment, so the two runs must agree byte for byte whether
+        // this test's stdout is a terminal or a captured pipe.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let url = empty_sqlite_db(dir.path());
+
+        let default = run_cli(&["query", "--url", &url, "SELECT 1"]).await;
+        let explicit = run_cli(&["query", "--url", &url, "--format", "table", "SELECT 1"]).await;
+        assert_eq!(default.code, EXIT_SUCCESS, "{}", default.stderr);
+        assert_eq!(default.stdout, explicit.stdout);
+        assert!(default.stdout.starts_with('+'), "{}", default.stdout);
+    }
+
+    #[tokio::test]
+    async fn test_a_select_matching_no_rows_still_writes_one_json_document() {
+        // End to end through a real adapter rather than a hand-built
+        // `QueryResult`: `render.rs` owns the same branch as a unit test.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let url = seeded_sqlite_db(dir.path()).await;
+
+        let outcome = run_cli(&[
+            "query",
+            "--url",
+            &url,
+            "--format",
+            "json",
+            "SELECT a FROM t WHERE 1 = 0",
+        ])
+        .await;
         assert_eq!(outcome.code, EXIT_SUCCESS, "{}", outcome.stderr);
-        assert_eq!(outcome.stdout, "[[1]]\n");
+        assert_eq!(outcome.stdout, "{\n  \"columns\": [],\n  \"rows\": []\n}\n");
     }
 
     #[tokio::test]

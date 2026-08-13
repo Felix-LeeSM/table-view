@@ -187,6 +187,29 @@ wallet mTLS 와는 상호 배타다. 남은 것은 tnsnames.ora 별칭을 파일
 - 앞 슬래시: 앱은 하나만 떼고 `tvw` 는 전부 뗀다. `postgres://h//db` 가 앱에서 `/db`,
   `tvw` 에서 `db` 다.
 
+### CLI output typing
+
+**Follow-up**: #2322 가 `--format table|json|csv` 의 출력을 고정하면서 닫은 것은
+**문서가 나오느냐**는 축이다 — 행이 0인 SELECT 에서 stdout 이 비느냐 마느냐가 어느
+엔진이 답했느냐에 달려 있던 자리이고, 처방은 `src-tauri/tvw/src/render.rs` 의
+`render` 가 `columns` 대신 `rows` 와 format 으로 가르는 것이다. 남은 것은 **값과
+메타데이터의 내용**이 엔진마다 다른 축이고, 승격 시점은 `tvw` 가 배포 대상이 될
+때다(#1775).
+
+- `--format json` 의 SQLite INTEGER 열: 같은 SELECT 가 SQLite 에서 `[["1"]]`,
+  PostgreSQL 에서 `[[1]]` 이다. 어댑터가 그렇게 직렬화하는 것이 결정이고
+  (ADR 0026 — 2^53 을 넘는 값이 raw JSON number 로 나가면 읽는 쪽 `f64` 가 무음
+  손상시킨다,
+  `src-tauri/table-view-core/src/db/adapters/sqlite/queries.rs`), 앱은
+  `wrapNumericCells`(`src/lib/tauri/numericWrap.ts`)로 되돌리는데 CLI 에는 그 층이
+  없다. `--format table` 과 `--format csv` 는 양쪽 다 따옴표 없는 토큰을 찍어 이
+  차이를 안 보인다. CLI 에서 되돌리려면 `ColumnCategory` 를 보고 문자열을 숫자
+  토큰으로 승격하는 층이 필요한데, 그것은 어댑터 계약을 CLI 한쪽에서만 뒤집는
+  일이라 별도 결정이다.
+- `--format json` 의 `columns` 배열: 행이 0인 SELECT 에서 PostgreSQL 은 컬럼을
+  이름과 함께 내고 SQLite·MySQL 은 낼 것이 없다. CLI 가 재구성할 근거가 없어
+  어댑터가 아는 만큼 그대로 싣는다.
+
 ### Security / ops policy
 
 **Follow-up**: Keep destructive/admin/security claims source-specific until a
