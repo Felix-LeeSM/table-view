@@ -61,7 +61,9 @@ trigger:
   [worktree](../../runbook/worktree/memory.md) 「리뷰어 사본」·「책임」이고, 이 방은
   그 방이 넘긴 「언제 · 어느 노드가 만드는가」를 답한다.
 - Subreview 결과는 coordinator의 입력이다. Coordinator는 PR에 직접 하나의
-  통합 scorecard와 action items를 repo-relative evidence로 comment한다.
+  통합 scorecard와 action items를 repo-relative evidence로 comment한다. 그 action
+  item 중 **구현자가 수정 라운드에 반영하는 것의 경계**는 이 방이 아니라
+  [delivery](../delivery/memory.md) 「Node 별 계약」이 소유한다 — 여기 복제하지 않는다.
 - Blocking은 아래 사유뿐이다: 런타임·보안 / 이 PR 귀책의 거짓이 SOT에 들어감 /
   자동 layer 실패 / 문서화 impact 게이트 위반. 그 게이트의 상세는
   [documentation](../documentation/memory.md) 「Reviewer 판정」이 갖고 여기

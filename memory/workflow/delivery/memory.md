@@ -27,9 +27,12 @@ SOT 는 없다.
 |---|---|---|
 | interface | 사용자 대화 · grill · 결정 기록 · raw→task 승격 · `needs:user` 중계. orchestration(spawn · 리뷰 큐 · 머지) 겸무 가능 — 조건은 [interface](../interface/memory.md) §3 | 코드 수정 — 쓰기 범위는 [interface](../interface/memory.md) §4 |
 | orchestrator | label 을 보고 다음 node spawn (`.agents/prompts/orchestrator.md` 그대로 기동) | 판단. 사용자와 대화하지 않는다. 코멘트를 읽지 않는다 |
-| 구현자 | 커밋 · 푸시 · PR 생성 · 수정 라운드 반영. **저자 사본에 파일을 쓰는 유일한 역할** | 리뷰어 부착, 라운드 판정, 머지 |
+| 구현자 | 커밋 · 푸시 · PR 생성 · 수정 라운드의 blocking 반영. **저자 사본에 파일을 쓰는 유일한 역할** | 리뷰어 부착, 라운드 판정, 머지, scorecard 의 non-blocking 수리 |
 | 리뷰어 | 판정 + scorecard + verdict label. 라운드 3부터는 회고 모드 — 개별 지적 대신 유형 반복 표 | commit / push / merge / branch 수정, 이슈 발행 |
 | 종결자 | 머지 · 브랜치 삭제 · 사본 회수 · 이슈 종결. 대규모 삭제 머지 시 삭제 경로 참조 이슈 스윕 | 코드 수정 |
+
+**non-blocking 은 구현자의 수정 라운드 작업이 아니다** — 그 행선지는 scorecard
+기록이고, 이슈화는 유형 단위 스윕 몫이다([orchestration](../orchestration/memory.md) §4).
 
 **저자가 자기 판정을 하지 않는다** — 자기 PR 의 리뷰어를 부르는 것, 자기가 고친
 것을 재발로 재단하는 것, 자기 PR 을 머지하는 것 셋 다 다른 node 로 나갔다.
