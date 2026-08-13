@@ -11,7 +11,7 @@
 #   스캔 루트 = `src-tauri/**/Cargo.toml` 바로 옆에 있는 `tests` 디렉토리 전부
 #            (`target` 디렉토리 안은 안 본다). 앱 패키지의 `src-tauri/tests` 와
 #            workspace member 의 `src-tauri/<member>/tests` 가 그렇게 들어오고,
-#            이번 실행이 무엇을 스캔했는지는 마지막 줄이 찍는다 (#2336)
+#            이번 실행이 무엇을 스캔했는지는 아래 집계 줄이 찍는다 (#2336)
 #   전수   = 스캔 루트마다 `find <root> -maxdepth 1 -type f -name '*.rs'` 가 낸
 #            파일의 확장자 뗀 이름, 그리고 `find <root> -mindepth 2 -maxdepth 2
 #            -type f -name 'main.rs'` 가 낸 파일의 부모 디렉토리 이름 (cargo 가
@@ -45,9 +45,11 @@
 #   bash scripts/check-ci-test-calls.sh          # 이 repo
 #   bash scripts/check-ci-test-calls.sh <ROOT>   # 다른 트리 (테스트가 쓴다)
 #
-# 마지막 줄에 전수 · 호출 · allowlist 를 찍는다. 이 게이트의 수치를 인용할 일이
-# 있으면 이 명령의 출력을 쓴다 — 같은 대조를 손으로 다시 적으면 게이트가 바뀌는
-# 날 그 사본만 낡는다.
+# 집계 줄(전수 · 호출 · allowlist · 스캔 루트)은 **통과와 위반 양쪽 경로에 다
+# 찍는다** — 통과하면 stdout 의 `ok:` 줄, 위반이 있으면 stderr 의 `집계:` 줄이다.
+# 이 게이트의 수치를 인용할 일이 있으면 이 명령의 출력을 쓴다 — 같은 대조를 손으로
+# 다시 적으면 게이트가 바뀌는 날 그 사본만 낡는다. 위반이 있을 때만 숫자가
+# 사라지면 인용할 수 있는 상태가 반쪽이 된다.
 #
 # exit: 0 통과 · 1 위반 있음 · 2 검사가 성립하지 않음
 
@@ -210,11 +212,18 @@ while IFS= read -r name; do
 	fi
 done <<<"$targets"
 
+summary="통합 테스트 target $targets_n 종 — CI 호출 $called_n 종, 사유 달린 미호출 allowlist $allowed_n 종 (스캔 루트: $roots_label)"
+
 if [ "$violations" -gt 0 ]; then
+	# 집계를 통과 경로에만 두면 인용할 수 있는 상태가 반쪽이 된다. red 를 받은
+	# 사람이 가장 먼저 묻는 것이 "내 crate 가 스캔되긴 했나" 인데 (#2336 이 바로
+	# 안 스캔된 루트였다) 그 답이 위반이 있을 때만 사라지면 안 된다.
+	# `scripts/check-non-blocking-jobs.sh` 가 같은 이유로 같은 형태를 쓴다.
+	echo "집계: $summary" >&2
 	# `::error::` 는 GitHub Actions workflow command 다 — Actions 에서는 PR 체크
 	# 화면 맨 위 annotation 이 되고, 로컬에서는 접두어가 그대로 찍히는 한 줄이다.
 	echo "::error::CI 미호출 통합 테스트 대조 위반 $violations 건 (위 FAIL 줄). 새 테스트는 .github/workflows 의 \`--test\` 로 부르거나, 못 부르는 사유를 $ALLOWLIST_NAME 에 적어라 (issue #2113)." >&2
 	exit 1
 fi
 
-echo "ok: 통합 테스트 target $targets_n 종 — CI 호출 $called_n 종, 사유 달린 미호출 allowlist $allowed_n 종 (스캔 루트: $roots_label)"
+echo "ok: $summary"

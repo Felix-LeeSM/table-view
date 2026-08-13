@@ -220,6 +220,22 @@ describe("check-ci-test-calls", () => {
     expect(run.status).toBe(0);
   });
 
+  // 집계가 통과 경로에만 있으면 인용할 수 있는 상태가 반쪽이 된다. red 를 받은
+  // 사람이 가장 먼저 묻는 것이 "내 crate 가 스캔되긴 했나" 인데 (#2336 이 바로 안
+  // 스캔된 루트였다) 그 답이 위반이 있을 때만 사라지면 안 된다. 아래는 수치와 두
+  // 루트를 통째로 못 박아, `집계:` 줄이 사라지거나 루트가 하나로 좁아지면 red 다.
+  it("prints the tally and the scan roots on the violation path too", () => {
+    const root = seed({
+      tests: { ...CALLED, "guard_grep.rs": "fn main() {}\n" },
+      members: { tvw: { "query_url_live.rs": "fn main() {}\n" } },
+    });
+    const run = runGate(root);
+    expect(run.out).toMatch(
+      /^집계: 통합 테스트 target 3 종 — CI 호출 1 종, 사유 달린 미호출 allowlist 0 종 \(스캔 루트: src-tauri\/tests, src-tauri\/tvw\/tests\)$/m,
+    );
+    expect(run.status).toBe(1);
+  });
+
   // 스캔 루트는 manifest 옆 `tests` 다. crate 안쪽 `src/**/tests` 는 cargo 가
   // 통합 target 으로 안 보는 모듈 디렉토리이므로 (실물:
   // `src-tauri/table-view-core/src/db/search/tests/`) 여기 있는 파일을 미호출
