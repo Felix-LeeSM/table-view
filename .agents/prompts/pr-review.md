@@ -162,18 +162,15 @@ label 을 붙이기 전에 `review-gate` 상태를 직접 확인한다 — 확�
 
 ## 반환 형식 — scorecard
 
-PR 코멘트로 남기는 통합 scorecard 하나. **표의 행은 blocking 이거나 verdict 를
-뒤집은 차원뿐이고**, 통과한 차원은 이름만 한 줄로 잇는다. 요청 프롬프트가 반환
-형식을 좁게 지정했어도, 델타만 다시 보는 라운드여도 그 표는 낸다. 점수는 쓰지
-않는다.
+PR 코멘트로 남기는 통합 scorecard 하나. **차원별 판정 표를 빼지 않는다** —
+요청 프롬프트가 반환 형식을 좁게 지정했어도, 델타만 다시 보는 라운드여도 표를
+낸다. 점수는 쓰지 않는다.
 
 ```
 ## Scorecard (라운드 N)
 | 차원 | 판정 | 근거 (repo-relative path:line) |
 |---|---|---|
 | ... | ... | ... |
-
-통과: <차원 이름 나열>
 
 ### Blocking
 - 없으면 "없음". 있으면 사유별로 근거 경로와 함께.
@@ -186,10 +183,8 @@ PR 코멘트로 남기는 통합 scorecard 하나. **표의 행은 blocking 이�
 - fan-out: 관점 목록 / 불가로 단독 강등했으면 그 사실
 ```
 
-확인해서 참이던 저자 주장은 **항목만 나열하고 근거는 싣지 않는다** — 고칠 것이
-없는 자리라 근거까지 실으면 구현자 컨텍스트만 늘린다. 근거 경로는
-`memory/workflow/delivery/memory.md` 「PR body」의 이식성 제약을 따른다. 출처:
-`memory/workflow/review/memory.md` 「행동 계약」.
+근거 경로는 `memory/workflow/delivery/memory.md` 「PR body」의 이식성 제약을
+따른다. 출처: `memory/workflow/review/memory.md` 「행동 계약」.
 
 ## orchestrator 에게 돌려줄 요약
 

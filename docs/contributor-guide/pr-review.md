@@ -33,9 +33,10 @@ read it there. This page keeps no copy of the list, not even a reworded one:
 whoever edits that Korean source of truth is not reading this English page, so
 a copy here turns false the moment an item is added, dropped, or reordered.
 
-Everything else is non-blocking. The reviewer records it on the scorecard only
-— the reviewer does not file issues. Type-level issue emission happens in a
-separate sweep (`memory/workflow/review/memory.md`).
+Everything else is non-blocking. What follows from that — who records it, who
+does not repair it in a fix round, and where issues come from — is owned by
+`memory/workflow/delivery/memory.md` 「Node 별 계약」. Read it there. This page
+keeps no copy of it either, for the reason given just above.
 
 A blocking finding must be backed by a counter-example, a command's output, or
 a gate result. "Insufficient evidence" and "not verified for every case" are
