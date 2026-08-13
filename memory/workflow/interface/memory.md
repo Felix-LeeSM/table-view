@@ -1,9 +1,9 @@
 ---
 title: Interface — 사용자 대화 전담 · 티켓 승격 · orchestrator 운용
 type: workflow-rule
-updated: 2026-08-13
+updated: 2026-08-14
 task: interface, user-dialogue, grill, ticket-promotion, needs-user, decision-record, issue-authoring
-keywords: 인터페이스, 사용자 대화, grill, 그릴, 승격, raw, task, needs:user, 결정 기록, 반대 근거, orchestrator spawn, SendMessage, 재개, 겸무, 직접 orchestration, 겸무 SOT, MANDATORY read, non-blocking, scorecard, 이슈화, 이슈 발행, 머지 보고, orchestrator 교체, 인계
+keywords: 인터페이스, 사용자 대화, grill, 그릴, 승격, raw, task, needs:user, 결정 기록, 반대 근거, orchestrator spawn, SendMessage, 재개, 겸무, 직접 orchestration, 겸무 SOT, MANDATORY read, non-blocking, scorecard, 이슈화, 이슈 발행, 머지 보고, orchestrator 교체, 인계, 대기 칸, 대기 칸 행선지, mergedAt
 ---
 
 # Interface — 행동 계약
@@ -73,10 +73,15 @@ top-level 세션(사용자와 직접 대화하는 그 세션)이 맡는 역할. 
   §1 절차로 티켓/코멘트로 만든 뒤 재개한다.
 - orchestrator 컨텍스트가 한계(실측 250k 부근)에 가까우면 새로 spawn 한다.
   **교체 전에 마지막 pass 보고의 머지 칸과 `대기` 칸을 이어받는다** — 머지 칸은 이 세션이
-  §2 로 처리하고, `대기` 칸은 위 재개 규칙의 PR 번호 포인터로 새 orchestrator 에 넘긴다.
-  머지된 PR 은 새 노드의 상태 수집(`--state open`)에서 빠지고, 출처를 `--state merged` 로
-  바꾸는 것은 [orchestration](../orchestration/memory.md) §7 이 막는다 — 그 번호가
-  돌아오는 자리는 이 인계다. 나머지 상태는 GitHub 에 있어 새 노드가 스스로 모은다.
+  §2 로 처리한다. **`대기` 칸도 머지된 PR 은 머지 칸과 같이 이 세션이 §2 로 처리하고**,
+  나머지만 위 재개 규칙의 PR 번호 포인터로 새 orchestrator 에 넘긴다. 가르는 조회는 번호마다
+  `gh pr view <N> --repo Felix-LeeSM/table-view --json mergedAt` 다 — 종결자 반환 전에 끝난
+  pass 의 PR 이 `대기` 로 오므로([orchestration](../orchestration/memory.md) §7) 인계 시점에
+  이미 머지된 PR 이 거기 있다.
+  **그 조회는 §7 이 막는 `gh pr list --state merged` 가 아니다** — 금지 사유인 창이 없다.
+  집합은 마지막 pass 보고의 `대기` 칸으로 닫히고 교체 때 한 번만 넘어온다.
+  머지된 PR 은 새 노드의 상태 수집(`--state open`)에서 빠지고, 그 번호가 돌아오는 자리는
+  이 인계다. 나머지 상태는 GitHub 에 있어 새 노드가 스스로 모은다.
 
 ## 4. 쓰기 범위
 
