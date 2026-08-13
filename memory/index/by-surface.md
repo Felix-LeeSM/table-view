@@ -75,7 +75,7 @@ generator: none — 손으로 갱신한다
 
 - [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
 
-### `src-tauri/tests`
+### `src-tauri/**/tests`
 
 - [Fixture strategy — support claims need local evidence](../../memory/engineering/conventions/testing-scenarios/fixtures/memory.md)
 

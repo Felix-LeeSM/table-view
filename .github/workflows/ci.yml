@@ -121,9 +121,12 @@ jobs:
       # binaries did exactly that until #1815. Which binaries count as uncalled
       # is decided by `scripts/check-ci-test-calls.sh` alone; its header states
       # the rule and running it prints the current tally. Every uncalled binary
-      # has to carry a reason in `ci-uncalled-tests.txt`, and one that does not
-      # fails here. Draining that file — wiring each binary in or deleting it —
-      # is a follow-up issue, not this one (owner's call, 2026-08-03).
+      # under that root has to carry a reason in `ci-uncalled-tests.txt`, and one
+      # that does not fails here. A workspace member's own tests directory is
+      # outside the scan root, so this contract does not reach it (#2336) — see
+      # the `cli-live-query` job. Draining that file — wiring each binary in or
+      # deleting it — is a follow-up issue, not this one (owner's call,
+      # 2026-08-03).
       # It lands in this job rather than one of its own because a required
       # context is registered in the `pr_to_main` ruleset, live GitHub state a
       # PR cannot change, and a freshly registered context that has never
@@ -517,8 +520,11 @@ jobs:
       # --workspace` would pull in every `src-tauri/tests/*.rs` binary,
       # including the Docker-backed ones that belong to `Integration Tests
       # (Docker)` and cannot run on this runner. `scripts/check-ci-test-calls.sh`
-      # is the gate on that list: every integration target is either named here
-      # (or in the coverage job) or carries a reason in `ci-uncalled-tests.txt`.
+      # is the gate on that list: every integration target under `src-tauri/tests`
+      # is either named here (or in the coverage job) or carries a reason in
+      # `ci-uncalled-tests.txt`. That scan root stops there — a workspace member's
+      # own tests directory is outside what this gate grades (#2336, and the
+      # `cli-live-query` job's comment).
       #
       # `keyring_*` (#1815) sits in this job rather than the coverage job on
       # purpose — that job carries `--fail-under-*` ratchets and adding targets
@@ -903,6 +909,190 @@ jobs:
             --fail-under-lines 80 \
             --fail-under-functions 75 \
             --fail-under-regions 80
+
+  # #2323 (#1770 AC-1 slice 3) — `tvw query --url` against ADR 0061's four SQL
+  # engines. Until this job existed, `src-tauri/tvw/tests/query_url_live.rs` was
+  # named by no workflow line, and `--test` is an allowlist: an integration
+  # target nobody names never runs.
+  #
+  # Nothing guards that for this crate. `scripts/check-ci-test-calls.sh` is the
+  # gate that catches an uncalled integration target, and its scan root is
+  # `src-tauri/tests` alone — it does not reach `src-tauri/tvw/tests`, so
+  # deleting the `--test` line below would not turn any check red. Widening that
+  # scan is a follow-up, out of this issue's two-path scope.
+  #
+  # A job of its own rather than a step inside `Integration Tests (Docker)`.
+  # That job runs its whole suite through `cargo llvm-cov nextest`, whose
+  # instrumentation RUSTFLAGS and target directory are cargo-llvm-cov's own, so
+  # a plain `cargo test` step beside it reuses none of its artifacts and pays
+  # this crate's graph from scratch wherever it sits. Selecting `-p tvw` inside
+  # that coverage command instead is what its own comment warns against for
+  # `--workspace`: its `--fail-under-*` literals would then grade a different
+  # population. Splitting also keeps a failure here off the job that carries
+  # those literals, and lets the two DB sets stay apart — that job's MySQL and
+  # MariaDB coverage comes from testcontainers started inside its test binaries,
+  # which expose nothing to a sibling process.
+  #
+  # One system library, not the WebKitGTK/GTK set `Rust Static Analysis` and
+  # `Integration Tests (Docker)` install. `tvw` links `table-view-core` and
+  # nothing from Tauri (src-tauri/tvw/Cargo.toml), but that core reaches
+  # `libdbus-sys` on Linux through keyring's secret-service backend:
+  #
+  #   cargo tree -p tvw --target x86_64-unknown-linux-gnu --edges normal \
+  #     --invert libdbus-sys
+  #   # libdbus-sys 0.2.7 <- dbus 0.9.11 <- dbus-secret-service 4.1.0
+  #   #                   <- keyring 3.6.3 <- table-view-core <- tvw
+  #
+  # The other two jobs never needed a line for it because `libgtk-3-dev` pulls
+  # it in. macOS resolves that edge to Security.framework instead, so a local
+  # build proves nothing about it — this job's first push compiled clean here
+  # and died on the missing `dbus-1.pc`:
+  # https://github.com/Felix-LeeSM/table-view/actions/runs/31698995240/job/94443268969
+  #
+  # This `name:` is NOT on the `pr_to_main` required-context list. That list is
+  # live GitHub state a PR cannot edit, and a freshly registered context that has
+  # never reported pins every open PR at BLOCKED
+  # (memory/runbook/pr-merge-gates/memory.md); registering it is a separate
+  # decision, taken after this job has reported on main. Until then a red here
+  # leaves `mergeStateStatus` at UNSTABLE, which still merges. The name carries
+  # no `(non-blocking)` suffix on purpose — release.yml DROPS check runs by that
+  # suffix from the release verdict, and this one should count there.
+  cli-live-query:
+    name: CLI Live Query (Docker)
+    runs-on: ubuntu-latest
+    # The run measured below was cold, and PR runs stay cold only until this job
+    # has run on main: `Swatinem/rust-cache` keys its entries by job, so this one
+    # opens entries of its own and `save-if` lets only main write them. Restore
+    # is attempted either way, so once main has saved, a PR run starts from
+    # main's entry. The graph is `table-view-core`'s, whose `duckdb` is bundled
+    # C++ source — the same cost that holds the `rust` job at 35, over a smaller
+    # graph here because the Tauri app is not in it.
+    #
+    # 25 is roughly twice one measured cold run, not a guess: on
+    # https://github.com/Felix-LeeSM/table-view/actions/runs/31699765244/job/94445900377
+    # the whole job took 11m04s, of which `Run tvw live query tests` was 10m05s
+    # and the tests themselves 0.23s (`gh api
+    # repos/{owner}/{repo}/actions/jobs/94445900377 --jq '.steps[]'`). That is
+    # one run on one runner, so the headroom is deliberate; the cap is here to
+    # end a hang, not to grade the build.
+    timeout-minutes: 25
+
+    # Ports mirror docker-compose.yml, so a local `pnpm db:up` run and this one
+    # use one set of numbers. MySQL and MariaDB both listen on 3306 inside their
+    # container, so their host ports have to differ. Credentials are the
+    # testuser/testpass pair the compose file, the app's integration helpers and
+    # the smoke fixtures already share.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: table_view_test
+        ports:
+          - 15432:5432
+        options: >-
+          --health-cmd "pg_isready -U testuser -d table_view_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testroot
+          MYSQL_USER: testuser
+          MYSQL_PASSWORD: testpass
+          MYSQL_DATABASE: table_view_test
+        ports:
+          - 13306:3306
+        # `-h 127.0.0.1` on purpose, not the compose file's `localhost`: that
+        # spelling reaches the unix socket, and mysql's entrypoint runs its
+        # initialisation on a socket-only temporary server. Over TCP the probe
+        # can only succeed once the real server is listening, which is the state
+        # the test needs.
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -u root -ptestroot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: testroot
+          MARIADB_USER: testuser
+          MARIADB_PASSWORD: testpass
+          MARIADB_DATABASE: table_view_test
+        ports:
+          - 23306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # Just the one library the job comment traces, not the Tauri set.
+      # Retry wrapper (#1293): transient apt mirror failures fail the whole
+      # setup. `Rust Static Analysis` and `Integration Tests (Docker)` run the
+      # same loop over their own package list.
+      - name: Install libdbus for keyring's Linux backend
+        run: |
+          install_deps() {
+            sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+          }
+          for i in 1 2 3; do
+            install_deps && exit 0
+            echo "apt install attempt $i failed; retrying in $((i * 10))s" >&2
+            sleep "$((i * 10))"
+          done
+          echo "apt install failed after 3 attempts" >&2
+          exit 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Same single entry as the other Rust jobs — one workspace, one target
+          # dir. Adding a line to this list is what buys a guaranteed cold run
+          # for every job that shares it (#1769); a new member joins through
+          # `src-tauri/Cargo.toml`'s `members`, not here.
+          workspaces: src-tauri -> target
+          cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # The four engines are ADR 0061's SQL core. SQLite needs no server and no
+      # variable — the test makes an empty file. The other three read a host
+      # variable as their gate, and an unset gate is not a silent skip: `skip()`
+      # in that file asserts on `CI`, so a missing endpoint fails the job rather
+      # than reporting PASS for a query that never ran. Verified locally by
+      # running the binary with `CI=1` and no host variables — three failures,
+      # one per server engine.
+      - name: Run tvw live query tests
+        working-directory: src-tauri
+        env:
+          PGHOST: localhost
+          PGPORT: 15432
+          PGUSER: testuser
+          PGPASSWORD: testpass
+          PGDATABASE: table_view_test
+          MYSQL_HOST: localhost
+          MYSQL_PORT: 13306
+          MYSQL_USER: testuser
+          MYSQL_PASSWORD: testpass
+          MYSQL_DATABASE: table_view_test
+          MARIADB_HOST: localhost
+          MARIADB_PORT: 23306
+          MARIADB_USER: testuser
+          MARIADB_PASSWORD: testpass
+          MARIADB_DATABASE: table_view_test
+        run: cargo test -p tvw --test query_url_live
 
   # Job `name:` values are load-bearing: the `pr_to_main` ruleset lists required
   # contexts by name, so renaming one silently un-gates main. That list is live

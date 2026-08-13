@@ -42,7 +42,7 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 ## 테스트
 
 - 신규 기능/버그 수정은 테스트 동반 필수 (테스트 없는 커밋 금지).
-- Rust: 같은 파일 하단 `#[cfg(test)] mod tests {}` 또는 `src-tauri/tests/` 통합 테스트. 핵심 로직은 adapter/parser/command 별 local coverage target 을 contract 에 적는다.
+- Rust: 같은 파일 하단 `#[cfg(test)] mod tests {}` 또는 통합 테스트 — 앱 패키지는 `src-tauri/tests/`, workspace member 는 `src-tauri/<member>/tests/`. 핵심 로직은 adapter/parser/command 별 local coverage target 을 contract 에 적는다.
 - React: Vitest + React Testing Library. 파일은 컴포넌트 옆 `*.test.tsx` 또는 `__tests__/`. Zustand 스토어는 순수 함수처럼.
 - E2E: WebdriverIO + tauri-driver 로 핵심 플로우(연결 생성, 쿼리 실행, 결과 확인). 시나리오 설계 원칙은 [e2e-scenarios](e2e-scenarios/memory.md) 필독.
 - 시나리오 원칙: 비-E2E 는 [testing-scenarios](testing-scenarios/memory.md), E2E 는 [e2e-scenarios](e2e-scenarios/memory.md). 같은 P-시리즈로 일관.

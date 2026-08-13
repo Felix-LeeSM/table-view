@@ -25,7 +25,7 @@ the product-facing support boundary stays in `docs/product/**`.
 | Shared contract fixtures | `tests/fixtures/**` | Shared TS/Rust/parser/support-boundary fixtures are contract evidence only. Unsupported-boundary fixtures are negative evidence and do not widen runtime support. |
 | Backend adapter fixture harness | `src-tauri/table-view-core/src/db/fixtures.rs`, `src-tauri/tests/fixture_harness.rs` | Adapter fixtures are requested by profile/family/paradigm/capability. Missing fixture diagnostics are failures, not silent skips. Current embedded harness coverage is Search-only. |
 | Generator/profile specs | `fixtures/**` | Profile existence is not runtime support. |
-| Test placement | `src/**`, `src-tauri/tests`, `e2e/smoke` | Frontend unit/component tests stay near their feature/domain; Rust integration stays under `src-tauri/tests`; desktop smoke stays under `e2e/smoke`, which nothing wires automatically. |
+| Test placement | `src/**`, `src-tauri/tests`, `src-tauri/<member>/tests`, `e2e/smoke` | Frontend unit/component tests stay near their feature/domain; Rust integration for the app package stays under `src-tauri/tests`, and a workspace member keeps its own beside its manifest — `tvw`'s live engine coverage is `src-tauri/tvw/tests/query_url_live.rs` (#2323); desktop smoke stays under `e2e/smoke`, which nothing wires automatically. |
 
 Promotion gate: fixture path + consuming contract/integration/E2E test +
 product docs or known-limitation review + smoke-routing decision. Fixture
@@ -187,12 +187,26 @@ Required local evidence:
   the integration targets under `src-tauri/tests` against the `--test` names CI
   calls, and fails unless each uncalled one carries a reason in
   `ci-uncalled-tests.txt`. It runs in the `PR Body Contract` job, so adding a
-  test binary without wiring it in is red. That script's header states what it
-  counts as a target and as a call, and running it prints the current tally —
-  quote that output rather than re-deriving the comparison by hand. Closing the
-  entries the file was seeded with is a separate issue.
+  test binary **under that root** without wiring it in is red. The scan root is
+  `src-tauri/tests` alone, so a workspace member's own `src-tauri/<member>/tests`
+  binary sits outside the population it grades: leaving that one uncalled stays
+  green, and `ci-uncalled-tests.txt` cannot absorb it either — the gate fails a
+  listed name whose target it cannot find. #2336 owns widening the scan; until it
+  lands, this gate does not hold a member crate's `--test` line. That script's
+  header states what it counts as a target and as a call, and running it prints
+  the current tally — quote that output rather than re-deriving the comparison by
+  hand. Closing the entries the file was seeded with is a separate issue.
 - Docker integration lane: with required services available,
   `cd src-tauri && cargo test --test schema_integration --test query_integration --test mongo_integration --test fixture_loading --test redis_integration`.
+  `tvw`'s live engine coverage is a binary in another workspace member, so
+  `--test` alone does not select it and it needs its own call plus the host
+  variables that gate it — leave them unset and the three server engines print
+  `SKIP:` instead of running. The skip still reports PASS, and libtest hides a
+  passing test's stdout unless the run carries `-- --nocapture`:
+  `cd src-tauri && PGHOST=127.0.0.1 MYSQL_HOST=127.0.0.1 MARIADB_HOST=127.0.0.1 cargo test -p tvw --test query_url_live -- --nocapture`.
+  CI spells the same cargo call in the `CLI Live Query (Docker)` job without
+  that flag; `skip()` asserts on `CI`, so with that variable set an unset gate
+  fails rather than printing.
 - Documentation lane: `git diff --check` on the touched docs plus
   `pnpm docs:links`, which fails on an internal markdown link whose file or
   heading does not exist and runs in CI inside the frontend test shards.
