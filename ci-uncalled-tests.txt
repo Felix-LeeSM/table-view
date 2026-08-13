@@ -1,4 +1,4 @@
-# ci-uncalled-tests.txt — CI 가 안 부르는 src-tauri/tests 통합 테스트 binary 의 allowlist (issue #2113).
+# ci-uncalled-tests.txt — CI 가 안 부르는 src-tauri 통합 테스트 binary 의 allowlist (issue #2113).
 #
 # `scripts/check-ci-test-calls.sh` 가 읽는다. 그 스크립트가 미호출로 판정한 통합
 # 테스트 target 은 전부 여기 사유와 함께 있어야 하고, 없으면 CI 의

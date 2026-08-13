@@ -82,8 +82,9 @@ red 면 그 줄과 파일이 그대로인지(들여쓰기·트레일링 CR 도 r
 **문자**로 잡고 `FAIL <path>: <실측> lines > 200` 을 찍는다 — fix 는 긴 절차를
 `.agents/skills/` 로 내리거나 방을 쪼개는 것이다.
 `src-tauri test binaries called or allowlisted` (#2113) 는 workflow 의 `--test`
-밖에 있는 `src-tauri/tests` target 을 `ci-uncalled-tests.txt` 와 대조한다 — fix
-는 그 테스트를 부르거나 사유를 적는 것이다.
+밖에 있는 통합 테스트 target 을 `ci-uncalled-tests.txt` 와 대조한다 — 스캔 루트는
+`src-tauri` 아래 manifest 옆 `tests/` 전부이고(#2336, 게이트 마지막 줄이 찍는다),
+fix 는 그 테스트를 부르거나 사유를 적는 것이다.
 `no review-round narrative in source comments` (#2114) 는 `src/` · `src-tauri/` ·
 `e2e/` 주석의 리뷰 라운드 표기를, `(non-blocking) job names carry
 continue-on-error` (#2174) 는 그 접미사를 단 job 의 `continue-on-error: true`

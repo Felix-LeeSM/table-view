@@ -64,9 +64,9 @@ fn get_user(id: u64) -> Result<User, AppError> {
 
 - 단위: 같은 파일 하단 `#[cfg(test)] mod tests {}`
 - 통합: 앱 패키지는 `src-tauri/tests/`, workspace member 는 자기 manifest 옆
-  `src-tauri/<member>/tests/` (예: `src-tauri/tvw/tests/`). member 쪽은
-  `scripts/check-ci-test-calls.sh` 스캔 루트 밖이라 그 게이트가 workflow `--test`
-  배선을 안 본다 (#2336)
+  `src-tauri/<member>/tests/` (예: `src-tauri/tvw/tests/`). 둘 다
+  `scripts/check-ci-test-calls.sh` 가 workflow `--test` 배선과 대조한다 — 안 부르는
+  target 은 `ci-uncalled-tests.txt` 에 사유를 적어야 CI 가 green 이다 (#2336)
 - 명명: `test_<동작>_<조건>_<기대결과>`
 - 모든 공개 함수에 테스트 필수
 - 커버리지: Rust local target 은 sprint/contract 에 명시한다. Parser/adapter/command

@@ -254,17 +254,6 @@ nothing makes the two runs comparable. Sibling steps in that job carry figures
 written the same way and were not re-measured. Pin the measurement conditions
 or drop the figures.
 
-Second open item on the same script, from #2323: its scan root is
-`$REPO/src-tauri/tests`, so a workspace member's own integration targets are
-outside the population it grades. `src-tauri/tvw/tests/query_url_live.rs` is the
-first such target, and the `--test query_url_live` line that runs it
-(`.github/workflows/ci.yml`, job `CLI Live Query (Docker)`) can be deleted
-without turning any check red — the exact state the gate exists to catch.
-Reproduce with `bash scripts/check-ci-test-calls.sh`, whose closing line reports
-the population it counted. Widening the scan to every `src-tauri/*/tests`
-directory changes what a required context grades, so it wants its own ticket
-rather than a rider on the wiring PR.
-
 ### Agent tooling — repo-recon MCP
 
 **Follow-up**: #2289 이 `scripts/mcp/repo-recon/server.mjs` 와 루트 `.mcp.json` 으로
