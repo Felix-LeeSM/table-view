@@ -43,7 +43,7 @@ keywords: 행동 계약, phase, 방 지도, workflow
 | 문서 추가 / PR 작성 / workflow 변경       | documentation  | [documentation](./documentation/memory.md) — impact 판단 후 기존 SOT 반영             |
 | 구현 끝 / 사용자가 "마무리해"             | delivery       | [delivery](./delivery/memory.md) — 구현자가 커밋 → 푸시 → PR 생성까지. 리뷰·머지·정리는 다른 node |
 | PR 생성 / 사용자가 "리뷰해"               | review         | [review](./review/memory.md) — 독립 read-only review pack, 판정은 label 로 공표      |
-| 여러 작업 동시 진행 / 이슈 발행 / 리뷰 라운드가 안 끝남 | orchestration | [orchestration](./orchestration/memory.md) — 티켓의 파일 범위로 교집합 측정, 리뷰 큐 직렬화, 사이클이면 정지·보고 |
+| 여러 작업 동시 진행 / 이슈 발행 / 리뷰 라운드가 안 끝남 | orchestration | [orchestration](./orchestration/memory.md) — 티켓의 파일 범위로 교집합 측정, 리뷰 큐 직렬화, 사이클이면 정지·보고. 이슈를 **누가 언제 여는가**는 [interface](./interface/memory.md) §2 (scorecard non-blocking 스윕 포함) |
 | 사용자와 설계/범위 논의, needs:user, 티켓 승격            | interface      | [interface](./interface/memory.md) — 반대 근거 1회 제시 → 결정 기록 → 닫힌 티켓으로 배출 |
 
 ## 관련 방

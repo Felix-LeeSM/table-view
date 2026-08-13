@@ -179,3 +179,4 @@ trigger:
 
 - [delivery](../delivery/memory.md) — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 계약
 - [documentation](../documentation/memory.md) — PR body와 documentation impact gate
+- [interface](../interface/memory.md) §2 — scorecard 에 남긴 non-blocking 을 이슈로 올리는 소유자 (리뷰어는 못 연다)

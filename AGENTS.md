@@ -32,7 +32,7 @@ GitHub 산출물로 남긴 뒤 종료한다 — 다음 노드는 그 상태를 �
 | TDD / RED evidence     | `memory/workflow/tdd/memory.md`                        |
 | commit / PR            | `memory/workflow/delivery/memory.md`                   |
 | PR review              | `memory/workflow/review/memory.md`                     |
-| 병렬 작업 / 이슈 발행  | `memory/workflow/orchestration/memory.md` (spawn·리뷰 큐·사이클 정지·이슈 수용기준) |
+| 병렬 작업 / 이슈 발행  | `memory/workflow/orchestration/memory.md` (spawn·리뷰 큐·사이클 정지·이슈 수용기준) + `memory/workflow/interface/memory.md` §2 (누가 언제 여는가 — scorecard non-blocking 스윕) |
 | subagent spawn / 역할 프롬프트 | `.agents/prompts/` — orchestrator·issue-implement·pr-review·pr-subreview·pr-finalize 고정부. **자동 도달 아니다**: spawn 시 파일을 그대로 첨부하거나 `.claude/agents/<role>.md` 정의가 첫 행동으로 읽는다 |
 | 사용자 대화 / 설계 결정 / raw→task 승격 | `memory/workflow/interface/memory.md` (top-level 세션 전용) |
 | 문서화 / PR body       | `memory/workflow/documentation/memory.md`              |
