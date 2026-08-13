@@ -190,8 +190,43 @@ assert_rc() {
 	fi
 }
 
+# 부분 문자열 판정. "있다/없다" 를 파이프라인 status 로 받던 자리를 여기로 모았다 —
+# 판정이 한 군데서만 나야 다음 편집이 그 형태를 되살릴 자리가 없다 (#2319, 선행 #2314).
+#
+# **파이프를 쓰지 않는다.** 옛 구현 `printf '%s\n' "$OUT" | grep -qF -- "$1"` 은
+# grep -q 가 첫 일치에서 stdin 을 안 비우고 빠지는 동안 왼쪽 printf 가 아직 쓸 것을
+# 갖고 있으면 EPIPE → SIGPIPE 로 141 이 되고, 위 `set -o pipefail` 이 그 141 을
+# 파이프라인 status 로 올려 **판정을 뒤집었다.**
+#
+# `case` 패턴 안의 따옴표 친 확장은 glob 메타문자까지 리터럴이라 `grep -F` 와 뜻이
+# 같고, 프로세스도 파이프도 안 만든다. 다른 점은 needle 에 개행이 있을 때뿐이다 —
+# grep -F 는 줄 단위 OR, case 는 그 연속열 그대로다. 개행을 품은 needle 을 넘기려면
+# 이 함수부터 다시 봐라. 회귀 가드는 아래 "assertion helpers (#2319)" 절이다.
+#
+# 이 파일에서 여기를 안 지나는 grep · 파이프와 그 이유:
+#   - `grep -cF -- "$TAG_STEP_ANCHOR" "$WORKFLOW"` — grep 이 파일을 직접 열어
+#     파이프도 writer 도 없다.
+#   - `printf '%s\n' "$2" | sed …` (fail) — sed 가 입력을 끝까지 읽고, status 가
+#     아니라 출력을 쓴다.
+#   - `printf '%s' "$MUT_OUT" | head -1 | cut …` (mutant_differs) — head 가 일찍
+#     빠지는 파이프이지만 status 가 아니라 값을 쓴다. 판정은 그 위 `[ ]` 비교다.
+contains() {
+	case "$1" in
+	*"$2"*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+# 정규식 판정. `case` 로는 앵커(`^` · `$`)를 못 써서 grep 을 그대로 두되
+# **파이프라인을 안 만든다** — here-string 은 파이프라인이 아니라 `pipefail` 이
+# 올릴 남의 status 가 애초에 없고, `$?` 는 grep 것 하나뿐이다. 아래 X.Y.Z 형식
+# 단언이 이것을 쓴다.
+matches_ere() {
+	grep -qE -- "$2" <<<"$1"
+}
+
 assert_has() {
-	if printf '%s\n' "$OUT" | grep -qF -- "$1"; then
+	if contains "$OUT" "$1"; then
 		pass "$2"
 	else
 		fail "$2" "찾는 문자열: $1
@@ -213,9 +248,12 @@ read_version "$FIX_DIR/does-not-exist.toml"
 assert_rc 1 "없는 manifest 는 빈 값이 아니라 실패다"
 
 # 저장소의 진짜 manifest. 숫자를 박으면 다음 릴리스 bump 마다 낡으므로 형식만 본다.
+# 앵커가 있어 `contains` 로 못 옮긴다 — 리터럴 판정은 `v0.7.0-rc1` 도 통과시킨다.
+# 이 표기를 아래 단언과 회귀 가드가 같이 쓴다.
+VERSION_ERE='^[0-9]+\.[0-9]+\.[0-9]+$'
 read_version "$ROOT/src-tauri/Cargo.toml"
 assert_rc 0 "저장소의 src-tauri/Cargo.toml 을 읽는다"
-if printf '%s\n' "$OUT" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+if matches_ere "$OUT" "$VERSION_ERE"; then
 	pass "그 값이 X.Y.Z 다 (auto-tag-release.yml 이 요구하는 형식)"
 else
 	fail "저장소 manifest 의 값이 X.Y.Z 가 아니다" "$OUT"
@@ -264,7 +302,7 @@ check_workflow_coupling() {
 
 	# 태그 스텝이 이 스크립트를 저장소의 manifest 로 부르는가. 닫힌 검사다 —
 	# 찾는 문자열 하나가 그 스텝에 있거나 없거나 둘 중 하나다.
-	if printf '%s\n' "$step" | grep -qF 'bash scripts/release/cargo-package-version.sh src-tauri/Cargo.toml'; then
+	if contains "$step" 'bash scripts/release/cargo-package-version.sh src-tauri/Cargo.toml'; then
 		pass "태그 스텝이 이 스크립트로 src-tauri/Cargo.toml 을 읽는다"
 	else
 		fail "coupling: 태그 스텝이 이 스크립트를 안 부른다" \
@@ -299,6 +337,62 @@ $step"
 	fi
 }
 check_workflow_coupling
+
+# ── assertion helpers (#2319) ────────────────────────────────────────────
+# contains() · matches_ere() 가 판정을 파이프 status 에 안 싣는다는 것의 회귀 가드.
+# 옛 형태로 되돌리면 여기가 red 다.
+#
+# 옛 구현은 `printf '%s\n' "$X" | grep -q…` 였다. grep -q 는 첫 일치에서 stdin 을
+# 안 비우고 빠지고, 왼쪽 printf 가 파이프 버퍼(64KiB)보다 큰 것을 써야 하면 grep 이
+# 비워 주기를 기다리며 막혔다가 이미 빠진 grep 때문에 EPIPE → SIGPIPE 로 141 이
+# 된다. `set -o pipefail` 이 그 141 을 파이프라인 status 로 올려 판정을 뒤집는다.
+#
+# **이 파일에서 contains()·matches_ere() 를 지나는 판정은 부호가 전부 양이다** —
+# assert_has, 위 X.Y.Z 형식 단언, 배선 단계의 호출 줄 판정, mutation 단계의 기대
+# 라벨 판정. 넷 다 「있어야 한다」라 뒤집히면 거짓 red 로 눈에 띈다. 옆 스위트
+# checksum-sidecars(`${{` 가드) · verify-tag-ci(continue-on-error 가드)가 갖는
+# 「없어야 한다」쪽, 곧 red 를 안 남기는 조용한 거짓 green 은 여기 없다.
+#
+# payload 를 파이프 버퍼의 두 배로 잡는 이유: 버퍼 바로 위는 아직 확률이다.
+# 2026-08-13 macOS 실측 한 판(bash 3.2.57 + BSD grep 2.6.0, 4-way 동시 × 200,
+# 첫 줄 일치, 옛 파이프 형태, flip = 있는 것을 "없음" 으로 낸 횟수. 전부 printf 쪽 141):
+#   8041B 0/800 · 70057B 799/800 · 200055B 800/800
+# 같은 판에서 `case` 형태와 here-string 형태는 세 크기 모두 0/800 이었다.
+# 재현 명령은 PR #2318 body 「기전의 경계」절의 race.sh 다.
+# 이 절은 $OUT 을 덮어쓴다 — 여기 아래에서 위 read_version() 의 출력을 읽는 단언이 없다.
+echo "assertion helpers (#2319):"
+
+SIGPIPE_PAD='filler-line-for-issue-2319'
+while [ "${#SIGPIPE_PAD}" -lt 200000 ]; do
+	SIGPIPE_PAD="$SIGPIPE_PAD
+$SIGPIPE_PAD"
+done
+
+# ① payload 가 실제로 파이프 버퍼를 넘는가. 이게 깨지면 아래 둘은 green 이어도
+#    아무것도 안 지킨다 — 옛 구현이 여기서 안 죽는 크기로 줄어든 것이다.
+if [ "${#SIGPIPE_PAD}" -ge 131072 ]; then
+	pass "SIGPIPE 가드 payload 가 파이프 버퍼(64KiB)의 두 배를 넘는다 (${#SIGPIPE_PAD}, ASCII)"
+else
+	fail "SIGPIPE 가드 payload 가 너무 작다: ${#SIGPIPE_PAD}" \
+		"131072 를 못 넘으면 결정론 구간 밖이다 — 버퍼 바로 위(70057B)는 위 실측대로 아직 확률이라 가드가 무력해진다."
+fi
+
+# ② assert_has — 있는 문자열을 SIGPIPE 로 놓치지 않는다. 배선 단계의 호출 줄 판정과
+#    mutation 단계의 기대 라벨 판정도 같은 contains() 를 지나므로 여기가 그 셋의 가드다.
+OUT="NEEDLE-2319
+$SIGPIPE_PAD"
+assert_has "NEEDLE-2319" "assert_has: 파이프 버퍼보다 큰 출력의 첫 줄 일치를 놓치지 않는다"
+
+# ③ matches_ere — X.Y.Z 형식 단언이 쓰는 정규식 판정. grep 은 줄 단위라 첫 줄이
+#    X.Y.Z 면 뒤가 아무리 길어도 일치다. 뒤집히면 저장소 manifest 가 멀쩡한데
+#    "X.Y.Z 가 아니다" 로 red 를 낸다.
+if matches_ere "0.7.0
+$SIGPIPE_PAD" "$VERSION_ERE"; then
+	pass "matches_ere: 파이프 버퍼보다 큰 입력의 첫 줄 일치를 놓치지 않는다"
+else
+	fail "matches_ere: 있는 일치를 '없음' 으로 냈다 — 판정이 파이프 status 를 탄다" \
+		"payload ${#SIGPIPE_PAD} 문자(ASCII), 첫 줄 '0.7.0', 패턴 $VERSION_ERE"
+fi
 
 # ── mutation — 이 스위트가 실제로 잡는지 ─────────────────────────────────
 if [ "${CARGO_PACKAGE_VERSION_SKIP_MUTATION:-0}" != "1" ]; then
@@ -480,7 +574,7 @@ $SUB_OUT"
 		fi
 		if run_suite_against_workflow "$dst"; then
 			fail "mutation[$name]: 변조본이 green — 배선 단계가 이 편집을 못 잡는다" "$SUB_OUT"
-		elif printf '%s\n' "$SUB_OUT" | grep -qF "$want"; then
+		elif contains "$SUB_OUT" "$want"; then
 			pass "mutation[$name]: '$want' 가 red 를 낸다"
 		else
 			fail "mutation[$name]: 스위트는 red 인데 기대한 단언이 아니다 (기대: $want)" "$SUB_OUT"
