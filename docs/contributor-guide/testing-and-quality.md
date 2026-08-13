@@ -281,9 +281,12 @@ Deferred or non-blocking checks must stay explicit:
 `scripts/**/*.test.sh` 는 `set -uo pipefail` 아래에서 단언을 돌린다. 그 안에서
 `printf '%s\n' "$X" | grep -q …` 로 부분 문자열을 판정하면 **판정이 파이프 status 에
 실린다**. `grep -q` 는 첫 일치에서 stdin 을 안 비우고 빠지고, 왼쪽 writer 가 파이프
-버퍼(64KiB)를 넘겨 써야 하면 EPIPE → SIGPIPE 로 141 이 되며, `pipefail` 이 그 141 을
-파이프라인 status 로 올린다. 부호가 양인 헬퍼(「있어야 한다」)에서는 거짓 red 로
-나타나고, 부호가 반대인 헬퍼(「없어야 한다」)에서는 **조용한 거짓 green** 이 된다 —
+버퍼(64KiB)를 넘겨 써야 하면 EPIPE 를 맞는다. 그 status 는 자리마다 갈린다 —
+EXIT trap 이 아직 안 걸린 자리에서만 SIGPIPE 로 141 이고, trap 이 걸린 뒤에는 bash 가
+SIGPIPE 로 못 죽어 printf 가 rc=1 과 `printf: write error: Broken pipe` 로 돌아온다.
+어느 쪽이든 비영이라 `pipefail` 이 그것을 파이프라인 status 로 올린다. 부호가 양인
+헬퍼(「있어야 한다」)에서는 거짓 red 로 나타나고, 부호가 반대인 헬퍼(「없어야
+한다」)에서는 **조용한 거짓 green** 이 된다 —
 후자는 red 를 안 남겨 로그로 못 찾는다. 기전·경계 실측·처방은 issue #2314 · #2319 와
 `scripts/review/measure-rounds.test.sh` · `scripts/release/verify-tag-ci.test.sh` 의
 `contains()` 주석에 있다.

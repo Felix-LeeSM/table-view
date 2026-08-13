@@ -123,8 +123,15 @@ assert_rc() {
 #
 # **파이프를 쓰지 않는다.** 옛 구현 `printf '%s\n' "$OUT" | grep -qF -- "$1"` 은
 # grep -q 가 첫 일치에서 stdin 을 안 비우고 빠지는 동안 왼쪽 printf 가 아직 쓸 것을
-# 갖고 있으면 EPIPE → SIGPIPE 로 141 이 되고, 위 `set -o pipefail` 이 그 141 을
-# 파이프라인 status 로 올려 **판정을 뒤집었다.**
+# 갖고 있으면 EPIPE 를 맞았다. 그 status 는 자리마다 갈린다 —
+# EXIT trap 이 아직 안 걸린 자리에서만 SIGPIPE 로 141 이고, trap 이 걸린 뒤에는 bash 가
+# SIGPIPE 로 못 죽어 printf 가 rc=1 과 `printf: write error: Broken pipe` 로 돌아온다.
+# 어느 쪽이든 비영이라 위 `set -o pipefail` 이 그것을 파이프라인 status 로 올려
+# **판정을 뒤집었다.**
+#
+# 이 파일 안에 그 경계가 있다 — 아래 assert_has 와 continue-on-error 가드는 `trap
+# 'rm -rf "$TMP"' EXIT` 보다 위라 141 쪽이고, 스텁부터 회귀 가드까지는 그 아래라 rc=1
+# 쪽이다. 뒤집힘 자체는 어느 쪽이든 성립한다.
 #
 # `case` 패턴 안의 따옴표 친 확장은 glob 메타문자까지 리터럴이라 `grep -F` 와 뜻이
 # 같고, 프로세스도 파이프도 안 만든다. 다른 점은 needle 에 개행이 있을 때뿐이다 —
@@ -428,12 +435,17 @@ assert_rc 1 "fail-closed: 자기 run 의 체크만 있으면 0건과 같다"
 #
 # 옛 구현은 `printf '%s\n' "$X" | grep -q…` 였다. grep -q 는 첫 일치에서 stdin 을
 # 안 비우고 빠지고, 왼쪽 printf 가 파이프 버퍼(64KiB)보다 큰 것을 써야 하면 grep 이
-# 비워 주기를 기다리며 막혔다가 이미 빠진 grep 때문에 EPIPE → SIGPIPE 로 141 이
-# 된다. `set -o pipefail` 이 그 141 을 파이프라인 status 로 올려 판정을 뒤집는다.
+# 비워 주기를 기다리며 막혔다가 이미 빠진 grep 때문에 EPIPE 를 맞는다. `set -o pipefail`
+# 이 그 비영 status 를 파이프라인 status 로 올려 판정을 뒤집는다. 값은 갈린다 — 이 절은
+# 위 `trap … EXIT` 아래라 rc=1 이고, 이 절이 지키는 진짜 continue-on-error 가드는 trap
+# 보다 위라 141 이었다. 뒤집힘은 양쪽이 같아 가드는 그대로 선다 (기전은 위 contains()
+# 주석).
 #
 # payload 를 파이프 버퍼의 두 배로 잡는 이유: 버퍼 바로 위는 아직 확률이다.
 # 2026-08-13 macOS 실측 한 판(bash 3.2.57 + BSD grep 2.6.0, 4-way 동시 × 200,
-# 첫 줄 일치, 옛 파이프 형태, flip = 있는 것을 "없음" 으로 낸 횟수. 전부 printf 쪽 141):
+# 첫 줄 일치, 옛 파이프 형태, flip = 있는 것을 "없음" 으로 낸 횟수. 그 race.sh 는 EXIT
+# trap 을 안 걸어 flip 이 전부 printf 쪽 141 이었다 — 이 절 안에서는 같은 flip 이 rc=1
+# 로 온다. 세는 것은 뒤집힘이지 status 값이 아니다):
 #   8041B 0/800 · 70057B 799/800 · 200055B 800/800
 # 같은 판에서 `case` 형태와 here-string 형태는 세 크기 모두 0/800 이었다.
 # 재현 명령은 PR #2318 body 「기전의 경계」절의 race.sh 이고, `hs` 모드는 그것에
@@ -456,13 +468,13 @@ else
 		"131072 를 못 넘으면 결정론 구간 밖이다 — 버퍼 바로 위(70057B)는 위 실측대로 아직 확률이라 가드가 무력해진다."
 fi
 
-# ② assert_has — 있는 문자열을 SIGPIPE 로 놓치지 않는다. 옛 구현에서는 141 이
+# ② assert_has — 있는 문자열을 EPIPE 로 놓치지 않는다. 옛 구현에서는 그 비영 status 가
 #    pipefail 을 타고 올라와 이 단언이 red 였다 (눈에 띄는 쪽).
 OUT="NEEDLE-2319
 $SIGPIPE_PAD"
 assert_has "NEEDLE-2319" "assert_has: 파이프 버퍼보다 큰 출력의 첫 줄 일치를 놓치지 않는다"
 
-# ③ continue-on-error 가드 — **이쪽이 더 위험하다.** 부호가 반대라 같은 141 이
+# ③ continue-on-error 가드 — **이쪽이 더 위험하다.** 부호가 반대라 같은 비영 status 가
 #    「키 없음」 = 통과로 등록되어 red 조차 안 남긴다. 여기서 올바른 동작이 곧
 #    FAIL 이라 서브셸에서 불러 출력만 본다 — total/fails 증가는 서브셸과 함께
 #    버려진다. 이 판정이 뒤집히면 릴리스 게이트에 continue-on-error 가 붙어
