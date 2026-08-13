@@ -195,8 +195,16 @@ assert_rc() {
 #
 # **파이프를 쓰지 않는다.** 옛 구현 `printf '%s\n' "$OUT" | grep -qF -- "$1"` 은
 # grep -q 가 첫 일치에서 stdin 을 안 비우고 빠지는 동안 왼쪽 printf 가 아직 쓸 것을
-# 갖고 있으면 EPIPE → SIGPIPE 로 141 이 되고, 위 `set -o pipefail` 이 그 141 을
-# 파이프라인 status 로 올려 **판정을 뒤집었다.**
+# 갖고 있으면 EPIPE 를 맞았다. 그 status 는 자리마다 갈린다 —
+# EXIT trap 이 아직 안 걸린 자리에서만 SIGPIPE 로 141 이고, trap 이 걸린 뒤에는 bash 가
+# SIGPIPE 로 못 죽어 printf 가 rc=1 과 `printf: write error: Broken pipe` 로 돌아온다.
+# 어느 쪽이든 비영이라 위 `set -o pipefail` 이 그것을 파이프라인 status 로 올려
+# **판정을 뒤집었다.**
+#
+# **이 파일에는 141 이 나올 자리가 없다.** `trap 'rm -rf "$FIX_DIR"' EXIT` 가 픽스처
+# 생성 앞에서 걸리고, 이 함수와 matches_ere() 를 지나는 단언은 그 아래에만 있다. 순서가
+# 바뀌면 이 서술이 낡는다 — trap 줄이 첫 호출 줄보다 위에 찍히는지로 다시 재라:
+#   git grep -n -E 'trap .*EXIT|(contains|matches_ere) "' scripts/release/cargo-package-version.test.sh
 #
 # `case` 패턴 안의 따옴표 친 확장은 glob 메타문자까지 리터럴이라 `grep -F` 와 뜻이
 # 같고, 프로세스도 파이프도 안 만든다. 다른 점은 needle 에 개행이 있을 때뿐이다 —
@@ -344,8 +352,10 @@ check_workflow_coupling
 #
 # 옛 구현은 `printf '%s\n' "$X" | grep -q…` 였다. grep -q 는 첫 일치에서 stdin 을
 # 안 비우고 빠지고, 왼쪽 printf 가 파이프 버퍼(64KiB)보다 큰 것을 써야 하면 grep 이
-# 비워 주기를 기다리며 막혔다가 이미 빠진 grep 때문에 EPIPE → SIGPIPE 로 141 이
-# 된다. `set -o pipefail` 이 그 141 을 파이프라인 status 로 올려 판정을 뒤집는다.
+# 비워 주기를 기다리며 막혔다가 이미 빠진 grep 때문에 EPIPE 를 맞는다. 이 절은 위
+# `trap … EXIT` 아래라 그 status 가 141 이 아니라 rc=1 이다 — 기전은 위 contains()
+# 주석이 갖는다. `set -o pipefail` 이 그 비영 status 를 파이프라인 status 로 올려
+# 판정을 뒤집는다.
 #
 # **이 파일에서 contains()·matches_ere() 를 지나는 판정은 부호가 전부 양이다** —
 # assert_has, 위 X.Y.Z 형식 단언, 배선 단계의 호출 줄 판정, mutation 단계의 기대
@@ -355,7 +365,9 @@ check_workflow_coupling
 #
 # payload 를 파이프 버퍼의 두 배로 잡는 이유: 버퍼 바로 위는 아직 확률이다.
 # 2026-08-13 macOS 실측 한 판(bash 3.2.57 + BSD grep 2.6.0, 4-way 동시 × 200,
-# 첫 줄 일치, 옛 파이프 형태, flip = 있는 것을 "없음" 으로 낸 횟수. 전부 printf 쪽 141):
+# 첫 줄 일치, 옛 파이프 형태, flip = 있는 것을 "없음" 으로 낸 횟수. 그 race.sh 는 EXIT
+# trap 을 안 걸어 flip 이 전부 printf 쪽 141 이었다 — 이 절 안에서는 같은 flip 이 rc=1
+# 로 온다. 세는 것은 뒤집힘이지 status 값이 아니다):
 #   8041B 0/800 · 70057B 799/800 · 200055B 800/800
 # 같은 판에서 `case` 형태와 here-string 형태는 세 크기 모두 0/800 이었다.
 # 재현 명령은 PR #2318 body 「기전의 경계」절의 race.sh 다.
@@ -377,7 +389,7 @@ else
 		"131072 를 못 넘으면 결정론 구간 밖이다 — 버퍼 바로 위(70057B)는 위 실측대로 아직 확률이라 가드가 무력해진다."
 fi
 
-# ② assert_has — 있는 문자열을 SIGPIPE 로 놓치지 않는다. 배선 단계의 호출 줄 판정과
+# ② assert_has — 있는 문자열을 EPIPE 로 놓치지 않는다. 배선 단계의 호출 줄 판정과
 #    mutation 단계의 기대 라벨 판정도 같은 contains() 를 지나므로 여기가 그 셋의 가드다.
 OUT="NEEDLE-2319
 $SIGPIPE_PAD"
