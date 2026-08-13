@@ -1,9 +1,9 @@
 ---
 title: Orchestration — 병렬 작업 spawn · 리뷰 큐 · 사이클 정지
 type: workflow-rule
-updated: 2026-08-11
+updated: 2026-08-13
 task: orchestration, parallel-pr, spawn, review-queue, cycle-detection, issue-authoring
-keywords: spawn, slot, slot 상한, 동시 활성, 병렬, 파일 교집합, 리뷰 큐, 수용 기준, 접수 조건, 사이클, needs:user, 이슈 발행, 유형 단위, raw, task, 보고 검증, 도달 검증, 세션 스냅샷, 묶음 이슈, 해악별 값, 겸무, 정지 조건, 사용자 산문, 고정부 첨부, origin/main 판
+keywords: spawn, slot, slot 상한, 동시 활성, 병렬, 파일 교집합, 리뷰 큐, 수용 기준, 접수 조건, 사이클, needs:user, 이슈 발행, 유형 단위, raw, task, 보고 검증, 도달 검증, 세션 스냅샷, 묶음 이슈, 해악별 값, 겸무, 정지 조건, 사용자 산문, 고정부 첨부, origin/main 판, 머지 칸, 머지 보고, 종결자 반환, 위임 모드, non-blocking 스윕, gh pr list --state merged
 trigger:
   signal: 여러 작업을 동시에 돌리거나, 이슈를 발행하거나, 리뷰 라운드가 안 끝날 때
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -142,6 +142,18 @@ script 도 대체물도 없다.
 **나가는 프롬프트만이 아니라 돌아오는 보고도 spawn 한 쪽 책임이다.** subagent 의
 보고를 다음 노드의 전제로 넣기 전에 검증한다 — 모호한 문장을 그대로 넘기면 뜻이
 뒤집힌 채 전파된다 (2026-07-25 실측). 인용은 원문 그대로 하고 해석은 검증 뒤에 붙인다.
+
+그 책임은 **위로 올리는 것까지다.** 종결자 반환의 첫 줄
+(`.agents/prompts/pr-finalize.md` 「반환 형식」의 `- PR: #<번호> — merged <SHA>`)이
+[interface](../interface/memory.md) §2 non-blocking 스윕의 트리거인데, 위임 모드에서
+그 반환은 orchestrator 가 받고 interface 는 못 본다 — 보고로 안 올리면 그 PR 의
+non-blocking 은 아무 데도 안 간다. 올리는 것은 **번호와 머지 SHA 를 원문 그대로**이고
+거기까지다: 코멘트를 열지 않고 무엇을 이슈로 열지도 정하지 않는다 — 그 판단은 §4 를
+지나는 interface 몫이다. 값의 출처를 `gh pr list --state merged` 로 바꾸지 않는다.
+창을 정의해야 하고, 그 창은 남의 세션이 머지한 PR 과 앞 pass 가 이미 올린 PR 을 다시
+실어 같은 스윕을 두 번 발화시킨다. 반환 전에 pass 가 끝난 PR 은 머지 칸이 아니라
+`대기` 로 가고 다음 pass 의 머지 칸이 집는다. 칸의 형식은
+`.agents/prompts/orchestrator.md` 「보고 형식」.
 
 **도달 검증에는 세션 경계가 있다.** `CLAUDE.md` 의 `@` import 와 harness 의 agent
 정의 레지스트리는 **세션 시작 시점 스냅샷**이다 — 이 파일들을 바꾸는 PR 의 도달
