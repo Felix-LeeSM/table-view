@@ -25,7 +25,7 @@ the product-facing support boundary stays in `docs/product/**`.
 | Shared contract fixtures | `tests/fixtures/**` | Shared TS/Rust/parser/support-boundary fixtures are contract evidence only. Unsupported-boundary fixtures are negative evidence and do not widen runtime support. |
 | Backend adapter fixture harness | `src-tauri/table-view-core/src/db/fixtures.rs`, `src-tauri/tests/fixture_harness.rs` | Adapter fixtures are requested by profile/family/paradigm/capability. Missing fixture diagnostics are failures, not silent skips. Current embedded harness coverage is Search-only. |
 | Generator/profile specs | `fixtures/**` | Profile existence is not runtime support. |
-| Test placement | `src/**`, `src-tauri/tests`, `e2e/smoke` | Frontend unit/component tests stay near their feature/domain; Rust integration stays under `src-tauri/tests`; desktop smoke stays under `e2e/smoke`, which nothing wires automatically. |
+| Test placement | `src/**`, `src-tauri/tests`, `src-tauri/<member>/tests`, `e2e/smoke` | Frontend unit/component tests stay near their feature/domain; Rust integration for the app package stays under `src-tauri/tests`, and a workspace member keeps its own beside its manifest — `tvw`'s live engine coverage is `src-tauri/tvw/tests/query_url_live.rs` (#2323); desktop smoke stays under `e2e/smoke`, which nothing wires automatically. |
 
 Promotion gate: fixture path + consuming contract/integration/E2E test +
 product docs or known-limitation review + smoke-routing decision. Fixture
