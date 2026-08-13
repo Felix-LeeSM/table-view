@@ -72,7 +72,11 @@ top-level 세션(사용자와 직접 대화하는 그 세션)이 맡는 역할. 
 - orchestrator 가 `needs:user` 로 멈추면: 보고를 사용자에게 올리고, 답을
   §1 절차로 티켓/코멘트로 만든 뒤 재개한다.
 - orchestrator 컨텍스트가 한계(실측 250k 부근)에 가까우면 새로 spawn 한다.
-  상태는 전부 GitHub 에 있으므로 인계 비용이 없다.
+  **교체 전에 마지막 pass 보고의 머지 칸과 `대기` 칸을 이어받는다** — 머지 칸은 이 세션이
+  §2 로 처리하고, `대기` 칸은 위 재개 규칙의 PR 번호 포인터로 새 orchestrator 에 넘긴다.
+  머지된 PR 은 새 노드의 상태 수집(`--state open`)에서 빠지고, 출처를 `--state merged` 로
+  바꾸는 것은 [orchestration](../orchestration/memory.md) §7 이 막는다 — 그 번호가
+  돌아오는 자리는 이 인계다. 나머지 상태는 GitHub 에 있어 새 노드가 스스로 모은다.
 
 ## 4. 쓰기 범위
 

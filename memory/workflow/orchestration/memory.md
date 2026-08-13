@@ -144,7 +144,8 @@ script 도 대체물도 없다.
 뒤집힌 채 전파된다 (2026-07-25 실측). 인용은 원문 그대로 하고 해석은 검증 뒤에 붙인다.
 
 그 책임은 **위로 올리는 것까지다.** 종결자 반환의 첫 줄
-(`.agents/prompts/pr-finalize.md` 「반환 형식」의 `- PR: #<번호> — merged <SHA>`)이
+(`.agents/prompts/pr-finalize.md` 「반환 형식」의
+`- PR: #<번호> — merged <머지 SHA> (squash)`)이
 [interface](../interface/memory.md) §2 non-blocking 스윕의 트리거인데, 위임 모드에서
 그 반환은 orchestrator 가 받고 interface 는 못 본다 — 보고로 안 올리면 그 PR 의
 non-blocking 은 아무 데도 안 간다. 올리는 것은 **번호와 머지 SHA 를 원문 그대로**이고
