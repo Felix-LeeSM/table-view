@@ -3,7 +3,7 @@ title: Interface — 사용자 대화 전담 · 티켓 승격 · orchestrator �
 type: workflow-rule
 updated: 2026-08-11
 task: interface, user-dialogue, grill, ticket-promotion, needs-user, decision-record
-keywords: 인터페이스, 사용자 대화, grill, 그릴, 승격, raw, task, needs:user, 결정 기록, 반대 근거, orchestrator spawn, SendMessage, 재개, 겸무, 직접 orchestration, 겸무 SOT, MANDATORY read
+keywords: 인터페이스, 사용자 대화, grill, 그릴, 승격, raw, task, needs:user, 결정 기록, 반대 근거, orchestrator spawn, SendMessage, 재개, 겸무, 직접 orchestration, 겸무 SOT, MANDATORY read, non-blocking, scorecard, 이슈화, 머지 보고
 ---
 
 # Interface — 행동 계약
@@ -34,6 +34,19 @@ top-level 세션(사용자와 직접 대화하는 그 세션)이 맡는 역할. 
   명령 출력 하나로 닫혀야 한다. 못 닫으면 raw 로 남긴다.
 - 사용자 발화도 예외가 아니다: "말했다 ≠ 계획이다". 승격 절차를 지나야
   orchestrator 의 입력이 된다.
+- **scorecard 의 non-blocking 을 이슈로 올리는 것은 interface 이고, 시점은 머지 보고를 받은 턴이다.**
+  종결자를 직접 띄운 겸무 턴에는 그 반환(`.agents/prompts/pr-finalize.md` 「반환 형식」)에
+  머지된 PR 번호가 실려 이 세션에 닿는다. 그 턴에 아래로 그 PR 의 scorecard 를 읽고, 같은
+  유형의 열린 이슈가 있으면 코멘트로 붙이고 없으면 새로 연다 — 유형으로 묶는 기준은
+  [orchestration](../orchestration/memory.md) §4 다.
+  리뷰어와 종결자는 이슈를 못 열어서, 이 턴을 놓치면 그 non-blocking 은 아무 데도 안 간다.
+  **§3 으로 orchestrator 에 위임한 세션에는 이 트리거가 안 온다** —
+  `.agents/prompts/orchestrator.md` 「보고 형식」에 머지 칸이 없어서다. 사고가 아니라 정상
+  경로이고, 그 채널 신설은 이슈 #2333 으로 나갔다.
+
+  ```bash
+  gh pr view <N> --repo Felix-LeeSM/table-view --json comments -q '.comments[].body'
+  ```
 
 ## 3. orchestrator 운용
 
