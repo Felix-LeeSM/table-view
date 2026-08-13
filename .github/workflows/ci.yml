@@ -954,15 +954,20 @@ jobs:
   cli-live-query:
     name: CLI Live Query (Docker)
     runs-on: ubuntu-latest
-    # One guaranteed cold compile: `Swatinem/rust-cache` keys its entries by job,
-    # so this job opens entries of its own that only main can save. The graph is
-    # `table-view-core`'s, whose `duckdb` is bundled C++ source — the same cost
-    # that holds the `rust` job at 35. Locally that graph builds in 4m45s
-    # (`cargo build -p tvw --bin tvw` from an absent target dir, macOS, one run
-    # under other load). No runner measurement exists for THIS job until it
-    # merges, so 45 is headroom over a local figure plus three service
-    # containers, not a number read off a run.
-    timeout-minutes: 45
+    # Every PR run of this job is cold: `Swatinem/rust-cache` keys its entries by
+    # job, so this one opens entries of its own and `save-if` lets only main
+    # write them. The graph is `table-view-core`'s, whose `duckdb` is bundled C++
+    # source — the same cost that holds the `rust` job at 35, over a smaller
+    # graph here because the Tauri app is not in it.
+    #
+    # 25 is roughly twice one measured cold run, not a guess: on
+    # https://github.com/Felix-LeeSM/table-view/actions/runs/31699765244/job/94445900377
+    # the whole job took 11m04s, of which `Run tvw live query tests` was 10m05s
+    # and the tests themselves 0.23s (`gh api
+    # repos/{owner}/{repo}/actions/jobs/94445900377 --jq '.steps[]'`). That is
+    # one run on one runner, so the headroom is deliberate; the cap is here to
+    # end a hang, not to grade the build.
+    timeout-minutes: 25
 
     # Ports mirror docker-compose.yml, so a local `pnpm db:up` run and this one
     # use one set of numbers. MySQL and MariaDB both listen on 3306 inside their
