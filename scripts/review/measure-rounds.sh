@@ -120,13 +120,13 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
-# 인자 형식 판정. 「맞나/아닌가」를 파이프라인 status 로 받던 자리를 이 둘로 모았다 —
+# 인자 형식 판정. 「맞나/아닌가」를 파이프라인 status 로 받던 자리를 이 셋으로 모았다 —
 # 판정이 여기서만 나야 다음 편집이 그 형태를 되살릴 자리가 없다 (#2330, 선행 #2314·#2319).
 # 이 파일에서 여기를 안 지나는 파이프와 그 이유:
 #   - `printf '%s' "$out" | jq -r …` (fetch_pages) — jq 가 입력을 끝까지 읽고,
 #     status 가 아니라 값을 쓴다.
 #
-# **파이프를 쓰지 않는다.** 옛 구현 `printf '%s' "$1" | grep -qE …` 는 grep -q 가 첫
+# **파이프라인을 안 만든다.** 옛 구현 `printf '%s' "$1" | grep -qE …` 는 grep -q 가 첫
 # 일치에서 stdin 을 안 비우고 빠지는 동안 왼쪽 printf 가 아직 쓸 것을 갖고 있으면
 # EPIPE 를 맞고, 위 `set -o pipefail` 이 그 비영 status 를 파이프라인 status 로 올려
 # 판정을 뒤집는다. 그 값은 자리마다 갈린다 — EXIT trap 이 아직 안 걸린 자리에서만
@@ -136,27 +136,40 @@ done
 # 쪽이었다. 순서가 바뀌면 이 서술이 낡는다 — trap 줄이 첫 호출 줄보다 아래인지로 재라:
 #   git grep -n -E '^trap .*EXIT|is_(date|uint) "\$' scripts/review/measure-rounds.sh
 #
-# `case` 는 문자열 전체를 본다. 이것이 `grep -E '^…$'` 와 다른 점이고, 옛 형태의
-# 두 번째 결함이다 — grep 은 줄 단위라 첫 줄만 맞으면 통과시켰다. origin/main
-# 6a41dc07 에서 `--limit '5<개행>garbage'` 는 rc=0 (bash 가 `[: integer expression
-# expected` 를 찍고 그대로 진행), `--since '2026-07-25<개행>garbage'` 는 rc=0 으로
-# 집계까지 냈다. 회귀 가드는 scripts/review/measure-rounds.test.sh 의
-# 「여러 줄 인자 (#2330)」 절이다.
-is_date() {
+# here-string 은 파이프라인이 아니라 `pipefail` 이 올릴 남의 status 가 애초에 없고,
+# `$?` 는 grep 것 하나뿐이다. 형태와 사유는
+# docs/contributor-guide/testing-and-quality.md 「Shell Suite Harness Quality」의
+# 처방 그대로이고, scripts/release/cargo-package-version.test.sh 의 matches_ere 가
+# 같은 형태다 (#2319).
+#
+# **셸 `case` 로 안 옮긴다.** 앵커(`^` · `$`)를 못 쓰는 것에 더해, `case` 패턴의
+# `[0-9]` 는 문자 클래스가 아니라 **collation 범위**라 그 집합을 로케일이 정한다 —
+# ubuntu:24.04(bash 5.2.21 · GNU grep 3.11) `LC_ALL=en_US.UTF-8` 에서
+# `case '٣' in [0-9])` 는 참인데 `grep -E '^[0-9]+$'` 는 거짓이라, `case` 로 옮기면
+# 옛 형태가 거절하던 값이 통과한다. macOS bash 3.2.57 은 C · en_US.UTF-8 ·
+# ko_KR.UTF-8 세 로케일 모두 거절해서 로컬에선 안 보인다 (#2330 라운드 1 리뷰).
+#
+# 개행은 grep 에 닿기 전에 거절한다 — grep 은 줄 단위라 첫 줄만 맞으면 통과시켰다.
+# origin/main 6a41dc07 에서 `--limit '5<개행>garbage'` 는 rc=0 (bash 가 `[: integer
+# expression expected` 를 찍고 그대로 진행), `--since '2026-07-25<개행>garbage'` 는
+# rc=0 으로 집계까지 냈다. 회귀 가드는 scripts/review/measure-rounds.test.sh 의
+# 「여러 줄 인자 (#2330)」 · 「인자 판정의 형태 (#2330)」 절이다.
+matches_ere() {
 	case "$1" in
-	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) return 0 ;;
-	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) return 0 ;;
-	*) return 1 ;;
+	*$'\n'*) return 1 ;;
 	esac
+	grep -qE -- "$2" <<<"$1"
 }
 
-# 음이 아닌 정수. 표기는 `.github/workflows/review-gate.yml` 의 라운드 집계 검증과
-# 같다 — 같은 것을 묻는 자리가 두 표기를 갖지 않게 맞춘다.
+is_date() {
+	matches_ere "$1" '^[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)?$'
+}
+
+# 음이 아닌 정수. `.github/workflows/review-gate.yml` 의 라운드 집계 검증은
+# `case "$rounds" in '' | *[!0-9]*)` 그대로다 — 그쪽 입력은 jq `length` 가 낸 값이라
+# 로케일이 닿는 문자가 못 들어오고, 여기는 인자가 사용자 입력이라 갈린다.
 is_uint() {
-	case "$1" in
-	'' | *[!0-9]*) return 1 ;;
-	*) return 0 ;;
-	esac
+	matches_ere "$1" '^[0-9]+$'
 }
 
 if [ -z "$SINCE" ]; then

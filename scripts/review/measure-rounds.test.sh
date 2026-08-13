@@ -514,6 +514,64 @@ OUT="$(bash "$SCRIPT" --from-json "$FIXTURE" --since 2026-07-25 --until 2026-07-
 RC=$?
 assert_rc 2 "--top 이 여러 줄이면 첫 줄만 맞아도 거절한다"
 
+# ── 인자 판정의 형태 (#2330) ─────────────────────────────────────────────
+# is_date() · is_uint() 가 셸 `case` 의 브래킷 **범위**로 숫자를 판정하지 않는다는
+# 회귀 가드. `[0-9]` 는 문자 클래스가 아니라 collation 범위라 그 집합을 로케일이
+# 정한다 — ubuntu:24.04(bash 5.2.21 · GNU grep 3.11) `LC_ALL=en_US.UTF-8` 에서
+# `case '٣' in [0-9])` 는 참인데 `grep -E '^[0-9]+$'` 는 거짓이라, 파이프를 떼면서
+# `case` 로 옮기면 옛 형태가 거절하던 값이 통과한다.
+#
+# **행동이 아니라 형태를 본다.** 이 갈림은 glibc 에서만 나타난다 — macOS bash
+# 3.2.57 은 C · en_US.UTF-8 · ko_KR.UTF-8 세 로케일 모두 두 형태가 거절해서
+# 판별력이 0 이고, 행동 단언만 두면 개발 머신에서 아무것도 안 지킨다. 아래
+# 「행동 축」 한 줄이 같은 축을 glibc 러너에서 한 번 더 잡는다.
+#
+# 이 절의 판별력은 아래 mutation "is-uint-case-range" 다 — is_uint() 를 옛 `case`
+# 형태로 되돌리면 이 스위트에서 red 가 되는 것은 이 절뿐이다.
+echo "arg validator shape (#2330):"
+
+script_func_body() {
+	awk -v fn="$1" '
+		$0 ~ "^" fn "\\(\\) \\{" { f = 1 }
+		f { print }
+		f && /^\}/ { exit }
+	' "$SCRIPT"
+}
+
+SHAPE="$(script_func_body matches_ere)"
+if [ -z "$SHAPE" ]; then
+	fail "matches_ere() 가 없다 — 인자 판정이 다른 형태로 옮겨갔다"
+elif contains "$SHAPE" '<<<"$1"'; then
+	pass "matches_ere() 가 here-string 으로 먹인다 (파이프라인이 아니다)"
+else
+	fail "matches_ere() 가 here-string 을 안 쓴다" "현재 본문:
+$SHAPE"
+fi
+
+for fn in is_date is_uint; do
+	SHAPE="$(script_func_body "$fn")"
+	if [ -z "$SHAPE" ]; then
+		fail "$fn() 이 없다"
+	elif contains "$SHAPE" 'case '; then
+		fail "$fn() 이 case 로 판정한다 — 브래킷 범위는 collation 이라 로케일이 숫자 집합을 정한다" \
+			"현재 본문:
+$SHAPE"
+	elif contains "$SHAPE" 'matches_ere "$1"'; then
+		pass "$fn() 이 matches_ere 로 판정한다 (셸 collation 범위를 안 탄다)"
+	else
+		fail "$fn() 이 matches_ere 를 안 쓴다" "현재 본문:
+$SHAPE"
+	fi
+done
+
+# 행동 축. 위 형태 단언과 달리 이 단언의 판별력은 libc 에 달렸다 — glibc +
+# en_US.UTF-8 에서만 두 형태가 갈린다. 그 로케일이 없는 러너에서는 setlocale 이
+# 실패해 C 로 남고, 그러면 어느 형태든 거절해서 이 줄은 아무것도 안 가른다.
+OUT="$(LC_ALL=en_US.UTF-8 bash "$SCRIPT" --from-json "$FIXTURE" \
+	--since 2026-07-25 --until 2026-07-26 --limit '٣' 2>&1)"
+RC=$?
+assert_rc 2 "--limit 이 비-ASCII 십진 숫자면 거절한다 (en_US.UTF-8)"
+
 # ── assertion helpers (#2314) ────────────────────────────────────────────
 # contains() 가 파이프를 안 쓴다는 것의 회귀 가드. 옛 형태로 되돌리면 여기가 red 다.
 #
@@ -665,6 +723,12 @@ if [ "${MEASURE_ROUNDS_SKIP_MUTATION:-0}" != "1" ]; then
 	mutation_case "round-events-comment-source" \
 		'(.comments.nodes | map(.createdAt) | sort) as $ts' \
 		'(.commits.nodes | map(.commit.committedDate) | sort) as $ts'
+	# is_uint() 를 옛 셸 `case` 형태로 되돌린다. 로컬(macOS)에서는 두 형태의 **행동**이
+	# 안 갈려서 — 여러 줄 인자도 비-ASCII 숫자도 양쪽 다 거절한다 — 위 「인자 판정의
+	# 형태」 절 말고는 이 변형을 잡는 단언이 없다. 그 절의 판별력이 이 변형이다.
+	mutation_case "is-uint-case-range" \
+		"	matches_ere \"\$1\" '^[0-9]+\$'" \
+		"	case \"\$1\" in '' | *[!0-9]*) return 1 ;; *) return 0 ;; esac"
 fi
 
 echo ""

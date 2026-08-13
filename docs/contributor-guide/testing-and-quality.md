@@ -347,6 +347,32 @@ writer 가 쓸 것을 다 밀어 넣고 끝나 EPIPE 가 안 난다. #2314 의 P
 것 하나뿐이다. **`set -o pipefail` 을 지우는 것은 답이 아니다** — 그 파일의 다른
 파이프라인 실패를 같이 놓친다.
 
+**`case` 로 옮기는 것은 리터럴 판정까지다 — 브래킷 범위는 로케일이 정한다.**
+`case` 패턴의 `[0-9]` 는 문자 클래스가 아니라 **collation 범위**여서 그 집합이
+로케일에 달렸고, 같은 판정을 하던 `grep -E '^[0-9]+$'` 는 안 그렇다. 파이프를
+떼면서 숫자·날짜 형식 검사까지 `case` 로 옮기면 옛 형태가 거절하던 값이 통과한다 —
+#2330 이 그 형태로 들어왔다가 리뷰 라운드 1 에서 잡혀 here-string 으로 되돌렸다.
+아라비아-인도 숫자 `٣` 로 잰 값 (ubuntu:24.04, bash 5.2.21 · GNU grep 3.11):
+
+```
+docker run --rm ubuntu:24.04 bash -c '
+apt-get -qq update >/dev/null 2>&1 && apt-get -qq install -y locales >/dev/null 2>&1
+locale-gen en_US.UTF-8 >/dev/null 2>&1
+for L in C.UTF-8 en_US.UTF-8; do
+  for f in '\''case "$1" in [0-9]) echo case=ACCEPT;; *) echo case=REJECT;; esac'\'' \
+           '\''grep -qE "^[0-9]+$" <<<"$1" && echo grep=ACCEPT || echo grep=REJECT'\''; do
+    printf "%s %s\n" "$L" "$(LC_ALL=$L bash -c "$f" _ ٣)"
+  done
+done'
+# C.UTF-8 case=REJECT      C.UTF-8 grep=REJECT
+# en_US.UTF-8 case=ACCEPT  en_US.UTF-8 grep=REJECT
+```
+
+macOS bash 3.2.57 은 C · en_US.UTF-8 · ko_KR.UTF-8 세 로케일 모두 두 형태가
+REJECT 라 **개발 머신에서는 이 갈림이 안 보인다.** 그래서 이 축의 회귀 가드는
+행동이 아니라 **형태**를 봐야 한다 — `scripts/review/measure-rounds.test.sh` 의
+「인자 판정의 형태 (#2330)」 절이 그 형태다.
+
 **회귀 가드의 payload 는 파이프 버퍼(64KiB)의 두 배 위로 잡고 그 크기 자체를
 단언한다.** 버퍼 언저리는 아직 스케줄링 경합이라 확률로만 나타나고, 누가 payload 를
 줄이면 나머지 단언이 green 이어도 아무것도 안 지키기 때문이다. 2026-08-13 macOS 실측
@@ -359,12 +385,12 @@ flip = 있는 것을 「없음」으로 낸 횟수): 8041B 0/800 · 70057B 799/8
 성립하려면 `grep` 이 앞쪽에서 빠져야 하고, 그러려면 입력이 여러 줄이면서 첫 줄이
 맞아야 한다. 판정이 문자열 **전체**를 보는 자리 — `^…$` 로 감싼 인자 형식 검사 —
 에서는 그런 입력의 올바른 답이 이미 「거절」이라, 옛 형태가 EPIPE 로 거절하든 새
-`case` 형태가 문자열 전체를 보고 거절하든 답이 같다. 큰 payload 의 판별력이 0 이
-된다. #2330 이 `scripts/review/measure-rounds.sh` 의 `is_uint()` 에서 잰 값: 첫 줄
-`5` 뒤에 숫자 327682 자를 붙여 5회 돌리면 옛 REJECT · 새 REJECT 이고, 같은 입력을
-11 자로 줄이면 옛 ACCEPT · 새 REJECT 다. 그래서 그 자리의 회귀 가드는 **작은** 여러
-줄 입력이고, 큰 payload 가 필요한 자리는 부호가 반대인 쪽 — 뒤집힘이 「없음」 =
-통과를 만드는 자리다.
+형태가 개행을 먼저 거절하든 답이 같다. 큰 payload 의 판별력이 0 이 된다. #2330 이
+`scripts/review/measure-rounds.sh` 의 `is_uint()` 에서 잰 값: 첫 줄 `5` 뒤에 숫자
+327682 자를 붙인 입력은 5회 모두 옛 REJECT · 새 REJECT 이고, 같은 모양을 12 자
+(`5` + 개행 + `1234567890`)로 줄이면 5회 모두 옛 ACCEPT · 새 REJECT 다. 그래서 그
+자리의 회귀 가드는 **작은** 여러 줄 입력이고, 큰 payload 가 필요한 자리는 부호가
+반대인 쪽 — 뒤집힘이 「없음」 = 통과를 만드는 자리다.
 
 **부호가 반대인 가드를 빠뜨리지 않는다.** 「없어야 한다」쪽은 뒤집혀도 red 를 안
 남기므로 「없어야 할 것이 실제로 있는데 통과」를 재현하는 단언을 따로 남긴다 —
