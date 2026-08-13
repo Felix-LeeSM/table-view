@@ -164,6 +164,7 @@ generator: none — 손으로 갱신한다
 
 ### issue-authoring
 
+- [Interface — 사용자 대화 전담 · 티켓 승격 · orchestrator 운용](../../memory/workflow/interface/memory.md)
 - [Orchestration](../../memory/workflow/orchestration/memory.md)
 
 ### local-storage

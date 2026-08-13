@@ -2,8 +2,8 @@
 title: Interface — 사용자 대화 전담 · 티켓 승격 · orchestrator 운용
 type: workflow-rule
 updated: 2026-08-13
-task: interface, user-dialogue, grill, ticket-promotion, needs-user, decision-record
-keywords: 인터페이스, 사용자 대화, grill, 그릴, 승격, raw, task, needs:user, 결정 기록, 반대 근거, orchestrator spawn, SendMessage, 재개, 겸무, 직접 orchestration, 겸무 SOT, MANDATORY read, non-blocking, scorecard, 이슈화, 머지 보고
+task: interface, user-dialogue, grill, ticket-promotion, needs-user, decision-record, issue-authoring
+keywords: 인터페이스, 사용자 대화, grill, 그릴, 승격, raw, task, needs:user, 결정 기록, 반대 근거, orchestrator spawn, SendMessage, 재개, 겸무, 직접 orchestration, 겸무 SOT, MANDATORY read, non-blocking, scorecard, 이슈화, 이슈 발행, 머지 보고, orchestrator 교체, 인계
 ---
 
 # Interface — 행동 계약
