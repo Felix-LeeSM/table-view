@@ -225,7 +225,7 @@ cd src-tauri && cargo test --workspace --lib
 > `-p`로 고르세요.
 > 통합 테스트까지 포함한 릴리스 전 순서는
 > [`docs/contributor-guide/testing-and-quality.md`](./docs/contributor-guide/testing-and-quality.md)의
-> Pre-Release Verification Gate Rust lane이 SOT입니다.
+> Pre-Release Verification Gate Rust lane · Docker integration lane이 SOT입니다.
 
 ### 3. 통합 테스트 (Docker 필요)
 
