@@ -24,6 +24,12 @@ type Tree = {
   /** `src-tauri/tests/` 아래에 만들 파일. 키는 그 디렉토리 기준 상대 경로. */
   tests?: Record<string, string>;
   /**
+   * workspace member crate 이름 → 그 crate 의 `tests/` 아래에 만들 파일.
+   * `src-tauri/<이름>/Cargo.toml` 을 같이 뿌린다 — 게이트는 manifest 옆의 `tests`
+   * 디렉토리를 스캔 루트로 잡으므로 manifest 가 없으면 그 디렉토리는 안 세어진다.
+   */
+  members?: Record<string, Record<string, string>>;
+  /**
    * `.github/workflows/ci.yml` 본문. 생략하면 호출 1건짜리 기본 workflow 이고,
    * `null` 이면 `.github/workflows` 디렉토리 자체를 안 만든다.
    */
@@ -36,16 +42,34 @@ const DEFAULT_WORKFLOW = `      - name: Run cargo tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --test called_one
 `;
 
-function seed({ tests = {}, workflow, allowlist = "" }: Tree): string {
-  const root = mkdtempSync(join(tmpdir(), "ci-test-calls-"));
-  trees.push(root);
-
-  const testsDir = join(root, "src-tauri", "tests");
+/**
+ * crate 하나를 뿌린다. 게이트는 manifest 의 내용을 안 읽고 `<crate>/Cargo.toml` 이
+ * `tests` 옆에 있다는 사실만 보므로 본문은 최소 형태다.
+ */
+function seedCrate(dir: string, name: string, tests: Record<string, string>) {
+  const testsDir = join(dir, "tests");
   mkdirSync(testsDir, { recursive: true });
+  writeFileSync(`${dir}/Cargo.toml`, `[package]\nname = "${name}"\n`, "utf8");
   for (const [rel, body] of Object.entries(tests)) {
     const path = join(testsDir, rel);
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, body, "utf8");
+  }
+}
+
+function seed({
+  tests = {},
+  members = {},
+  workflow,
+  allowlist = "",
+}: Tree): string {
+  const root = mkdtempSync(join(tmpdir(), "ci-test-calls-"));
+  trees.push(root);
+
+  const crates = join(root, "src-tauri");
+  seedCrate(crates, "fixture-app", tests);
+  for (const [name, files] of Object.entries(members)) {
+    seedCrate(join(crates, name), name, files);
   }
 
   if (workflow !== null) {
@@ -158,6 +182,81 @@ describe("check-ci-test-calls", () => {
     expect(run.status).toBe(1);
   });
 
+  // 아래는 스캔 루트가 앱 패키지 하나가 아니라는 것을 잠근다 (#2336). 루트가
+  // `src-tauri/tests` 뿐이던 동안 `src-tauri/tvw/tests/query_url_live.rs` 는
+  // 등급 대상 밖이라, 그것을 부르는 `--test` 줄을 지워도 게이트가 green 이었다.
+  it("fails a workspace member's test binary that no workflow calls", () => {
+    const root = seed({
+      tests: CALLED,
+      members: { tvw: { "query_url_live.rs": "fn main() {}\n" } },
+    });
+    const run = runGate(root);
+    expect(run.out).toContain("FAIL query_url_live");
+    expect(run.out).toContain("ci-uncalled-tests.txt 에 없다");
+    expect(run.status).toBe(1);
+  });
+
+  it("counts a --test name that selects a member's binary", () => {
+    const root = seed({
+      tests: CALLED,
+      members: { tvw: { "query_url_live.rs": "fn main() {}\n" } },
+      workflow: `${DEFAULT_WORKFLOW}      - run: cargo test --manifest-path src-tauri/Cargo.toml -p tvw --test query_url_live\n`,
+    });
+    const run = runGate(root);
+    expect(run.out).toMatch(/^ok: /);
+    expect(run.status).toBe(0);
+  });
+
+  // 루트만 넓히고 allowlist 판정을 그대로 두면 새 자리가 등록 불가인 채 남는다 —
+  // 넓히기 전에는 이 픽스처가 `그런 테스트가 없다` 로 rc 1 이었다.
+  it("lets the allowlist carry a member's uncalled binary", () => {
+    const root = seed({
+      tests: CALLED,
+      members: { tvw: { "query_url_live.rs": "fn main() {}\n" } },
+      allowlist: "query_url_live\tdocker 필요, 후속 이슈\n",
+    });
+    const run = runGate(root);
+    expect(run.out).toMatch(/^ok: /);
+    expect(run.status).toBe(0);
+  });
+
+  // 집계가 통과 경로에만 있으면 인용할 수 있는 상태가 반쪽이 된다. red 를 받은
+  // 사람이 가장 먼저 묻는 것이 "내 crate 가 스캔되긴 했나" 인데 (#2336 이 바로 안
+  // 스캔된 루트였다) 그 답이 위반이 있을 때만 사라지면 안 된다. 아래는 수치와 두
+  // 루트를 통째로 못 박아, `집계:` 줄이 사라지거나 루트가 하나로 좁아지면 red 다.
+  it("prints the tally and the scan roots on the violation path too", () => {
+    const root = seed({
+      tests: { ...CALLED, "guard_grep.rs": "fn main() {}\n" },
+      members: { tvw: { "query_url_live.rs": "fn main() {}\n" } },
+    });
+    const run = runGate(root);
+    expect(run.out).toMatch(
+      /^집계: 통합 테스트 target 3 종 — CI 호출 1 종, 사유 달린 미호출 allowlist 0 종 \(스캔 루트: src-tauri\/tests, src-tauri\/tvw\/tests\)$/m,
+    );
+    expect(run.status).toBe(1);
+  });
+
+  // 스캔 루트는 manifest 옆 `tests` 다. crate 안쪽 `src/**/tests` 는 cargo 가
+  // 통합 target 으로 안 보는 모듈 디렉토리이므로 (실물:
+  // `src-tauri/table-view-core/src/db/search/tests/`) 여기 있는 파일을 미호출
+  // target 으로 세면 안 된다.
+  it("does not grade a tests directory that sits inside src/", () => {
+    const root = seed({ tests: CALLED, members: { "table-view-core": {} } });
+    const moduleTests = join(
+      root,
+      "src-tauri",
+      "table-view-core",
+      "src",
+      "db",
+      "tests",
+    );
+    mkdirSync(moduleTests, { recursive: true });
+    writeFileSync(join(moduleTests, "metadata.rs"), "fn main() {}\n", "utf8");
+    const run = runGate(root);
+    expect(run.out).toMatch(/^ok: /);
+    expect(run.status).toBe(0);
+  });
+
   it("fails an allowlist entry with no reason", () => {
     const root = seed({
       tests: { ...CALLED, "guard_grep.rs": "fn main() {}\n" },
@@ -199,8 +298,16 @@ describe("check-ci-test-calls", () => {
     expect(run.status).toBe(1);
   });
 
-  // 아래 넷은 "아무것도 못 쟀는데 위반 0 으로 통과" 를 막는다. 트리가 옮겨지거나
+  // 아래는 "아무것도 못 쟀는데 위반 0 으로 통과" 를 막는다. 트리가 옮겨지거나
   // `--test` 표기가 통째로 바뀐 날 게이트가 조용히 green 이 되면 안 된다.
+  it("refuses a tree whose src-tauri holds no crate manifest", () => {
+    const root = seed({ tests: CALLED });
+    rmSync(`${root}/src-tauri/Cargo.toml`);
+    const run = runGate(root);
+    expect(run.out).toContain("tests 디렉토리가 하나도 없다");
+    expect(run.status).toBe(2);
+  });
+
   it("refuses a tree with no integration test target", () => {
     const root = seed({ tests: {} });
     const run = runGate(root);

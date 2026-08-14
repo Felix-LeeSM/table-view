@@ -115,16 +115,17 @@ jobs:
         run: bash scripts/check-memory-doc-size.sh
 
       # A fourth contract rides here, for the same reason the second and third
-      # do (#2113). `--test` is an allowlist: an integration binary under
-      # src-tauri/tests that no workflow line names never runs, so a test
-      # written to turn CI red can sit green and gate nothing — the `keyring_*`
-      # binaries did exactly that until #1815. Which binaries count as uncalled
-      # is decided by `scripts/check-ci-test-calls.sh` alone; its header states
-      # the rule and running it prints the current tally. Every uncalled binary
-      # under that root has to carry a reason in `ci-uncalled-tests.txt`, and one
-      # that does not fails here. A workspace member's own tests directory is
-      # outside the scan root, so this contract does not reach it (#2336) — see
-      # the `cli-live-query` job. Draining that file — wiring each binary in or
+      # do (#2113). `--test` is an allowlist: an integration binary that no
+      # workflow line names never runs, so a test written to turn CI red can sit
+      # green and gate nothing — the `keyring_*` binaries did exactly that until
+      # #1815. Which binaries count as uncalled is decided by
+      # `scripts/check-ci-test-calls.sh` alone; its header states the rule and
+      # running it prints the current tally along with the roots it scanned.
+      # Every uncalled binary has to carry a reason in `ci-uncalled-tests.txt`,
+      # and one that does not fails here. Since #2336 the scan takes every
+      # `tests` directory sitting beside a `src-tauri/**/Cargo.toml` manifest, so
+      # a workspace member's own targets are graded on the same terms — see the
+      # `cli-live-query` job. Draining that file — wiring each binary in or
       # deleting it — is a follow-up issue, not this one (owner's call,
       # 2026-08-03).
       # It lands in this job rather than one of its own because a required
@@ -520,11 +521,10 @@ jobs:
       # --workspace` would pull in every `src-tauri/tests/*.rs` binary,
       # including the Docker-backed ones that belong to `Integration Tests
       # (Docker)` and cannot run on this runner. `scripts/check-ci-test-calls.sh`
-      # is the gate on that list: every integration target under `src-tauri/tests`
-      # is either named here (or in the coverage job) or carries a reason in
-      # `ci-uncalled-tests.txt`. That scan root stops there — a workspace member's
-      # own tests directory is outside what this gate grades (#2336, and the
-      # `cli-live-query` job's comment).
+      # is the gate on that list: every integration target it finds is either
+      # named here (or in the coverage job, or the `cli-live-query` job) or
+      # carries a reason in `ci-uncalled-tests.txt`. Since #2336 that scan takes
+      # each package's own `tests` directory, a workspace member's included.
       #
       # `keyring_*` (#1815) sits in this job rather than the coverage job on
       # purpose — that job carries `--fail-under-*` ratchets and adding targets
@@ -915,11 +915,11 @@ jobs:
   # named by no workflow line, and `--test` is an allowlist: an integration
   # target nobody names never runs.
   #
-  # Nothing guards that for this crate. `scripts/check-ci-test-calls.sh` is the
-  # gate that catches an uncalled integration target, and its scan root is
-  # `src-tauri/tests` alone — it does not reach `src-tauri/tvw/tests`, so
-  # deleting the `--test` line below would not turn any check red. Widening that
-  # scan is a follow-up, out of this issue's two-path scope.
+  # `scripts/check-ci-test-calls.sh` is the gate that catches an uncalled
+  # integration target, and since #2336 its scan takes every `tests` directory
+  # beside a `src-tauri/**/Cargo.toml` manifest, `src-tauri/tvw/tests` included.
+  # Deleting the `--test` line below turns the `PR Body Contract` job red unless
+  # the name moves into `ci-uncalled-tests.txt` with a reason.
   #
   # A job of its own rather than a step inside `Integration Tests (Docker)`.
   # That job runs its whole suite through `cargo llvm-cov nextest`, whose

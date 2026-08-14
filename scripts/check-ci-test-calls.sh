@@ -8,17 +8,29 @@
 #
 # ## 무엇을 세는가 — 이 규칙이 판정의 전부다
 #
-#   전수   = `find <tests> -maxdepth 1 -type f -name '*.rs'` 가 낸 파일의 확장자
-#            뗀 이름, 그리고 `find <tests> -mindepth 2 -maxdepth 2 -type f -name
-#            'main.rs'` 가 낸 파일의 부모 디렉토리 이름 (cargo 가 자동 인식하는
-#            통합 테스트 target 두 형태. 후자는 `cargo metadata` 로 실측 확인 —
-#            빈 디렉토리에 main.rs 하나를 넣으면 target 이 하나 늘고 그 이름은
-#            디렉토리 이름이다)
+#   스캔 루트 = `src-tauri/**/Cargo.toml` 바로 옆에 있는 `tests` 디렉토리 전부
+#            (`target` 디렉토리 안은 안 본다). 앱 패키지의 `src-tauri/tests` 와
+#            workspace member 의 `src-tauri/<member>/tests` 가 그렇게 들어오고,
+#            이번 실행이 무엇을 스캔했는지는 아래 집계 줄이 찍는다 (#2336)
+#   전수   = 스캔 루트마다 `find <root> -maxdepth 1 -type f -name '*.rs'` 가 낸
+#            파일의 확장자 뗀 이름, 그리고 `find <root> -mindepth 2 -maxdepth 2
+#            -type f -name 'main.rs'` 가 낸 파일의 부모 디렉토리 이름 (cargo 가
+#            자동 인식하는 통합 테스트 target 두 형태. 후자는 `cargo metadata` 로
+#            실측 확인 — 빈 디렉토리에 main.rs 하나를 넣으면 target 이 하나 늘고
+#            그 이름은 디렉토리 이름이다). 두 루트에 같은 이름이 있으면 한 이름으로
+#            센다 — 호출도 이름으로만 세기 때문이다
 #   호출   = `.github/workflows/` 아래 모든 파일에서, 첫 비공백이 `#` 가 아닌
 #            줄에 있는 `--test<공백><이름>` 의 <이름>
 #   미호출 = 전수 − 호출  →  전부 ci-uncalled-tests.txt 에 사유와 함께 있어야 한다
 #
 # 이 규칙에 안 적힌 성질은 판정에 안 들어간다.
+#
+# 스캔 루트를 손으로 열거하지 않는 이유: member 가 늘 때마다 목록이 낡는데, 낡은 쪽은
+# red 가 아니라 green 이다 — 그 crate 의 통합 테스트를 아무도 안 부르는 상태가 조용히
+# 통과한다. `src-tauri/tvw/tests` 가 실제로 그렇게 들어왔다 (#2336). `[workspace]
+# members` 를 읽지 않는 이유는 그 목록이 member 전수가 아니어서다 — path dependency 는
+# 적지 않아도 member 이고, 그 사실은 `src-tauri/Cargo.toml` 헤더가 적는다. cargo 가
+# 통합 target 을 찾는 단위는 manifest 이므로 manifest 옆 `tests` 를 그대로 쓴다.
 #
 # 주석 줄을 호출에서 빼는 이유: 이 저장소 `ci.yml` 은 「예전 줄은 `--test X` 였다」는
 # 이력 주석을 관례로 남긴다. 주석을 세면 진짜 호출을 지우고 이력 주석만 남긴 커밋이
@@ -33,21 +45,23 @@
 #   bash scripts/check-ci-test-calls.sh          # 이 repo
 #   bash scripts/check-ci-test-calls.sh <ROOT>   # 다른 트리 (테스트가 쓴다)
 #
-# 마지막 줄에 전수 · 호출 · allowlist 를 찍는다. 이 게이트의 수치를 인용할 일이
-# 있으면 이 명령의 출력을 쓴다 — 같은 대조를 손으로 다시 적으면 게이트가 바뀌는
-# 날 그 사본만 낡는다.
+# 집계 줄(전수 · 호출 · allowlist · 스캔 루트)은 **통과와 위반 양쪽 경로에 다
+# 찍는다** — 통과하면 stdout 의 `ok:` 줄, 위반이 있으면 stderr 의 `집계:` 줄이다.
+# 이 게이트의 수치를 인용할 일이 있으면 이 명령의 출력을 쓴다 — 같은 대조를 손으로
+# 다시 적으면 게이트가 바뀌는 날 그 사본만 낡는다. 위반이 있을 때만 숫자가
+# 사라지면 인용할 수 있는 상태가 반쪽이 된다.
 #
 # exit: 0 통과 · 1 위반 있음 · 2 검사가 성립하지 않음
 
 set -uo pipefail
 
 REPO="${1:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"}"
-TESTS_DIR="$REPO/src-tauri/tests"
+CRATES_DIR="$REPO/src-tauri"
 WORKFLOWS_DIR="$REPO/.github/workflows"
 ALLOWLIST="$REPO/ci-uncalled-tests.txt"
 ALLOWLIST_NAME="ci-uncalled-tests.txt"
 
-for dir in "$TESTS_DIR" "$WORKFLOWS_DIR"; do
+for dir in "$CRATES_DIR" "$WORKFLOWS_DIR"; do
 	if [ ! -d "$dir" ]; then
 		echo "ERROR: 검사할 디렉토리가 없다: $dir" >&2
 		exit 2
@@ -62,9 +76,35 @@ fi
 # find 의 종료 상태를 여기서 받는다. `< <(find ...)` 로 넘기면 process substitution
 # 이라 bash 가 상태를 안 보고 pipefail 도 안 걸려서, 못 읽는 하위 디렉토리가 있어도
 # 게이트는 green 이 된다 (같은 함정이 scripts/check-memory-doc-size.sh 에도 있다).
-if ! flat_files="$(find "$TESTS_DIR" -maxdepth 1 -type f -name '*.rs')" ||
-	! dir_files="$(find "$TESTS_DIR" -mindepth 2 -maxdepth 2 -type f -name 'main.rs')"; then
-	echo "ERROR: find 가 $TESTS_DIR 를 다 훑지 못했다 (위 stderr) — 검사 불성립" >&2
+# `| sort` 는 루트 순서를 고정한다 — pipefail 이 켜져 있어 find 의 실패는 그대로 온다.
+# `target` 을 prune 하는 이유는 둘이다: 빌드 산출물 트리를 훑는 비용, 그리고 그 안에
+# 딸려 온 남의 manifest 를 스캔 루트로 세지 않기 위해서다.
+if ! manifests="$(find "$CRATES_DIR" -name target -prune -o -type f -path '*/Cargo.toml' -print | sort)"; then
+	echo "ERROR: find 가 $CRATES_DIR 를 다 훑지 못했다 (위 stderr) — 검사 불성립" >&2
+	exit 2
+fi
+
+# 스캔 루트 = manifest 옆 `tests` 디렉토리. `roots_label` 은 사람이 읽는 자리에만
+# 쓰므로 $REPO 를 뗀 상대 경로다 — 임시 트리에서 돌려도 같은 모양으로 읽힌다.
+tests_dirs=()
+roots_label=""
+while IFS= read -r manifest; do
+	[ -n "$manifest" ] || continue
+	dir="${manifest%/Cargo.toml}/tests"
+	[ -d "$dir" ] || continue
+	tests_dirs+=("$dir")
+	roots_label="${roots_label:+$roots_label, }${dir#"$REPO/"}"
+done <<<"$manifests"
+
+# 루트가 0 개면 아무것도 안 재고 통과할 판이다 — 검사 불성립으로 끊는다.
+if [ "${#tests_dirs[@]}" -eq 0 ]; then
+	echo "ERROR: $CRATES_DIR 아래 manifest 옆에 tests 디렉토리가 하나도 없다 — 트리가 옮겨졌거나 경로가 틀렸다" >&2
+	exit 2
+fi
+
+if ! flat_files="$(find "${tests_dirs[@]}" -maxdepth 1 -type f -name '*.rs')" ||
+	! dir_files="$(find "${tests_dirs[@]}" -mindepth 2 -maxdepth 2 -type f -name 'main.rs')"; then
+	echo "ERROR: find 가 스캔 루트($roots_label)를 다 훑지 못했다 (위 stderr) — 검사 불성립" >&2
 	exit 2
 fi
 
@@ -77,7 +117,7 @@ targets_n="$(printf '%s\n' "$targets" | grep -c '.')"
 # 0 개를 "위반 0" 으로 통과시키면 트리가 옮겨진 날 게이트가 아무것도 안 재면서
 # green 이 된다. 검사 불성립은 통과가 아니다.
 if [ "$targets_n" -eq 0 ]; then
-	echo "ERROR: $TESTS_DIR 아래에 통합 테스트 target 이 0 개다 — 트리가 옮겨졌거나 경로가 틀렸다" >&2
+	echo "ERROR: 스캔 루트($roots_label) 아래에 통합 테스트 target 이 0 개다 — 트리가 옮겨졌거나 경로가 틀렸다" >&2
 	exit 2
 fi
 
@@ -150,7 +190,7 @@ while read -r name reason; do
 		continue
 	fi
 	if ! has "$name" "$targets_set"; then
-		echo "FAIL $name: $ALLOWLIST_NAME 에 있는데 src-tauri/tests 에 그런 테스트가 없다 — 줄을 지워라" >&2
+		echo "FAIL $name: $ALLOWLIST_NAME 에 있는데 스캔 루트($roots_label)에 그런 테스트가 없다 — 줄을 지워라" >&2
 		violations=$((violations + 1))
 		continue
 	fi
@@ -172,11 +212,18 @@ while IFS= read -r name; do
 	fi
 done <<<"$targets"
 
+summary="통합 테스트 target $targets_n 종 — CI 호출 $called_n 종, 사유 달린 미호출 allowlist $allowed_n 종 (스캔 루트: $roots_label)"
+
 if [ "$violations" -gt 0 ]; then
+	# 집계를 통과 경로에만 두면 인용할 수 있는 상태가 반쪽이 된다. red 를 받은
+	# 사람이 가장 먼저 묻는 것이 "내 crate 가 스캔되긴 했나" 인데 (#2336 이 바로
+	# 안 스캔된 루트였다) 그 답이 위반이 있을 때만 사라지면 안 된다.
+	# `scripts/check-non-blocking-jobs.sh` 가 같은 이유로 같은 형태를 쓴다.
+	echo "집계: $summary" >&2
 	# `::error::` 는 GitHub Actions workflow command 다 — Actions 에서는 PR 체크
 	# 화면 맨 위 annotation 이 되고, 로컬에서는 접두어가 그대로 찍히는 한 줄이다.
 	echo "::error::CI 미호출 통합 테스트 대조 위반 $violations 건 (위 FAIL 줄). 새 테스트는 .github/workflows 의 \`--test\` 로 부르거나, 못 부르는 사유를 $ALLOWLIST_NAME 에 적어라 (issue #2113)." >&2
 	exit 1
 fi
 
-echo "ok: 통합 테스트 target $targets_n 종 — CI 호출 $called_n 종, 사유 달린 미호출 allowlist $allowed_n 종"
+echo "ok: $summary"
