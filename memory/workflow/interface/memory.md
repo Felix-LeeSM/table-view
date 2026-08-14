@@ -43,6 +43,8 @@ top-level 세션(사용자와 직접 대화하는 그 세션)이 맡는 역할. 
   **§3 으로 orchestrator 에 위임한 세션에는 그 반환이 orchestrator 에서 멈춘다** — 대신
   `.agents/prompts/orchestrator.md` 「보고 형식」의 머지 칸이 번호와 머지 SHA 를 올려 같은
   턴을 연다. 그 칸의 계약은 [orchestration](../orchestration/memory.md) §7 이다.
+  **진입로가 하나 더 있다 — orchestrator 교체 인계다.** §3 이 `대기` 칸에서 갈라내는
+  머지된 PR 도 같은 스윕으로 오고, 가르는 조회와 인계 절차는 §3 이 소유한다.
 
   ```bash
   gh pr view <N> --repo Felix-LeeSM/table-view --json comments -q '.comments[].body'
