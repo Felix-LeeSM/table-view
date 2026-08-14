@@ -146,14 +146,15 @@ done
 # `[0-9]` 는 문자 클래스가 아니라 **collation 범위**라 그 집합을 로케일이 정한다 —
 # ubuntu:24.04(bash 5.2.21 · GNU grep 3.11) `LC_ALL=en_US.UTF-8` 에서
 # `case '٣' in [0-9])` 는 참인데 `grep -E '^[0-9]+$'` 는 거짓이라, `case` 로 옮기면
-# 옛 형태가 거절하던 값이 통과한다. macOS bash 3.2.57 은 C · en_US.UTF-8 ·
-# ko_KR.UTF-8 세 로케일 모두 거절해서 로컬에선 안 보인다 (#2330 라운드 1 리뷰).
+# 옛 형태가 거절하던 값이 통과한다. macOS bash 3.2.57 도 C · en_US.UTF-8 ·
+# ko_KR.UTF-8 셋만 보면 셋 다 거절하지만, 그 셋은 표본이다 — `locale -a` 를 전수로
+# 돌면 같은 머신에도 갈리는 로케일이 있다. 열거 명령은 위 문서의 같은 절에 있다.
 #
 # 개행은 grep 에 닿기 전에 거절한다 — grep 은 줄 단위라 첫 줄만 맞으면 통과시켰다.
 # origin/main 6a41dc07 에서 `--limit '5<개행>garbage'` 는 rc=0 (bash 가 `[: integer
 # expression expected` 를 찍고 그대로 진행), `--since '2026-07-25<개행>garbage'` 는
 # rc=0 으로 집계까지 냈다. 회귀 가드는 scripts/review/measure-rounds.test.sh 의
-# 「여러 줄 인자 (#2330)」 · 「인자 판정의 형태 (#2330)」 절이다.
+# 「여러 줄 인자 (#2330)」 · 「인자 판정의 로케일 축 (#2330)」 절이다.
 matches_ere() {
 	case "$1" in
 	*$'\n'*) return 1 ;;

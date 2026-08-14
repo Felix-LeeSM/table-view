@@ -369,9 +369,26 @@ done'
 ```
 
 macOS bash 3.2.57 은 C · en_US.UTF-8 · ko_KR.UTF-8 세 로케일 모두 두 형태가
-REJECT 라 **개발 머신에서는 이 갈림이 안 보인다.** 그래서 이 축의 회귀 가드는
-행동이 아니라 **형태**를 봐야 한다 — `scripts/review/measure-rounds.test.sh` 의
-「인자 판정의 형태 (#2330)」 절이 그 형태다.
+REJECT 다. **그 셋은 표본이지 머신의 판정이 아니다** — 같은 머신에서 `locale -a` 를
+전수로 돌리면 갈리는 이름이 나온다. 2026-08-15 macOS 26.5.2 (bash 3.2.57 · BSD
+grep) 실측:
+
+```
+locale -a | while read -r L; do
+  C=$(LC_ALL="$L" bash -c 'case "٣" in [0-9]) echo A ;; *) echo R ;; esac' 2>/dev/null)
+  G=$(LC_ALL="$L" bash -c 'grep -qE "^[0-9]+$" <<<"٣" && echo A || echo R' 2>/dev/null)
+  [ "$C" = "A" ] && [ "$G" = "R" ] && echo "$L"
+done | sort
+# ar_AE  ar_AE.UTF-8  ar_EG  ar_EG.UTF-8  ar_JO  ar_JO.UTF-8  ar_MA  ar_MA.UTF-8
+# ar_QA  ar_QA.UTF-8  ar_SA  ar_SA.UTF-8  fa_AF  fa_AF.UTF-8  fa_IR  fa_IR.UTF-8
+# locale -a 288 개 중 16 개이고 전부 아랍어·페르시아어다 (`locale -a | wc -l` = 288).
+```
+
+그래서 이 축의 회귀 가드는 **행동**이다 — 로케일 이름을 박지 않고, 위와 같은
+판정으로 러너의 `locale -a` 에서 갈리는 첫 하나를 골라 그 로케일로 스크립트를
+돌린다. `scripts/review/measure-rounds.test.sh` 의 「인자 판정의 로케일 축 (#2330)」
+절이 그 형태이고, 고른 이름을 단언 label 에 찍는다. 갈리는 로케일이 러너에 하나도
+없으면 통과가 아니라 red 다 — 가드가 무력해진 것을 조용히 넘기지 않기 위해서다.
 
 **회귀 가드의 payload 는 파이프 버퍼(64KiB)의 두 배 위로 잡고 그 크기 자체를
 단언한다.** 버퍼 언저리는 아직 스케줄링 경합이라 확률로만 나타나고, 누가 payload 를
