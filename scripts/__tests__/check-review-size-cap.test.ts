@@ -116,11 +116,26 @@ describe("check-review-size-cap", () => {
 
   // 위 케이스가 전부 green 이어도 workflow 가 스크립트를 안 부르면 게이트는
   // 없는 것과 같다 — 스텝이 지워지거나 이름이 바뀌면 여기서 잡힌다.
+  //
+  // **주석 줄은 호출로 안 센다.** 두 workflow 다 스크립트 경로를 산문 주석에도
+  // 적으므로, 파일 전체에 경로가 있는지만 보면 스텝을 통째로 지우고 주석만 남겨도
+  // 통과한다. 「첫 비공백이 `#` 가 아닌 줄」이라는 같은 판정을 형제 가드
+  // scripts/check-ci-test-calls.sh 가 먼저 쓴다 (그 헤더 「무엇을 세는가」).
+  //
+  // 파이프 모양까지 고정하는 이유: 이 게이트는 개행도 한 글자로 세므로 호출자가
+  // `printf '%s\n'` 으로 넘기면 문서에 없던 한 글자가 더해지고, 그러면 같은
+  // 「12,000」이 호출 자리마다 다른 수가 된다 (#2321).
   it.each([".github/workflows/ci.yml", ".github/workflows/review-gate.yml"])(
-    "is wired into %s",
+    "calls %s's gate outside a comment, with a pipe that adds no characters",
     (workflow) => {
-      const yaml = readFileSync(join(repoRoot, workflow), "utf8");
-      expect(yaml).toContain(gate);
+      const calls = readFileSync(join(repoRoot, workflow), "utf8")
+        .split("\n")
+        .filter((l) => l.includes(gate) && !l.trimStart().startsWith("#"));
+      expect(calls).not.toHaveLength(0);
+      for (const call of calls) {
+        expect(call).toMatch(/printf '%s' "\$\{?\w+\}?"\s*\|\s*bash /);
+        expect(call).toContain(gate);
+      }
     },
   );
 });

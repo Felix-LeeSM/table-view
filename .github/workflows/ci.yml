@@ -247,6 +247,14 @@ jobs:
       # payload with the old body and fails at the same character count. The
       # scorecard half of this cap sits in review-gate.yml and clears
       # differently — it re-reads comments through the API.
+      #
+      # `printf '%s'`, without the `\n` the step above uses. That newline is a
+      # character, and a character cap counts it: with `'%s\n'` this step read
+      # 5517 for a 5516-character body, so «12,000 이하» meant 11,999 here while
+      # the scorecard site — where `$( )` strips the trailing newline before
+      # `printf` puts one back — kept meaning 12,000. One cap, two numbers. The
+      # neighbouring universals step keeps its `\n` on purpose: that check is
+      # line-oriented and its last line needs a terminator.
       - name: PR body size cap
         env:
           BODY: ${{ github.event.pull_request.body }}
@@ -255,7 +263,7 @@ jobs:
             echo "no PR body on this event — nothing to check"
             exit 0
           fi
-          if ! printf '%s\n' "$BODY" | bash scripts/check-review-size-cap.sh "PR body"; then
+          if ! printf '%s' "$BODY" | bash scripts/check-review-size-cap.sh "PR body"; then
             echo "::error::Trim the body, then push a commit. A body edit alone does NOT clear this — the workflow ignores edited events and a job re-run re-reads the OLD body from the original payload."
             exit 1
           fi

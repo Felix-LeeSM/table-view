@@ -207,6 +207,13 @@ jobs:
       # 조회 실패는 통과가 아니라 실패다. 0 장은 통과다 — opened / synchronize 처럼
       # 아직 리뷰가 안 붙은 이벤트에서도 이 job 이 돌기 때문이고, 그때 "scorecard 가
       # 없다" 는 못 잰 것이 아니라 참이다.
+      #
+      # 아래 `printf '%s'` 에 `\n` 이 없다. 개행도 한 글자라 문자 cap 이 그것을 센다 —
+      # `'%s\n'` 이면 호출자가 문서에 없던 한 글자를 얹어 상한의 뜻이 자리마다 달라진다
+      # (ci.yml 의 같은 자리가 5516 자 body 를 5517 로 읽었다). 이쪽은 `$( )` 가 끝
+      # 개행을 떼고 `printf` 가 하나를 도로 붙여 상쇄됐지만, 상쇄는 코멘트가 개행 하나로
+      # 끝날 때만 성립한다. 여기서 재는 것은 **끝 개행을 뗀 코멘트**다 — 늘 실제 이하라
+      # 거짓 red 를 못 만든다.
       - name: Scorecard size cap
         if: github.event_name == 'pull_request'
         env:
@@ -227,7 +234,7 @@ jobs:
               exit 1
             fi
             checked=$((checked + 1))
-            printf '%s\n' "$body" | bash scripts/check-review-size-cap.sh "scorecard ${id}" || over=$((over + 1))
+            printf '%s' "$body" | bash scripts/check-review-size-cap.sh "scorecard ${id}" || over=$((over + 1))
           done
           if [ "$over" -gt 0 ]; then
             echo "::error::분량 cap 을 넘은 scorecard ${over} 장 (위 FAIL 줄의 코멘트 id). 그 코멘트를 줄인 뒤 이 job 을 re-run 해라 — 이 스텝은 코멘트를 API 로 다시 읽으므로 새 commit 없이 풀린다."
