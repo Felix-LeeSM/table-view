@@ -73,9 +73,79 @@ fn with_suffix(base: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(s)
 }
 
+/// How many `-1`, `-2`, … variants [`claim_quarantine_path`] will try before it
+/// gives up. Two collisions in one second is already the outer edge of what the
+/// real paths produce; the bound is here so a pathological directory ends in an
+/// error instead of an unbounded loop.
+const QUARANTINE_NAME_ATTEMPTS: u32 = 1_000;
+
+/// Seconds since the Unix epoch, or `0` for a clock set before it.
+///
+/// Both quarantine naming rules in this module tree are built on it — this one
+/// and [`crate::storage`]'s `quarantine_corrupt_storage` — and its **second**
+/// resolution is exactly why they both have to go through
+/// [`claim_quarantine_path`]: two quarantines inside one second read the same
+/// value and build the same name.
+pub(crate) fn quarantine_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Take `preferred` for a quarantine, or the first `-1`, `-2`, … variant of it
+/// that nothing holds yet, and return the name that was taken.
+///
+/// Issue #2302. `fs::rename` replaces an existing destination on Unix with no
+/// error and no log, so a quarantine that renames onto a name something else
+/// already owns destroys the generation it was written to preserve — silently,
+/// and in the one code path whose entire job is to keep the user's last copy.
+/// Second-resolution timestamps are not enough to keep the names apart:
+/// `open_pool` quarantines twice inside one call when the header probe fires and
+/// the replacement DB then fails its health check (`storage/local.rs`).
+///
+/// The claim is `create_new`, not `Path::exists`. A check followed by a rename
+/// leaves a window in which a second instance of the app — or a relaunch — takes
+/// the name in between, which is the same silent overwrite one step further out.
+/// `create_new` makes "is this name free" and "this name is mine now" a single
+/// operation, so the loser of that race gets `AlreadyExists` and moves to the
+/// next candidate rather than renaming over the winner.
+///
+/// The empty file left behind is the reservation itself; the caller renames the
+/// quarantined file over it. A caller that fails afterwards deliberately leaves
+/// it in place rather than releasing the name: the source file is still where it
+/// was (that is what lets the next boot retry), so the placeholder cannot be
+/// mistaken for lost data, and releasing it would re-open the name while any
+/// sidecar already moved beside it stays.
+pub(crate) fn claim_quarantine_path(preferred: &Path) -> Result<PathBuf, AppError> {
+    for attempt in 0..QUARANTINE_NAME_ATTEMPTS {
+        let candidate = if attempt == 0 {
+            preferred.to_path_buf()
+        } else {
+            with_suffix(preferred, &format!("-{attempt}"))
+        };
+        match fs::File::create_new(&candidate) {
+            Ok(_) => return Ok(candidate),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Err(AppError::Storage(format!(
+        "no free quarantine name beside {} after {} attempts",
+        preferred.display(),
+        QUARANTINE_NAME_ATTEMPTS
+    )))
+}
+
 /// Rename `state.db` to `state.db.bak` (Q2). 기존 `.bak` 가 있으면 timestamp
 /// suffix 를 붙여 누적 보존 — 사용자가 manual 복구 시 여러 corruption epoch
 /// 을 모두 inspect 가능.
+///
+/// Issue #2302: the name is taken through [`claim_quarantine_path`] rather than
+/// handed straight to `fs::rename`. Both branches below needed it — the
+/// timestamped one because its second-resolution stamp repeats, and the
+/// `state.db.bak` one because `primary.exists()` answers for a moment that has
+/// passed by the time the rename runs.
 ///
 /// Issue #1095: the `-wal`/`-shm` WAL sidecars relocate together with the main
 /// file (paired to the same backup name). SQLite replays any `-wal` left
@@ -90,19 +160,16 @@ pub fn quarantine(path: &Path) -> Result<PathBuf, AppError> {
         "{}.bak",
         path.extension().and_then(|e| e.to_str()).unwrap_or("db")
     ));
-    let backup = if primary.exists() {
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+    let preferred = if primary.exists() {
         path.with_extension(format!(
             "{}.bak.{}",
             path.extension().and_then(|e| e.to_str()).unwrap_or("db"),
-            ts
+            quarantine_timestamp()
         ))
     } else {
         primary
     };
+    let backup = claim_quarantine_path(&preferred)?;
     // Sidecars first so a failure leaves the main file untouched for retry.
     for suffix in ["-wal", "-shm"] {
         let src = with_suffix(path, suffix);
@@ -223,5 +290,63 @@ mod tests {
         assert!(primary_bak.exists(), "Old .bak preserved");
         assert!(backup.exists(), "Timestamped backup created");
         assert_ne!(backup, primary_bak, "Must NOT overwrite existing .bak");
+    }
+
+    /// #2302 — the timestamped fallback the test above reaches is
+    /// **second**-resolution, and `fs::rename` replaces its destination on Unix
+    /// with no error and no log. Two quarantines inside one second therefore
+    /// built the same `state.db.bak.<ts>` and the second renamed straight over
+    /// the first, destroying the generation the quarantine exists to keep.
+    ///
+    /// `open_pool` walks that sequence inside a single call: the header probe
+    /// quarantines, the fresh DB created in its place fails its boot health
+    /// check, and the health-check arm quarantines again (`storage/local.rs`).
+    /// The two land milliseconds apart, and a `state.db.bak` left by an earlier
+    /// epoch is what puts both of them on the timestamped name.
+    ///
+    /// The loop is what makes this deterministic rather than a coin flip: only a
+    /// pair that really landed inside one second says anything about the
+    /// collision, so a run whose clock ticked between the two calls is retried
+    /// instead of asserted on, and running out of tries fails loudly rather than
+    /// passing on a pair that never collided.
+    #[test]
+    fn test_quarantine_twice_in_one_second_keeps_the_earlier_backup() {
+        let secs = || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0)
+        };
+        let dir = TempDir::new().unwrap();
+        for attempt in 0..32 {
+            let case = dir.path().join(format!("attempt-{attempt}"));
+            fs::create_dir(&case).unwrap();
+            let path = case.join("state.db");
+            // The precondition that makes both calls choose a timestamped name.
+            fs::write(case.join("state.db.bak"), b"epoch 0").unwrap();
+
+            fs::write(&path, b"epoch 1").unwrap();
+            let opened = secs();
+            let first = quarantine(&path).unwrap();
+            fs::write(&path, b"epoch 2").unwrap();
+            let second = quarantine(&path).unwrap();
+            if secs() != opened {
+                continue;
+            }
+
+            assert_ne!(
+                first, second,
+                "two quarantines inside one second must not choose the same name"
+            );
+            assert_eq!(
+                fs::read(&first).unwrap(),
+                b"epoch 1",
+                "the earlier backup at {} must still hold its own bytes",
+                first.display()
+            );
+            assert_eq!(fs::read(&second).unwrap(), b"epoch 2");
+            return;
+        }
+        panic!("could not land two quarantines inside one second in 32 tries");
     }
 }
