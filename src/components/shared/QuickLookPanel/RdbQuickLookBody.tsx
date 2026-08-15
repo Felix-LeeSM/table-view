@@ -58,8 +58,20 @@ export default function RdbQuickLookBody({
     columnName: string;
   } | null>(null);
 
+  // #2133 — the same three-part bounds test `DocumentQuickLookBody` uses. The
+  // lower bound is regression defense, not a live fix: `QuickLookPanel` clamps
+  // the derivation, `useDataGridSelection.handleSelectRow` is the only writer of
+  // `selectedRowIds`, and its call sites pass `.map()` / virtualizer indices, so
+  // nothing hands this a negative today. It also changes nothing observable on
+  // its own — `data.rows[-1]` is `undefined` and the `!row` return below already
+  // caught that. What it buys is that the two bodies now defend the same range;
+  // a split defense is what lets a future path in break only one paradigm.
   const row = useMemo(() => {
-    if (firstSelectedId == null || firstSelectedId >= data.rows.length) {
+    if (
+      firstSelectedId == null ||
+      firstSelectedId < 0 ||
+      firstSelectedId >= data.rows.length
+    ) {
       return null;
     }
     return data.rows[firstSelectedId];

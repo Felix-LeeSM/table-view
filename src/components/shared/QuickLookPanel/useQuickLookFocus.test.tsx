@@ -12,8 +12,10 @@
 //
 // The fix then moved WHERE the restore hangs, and that is what the harness below
 // encodes: nothing calls a restore function — the panel is simply unmounted,
-// the same way a commit or a shrinking refetch removes it. The two real paths
-// are in `DataGrid.quicklook-focus.test.tsx`.
+// the same way a commit or a refetch onto an empty page removes it. Those real
+// paths are in `DataGrid.quicklook-focus.test.tsx`. (#2133 narrowed the refetch
+// one: a page that comes back shorter but non-empty now clamps the selection and
+// keeps the panel, so only an empty page still takes it down.)
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useRef, useState } from "react";
@@ -122,7 +124,8 @@ describe("useQuickLookFocus", () => {
   // Reason: #1734 (5) — the restore has to survive paths that remove the
   // panel without calling anything. Nothing here calls a restore; the panel is
   // taken out of the tree and the hook sees only its ref detaching, which is
-  // what a successful commit and a shrinking refetch look like from here.
+  // what a successful commit and a refetch onto an empty page look like from
+  // here.
   it("restores focus from a nested control with no close handler in the path", () => {
     render(<Harness />);
     const inside = screen.getByRole("button", { name: "in panel" });

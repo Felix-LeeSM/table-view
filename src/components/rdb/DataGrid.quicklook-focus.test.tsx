@@ -7,16 +7,18 @@
 // where the next arrow key goes nowhere.
 //
 // An earlier fix held that second half by calling a restore from each close
-// handler; the commit case below is the one that reaches no handler.
-// `useQuickLookFocus` now hangs the restore off the panel node leaving the DOM,
-// so the close-button and `Cmd+L` cases below prove the same one mechanism the
-// commit case does — deleting the `focusGridCell()` call from that hook's
-// unmount effect reds cases in this file and in `useQuickLookFocus.test.tsx`
-// alike.
+// handler, and what broke it was the paths that reach no handler at all: a
+// successful commit, and a refetch that leaves nothing for the panel to show.
+// Both sit in the "paths that remove the panel without a close handler" block
+// below. `useQuickLookFocus` now hangs the restore off the panel node leaving
+// the DOM, so the close-button and `Cmd+L` cases below prove the same mechanism
+// the commit case does — deleting the `focusGridCell()` call from that hook's
+// focus-restore effect (it runs on every commit; it is not an unmount cleanup)
+// reds cases in this file and in `useQuickLookFocus.test.tsx` alike.
 //
-// #2133 took a refetch off that list. A page that still has rows keeps the
-// panel now (the derivation clamps the selection onto the last of them), so
-// nothing is removed there for a restore to answer.
+// #2133 narrowed the refetch half instead of deleting it. A page that still has
+// rows keeps the panel now (the derivation clamps the selection onto the last of
+// them), so the panel goes away there only when the page comes back empty.
 //
 // Also pins the owner's stated default from the 2026-08-02 decision comment:
 // moving the row selection while the panel is open re-syncs the detail body.
@@ -399,11 +401,14 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
   // `useQuickLookFocus.test.tsx` because what it pins is the real wiring — a
   // commit, which does not know Quick Look exists.
   //
-  // #1734 (5) listed a refetch alongside the commit. #2133 took it off this
-  // list: a refetch onto a page that still has rows now clamps the selection
-  // and keeps the panel (the shrink block below pins that), and a refetch onto
-  // an EMPTY page takes the grid rows with it, leaving no anchor cell to hand
-  // focus to — the case the hook's header already declines to promise.
+  // #1734 (5) listed a refetch alongside the commit. #2133 moved where that
+  // refetch lands rather than deleting it: a page that still has rows now
+  // clamps the selection and keeps the panel (the shrink block below pins
+  // that), while an EMPTY page has nothing to clamp onto and still removes it.
+  // Both halves stay pinned — the empty-page case below asserts the removal
+  // only, because that page takes the grid rows with it and leaves no anchor
+  // cell to hand focus to, which is the one case `useQuickLookFocus`'s header
+  // already declines to promise.
   describe("paths that remove the panel without a close handler", () => {
     /** Grid-cell edit on the selected row, so a commit has something to write. */
     async function makePendingEdit() {
@@ -453,6 +458,36 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
         screen.queryByRole("region", { name: "Row Details" }),
       ).not.toBeInTheDocument();
       expect(document.activeElement).toBe(rovingAnchor());
+    });
+
+    // Reason: the removal half of the refetch case. #2133 clamps onto the last
+    // surviving row, so a shorter page keeps the panel — but a page with zero
+    // rows has no row to clamp onto and the derivation returns `null`, which
+    // still takes the panel down with no close handler in the path. Asserting
+    // only the removal (not the focus landing) is what makes this case
+    // expressible: `rovingAnchor()` throws on an empty grid.
+    it("a refetch onto an empty page still removes the panel", async () => {
+      renderDataGrid();
+      await screen.findByText("3 rows");
+      await selectRowAndOpenPanel(2);
+      expect(
+        screen.queryByRole("region", { name: "Row Details" }),
+      ).toBeInTheDocument();
+
+      mockQueryTableData.mockResolvedValue({
+        ...MOCK_DATA,
+        rows: [],
+        total_count: 0,
+      });
+      await act(async () => {
+        window.dispatchEvent(new Event("refresh-data"));
+      });
+
+      await waitFor(() => {
+        expect(
+          screen.queryByRole("region", { name: "Row Details" }),
+        ).not.toBeInTheDocument();
+      });
     });
   });
 
