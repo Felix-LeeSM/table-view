@@ -1763,6 +1763,22 @@ mod tests {
     // recover from). A save now leaves the file it replaces behind as a backup
     // whenever that file holds something (#2187), and a missing file is
     // restored from it.
+    //
+    // #2303 — before adding a test here: **the backup left by the first save
+    // that finds an empty slot does not say which writer filled it.** Two of
+    // them put the same bytes there. `save_conn` loads before it saves, and on
+    // the way in `seed_backup_if_absent` copies the document it just read into
+    // an empty slot — so after `save_conn(c1); save_conn(c2)` the backup holds
+    // `["c1"]` whether or not `save_storage_raw` still renames anything. A test
+    // that asserts on it is green against a build with the rename deleted, and
+    // proves nothing about the property its name claims.
+    //
+    // Assert one save later. By the third the slot is occupied, the seed returns
+    // early, and the rename is the only writer left that can have put
+    // `["c1", "c2"]` there. This is about claims on what a *save* left behind:
+    // a test whose subject is the seed itself
+    // (`a_load_seeds_the_backup_for_an_install_that_has_none`) or the absence of
+    // a backup has no such ambiguity and needs no extra save.
     // -------------------------------------------------------------------
 
     /// Helper: the two paths these tests care about, beside each other in the
@@ -1789,9 +1805,16 @@ mod tests {
     }
 
     /// Acceptance ① — a save keeps the generation it replaced whenever that
-    /// generation holds something. The first save below replaces the empty
-    /// document a first run writes and correctly keeps nothing; the second is
-    /// the one the assertion is about.
+    /// generation holds something.
+    ///
+    /// Three saves, and the assertion is on the third, for the reason the block
+    /// comment above this group gives (#2303). The first replaces the empty
+    /// document a first run writes and correctly keeps nothing. The second walks
+    /// in on an empty slot, so `seed_backup_if_absent` copies `["c1"]` there on
+    /// the way in and asserting at that point holds against a build with the
+    /// rename deleted — which is what this test used to do. By the third the slot
+    /// is occupied, the seed returns early, and the rename in `save_storage_raw`
+    /// is the only writer left that can have put `["c1", "c2"]` in it.
     #[test]
     #[serial]
     fn a_save_leaves_the_generation_it_replaced_in_the_backup() {
@@ -1800,13 +1823,14 @@ mod tests {
 
         save_conn(sample_connection("c1", "DB1")).unwrap();
         save_conn(sample_connection("c2", "DB2")).unwrap();
+        save_conn(sample_connection("c3", "DB3")).unwrap();
 
         assert_eq!(
             ids(&read_json(&backup)),
-            ["c1"],
+            ["c1", "c2"],
             "the backup must hold the generation before the last save, not the last save itself"
         );
-        assert_eq!(ids(&read_json(&path)), ["c1", "c2"]);
+        assert_eq!(ids(&read_json(&path)), ["c1", "c2", "c3"]);
 
         // The backup carries the same encrypted passwords as the file it copies,
         // so it inherits the 0600 the atomic write applies at create time. That
@@ -2209,6 +2233,13 @@ mod tests {
     /// Both halves of the contract are asserted here because the deleted clause
     /// breaks both: the save stops rotating the backup, and the recovery stops
     /// being announced.
+    ///
+    /// #2303 — three saves for the reason the block comment above this group
+    /// gives. The clause this test is named for is read by the seed and by the
+    /// rename alike, so with the assertion on the second save a build that had
+    /// lost the rename entirely still left `["g1"]` in the slot and the sentence
+    /// below — "the save that replaced it had to leave it in the backup" — was
+    /// the part that did not hold.
     #[test]
     #[serial]
     fn a_groups_only_install_is_backed_up_and_its_restore_is_announced() {
@@ -2216,11 +2247,13 @@ mod tests {
         let (path, backup) = storage_and_backup(&dir);
         CONNECTIONS_RESTORED_FROM_BACKUP.store(false, Ordering::SeqCst);
 
-        // Add a group, then a second one. The first save replaces the empty
-        // document a first run writes and correctly leaves no backup; the second
-        // has a groups-only file in front of it that is worth keeping.
+        // Add a group, then a second, then a third. The first save replaces the
+        // empty document a first run writes and correctly leaves no backup; the
+        // second fills the empty slot through the seed; the third is the one with
+        // a groups-only file in front of it that only the rename can move.
         save_group(sample_group("g1", "Production")).unwrap();
         save_group(sample_group("g2", "Staging")).unwrap();
+        save_group(sample_group("g3", "Archive")).unwrap();
 
         let kept = read_json(&backup);
         assert!(
@@ -2229,7 +2262,7 @@ mod tests {
         );
         assert_eq!(
             group_ids(&kept),
-            ["g1"],
+            ["g1", "g2"],
             "a document with groups and no connections has something to lose, so the \
              save that replaced it had to leave it in the backup"
         );
@@ -2240,7 +2273,7 @@ mod tests {
         let loaded = load_storage_redacted().unwrap();
         assert_eq!(
             group_ids(&loaded),
-            ["g1"],
+            ["g1", "g2"],
             "a groups-only backup is a recovery source like any other"
         );
         assert!(
