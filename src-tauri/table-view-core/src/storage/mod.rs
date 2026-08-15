@@ -514,17 +514,26 @@ fn set_aside_unusable_backup(backup: &std::path::Path) {
 /// Move a corrupt storage file aside with a timestamped suffix so the user
 /// can inspect / recover it manually and the app can boot clean. Returns the
 /// quarantine path on success.
+///
+/// Issue #2302 — the name is taken through
+/// [`corrupt_recovery::claim_quarantine_path`] rather than handed straight to
+/// `fs::rename`, which replaces an existing destination on Unix with no error
+/// and no log. The timestamp below is second-resolution, so two quarantines
+/// inside one second built the same name and the second one ate the file the
+/// first had just set aside — the user's only remaining copy of a document that
+/// no longer parses. `corrupt_recovery::quarantine` takes its name the same way;
+/// the base names differ (`.corrupt-<ts>` here, `.bak` there) because they are
+/// different files with conventions their own callers and tests already read,
+/// but the rule that keeps two quarantines off one name is shared.
 fn quarantine_corrupt_storage(path: &std::path::Path) -> Result<PathBuf, AppError> {
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let mut backup = path.to_path_buf();
+    let ts = corrupt_recovery::quarantine_timestamp();
+    let mut preferred = path.to_path_buf();
     let file_name = path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("connections.json");
-    backup.set_file_name(format!("{file_name}.corrupt-{ts}"));
+    preferred.set_file_name(format!("{file_name}.corrupt-{ts}"));
+    let backup = corrupt_recovery::claim_quarantine_path(&preferred)?;
     fs::rename(path, &backup)?;
     Ok(backup)
 }
