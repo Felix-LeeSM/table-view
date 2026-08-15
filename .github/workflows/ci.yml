@@ -224,6 +224,50 @@ jobs:
           fi
           printf '%s\n' "$BODY" | bash scripts/check-pr-body-universals.sh
 
+      # The third step that reads the PR body (#2321), and the seventh contract
+      # riding this job for the reason the second through sixth do: a required
+      # context cannot be registered by the PR that adds it, so riding one that
+      # is already required is what makes a new check blocking on the day it
+      # merges (memory/runbook/pr-merge-gates/memory.md). It sits beside the
+      # universals step because it also runs a script out of the tree, so it has
+      # to be after `Checkout`, and the body reaches it through `env:` for the
+      # same reason — a PR body is attacker-controlled text.
+      #
+      # What it enforces is a character cap on the body. A PR body is an input
+      # the next node reads, and past bodies ran to roughly twice the cap
+      # AGENTS.md 「강제 룰」 puts on one memory room; #2316 reached the point
+      # where the body's own factuality became a blocking finding. What counts
+      # as a violation is decided by `scripts/check-review-size-cap.sh` alone;
+      # its header states the rule, the 12,000 figure and where that number
+      # comes from. The script needs no toolchain, so it adds no setup here.
+      #
+      # The clearing rule below is not decoration. This workflow does not
+      # listen for `edited` (see the `on:` comment at the top of this file), so
+      # a red here survives a body edit, and a job re-run replays the original
+      # payload with the old body and fails at the same character count. The
+      # scorecard half of this cap sits in review-gate.yml and clears
+      # differently — it re-reads comments through the API.
+      #
+      # `printf '%s'`, without the `\n` the step above uses. That newline is a
+      # character, and a character cap counts it: with `'%s\n'` this step read
+      # 5517 for a 5516-character body, so «12,000 이하» meant 11,999 here while
+      # the scorecard site — where `$( )` strips the trailing newline before
+      # `printf` puts one back — kept meaning 12,000. One cap, two numbers. The
+      # neighbouring universals step keeps its `\n` on purpose: that check is
+      # line-oriented and its last line needs a terminator.
+      - name: PR body size cap
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [ -z "$BODY" ]; then
+            echo "no PR body on this event — nothing to check"
+            exit 0
+          fi
+          if ! printf '%s' "$BODY" | bash scripts/check-review-size-cap.sh "PR body"; then
+            echo "::error::Trim the body, then push a commit. A body edit alone does NOT clear this — the workflow ignores edited events and a job re-run re-reads the OLD body from the original payload."
+            exit 1
+          fi
+
   dependency-security:
     name: Dependency Security
     runs-on: ubuntu-latest
