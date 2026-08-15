@@ -112,6 +112,12 @@ trigger:
 - **scorecard 의 「확인했고 참이던 주장」절은 항목 이름과 판정만 싣고 근거 인용을
   뺀다** — 고칠 것이 없는 자리라, 근거까지 실으면 다음 라운드 구현자의 컨텍스트만
   늘린다. 절 자체는 없애지 않는다.
+- **scorecard 한 장은 12,000 문자 이하다** (#2321). `review-gate` 가 `## Scorecard`
+  로 여는 코멘트를 장마다 재고, 판정 정의와 그 수의 출처는
+  `scripts/check-review-size-cap.sh` 헤더가 갖는다. 합이 아니라 장 단위인 이유도
+  거기 있다. 넘으면 그 코멘트를 줄이고 job 을 re-run 한다 — 이 게이트는 코멘트를
+  API 로 다시 읽어서 새 commit 없이 풀린다 (같은 cap 이 걸린 PR body 쪽은 반대다:
+  [delivery](../delivery/memory.md) 「PR body」).
 - Verdict는 label로 공표한다. add와 remove를 한 명령에 같이 쓰지 않는다 — 같은
   초에 label 이벤트가 둘 나면 `cancel-in-progress`가 `review-gate` run 하나를 죽이고,
   그 이름의 최신 suite가 non-success인 채 남아 BLOCKED가 고착된다(#1879 실측).
