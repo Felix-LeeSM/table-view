@@ -8,9 +8,12 @@
 //!   - **Path A (신규)**: 디스크 `.key` 없음 + keyring 없음 → 새 key 생성,
 //!     keyring 저장, 디스크 file 폐기. AC-356-01.
 //!   - **Path B (migration)**: 디스크 `.key` 있음 + keyring 없음 → 디스크
-//!     read → keyring write → readback 검증 → 디스크 secure delete
-//!     (overwrite + 0o000 + unlink). 실패 시 디스크 유지 + sidecar
-//!     `.key.migration-failed`. AC-356-02..04.
+//!     read → (c) ciphertext probe → (a) keyring write → (b) readback 검증 →
+//!     (d) 디스크 secure delete (overwrite + 0o000 + unlink). 실패 시 디스크
+//!     유지 + sidecar `.key.migration-failed`. 단계 이름 (a)~(d) 는 설계
+//!     문서(strategy 873–905)의 것이고 실행 순서는 위와 같다 — (c) 가 (a)
+//!     앞에 서는 이유는 [`path_b_migrate_from_disk`] 가 갖는다 (#2138).
+//!     AC-356-02..04.
 //!   - **Path B 후속 boot**: 디스크 `.key` 없음 + keyring 있음 → keyring
 //!     read. AC-356-03.
 //!   - **재키잉 (#1814)**: 디스크 `.key` 있음 + keyring 있음 → 디스크를 거친
@@ -199,12 +202,52 @@ pub fn migrate_or_initialize<B: KeyringBackend>(
 /// secure-delete. 한 step 이라도 실패 시 sentinel sidecar + 디스크 보존
 /// (다음 boot 재시도). decrypt 는 디스크 path 로 fallback (caller
 /// 책임).
+///
+/// 실행 순서는 (c) → (a) → (b) → (d) 다. 재정렬이 지켜야 하는 설계 제약은 strategy
+/// line 891 의 「(a)(b)(c) 모두 성공 시에만 (d)」이고 그 조건은 그대로 선다. 스냅샷의
+/// 단계 서술 자체는 a → b → c 로 읽히지만 (strategy line 888 의 (b) 가 (a) 가 쓴
+/// 것을 되읽고, line 889–890 의 (c) 가 `.key` 와 keyring 둘 다를 말한다), (c) 를 앞으로
+/// 뺄 수 있는 것은 구현의 [`validate_ciphertexts_decrypt`] 가 keyring 을 안 보고
+/// `disk_key` 만 읽기 때문이다.
+///
+/// (c) 를 맨 앞에 두는 이유는 (a) 뒤에서 실패했을 때 남는 상태다 (#2138). 그 부팅이
+/// keyring 엔트리를 남기면 다음 부팅은 [`migrate_or_initialize`] 의 keyring hit 분기로
+/// 빠져 Path B 에 다시 못 들어온다. sentinel 을 회수하는 자리가 아래 (d) 블록 안이라
+/// 마커는 그대로 남는다. 디스크 평문 `.key` 는 다르다 — 암호문이 다시 열리게 되면
+/// [`rekey_after_disk_exposure`] 의 앵커 arm 이 서서 새 키로 갈아타고 그 함수의
+/// step 3 이 파일을 지운다. 어느 키로도 안 열리는 동안만 같은 함수의 「둘 다 보존」
+/// arm 에 갇힌다.
+///
+/// 이 순서가 치르는 값은 노출된 키다. (c) 가 먼저면 그 프로필은 다음 부팅에 Path B 로
+/// 재진입해 **디스크에 평문으로 앉아 있던 그 키를 그대로** keyring 으로 옮긴다. (a) 가
+/// 먼저였다면 같은 프로필이 [`rekey_after_disk_exposure`] 로 가 새 키를 만들고
+/// `connections.json` 을 재암호화했다. Path B 가 같은 키를 이주시키는 것은 AC-356-02
+/// 계약이고, 그 경로의 노출 회수가 아직 열린 공백이라는 것은 `docs/roadmap/h7.md` 의
+/// 「Credential/privacy boundary」 행이 이미 적어 뒀다. [`KeyringBackend`] 에
+/// `delete` 가 없어 (a) 를 되돌릴 수단이 없는 것도 그대로다.
 fn path_b_migrate_from_disk<B: KeyringBackend>(
     backend: &B,
     data_dir: &Path,
     disk_path: &Path,
 ) -> Result<KeyOutcome, AppError> {
     let disk_key = read_disk_key(disk_path)?;
+
+    // (c) ciphertext decrypt sanity check (strategy line 886–887). Best
+    // effort — if there are no ciphertexts to validate (fresh dual-write
+    // user) we still proceed.
+    if let Err(e) = validate_ciphertexts_decrypt(data_dir, &disk_key) {
+        warn!(
+            target: "boot",
+            "key_migration: Path B step (c) ciphertext probe failed ({e}); leaving sentinel"
+        );
+        write_sentinel(&migration_failed_sentinel_path(data_dir))?;
+        return Ok(KeyOutcome {
+            key: disk_key,
+            source: KeySource::DiskFallback,
+            fallback_to_disk: true,
+            rekeyed_after_disk_exposure: false,
+        });
+    }
 
     // (a) keyring write.
     if let Err(e) = backend.set(KEYRING_ENTRY_NAME, &disk_key) {
@@ -241,23 +284,6 @@ fn path_b_migrate_from_disk<B: KeyringBackend>(
                 rekeyed_after_disk_exposure: false,
             });
         }
-    }
-
-    // (c) ciphertext decrypt sanity check (strategy line 886–887). Best
-    // effort — if there are no ciphertexts to validate (fresh dual-write
-    // user) we still proceed.
-    if let Err(e) = validate_ciphertexts_decrypt(data_dir, &disk_key) {
-        warn!(
-            target: "boot",
-            "key_migration: Path B step (c) ciphertext probe failed ({e}); leaving sentinel"
-        );
-        write_sentinel(&migration_failed_sentinel_path(data_dir))?;
-        return Ok(KeyOutcome {
-            key: disk_key,
-            source: KeySource::DiskFallback,
-            fallback_to_disk: true,
-            rekeyed_after_disk_exposure: false,
-        });
     }
 
     // (d) secure delete + clear sentinel (in case a previous boot left one).

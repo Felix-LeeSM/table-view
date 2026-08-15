@@ -480,11 +480,12 @@ fn issue_1814_unreadable_leftover_key_file_does_not_break_boot() {
 
 // --------------------- #1815 잔여 공백 -----------------------------------
 //
-// Path B 는 네 단계다 — (a) keyring write, (b) readback, (c) ciphertext probe,
-// (d) secure delete. (a) 의 실패만 `ac_356_04_*` 가 덮고 있었고, (c) 의 실패와
-// (d) 의 실제 덮어쓰기, 그리고 (a) 가 남긴 sentinel 을 다음 부팅이 회수하는
-// 계약은 어디에서도 단언되지 않았다. 셋 다 반환값이 아니라 디스크에 남은
-// 상태가 진실이라 통합 테스트에서만 판별된다.
+// Path B 는 네 단계다 — (c) ciphertext probe, (a) keyring write, (b) readback,
+// (d) secure delete (단계 이름은 설계 문서 것이고 위가 실행 순서다, #2138).
+// (a) 의 실패만 `ac_356_04_*` 가 덮고 있었고, (c) 의 실패와 (d) 의 실제
+// 덮어쓰기, 그리고 (a) 가 남긴 sentinel 을 다음 부팅이 회수하는 계약은
+// 어디에서도 단언되지 않았다. 셋 다 반환값이 아니라 디스크에 남은 상태가
+// 진실이라 통합 테스트에서만 판별된다.
 
 /// (c) ciphertext probe 실패는 fail-closed 다 — 디스크 `.key` 로 열리지 않는
 /// 암호문 앞에서 migration 을 완주하면 (d) 가 그 `.key` 를 지우고, 그 순간
@@ -530,13 +531,57 @@ fn path_b_ciphertext_probe_failure_preserves_the_key_and_leaves_a_sentinel() {
         migration_failed_sentinel_path(dir.path()).exists(),
         "the next boot needs the retry marker"
     );
-    // (a) 는 이미 성공한 뒤라 keyring 은 롤백되지 않는다. 다음 부팅이
-    // 「keyring hit + 디스크 `.key` 존재」로 들어가고, 거기서도 어느 키도
-    // 암호문을 못 여니 #1814 재키잉이 둘 다 보존한 채 넘어간다.
+}
+
+// --------------------- #2138 probe 가 먼저다 -----------------------------
+
+/// (c) ciphertext probe 가 실패한 부팅은 keyring 에 아무것도 남기면 안 된다.
+/// 남기면 다음 부팅이 「keyring hit」 분기로 빠져 Path B 에 다시 못 들어오고,
+/// sentinel 을 회수하는 자리가 Path B 의 (d) 블록 안이라 마커가 그대로 남는다.
+/// `KeyringBackend` 에는 `delete` 가 없어 (a) 를 되돌릴 수단이 없으므로 방어는
+/// 안 쓰는 쪽이다 (#2138). 이 순서가 치르는 값 — 재진입한 Path B 가 디스크에
+/// 평문으로 앉아 있던 그 키를 그대로 이주시키는 것 — 은 아래
+/// `assert_eq!(retried.key, disk_key)` 가 잠그고, 사유는
+/// `path_b_migrate_from_disk` 의 doc comment 가 갖는다.
+///
+/// 두 부팅을 연달아 돌려 그 전이를 통째로 잠근다 — 「keyring 이 비었다」만
+/// 보면 재진입까지는 증명되지 않는다.
+#[test]
+fn path_b_probe_failure_writes_no_keyring_entry_so_the_next_boot_re_enters_path_b() {
+    let dir = TempDir::new().unwrap();
+    let disk_key: Vec<u8> = (0..32u8).collect();
+    // 이 프로필의 암호문은 이 머신 어디에도 없는 키로 감싸여 있다 — probe 가 막는다.
+    let lost_key: Vec<u8> = (200..232u8).collect();
+    seed_disk_key(dir.path(), &disk_key);
+    seed_connections_json(dir.path(), &lost_key, &["alpha"]);
+    let backend = InMemoryKeyringBackend::new_available();
+
+    // 부팅 1 — probe 실패.
+    let failed =
+        migrate_or_initialize(&backend, dir.path()).expect("a failed probe must not fail the boot");
+    assert_eq!(failed.source, KeySource::DiskFallback);
+    assert!(
+        backend.get(KEYRING_ENTRY_NAME).unwrap().is_none(),
+        "a boot that never finished the migration must leave the keyring untouched"
+    );
+
+    // 부팅 2 — 사용자가 백업에서 되살려 암호문이 디스크 `.key` 로 열리게 됐다.
+    seed_connections_json(dir.path(), &disk_key, &["alpha"]);
+    let retried = migrate_or_initialize(&backend, dir.path()).expect("the retry must not fail");
+
     assert_eq!(
-        backend.get(KEYRING_ENTRY_NAME).unwrap().unwrap(),
-        disk_key,
-        "the keyring write from step (a) is not rolled back"
+        retried.source,
+        KeySource::MigratedFromDisk,
+        "the next boot must re-enter Path B, not fall into the keyring-hit branch"
+    );
+    assert_eq!(retried.key, disk_key);
+    assert!(
+        !disk_key_path(dir.path()).exists(),
+        "the retry finishes the migration the failed probe deferred"
+    );
+    assert!(
+        !migration_failed_sentinel_path(dir.path()).exists(),
+        "a successful retry reclaims the marker the failed boot left"
     );
 }
 
