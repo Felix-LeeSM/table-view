@@ -537,10 +537,12 @@ fn path_b_ciphertext_probe_failure_preserves_the_key_and_leaves_a_sentinel() {
 
 /// (c) ciphertext probe 가 실패한 부팅은 keyring 에 아무것도 남기면 안 된다.
 /// 남기면 다음 부팅이 「keyring hit」 분기로 빠져 Path B 에 다시 못 들어오고,
-/// 디스크 평문 `.key` 를 지우는 유일한 경로인 (d) 와 sentinel 회수가 영영 안
-/// 돈다 — probe 가 나중에 성공할 수 있게 고쳐져도 마찬가지다. `KeyringBackend`
-/// 에는 `delete` 가 없어 (a) 를 되돌릴 수단도 없으므로, 애초에 안 쓰는 것이
-/// 유일한 방어다 (#2138).
+/// sentinel 을 회수하는 자리가 Path B 의 (d) 블록 안이라 마커가 그대로 남는다.
+/// `KeyringBackend` 에는 `delete` 가 없어 (a) 를 되돌릴 수단이 없으므로 방어는
+/// 안 쓰는 쪽이다 (#2138). 이 순서가 치르는 값 — 재진입한 Path B 가 디스크에
+/// 평문으로 앉아 있던 그 키를 그대로 이주시키는 것 — 은 아래
+/// `assert_eq!(retried.key, disk_key)` 가 잠그고, 사유는
+/// `path_b_migrate_from_disk` 의 doc comment 가 갖는다.
 ///
 /// 두 부팅을 연달아 돌려 그 전이를 통째로 잠근다 — 「keyring 이 비었다」만
 /// 보면 재진입까지는 증명되지 않는다.
