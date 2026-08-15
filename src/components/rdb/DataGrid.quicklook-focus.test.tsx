@@ -7,11 +7,16 @@
 // where the next arrow key goes nowhere.
 //
 // An earlier fix held that second half by calling a restore from each close
-// handler; the two cases at the bottom of this file are the ones that reach no
-// handler. `useQuickLookFocus` now hangs the restore off the panel node leaving
-// the DOM, so the close-button and `Cmd+L` cases below prove the same one
-// mechanism the commit and refetch cases do — neutering it reds 9 of the 17
-// tests across this file and `useQuickLookFocus.test.tsx`.
+// handler; the commit case below is the one that reaches no handler.
+// `useQuickLookFocus` now hangs the restore off the panel node leaving the DOM,
+// so the close-button and `Cmd+L` cases below prove the same one mechanism the
+// commit case does — deleting the `focusGridCell()` call from that hook's
+// unmount effect reds cases in this file and in `useQuickLookFocus.test.tsx`
+// alike.
+//
+// #2133 took a refetch off that list. A page that still has rows keeps the
+// panel now (the derivation clamps the selection onto the last of them), so
+// nothing is removed there for a restore to answer.
 //
 // Also pins the owner's stated default from the 2026-08-02 decision comment:
 // moving the row selection while the panel is open re-syncs the detail body.
@@ -20,6 +25,7 @@
 // live in `__tests__/dataGridTestHelpers.tsx`, so each axis file re-declares
 // them (see that helper's header).
 
+import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
 import {
   act,
   fireEvent,
@@ -27,6 +33,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { SortInfo } from "@/types/schema";
@@ -173,6 +180,44 @@ async function selectRowAndOpenPanel(rowIdx: number): Promise<HTMLElement> {
     fireEvent.keyDown(document, { key: "l", metaKey: true });
   });
   return cell;
+}
+
+/** `Cmd+L` — the Quick Look toggle (`useRdbDataGridShortcuts`). */
+async function pressCmdL() {
+  await act(async () => {
+    fireEvent.keyDown(document, { key: "l", metaKey: true });
+  });
+}
+
+/**
+ * Serves fewer rows once the grid asks for a smaller page, keyed off the
+ * `pageSize` argument `useRdbTableData` actually sends (5th positional). The
+ * fixture cannot shrink 300 → 100 by arithmetic: that needs >100 rows on the
+ * page, and past `VIRTUALIZE_THRESHOLD` (200) jsdom's missing layout keeps the
+ * row this test has to click out of the DOM — the same limit the anchor case
+ * above documents. Stubbing the boundary reproduces the one observable that
+ * matters, a page whose row count dropped below the selected index.
+ */
+function serveOneRowOnTheSmallerPage() {
+  mockQueryTableData.mockImplementation((...args: unknown[]) => {
+    const pageSize = args[4] as number;
+    const rows =
+      pageSize < DEFAULT_PAGE_SIZE
+        ? MOCK_DATA.rows.slice(0, 1)
+        : MOCK_DATA.rows;
+    return Promise.resolve({ ...MOCK_DATA, rows, page_size: pageSize });
+  });
+}
+
+/** Picks 100 in the toolbar page-size select (default is 300). */
+async function shrinkPageSize() {
+  const user = userEvent.setup();
+  await user.click(screen.getByLabelText("Page size"));
+  await user.click(screen.getByRole("option", { name: "100" }));
+  await waitFor(() => {
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(screen.queryByText("Charlie")).not.toBeInTheDocument();
+  });
 }
 
 describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
@@ -347,12 +392,18 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
     expect(document.activeElement).toBe(cell);
   });
 
-  // Reason: #1734 (5) — the two paths that remove the panel without
-  // going through any close handler. Both were live regressions of the same
-  // shape the close-handler restore already fixed: the panel vanishes and focus
-  // is left on `<body>`, so the next arrow key goes nowhere. They are here rather
-  // than in `useQuickLookFocus.test.tsx` because what they pin is the real
-  // wiring — a commit and a refetch, neither of which knows Quick Look exists.
+  // Reason: #1734 (5) — a path that removes the panel without going through any
+  // close handler. It was a live regression of the same shape the close-handler
+  // restore already fixed: the panel vanishes and focus is left on `<body>`, so
+  // the next arrow key goes nowhere. It is here rather than in
+  // `useQuickLookFocus.test.tsx` because what it pins is the real wiring — a
+  // commit, which does not know Quick Look exists.
+  //
+  // #1734 (5) listed a refetch alongside the commit. #2133 took it off this
+  // list: a refetch onto a page that still has rows now clamps the selection
+  // and keeps the panel (the shrink block below pins that), and a refetch onto
+  // an EMPTY page takes the grid rows with it, leaving no anchor cell to hand
+  // focus to — the case the hook's header already declines to promise.
   describe("paths that remove the panel without a close handler", () => {
     /** Grid-cell edit on the selected row, so a commit has something to write. */
     async function makePendingEdit() {
@@ -403,13 +454,61 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
       ).not.toBeInTheDocument();
       expect(document.activeElement).toBe(rovingAnchor());
     });
+  });
 
-    // Reason: a refetch that returns fewer rows than the selected index makes
-    // `RdbQuickLookBody` render `null` while `showQuickLook` is still true —
-    // the panel disappears with no state change to hang a restore on. The
-    // reviewer's page-1 page-size shrink is the same class; a refresh is the
-    // instance that keeps focus inside the panel while the rows change.
-    it("a refetch that drops the selected row out of range hands focus back", async () => {
+  // Issue #2133 — the rows under an open panel shrink while the selection stays.
+  // Shrinking the page size ON PAGE 1 is the reported way in: `useDataGridEdit`
+  // clears the selection from a `[page]` effect and `handleSetPageSize` resets a
+  // page that is already 1, so the selected index outlives the rows it pointed
+  // at. Before `QuickLookPanel` clamped its derivation that stale index reached
+  // `RdbQuickLookBody`, which rendered `null` while `showQuickLook` stayed true:
+  // the panel vanished and the toggle then flipped a flag no visible body read,
+  // so `Cmd/Ctrl+L` could not bring it back and F6 / Escape were dead with it
+  // (`useQuickLookFocus.ts` returns early on a null panel node). Selecting an
+  // in-range row was the only way out. A refresh reaches the same state, which
+  // is why the last case here used to sit in the block above.
+  describe("rows shrinking under the selection (#2133)", () => {
+    it("keeps the panel on the last row that still exists", async () => {
+      serveOneRowOnTheSmallerPage();
+      renderDataGrid();
+      await screen.findByText("3 rows");
+      await selectRowAndOpenPanel(2);
+      expect(within(panel()).getByDisplayValue("Charlie")).toBeInTheDocument();
+
+      await shrinkPageSize();
+
+      expect(
+        screen.queryByRole("region", { name: "Row Details" }),
+      ).toBeInTheDocument();
+      expect(within(panel()).getByDisplayValue("Alice")).toBeInTheDocument();
+    });
+
+    it("leaves Cmd+L able to reopen the panel", async () => {
+      serveOneRowOnTheSmallerPage();
+      renderDataGrid();
+      await screen.findByText("3 rows");
+      await selectRowAndOpenPanel(2);
+
+      await shrinkPageSize();
+
+      await pressCmdL();
+      expect(
+        screen.queryByRole("region", { name: "Row Details" }),
+      ).not.toBeInTheDocument();
+
+      await pressCmdL();
+      expect(
+        screen.queryByRole("region", { name: "Row Details" }),
+      ).toBeInTheDocument();
+    });
+
+    // Reason: the panel surviving has to mean focus survives with it. The
+    // restore in `useQuickLookFocus` fires on the panel node leaving the DOM,
+    // and a panel that re-renders in place never leaves — so a refetch that
+    // shortens the page must leave the user where they were reading instead of
+    // throwing them back at the grid. A refresh is the instance that keeps focus
+    // inside the panel while the rows change.
+    it("a refetch that shortens the page keeps focus inside the panel", async () => {
       renderDataGrid();
       await screen.findByText("3 rows");
       await selectRowAndOpenPanel(2);
@@ -430,8 +529,8 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
 
       expect(
         screen.queryByRole("region", { name: "Row Details" }),
-      ).not.toBeInTheDocument();
-      expect(document.activeElement).toBe(rovingAnchor());
+      ).toBeInTheDocument();
+      expect(document.activeElement).toBe(panel());
     });
   });
 

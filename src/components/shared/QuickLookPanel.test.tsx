@@ -295,9 +295,43 @@ describe("QuickLookPanel", () => {
       expect(onClose).toHaveBeenCalledOnce();
     });
 
-    it("renders nothing when selected row index is out of bounds", () => {
-      const { container } = render(
+    // #2133 — this used to render nothing. `selectedRowIds` indexes the page,
+    // so a page that shrinks under an open panel (a page-1 page-size change
+    // keeps the selection) leaves the index pointing past the rows. Rendering
+    // nothing took the whole panel down while the caller still had it open, and
+    // the Quick Look toggle then flipped a flag with no visible body reading it
+    // — unrecoverable until the user selected an in-range row. The derivation
+    // clamps instead, so the panel lands on the last row that still exists.
+    it("clamps a selected row index past the end onto the last row", () => {
+      render(
         <QuickLookPanel {...defaultProps} selectedRowIds={new Set([99])} />,
+      );
+
+      expect(
+        screen.getByRole("region", { name: "Row Details" }),
+      ).toBeInTheDocument();
+      // Last of the 3 fixture rows.
+      expect(screen.getByText("Charlie")).toBeInTheDocument();
+    });
+
+    // The lower half of the same clamp. `RdbQuickLookBody` guards only the upper
+    // bound, so a negative index would reach `data.rows[-1]` (undefined) there;
+    // the derivation is what keeps it off that path.
+    it("clamps a negative selected row index onto the first row", () => {
+      render(
+        <QuickLookPanel {...defaultProps} selectedRowIds={new Set([-1])} />,
+      );
+
+      expect(screen.getByText("Alice")).toBeInTheDocument();
+    });
+
+    it("renders nothing when the page has no rows at all", () => {
+      const { container } = render(
+        <QuickLookPanel
+          {...defaultProps}
+          data={{ ...MOCK_DATA, rows: [], total_count: 0 }}
+          selectedRowIds={new Set([0])}
+        />,
       );
       expect(container.innerHTML).toBe("");
     });
@@ -706,7 +740,12 @@ describe("QuickLookPanel", () => {
       expect(tree).toHaveTextContent("tags");
     });
 
-    it("shows the BsonTreeViewer empty state when the selection is out of bounds", () => {
+    // #2133 — this used to show the empty state. The clamp lives in the shared
+    // derivation, so the document paradigm gets it from the same change that
+    // fixes RDB: an index past the end lands on the last document instead of on
+    // "No document selected". `DocumentQuickLookBody` keeps its own bounds guard
+    // for callers that hand it a `firstSelectedId` directly.
+    it("clamps a selection past the end onto the last document", () => {
       render(
         <QuickLookPanel
           {...documentDefaultProps}
@@ -714,10 +753,13 @@ describe("QuickLookPanel", () => {
         />,
       );
 
+      // Second (last) fixture document is Bob's.
       expect(
         screen.getByRole("tree", { name: /BSON document tree/i }),
-      ).toBeInTheDocument();
-      expect(screen.getByText(/No document selected/i)).toBeInTheDocument();
+      ).toHaveTextContent("Bob");
+      expect(
+        screen.queryByText(/No document selected/i),
+      ).not.toBeInTheDocument();
     });
 
     it("shows the BsonTreeViewer empty state when rawDocuments is empty", () => {

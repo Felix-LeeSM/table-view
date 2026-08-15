@@ -78,10 +78,30 @@ export default function QuickLookPanel(props: QuickLookPanelProps) {
 
   // Shared selection arithmetic — both paradigms use the smallest-index
   // row as the "first" selected, matching the existing RDB behaviour.
+  //
+  // #2133 — clamped to the rows that currently exist. `selectedRowIds` indexes
+  // the page, and shrinking the page size while already on page 1 swaps the
+  // rows without clearing it: `useDataGridEdit` drops the selection from a
+  // `[page]` effect, and `handleSetPageSize` resets a page that is already 1.
+  // The stale index then outlives its row. Unclamped it reached the bodies,
+  // where `RdbQuickLookBody` renders `null` for an out-of-range index and takes
+  // the whole panel down while `showQuickLook` stays true — leaving the toggle
+  // flipping a flag no visible body reads, so `Cmd/Ctrl+L` could not reopen it
+  // and F6 / Escape died with the panel node. Clamping at the single derivation
+  // covers both paradigms; the bodies keep their own bounds guards as a second
+  // line for the props they can be handed directly.
+  const rowCount =
+    props.mode === "document"
+      ? props.rawDocuments.length
+      : props.data.rows.length;
   const firstSelectedId = useMemo(() => {
-    if (props.selectedRowIds.size === 0) return null;
-    return Math.min(...props.selectedRowIds);
-  }, [props.selectedRowIds]);
+    if (props.selectedRowIds.size === 0 || rowCount === 0) return null;
+    // Clamped at both ends. `RdbQuickLookBody` guards only the upper bound
+    // (`DocumentQuickLookBody` guards both), so the lower clamp here is what
+    // keeps a negative index off that path rather than a fourth guard there.
+    const first = Math.min(...props.selectedRowIds);
+    return Math.min(Math.max(first, 0), rowCount - 1);
+  }, [props.selectedRowIds, rowCount]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
