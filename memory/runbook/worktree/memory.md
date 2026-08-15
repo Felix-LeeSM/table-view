@@ -68,41 +68,48 @@ cd "$DEST" && pnpm install --frozen-lockfile --prefer-offline
 
 ## 리뷰어 사본 — PR head 를 체크아웃한다
 
-위 「생성」은 구현자용이라 `origin/main` 을 잡는다. 리뷰어가 그대로 쓰면 **PR 의
-변경이 하나도 안 들어간 트리**에서 test·lint·build 를 돌리고 그 출력을 scorecard
-근거로 인용하게 된다 — 통과든 실패든 무의미한데 출력 어디에도 그 사실이 안 드러난다.
-만들 조건은 [review](../../workflow/review/memory.md) 「행동 계약」, 지우는 의무는
-아래 「책임」이다.
+위 「생성」은 구현자용이라 `origin/main` 을 잡는다. 리뷰어가 그대로 쓰면 **PR 의 변경이
+하나도 안 들어간 트리**에서 test·lint·build 를 돌리고 그 출력을 scorecard 근거로 인용하게
+된다 — 통과든 실패든 무의미한데 출력 어디에도 그 사실이 안 드러난다. 만들 조건은
+[review](../../workflow/review/memory.md) 「행동 계약」, 지우는 의무는 아래 「책임」이다.
 
 ```bash
 PR=<PR 번호>
 AUTHOR="<spawn 이 준 저자 사본 경로>"   # 첫 turn 검증에 쓴 그 문자열. 경로 계산에만 쓴다
 case "$AUTHOR" in /*) ;; *) echo "ABORT: AUTHOR 는 절대경로여야 한다" >&2; exit 1;; esac
 OID="$(gh pr view "$PR" --repo Felix-LeeSM/table-view --json headRefOid -q .headRefOid)"
-DEST="$(dirname "$AUTHOR")/review__${PR}__${OID:0:12}"
+DEST="$(mktemp -d "$(dirname "$AUTHOR")/review__${PR}__${OID:0:12}__XXXXXX")"
 git init -q "$DEST"
+printf '%s\n' "$DEST" > "$DEST/.git/.review-clone"   # 소유 표식. work tree 밖이라 dirty 가 아니다
 git -C "$DEST" remote add origin https://github.com/Felix-LeeSM/table-view.git
-git -C "$DEST" fetch origin "$OID"
+git -C "$DEST" fetch origin "$OID" '+refs/heads/main:refs/remotes/origin/main'
 git -C "$DEST" -c advice.detachedHead=false checkout --detach "$OID"
 test "$(git -C "$DEST" rev-parse HEAD)" = "$OID" \
   || { echo "ABORT: PR head 가 아니다" >&2; exit 1; }
 # 의존성이 필요하면 「생성」 3) 과 같다 — 설치 티어라 subreviewer 는 안 돈다
+# 회수 (같은 턴) — 지울 대상은 위 mktemp 가 이 노드에 준 $DEST 뿐이다
+TARGET="$DEST"   # $DEST 가 안 잡혔거나 표식이 그것과 다르면 아래가 막는다
+test -n "$DEST" && test "$(cat "$TARGET/.git/.review-clone" 2>/dev/null)" = "$DEST" \
+  || { echo "ABORT: 이 노드가 만든 사본이 아니다" >&2; exit 1; }
+rm -rf "$TARGET"
 ```
 
 - **`PRIMARY` 를 안 쓴다 — cwd 를 아예 안 읽는다.** 리뷰어의 첫 명령이 저자 사본
   **밖**을 요구하고 그 밖에는 어디든 허용하므로(`.agents/prompts/pr-review.md`
   「MANDATORY 첫 명령」) `git rev-parse --show-toplevel` 이 무엇을 낼지 정해져
-  있지 않다. 위 형태는 `dirname "$AUTHOR"` 만 읽어 어디에 서 있든 같은 `DEST` 다.
+  있지 않다. 위 형태는 `dirname "$AUTHOR"` 만 읽어 어디에 서 있든 같은 부모에 만든다.
 - **저자 사본을 clone 소스로 쓰지 않는다.** 저자 사본은 살아 움직이고 push 안 된
   커밋을 갖는다. 2026-08-07 실측: PR #2210 의 저자 사본이 그 시점 head
-  `2e0bd76fc606` 위에 미push 커밋 `e6a2817bd5b6` 을 얹고 있었고, 그 사본을 clone 한
-  뒤 `gh pr checkout 2210` 은 "Already up to date" 를 내며 `e6a2817bd5b6` 에 섰다 —
-  GitHub 에 없는 커밋이 그 PR 의 근거가 될 뻔했다. (`e6a2817bd5b6` 은 몇 분 뒤
-  push 되어 head 가 됐으니 이 대조 자체는 지금 재현되지 않는다.) 그래서 소스는
-  GitHub 이고 대상은 브랜치가 아니라 OID 이며, 마지막 `test` 가 통과하기 전에는 이
-  사본의 출력을 근거로 쓰지 않는다.
-- 이름 `review__<PR>__<OID 앞 12>` 는 저자 사본(브랜치 이름)과 안 겹치고, 라운드가
-  바뀌면 OID 가 달라져 옛 사본을 조용히 재사용하지 못한다.
+  `2e0bd76fc606` 위에 미push 커밋 `e6a2817bd5b6` 을 얹고 있었고, 거기서
+  `gh pr checkout 2210` 이 "Already up to date" 를 내 GitHub 에 없는 커밋이 근거가 될
+  뻔했다 (그 커밋은 몇 분 뒤 push 돼 head 가 됐으니 이 대조는 지금 재현되지 않는다).
+  그래서 소스는 GitHub, 대상은 OID 이고, 마지막 `test` 전에는 출력을 근거로 안 쓴다.
+- 앞부분 `review__<PR>__<OID 앞 12>` 는 저자 사본(브랜치 이름)과 안 겹치고 「회수」와
+  종결자 스윕이 거기서 PR 을 읽는다. **꼬리는 `mktemp -d` 가 붙인다 — 이름을 계산하지
+  않고 만들어서 받으므로** 같은 PR·같은 head 를 보는 노드 둘이 못 겹친다.
+- **`refs/remotes/origin/main` 을 같이 가져온다.** 안 가져오면 이 저장소가 PR body
+  수치에 처방하는 `"$(git merge-base origin/main HEAD)"` 가 사본에서 rc=128 로 죽는다
+  ([delivery](../../workflow/delivery/memory.md) 「PR body」).
 - **깊이를 줄이지 않는다** — 사유는 위 「생성」의 얕은 사본 금지와 같다.
 
 ### 결과를 인용하는 법
@@ -147,7 +154,7 @@ spawner 가 역할에 맞는 쪽을 prompt 의 첫 명령 슬롯에 넣는다 �
 ## 회수
 
 - **판정 대상은 사본 루트 전체다** (spawn 이 준 경로 하나가 아니다). 그중
-  `review__<PR>__<OID>` 는 tip 이 아니라 **이름에 박힌 PR** 로 판정한다 — detached 고
+  `review__<PR>__<OID>__<꼬리>` 는 tip 이 아니라 **이름에 박힌 PR** 로 판정한다 — detached 고
   tip 이 옛 라운드 head 라 아래 대조가 영구 보존을 낸다. 닫힘을 읽어야 지운다.
 - 머지된 PR 의 head OID 를 받아 **사본 tip 이 그 안에 포함될 때만** 지운다.
   조상 관계 판정 금지 — squash 머지에서 양쪽으로 틀린다 (#1932 실측: 머지된
@@ -165,8 +172,10 @@ spawner 가 역할에 맞는 쪽을 prompt 의 첫 명령 슬롯에 넣는다 �
   (사용자가 못 보는 디스크 점유). 막는 장치 없음 — 규율만.
 - **예외는 리뷰어의 일회용 검증 사본뿐이다** — 리뷰어가 스스로 만든다
   ([review](../../workflow/review/memory.md) 「행동 계약」). 디스크 점유 사유는 그대로
-  걸리므로 **만든 리뷰어가 같은 턴에 지운다.** 만드는 법과 경로는 위 「리뷰어 사본」이
-  정한다. 리뷰어가 죽어 안 지우면 그 자리는 위 「회수」의 루트 스윕이 줍는다.
+  걸리므로 **만든 리뷰어가 같은 턴에 지운다 — 자기가 만든 것만이다.** 만드는 법도
+  지울 자격도 위 「리뷰어 사본」이 정한다: `$DEST` 가 안 잡혔거나 표식이 그것과 다르면
+  손대지 않는다. 같은 PR 을 동시에 보는 coordinator 와 subreviewer 가 서로의 트리를
+  지우던 자리가 이것이다 (#2286). 리뷰어가 죽어 안 지우면 「회수」가 줍는다.
 - 작업 사본은 PR 당 하나, 동시에 쓰는 node 는 하나 (그 사본에 파일을 쓰는 것은
   구현자뿐 — 리뷰어는 저자 사본을 편집하지 않는다). 리뷰 라운드는 새 사본을
   만들지 않고 같은 사본에 다음 구현자를 붙인다 — 쪼개면 죽은 구현자의 미푸시
@@ -179,18 +188,9 @@ spawner 가 역할에 맞는 쪽을 prompt 의 첫 명령 슬롯에 넣는다 �
 `FETCH_HEAD` 는 `reset --hard` 의 대상이지 `fetch` 명령이 아니고, 이 방의
 「리뷰어 사본」이 `git fetch` 를 절차로 처방한다.
 
-push reject 시 회복 정답 4-step:
-
-```bash
-git ls-remote origin <branch>                    # 1) remote SHA 진단
-git reflog                                       # 2) 직전 본인 SHA
-git update-ref refs/heads/<branch> <local-sha>   # 3) ref 만 fix
-SHA="$(git rev-parse HEAD)"
-git push origin "$SHA":refs/heads/<branch>       # 4) SHA refspec push
-```
-
-자세히: [recovering-push-rejects](../../../.agents/skills/recovering-push-rejects/SKILL.md)
-— 외부 race 가짜 신호 + push reject 응급 처치. 계약은
+push reject 회복은 명령 시퀀스라 skill 이 SOT 다 —
+[recovering-push-rejects](../../../.agents/skills/recovering-push-rejects/SKILL.md)
+「회복 정답 (4-step)」 · 외부 race 가짜 신호 · SHA refspec push. 계약은
 [git-policy](../../workflow/git-policy/memory.md).
 
 ## 관련
