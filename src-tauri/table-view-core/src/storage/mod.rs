@@ -525,6 +525,12 @@ fn set_aside_unusable_backup(backup: &std::path::Path) {
 /// the base names differ (`.corrupt-<ts>` here, `.bak` there) because they are
 /// different files with conventions their own callers and tests already read,
 /// but the rule that keeps two quarantines off one name is shared.
+///
+/// Issue #2362 — and so is the duty to give a claimed name back. The claim is an
+/// empty file, the rename after it can fail, and no retention in this repo ever
+/// sweeps what that used to leave. [`set_aside_unusable_backup`] logs the error
+/// and carries on, so the placeholders would pile up in the user's data
+/// directory with nothing on screen to say so.
 fn quarantine_corrupt_storage(path: &std::path::Path) -> Result<PathBuf, AppError> {
     let ts = corrupt_recovery::quarantine_timestamp();
     let mut preferred = path.to_path_buf();
@@ -534,7 +540,10 @@ fn quarantine_corrupt_storage(path: &std::path::Path) -> Result<PathBuf, AppErro
         .unwrap_or("connections.json");
     preferred.set_file_name(format!("{file_name}.corrupt-{ts}"));
     let backup = corrupt_recovery::claim_quarantine_path(&preferred)?;
-    fs::rename(path, &backup)?;
+    if let Err(e) = fs::rename(path, &backup) {
+        let _ = fs::remove_file(&backup);
+        return Err(e.into());
+    }
     Ok(backup)
 }
 
@@ -1753,6 +1762,35 @@ mod tests {
             return;
         }
         panic!("could not land two quarantines inside one second in 32 tries");
+    }
+
+    /// #2362 — the claim above is an empty file created at the chosen name, and
+    /// the rename that follows it can fail. Nothing gave that name back when it
+    /// did: a zero-byte `connections.json.corrupt-<ts>` stayed, no retention
+    /// sweeps it, and [`set_aside_unusable_backup`] logs and swallows the error
+    /// that made it — so the placeholders accumulate with nothing on screen.
+    ///
+    /// The rename is failed by putting a directory where the file goes;
+    /// `fs::rename` will not move one onto the empty file the claim just
+    /// created.
+    #[test]
+    fn a_failed_quarantine_gives_the_claimed_name_back() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("connections.json");
+        fs::create_dir(&path).unwrap();
+
+        let err = quarantine_corrupt_storage(&path).unwrap_err();
+
+        let entries: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            entries,
+            vec!["connections.json".to_string()],
+            "a quarantine that failed ({err}) has to leave the directory as it found it"
+        );
     }
 
     // -------------------------------------------------------------------
