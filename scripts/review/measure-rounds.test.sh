@@ -247,8 +247,10 @@ check_gate_signal
 #
 # RED 재현 3종. 각각 아래 ①~③ 중 하나를 죽인다:
 #   d="$(mktemp -d)"; git archive HEAD | tar -x -C "$d"
-#   # (a) 해제 검증이 다른 label 을 본다 — 잔존 경로가 통과가 된다
-#   perl -0pi -e "s/grep -qxF 'reflect:done'/grep -qxF 'reflect:never'/" \
+#   # (a) 해제 검증이 다른 label 을 본다 — 잔존 경로가 통과가 된다.
+#   #     리터럴은 그 파일의 표기 그대로다 (#2330 이 파이프를 case 로 바꿨다).
+#   #     작은따옴표인 이유: 큰따옴표면 셸이 ${nl} 을 먼저 먹는다.
+#   perl -0pi -e 's/reflect:done\$\{nl\}/reflect:never\$\{nl\}/' \
 #     "$d/.github/workflows/review-gate.yml"
 #   # (b) 해제 스텝의 always() 를 뗀다 — dismissal 의 exit 1 뒤라 영영 안 돈다
 #   perl -0pi -e "s/\Qif: always() && github.event_name\E/if: github.event_name/" \
@@ -326,6 +328,17 @@ for a in "$@"; do
 done
 [ "${STUB_LIST_RC:-0}" = 0 ] || exit "$STUB_LIST_RC"
 printf '%s\n' $STUB_LABELS
+# 아래 "assertion helpers (#2330)" 절이 쓰는 패딩. 환경 변수나 인자가 아니라 파일로
+# 받는 이유: 그 payload 는 파이프 버퍼의 두 배(221183 자)이고, 인자·환경 문자열 하나의
+# 길이 상한은 플랫폼마다 다르다 — Linux 의 `MAX_ARG_STRLEN` 은 32 × page size 라
+# 4KiB page 에서 131072 바이트이고 CI 러너가 ubuntu-latest 다. 로컬만 보면 이 함정이
+# 안 보인다: Darwin arm64 에서는 같은 221183 자 인자가 rc=0 으로 그냥 지나간다
+# (`getconf ARG_MAX` 1048576, 개별 상한 없음). 파일 경로는 짧아 그 상한과 무관하다.
+# `if` 로 감싸는 이유: 뒤에 붙인 `[ -n … ] && cat …` 는 빈 값일 때 rc=1 이라 스텁
+# 전체가 실패로 끝나고, 그러면 위 네 케이스가 label 조회 실패 경로로 새어 나간다.
+if [ -n "${STUB_LABEL_PAD:-}" ]; then
+	cat "$STUB_LABEL_PAD"
+fi
 STUB
 	chmod +x "$dir/gh"
 
@@ -355,6 +368,49 @@ STUB
 	release_case 0 0 "reflect:done review:approved"
 	assert_rc 1 "fail-closed: label 이 남으면 실패다"
 	assert_has "::error::reflect:done 해제 실패" "잔존을 에러로 찍는다"
+
+	# ── assertion helpers (#2330) ────────────────────────────────────────
+	# 잔존 판정이 파이프 status 를 안 탄다는 것의 회귀 가드. 옛 형태
+	# `printf '%s\n' "$labels" | grep -qxF 'reflect:done'` 로 되돌리면 여기가 red
+	# 다. 부호가 「없어야 한다」라 뒤집혀도 red 를 안 남기는 자리다 — label 이
+	# 남았는데 게이트가 「해제됐다」로 통과한다.
+	#
+	# **`-o pipefail` 을 켜서 돌린다.** 이 스텝은 `shell:` 이 없어 GitHub 이
+	# `bash -e {0}` 로 돌리고 그 모드에서는 뒤집힘이 성립하지 않는다 (위 네 케이스가
+	# 그 모드다). 값은 그것이 바뀌는 날에 있다 — 같은 저장소의 e2e-smoke.yml ·
+	# platform-smoke-canary.yml · release.yml 이 이미 `shell: bash` 를 쓰고, 그 키가
+	# 이 스텝에 붙으면 pipefail 이 같이 온다. 이 사본에서 잰 값(payload 221212 자 =
+	# 아래 pad 221183 + label 두 줄, 첫 줄이 reflect:done): 옛 형태는 `bash -e -c`
+	# 에서 rc=1(탐지) · `bash -e -o pipefail -c` 에서 rc=0(놓침), 새 `case` 형태는
+	# 양쪽 다 rc=1.
+	#
+	# payload 를 파이프 버퍼(64KiB)의 두 배 위로 잡는 이유: 버퍼 언저리는 아직
+	# 스케줄링 경합이라 확률로만 나타난다 (#2318 실측 8041B 0/800 · 70057B 799/800 ·
+	# 200055B 800/800). 누가 줄이면 아래 두 단언이 green 이어도 아무것도 안 지키므로
+	# 크기 자체를 먼저 단언한다.
+	local pad='filler-line-for-issue-2330'
+	while [ "${#pad}" -lt 200000 ]; do
+		pad="$pad
+$pad"
+	done
+	printf '%s\n' "$pad" >"$dir/pad.txt"
+
+	if [ "${#pad}" -ge 131072 ]; then
+		pass "SIGPIPE 가드 payload 가 파이프 버퍼(64KiB)의 두 배를 넘는다 (${#pad}, ASCII)"
+	else
+		fail "SIGPIPE 가드 payload 가 너무 작다: ${#pad}" \
+			"131072 를 못 넘으면 결정론 구간 밖이다 — 버퍼 바로 위(70057B)는 위 실측대로 아직 확률이라 가드가 무력해진다."
+	fi
+
+	# release_case() 를 안 쓰고 펼쳐 쓴다 — 다른 것은 셸 모드 하나뿐이고 그 하나가
+	# 이 단언의 전부라 호출 자리에서 보여야 한다.
+	OUT="$(PATH="$dir:$PATH" GITHUB_REPOSITORY="o/r" PR=1 \
+		STUB_DELETE_RC=0 STUB_LIST_RC=0 STUB_LABELS="reflect:done review:approved" \
+		STUB_LABEL_PAD="$dir/pad.txt" \
+		bash -e -o pipefail -c "$script" 2>&1)"
+	RC=$?
+	assert_rc 1 "pipefail: 파이프 버퍼보다 큰 label 목록에서도 잔존을 잡는다"
+	assert_has "::error::reflect:done 해제 실패" "pipefail: 잔존이 조용한 거짓 green 이 되지 않는다"
 
 	rm -rf "$dir"
 }
@@ -435,6 +491,73 @@ assert_rc 2 "값 없는 --top 이 마지막 인자"
 OUT="$(bash "$SCRIPT" --since 2026-07-25 --wat 2>&1)"
 RC=$?
 assert_rc 2 "모르는 인자"
+
+# ── 여러 줄 인자 (#2330) ─────────────────────────────────────────────────
+# measure-rounds.sh 의 is_date() · is_uint() 가 파이프를 안 쓴다는 것의 회귀 가드.
+# 옛 형태 `printf '%s' "$X" | grep -qE '^…$'` 는 grep 이 줄 단위라 첫 줄만 맞으면
+# 통과시켰다 — 판정을 파이프에 실은 것의 부산물이다. origin/main 6a41dc07 에서 아래
+# 셋의 rc 는 각각 0 · 0 · 1 이었다 (`--limit` 은 bash 가 `[: integer expression
+# expected` 를 찍고 그대로 진행, `--top` 은 jq 가 --argjson 파싱에서 죽음).
+#
+# **여기 payload 는 일부러 작다.** 위 "assertion helpers" 절들과 다르다 — 이 판정은
+# 뒤집힘이 성립하려면 첫 줄이 맞고 뒤가 더 있어야 하는데, 그 입력의 올바른 답이 이미
+# 「거절」이라 옛 형태가 EPIPE 로 거절하든 새 형태가 문자열 전체를 보고 거절하든
+# 답이 같다. 이 사본에서 첫 줄 '5' + 숫자 327682 자로 5회 돌려 옛 REJECT · 새
+# REJECT 였다 (판별력 0). 같은 입력을 11 자로 줄이면 옛 ACCEPT · 새 REJECT 다.
+OUT="$(bash "$SCRIPT" --from-json "$FIXTURE" --since "$(printf '2026-07-25\ngarbage')" 2>&1)"
+RC=$?
+assert_rc 2 "--since 가 여러 줄이면 첫 줄만 맞아도 거절한다"
+OUT="$(bash "$SCRIPT" --from-json "$FIXTURE" --since 2026-07-25 --until 2026-07-26 --limit "$(printf '5\ngarbage')" 2>&1)"
+RC=$?
+assert_rc 2 "--limit 이 여러 줄이면 첫 줄만 맞아도 거절한다"
+OUT="$(bash "$SCRIPT" --from-json "$FIXTURE" --since 2026-07-25 --until 2026-07-26 --top "$(printf '5\ngarbage')" 2>&1)"
+RC=$?
+assert_rc 2 "--top 이 여러 줄이면 첫 줄만 맞아도 거절한다"
+
+# ── 인자 판정의 로케일 축 (#2330) ────────────────────────────────────────
+# is_date() · is_uint() 가 셸 `case` 의 브래킷 **범위**로 숫자를 판정하지 않는다는
+# 회귀 가드. `[0-9]` 는 문자 클래스가 아니라 collation 범위라 그 집합을 로케일이
+# 정한다 — `case '٣' in [0-9])` 는 참인데 `grep -E '^[0-9]+$'` 는 거짓인 로케일이
+# 있고, 거기서는 파이프를 떼면서 `case` 로 옮긴 순간 옛 형태가 거절하던 값이
+# 통과한다. 그러니 판정을 그런 로케일에 걸어야 이 축이 실제로 지켜진다.
+#
+# **로케일 이름을 박지 않는다.** 어느 이름이 생성돼 있는지는 러너마다 다르고, 박아
+# 두면 「그 이름이 이 러너에 있나」를 이 스위트가 스스로 못 닫는다. 러너의
+# `locale -a` 를 돌며 실제로 갈리는 첫 하나를 골라 쓰고, 고른 이름은 단언 label 에
+# 찍는다. 하나도 없으면 이 축의 가드가 무력하다는 뜻이라 red 다 — 조용히 통과시키면
+# 가드가 사라진 것을 아무도 모른다.
+#
+# 비용은 로케일당 bash 하나이고 갈리는 것을 만나면 거기서 멈춘다. 전수 열거 명령과
+# 개발 머신 실측은 docs/contributor-guide/testing-and-quality.md 의
+# 「Shell Suite Harness Quality」에 있다.
+#
+# 이 절의 판별력은 아래 mutation "is-uint-case-range" 다 — is_uint() 를 옛 `case`
+# 형태로 되돌리면 이 스위트에서 red 가 되는 것은 이 절뿐이다.
+echo "arg validator locale axis (#2330):"
+
+# 두 형태가 갈리는 로케일이면 0. 없는 이름이면 setlocale 이 실패해 C 로 남고 두
+# 형태 다 거절해서 1 이라, 이름이 생성돼 있는지를 따로 확인할 필요가 없다.
+locale_splits_digits() {
+	LC_ALL="$1" bash -c 'case "٣" in [0-9]) ;; *) exit 1 ;; esac; ! grep -qE "^[0-9]+$" <<<"٣"' 2>/dev/null
+}
+
+SPLIT_LOCALE=""
+for L in $(locale -a 2>/dev/null); do
+	if locale_splits_digits "$L"; then
+		SPLIT_LOCALE="$L"
+		break
+	fi
+done
+
+if [ -z "$SPLIT_LOCALE" ]; then
+	fail "두 형태가 갈리는 로케일이 이 러너에 없다 — 이 축의 회귀 가드가 무력하다" \
+		"locale -a 어디에서도 case '٣' in [0-9]) 가 참이면서 grep -qE '^[0-9]+\$' 가 거짓이 되지 않았다."
+else
+	OUT="$(LC_ALL="$SPLIT_LOCALE" bash "$SCRIPT" --from-json "$FIXTURE" \
+		--since 2026-07-25 --until 2026-07-26 --limit '٣' 2>&1)"
+	RC=$?
+	assert_rc 2 "--limit 이 비-ASCII 십진 숫자면 거절한다 (LC_ALL=$SPLIT_LOCALE — 이 러너에서 갈리는 로케일)"
+fi
 
 # ── assertion helpers (#2314) ────────────────────────────────────────────
 # contains() 가 파이프를 안 쓴다는 것의 회귀 가드. 옛 형태로 되돌리면 여기가 red 다.
@@ -587,6 +710,13 @@ if [ "${MEASURE_ROUNDS_SKIP_MUTATION:-0}" != "1" ]; then
 	mutation_case "round-events-comment-source" \
 		'(.comments.nodes | map(.createdAt) | sort) as $ts' \
 		'(.commits.nodes | map(.commit.committedDate) | sort) as $ts'
+	# is_uint() 를 옛 셸 `case` 형태로 되돌린다. 이 변형을 잡는 것은 위 「인자 판정의
+	# 로케일 축」 절 하나이고, 그 절이 고른 로케일에서만 두 형태의 행동이 갈린다 —
+	# 여러 줄 인자는 양쪽 다 거절해서 「여러 줄 인자」 절은 이 변형을 못 가른다.
+	# 갈리는 로케일이 없는 러너에서는 그 절이 먼저 red 를 낸다.
+	mutation_case "is-uint-case-range" \
+		"	matches_ere \"\$1\" '^[0-9]+\$'" \
+		"	case \"\$1\" in '' | *[!0-9]*) return 1 ;; *) return 0 ;; esac"
 fi
 
 echo ""

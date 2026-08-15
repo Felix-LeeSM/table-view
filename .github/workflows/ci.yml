@@ -742,8 +742,21 @@ jobs:
         run: |
           set -euo pipefail
 
-          features="$(cargo tree -i table-view-core --edges normal \
-            --format '{f}' --prefix none | head -1)"
+          # No pipe here (#2330). `| head -1` lets head leave at the first line
+          # while cargo still has bytes to write; cargo then takes EPIPE and
+          # `pipefail` raises that non-zero onto the pipeline, so `-e` kills the
+          # step — a false red that costs this early warning. This one sits far
+          # under the reachable zone: the output measured 9 bytes / 2 lines here
+          # against a 64KiB pipe buffer. The form is still the one #2314/#2319
+          # took out elsewhere, so it goes too. Re-measure the size with:
+          #   cargo tree -i table-view-core --edges normal --format '{f}' \
+          #     --prefix none | wc -c
+          # `${tree%%...}` strips everything from the first newline on, which is
+          # what `head -1` produced, and keeps `-e` catching a cargo failure
+          # because the assignment carries the substitution's status.
+          tree="$(cargo tree -i table-view-core --edges normal \
+            --format '{f}' --prefix none)"
+          features="${tree%%$'\n'*}"
           echo "table-view-core features in the release graph: [$features]"
           case ",$features," in
             *,testing,*)

@@ -74,10 +74,31 @@ jobs:
             echo "::error::reflect:done 해제를 확인하지 못했다 (label 조회 실패) — 남아 있으면 다음 라운드가 사용자 승인 없이 통과한다"
             exit 1
           }
-          if printf '%s\n' "$labels" | grep -qxF 'reflect:done'; then
+          # 잔존 판정을 파이프 status 에서 뗀다 (#2330). 옛 형태
+          # `printf '%s\n' "$labels" | grep -qxF 'reflect:done'` 는 grep -q 가 첫
+          # 일치에서 stdin 을 안 비우고 빠지는 동안 왼쪽 printf 가 아직 쓸 것을 갖고
+          # 있으면 EPIPE 를 맞고, `pipefail` 이 그 비영 status 를 파이프라인 status 로
+          # 올려 판정을 뒤집는다 — 부호가 「없어야 한다」라 label 이 남아 있는데
+          # 「해제됐다」로 통과하는 조용한 거짓 green 이다. 이 스텝은 `shell:` 이 없어
+          # `bash -e {0}` 로 돌고 pipefail 이 없지만, 같은 저장소의 e2e-smoke.yml ·
+          # platform-smoke-canary.yml · release.yml 이 이미 `shell: bash` 를 쓴다 —
+          # 그 형태가 이 파일에 오는 날 뒤집힌다. 221212 자 payload 로 잰 값
+          # (첫 줄이 reflect:done, bash 3.2.57): 옛 형태는 `bash -e -c` 에서
+          # rc=1(탐지) · `bash -e -o pipefail -c` 에서 rc=0(놓침)이고, 아래 case
+          # 형태는 양쪽 다 rc=1 이다.
+          #
+          # `case` 는 파이프를 안 만들어 그 status 가 성립할 자리 자체가 없다. 양끝
+          # 개행이 부분 일치를 막아 `grep -qxF` 의 줄 단위 일치와 뜻이 같고, 인용된
+          # 확장은 glob 이 아니라 리터럴이다 — scripts/check-ci-test-calls.sh 의
+          # has() 와 같은 형태다. 회귀 가드는 scripts/review/measure-rounds.test.sh 의
+          # 「assertion helpers (#2330)」 절이다.
+          nl=$'\n'
+          case "$nl$labels$nl" in
+          *"${nl}reflect:done${nl}"*)
             echo "::error::reflect:done 해제 실패 — label 이 그대로 남아 있다. 손으로 떼라: gh pr edit ${PR} --remove-label reflect:done"
             exit 1
-          fi
+            ;;
+          esac
           echo "::notice::reflect:done released — 새 head OID 는 새 라운드다"
 
       # 라운드 = 서로 다른 head 커밋에 붙은 리뷰 인계의 수 (#1968). 옛 프록시는 PR
