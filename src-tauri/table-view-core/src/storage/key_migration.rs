@@ -8,9 +8,12 @@
 //!   - **Path A (신규)**: 디스크 `.key` 없음 + keyring 없음 → 새 key 생성,
 //!     keyring 저장, 디스크 file 폐기. AC-356-01.
 //!   - **Path B (migration)**: 디스크 `.key` 있음 + keyring 없음 → 디스크
-//!     read → keyring write → readback 검증 → 디스크 secure delete
-//!     (overwrite + 0o000 + unlink). 실패 시 디스크 유지 + sidecar
-//!     `.key.migration-failed`. AC-356-02..04.
+//!     read → (c) ciphertext probe → (a) keyring write → (b) readback 검증 →
+//!     (d) 디스크 secure delete (overwrite + 0o000 + unlink). 실패 시 디스크
+//!     유지 + sidecar `.key.migration-failed`. 단계 이름 (a)~(d) 는 설계
+//!     문서(strategy 873–905)의 것이고 실행 순서는 위와 같다 — (c) 가 (a)
+//!     앞에 서는 이유는 [`path_b_migrate_from_disk`] 가 갖는다 (#2138).
+//!     AC-356-02..04.
 //!   - **Path B 후속 boot**: 디스크 `.key` 없음 + keyring 있음 → keyring
 //!     read. AC-356-03.
 //!   - **재키잉 (#1814)**: 디스크 `.key` 있음 + keyring 있음 → 디스크를 거친
@@ -199,12 +202,37 @@ pub fn migrate_or_initialize<B: KeyringBackend>(
 /// secure-delete. 한 step 이라도 실패 시 sentinel sidecar + 디스크 보존
 /// (다음 boot 재시도). decrypt 는 디스크 path 로 fallback (caller
 /// 책임).
+///
+/// 실행 순서는 (c) → (a) → (b) → (d) 다. 설계(strategy 873–905)가 요구하는 것은
+/// (d) 앞에 (a)(b)(c) 가 전부 성공하는 것이고 셋 사이의 순서는 열려 있다 — (c) 를
+/// 맨 앞에 두는 이유는 실패했을 때 남는 상태다 (#2138). (a) 뒤에서 실패하면 그
+/// 부팅이 keyring 엔트리를 남기고, 다음 부팅은 [`migrate_or_initialize`] 의
+/// keyring hit 분기로 빠져 Path B 에 다시 못 들어온다. 그러면 (d) 도 sentinel
+/// 회수도 영영 안 돌아 디스크 평문 `.key` 가 영구 잔존한다. [`KeyringBackend`]
+/// 에는 `delete` 가 없어 (a) 를 되돌릴 수단도 없으니, 안 쓰는 것이 유일한 방어다.
 fn path_b_migrate_from_disk<B: KeyringBackend>(
     backend: &B,
     data_dir: &Path,
     disk_path: &Path,
 ) -> Result<KeyOutcome, AppError> {
     let disk_key = read_disk_key(disk_path)?;
+
+    // (c) ciphertext decrypt sanity check (strategy line 886–887). Best
+    // effort — if there are no ciphertexts to validate (fresh dual-write
+    // user) we still proceed.
+    if let Err(e) = validate_ciphertexts_decrypt(data_dir, &disk_key) {
+        warn!(
+            target: "boot",
+            "key_migration: Path B step (c) ciphertext probe failed ({e}); leaving sentinel"
+        );
+        write_sentinel(&migration_failed_sentinel_path(data_dir))?;
+        return Ok(KeyOutcome {
+            key: disk_key,
+            source: KeySource::DiskFallback,
+            fallback_to_disk: true,
+            rekeyed_after_disk_exposure: false,
+        });
+    }
 
     // (a) keyring write.
     if let Err(e) = backend.set(KEYRING_ENTRY_NAME, &disk_key) {
@@ -241,23 +269,6 @@ fn path_b_migrate_from_disk<B: KeyringBackend>(
                 rekeyed_after_disk_exposure: false,
             });
         }
-    }
-
-    // (c) ciphertext decrypt sanity check (strategy line 886–887). Best
-    // effort — if there are no ciphertexts to validate (fresh dual-write
-    // user) we still proceed.
-    if let Err(e) = validate_ciphertexts_decrypt(data_dir, &disk_key) {
-        warn!(
-            target: "boot",
-            "key_migration: Path B step (c) ciphertext probe failed ({e}); leaving sentinel"
-        );
-        write_sentinel(&migration_failed_sentinel_path(data_dir))?;
-        return Ok(KeyOutcome {
-            key: disk_key,
-            source: KeySource::DiskFallback,
-            fallback_to_disk: true,
-            rekeyed_after_disk_exposure: false,
-        });
     }
 
     // (d) secure delete + clear sentinel (in case a previous boot left one).
