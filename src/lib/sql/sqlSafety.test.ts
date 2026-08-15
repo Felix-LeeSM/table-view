@@ -682,8 +682,8 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
       ).toBe("danger");
     });
 
-    // Reason: #2288 review round 1 — the Rust side compared whitespace-split
-    // tokens and read `REPLACE"t"` as one word, so a quoted table name hugging
+    // Reason: #2288 — the Rust side compared whitespace-split tokens and
+    // read `REPLACE"t"` as one word, so a quoted table name hugging
     // the keyword classified `Info` there while this `\b` anchor said danger,
     // and the enforcing layer is the Rust one (#1112). SQLite accepts all four
     // delimiters with nothing before them and each still DELETEs the

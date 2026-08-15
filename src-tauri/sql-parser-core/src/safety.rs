@@ -641,9 +641,9 @@ fn first_word(s: &str) -> String {
 /// `'t'` all run, and all four DELETE the conflicting row. A whitespace split
 /// (`split_whitespace`) reads those as the single word `REPLACE"T"` and misses
 /// the statement; that is exactly how the `OR REPLACE` branch above diverged
-/// from the frontend, whose `\b` anchor never had the hole (#2288 review round
-/// 1). Chaining this helper keeps ONE boundary rule for every keyword test in
-/// this fallback.
+/// from the frontend, whose `\b` anchor never had the hole (#2288). Chaining
+/// this helper keeps ONE boundary rule for every keyword test in this
+/// fallback.
 fn after_keyword<'a>(upper: &'a str, keyword: &str) -> Option<&'a str> {
     let rest = upper.strip_prefix(keyword)?;
     match rest.chars().next() {
@@ -1124,7 +1124,7 @@ mod tests {
         assert!(!is_danger("CREATE OR REPLACE VIEW v AS SELECT 1"));
     }
 
-    /// #2288 review round 1 — this fallback compared whitespace-split tokens,
+    /// #2288 — this fallback compared whitespace-split tokens,
     /// so a quoted identifier hugging the keyword (`REPLACE"T"` lexes as ONE
     /// word) slipped out as `Info` while the frontend `\b` anchor read the same
     /// string as danger — and the backend is the enforcing layer (#1112).
