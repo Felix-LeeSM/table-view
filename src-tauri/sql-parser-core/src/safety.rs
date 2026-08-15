@@ -19,6 +19,10 @@
 //!   - `DELETE` without a `WHERE` clause
 //!   - `UPDATE` without a `WHERE` clause
 //!   - `REPLACE …` (MySQL/MariaDB destructive upsert — issue #1115)
+//!   - SQLite's conflict-algorithm spelling of that same upsert on either
+//!     write verb — `INSERT OR REPLACE …` (issue #2272) / `UPDATE OR REPLACE
+//!     …` (issue #2288). A WHERE does not de-escalate the UPDATE form: the
+//!     row the algorithm deletes is one the WHERE never selected.
 //!   - `RESTORE …` (SQL Server — may overwrite a database)
 //!   - data-modifying CTE — `WITH x AS (DELETE/UPDATE … no WHERE) SELECT …`
 //!     in ANY CTE position (issue #1350; mirrors the frontend `analyzeDmlCte`;
@@ -319,22 +323,28 @@ fn classify_by_keyword(stmt: &str, dialect: SqlDialect) -> Severity {
     if starts_with_keyword(upper, "REPLACE") {
         return Severity::Danger;
     }
-    // SQLite `INSERT OR REPLACE INTO …` (issue #2272) — the same destructive
-    // upsert under a different spelling: the conflict algorithm DELETEs the
-    // conflicting row before inserting. The branch above is a leading-keyword
-    // test so it does not see this form, and `parse` rejects it (the grammar's
-    // INSERT rule expects INTO right after INSERT), so it used to fall out of
-    // this function as `Info`. Whitespace is not collapsed here (only comments
-    // are, into a single space), so the three leading words are compared
-    // token-wise. Only REPLACE deletes an existing row — `INSERT OR ABORT|FAIL`
-    // abort the statement, `INSERT OR IGNORE` skips the row, and `INSERT OR
-    // ROLLBACK` also rolls back the open transaction, but only that
-    // transaction's own uncommitted work, so those stay `Info` (mirrors the
-    // frontend `^INSERT\s+OR\s+REPLACE\b` branch in
+    // SQLite `INSERT OR REPLACE INTO …` (issue #2272) and `UPDATE OR REPLACE …
+    // SET …` (issue #2288) — the same destructive upsert under the conflict-
+    // algorithm spelling, which SQLite hangs on BOTH write verbs: the algorithm
+    // DELETEs the conflicting row before writing. The `REPLACE` branch above is
+    // a leading-keyword test so it sees neither, and `parse` rejects both (its
+    // INSERT rule expects INTO right after INSERT, its UPDATE rule a table
+    // name), so both used to fall out of this function as `Info`. For the
+    // UPDATE spelling the `has_where` test further down is measuring the wrong
+    // thing: the deleted row is one the WHERE never selected, so a WHERE does
+    // not bound the loss. Whitespace is not collapsed here (only comments are,
+    // into a single space), so the three leading words are compared token-wise.
+    // The verb set is CLOSED to the two SQLite allows the clause on — admitting
+    // any verb would swallow `CREATE OR REPLACE VIEW`. Only REPLACE deletes an
+    // existing row: `OR ABORT|FAIL` abort the statement, `OR IGNORE` skips the
+    // row, and `OR ROLLBACK` also rolls back the open transaction, but only
+    // that transaction's own uncommitted work, so on either verb those stay
+    // where they are (mirrors the frontend
+    // `^(INSERT|UPDATE)\s+OR\s+REPLACE\b` branch in
     // `src/lib/sql/sqlSafetyClassifier.ts`).
     {
         let mut words = upper.split_whitespace();
-        if words.next() == Some("INSERT")
+        if matches!(words.next(), Some("INSERT" | "UPDATE"))
             && words.next() == Some("OR")
             && words.next() == Some("REPLACE")
         {
@@ -1058,6 +1068,47 @@ mod tests {
     #[test]
     fn create_or_replace_is_not_danger() {
         // Leading keyword is CREATE, not REPLACE — must not false-positive.
+        assert!(!is_danger("CREATE OR REPLACE VIEW v AS SELECT 1"));
+    }
+
+    #[test]
+    fn sqlite_or_replace_is_danger_on_both_write_verbs() {
+        // Issues #2272 / #2288 — SQLite hangs `OR <conflict-algorithm>` on
+        // both write verbs, and REPLACE is the one algorithm that DELETEs the
+        // conflicting row. `parse` rejects both spellings (its INSERT rule
+        // wants INTO right after INSERT, its UPDATE rule a table name), so the
+        // keyword fallback is the sole classifier on this side.
+        assert_eq!(
+            classify("INSERT OR REPLACE INTO users VALUES (1)"),
+            Severity::Danger
+        );
+        // The UPDATE spelling carries a WHERE, so the bounded-UPDATE test
+        // below it reads it as bounded — but the deleted row is one the WHERE
+        // never selected. Before #2288 this fell out of the fallback as `Info`.
+        assert_eq!(
+            classify("UPDATE OR REPLACE users SET id = 1 WHERE rowid = 5"),
+            Severity::Danger
+        );
+        assert_eq!(
+            classify("update or replace users set id = 1 where rowid = 5"),
+            Severity::Danger
+        );
+        // Only REPLACE deletes a row — the other four conflict algorithms
+        // abort / skip, so they must not ride this branch on either verb.
+        for algorithm in ["ROLLBACK", "ABORT", "FAIL", "IGNORE"] {
+            assert!(
+                !is_danger(&format!(
+                    "UPDATE OR {algorithm} users SET id = 1 WHERE rowid = 5"
+                )),
+                "UPDATE OR {algorithm} must not be danger"
+            );
+            assert!(
+                !is_danger(&format!("INSERT OR {algorithm} INTO users VALUES (1)")),
+                "INSERT OR {algorithm} must not be danger"
+            );
+        }
+        // Verb set is closed to the two SQLite allows the clause on — a third
+        // verb must not ride it (`CREATE OR REPLACE VIEW` is info by design).
         assert!(!is_danger("CREATE OR REPLACE VIEW v AS SELECT 1"));
     }
 

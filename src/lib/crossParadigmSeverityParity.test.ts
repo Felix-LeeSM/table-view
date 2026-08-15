@@ -193,6 +193,17 @@ const PARITY_TABLE: ParityBucket[] = [
         actual: sql("INSERT OR REPLACE INTO users VALUES (1)"),
       },
       {
+        // Issue #2288 — SQLite hangs the same conflict algorithm on UPDATE.
+        // The WHERE bounds which row is written but not which row is
+        // DELETEd: the row that loses the uniqueness conflict is removed
+        // whole. So the filter stops bounding the blast radius and this does
+        // NOT belong with the `UPDATE … WHERE` case in the bounded
+        // multi-row write bucket, even though it carries a WHERE.
+        paradigm: "sql",
+        label: "UPDATE OR REPLACE … WHERE (SQLite row replace)",
+        actual: sql("UPDATE OR REPLACE users SET id = 1 WHERE rowid = 5"),
+      },
+      {
         paradigm: "mongo-op",
         label: "updateMany({})",
         actual: analyzeMongoOperation({
