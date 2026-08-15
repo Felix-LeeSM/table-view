@@ -279,6 +279,14 @@ mod tests {
         );
     }
 
+    /// #2303 — the last assertion reads the *name*, because the three above it
+    /// hold with the timestamped branch in [`quarantine`] deleted. Replace that
+    /// branch with `let preferred = primary;` and a taken `state.db.bak` sends
+    /// `claim_quarantine_path` to `state.db.bak-1` instead: it exists, it differs
+    /// from the primary, and it leaves the primary alone. Two mechanisms reach
+    /// the same three outcomes, and the name is the only place they part — the
+    /// `-N` suffix is the collision fallback, `.bak.<seconds>` is the branch this
+    /// test is named for.
     #[test]
     fn test_quarantine_adds_timestamp_when_bak_already_exists() {
         let dir = TempDir::new().unwrap();
@@ -290,6 +298,12 @@ mod tests {
         assert!(primary_bak.exists(), "Old .bak preserved");
         assert!(backup.exists(), "Timestamped backup created");
         assert_ne!(backup, primary_bak, "Must NOT overwrite existing .bak");
+        let name = backup.file_name().unwrap().to_str().unwrap();
+        assert!(
+            name.starts_with("state.db.bak."),
+            "an occupied state.db.bak has to send the quarantine to the timestamped name, \
+             not to the -N collision fallback; got {name}"
+        );
     }
 
     /// #2302 — the timestamped fallback the test above reaches is
