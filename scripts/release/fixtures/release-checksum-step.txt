@@ -20,6 +20,13 @@
             fi
           }
 
+          # The join key is the content digest, not the name. Mirroring either
+          # rename here would just move the divergence — the next change on
+          # either side would go stale in this file instead of in the sidecar.
+          # `gh release view` resolves a draft by tag the same way `gh release
+          # upload` below already does.
+          assets="$(gh release view "$TAG" --json assets)"
+
           # `done < <(...)` and not `jq … | while`: a pipe would put the loop in
           # a subshell and the counters below would come back zero however many
           # bundles were hashed.
@@ -36,8 +43,17 @@
               echo "::error::artifactPaths entry resolves to nothing: $raw (read as '$f'). Refusing to end green with a bundle that has no checksum." >&2
               exit 1
             fi
-            (cd "$(dirname "$f")" && shasum -a 256 "$(basename "$f")") > "${f}.sha256"
-            gh release upload "$TAG" "${f}.sha256" --clobber
+            sum="$(shasum -a 256 "$f" | cut -d' ' -f1)"
+            name="$(printf '%s' "$assets" | jq -r --arg d "sha256:$sum" '[.assets[] | select(.digest == $d) | .name] | if length == 1 then .[0] else "" end')"
+            if [ -z "$name" ]; then
+              echo "::error::no single $TAG asset carries digest sha256:$sum ($raw). Refusing to upload a sidecar under a name that pairs with nothing." >&2
+              exit 1
+            fi
+            # Both the sidecar's own name and the filename column inside it are
+            # the published name: `shasum -c` runs in the directory the user
+            # downloaded into, where that is what the file is called.
+            printf '%s  %s\n' "$sum" "$name" > "$(dirname "$f")/$name.sha256"
+            gh release upload "$TAG" "$(dirname "$f")/$name.sha256" --clobber
             hashed=$((hashed + 1))
           done < <(printf '%s' "$ARTIFACT_PATHS" | jq -r '.[]')
 

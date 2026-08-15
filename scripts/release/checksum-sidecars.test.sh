@@ -230,9 +230,17 @@ STUB_BIN="$TMP/bin"
 mkdir -p "$STUB_BIN"
 
 # 업로드된 파일 경로를 한 줄씩 $STUB_DIR/uploads 에 적는다. $STUB_DIR/rc 가 있으면
-# 그 값으로 죽는다 — 업로드 실패가 스텝을 red 로 만드는지 보는 케이스가 쓴다.
+# 업로드가 그 값으로 죽는다 — 업로드 실패가 스텝을 red 로 만드는지 보는 케이스가 쓴다.
+#
+# `release view` 는 릴리스에 이미 올라간 자산 목록을 낸다 (#2307). 그 rc 는 안
+# 읽는다: 업로드 실패 케이스가 조회에서 먼저 죽으면 업로드 경로를 한 번도 안 지난
+# 채 rc=1 이 나와, 그 케이스가 자기가 재는 것을 안 재게 된다.
 cat >"$STUB_BIN/gh" <<'STUB'
 #!/usr/bin/env bash
+if [ "${1:-}" = "release" ] && [ "${2:-}" = "view" ]; then
+	cat "$STUB_DIR/assets.json"
+	exit 0
+fi
 for a in "$@"; do
 	case "$a" in *.sha256) printf '%s\n' "$a" >>"$STUB_DIR/uploads" ;; esac
 done
@@ -281,6 +289,9 @@ new_case() {
 	local d
 	d="$(mktemp -d "$TMP/case.XXXXXX")"
 	: >"$d/uploads"
+	# 기본은 자산 없음. 조회 자체는 성공해야 한다 — 스텝이 루프 앞에서 한 번
+	# 부르므로, 파일이 없으면 항목 0개 케이스가 제 사유가 아니라 조회 실패로 죽는다.
+	printf '{"assets":[]}' >"$d/assets.json"
 	printf '%s' "$d"
 }
 
@@ -289,14 +300,52 @@ json_array() {
 	printf '%s\n' "$@" | jq -R . | jq -s -c .
 }
 
+# 릴리스에 이미 올라간 자산 목록을 세운다 (#2307). 인자는 `<자산 이름>=<로컬 파일>`
+# 이고, 자산 이름을 로컬 basename 과 다르게 주면 그것이 업로드 때 이름이 갈리는
+# 경우다. digest 는 진짜 GitHub 처럼 로컬 파일 내용에서 만든다 — 스텝이 이름이
+# 아니라 그 값으로 짝을 찾으므로, 여기서 이름 규칙을 흉내 낼 필요가 없다.
+set_assets() {
+	local d="$1" pair
+	shift
+	: >"$d/assets.jsonl"
+	for pair in "$@"; do
+		printf '{"name":%s,"digest":"sha256:%s"}\n' \
+			"$(printf '%s' "${pair%%=*}" | jq -R .)" \
+			"$(shasum -a 256 "${pair#*=}" | cut -d' ' -f1)" >>"$d/assets.jsonl"
+	done
+	jq -s -c '{assets: .}' "$d/assets.jsonl" >"$d/assets.json"
+}
+
 uploaded_count() {
 	awk 'NF {n++} END {print n + 0}' "$1/uploads"
+}
+
+# 마지막으로 올라간 사이드카의 basename. 스텝이 어떤 이름으로 올렸는지가 판정
+# 대상이라, 경로가 아니라 이름만 본다.
+uploaded_name() {
+	awk 'NF {last = $0} END {n = split(last, p, "/"); print p[n]}' "$1/uploads"
+}
+
+# 사용자가 받은 디렉토리를 흉내 낸다: 자산 이름 그대로 놓인 파일과 그 옆의
+# 사이드카. 릴리스 본문(위 releaseBody)이 사용자에게 시키는 명령이 그 자리에서
+# 도는지가 판정이다 — 사이드카 안의 파일 이름 칸이 로컬 이름이면 여기서 걸린다.
+verifies_as_downloaded() {
+	local sidecar="$1" asset="$2" src="$3" dl
+	dl="$(mktemp -d "$TMP/dl.XXXXXX")"
+	# 사이드카가 아예 없으면(= 다른 이름으로 올라갔으면) 여기서 걸린다. 실패
+	# 메시지가 그 파일을 다시 찍으므로 cp 자신의 stderr 는 버린다.
+	cp "$src" "$dl/$asset" 2>/dev/null || return 1
+	cp "$sidecar" "$dl/$asset.sha256" 2>/dev/null || return 1
+	(cd "$dl" && shasum -a 256 -c "$asset.sha256" >/dev/null 2>&1)
 }
 
 echo "step behaviour (stubbed gh):"
 
 LBL_POSIX_HAPPY="POSIX 경로: 파일마다 사이드카를 만들어 올린다"
-LBL_SIDECAR_VERIFIES="사이드카가 shasum -a 256 -c 로 검증된다"
+LBL_SIDECAR_VERIFIES="사이드카가 받은 디렉토리에서 shasum -a 256 -c 로 검증된다"
+LBL_SIDECAR_FOLLOWS_ASSET="업로드 이름이 로컬 이름과 다르면 사이드카가 업로드 이름을 따른다"
+LBL_RENAMED_VERIFIES="이름이 갈린 자산도 받은 디렉토리에서 shasum -a 256 -c 로 검증된다"
+LBL_NO_MATCH_IS_RED="digest 가 어느 자산과도 안 맞으면 red (이름을 지어내지 않는다)"
 LBL_RAW_BACKSLASH_UNSTATTABLE="raw 백슬래시 경로는 stat 되지 않는다 (Git Bash 와 같은 조건)"
 LBL_WINDOWS_CONVERTED="백슬래시 경로를 변환해 사이드카를 만든다"
 LBL_UNRESOLVED_IS_RED="해석 안 되는 항목은 red 다 (조용한 건너뛰기가 아니다)"
@@ -305,15 +354,20 @@ LBL_ALL_SKIPPED_RED="fail-closed: 전부 건너뛰었으면 red"
 LBL_DIR_SKIPPED="디렉토리 번들만 건너뛰고 나머지는 해시한다"
 LBL_UPLOAD_FAILURE_RED="gh 업로드 실패가 스텝을 red 로 만든다"
 
-# 전부 있는 POSIX 경로. macOS / Linux 러너의 모양이다.
+# 전부 있는 POSIX 경로. macOS / Linux 러너의 모양이다. 자산 이름의 공백이 점으로
+# 바뀐 것은 GitHub 이 하는 일이라 여기서도 실물 그대로 세운다 — v0.7.1 의
+# `Table.View_0.7.1_amd64.deb` 가 로컬 `Table View_0.7.1_amd64.deb` 에서 온 것이다.
 d="$(new_case)"
 mkdir -p "$d/bundle/dmg"
 printf 'dmg-bytes' >"$d/bundle/dmg/Table View_9.9.9_aarch64.dmg"
 printf 'sig-bytes' >"$d/bundle/dmg/Table View_9.9.9_aarch64.dmg.sig"
+set_assets "$d" \
+	"Table.View_9.9.9_aarch64.dmg=$d/bundle/dmg/Table View_9.9.9_aarch64.dmg" \
+	"Table.View_9.9.9_aarch64.dmg.sig=$d/bundle/dmg/Table View_9.9.9_aarch64.dmg.sig"
 run_step "$(json_array "$d/bundle/dmg/Table View_9.9.9_aarch64.dmg" "$d/bundle/dmg/Table View_9.9.9_aarch64.dmg.sig")" "$d"
 assert_rc 0 "$LBL_POSIX_HAPPY"
-if [ -f "$d/bundle/dmg/Table View_9.9.9_aarch64.dmg.sha256" ] &&
-	[ -f "$d/bundle/dmg/Table View_9.9.9_aarch64.dmg.sig.sha256" ] &&
+if [ -f "$d/bundle/dmg/Table.View_9.9.9_aarch64.dmg.sha256" ] &&
+	[ -f "$d/bundle/dmg/Table.View_9.9.9_aarch64.dmg.sig.sha256" ] &&
 	[ "$(uploaded_count "$d")" = "2" ]; then
 	pass "사이드카 둘이 생기고 둘 다 업로드됐다"
 else
@@ -321,12 +375,18 @@ else
 $OUT"
 fi
 
-# 사이드카 형식. `<hash>  <파일이름>` 한 줄이라야 표준 검증기가 먹는다 — 절대경로가
-# 들어가면 사용자가 받은 디렉토리에서 `shasum -c` 가 못 찾는다.
-if (cd "$d/bundle/dmg" && shasum -a 256 -c "Table View_9.9.9_aarch64.dmg.sha256" >/dev/null 2>&1); then
+# 사이드카 형식. `<hash>  <파일이름>` 한 줄이라야 표준 검증기가 먹는다. 판정을
+# 로컬 디렉토리에서 하지 않는 이유는 그 자리가 v0.7.1 을 green 으로 통과시켰기
+# 때문이다 — 로컬에는 `Table View_…` 가 있으니 로컬 이름을 적은 사이드카도 거기서는
+# 검증된다. 사용자가 받는 것은 `Table.View_…` 뿐이다.
+if verifies_as_downloaded \
+	"$d/bundle/dmg/Table.View_9.9.9_aarch64.dmg.sha256" \
+	"Table.View_9.9.9_aarch64.dmg" \
+	"$d/bundle/dmg/Table View_9.9.9_aarch64.dmg"; then
 	pass "$LBL_SIDECAR_VERIFIES"
 else
-	fail "$LBL_SIDECAR_VERIFIES" "$(cat "$d/bundle/dmg/Table View_9.9.9_aarch64.dmg.sha256")"
+	fail "$LBL_SIDECAR_VERIFIES" "사이드카: $(cat "$d/bundle/dmg/Table.View_9.9.9_aarch64.dmg.sha256" 2>&1)
+업로드: $(cat "$d/uploads")"
 fi
 
 # Windows 러너의 모양. 경로는 run 31138766861 의 Windows 잡 로그에서 온 형태다.
@@ -345,10 +405,13 @@ else
 	pass "$LBL_RAW_BACKSLASH_UNSTATTABLE"
 fi
 
+set_assets "$d" \
+	"Table.View_9.9.9_x64_en-US.msi=$REAL_DIR/msi/Table View_9.9.9_x64_en-US.msi" \
+	"Table.View_9.9.9_x64-setup.exe=$REAL_DIR/nsis/Table View_9.9.9_x64-setup.exe"
 run_step "$(json_array "$WIN_MSI" "$WIN_EXE")" "$d" cygpath
 assert_rc 0 "$LBL_WINDOWS_CONVERTED"
-if [ -f "$REAL_DIR/msi/Table View_9.9.9_x64_en-US.msi.sha256" ] &&
-	[ -f "$REAL_DIR/nsis/Table View_9.9.9_x64-setup.exe.sha256" ] &&
+if [ -f "$REAL_DIR/msi/Table.View_9.9.9_x64_en-US.msi.sha256" ] &&
+	[ -f "$REAL_DIR/nsis/Table.View_9.9.9_x64-setup.exe.sha256" ] &&
 	[ "$(uploaded_count "$d")" = "2" ]; then
 	pass "변환된 경로 옆에 사이드카가 생기고 업로드됐다"
 else
@@ -360,6 +423,7 @@ fi
 d="$(new_case)"
 mkdir -p "$d/bundle"
 printf 'ok-bytes' >"$d/bundle/good.deb"
+set_assets "$d" "good.deb=$d/bundle/good.deb"
 run_step "$(json_array "$d/bundle/good.deb" "$WIN_MSI")" "$d"
 assert_rc 1 "$LBL_UNRESOLVED_IS_RED"
 assert_has "resolves to nothing" "해석 못 한 항목을 이름으로 찍는다"
@@ -371,19 +435,55 @@ run_step '[]' "$d"
 assert_rc 1 "fail-closed: 빈 배열에서 rc=1"
 assert_has "artifactPaths carried no entries" "$LBL_EMPTY_ARRAY_RED"
 
-# 디렉토리 번들. macOS 의 `Table View.app` 이 그것이고, 사이드카가 없는 것이 정상이다.
+# macOS 레그의 모양. 디렉토리 번들 `Table View.app` 은 사이드카가 없는 것이
+# 정상이고, 그 옆의 업데이터 tarball 은 tauri-action 이 아키텍처를 붙여 올린다 —
+# 로컬 `Table View.app.tar.gz` 가 자산 `Table.View_aarch64.app.tar.gz` 로 간다.
+# v0.7.1 실물이 그 이름이고, 이 케이스가 #2307 의 판정 자리다.
 d="$(new_case)"
 mkdir -p "$d/bundle/macos/Table View.app"
 printf 'tar-bytes' >"$d/bundle/macos/Table View.app.tar.gz"
+set_assets "$d" "Table.View_aarch64.app.tar.gz=$d/bundle/macos/Table View.app.tar.gz"
 run_step "$(json_array "$d/bundle/macos/Table View.app" "$d/bundle/macos/Table View.app.tar.gz")" "$d"
 assert_rc 0 "$LBL_DIR_SKIPPED"
 assert_has "no sidecar for a directory bundle" "건너뛴 디렉토리를 로그에 남긴다"
-if [ -f "$d/bundle/macos/Table View.app.tar.gz.sha256" ] && [ "$(uploaded_count "$d")" = "1" ]; then
+if [ "$(uploaded_count "$d")" = "1" ]; then
 	pass "디렉토리는 건너뛰고 파일 하나만 올렸다"
 else
 	fail "디렉토리 건너뛰기가 나머지까지 삼켰다" "업로드: $(cat "$d/uploads")
 $OUT"
 fi
+
+# #2307 그 자체. 로컬 이름으로 올리면 가리키는 자산이 없는 사이드카가 되고, 진짜
+# 자산 쪽에는 체크섬이 없는 채로 릴리스가 나간다.
+if [ "$(uploaded_name "$d")" = "Table.View_aarch64.app.tar.gz.sha256" ]; then
+	pass "$LBL_SIDECAR_FOLLOWS_ASSET"
+else
+	fail "$LBL_SIDECAR_FOLLOWS_ASSET" "올라간 이름: $(uploaded_name "$d")
+기대: Table.View_aarch64.app.tar.gz.sha256 (자산 Table.View_aarch64.app.tar.gz 의 짝)
+업로드: $(cat "$d/uploads")
+$OUT"
+fi
+
+if verifies_as_downloaded \
+	"$d/bundle/macos/Table.View_aarch64.app.tar.gz.sha256" \
+	"Table.View_aarch64.app.tar.gz" \
+	"$d/bundle/macos/Table View.app.tar.gz"; then
+	pass "$LBL_RENAMED_VERIFIES"
+else
+	fail "$LBL_RENAMED_VERIFIES" "사이드카: $(cat "$d/bundle/macos/Table.View_aarch64.app.tar.gz.sha256" 2>&1)
+업로드: $(cat "$d/uploads")"
+fi
+
+# 로컬 파일이 릴리스의 어느 자산과도 안 맞는 경우. 업로드가 아직 안 끝났거나 다른
+# 바이트로 올라갔다는 뜻이라, 이름을 지어내 올리면 #2307 이 그대로 재발한다.
+d="$(new_case)"
+mkdir -p "$d/bundle"
+printf 'orphan-bytes' >"$d/bundle/orphan.deb"
+printf 'other-bytes' >"$d/bundle/other.deb"
+set_assets "$d" "other.deb=$d/bundle/other.deb"
+run_step "$(json_array "$d/bundle/orphan.deb")" "$d"
+assert_rc 1 "$LBL_NO_MATCH_IS_RED"
+assert_has "carries digest" "짝을 못 찾은 항목의 digest 를 찍는다"
 
 # 전부 디렉토리. 건너뛰기만 하고 green 으로 끝나면 #2207 과 같은 상태다.
 d="$(new_case)"
@@ -396,6 +496,7 @@ assert_has "every artifactPaths entry was skipped" "$LBL_ALL_SKIPPED_RED"
 d="$(new_case)"
 mkdir -p "$d/bundle"
 printf 'deb-bytes' >"$d/bundle/app.deb"
+set_assets "$d" "app.deb=$d/bundle/app.deb"
 printf '1' >"$d/rc"
 run_step "$(json_array "$d/bundle/app.deb")" "$d"
 assert_rc 1 "$LBL_UPLOAD_FAILURE_RED"
@@ -508,11 +609,15 @@ if [ "${CHECKSUM_SIDECARS_SKIP_MUTATION:-0}" != "1" ]; then
 
 	# "스위트가 red" 로 끝내지 않고 **그 단언이** 낸 red 인지까지 본다 — 안 그러면
 	# 다른 단언이 깨져도 통과로 읽힌다.
+	#
+	# 찾는 것은 라벨이 아니라 `fail()` 이 찍는 `  FAIL <라벨>` 줄이다. 라벨만 찾으면
+	# `pass()` 의 `  ok   <라벨>` 에도 걸려, 기대한 단언이 **통과**했는데 딴 단언이
+	# 깨진 변조본이 "그 단언이 red 를 낸다" 로 등록된다.
 	assert_mutant() {
 		local name="$1" wf="$2" want="$3"
 		if run_suite_against "$wf"; then
 			fail "mutation[$name]: 변조본이 green — 이 스위트가 그 편집을 못 잡는다" "$SUB_OUT"
-		elif contains "$SUB_OUT" "$want"; then
+		elif contains "$SUB_OUT" "  FAIL $want"; then
 			pass "mutation[$name]: '$want' 가 red 를 낸다"
 		else
 			fail "mutation[$name]: 스위트는 red 인데 기대한 단언이 아니다 (기대: $want)" "$SUB_OUT"
@@ -579,6 +684,29 @@ YML
 		)"
 		step_mutation_case "missing-entry-skipped" "$MISSING_IS_RED" "$MISSING_IS_SKIPPED" \
 			"$LBL_UNRESOLVED_IS_RED"
+
+		# #2307 의 그 형태를 되돌린다: 사이드카 이름도, 안의 파일 이름 칸도 러너
+		# 로컬 경로에서 온다. 이것이 v0.7.1 을 낸 코드 그대로다.
+		SIDECAR_FROM_ASSET="$(
+			cat <<'YML'
+            printf '%s  %s\n' "$sum" "$name" > "$(dirname "$f")/$name.sha256"
+            gh release upload "$TAG" "$(dirname "$f")/$name.sha256" --clobber
+YML
+		)"
+		SIDECAR_FROM_LOCAL_PATH="$(
+			cat <<'YML'
+            (cd "$(dirname "$f")" && shasum -a 256 "$(basename "$f")") > "${f}.sha256"
+            gh release upload "$TAG" "${f}.sha256" --clobber
+YML
+		)"
+		step_mutation_case "sidecar-named-from-local-path" \
+			"$SIDECAR_FROM_ASSET" "$SIDECAR_FROM_LOCAL_PATH" \
+			"$LBL_SIDECAR_FOLLOWS_ASSET"
+
+		# 짝을 못 찾은 항목을 그냥 지나가게 한다 — 이름 없는 사이드카가 올라간다.
+		step_mutation_case "digest-miss-passes" \
+			'            if [ -z "$name" ]; then' '            if false; then' \
+			"$LBL_NO_MATCH_IS_RED"
 
 		# 경로 변환을 없앤다 — Windows 러너에서 옛 상태 그대로다.
 		step_mutation_case "no-path-conversion" \

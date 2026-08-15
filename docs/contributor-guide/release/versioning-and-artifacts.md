@@ -117,7 +117,7 @@ concerns follow from that:
 | macOS arm64 | `macOS arm64`, `aarch64-apple-darwin` | Apple Silicon `.dmg` plus `.sha256`. Current packages are unsigned, so first launch may require right-click -> Open or quarantine removal. |
 | Windows x86_64 | `Windows x86_64`, `x86_64-pc-windows-msvc` | Windows installer bundle, normally `.msi`, plus `.sha256`. Current packages are unsigned, so SmartScreen may warn. |
 | Linux x64 | `Linux x64`, `x86_64-unknown-linux-gnu` | Linux bundles produced by Tauri, such as `.deb`, `.rpm`, or `.AppImage`, plus `.sha256`. This lane is automation packaging evidence, not the primary supported desktop distribution target. |
-| Checksums | `Upload SHA256 checksums` step | The step hashes each `artifactPaths` entry that is a file and uploads a `.sha256` for it in standard `shasum -a 256` format, under the file's pre-upload name. It ends the leg red when an entry resolves to neither a file nor a directory, and when nothing was hashed at all (#2207: Git Bash cannot stat the backslash paths `tauri-action` reports on Windows, and `[ -f "$f" ] || continue` turned that into a silent skip — `v0.7.0` and `v0.7.1` published `.msi` and `.exe` with no checksum under a green step). A green leg does not mean every published asset has a sidecar it pairs with: a directory bundle (the macOS `.app`) gets none by design and is logged as skipped, and `tauri-action` renames the macOS updater tarball on upload, so its sidecar publishes under the pre-upload name and pairs with no asset. Pair them yourself against the published assets — Post-Release Verification below carries the command. `scripts/release/checksum-sidecars.test.sh` pins the step's shape. |
+| Checksums | `Upload SHA256 checksums` step | The step hashes each `artifactPaths` entry that is a file and uploads a `.sha256` for it in standard `shasum -a 256` format, under the name the asset was published as — that name goes in the sidecar's own filename and in the filename column inside it. It reads the name off the release by matching the local file's sha256 against the assets' `digest` field instead of deriving it, because two renames sit in between: GitHub rewrites spaces to dots, and `tauri-action` gives the macOS updater tarball an arch suffix (#2307 — `v0.7.1` published `Table.View.app.tar.gz.sha256`, which pairs with no asset, while the published `Table.View_aarch64.app.tar.gz` got none; every sidecar in that release also wrote `Table View_…` with a space in its filename column, so the `shasum -a 256 -c` the release body tells users to run failed on all of them). It ends the leg red when an entry resolves to neither a file nor a directory, when no single published asset carries an entry's digest, and when nothing was hashed at all (#2207: Git Bash cannot stat the backslash paths `tauri-action` reports on Windows, and `[ -f "$f" ] || continue` turned that into a silent skip — `v0.7.0` and `v0.7.1` published `.msi` and `.exe` with no checksum under a green step). A green leg still does not mean every published asset has a sidecar: a directory bundle (the macOS `.app`) gets none by design and is logged as skipped, and `latest.json` gets none because it is not an `artifactPaths` entry and every matrix leg rewrites it after upload, which would leave any checksum stale. `scripts/release/checksum-sidecars.test.sh` pins the step's shape. |
 | Updater artifacts | `createUpdaterArtifacts: true` in `tauri.conf.json`; `tauri-action` signs each with the minisign key | Each platform's updater bundle plus a sibling minisign `.sig` (macOS: `<app>.app.tar.gz` + `<app>.app.tar.gz.sig`), aggregated into one `latest.json` manifest on the draft release. This is the auto-update path — no job verifies it; check it by hand in Post-Release Verification. |
 | Homebrew cask | [`homebrew-cask.md`](homebrew-cask.md) after release publish | No workflow updates the tap. After publishing, edit `Casks/table-view.rb` in the tap repo by hand from the macOS arm64 `.dmg` and its checksum, and open the tap PR. |
 
@@ -129,16 +129,23 @@ After the draft release is created:
   SHA.
 - Confirm macOS, Windows, and Linux bundle assets are present for the workflow
   lanes above.
-- List the assets that carry no sibling `.sha256`, then verify at least one
-  checksum locally with the command shown in the generated release body. The
-  updater manifest `latest.json` and the macOS updater tarball
-  `<app>_aarch64.app.tar.gz` with its `.sig` are expected in that list — see the
-  Checksums row in Artifact Expectations above for why. A `.msi`, `.exe`,
-  `.dmg`, or Linux bundle in that list is a defect.
+- Take the difference both ways — assets with no sidecar, and sidecars naming an
+  asset that is not there — then verify at least one checksum locally with the
+  command shown in the generated release body. Only the updater manifest
+  `latest.json` is expected under `NO SIDECAR`; see the Checksums row in Artifact
+  Expectations above for why. Anything else under either heading is a defect
+  (#2307 — reading only the `NO SIDECAR` direction is what let `v0.7.1` ship two
+  sidecars pointing at nothing).
 
   ```sh
   gh release view <TAG> --json assets -q '.assets[].name' \
-    | awk '{n[$0]=1} END {for (a in n) if (a !~ /\.sha256$/ && !((a ".sha256") in n)) print "NO SIDECAR: " a}'
+    | awk '{n[$0] = 1} END {
+        for (a in n)
+          if (a ~ /\.sha256$/) {
+            b = substr(a, 1, length(a) - 7)
+            if (!(b in n)) print "ORPHAN SIDECAR: " a
+          } else if (!((a ".sha256") in n)) print "NO SIDECAR: " a
+      }'
   ```
 - Confirm release notes link to
   [`release-notes-support-matrix.md`](release-notes-support-matrix.md),
