@@ -314,9 +314,9 @@ describe("QuickLookPanel", () => {
       expect(screen.getByText("Charlie")).toBeInTheDocument();
     });
 
-    // The lower half of the same clamp. `RdbQuickLookBody` guards only the upper
-    // bound, so a negative index would reach `data.rows[-1]` (undefined) there;
-    // the derivation is what keeps it off that path.
+    // The lower half of the same clamp. What it pins is the derivation's own
+    // contract — never hand a body an index the page lacks — whatever each
+    // body then does with one.
     it("clamps a negative selected row index onto the first row", () => {
       render(
         <QuickLookPanel {...defaultProps} selectedRowIds={new Set([-1])} />,

@@ -96,9 +96,8 @@ export default function QuickLookPanel(props: QuickLookPanelProps) {
       : props.data.rows.length;
   const firstSelectedId = useMemo(() => {
     if (props.selectedRowIds.size === 0 || rowCount === 0) return null;
-    // Clamped at both ends. `RdbQuickLookBody` guards only the upper bound
-    // (`DocumentQuickLookBody` guards both), so the lower clamp here is what
-    // keeps a negative index off that path rather than a fourth guard there.
+    // Clamped at both ends so this only ever yields `null` or an index the
+    // page actually has.
     const first = Math.min(...props.selectedRowIds);
     return Math.min(Math.max(first, 0), rowCount - 1);
   }, [props.selectedRowIds, rowCount]);
