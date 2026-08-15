@@ -224,4 +224,62 @@ mod tests {
         assert!(backup.exists(), "Timestamped backup created");
         assert_ne!(backup, primary_bak, "Must NOT overwrite existing .bak");
     }
+
+    /// #2302 — the timestamped fallback the test above reaches is
+    /// **second**-resolution, and `fs::rename` replaces its destination on Unix
+    /// with no error and no log. Two quarantines inside one second therefore
+    /// built the same `state.db.bak.<ts>` and the second renamed straight over
+    /// the first, destroying the generation the quarantine exists to keep.
+    ///
+    /// `open_pool` walks that sequence inside a single call: the header probe
+    /// quarantines, the fresh DB created in its place fails its boot health
+    /// check, and the health-check arm quarantines again (`storage/local.rs`).
+    /// The two land milliseconds apart, and a `state.db.bak` left by an earlier
+    /// epoch is what puts both of them on the timestamped name.
+    ///
+    /// The loop is what makes this deterministic rather than a coin flip: only a
+    /// pair that really landed inside one second says anything about the
+    /// collision, so a run whose clock ticked between the two calls is retried
+    /// instead of asserted on, and running out of tries fails loudly rather than
+    /// passing on a pair that never collided.
+    #[test]
+    fn test_quarantine_twice_in_one_second_keeps_the_earlier_backup() {
+        let secs = || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0)
+        };
+        let dir = TempDir::new().unwrap();
+        for attempt in 0..32 {
+            let case = dir.path().join(format!("attempt-{attempt}"));
+            fs::create_dir(&case).unwrap();
+            let path = case.join("state.db");
+            // The precondition that makes both calls choose a timestamped name.
+            fs::write(case.join("state.db.bak"), b"epoch 0").unwrap();
+
+            fs::write(&path, b"epoch 1").unwrap();
+            let opened = secs();
+            let first = quarantine(&path).unwrap();
+            fs::write(&path, b"epoch 2").unwrap();
+            let second = quarantine(&path).unwrap();
+            if secs() != opened {
+                continue;
+            }
+
+            assert_ne!(
+                first, second,
+                "two quarantines inside one second must not choose the same name"
+            );
+            assert_eq!(
+                fs::read(&first).unwrap(),
+                b"epoch 1",
+                "the earlier backup at {} must still hold its own bytes",
+                first.display()
+            );
+            assert_eq!(fs::read(&second).unwrap(), b"epoch 2");
+            return;
+        }
+        panic!("could not land two quarantines inside one second in 32 tries");
+    }
 }

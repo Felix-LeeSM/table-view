@@ -1694,6 +1694,58 @@ mod tests {
         cleanup_test_env();
     }
 
+    /// #2302 — the quarantine name above carries a **second**-resolution
+    /// timestamp and `fs::rename` replaces its destination on Unix with no error
+    /// and no log. Two quarantines inside one second therefore built the same
+    /// `connections.json.corrupt-<ts>` and the second renamed straight over the
+    /// first. What that destroyed is the only copy left of a file that had
+    /// already failed to parse — the quarantine is the recovery, so eating its
+    /// own earlier generation is the whole loss.
+    ///
+    /// The loop is what makes this deterministic rather than a coin flip: only a
+    /// pair that really landed inside one second says anything about the
+    /// collision, so a run whose clock ticked between the two calls is retried
+    /// instead of asserted on, and running out of tries fails loudly rather than
+    /// passing on a pair that never collided.
+    #[test]
+    fn quarantining_twice_in_one_second_keeps_the_earlier_file() {
+        let secs = || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0)
+        };
+        let dir = TempDir::new().unwrap();
+        for attempt in 0..32 {
+            let case = dir.path().join(format!("attempt-{attempt}"));
+            fs::create_dir(&case).unwrap();
+            let path = case.join("connections.json");
+
+            fs::write(&path, b"{ generation 1").unwrap();
+            let opened = secs();
+            let first = quarantine_corrupt_storage(&path).unwrap();
+            fs::write(&path, b"{ generation 2").unwrap();
+            let second = quarantine_corrupt_storage(&path).unwrap();
+            if secs() != opened {
+                continue;
+            }
+
+            assert_ne!(
+                first, second,
+                "two quarantines inside one second must not choose the same name"
+            );
+            assert_eq!(
+                fs::read(&first).unwrap(),
+                b"{ generation 1",
+                "the earlier quarantined file at {} must still hold its own bytes",
+                first.display()
+            );
+            assert_eq!(fs::read(&second).unwrap(), b"{ generation 2");
+            return;
+        }
+        panic!("could not land two quarantines inside one second in 32 tries");
+    }
+
     // -------------------------------------------------------------------
     // #2183 — a missing connections.json is a data-loss event, not a first
     // run. On 2026-08-06 a real machine's app data directory lost its
