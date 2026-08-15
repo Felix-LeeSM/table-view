@@ -681,6 +681,39 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
         ).severity,
       ).toBe("danger");
     });
+
+    // Reason: #2288 review round 1 — the Rust side compared whitespace-split
+    // tokens and read `REPLACE"t"` as one word, so a quoted table name hugging
+    // the keyword classified `Info` there while this `\b` anchor said danger,
+    // and the enforcing layer is the Rust one (#1112). SQLite accepts all four
+    // delimiters with nothing before them and each still DELETEs the
+    // conflicting row. Both layers now match on the word boundary; this locks
+    // the frontend half so the pair cannot drift back apart. (2026-08-16)
+    it("[AC-2288-07] a quoted table name hugging REPLACE → still danger", () => {
+      for (const [open, close] of [
+        ['"', '"'],
+        ["[", "]"],
+        ["`", "`"],
+        ["'", "'"],
+      ]) {
+        expect(
+          analyzeStatement(
+            `UPDATE OR REPLACE${open}t${close} SET b = 20 WHERE a = 1`,
+          ).severity,
+        ).toBe("danger");
+        expect(
+          analyzeStatement(`INSERT OR REPLACE INTO${open}t${close} VALUES (1)`)
+            .severity,
+        ).toBe("danger");
+      }
+      // The three words still have to be three words: a table actually NAMED
+      // `OR REPLACE` is a bounded UPDATE, not a conflict clause.
+      const named = analyzeStatement(
+        'UPDATE "OR REPLACE" SET b = 20 WHERE a = 1',
+      );
+      expect(named.kind).toBe("dml-update");
+      expect(named.severity).toBe("warn");
+    });
   });
 
   // -------------------------------------------------------------------------

@@ -332,8 +332,9 @@ fn classify_by_keyword(stmt: &str, dialect: SqlDialect) -> Severity {
     // name), so both used to fall out of this function as `Info`. For the
     // UPDATE spelling the `has_where` test further down is measuring the wrong
     // thing: the deleted row is one the WHERE never selected, so a WHERE does
-    // not bound the loss. Whitespace is not collapsed here (only comments are,
-    // into a single space), so the three leading words are compared token-wise.
+    // not bound the loss. The three leading words are consumed with
+    // [`after_keyword`], i.e. on a WORD BOUNDARY — see that helper for why a
+    // whitespace split silently missed `UPDATE OR REPLACE"t"`.
     // The verb set is CLOSED to the two SQLite allows the clause on — admitting
     // any verb would swallow `CREATE OR REPLACE VIEW`. Only REPLACE deletes an
     // existing row: `OR ABORT|FAIL` abort the statement, `OR IGNORE` skips the
@@ -342,14 +343,13 @@ fn classify_by_keyword(stmt: &str, dialect: SqlDialect) -> Severity {
     // where they are (mirrors the frontend
     // `^(INSERT|UPDATE)\s+OR\s+REPLACE\b` branch in
     // `src/lib/sql/sqlSafetyClassifier.ts`).
+    if after_keyword(upper, "INSERT")
+        .or_else(|| after_keyword(upper, "UPDATE"))
+        .and_then(|rest| after_keyword(rest, "OR"))
+        .and_then(|rest| after_keyword(rest, "REPLACE"))
+        .is_some()
     {
-        let mut words = upper.split_whitespace();
-        if matches!(words.next(), Some("INSERT" | "UPDATE"))
-            && words.next() == Some("OR")
-            && words.next() == Some("REPLACE")
-        {
-            return Severity::Danger;
-        }
+        return Severity::Danger;
     }
     if starts_with_keyword(upper, "RESTORE") {
         return Severity::Danger;
@@ -631,20 +631,32 @@ fn first_word(s: &str) -> String {
         .collect()
 }
 
+/// What follows `keyword` when it is the leading token of `upper` (already
+/// upper-cased + left-trimmed), itself left-trimmed. `None` when `upper`
+/// opens with a longer word instead (`REPLACED` / `DROPLET`).
+///
+/// The boundary is "the next character is not a word character", NOT "the next
+/// character is whitespace". SQLite lets a quoted identifier hug the keyword
+/// with nothing between them — `UPDATE OR REPLACE"t"`, `[t]`, `` `t` `` and
+/// `'t'` all run, and all four DELETE the conflicting row. A whitespace split
+/// (`split_whitespace`) reads those as the single word `REPLACE"T"` and misses
+/// the statement; that is exactly how the `OR REPLACE` branch above diverged
+/// from the frontend, whose `\b` anchor never had the hole (#2288 review round
+/// 1). Chaining this helper keeps ONE boundary rule for every keyword test in
+/// this fallback.
+fn after_keyword<'a>(upper: &'a str, keyword: &str) -> Option<&'a str> {
+    let rest = upper.strip_prefix(keyword)?;
+    match rest.chars().next() {
+        Some(c) if c.is_alphanumeric() || c == '_' => None,
+        _ => Some(rest.trim_start()),
+    }
+}
+
 /// True when `keyword` is the leading token of `upper` (already
 /// upper-cased + left-trimmed). Guards against `REPLACED` / `DROPLET`
 /// style false positives by requiring a word boundary after the keyword.
 fn starts_with_keyword(upper: &str, keyword: &str) -> bool {
-    if let Some(rest) = upper.strip_prefix(keyword) {
-        rest.is_empty()
-            || rest
-                .chars()
-                .next()
-                .map(|c| !c.is_alphanumeric() && c != '_')
-                .unwrap_or(true)
-    } else {
-        false
-    }
+    after_keyword(upper, keyword).is_some()
 }
 
 /// Word-boundary `WHERE` presence that skips string literals, quoted
@@ -1110,6 +1122,29 @@ mod tests {
         // Verb set is closed to the two SQLite allows the clause on — a third
         // verb must not ride it (`CREATE OR REPLACE VIEW` is info by design).
         assert!(!is_danger("CREATE OR REPLACE VIEW v AS SELECT 1"));
+    }
+
+    /// #2288 review round 1 — this fallback compared whitespace-split tokens,
+    /// so a quoted identifier hugging the keyword (`REPLACE"T"` lexes as ONE
+    /// word) slipped out as `Info` while the frontend `\b` anchor read the same
+    /// string as danger — and the backend is the enforcing layer (#1112).
+    /// SQLite accepts every delimiter below with nothing before it, and each
+    /// one still DELETEs the conflicting row (`sqlite3 :memory:` on a UNIQUE
+    /// column: 2 rows in, 1 row out). The guard is the word boundary, not this
+    /// list — the list only proves the boundary holds where it used to break.
+    #[test]
+    fn sqlite_or_replace_matches_on_a_word_boundary_not_whitespace() {
+        for (open, close) in [("\"", "\""), ("[", "]"), ("`", "`"), ("'", "'")] {
+            let update = format!("UPDATE OR REPLACE{open}t{close} SET b = 20 WHERE a = 1");
+            assert_eq!(classify(&update), Severity::Danger, "{update}");
+            let insert = format!("INSERT OR REPLACE INTO{open}t{close} VALUES (1)");
+            assert_eq!(classify(&insert), Severity::Danger, "{insert}");
+        }
+        // The three words still have to be three words. A table actually NAMED
+        // `OR REPLACE` carries no conflict clause — it is a bounded UPDATE.
+        assert!(!is_danger("UPDATE \"OR REPLACE\" SET b = 20 WHERE a = 1"));
+        // …and the boundary still rejects a longer word (`REPLACED`-style).
+        assert!(!is_danger("UPDATE OR REPLACEMENT SET b = 20 WHERE a = 1"));
     }
 
     #[test]

@@ -96,6 +96,16 @@
       "expectedSeverity": "danger"
     },
     {
+      "name": "sqlite_update_or_replace_quoted_table",
+      "sql": "UPDATE OR REPLACE\"users\" SET id = 1 WHERE rowid = 5",
+      "expectedSeverity": "danger"
+    },
+    {
+      "name": "sqlite_update_or_replace_bracket_table",
+      "sql": "UPDATE OR REPLACE[users] SET id = 1 WHERE rowid = 5",
+      "expectedSeverity": "danger"
+    },
+    {
       "name": "restore_database",
       "sql": "RESTORE DATABASE shop FROM DISK = 'x.bak'",
       "expectedSeverity": "danger"
