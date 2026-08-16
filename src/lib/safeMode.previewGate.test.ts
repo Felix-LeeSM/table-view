@@ -2,23 +2,29 @@
 //
 // The bug this closes was not one bad line, it was a *shape*: each write
 // surface decided on its own whether to mount the preview by testing the
-// analyzer severity against a string literal. Six surfaces agreed on the
-// WARN tier and none of them covered the destructive statements that
-// `decideSafeModeAction` deliberately hands back as `allow` on a
-// non-production connection under Safe Mode `warn` / `off`. Fixing the six
-// call sites one by one leaves the shape intact, so a seventh surface
-// reintroduces the hole the day it is written.
+// analyzer severity against a string literal. Every surface that tested at
+// all tested for the WARN tier, `dropIndex` tested for nothing, and none of
+// them covered the destructive statements that `decideSafeModeAction`
+// deliberately hands back as `allow` on a non-production connection under
+// Safe Mode `warn` / `off`. Fixing the call sites one by one leaves the shape
+// intact, so the next surface reintroduces the hole the day it is written.
 //
-// So this file does not carry a list of the call sites. It derives the
-// population from the source tree — every non-test file under `src/` that
-// mounts the preview (calls a `setPending*Warn` setter with a payload) — and
-// asserts two things about whatever that population turns out to be:
+// So this file does not carry a list of the call sites. It derives its
+// populations from the source tree and asserts:
 //
-//   A. no file in it compares a value against the `warn` string literal, and
-//   B. every file in it routes through `requiresPreviewDialog`.
+//   A. no preview-mounting file compares a value against the `warn` string
+//      literal,
+//   B. every preview-mounting file routes through `requiresPreviewDialog`,
+//   C. every mongosh dispatch branch that consults the Safe Mode matrix also
+//      consults the preview gate.
 //
-// A is what fails when someone writes a new gate the old way; B is what
-// fails when someone writes a new gate in a new file without the predicate.
+// A file mounts the preview when it calls a `setPending*Warn` setter with a
+// payload. A dispatch branch is an `if (parsed.method === "…")` arm of one of
+// those files. A is what fails when someone writes a new gate the old way; B
+// is what fails when someone writes a new gate in a new file without the
+// predicate; C is what fails when someone adds a branch to a file that
+// already passes A and B — the form that shipped `dropIndex` with no dialog
+// at all, since a file-granular check cannot see a single branch missing.
 //
 // KNOWN CEILINGS — forms this file does NOT catch, verified by writing each
 // one into the source and watching the suite stay green:
@@ -26,9 +32,23 @@
 //     output of a rank helper (`severityRank(analysis.severity) === 1`);
 //   - a membership test, e.g. `["warn"].includes(analysis.severity)`, which
 //     carries the literal but no comparison operator next to it;
-//   - a new gate in an already-covered file that mounts the preview for the
-//     DANGER tier only and so still skips WARN — the file passes both A and
-//     B while gating the wrong half.
+//   - a new gate in an already-covered branch that mounts the preview for the
+//     DANGER tier only and so still skips WARN — it passes A, B and C while
+//     gating the wrong half;
+//   - a decision site outside an `if (parsed.method === "…")` arm, since C's
+//     population is those arms. Two live examples. `rdbQueryExecution.ts`
+//     has no arms at all and holds B only because it has exactly one
+//     `requiresPreviewDialog(` call — that is arity, not structure: adding a
+//     second, ungated `setPendingRdbWarn` mount to that file leaves the whole
+//     suite green (measured — the file-level `text.includes` in B still sees
+//     the first call). And `executeMongoRunCommandIfPresent` in
+//     `mongoQueryExecution.ts` sits ahead of the first arm, so its decision
+//     site is in the dropped head of the split; it carries no
+//     `requiresPreviewDialog(` today and the suite is green, which is the
+//     same measurement. What covers that one is
+//     its own stricter gate — everything outside the read-only allowlist goes
+//     to the confirm dialog, not to this preview — so do not "fix" it by
+//     routing it through the preview predicate.
 // The behavioural tests in `src/components/query/QueryTab.warn-dialog.test.tsx`
 // and `src/components/query/QueryTab/useQueryExecution.writeDispatch.test.tsx`
 // are what cover those; this file covers the shape.
@@ -85,6 +105,27 @@ const previewMountFiles = collectSourceFiles(SRC_ROOT)
   .map((path) => ({ path, text: readFileSync(path, "utf8") }))
   .filter(({ text }) => PREVIEW_MOUNT.test(text));
 
+// One arm of the parser-driven mongosh dispatch table. Splitting on the
+// marker gives the arm's body up to the next arm (or EOF for the last one),
+// which is the unit a missing gate hides in. The head of the split is the
+// file's imports and helpers and carries no arm, so it is dropped.
+const DISPATCH_BRANCH = /if \(parsed\.method === "(\w+)"\)/g;
+
+const dispatchBranches = previewMountFiles.flatMap(({ path, text }) => {
+  const parts = text.split(DISPATCH_BRANCH);
+  const branches: { file: string; method: string; body: string }[] = [];
+  // `String.split` with one capture group yields [head, name, body, name,
+  // body, …].
+  for (let i = 1; i < parts.length; i += 2) {
+    branches.push({
+      file: relative(path),
+      method: parts[i]!,
+      body: parts[i + 1] ?? "",
+    });
+  }
+  return branches;
+});
+
 describe("preview-dialog gate — shape guard (issue #2375)", () => {
   it("finds the known dispatch surfaces, so an empty sweep cannot pass vacuously", () => {
     const found = previewMountFiles.map(({ path }) => relative(path)).sort();
@@ -116,6 +157,33 @@ describe("preview-dialog gate — shape guard (issue #2375)", () => {
       .filter(({ text }) => !text.includes("requiresPreviewDialog("))
       .map(({ path }) => relative(path));
     expect(missing).toEqual([]);
+  });
+
+  it("finds the mongosh dispatch branches, so an empty split cannot pass vacuously", () => {
+    const found = dispatchBranches.map(({ method }) => method);
+    // A subset assertion, like the file-level one above: the roster grows
+    // whenever a mongosh method is added, and this fails loudly if the split
+    // stops finding arms at all. `dropIndex` is named because it is the arm
+    // that shipped with no gate.
+    expect(found).toEqual(
+      expect.arrayContaining([
+        "aggregate",
+        "deleteMany",
+        "bulkWrite",
+        "dropIndex",
+      ]),
+    );
+  });
+
+  it("every dispatch branch that asks the Safe Mode matrix also asks the preview gate", () => {
+    const offenders = dispatchBranches
+      .filter(
+        ({ body }) =>
+          body.includes("decideSafeMode(") &&
+          !body.includes("requiresPreviewDialog("),
+      )
+      .map(({ file, method }) => `${file} — ${method}`);
+    expect(offenders).toEqual([]);
   });
 });
 

@@ -737,10 +737,13 @@ export default function QueryTab({ tab }: QueryTabProps) {
       )}
 
       {/* Sprint 255 — raw RDB preview dialog. Mounts when the batch has at
-          least one statement the analyzer puts above the INFO tier and the
-          Safe Mode gate raised no STOP. That STOP priority is enforced
-          inside `handleExecute`, so `pendingRdbWarn` is `null` when
-          `pendingRdbConfirm` is set — the two dialogs never co-mount.
+          least one statement the analyzer puts above the INFO tier, the
+          Safe Mode gate raised no STOP, and the dry-run row-impact probe
+          did not escalate. Both of those exits return before the mount in
+          `executeRdbQuery`, so `pendingRdbWarn` is `null` whenever
+          `pendingRdbConfirm` is set — the two dialogs never co-mount, and
+          an escalated 100+-row DELETE gets the confirm instead of this
+          dialog rather than both.
           INFO statements (SELECT / EXPLAIN / SHOW / DESCRIBE / WITH …
           SELECT / INSERT / CREATE) bypass this dialog entirely (direct
           IPC).
@@ -762,10 +765,15 @@ export default function QueryTab({ tab }: QueryTabProps) {
       )}
 
       {/* Sprint 255 — raw Mongo preview modal, plus the parser-driven
-          write dispatch (Sprint 312). Mounts when `analyzeMongoPipeline` /
-          `analyzeMongoOperation` puts the call above the INFO tier and the
-          Safe Mode gate raised no STOP. The find path never mounts it
-          (always INFO).
+          write dispatch (Sprint 312). Mounts when the dispatch branch's
+          analysis is above the INFO tier and the Safe Mode gate raised no
+          STOP. The find path never mounts it (always INFO). `dropIndex`
+          builds its analysis inline rather than through
+          `analyzeMongoOperation`, so the branch — not the analyzer roster
+          — is what decides.
+          `db.runCommand` / `db.adminCommand` never land here: that branch
+          sends everything outside its read-only allowlist to
+          `pendingMongoConfirm`, a stricter gate than this preview.
           Issue #2375 — `$out` / `$merge` and the empty-filter `*-many`
           writes reach `pendingMongoConfirm` only where the gate returns
           `confirm` (production, or non-production under `strict`). On a

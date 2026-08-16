@@ -173,14 +173,17 @@ function seedSchemaCache(): void {
 }
 
 function seedTab(sql: string) {
-  // Use DROP TABLE syntax — `severity: "danger"`, non-prod + `warn` mode
-  // → `decideSafeModeAction` returns `allow`, so no ConfirmDestructiveDialog
-  // gets in the way of the self-invalidate assertion.
+  // The DDL cases below pass DROP TABLE — `severity: "danger"`, non-prod +
+  // `warn` mode → `decideSafeModeAction` returns `allow`, so no
+  // ConfirmDestructiveDialog gets in the way of the self-invalidate
+  // assertion.
   //
-  // Issue #2375 — this no longer reaches `runRdbSingleNow` on the first
-  // click: the QueryTab preview now mounts for every non-INFO tier, not
-  // just WARN. `executeThroughPreview` below walks past it so these cases
-  // keep testing schema invalidation rather than dialog mechanics.
+  // Issue #2375 — a DROP TABLE seeded here no longer reaches
+  // `runRdbSingleNow` on the first click: the QueryTab preview now mounts
+  // for every non-INFO tier, not just WARN. `executeThroughPreview` below
+  // walks past it so those cases keep testing schema invalidation rather
+  // than dialog mechanics. The last case in this file seeds an INFO-tier
+  // SELECT instead, which still goes direct on the first click.
   const tab = makeQueryTab({ sql, database: "db1" });
   useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
   useConnectionStore.setState({
@@ -197,11 +200,18 @@ async function executeThroughPreview(result: {
   current: {
     handleExecute: () => Promise<void>;
     confirmRdbWarn: () => Promise<void>;
+    pendingRdbWarn: unknown;
   };
 }) {
   await act(async () => {
     await result.current.handleExecute();
   });
+  // Assert the preview actually stood before walking past it. Without this
+  // line the helper is blind to a regression back to the WARN-only gate:
+  // `handleExecute` would dispatch directly and `confirmRdbWarn` would be a
+  // no-op (`useQueryExecution` returns early when `pendingRdbWarn` is null),
+  // so the schema-invalidation assertions downstream would still pass.
+  expect(result.current.pendingRdbWarn).not.toBeNull();
   await act(async () => {
     await result.current.confirmRdbWarn();
   });

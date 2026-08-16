@@ -264,8 +264,9 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
   // `seedDocTab` 이 심는 연결 환경은 `development` 이고 위 beforeEach 가
   // `mode` 를 `warn` 으로 둔다 — 출하 기본 설정이다. 그 조합에서
   // `decideSafeModeAction` 은 파괴적 문장에도 `allow` 를 주므로, 회귀 전에는
-  // 아래 세 문장이 창 하나 없이 IPC 로 나갔다. `pendingMongoConfirm` 이
-  // 대신 서면 안 된다 — 그건 ADR 0022 의 매트릭스를 고쳤다는 뜻이다.
+  // 아래 `preview[danger]` 케이스들과 이 파일 끝의 `dropIndex` 케이스가 창
+  // 하나 없이 IPC 로 나갔다. `pendingMongoConfirm` 이 대신 서면 안 된다 —
+  // 그건 ADR 0022 의 매트릭스를 고쳤다는 뜻이다.
 
   it("preview[danger] empty-filter deleteMany → 미리보기 pending; confirm 후에야 IPC", async () => {
     deleteManyMock.mockResolvedValueOnce(9);
@@ -579,12 +580,27 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     );
   });
 
-  it("dispatches dropIndex to dropMongoIndex", async () => {
+  // Issue #2375 — `dropIndex` builds `severity: "danger"` inline in
+  // `mongoWriteDispatch.ts` rather than through `analyzeMongoOperation`, so
+  // it carried no `severity` comparison for the first sweep of this issue to
+  // widen and stayed ungated a round longer than the branches above. Under
+  // this file's shipped-default fixture (`development` + `warn`) the gate
+  // returns `allow`, so before the fix `handleExecute` alone called
+  // `dropMongoIndex`. The assertions before `confirmMongoWarn` are what go
+  // red if that branch loses the gate again; the IPC-payload assertions
+  // after it are the pre-#2375 ones, unchanged.
+  it("preview[danger] dropIndex → 미리보기 pending; confirm 후에야 dropMongoIndex", async () => {
     dropMongoIndexMock.mockResolvedValueOnce(undefined);
     const tab = seedDocTab('db.users.dropIndex("email_1")');
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
     await actAsync(result.current.handleExecute);
+
+    expect(result.current.pendingMongoWarn).not.toBeNull();
+    expect(result.current.pendingMongoConfirm).toBeNull();
+    expect(dropMongoIndexMock).not.toHaveBeenCalled();
+
+    await actAsync(result.current.confirmMongoWarn);
 
     await waitFor(() => {
       expect(dropMongoIndexMock).toHaveBeenCalledTimes(1);

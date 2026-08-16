@@ -37,11 +37,23 @@ import type { Severity, StatementAnalysis } from "@/lib/sql/sqlSafety";
  *     fire before `connectionStore` populates.
  *
  * Mode 3-tier (`strict` / `warn` / `off`) keeps its store / UI shape; only
- * the *meaning* changed:
- *   - strict: destructive dialog in *all* environments (incl. dev).
- *   - warn (default): destructive dialog in production only.
+ * the *meaning* changed. The dialog these three lines describe is the
+ * confirm dialog this function asks for — the preview dialog below is a
+ * separate surface and does not follow this table:
+ *   - strict: destructive confirm in *all* environments (incl. dev).
+ *   - warn (default): destructive confirm in production only.
  *   - off: prod-auto — production still confirms (with prod-auto copy);
- *     non-prod is unguarded (safe writes + destructive both allowed).
+ *     non-prod returns `allow` for safe writes and destructive alike.
+ *
+ * Since #2375, `allow` no longer means "nothing is shown". The raw SQL / MQL
+ * editor runs a second gate above this one (`requiresPreviewDialog` below):
+ * it mounts `SqlPreviewDialog` / `MqlPreviewModal` for the non-INFO
+ * statements this function allows there, so a non-production destructive
+ * statement under `warn` / `off` still stops at a review step. That is the
+ * editor's own surface, not this matrix — a caller with no preview to mount
+ * (the Redis command console,
+ * `src/components/query/QueryTab/kvQueryExecution.ts`) still dispatches an
+ * allowed statement straight away.
  *
  * Block action survives in the type union for the Mongo single-node
  * fallback (where dry-run is unavailable). This function never returns

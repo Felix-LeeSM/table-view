@@ -563,6 +563,13 @@ export async function dispatchMongoWriteCall(
       return true;
     }
     const indexName = nameArg.trim();
+    // Issue #2375 — this branch builds its analysis inline instead of asking
+    // `analyzeMongoOperation`, and it holds no `severity` comparison to
+    // widen, so the sweep that moved the other branches off the WARN literal
+    // had nothing to match here and left it behind. The Safe Mode gate
+    // returns `allow` on a non-production connection under the shipped
+    // `warn` default, so `db.c.dropIndex("…")` reached the driver with no
+    // dialog while a bounded `deleteMany` in this same file got a preview.
     const analysis = {
       kind: "mongo-drop" as const,
       severity: "danger" as const,
@@ -591,6 +598,11 @@ export async function dispatchMongoWriteCall(
         reason: decision.reason,
         previewLines: [rawSql],
       });
+      return true;
+    }
+    if (requiresPreviewDialog(analysis.severity)) {
+      pendingWriteRunnerRef.current = runner;
+      setPendingMongoWarn({ pipeline: [], previewLines: [rawSql] });
       return true;
     }
     await runner();

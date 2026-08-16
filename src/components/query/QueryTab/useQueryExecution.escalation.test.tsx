@@ -248,8 +248,8 @@ describe("useQueryExecution — Sprint 254 dry-run WARN escalation", () => {
   // 미리보기 mount 조건과 dry-run 승격 조건이 `hasWarn` 플래그 하나를
   // 나눠 쓰고 있었다. 미리보기만 넓히려고 그 한 줄을 고치면 이미 danger 인
   // 문장이 승격 경로로 들어가, `escalateWarnIfLargeImpact` 가 기준선으로 받는
-  // `"warn"` 이 거짓이 되고 쓸데없는 dry-run 카운트 질의가 붙는다. 아래 두
-  // 케이스가 플래그가 실제로 갈라졌는지를 잰다.
+  // `"warn"` 이 거짓이 되고 쓸데없는 dry-run 카운트 질의가 붙는다. 아래
+  // `[AC-2375-03]` 과 `[AC-2375-04]` 가 플래그가 실제로 갈라졌는지를 잰다.
 
   it("[AC-2375-03] preview[danger] DELETE without WHERE (비프로덕션) → 미리보기, dry-run 프로브 미발동", async () => {
     const tab = seedTab("DELETE FROM users");
