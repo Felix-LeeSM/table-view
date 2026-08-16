@@ -29,10 +29,12 @@
 // while the panel is open.
 //
 // The second trap is WHERE the restore hangs. #1734 (5) first wired it into each
-// close handler and wrote that every close path went through them; two did not, and
-// neither was a handler at all — a successful commit empties the selection the
-// panel's mount gate reads, and a refetch that returns fewer rows than the
-// selected index makes the body render `null`. Enumerating close handlers can
+// close handler and wrote that every close path went through them. Some did not,
+// and none of those was a handler at all — a successful commit empties the
+// selection the panel's mount gate reads, and a refetch can leave the page with
+// no row for the panel to show. (#2133 narrowed that second one: an index past
+// the end is now clamped onto the last surviving row, so only a page that comes
+// back EMPTY still removes the panel.) Enumerating close handlers can
 // only ever be as complete as the last audit, so the restore hangs off the one
 // event all of them share instead: the panel node leaving the DOM, which React
 // reports by calling `panelRef` with `null`. Nothing a call site does (or
@@ -114,7 +116,7 @@ export function useQuickLookFocus(
   // detach happens mid-mutation, before the rest of the commit has landed.
   // Focusing from there picks a cell React is about to replace and reads a
   // `focusAnchorRef` the grid republishes in its own effect — measured landing
-  // straight back on `<body>` in both of the paths this fixes. By here the DOM
+  // straight back on `<body>` in the no-handler paths above. By here the DOM
   // is final and the child grid's effect has already run.
   useEffect(() => {
     if (!panelWentAwayRef.current) return;

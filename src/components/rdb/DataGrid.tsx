@@ -147,10 +147,12 @@ export default function DataGrid({
   // #1734 (5) — F6 walks focus grid ↔ panel. Handing focus back when the panel
   // disappears is NOT wired here: `useQuickLookFocus` hangs it off `panelRef`
   // being detached, so it covers the paths below and equally the ones that
-  // never touch them (a commit that empties the selection, a refetch that drops
-  // the selected row out of range). `focusAnchorRef` is what the grid publishes
-  // its virtualization-aware focuser into; without it the RDB grid's anchor row
-  // can be scrolled out of the DOM and the restore silently no-ops.
+  // never touch them (a commit that empties the selection, a refetch that leaves
+  // the page with no rows — #2133 clamps a merely out-of-range selection onto
+  // the last surviving row, so that no longer removes the panel).
+  // `focusAnchorRef` is what the grid publishes its virtualization-aware focuser
+  // into; without it the RDB grid's anchor row can be scrolled out of the DOM
+  // and the restore silently no-ops.
   const focusAnchorRef = useRef<(() => void) | null>(null);
   const quickLookOpen =
     showQuickLook && editState.selectedRowIds.size > 0 && data !== null;
