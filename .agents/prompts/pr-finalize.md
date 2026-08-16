@@ -151,10 +151,11 @@ gh pr view <N> --json comments -q '.comments[].body'   # 라운드별 scorecard
 CNT="$(gh pr view <N> --json commits -q '.commits|length')" || CNT=UNREADABLE
 case "$CNT" in
   1)      TITLE="$(gh api repos/Felix-LeeSM/table-view/pulls/<N>/commits \
-                     --jq '.[0].commit.message' | head -1)" ;;
-  [0-9]*) TITLE="$(gh pr view <N> --json title -q .title)" ;;
+                     --jq '.[0].commit.message | split("\n")[0]')" || TITLE= ;;
+  [0-9]*) TITLE="$(gh pr view <N> --json title -q .title)" || TITLE= ;;
   *)      echo "ABORT: 커밋 수를 못 읽어 제목 출처를 못 가른다 ($CNT)" >&2; exit 1 ;;
 esac
+[ -n "$TITLE" ] || { echo "ABORT: 제목을 못 읽어 대조할 문자열이 없다" >&2; exit 1; }
 printf '%s\n' "$TITLE"
 
 # scorecard 가 지목한 문구 하나가 커밋 메시지에 있는지. tr 이 하드랩을 이어 붙인다.
