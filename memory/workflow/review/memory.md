@@ -11,11 +11,10 @@ trigger:
 
 # PR Review Behavior
 
-이 방은 PR review phase에서 agent가 반드시 취해야 할 행동 계약을 둔다.
-**review 방법론에는 SOT 가 없다** — 평가 차원과 profile 분기는 어디에도 없고,
-리뷰어는 아래 계약만 받는다. scorecard 의 **형식 틀**만
-`.agents/prompts/pr-review.md` 「반환 형식」이 갖는다 (무엇을 평가할지는 여전히
-리뷰어가 세운다).
+이 방은 PR review phase에서 agent가 반드시 취해야 할 행동 계약을 둔다. **review
+방법론에는 SOT 가 없다** — 평가 차원과 profile 분기는 어디에도 없고, 리뷰어는 아래
+계약만 받는다. scorecard 의 **형식 틀**만 `.agents/prompts/pr-review.md` 「반환
+형식」이 갖는다 (무엇을 평가할지는 여전히 리뷰어가 세운다).
 
 ## 행동 계약
 
@@ -113,6 +112,8 @@ trigger:
   [delivery](../delivery/memory.md) 「squash 커밋 교정」이 SOT 다 — 교정 대상 표면은
   body 말고 제목도 있고, 위 덤프는 커밋이 하나일 때의 제목까지 같이 덮는다
   (그 제목이 곧 덤프의 첫 줄이다).
+- **라운드 2 이상은 직전 라운드와의 blocking 대조를 scorecard 에 싣는다** — 직전
+  라운드의 blocking 집합 · 이번 라운드의 것 · 둘 다에 있는 것. 사이클 판정은 안 한다.
 - **라운드 3 이상은 회고 모드다.** 그 라운드에서 개별 finding 수리를 계속하는 것
   자체가 사이클 신호다 — fix 를 더 얹으라는 지적 대신 유형 재발 표(유형 × 라운드별
   건수)를 먼저 낸다. 트리거와 보고 항목은
@@ -178,10 +179,9 @@ trigger:
 
 ## Merge 전 요구
 
-- 자동 gate와 CI가 green이어야 한다. `review-gate` check는
-  `review:approved` label이 있어야 pass — branch protection required check +
-  enforce_admins라 우회 불가. 새 commit push 시 label이 자동 해제되므로
-  fix 후에는 재리뷰가 필수다.
+- 자동 gate와 CI가 green이어야 한다. `review-gate` check는 `review:approved`
+  label이 있어야 pass — branch protection required check + enforce_admins라 우회
+  불가. 새 commit push 시 label이 자동 해제되므로 fix 후에는 재리뷰가 필수다.
 - 라운드가 3 이상이면 `reflect:done` label 도 있어야 한다 — 없으면
   `review:approved` 가 붙어 있어도 `review-gate` 가 fail 한다. 라운드는 서로 다른
   head 커밋에 붙은 리뷰 인계의 수이고 코멘트 수는 그 **상한**이다 — 같은 커밋에
