@@ -214,7 +214,7 @@ jobs:
       # finalizer's copy in `.agents/prompts/pr-finalize.md` and the reviewer's
       # in `memory/workflow/review/memory.md` — so a gate on one tree watches
       # half of it. `docs/` stays out: measured on 2026-08-16 it reports 36
-      # sites, nearly all single-quoted jq bodies spanning physical lines.
+      # sites, most of them the search recipes in `docs/README.md`.
       # What counts as a violation is decided by
       # `scripts/check-prompt-fail-silently.sh` alone; its header states the
       # rule, the printf/echo allowlist and why quoting a forbidden form in a
