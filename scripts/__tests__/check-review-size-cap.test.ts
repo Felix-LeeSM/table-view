@@ -92,12 +92,24 @@ describe("check-review-size-cap", () => {
     expect(run.status).toBe(1);
   });
 
-  // 빈 입력은 통과다 — 이 게이트가 막는 해악은 "너무 길다" 하나뿐이라 0 문자는
-  // 못 잰 것이 아니라 실제로 상한 아래다 (스크립트 헤더 「빈 입력은 통과다」).
-  it("passes empty input", () => {
+  // 0 문자는 "상한 아래" 가 아니라 "잴 것을 못 받았다" 다 — 호출자가 stdin 을 안
+  // 주거나 인자 자리를 헷갈리면 어느 크기의 문서든 0 으로 읽힌다. 통과로 강등하면
+  // 그 호출자는 "쟀고 통과했다" 를 믿는다 (스크립트 헤더 「빈 입력은 검사 불성립이다」).
+  it("refuses empty input instead of passing it", () => {
     const run = runGate(["PR body"], "");
-    expect(run.out).toContain(`PR body 0 chars <= ${MAX}`);
-    expect(run.status).toBe(0);
+    expect(run.out).toContain("잰 문서가 0 문자다");
+    expect(run.out).not.toMatch(/^ok:/);
+    expect(run.status).toBe(2);
+  });
+
+  // 이슈 #2374 가 보고한 증상 그대로: 인자 계약이 <LABEL> [FILE] 인데 파일 경로를
+  // LABEL 자리에 넣으면 FILE 이 없어 stdin 을 읽고, stdin 이 비면 0 문자가 된다.
+  // 20,000 자 문서가 `ok: <경로> 0 chars <= 12000` 으로 통과하던 자리다.
+  it("refuses a FILE path put in the LABEL slot with no stdin", () => {
+    const over = seed("x".repeat(MAX + 8_000));
+    const run = runGate([over], "");
+    expect(run.out).not.toMatch(/^ok:/);
+    expect(run.status).not.toBe(0);
   });
 
   it("refuses a FILE that is not there", () => {

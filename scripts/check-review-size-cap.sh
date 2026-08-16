@@ -30,11 +30,24 @@
 #   산출물의 실측 분포 어디에 서는지는 issue #2321 과 그 PR body 가 재현
 #   명령과 함께 기록한다.
 #
-# ## 빈 입력은 통과다
+# ## 빈 입력은 검사 불성립이다 (issue #2374)
 #
-#   이 게이트가 막는 해악은 「너무 길다」 하나뿐이라, 0 문자는 못 잰 것이
-#   아니라 실제로 상한 아래다. 빈 body 자체를 문제로 볼지는 호출자가 정한다
-#   (.github/workflows/ci.yml 의 스텝이 `-z "$BODY"` 로 먼저 거른다).
+#   0 문자를 「상한 아래」로 읽으면 **아무 크기의 문서도 통과한다.** 0 이 나오는
+#   흔한 원인은 문서가 비어서가 아니라 문서를 안 넘겨서다 — stdin 을 파이프로
+#   안 주거나, 아래 「사용」의 두 자리를 헷갈려 파일 경로를 LABEL 에 넣거나
+#   (그러면 FILE 이 없어 stdin 을 읽는다). 20,000 자 문서가
+#   `ok: <경로> 0 chars <= 12000` 으로 통과하던 자리가 그것이다. 이 스크립트는
+#   「내 문서가 넘나」를 push 전에 손으로 재는 용도로도 쓰이고, 거기서 나온 거짓
+#   green 은 required 게이트가 red 가 되고서야 드러난다 — 그때 ci.yml 쪽은
+#   `edited` 를 안 들어서 새 commit 없이는 안 풀린다 (아래 「red 가 풀리는 법」).
+#   그래서 0 문자는 위반(exit 1)이 아니라 **검사 불성립(exit 2)** 으로 끊는다.
+#
+#   대가: 진짜로 빈 문서를 재는 호출자가 생기면 그쪽이 red 가 된다. 그 호출자는
+#   부르기 전에 빈 것을 스스로 걸러야 한다 — 커밋된 호출자 둘이 이미 그 모양이다.
+#   .github/workflows/ci.yml 의 PR body 스텝은 `-z "$BODY"` 로 먼저 빠져나가고
+#   (이 판정이 그 줄을 하중 부재로 만든다 — 지우면 body 없는 이벤트가 red 다),
+#   .github/workflows/review-gate.yml 은 `## Scorecard` 로 시작하는 코멘트만
+#   골라 넘기므로 빈 입력이 안 나온다.
 #
 # ## red 가 풀리는 법은 부르는 자리마다 다르다
 #
@@ -106,6 +119,15 @@ case "$chars" in
 	exit 2
 	;;
 esac
+
+# 0 은 「상한 아래」가 아니라 「잴 것을 못 받았다」다 — 위 헤더 「빈 입력은 검사
+# 불성립이다」. FILE 을 줬든 stdin 을 읽었든 같은 자리에서 끊는다.
+if [ "$chars" -eq 0 ]; then
+	echo "ERROR: $label: 잰 문서가 0 문자다 — 넘어온 문서가 없다. 통과로 강등하지 않는다" >&2
+	echo "       사용: bash scripts/check-review-size-cap.sh <LABEL> [FILE]" >&2
+	echo "       FILE 을 안 주면 stdin 을 읽는다 — 파일을 재려면 경로는 LABEL 이 아니라 두 번째 자리다" >&2
+	exit 2
+fi
 
 if [ "$chars" -gt "$MAX_CHARS" ]; then
 	echo "FAIL $label: $chars chars > $MAX_CHARS" >&2
