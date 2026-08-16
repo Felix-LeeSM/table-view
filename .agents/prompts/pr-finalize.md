@@ -104,7 +104,11 @@ gh pr checks <N>
 
    ```bash
    # 패턴 목록은 옮겨 적지 말고 ci.yml 의 `PR Body Contract` job 에서 그대로 가져온다
-   gh pr view <N> --json body -q .body | grep -n -F -e '<ci.yml 의 -e 목록 그대로>'
+   # body 를 먼저 받고 rc 를 가드한다 — grep 에 바로 물리면 조회 실패가 grep 의 rc 로
+   # 덮여 hit 0 이 되고, 검사된 적 없는 body 가 clean 으로 통과한다
+   BODY="$(gh pr view <N> --json body -q .body)" \
+     || { echo "ABORT: PR body 를 못 읽어 재검사가 성립하지 않는다" >&2; exit 1; }
+   printf '%s\n' "$BODY" | grep -n -F -e '<ci.yml 의 -e 목록 그대로>'
    ```
 
    hit 이 나오면 **머지하지 말고** 구현자에게 새 commit 을 요구한다.
@@ -163,8 +167,12 @@ printf '%s\n' "$TITLE"
 # memory/workflow/review/memory.md 「행동 계약」이 갖는다
 # 조각에도 같은 정규화를 건다 — 안 걸면 아래 문단의 탭·개행·연속 공백에 뚫린다
 NEEDLE="$(printf '%s' '<문구>' | LC_ALL=C tr -s '[:space:]' ' ')"
-gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
-  --jq '.[].commit.message' | LC_ALL=C tr -s '[:space:]' ' ' \
+# 메시지를 먼저 받고 rc 를 가드한다 — `tr` 에 바로 물리면 조회 실패가 맨 오른쪽
+# `wc -l` 의 rc 로 덮여 아래 「hit 0」과 구분이 안 된다
+MSGS="$(gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
+          --jq '.[].commit.message')" \
+  || { echo "ABORT: 커밋 메시지를 못 읽어 대조가 성립하지 않는다" >&2; exit 1; }
+printf '%s\n' "$MSGS" | LC_ALL=C tr -s '[:space:]' ' ' \
   | grep -o -F -- "$NEEDLE" | wc -l
 ```
 
@@ -186,9 +194,10 @@ gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
 와 이슈 번호 `#2239` 에 걸리는데, 걸리게 만든 것은 뗀 공백이 아니라 같이 뗀 `#` 다.
 「연속 공백이 안 낀」은 hit 의 필요조건이고 충분조건이 아니다.
 
-**hit 0 은 「커밋 메시지에 없다」의 증명이 아니다.** 정규화해도 인증 실패와 `--jq`
-오타는 똑같이 0 이다. 0 이면 교정 대상에서 빼기 전에 위 원문 덤프를 육안으로 훑는다 —
-0 을 잘못 믿는 값이 한쪽으로만 크기 때문이다 (같은 방).
+**hit 0 은 「커밋 메시지에 없다」의 증명이 아니다.** 위 `ABORT` 가 조회 실패를 걷어낸
+뒤에도, `--jq` 필드명 오타와 정규화가 어긋난 조각은 똑같이 0 을 낸다 — 오타 쪽은 `gh` 가
+rc 0 · 빈 값을 내므로 `ABORT` 를 안 지난다. 0 이면 교정 대상에서 빼기 전에 위 원문
+덤프를 육안으로 훑는다 — 0 을 잘못 믿는 값이 한쪽으로만 크기 때문이다 (같은 방).
 
 **그 값은 hit 여부가 아니라 자리 수다 — N 이면 커밋 메시지 N 곳에 있고 N 곳을 다
 고친다.** scorecard 가 커밋 하나를 지목했어도 그것을 자리 수로 읽지 마라: 2026-08-16
@@ -217,8 +226,16 @@ gh pr merge <N> --squash --delete-branch \
 
 ```bash
 # REST 로 읽는다 — 종결자는 회수 대상 사본 밖에 서 있어(「MANDATORY 첫 명령」) 그 머지
-# 커밋을 가진 체크아웃이 손에 있다는 보장이 없다
-gh api repos/Felix-LeeSM/table-view/commits/<머지 SHA> --jq '.commit.message' | head -1
+# 커밋을 가진 체크아웃이 손에 있다는 보장이 없다.
+# 첫 줄은 `--jq` 안에서 자른다 — 첫 줄 자르는 필터에 파이프로 물리면 그 필터의 rc 가
+# 덮어써서 조회 실패가 rc 0 으로 지나간다. rc 만 갈라 놔서는 부족하다: `gh` 는 오류
+# 본문을 stdout 에 쓰므로 그 JSON 이 착지 제목 행세를 하고(빈 값 검사로도 안 걸린다),
+# rc 를 안 보는 노드는 그것을 반환 형식에 그대로 싣는다. 위 두 자리와 같은 형태로
+# 변수에 받고 가드해 stdout 에서 치운다
+LANDED="$(gh api repos/Felix-LeeSM/table-view/commits/<머지 SHA> \
+            --jq '.commit.message | split("\n")[0]')" \
+  || { echo "ABORT: 머지 커밋을 못 읽어 착지 제목을 못 싣는다" >&2; exit 1; }
+printf '%s\n' "$LANDED"
 ```
 
 `--squash` 는 `memory/workflow/delivery/memory.md` 「자율 실행 vs 중단」이 정한
