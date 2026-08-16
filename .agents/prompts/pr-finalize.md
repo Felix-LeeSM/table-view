@@ -113,16 +113,28 @@ gh pr checks <N>
 
 ## 3단계 — 머지
 
-기본 squash body 는 PR body 가 아니라 **브랜치 커밋 메시지를 이어붙인 것이다**
-(repo 설정 `squash_merge_commit_message=COMMIT_MESSAGES`). 리뷰 라운드가 뒤집은
-주장이 거기 남아 있으면 그대로 main 히스토리가 된다 — 저자는 force-push 금지라 못
-고치고 머지 뒤에는 아무도 못 고친다. 교정 대상의 정의와 사유는
-`memory/workflow/delivery/memory.md` 「PR body」.
+**squash 가 main 히스토리에 남기는 표면은 제목과 body 둘이고, 어느 쪽도 PR body 가
+아니다.** 리뷰 라운드가 뒤집은 주장이 둘 중 어디에 남아도 그대로 히스토리가 된다 —
+저자는 force-push 금지라 못 고치고 머지 뒤에는 아무도 못 고친다. **표면 하나만 보고
+머지하면 나머지 하나로 거짓이 나간다.** 무엇이 오는지 · 누가 고칠 수 있는지 · 무엇이
+교정 대상인지의 SOT 는 `memory/workflow/delivery/memory.md` 「squash 커밋 교정」이고,
+여기는 표면마다 **어느 명령이 닿는지**만 둔다.
+
+| 표면 | 읽는 명령 | 교정 지점 |
+|---|---|---|
+| 제목 | 아래 `TITLE=` | `--subject` |
+| body | 아래 REST 덤프 전문 | `--body-file` |
+
+**제목 쪽 가지를 가르는 것은 커밋 수 하나뿐이다** — 무엇이 착지하는지와 그 repo
+설정 이름은 위 방의 표가 갖고, 여기서 쓰는 것은 그 수를 읽는 `.commits|length` 다.
+**`gh pr view --json commits` 는 개수에만 쓴다.** 제목 문자열을 거기 `messageHeadline`
+에서 읽으면 69자에서 잘린 값을 교정 대상으로 삼는다 (기전은
+`memory/workflow/review/memory.md` 「행동 계약」).
 
 **커밋이 하나면 라운드 1 scorecard 만 대조한다 — 건너뛰지는 않는다.** 라운드 1 의
 finding 이 그 하나뿐인 커밋 메시지를 지목할 수 있다. 커밋이 둘 이상이면 전 라운드를
-대조한다. **무엇이 거짓인지 새로 판정하지 않는다 — 리뷰어가 이미 판정한 것을 커밋
-메시지에서 찾는다.**
+대조한다. **무엇이 거짓인지 새로 판정하지 않는다 — 리뷰어가 이미 판정한 것을 위 두
+표면에서 찾는다.**
 
 ```bash
 # 커밋 메시지 원문. REST 라 headline 이 안 잘린다. --paginate 가 없애는 것은 페이지
@@ -132,6 +144,19 @@ finding 이 그 하나뿐인 커밋 메시지를 지목할 수 있다. 커밋이
 gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
   --jq '.[].commit.message'
 gh pr view <N> --json comments -q '.comments[].body'   # 라운드별 scorecard
+
+# 착지할 제목 — 가지가 갈리는 사유는 위 방이고 여기는 가지마다 읽는 명령만 둔다.
+# 읽기 실패를 빈 값으로 접으면 커밋 하나짜리가 조용히 PR 제목 가지로 새 — 못 고치는
+# 표면에 안 착지할 문자열을 대조하게 되므로 판정 불가는 값으로 남기고 멈춘다
+CNT="$(gh pr view <N> --json commits -q '.commits|length')" || CNT=UNREADABLE
+case "$CNT" in
+  1)      TITLE="$(gh api repos/Felix-LeeSM/table-view/pulls/<N>/commits \
+                     --jq '.[0].commit.message | split("\n")[0]')" || TITLE= ;;
+  [0-9]*) TITLE="$(gh pr view <N> --json title -q .title)" || TITLE= ;;
+  *)      echo "ABORT: 커밋 수를 못 읽어 제목 출처를 못 가른다 ($CNT)" >&2; exit 1 ;;
+esac
+[ -n "$TITLE" ] || { echo "ABORT: 제목을 못 읽어 대조할 문자열이 없다" >&2; exit 1; }
+printf '%s\n' "$TITLE"
 
 # scorecard 가 지목한 문구 하나가 커밋 메시지에 있는지. tr 이 하드랩을 이어 붙인다.
 # LC_ALL=C 를 빼면 한국어 문구가 통째로 0 이 된다 — 기전과 표적 음절은
@@ -171,14 +196,29 @@ gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
 있었다. **`grep -c` 로 바꾸지 마라** — 앞의 `tr` 이 개행을 없애 그 형태는 0 아니면 1
 밖에 못 낸다. 기전은 `memory/workflow/review/memory.md` 「행동 계약」이 갖는다.
 
-각 라운드 scorecard 의 blocking / non-blocking 목록을 커밋 메시지와 대조한다.
-**라운드 N 의 finding 이 지목한 주장이 라운드 N 이전 커밋 메시지에 그대로 남아
-있으면 그것이 교정 대상이다** — 수치든 산문이든 저자의 철회문이든 같다. 하나라도
-걸리면 교정본을 만들어 `--body-file` 로 대체한다.
+각 라운드 scorecard 의 blocking / non-blocking 목록을 **표면마다** 대조한다 — 커밋
+메시지에 위 `NEEDLE` 대조를, `$TITLE` 에는 눈으로. **라운드 N 의 finding 이 지목한
+주장이 라운드 N 이전 커밋 메시지나 `$TITLE` 에 그대로 남아 있으면 그것이 교정
+대상이다** — 수치든 산문이든 저자의 철회문이든 같다. 걸린 표면마다 그 표면의 교정
+지점을 쓴다.
 
 ```bash
-gh pr merge <N> --squash --delete-branch                            # 대조 결과 clean
-gh pr merge <N> --squash --delete-branch --body-file <교정본 경로>  # 교정할 때
+gh pr merge <N> --squash --delete-branch                            # 두 표면 다 clean
+# 걸린 표면의 플래그만 붙인다 — 제목만이면 --subject 만, 둘 다면 둘 다
+gh pr merge <N> --squash --delete-branch \
+  --subject '<교정 제목>' --body-file <교정본 경로>
+```
+
+**`--subject` 를 줬을 때 GitHub 이 ` (#<PR>)` 꼬리를 또 붙이는지는 실측이 없다** —
+재려면 실제 머지가 필요하다. 실측된 것은 **기본** 계산이 그 꼬리를 붙인다는 것까지다
+(#2369 는 커밋이 넷이라 PR 제목을 썼고 착지 제목이 그 제목 + ` (#2369)` 였다).
+**꼬리를 직접 넣어 넘기고, 머지 뒤 착지 제목을 읽어 반환 형식에 그대로 싣는다** —
+빠졌거나 둘이면 거기서 드러나고, 그 보고가 다음 종결자의 실측이 된다.
+
+```bash
+# REST 로 읽는다 — 종결자는 회수 대상 사본 밖에 서 있어(「MANDATORY 첫 명령」) 그 머지
+# 커밋을 가진 체크아웃이 손에 있다는 보장이 없다
+gh api repos/Felix-LeeSM/table-view/commits/<머지 SHA> --jq '.commit.message' | head -1
 ```
 
 `--squash` 는 `memory/workflow/delivery/memory.md` 「자율 실행 vs 중단」이 정한
@@ -234,6 +274,9 @@ gh pr merge <N> --squash --delete-branch --body-file <교정본 경로>  # 교�
 
 ```
 - PR: #<번호> — merged <머지 SHA> (squash)
+- squash 제목: 출처(커밋 <수>개 → 커밋 제목 / PR 제목) · 기본(대조 clean) /
+  `--subject` 교정 · 착지 제목 `<머지 뒤 읽은 그대로>`. **제목은 body 와 별개 표면이라
+  이 줄이 없으면 안 본 것이 안 보인다** — 3단계의 표가 이 줄의 근거다
 - squash body: 기본(대조 clean) / 교정(뒤집힌 주장 N건)
 - reflect:done: 부착 / 불필요 (라운드 <N>) — 부착했으면 labeled run 결과
 - required: 머지 시점 충족 — `mergeStateStatus` = CLEAN / UNSTABLE

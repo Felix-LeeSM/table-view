@@ -1,9 +1,9 @@
 ---
 title: Delivery — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 행동 계약
 type: workflow-rule
-updated: 2026-08-07
+updated: 2026-08-16
 task: delivery, commit, push, pr, review, merge
-keywords: 커밋, commit, push, PR 생성, squash, squash body, --body-file, COMMIT_MESSAGES, 뒤집힌 주장, 철회문, scorecard 대조, staleness, 머지 정책, review:approved, reflect:done, 자율 실행, 중단 조건, GPG, pinentry, 노드 표
+keywords: 커밋, commit, push, PR 생성, squash, squash body, squash 제목, 머지 제목, 교정 대상 표면, --body-file, --subject, COMMIT_MESSAGES, COMMIT_OR_PR_TITLE, 뒤집힌 주장, 철회문, scorecard 대조, staleness, 머지 정책, review:approved, reflect:done, 자율 실행, 중단 조건, GPG, pinentry, 노드 표
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -110,15 +110,25 @@ blocking 의 반복 공급원이었다 (#2226). 다시 쓰는 것은 지우면 �
 그때는 추론이 아니라 명령 출력으로 쓴다 (같은 §5 표의 「수치가 추론으로 생산됨」 행).
 지우든 다시 쓰든 body 편집 단독은 재검사되지 않으니 fix commit + push 와 한 세트로 간다.
 
-### squash body 교정
+### squash 커밋 교정 — 표면은 제목과 body 둘이다
 
-기본 squash body 는 PR body 가 아니라 **브랜치 커밋 메시지를 이어붙인 것이다**
-(repo 설정 `squash_merge_commit_message=COMMIT_MESSAGES`). 저자는 이미 push 된 커밋
-메시지를 못 고친다 — force-push 가 [git-policy](../git-policy/memory.md) hard block
-이라, 리뷰가 소스와 PR body 를 고쳐도 커밋 메시지는 거짓인 채로 남는다. 교정 지점은
-종결자의 `--body-file` 하나뿐이고 머지 뒤에는 히스토리라 아무도 못 고친다.
+**squash 가 main 히스토리에 남기는 표면은 둘이고 어느 쪽도 PR body 가 아니다.**
+한쪽만 교정하면 다른 쪽으로 거짓이 그대로 나간다.
 
-**교정 대상은 리뷰 라운드가 뒤집은 모든 주장이다 — 수치 · 산문 · 철회된 결론.**
+| 표면 | 무엇이 오나 | 저자가 고칠 수 있나 | 종결자의 교정 지점 |
+|---|---|---|---|
+| 제목 | 커밋이 하나면 그 커밋 제목, 둘 이상이면 PR 제목 (`squash_merge_commit_title=COMMIT_OR_PR_TITLE`) | 커밋 하나면 못 고친다 · 둘 이상이면 `gh pr edit --title` | `--subject` |
+| body | 브랜치 커밋 메시지를 이어붙인 것 (`squash_merge_commit_message=COMMIT_MESSAGES`) | 못 고친다 | `--body-file` |
+
+저자가 못 고치는 칸의 사유는 하나다 — force-push 가
+[git-policy](../git-policy/memory.md) hard block 이라 push 된 커밋 메시지가 그대로
+간다. 리뷰가 소스와 PR body 를 고쳐도 두 표면은 거짓인 채다. 머지 뒤에는 양쪽 다
+히스토리라 아무도 못 고친다. **제목 쪽 실물이 2026-08-11 #2286 이다** — 리뷰가
+교정 대상으로 지목한 닫힌 개수 서술을 제목이 이고 있었고 `--body-file` 이 안 닿는
+자리였다. 그때 안 샌 것은 이 계약이 아니라 그 종결자의 재량 덕이다.
+
+**교정 대상은 리뷰 라운드가 뒤집은 모든 주장이고 두 표면에 똑같이 걸린다 — 수치 ·
+산문 · 철회된 결론.**
 수치로만 좁히면 수치가 아닌 거짓이 조건에 안 걸린다. 2026-08-07 #2204 가 그
 형태다 — 저자의 철회 목록이 같은 줄의 `182 → 183` 은 고치고 `the two new tests` 라는
 **낱말**은 안 건드렸는데, 브랜치가 더한 테스트는 셋이었다 (라운드 2 scorecard NB2).
@@ -126,8 +136,15 @@ blocking 의 반복 공급원이었다 (#2226). 다시 쓰는 것은 지우면 �
 철회문 자체가 거짓일 수 있다 (2026-08-07 #2206 라운드 2 scorecard non-blocking 3:
 철회문이 "base 와 head 에서 똑같이 0건" 이라 적었는데 base 는 2건이었다).
 
-**종결자는 무엇이 거짓인지 새로 판정하지 않는다** — 리뷰어가 이미 판정한 것을
-커밋 메시지와 대조한다. **커밋이 하나여도 대조를 통째로 건너뛰지 않는다** — 라운드 1 의
+**종결자는 무엇이 거짓인지 새로 판정하지 않는다** — 리뷰어가 이미 판정한 것을 위 두
+표면에서 찾는다. **리뷰어가 안 지목한 것은 제목에서도 안 고친다.** 커밋 하나짜리
+PR 의 착지 제목이 PR 제목에 있던 `(#이슈)` 를 잃는 것이 그 형태인데, 제목 형식의
+SOT 는 [engineering/conventions](../../engineering/conventions/memory.md)
+「커밋 메시지」이고 거기에 이슈 번호를 요구하는 줄이 없어 종결자가 새로 재단할
+자리가 아니다. **닫는 것은 종결자가 아니라 저자다** — 커밋 제목에
+`(#이슈)` 를 넣거나, 커밋을 하나 더 얹어 제목 출처를 자기가 `gh pr edit --title` 로
+고칠 수 있는 PR 제목 쪽으로 넘긴다.
+**커밋이 하나여도 대조를 통째로 건너뛰지 않는다** — 라운드 1 의
 finding 이 그 하나뿐인 커밋 메시지를 지목할 수 있고, non-blocking 만 달고 라운드 1 에서
 approved 되면 커밋이 둘로 늘지 않은 채 머지된다. 싼 경로는 대조 범위를 라운드 1
 scorecard 하나로 줄이는 것이지 생략이 아니다. 대조 절차는
