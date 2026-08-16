@@ -460,9 +460,10 @@ describe("check-ci-test-calls", () => {
 
   // exit 2 가드 중 `find` 실패를 받는 둘은 어느 케이스도 안 밟았다 (#2347 결함 3).
   // 아래 둘이 하나씩 밟는다. 두 메시지가 다 `다 훑지 못했다` 로 끝나므로 어느 가드가
-  // 걸렸는지는 그 낱말로 안 갈린다 — 첫 find 는 스캔 루트를 모으기 전에 죽어 집계 줄이
-  // `스캔 루트: 미측정` 이고, 두 번째 find 는 그 라벨을 이미 갖고 있어 die 메시지가
-  // `스캔 루트(...)` 를 싣는다. 그 두 문면을 단언해 케이스가 서로의 자리를 안 밟게 한다.
+  // 걸렸는지는 그 낱말로 안 갈린다 — `$CRATES_DIR` 가드는 스캔 루트를 모으기 전에 죽어
+  // 집계 줄이 `스캔 루트: 미측정` 이고, 스캔 루트 가드는 그 라벨을 이미 갖고 있어 die
+  // 메시지가 `스캔 루트(...)` 를 싣는다. 그 두 문면을 단언해 케이스가 서로의 자리를 안
+  // 밟게 한다.
   it("refuses a tree whose scan root cannot be read", (ctx) => {
     if (RUNNING_AS_ROOT) ctx.skip(ROOT_SKIP);
     const root = seed({ tests: CALLED });
@@ -479,10 +480,10 @@ describe("check-ci-test-calls", () => {
     }
   });
 
-  // 스캔 루트만 훑는 두 번째 find 의 실패 경로. 첫 find 는 깊이 제한이 없지만
-  // `-name target -prune` 으로 폭이 좁아서, 스캔 루트 아래 못 읽는 `target` 디렉토리를
-  // 프룬해 rc 0 으로 지나간다 — 그것을 여는 것은 prune 이 없는 두 번째 find 뿐이다.
-  // 상류를 안 고쳐도 오늘 도달하는 자리라 케이스로 잠근다.
+  // 스캔 루트만 훑는 가드의 실패 경로. `$CRATES_DIR` 를 훑는 find 는 깊이 제한이
+  // 없지만 `-name target -prune` 으로 폭이 좁아서, 스캔 루트 아래 못 읽는 `target`
+  // 디렉토리를 프룬해 rc 0 으로 지나간다 — 그것을 여는 것은 그 가드의 `-mindepth 2`
+  // find 다. 상류를 안 고쳐도 오늘 도달하는 자리라 케이스로 잠근다.
   it("refuses a tree whose scan root holds an unreadable target directory", (ctx) => {
     if (RUNNING_AS_ROOT) ctx.skip(ROOT_SKIP);
     const root = seed({ tests: CALLED });
