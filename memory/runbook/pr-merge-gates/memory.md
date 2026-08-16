@@ -3,7 +3,7 @@ title: PR merge 게이트 — required context 계약
 type: runbook
 updated: 2026-08-06
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
-keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, merge ref, rerun, cancelled, cancel-in-progress, expected, Dismiss stale approval, Release reflect:done on a new round, Count review rounds by head OID, head-oid, head OID, rounds=, round-def, statusCheckRollup, auto-merge, 체크 0개, PR Body Contract, CLAUDE.md import intact, memory/ doc size cap, check-memory-doc-size, lines >, chars >, test binaries called or allowlisted, check-ci-test-calls, ci-uncalled-tests.txt, 안 부르는데, agent contract command blocks do not swallow failures, 계약 문서의 명령 블록이 실패를 흘린다, 파이프가 의 rc 를 가린다, ABORT 를 적고 0 아닌 rc 로 안 끝난다, check-prompt-fail-silently
+keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, merge ref, rerun, cancelled, cancel-in-progress, expected, Dismiss stale approval, Release reflect:done on a new round, Count review rounds by head OID, head-oid, head OID, rounds=, round-def, statusCheckRollup, auto-merge, 체크 0개, PR Body Contract, CLAUDE.md import intact, memory/ doc size cap, check-memory-doc-size, lines >, chars >, test binaries called or allowlisted, check-ci-test-calls, ci-uncalled-tests.txt, 안 부르는데, 검사 불성립, 집계:, 다 훑지 못했다, agent contract command blocks do not swallow failures, 계약 문서의 명령 블록이 실패를 흘린다, 파이프가 의 rc 를 가린다, ABORT 를 적고 0 아닌 rc 로 안 끝난다, check-prompt-fail-silently
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -84,8 +84,11 @@ red 면 그 줄과 파일이 그대로인지(들여쓰기·트레일링 CR 도 r
 `src-tauri test binaries called or allowlisted` (#2113) 는 workflow 의 `--test`
 밖에 있는 통합 테스트 target 을 `ci-uncalled-tests.txt` 와 대조한다 — red 면
 `FAIL <이름>: …` 줄 뒤에 `집계: … (스캔 루트: …)` 를 찍어 그 실행이 무엇을
-스캔했는지 같이 보여 준다. 스캔 루트는 `src-tauri` 아래 manifest 옆 `tests/`
-전부이고(#2336), fix 는 그 테스트를 부르거나 사유를 적는 것이다.
+스캔했는지 같이 보여 준다. **여기서 red 는 rc 1(위반)과 rc 2(검사 불성립) 둘 다고
+양쪽이 같은 모양을 낸다** — rc 2 가 아무 줄도 안 찍던 자리를 #2347 이 닫았고, 그
+경우 이름 자리는 `검사 불성립` 고정이다. 스캔 루트는 `src-tauri` 아래 manifest 옆
+`tests/` 전부이고(#2336), fix 는 rc 1 이면 그 테스트를 부르거나 사유를 적는 것이고
+rc 2 면 그 `FAIL 검사 불성립:` 줄이 지목하는 경로다.
 `no review-round narrative in source comments` (#2114) 는 `src/` · `src-tauri/` ·
 `e2e/` 주석의 리뷰 라운드 표기를, `(non-blocking) job names carry
 continue-on-error` (#2174) 는 그 접미사를 단 job 의 `continue-on-error: true`
