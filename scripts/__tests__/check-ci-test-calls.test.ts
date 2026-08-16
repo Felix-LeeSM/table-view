@@ -271,8 +271,6 @@ describe("check-ci-test-calls", () => {
     expect(run.status).toBe(0);
   });
 
-  // 전수는 이름의 집합이다 (스크립트 헤더 「전수」). 호출도 이름으로만 세므로 두
-  // 루트에 같은 이름이 있을 때 두 번 세면 집계와 FAIL 줄이 같은 이름을 두 벌 낸다.
   it("counts a target name shared by two roots once", () => {
     const root = seed({
       tests: { ...CALLED, "shared_probe.rs": "fn main() {}\n" },
