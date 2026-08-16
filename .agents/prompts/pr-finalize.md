@@ -195,7 +195,8 @@ printf '%s\n' "$MSGS" | LC_ALL=C tr -s '[:space:]' ' ' \
 「연속 공백이 안 낀」은 hit 의 필요조건이고 충분조건이 아니다.
 
 **hit 0 은 「커밋 메시지에 없다」의 증명이 아니다.** 위 `ABORT` 가 조회 실패를 걷어낸
-뒤에도, 정규화가 어긋난 조각은 똑같이 0 을 낸다. 0 이면 교정 대상에서 빼기 전에 위 원문
+뒤에도, `--jq` 필드명 오타와 정규화가 어긋난 조각은 똑같이 0 을 낸다 — 오타 쪽은 `gh` 가
+rc 0 · 빈 값을 내므로 `ABORT` 를 안 지난다. 0 이면 교정 대상에서 빼기 전에 위 원문
 덤프를 육안으로 훑는다 — 0 을 잘못 믿는 값이 한쪽으로만 크기 때문이다 (같은 방).
 
 **그 값은 hit 여부가 아니라 자리 수다 — N 이면 커밋 메시지 N 곳에 있고 N 곳을 다
@@ -227,10 +228,14 @@ gh pr merge <N> --squash --delete-branch \
 # REST 로 읽는다 — 종결자는 회수 대상 사본 밖에 서 있어(「MANDATORY 첫 명령」) 그 머지
 # 커밋을 가진 체크아웃이 손에 있다는 보장이 없다.
 # 첫 줄은 `--jq` 안에서 자른다 — 첫 줄 자르는 필터에 파이프로 물리면 그 필터의 rc 가
-# 덮어써서 조회 실패가 rc 0 으로 지나가고, `gh` 는 오류 본문을 stdout 에 쓰므로 그
-# JSON 이 착지 제목 행세를 한다 (빈 값 검사로도 안 걸린다)
-gh api repos/Felix-LeeSM/table-view/commits/<머지 SHA> \
-  --jq '.commit.message | split("\n")[0]'
+# 덮어써서 조회 실패가 rc 0 으로 지나간다. rc 만 갈라 놔서는 부족하다: `gh` 는 오류
+# 본문을 stdout 에 쓰므로 그 JSON 이 착지 제목 행세를 하고(빈 값 검사로도 안 걸린다),
+# rc 를 안 보는 노드는 그것을 반환 형식에 그대로 싣는다. 위 두 자리와 같은 형태로
+# 변수에 받고 가드해 stdout 에서 치운다
+LANDED="$(gh api repos/Felix-LeeSM/table-view/commits/<머지 SHA> \
+            --jq '.commit.message | split("\n")[0]')" \
+  || { echo "ABORT: 머지 커밋을 못 읽어 착지 제목을 못 싣는다" >&2; exit 1; }
+printf '%s\n' "$LANDED"
 ```
 
 `--squash` 는 `memory/workflow/delivery/memory.md` 「자율 실행 vs 중단」이 정한

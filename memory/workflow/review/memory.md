@@ -75,9 +75,10 @@ trigger:
   메시지를 이어붙인 것이다. 그래서 교정 자리를 종결자에게 넘길 때는 그 문구가
   커밋 메시지에 있는지 먼저 대조한다:
 
-  ```
-  gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
-    --jq '.[].commit.message' | LC_ALL=C tr -s '[:space:]' ' ' \
+  ```bash
+  MSGS="$(gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
+            --jq '.[].commit.message')" || { echo "ABORT: 커밋 메시지 조회 실패" >&2; exit 1; }
+  printf '%s\n' "$MSGS" | LC_ALL=C tr -s '[:space:]' ' ' \
     | grep -o -F '<문구>' | wc -l
   ```
 
@@ -97,12 +98,12 @@ trigger:
   (`.agents/prompts/pr-finalize.md` 「3단계」) 기전은 이 방이 갖는다.
 
   hit 이면 저자가 못 고치는 자리라(force-push 가 hard block) 종결자 몫이다.
-  **hit 0 은 「PR body 에만 있다」의 증명이 아니다** — 인증 실패도 `--jq` 오타도
-  문구 쪽 오타도 똑같이 0 이다. 0 이면 문구를 줄여 다시 재고, 그래도 0 이면 저자
-  쪽으로 적되 scorecard 에서 지우지는 않는다. 종결자가 그 목록을 다시 훑기
-  때문이고(`.agents/prompts/pr-finalize.md` 「3단계」), 오판 값이 한쪽으로만 크기
-  때문이다 — hit 을 잘못 믿으면 종결자가 한 번 더 볼 뿐이지만 0 을 잘못 믿으면
-  못 고치는 자리가 못 고치는 노드에게 간다.
+  **hit 0 은 「PR body 에만 있다」의 증명이 아니다** — 위 `ABORT` 가 조회 실패를
+  걷어낸 뒤에도 `--jq` 필드명 오타와 문구 쪽 오타는 0 이다. 0 이면 문구를 줄여 다시
+  재고, 그래도 0 이면 저자 쪽으로 적되 scorecard 에서 지우지는 않는다. 종결자가 그
+  목록을 다시 훑기 때문이고(`.agents/prompts/pr-finalize.md` 「3단계」), 오판 값이
+  한쪽으로만 크기 때문이다 — hit 을 잘못 믿으면 종결자가 한 번 더 볼 뿐이지만 0 을
+  잘못 믿으면 못 고치는 자리가 못 고치는 노드에게 간다.
   **`gh pr view --json commits` 로 되돌리지 마라** — 거기 `messageHeadline` 은
   69자에서 낱말 한가운데를 `…` 로 자르고, `commits(first: 100)` 이라 101번째부터
   조용히 빠진다. `tr` 은 하드랩된 산문이 줄 단위 `grep` 을 빠져나가는 것을 막는다.

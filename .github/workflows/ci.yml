@@ -199,7 +199,7 @@ jobs:
       # check blocking on the day it merges
       # (memory/runbook/pr-merge-gates/memory.md).
       #
-      # `.agents/prompts/` is the contract every node reads as its first action,
+      # `.agents/` and `memory/` are the contracts a node reads before it acts,
       # and nodes run the commands written there verbatim. A block that lets a
       # failure through hands the node an empty string or an error body to
       # compare against, and the node reports «clean» — `gh` writes its error
@@ -207,9 +207,15 @@ jobs:
       # took this shape three rounds running and each round fixed only the line
       # that was quoted, so the shape survived; the sweep command the issue
       # pinned (`git grep -nE '\| *head -1|\| *head -n|\| *tail -1' --
-      # .agents/prompts/`) saw one of the four sites this gate finds, because it
-      # matches a literal rather than the form. A sweep without the gate in the
-      # same PR does not hold. What counts as a violation is decided by
+      # .agents/prompts/`) matched one line at base `6adba884` where this gate
+      # reports four, because it matches a literal rather than the form. A sweep
+      # without the gate in the same PR does not hold. Both scanned trees are
+      # in scope because the same command is duplicated per role — the
+      # finalizer's copy in `.agents/prompts/pr-finalize.md` and the reviewer's
+      # in `memory/workflow/review/memory.md` — so a gate on one tree watches
+      # half of it. `docs/` stays out: measured on 2026-08-16 it reports 36
+      # sites, nearly all single-quoted jq bodies spanning physical lines.
+      # What counts as a violation is decided by
       # `scripts/check-prompt-fail-silently.sh` alone; its header states the
       # rule, the printf/echo allowlist and why quoting a forbidden form in a
       # comment also fails. The script needs no toolchain — awk and the shell —
@@ -217,7 +223,7 @@ jobs:
       # here for the reason the step above gives: none of the figures in this
       # job record the machine, load, or warm/cold state that would make two
       # runs comparable.
-      - name: prompt command blocks do not swallow failures
+      - name: agent contract command blocks do not swallow failures
         run: bash scripts/check-prompt-fail-silently.sh
 
       # The second step that reads the PR body (#2228). It sits at the bottom
@@ -251,8 +257,8 @@ jobs:
           fi
           printf '%s\n' "$BODY" | bash scripts/check-pr-body-universals.sh
 
-      # The third step that reads the PR body (#2321), and the seventh contract
-      # riding this job for the reason the second through sixth do: a required
+      # The third step that reads the PR body (#2321), and the eighth contract
+      # riding this job for the reason the second through seventh do: a required
       # context cannot be registered by the PR that adds it, so riding one that
       # is already required is what makes a new check blocking on the day it
       # merges (memory/runbook/pr-merge-gates/memory.md). It sits beside the

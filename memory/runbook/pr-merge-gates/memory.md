@@ -3,7 +3,7 @@ title: PR merge 게이트 — required context 계약
 type: runbook
 updated: 2026-08-06
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
-keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, merge ref, rerun, cancelled, cancel-in-progress, expected, Dismiss stale approval, Release reflect:done on a new round, Count review rounds by head OID, head-oid, head OID, rounds=, round-def, statusCheckRollup, auto-merge, 체크 0개, PR Body Contract, CLAUDE.md import intact, memory/ doc size cap, check-memory-doc-size, lines >, chars >, test binaries called or allowlisted, check-ci-test-calls, ci-uncalled-tests.txt, 안 부르는데
+keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, merge ref, rerun, cancelled, cancel-in-progress, expected, Dismiss stale approval, Release reflect:done on a new round, Count review rounds by head OID, head-oid, head OID, rounds=, round-def, statusCheckRollup, auto-merge, 체크 0개, PR Body Contract, CLAUDE.md import intact, memory/ doc size cap, check-memory-doc-size, lines >, chars >, test binaries called or allowlisted, check-ci-test-calls, ci-uncalled-tests.txt, 안 부르는데, agent contract command blocks do not swallow failures, 계약 문서의 명령 블록이 실패를 흘린다, 파이프가 의 rc 를 가린다, ABORT 를 적고 0 아닌 rc 로 안 끝난다, check-prompt-fail-silently
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -89,7 +89,13 @@ red 면 그 줄과 파일이 그대로인지(들여쓰기·트레일링 CR 도 r
 `no review-round narrative in source comments` (#2114) 는 `src/` · `src-tauri/` ·
 `e2e/` 주석의 리뷰 라운드 표기를, `(non-blocking) job names carry
 continue-on-error` (#2174) 는 그 접미사를 단 job 의 `continue-on-error: true`
-누락을 본다. 이 스텝들은 body 경로 검사 뒤라 그것이 red 면 뒤가 skip 된다 —
+누락을 본다.
+`agent contract command blocks do not swallow failures` (#2403) 는 `.agents/` 와
+`memory/` 의 bash 펜스에서 왼쪽 명령의 rc 를 버리는 파이프와 `ABORT` 를 적고 0 아닌
+rc 로 안 끝나는 줄을 본다 — red 면 자리마다 `파이프가 ... 의 rc 를 가린다` 를 찍고
+`계약 문서의 명령 블록이 실패를 흘린다` 로 닫는다. 판정 정의와 allowlist 는
+`scripts/check-prompt-fail-silently.sh` 헤더가 갖는다.
+이 스텝들은 body 경로 검사 뒤라 그것이 red 면 뒤가 skip 된다 —
 지금 도는 스텝 목록은 `.github/workflows/ci.yml` 의 `pr-body` job 이 SOT 다.
 
 ## 계약 — 어기면 열린 PR 전부가 막힌다
