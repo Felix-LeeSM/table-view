@@ -1,7 +1,7 @@
 ---
 title: Orchestration — 병렬 작업 spawn · 리뷰 큐 · 사이클 정지
 type: workflow-rule
-updated: 2026-08-14
+updated: 2026-08-16
 task: orchestration, parallel-pr, spawn, review-queue, cycle-detection, issue-authoring
 keywords: spawn, slot, slot 상한, 동시 활성, 병렬, 파일 교집합, 리뷰 큐, 수용 기준, 접수 조건, 사이클, needs:user, 이슈 발행, 유형 단위, raw, task, 보고 검증, 도달 검증, 세션 스냅샷, 묶음 이슈, 해악별 값, 겸무, 정지 조건, 사용자 산문, 고정부 첨부, origin/main 판, 머지 칸, 대기 칸, 머지 보고, 종결자 반환, 위임 모드, non-blocking 스윕, gh pr list --state merged
 trigger:
@@ -72,7 +72,10 @@ script 도 대체물도 없다.
 
 판정 주체는 회고 모드 리뷰어다 — 라운드 3부터는 개별 지적이 아니라 같은
 유형의 반복을 본다. 저자도 orchestrator 도 여기서 판정하지 않는다.
-트리거는 라운드 k+1 의 blocking 집합이 라운드 k 의 진부분집합이 아닐 때다.
+트리거는 둘 중 하나다 — **라운드 k 에 없던 blocking 이 k+1 에 생겼거나**,
+**k+1 에도 blocking 이 있는데 k 의 것이 하나도 안 없어졌을 때.** 둘 다
+blocking 0 인 재리뷰는 어느 쪽도 안 걸려 트리거가 아니다 — 집합 낱말로 쓰면
+여기가 뒤집힌다 (공집합은 자기 자신의 진부분집합이 아니다 — PR #2405 라운드 3).
 
 1. 해당 PR 리뷰 중단.
 2. 파일 교집합이 있는 in-flight PR 을 리뷰 큐에서 함께 정지 (작업은 그대로).
