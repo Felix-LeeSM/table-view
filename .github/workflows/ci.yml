@@ -213,10 +213,10 @@ jobs:
       # in scope because the same command is duplicated per role — the
       # finalizer's copy in `.agents/prompts/pr-finalize.md` and the reviewer's
       # in `memory/workflow/review/memory.md` — so a gate on one tree watches
-      # half of it. That duplication is also why the gate grew a third rule in
-      # #2409: the two copies had already drifted apart three times in a day,
-      # and one drift left the reviewer's copy matching a normalized stream with
-      # an unnormalized needle, so a phrase that was present counted 0 and the
+      # half of it. That duplication is also why #2409 added the needle rule:
+      # `04e64f3ee` (#2264) put `NEEDLE=` in the finalizer's copy alone, which
+      # left the reviewer's copy matching a normalized stream with an
+      # unnormalized needle, so a phrase that was present counted 0 and the
       # falsehood rode into main history. `docs/` stays out: measured on
       # 2026-08-16 it reports 36 sites, most of them the search recipes in
       # `docs/README.md`.
