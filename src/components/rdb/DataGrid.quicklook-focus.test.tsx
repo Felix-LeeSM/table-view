@@ -2,9 +2,8 @@
 //
 // The grid publishes a single tab stop (roving tabindex), so Tab reaches the
 // panel only by walking its controls and re-enters the grid at that one tab
-// stop rather than at the cell the user left. `F6` is the direct walk in both
-// directions, and the panel disappearing must not leave focus on `<body>`,
-// where the next arrow key goes nowhere.
+// stop. `F6` is the direct walk in both directions, and the panel disappearing
+// must not leave focus on `<body>`, where the next arrow key goes nowhere.
 //
 // An earlier fix held that second half by calling a restore from each close
 // handler, and what broke it was the paths that reach no handler at all: a
@@ -17,10 +16,8 @@
 //
 // The refetch half was narrowed in two steps and is now closed. #2133 clamped
 // a merely out-of-range selection onto the last surviving row; #2384 gave the
-// zero-row page an empty state inside a mounted panel. Its case moved out of
-// the "paths that remove the panel without a close handler" block and into the
-// `#2384` block, leaving a successful commit as the handler-less removal that
-// block still pins.
+// zero-row page an empty state inside a mounted panel. A successful commit is
+// the handler-less removal the block below still pins.
 //
 // Also pins the owner's stated default from the 2026-08-02 decision comment:
 // moving the row selection while the panel is open re-syncs the detail body.
@@ -401,11 +398,11 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
   // commit, which does not know Quick Look exists.
   //
   // #1734 (5) listed a refetch alongside the commit, and both later fixes moved
-  // the refetch out of this block rather than deleting the case: #2133 clamps a
-  // shrunken page onto its last row (the shrink block below pins that) and
-  // #2384 gives the zero-row page an empty state (the `#2384` block below).
-  // A successful commit is what is left here.
-  describe("paths that remove the panel without a close handler", () => {
+  // the refetch out of this block: #2133 clamps a shrunken page onto its last
+  // row (the shrink block below pins that) and #2384 gives the zero-row page an
+  // empty state (the `#2384` block below). A successful commit is what is left
+  // here.
+  describe("removing the panel without a close handler", () => {
     /** Grid-cell edit on the selected row, so a commit has something to write. */
     async function makePendingEdit() {
       const nameCell = document.querySelector<HTMLElement>(
@@ -424,8 +421,8 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
     }
 
     // Reason: commit success runs `clearPendingAfterCommit` →`clearSelection`,
-    // and the panel's mount gate is `selectedRowIds.size > 0`. No close handler
-    // is involved, so a handler-driven restore simply never ran here.
+    // and the panel's mount gate includes `selectedRowIds.size > 0`. No close
+    // handler is involved, so a handler-driven restore simply never ran here.
     it("a successful commit empties the selection and the panel it unmounts hands focus back", async () => {
       renderDataGrid();
       await screen.findByText("3 rows");

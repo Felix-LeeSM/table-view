@@ -105,6 +105,21 @@ smoke or measurement gates:
   does not consume the event, so the collision fires from inside a panel field
   editor too — those do not stop propagation either. The document grid has no
   Escape discard gate at all, so it does not have the collision.
+- Tab cannot always get back into the RDB grid. The grid keeps a single tab
+  stop and it is the cell that last held focus: `cellTabIndex`
+  (`src/components/datagrid/useGridRoving.ts:79-83`) gives `tabIndex=0` to the
+  roving anchor alone, `src/components/datagrid/DataGridTable.tsx:578` hands a
+  non-null `tabCol` only to the anchor's row, and moving focus into the Quick
+  Look panel does not move the anchor because the panel renders no
+  `[data-grid-row]` for `syncFocus` to fire from. Past the virtualization
+  threshold (`src/components/datagrid/DataGridTable/columnUtils.ts:19` — 200
+  rows, under the default page size 300 in `src/lib/gridPolicy.ts:5`) the grid
+  renders only the virtual window
+  (`src/components/datagrid/DataGridTable.tsx:641`), so while the anchor row is
+  scrolled out no cell carries `tabIndex=0` at all and Tab walks past the whole
+  grid body. `F6` and Escape are unaffected — they route through
+  `useGridRoving.focusAnchorCell`, which scrolls the anchor row back in first.
+  The document grid does not virtualize its rows, so it does not have this gap.
 - Quick Look grows its long-value editors to fit their content with the CSS
   `field-sizing` property, which needs Chromium 123+ or WebKit 26+. On an older
   engine those editors fall back to their fixed `rows` height and scroll, as
