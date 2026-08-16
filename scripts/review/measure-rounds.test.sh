@@ -30,6 +30,9 @@ FIXTURE="$ROOT/scripts/review/fixtures/measure-rounds-2026-07-24_27.json"
 # 것은 그 단계의 RED 를 손으로 재현하기 위해서다 (MEASURE_ROUNDS_SCRIPT 와 같은
 # 이유). 기본값은 저장소의 진짜 파일이다.
 GATE_WORKFLOW="${MEASURE_ROUNDS_GATE_WORKFLOW:-$ROOT/.github/workflows/review-gate.yml}"
+# #2330 이 파이프를 뗀 자리 중 하나가 이 워크플로의 인라인 스텝이다. 아래
+# "ci.yml 인라인의 파이프 축" 단계가 읽고, env 로 갈아끼우는 이유는 위와 같다.
+CI_WORKFLOW="${MEASURE_ROUNDS_CI_WORKFLOW:-$ROOT/.github/workflows/ci.yml}"
 
 if [ ! -f "$SCRIPT" ]; then
 	echo "FAIL: 대상 스크립트가 없다: $SCRIPT" >&2
@@ -492,48 +495,96 @@ OUT="$(bash "$SCRIPT" --since 2026-07-25 --wat 2>&1)"
 RC=$?
 assert_rc 2 "모르는 인자"
 
-# ── 여러 줄 인자 (#2330) ─────────────────────────────────────────────────
-# measure-rounds.sh 의 is_date() · is_uint() 가 파이프를 안 쓴다는 것의 회귀 가드.
-# 옛 형태 `printf '%s' "$X" | grep -qE '^…$'` 는 grep 이 줄 단위라 첫 줄만 맞으면
-# 통과시켰다 — 판정을 파이프에 실은 것의 부산물이다. origin/main 6a41dc07 에서 아래
-# 셋의 rc 는 각각 0 · 0 · 1 이었다 (`--limit` 은 bash 가 `[: integer expression
-# expected` 를 찍고 그대로 진행, `--top` 은 jq 가 --argjson 파싱에서 죽음).
+# ── 인자 판정의 회귀 가드 — 자리 × 축 (#2356) ────────────────────────────
+# #2330 이 파이프를 뗀 뒤 어느 자리에 어느 축이 걸렸는지가 손으로 갈렸다: 개행 축은
+# `--since` · `--limit` · `--top` 에만, 로케일 축은 `--limit` 하나에만, `--until` 은
+# 둘 다 없고, `is_date` 는 mutation 등록이 없었다. 자리를 손으로 들고 있으면 다음
+# 자리가 또 빈다 — 그래서 **자리를 소스에서 뽑고 축은 자리마다 같은 것을 건다.**
+# 아래 완전성 단언이 표와 소스가 어긋나는 순간 red 라, 판정자를 더하면서 가드를
+# 빼먹을 자리가 없다.
 #
-# **여기 payload 는 일부러 작다.** 위 "assertion helpers" 절들과 다르다 — 이 판정은
-# 뒤집힘이 성립하려면 첫 줄이 맞고 뒤가 더 있어야 하는데, 그 입력의 올바른 답이 이미
-# 「거절」이라 옛 형태가 EPIPE 로 거절하든 새 형태가 문자열 전체를 보고 거절하든
-# 답이 같다. 이 사본에서 첫 줄 '5' + 숫자 327682 자로 5회 돌려 옛 REJECT · 새
-# REJECT 였다 (판별력 0). 같은 입력을 11 자로 줄이면 옛 ACCEPT · 새 REJECT 다.
-OUT="$(bash "$SCRIPT" --from-json "$FIXTURE" --since "$(printf '2026-07-25\ngarbage')" 2>&1)"
-RC=$?
-assert_rc 2 "--since 가 여러 줄이면 첫 줄만 맞아도 거절한다"
-OUT="$(bash "$SCRIPT" --from-json "$FIXTURE" --since 2026-07-25 --until 2026-07-26 --limit "$(printf '5\ngarbage')" 2>&1)"
-RC=$?
-assert_rc 2 "--limit 이 여러 줄이면 첫 줄만 맞아도 거절한다"
-OUT="$(bash "$SCRIPT" --from-json "$FIXTURE" --since 2026-07-25 --until 2026-07-26 --top "$(printf '5\ngarbage')" 2>&1)"
-RC=$?
-assert_rc 2 "--top 이 여러 줄이면 첫 줄만 맞아도 거절한다"
+# 축 셋. 앞의 둘은 행동으로, 파이프 축은 형태로 잡는다:
+#   개행   — 여러 줄 인자는 첫 줄만 맞아도 거절한다. 옛 형태 `printf … | grep -qE`
+#            는 grep 이 줄 단위라 통과시켰다. **payload 는 일부러 작다** — 뒤집힘이
+#            성립하려면 첫 줄이 맞고 뒤가 더 있어야 하는데, 큰 입력의 올바른 답이
+#            이미 「거절」이라 판별력이 0 이 된다 (실측은 아래 harness 문서)
+#   로케일 — `case` 브래킷 범위로 옮기면 `[0-9]` 의 집합을 로케일이 정한다.
+#            **로케일 이름을 박지 않는다** — 러너의 `locale -a` 에서 실제로 갈리는
+#            첫 하나를 골라 그 이름을 단언 label 에 찍는다. 하나도 없으면 통과가
+#            아니라 red 다. 판별력은 아래 mutation `is-*-case-range` 다
+#   파이프 — 판정을 파이프라인 status 에 싣지 않는다. **자리가 하나다** — 판정자는
+#            전부 matches_ere 를 지나므로(완전성 단언이 그것을 소스에서 센다) 그
+#            함수 하나에 걸면 어떤 판정자도 이 축을 못 만든다
+#
+# 전수 열거 명령 · 크기 실측 · 로케일 실측은
+# docs/contributor-guide/testing-and-quality.md 「Shell Suite Harness Quality」에 있다.
+echo "arg validator axes (#2356):"
 
-# ── 인자 판정의 로케일 축 (#2330) ────────────────────────────────────────
-# is_date() · is_uint() 가 셸 `case` 의 브래킷 **범위**로 숫자를 판정하지 않는다는
-# 회귀 가드. `[0-9]` 는 문자 클래스가 아니라 collation 범위라 그 집합을 로케일이
-# 정한다 — `case '٣' in [0-9])` 는 참인데 `grep -E '^[0-9]+$'` 는 거짓인 로케일이
-# 있고, 거기서는 파이프를 떼면서 `case` 로 옮긴 순간 옛 형태가 거절하던 값이
-# 통과한다. 그러니 판정을 그런 로케일에 걸어야 이 축이 실제로 지켜진다.
-#
-# **로케일 이름을 박지 않는다.** 어느 이름이 생성돼 있는지는 러너마다 다르고, 박아
-# 두면 「그 이름이 이 러너에 있나」를 이 스위트가 스스로 못 닫는다. 러너의
-# `locale -a` 를 돌며 실제로 갈리는 첫 하나를 골라 쓰고, 고른 이름은 단언 label 에
-# 찍는다. 하나도 없으면 이 축의 가드가 무력하다는 뜻이라 red 다 — 조용히 통과시키면
-# 가드가 사라진 것을 아무도 모른다.
-#
-# 비용은 로케일당 bash 하나이고 갈리는 것을 만나면 거기서 멈춘다. 전수 열거 명령과
-# 개발 머신 실측은 docs/contributor-guide/testing-and-quality.md 의
-# 「Shell Suite Harness Quality」에 있다.
-#
-# 이 절의 판별력은 아래 mutation "is-uint-case-range" 다 — is_uint() 를 옛 `case`
-# 형태로 되돌리면 이 스위트에서 red 가 되는 것은 이 절뿐이다.
-echo "arg validator locale axis (#2330):"
+# 소스에서 (플래그, 판정자) 짝을 뽑는다. 인자 파서의 `--flag)` + `VAR="${2:-}"` 와
+# 검사부의 `! is_x "$VAR"` 를 변수 이름으로 잇는다.
+source_validated_pairs() {
+	awk '
+	/^\t--[a-z-]+\)$/ { f = substr($0, 2, length($0) - 2); next }
+	f != "" && /^\t\t[A-Z_]+="\$\{2:-\}"$/ {
+		v = $0; sub(/^\t\t/, "", v); sub(/=.*$/, "", v); flagof[v] = f; f = ""; next
+	}
+	f != "" && /^\t\t/ { f = "" }
+	/! is_[a-z]+ "\$[A-Z_]+"/ {
+		s = $0
+		while (match(s, /! is_[a-z]+ "\$[A-Z_]+"/)) {
+			t = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+			fn = t; sub(/^! /, "", fn); sub(/ .*$/, "", fn)
+			vr = t; sub(/^.*"\$/, "", vr); sub(/"$/, "", vr)
+			seen[vr] = fn
+		}
+	}
+	END { for (v in seen) if (flagof[v] != "") print flagof[v] " " seen[v] }
+	' "$SCRIPT"
+}
+
+# 판정자의 `matches_ere` 호출 줄. 아래 mutation 이 이 줄을 통째로 옛 `case` 형태로
+# 바꾼다 — 리터럴을 손으로 옮겨 적으면 패턴이 바뀌는 날 그 사본만 낡는다.
+validator_ere_line() {
+	awk -v n="$1" '$0 == n "() {" { f = 1; next }
+	               f && /^\}$/ { exit }
+	               f && /matches_ere/ { print; exit }' "$SCRIPT"
+}
+
+# 판정자 한 줄 = 자리 한 묶음. 탭 구분 필드는 판정자 · 그 판정자가 검사하는 플래그 ·
+# 정상값 · 비-ASCII 십진 표기 · 옛 `case` 브래킷 범위 형태(mutation 이 쓴다).
+# 이 표를 `VAR="$(cat <<'ROWS' … )"` 로 접지 않는다 — bash 3.2 의 `$( )` 파서가
+# 따옴표 친 here-doc 안의 `)` 를 세어 `case` 패턴의 닫는 괄호에서 치환을 끝낸다
+# (이 사본에서 `[0-9])` 가 `[0-9]` 로 잘려 나왔다).
+axis_rows() {
+	cat <<'ROWS'
+is_date	--since --until	2026-07-25	٢٠٢٦-٠٧-٢٥	case "$1" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) return 0 ;; *) return 1 ;; esac
+is_uint	--limit --top	5	٣	case "$1" in '' | *[!0-9]*) return 1 ;; *) return 0 ;; esac
+ROWS
+}
+
+axis_table_pairs() {
+	local fn flags valid alt form flag
+	while IFS=$'\t' read -r fn flags valid alt form; do
+		[ -n "$fn" ] || continue
+		for flag in $flags; do printf '%s %s\n' "$flag" "$fn"; done
+	done <<EOF
+$(axis_rows)
+EOF
+}
+
+# 표가 소스를 덮는가. 어긋나면 새 판정자가 가드 없이 들어왔거나 표가 없는 자리를
+# 가리키는 것이고, 둘 다 이 스위트가 무엇을 지키는지가 거짓이 된 상태다.
+SOURCE_PAIRS="$(sort <<<"$(source_validated_pairs)")"
+TABLE_PAIRS="$(sort <<<"$(axis_table_pairs)")"
+if [ -n "$SOURCE_PAIRS" ] && [ "$SOURCE_PAIRS" = "$TABLE_PAIRS" ]; then
+	pass "축 표가 소스의 (플래그, 판정자) 짝을 정확히 덮는다"
+else
+	fail "축 표와 소스의 (플래그, 판정자) 짝이 다르다" \
+		"소스:
+$SOURCE_PAIRS
+표:
+$TABLE_PAIRS"
+fi
 
 # 두 형태가 갈리는 로케일이면 0. 없는 이름이면 setlocale 이 실패해 C 로 남고 두
 # 형태 다 거절해서 1 이라, 이름이 생성돼 있는지를 따로 확인할 필요가 없다.
@@ -550,14 +601,143 @@ for L in $(locale -a 2>/dev/null); do
 done
 
 if [ -z "$SPLIT_LOCALE" ]; then
-	fail "두 형태가 갈리는 로케일이 이 러너에 없다 — 이 축의 회귀 가드가 무력하다" \
+	fail "두 형태가 갈리는 로케일이 이 러너에 없다 — 로케일 축의 회귀 가드가 무력하다" \
 		"locale -a 어디에서도 case '٣' in [0-9]) 가 참이면서 grep -qE '^[0-9]+\$' 가 거짓이 되지 않았다."
-else
-	OUT="$(LC_ALL="$SPLIT_LOCALE" bash "$SCRIPT" --from-json "$FIXTURE" \
-		--since 2026-07-25 --until 2026-07-26 --limit '٣' 2>&1)"
-	RC=$?
-	assert_rc 2 "--limit 이 비-ASCII 십진 숫자면 거절한다 (LC_ALL=$SPLIT_LOCALE — 이 러너에서 갈리는 로케일)"
 fi
+
+# 정상 인자를 먼저 깔고 검사할 플래그를 마지막에 다시 준다 — 파서가 덮어쓰므로
+# 자리마다 동반 인자를 따로 들 필요가 없다. 판정은 파싱이 다 끝난 뒤에 돈다.
+while IFS=$'\t' read -r AX_FN AX_FLAGS AX_VALID AX_ALT AX_FORM; do
+	[ -n "$AX_FN" ] || continue
+	for AX_FLAG in $AX_FLAGS; do
+		OUT="$(bash "$SCRIPT" --from-json "$FIXTURE" --since 2026-07-25 --until 2026-07-26 \
+			"$AX_FLAG" "$(printf '%s\ngarbage' "$AX_VALID")" 2>&1)"
+		RC=$?
+		assert_rc 2 "$AX_FLAG 가 여러 줄이면 첫 줄만 맞아도 거절한다 ($AX_FN)"
+
+		if [ -n "$SPLIT_LOCALE" ]; then
+			OUT="$(LC_ALL="$SPLIT_LOCALE" bash "$SCRIPT" --from-json "$FIXTURE" \
+				--since 2026-07-25 --until 2026-07-26 "$AX_FLAG" "$AX_ALT" 2>&1)"
+			RC=$?
+			assert_rc 2 "$AX_FLAG 가 비-ASCII 십진 숫자면 거절한다 ($AX_FN, LC_ALL=$SPLIT_LOCALE)"
+		fi
+	done
+done <<EOF
+$(axis_rows)
+EOF
+
+# 파이프 축. 이 자리는 행동으로 못 잡는다 — 두 형태가 갈리려면 `grep -q` 가 입력을
+# 다 읽기 전에 빠져야 하는데, 패턴이 `^…$` 앵커라 줄 끝까지 읽어야 하고 여러 줄은
+# 개행 `case` 가 grep 앞에서 거절한다. 그래서 EPIPE 가 설 자리가 없다: 파이프만
+# 되돌린 변조본은 이 스위트를 단언 줄까지 baseline 과 똑같이 통과했다.
+# **두 형태의 답을 같게 만드는 것은 앵커가 아니라 그 개행 `case` 가드다** — 앵커만
+# 믿고 가드를 지우면 파이프 축이 되살아난다. 그 사유는 산문이 아니라 아래 mutation
+# `matches-ere-newline-guard` 가 잡는다.
+# 천장: 판정은 그 줄에 `|` 가 있나까지이고 따옴표를 안 가린다. 지금 ERE 는 `"$2"` 로
+# 오지만, 리터럴 ERE 를 그 줄에 인라인하면서 `|` 교대를 쓰면 오탐이다.
+matches_ere_grep_line() {
+	awk '$0 == "matches_ere() {" { f = 1; next }
+	     f && /^\}$/ { exit }
+	     f && /grep/ { print; exit }' "$SCRIPT"
+}
+
+MATCHES_ERE_GREP="$(matches_ere_grep_line)"
+if [ -z "$MATCHES_ERE_GREP" ]; then
+	fail "파이프 축: matches_ere() 의 grep 줄을 못 찾았다" \
+		"함수 이름이나 구조가 바뀌었다. 이 스위트의 matches_ere_grep_line() 을 같이 고쳐라."
+elif contains "$MATCHES_ERE_GREP" "|"; then
+	fail "파이프 축: matches_ere() 가 판정을 파이프라인 status 에 싣는다" \
+		"현재 줄: $MATCHES_ERE_GREP
+here-string 으로 먹여라 — pipefail 이 올릴 남의 status 가 애초에 없다."
+else
+	pass "파이프 축: matches_ere() 가 grep 을 파이프 없이 먹인다"
+fi
+
+# ── ci.yml 인라인의 파이프 축 (#2356) ────────────────────────────────────
+# #2330 이 닫은 다섯 자리 중 이 하나는 스크립트가 아니라 workflow 인라인이라 어느
+# 가드에도 안 들어가 있었다. 위 자리들과 달리 **행동으로 갈린다** — 스텝이
+# `set -euo pipefail` 을 스스로 걸고, `| head -1` 을 되돌리면 head 가 첫 줄에서
+# 빠져 cargo 가 EPIPE 를 맞고 그 status 가 스텝을 죽인다. 탐지(`testing` 이 있을 때
+# exit 1)는 두 형태가 같으니 판별력은 **거짓 red** 쪽에 있다: 첫 줄이 안전한 큰
+# 출력에서 지금 형태는 rc=0, `| head -1` 형태는 비영이다.
+#
+# RED 재현:
+#   d="$(mktemp -d)"; git archive HEAD | tar -x -C "$d"
+#   perl -0pi -e "s/\Q--format '{f}' --prefix none)\"\E/--format '{f}' --prefix none | head -1)\"/" \
+#     "$d/.github/workflows/ci.yml"
+#   MEASURE_ROUNDS_CI_WORKFLOW="$d/.github/workflows/ci.yml" \
+#     bash scripts/review/measure-rounds.test.sh
+release_graph_step() {
+	awk '/- name: Test-only data-dir override stays out of the release graph/{f=1}
+	     f && /^[[:space:]]*run:/{g=1; next}
+	     g && NF && substr($0, 1, 10) != "          " {exit}
+	     g' "$CI_WORKFLOW"
+}
+
+check_release_graph_step() {
+	# check_gate_signal() 과 같은 이유로 mutation 서브런에서는 끈다 — 대상이
+	# 스크립트가 아니라 저장소의 워크플로다.
+	[ "${MEASURE_ROUNDS_SKIP_GATE_CHECK:-0}" = "1" ] && return 0
+
+	echo "release-graph step pipe axis (#2356):"
+
+	if [ ! -f "$CI_WORKFLOW" ]; then
+		fail "release-graph: ci.yml 이 없다: $CI_WORKFLOW"
+		return
+	fi
+
+	local body mut dir pad
+	body="$(release_graph_step)"
+	if [ -z "$body" ]; then
+		fail "release-graph: 'Test-only data-dir override stays out of the release graph' 스텝의 run: 블록을 못 찾았다" \
+			"스텝 이름이나 워크플로 구조가 바뀌었다. 이 스위트의 release_graph_step() 을 같이 고쳐라."
+		return
+	fi
+
+	dir="$(mktemp -d "${TMPDIR:-/tmp}/release-graph.XXXXXX")"
+	# 가짜 cargo. 첫 줄은 안전한 feature 목록이고, 뒤에 파이프 버퍼의 두 배가 붙는다.
+	pad='filler-line-for-issue-2356'
+	while [ "${#pad}" -lt 200000 ]; do
+		pad="$pad
+$pad"
+	done
+	printf '%s\n' "$pad" >"$dir/pad.txt"
+	if [ "${#pad}" -ge 131072 ]; then
+		pass "release-graph: EPIPE 가드 payload 가 파이프 버퍼(64KiB)의 두 배를 넘는다 (${#pad}, ASCII)"
+	else
+		fail "release-graph: EPIPE 가드 payload 가 너무 작다: ${#pad}" \
+			"131072 를 못 넘으면 결정론 구간 밖이다 — 이 사본에서 2 줄짜리 출력은 두 형태 다 rc=0 이었다 (판별력 0)."
+	fi
+	cat >"$dir/cargo" <<'STUB'
+#!/usr/bin/env bash
+printf 'default\n'
+cat "$STUB_TREE_PAD"
+STUB
+	chmod +x "$dir/cargo"
+
+	PATH="$dir:$PATH" STUB_TREE_PAD="$dir/pad.txt" bash -c "$body" >/dev/null 2>&1
+	RC=$?
+	OUT=""
+	assert_rc 0 "release-graph: 큰 cargo 출력에서 스텝이 거짓 red 를 안 낸다"
+
+	mut="${body/"--prefix none)\""/"--prefix none | head -1)\""}"
+	if [ "$mut" = "$body" ]; then
+		fail "release-graph: '| head -1' 재도입 치환이 no-op 이다" \
+			"cargo tree 호출의 표기가 바뀌었다. 이 단언의 치환 리터럴을 같이 고쳐라."
+	else
+		PATH="$dir:$PATH" STUB_TREE_PAD="$dir/pad.txt" bash -c "$mut" >/dev/null 2>&1
+		local mrc=$?
+		if [ "$mrc" -ne 0 ]; then
+			pass "release-graph: '| head -1' 을 되돌리면 같은 입력이 비영으로 죽는다 (rc=$mrc)"
+		else
+			fail "release-graph: '| head -1' 재도입본이 rc=0 — 이 단언이 그 회귀를 못 잡는다" \
+				"payload ${#pad} 자로도 EPIPE 가 안 났다."
+		fi
+	fi
+
+	rm -rf "$dir"
+}
+check_release_graph_step
 
 # ── assertion helpers (#2314) ────────────────────────────────────────────
 # contains() 가 파이프를 안 쓴다는 것의 회귀 가드. 옛 형태로 되돌리면 여기가 red 다.
@@ -710,13 +890,33 @@ if [ "${MEASURE_ROUNDS_SKIP_MUTATION:-0}" != "1" ]; then
 	mutation_case "round-events-comment-source" \
 		'(.comments.nodes | map(.createdAt) | sort) as $ts' \
 		'(.commits.nodes | map(.commit.committedDate) | sort) as $ts'
-	# is_uint() 를 옛 셸 `case` 형태로 되돌린다. 이 변형을 잡는 것은 위 「인자 판정의
-	# 로케일 축」 절 하나이고, 그 절이 고른 로케일에서만 두 형태의 행동이 갈린다 —
-	# 여러 줄 인자는 양쪽 다 거절해서 「여러 줄 인자」 절은 이 변형을 못 가른다.
-	# 갈리는 로케일이 없는 러너에서는 그 절이 먼저 red 를 낸다.
-	mutation_case "is-uint-case-range" \
-		"	matches_ere \"\$1\" '^[0-9]+\$'" \
-		"	case \"\$1\" in '' | *[!0-9]*) return 1 ;; *) return 0 ;; esac"
+	# 판정자마다 옛 셸 `case` 브래킷 범위로 되돌린다 — 자리는 위 축 표에서 오고
+	# 대상 줄은 소스에서 뽑으므로 판정자를 더하면 이 변형도 같이 는다. 이 변형을
+	# 잡는 것은 위 로케일 축뿐이고 그 절이 고른 로케일에서만 두 형태가 갈린다 —
+	# 여러 줄 인자는 양쪽 다 거절해서 개행 축은 이 변형을 못 가른다. 갈리는
+	# 로케일이 없는 러너에서는 그 절이 먼저 red 를 낸다.
+	while IFS=$'\t' read -r MUT_FN MUT_FLAGS MUT_VALID MUT_ALT MUT_FORM; do
+		[ -n "$MUT_FN" ] || continue
+		MUT_OLD="$(validator_ere_line "$MUT_FN")"
+		if [ -z "$MUT_OLD" ]; then
+			fail "mutation[${MUT_FN//_/-}-case-range]: $MUT_FN() 의 matches_ere 줄을 소스에서 못 찾았다"
+			continue
+		fi
+		mutation_case "${MUT_FN//_/-}-case-range" "$MUT_OLD" "	$MUT_FORM"
+	done <<EOF
+$(axis_rows)
+EOF
+
+	# 파이프 재도입. 위 파이프 축 단언이 잡는다 — 행동으로는 안 갈리는 자리라
+	# 이 변형이 그 단언의 판별력이다.
+	mutation_case "matches-ere-pipe" \
+		"	grep -qE -- \"\$2\" <<<\"\$1\"" \
+		"	printf '%s' \"\$1\" | grep -qE -- \"\$2\""
+	# 개행 `case` 가드. 이것이 서 있는 동안만 here-string 과 파이프의 답이 같다 —
+	# 위 파이프 축 주석이 그 사유로 드는 문장을 여기서 실행으로 확인한다.
+	mutation_case "matches-ere-newline-guard" \
+		"	*\$'\n'*) return 1 ;;" \
+		"	*\$'\n'*) : ;;"
 fi
 
 echo ""

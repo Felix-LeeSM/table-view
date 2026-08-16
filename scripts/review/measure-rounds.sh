@@ -154,7 +154,8 @@ done
 # origin/main 6a41dc07 에서 `--limit '5<개행>garbage'` 는 rc=0 (bash 가 `[: integer
 # expression expected` 를 찍고 그대로 진행), `--since '2026-07-25<개행>garbage'` 는
 # rc=0 으로 집계까지 냈다. 회귀 가드는 scripts/review/measure-rounds.test.sh 의
-# 「여러 줄 인자 (#2330)」 · 「인자 판정의 로케일 축 (#2330)」 절이다.
+# 「인자 판정의 회귀 가드 — 자리 × 축 (#2356)」 절이다. 그 절은 자리를 이 파일의
+# 소스에서 뽑으므로 판정자를 더하면 개행 · 로케일 · 파이프 축이 같이 붙는다.
 matches_ere() {
 	case "$1" in
 	*$'\n'*) return 1 ;;
