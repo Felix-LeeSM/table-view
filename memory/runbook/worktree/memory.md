@@ -84,13 +84,13 @@ printf '%s\n' "$DEST" > "$DEST/.git/.review-clone"   # 소유 표식. work tree 
 git -C "$DEST" remote add origin https://github.com/Felix-LeeSM/table-view.git
 git -C "$DEST" fetch origin "$OID" '+refs/heads/main:refs/remotes/origin/main'
 git -C "$DEST" -c advice.detachedHead=false checkout --detach "$OID"
-test "$(git -C "$DEST" rev-parse HEAD)" = "$OID" \
-  || { echo "ABORT: PR head 가 아니다" >&2; exit 1; }
+test "$(git -C "$DEST" rev-parse HEAD)" = "$OID" || { echo "ABORT: PR head 가 아니다" >&2; exit 1; }
+echo "$DEST"   # 회수 블록에 손으로 옮길 값 — 변수는 Bash 호출을 못 넘는다
 # 의존성이 필요하면 「생성」 3) 과 같다 — 설치 티어라 subreviewer 는 안 돈다
-# 회수 (같은 턴) — 지울 대상은 위 mktemp 가 이 노드에 준 $DEST 뿐이다
-TARGET="$DEST"   # $DEST 가 안 잡혔거나 표식이 그것과 다르면 아래가 막는다
-test -n "$DEST" && test "$(cat "$TARGET/.git/.review-clone" 2>/dev/null)" = "$DEST" \
-  || { echo "ABORT: 이 노드가 만든 사본이 아니다" >&2; exit 1; }
+# 회수 — 검증이 사이에 끼므로 생성과 다른 Bash 호출이고 거기엔 $DEST 가 없다
+TARGET="<위 echo 가 찍은 경로 — mktemp 꼬리까지 그대로>"
+test -n "$TARGET" && test "$(cat "$TARGET/.git/.review-clone" 2>/dev/null)" = "$TARGET" \
+  || { echo "ABORT: 이 레시피가 만든 사본이 아니다" >&2; exit 1; }
 rm -rf "$TARGET"
 ```
 
@@ -172,10 +172,10 @@ spawner 가 역할에 맞는 쪽을 prompt 의 첫 명령 슬롯에 넣는다 �
   (사용자가 못 보는 디스크 점유). 막는 장치 없음 — 규율만.
 - **예외는 리뷰어의 일회용 검증 사본뿐이다** — 리뷰어가 스스로 만든다
   ([review](../../workflow/review/memory.md) 「행동 계약」). 디스크 점유 사유는 그대로
-  걸리므로 **만든 리뷰어가 같은 턴에 지운다 — 자기가 만든 것만이다.** 만드는 법도
-  지울 자격도 위 「리뷰어 사본」이 정한다: `$DEST` 가 안 잡혔거나 표식이 그것과 다르면
-  손대지 않는다. 같은 PR 을 동시에 보는 coordinator 와 subreviewer 가 서로의 트리를
-  지우던 자리가 이것이다 (#2286). 리뷰어가 죽어 안 지우면 「회수」가 줍는다.
+  걸리므로 **만든 리뷰어가 같은 턴에 지운다.** 자격은 위 「리뷰어 사본」이 정한다 —
+  표식이 그 트리 자신의 경로가 아니면 손대지 않는다. 회수 셸엔 `$DEST` 가 없어
+  「자기 것만」은 기계가 아니라 `mktemp` 꼬리가 지킨다: 같은 PR 을 동시에 보는
+  coordinator 와 subreviewer 가 서로의 트리를 지우던 자리다 (#2286). 죽으면 「회수」가 줍는다.
 - 작업 사본은 PR 당 하나, 동시에 쓰는 node 는 하나 (그 사본에 파일을 쓰는 것은
   구현자뿐 — 리뷰어는 저자 사본을 편집하지 않는다). 리뷰 라운드는 새 사본을
   만들지 않고 같은 사본에 다음 구현자를 붙인다 — 쪼개면 죽은 구현자의 미푸시
