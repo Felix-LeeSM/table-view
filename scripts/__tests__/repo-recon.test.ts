@@ -60,6 +60,38 @@ function gitOutput(argv: string[]): string {
 
 const headOid = gitOutput(["rev-parse", "HEAD"]).trim();
 
+/**
+ * git 이 오브젝트 하나로 푸는 6자 축약 oid 를 `rev` 의 조상 쪽에서 찾는다.
+ *
+ * 6자 접두사는 커밋만의 이름공간이 아니라 tree · blob 과 같이 쓴다. 겹치면 git 이 rev 를
+ * 아예 못 풀어 `rev-parse` 도 `git grep` 도 죽으므로, 그 접두사를 rev 로 쓰는 단언은
+ * 저장소 오브젝트 상태에 따라 통째로 무너진다 (#2390 — CI 가 체크아웃한 merge 커밋의 앞
+ * 6자가 저장소의 tree 와 겹쳐, repo-recon 과 무관한 PR 의 Frontend Checks 가 red 였다).
+ *
+ * `--abbrev=6` 을 준 `%h` 가 6자를 그대로 내면 그 접두사가 유일하다는 git 자신의 판정이다 —
+ * 겹치면 git 이 스스로 7자 이상으로 늘린다. 유일성 규칙을 다시 구현하지 않고 그 길이를 읽는다.
+ * @param rev 여기서부터 조상 쪽으로 훑는다
+ */
+function resolvableShortOid(rev: string): string {
+  const abbreviated = gitOutput([
+    "log",
+    "--format=%h",
+    "--abbrev=6",
+    "-n",
+    "50",
+    rev,
+  ])
+    .trim()
+    .split("\n");
+  const unique = abbreviated.find((abbrev) => abbrev.length === 6);
+  if (unique === undefined) {
+    // 훑은 커밋이 전부 겹쳐야 여기 온다. 조용히 옛 동작으로 되돌아가면 같은 결함이
+    // 되살아나므로, 범위를 넓혀야 한다는 사실이 보이게 죽는다.
+    throw new Error(`6자 접두사가 유일한 커밋이 ${rev} 에서 50개 안에 없다`);
+  }
+  return unique;
+}
+
 // `rev` 로 들어가는 git 옵션이 파일을 만드는지 보는 자리. 저장소 안에 두면 그 실패가
 // 트리를 더럽히므로 임시 디렉토리에 둔다.
 const probeDir = mkdtempSync(join(tmpdir(), "repo-recon-"));
@@ -314,9 +346,32 @@ describe("repo-recon MCP server", () => {
     expect(await warningsFor(headOid)).not.toMatch(/움직이는 ref/);
     // 축약 oid 는 git 이 커밋으로 풀지만 판정식이 7자리부터라 「고정」으로 안 센다.
     // 그 아래까지 고정으로 세면 hex 로만 된 짧은 ref 이름(`beef` · `dead`)이 경고를 잃는다.
-    const shortOid = headOid.slice(0, 6);
-    expect(gitOutput(["rev-parse", "--verify", shortOid]).trim()).toBe(headOid);
+    // 접두사가 겹치면 rev 가 안 풀려 아래 두 줄이 같이 죽으므로 HEAD 를 그대로 자르지 않고
+    // git 이 유일하다고 판정한 것을 받는다 — 사유는 `resolvableShortOid` 에 적었다.
+    const shortOid = resolvableShortOid("HEAD");
+    expect(gitOutput(["cat-file", "-t", shortOid]).trim()).toBe("commit");
     expect(await warningsFor(shortOid)).toMatch(/움직이는 ref/);
+  });
+
+  // Reason: 위 단언이 죽는 조건은 6자 접두사가 tree · blob 과 겹치는 것이고, 그것은 HEAD 가
+  // 무엇이냐에 달려 있어 평소 실행에서는 한 번도 안 밟힌다 (#2390 은 CI 가 그 HEAD 를 골라서야
+  // 드러났다). 그 조건을 만드는 오브젝트 쌍이 이 저장소 히스토리에 영구히 있으므로 — 커밋
+  // 8b81cf52… 와 blob 8b81cf4d… 가 앞 6자를 공유한다 — 거기서 시작시켜 고르기를 직접 문다.
+  // 앞 단언이 없으면 그 쌍이 사라져도 뒤가 조용히 공회전한다.
+  it("skips a short oid whose prefix collides with a non-commit object", () => {
+    const collidingOid = "8b81cf52cabc68d44e5c2bfee4b27f36b9091079";
+    const collidingPrefix = collidingOid.slice(0, 6);
+    expect(
+      gitOutput(["rev-parse", `--disambiguate=${collidingPrefix}`])
+        .trim()
+        .split("\n").length,
+    ).toBeGreaterThan(1);
+    const shortOid = resolvableShortOid(collidingOid);
+    expect(shortOid).not.toBe(collidingPrefix);
+    // 길이도 같이 문다 — 겹침을 자릿수를 늘려 피하면 판정식이 「고정」으로 세어
+    // 위 테스트가 재려던 것이 사라진다.
+    expect(shortOid).toHaveLength(6);
+    expect(gitOutput(["cat-file", "-t", shortOid]).trim()).toBe("commit");
   });
 
   // Reason: 작업 트리 읽기를 막으면 노드는 우회를 발명한다. 정식 값으로 받되 읽었다는
