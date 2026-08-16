@@ -126,6 +126,17 @@ vi.mock("@hooks/useSqlAutocomplete", () => ({
   useSqlAutocomplete: () => ({}),
 }));
 
+// Issue #2375 — a batch carrying a destructive statement now mounts the
+// SqlPreviewDialog before dispatch, the same way a WHERE-bounded write
+// already did. The dialog is modal, so the mock editor's own Execute button
+// is aria-hidden while it is open and this lookup is unambiguous.
+async function confirmSqlPreview() {
+  const confirmBtn = await screen.findByRole("button", { name: /execute/i });
+  await act(async () => {
+    confirmBtn.click();
+  });
+}
+
 vi.mock("@lib/sql/sqlUtils", () => ({
   splitSqlStatements: (sql: string) => {
     // Simple split by semicolons for testing
@@ -211,8 +222,9 @@ describe("QueryTab — execution", () => {
     // tab per statement (success rows / failed marker). The store's
     // `statements` array carries per-stmt status + error message + result.
     //
-    // Pin non-production + warn so destructive SQL still exercises
-    // multi-statement execution instead of the Safe Mode confirm path.
+    // Pin non-production + warn so the batch takes the preview path rather
+    // than the Safe Mode confirm path — issue #2375 mounts the preview for
+    // the destructive tier too, so `confirmSqlPreview` releases the batch.
     mockExecuteQuery
       .mockResolvedValueOnce(MOCK_RESULT)
       .mockRejectedValueOnce(new Error("Table not found"));
@@ -227,6 +239,7 @@ describe("QueryTab — execution", () => {
     await act(async () => {
       executeBtn.click();
     });
+    await confirmSqlPreview();
 
     await waitFor(() => {
       const state = getTestWorkspace();
@@ -465,7 +478,8 @@ describe("QueryTab — execution", () => {
   // ── Multi-statement history recording ──
 
   it("records error history when some multi-statements fail", async () => {
-    // Pin non-production + warn so destructive SQL still dispatches.
+    // Pin non-production + warn so the batch takes the preview path rather
+    // than the Safe Mode confirm path (issue #2375).
     mockExecuteQuery
       .mockResolvedValueOnce(MOCK_RESULT)
       .mockRejectedValueOnce(new Error("Table not found"));
@@ -480,12 +494,18 @@ describe("QueryTab — execution", () => {
     await act(async () => {
       executeBtn.click();
     });
+    await confirmSqlPreview();
 
     await waitFor(() => {
       const history = useQueryHistoryStore.getState().recentVisible;
       expect(history).toHaveLength(1);
       expect(history[0]!.status).toBe("error");
-      expect(history[0]!.sqlRedacted).toBe("SELECT 1; DROP TABLE nope");
+      // The preview path rebuilds the batch text from the split statements
+      // (`confirmRdbWarn` → `pending.statements.join(";\n")`) rather than
+      // replaying the raw editor buffer, so the recorded separator is
+      // `;\n`. That has been the shape for every WARN-tier batch since
+      // Sprint 255; issue #2375 only routed this batch onto the same path.
+      expect(history[0]!.sqlRedacted).toBe("SELECT 1;\nDROP TABLE nope");
     });
   });
 
@@ -613,7 +633,8 @@ describe("QueryTab — execution", () => {
     // String(err) and recorded on the failing statement entry, not on the
     // collapsed top-level error message.
     //
-    // Pin non-production + warn so destructive SQL still dispatches.
+    // Pin non-production + warn so the batch takes the preview path rather
+    // than the Safe Mode confirm path (issue #2375).
     mockExecuteQuery
       .mockResolvedValueOnce(MOCK_RESULT)
       .mockRejectedValueOnce("raw error");
@@ -628,6 +649,7 @@ describe("QueryTab — execution", () => {
     await act(async () => {
       executeBtn.click();
     });
+    await confirmSqlPreview();
 
     await waitFor(() => {
       const state = getTestWorkspace();

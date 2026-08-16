@@ -71,7 +71,19 @@ connection that momentarily reads as unresolved during a frontend hydration race
 is still covered structurally by the backend gate, which re-reads `environment`
 from its own SQLite store; non-canonical stored tags ("Production", "prod")
 canonicalize to unset and surface an "Unknown" badge rather than silently
-masquerading as production. Destructive classification reuses the native
+masquerading as production. A Safe Mode `allow` does not mean the statement
+runs unannounced: the raw SQL/MQL editor mounts its preview dialog
+(`SqlPreviewDialog` / `MqlPreviewModal`) for every statement the analyzer puts
+above the info tier, destructive ones included, so on a non-production
+connection under the shipped Safe Mode `warn` default `DROP TABLE t` gets the
+same review step `DELETE FROM t WHERE id = 1` gets. Until #2375 that preview
+was gated on
+the warn tier alone, which ran friction backwards against severity — the
+WHERE-bounded write was previewed while the whole-table statement went straight
+to the driver. The decision matrix is unchanged by that widening: `allow` still
+carries no confirmation proof to the backend, and the confirm dialog is still
+what production connections and Safe Mode `strict` raise. Destructive
+classification reuses the native
 `sql-parser-core` crate (the same parser the frontend compiles to WASM); the one
 intentional divergence is the frontend's dynamic dry-run WARN→danger escalation,
 a UI-only runtime escalation outside the Safe Mode decision matrix that the

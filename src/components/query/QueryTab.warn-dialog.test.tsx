@@ -19,16 +19,25 @@
 // - Mongo aggregate read-only ($match) → dialog NOT mount (INFO skip)
 // - Mongo aggregate write ($out) → ConfirmDestructiveDialog (STOP 우선)
 //
-// `severity: "warn"` 인 non-INFO 만 WARN dialog 발동. INFO/STOP 분기는
-// 위와 같이 회귀 테스트로 가드.
+// INFO tier 만 dialog 를 건너뛴다. INFO / STOP 분기는 위와 같이 회귀
+// 테스트로 가드.
+//
+// 이슈 #2375 (2026-08-16) — dialog mount 조건이 WARN tier 에서 non-INFO
+// 전체로 넓어졌다. 출하 기본 설정(연결 환경 태그 비-production + Safe Mode
+// `warn`)에서 `decideSafeModeAction` 이 파괴적 문장을 `allow` 로 흘려보내는데
+// 그 문장에 아무 창도 안 떠서, 범위를 `WHERE` 로 묶은 문장보다 테이블을 통째로
+// 지우는 문장의 마찰이 더 낮았다. 아래 `preview[danger]` 케이스가 그 역전을
+// 잡는다 — `decideSafeModeAction` 의 반환은 `allow` 그대로여야 한다.
 
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
+import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { decideSafeModeAction } from "@/lib/safeMode";
 import {
   getTestWorkspace,
   seedWorkspace,
@@ -279,6 +288,69 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
     });
   });
 
+  // ── 이슈 #2375 — danger tier 도 미리보기를 받는다 ─────────────────────
+
+  it("[AC-2375-01a] preview[danger] DROP TABLE — 비프로덕션 + warn 에서 dialog mount, Execute → executeQuery 1회", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    seedConnection("development");
+    const tab = seedTab("DROP TABLE foo");
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    // 창이 뜨기 전에는 드라이버로 아무것도 안 나간다 — 회귀 전에는 여기서
+    // 이미 executeQuery 가 1회 호출돼 있었다.
+    expect(mockExecuteQuery).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByText("Review SQL Changes")).toBeInTheDocument();
+    });
+    // 결정 함수는 안 건드렸다: 미리보기를 여는 것은 QueryTab 표면이고
+    // `decideSafeModeAction` 은 여전히 이 문장을 `allow` 로 흘린다.
+    // (`confirm` 이면 ADR 0022 의 매트릭스를 고친 것이다.)
+    expect(
+      decideSafeModeAction(
+        "warn",
+        "development",
+        analyzeStatement("DROP TABLE foo"),
+      ),
+    ).toEqual({ action: "allow" });
+    // ConfirmDestructiveDialog 가 대신 뜬 것도 아니다.
+    expect(
+      screen.queryByTestId("confirm-destructive-confirm"),
+    ).not.toBeInTheDocument();
+
+    const executeBtn = await screen.findByRole("button", { name: /execute/i });
+    await act(async () => {
+      executeBtn.click();
+    });
+    await waitFor(() => {
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("[AC-2375-01b] preview[danger] DELETE without WHERE — 환경 태그 없음 + off 에서도 dialog mount", async () => {
+    // 태그 없는 연결 + Safe Mode `off` 는 `decideSafeModeAction` 의 나머지
+    // `allow` 칸이다. 같은 미리보기를 받아야 마찰이 등급을 거스르지 않는다.
+    seedConnection(null);
+    useSafeModeStore.setState({ mode: "off" });
+    const tab = seedTab("DELETE FROM users");
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockExecuteQuery).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByText("Review SQL Changes")).toBeInTheDocument();
+    });
+    expect(
+      decideSafeModeAction("off", null, analyzeStatement("DELETE FROM users")),
+    ).toEqual({ action: "allow" });
+  });
+
   it("[AC-255-04a] WARN dialog Cancel click → dialog dismissed + executeQuery NOT called", async () => {
     seedConnection("development");
     const tab = seedTab("UPDATE users SET name = 'a' WHERE id = 1");
@@ -484,5 +556,30 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
       ).toBeInTheDocument();
     });
     expect(screen.queryByText("MQL Preview")).not.toBeInTheDocument();
+  });
+
+  it("[AC-2375-02] preview[danger] Mongo aggregate $out — 비프로덕션 + warn 에서 MQL Preview mount", async () => {
+    // 같은 pipeline 이 production 에서는 위 [AC-255-07c] 처럼 STOP 창을
+    // 받는다. 비프로덕션에서는 `decideSafeModeAction` 이 `allow` 를 주므로
+    // 회귀 전에는 aggregateDocuments 가 창 없이 바로 나갔다.
+    seedDocConnection("development");
+    useSafeModeStore.setState({ mode: "warn" });
+    const tab = seedDocTab(
+      'db.users.aggregate([{$out:"snapshot"}])',
+      "aggregate",
+    );
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockAggregateDocuments).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByText("MQL Preview")).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByTestId("confirm-destructive-confirm"),
+    ).not.toBeInTheDocument();
   });
 });

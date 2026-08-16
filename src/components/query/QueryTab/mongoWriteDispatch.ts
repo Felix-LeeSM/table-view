@@ -1,6 +1,7 @@
 import type { ParsedMongoshCall } from "@features/query";
 import { idOnlyFilter } from "@lib/mongo/documentIdentity";
 import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
+import { requiresPreviewDialog } from "@/lib/safeMode";
 import type { BulkWriteOp } from "@/types/documentMutate";
 import type { ExecuteMongoQueryRequest } from "./mongoQueryExecution";
 import {
@@ -269,7 +270,7 @@ export async function dispatchMongoWriteCall(
       });
       return true;
     }
-    if (analysis.severity === "warn") {
+    if (requiresPreviewDialog(analysis.severity)) {
       pendingWriteRunnerRef.current = runner;
       setPendingMongoWarn({ pipeline: [], previewLines: [rawSql] });
       return true;
@@ -328,7 +329,7 @@ export async function dispatchMongoWriteCall(
       });
       return true;
     }
-    if (analysis.severity === "warn") {
+    if (requiresPreviewDialog(analysis.severity)) {
       pendingWriteRunnerRef.current = runner;
       setPendingMongoWarn({ pipeline: [], previewLines: [rawSql] });
       return true;
@@ -466,7 +467,7 @@ export async function dispatchMongoWriteCall(
       });
       return true;
     }
-    if (analysis.severity === "warn") {
+    if (requiresPreviewDialog(analysis.severity)) {
       pendingWriteRunnerRef.current = runner;
       setPendingMongoWarn({ pipeline: [], previewLines: [rawSql] });
       return true;
@@ -521,7 +522,7 @@ export async function dispatchMongoWriteCall(
       });
       return true;
     }
-    if (analysis.severity === "warn") {
+    if (requiresPreviewDialog(analysis.severity)) {
       pendingWriteRunnerRef.current = runner;
       setPendingMongoWarn({ pipeline: [], previewLines: [rawSql] });
       return true;

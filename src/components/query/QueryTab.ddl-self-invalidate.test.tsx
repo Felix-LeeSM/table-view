@@ -174,16 +174,37 @@ function seedSchemaCache(): void {
 
 function seedTab(sql: string) {
   // Use DROP TABLE syntax — `severity: "danger"`, non-prod + `warn` mode
-  // → `decideSafeModeAction` returns `allow` and `hasWarn` stays false.
-  // This routes directly to `runRdbSingleNow` without mounting a
-  // pendingRdbWarn / pendingRdbConfirm dialog, isolating the self-
-  // invalidate assertion from SafeMode dialog mechanics.
+  // → `decideSafeModeAction` returns `allow`, so no ConfirmDestructiveDialog
+  // gets in the way of the self-invalidate assertion.
+  //
+  // Issue #2375 — this no longer reaches `runRdbSingleNow` on the first
+  // click: the QueryTab preview now mounts for every non-INFO tier, not
+  // just WARN. `executeThroughPreview` below walks past it so these cases
+  // keep testing schema invalidation rather than dialog mechanics.
   const tab = makeQueryTab({ sql, database: "db1" });
   useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
   useConnectionStore.setState({
     connections: [makeConn({ id: "conn1", environment: "development" })],
   });
   return tab;
+}
+
+// Issue #2375 — a DROP TABLE reaches the driver only after the QueryTab
+// preview is confirmed, so every DDL case here needs the second step. The
+// INFO-tier SELECT guard at the bottom of this file still goes direct and
+// must NOT use this helper.
+async function executeThroughPreview(result: {
+  current: {
+    handleExecute: () => Promise<void>;
+    confirmRdbWarn: () => Promise<void>;
+  };
+}) {
+  await act(async () => {
+    await result.current.handleExecute();
+  });
+  await act(async () => {
+    await result.current.confirmRdbWarn();
+  });
 }
 
 describe("useQueryExecution — sprint-360 Phase 2 Q23 self-invalidate", () => {
@@ -223,9 +244,7 @@ describe("useQueryExecution — sprint-360 Phase 2 Q23 self-invalidate", () => {
     const tab = seedTab("DROP TABLE foo");
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await executeThroughPreview(result);
 
     await waitFor(() => {
       expect(executeQueryMock).toHaveBeenCalledTimes(1);
@@ -247,9 +266,7 @@ describe("useQueryExecution — sprint-360 Phase 2 Q23 self-invalidate", () => {
     const tab = seedTab("DROP TABLE foo");
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    await act(async () => {
-      await result.current.handleExecute();
-    });
+    await executeThroughPreview(result);
 
     await waitFor(() => {
       const state = useSchemaStore.getState();
@@ -282,17 +299,21 @@ describe("useQueryExecution — sprint-360 Phase 2 Q23 self-invalidate", () => {
           resolveExec = resolve;
         }),
     );
-    // DROP TABLE keeps SafeMode gate at `allow` for non-prod+warn (severity
-    // danger but action allow). CREATE TABLE is `severity: "warn"` which
-    // routes to pendingRdbWarn instead of runRdbSingleNow direct — that
-    // path is covered by the WARN-tier confirm tests in sprint-255.
+    // DROP TABLE keeps the SafeMode gate at `allow` for non-prod+warn
+    // (severity danger but action allow), so no ConfirmDestructiveDialog
+    // competes with the preview whose confirm we time below.
     const tab = seedTab("DROP TABLE foo");
     const { result } = renderHook(() => useQueryExecution({ tab }));
 
-    // Kick off handleExecute; resolves only when we call `resolveExec`.
+    // Issue #2375 — the preview stands between the click and the driver, so
+    // the deferred IPC starts at the confirm, not at `handleExecute`.
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+    // Kick off the confirm; resolves only when we call `resolveExec`.
     let executePromise: Promise<void> = Promise.resolve();
     act(() => {
-      executePromise = result.current.handleExecute();
+      executePromise = result.current.confirmRdbWarn();
     });
 
     // Wait for the IPC mock to be invoked so the hook is awaiting it.
@@ -355,9 +376,7 @@ describe("useQueryExecution — sprint-360 Phase 2 Q23 self-invalidate", () => {
     // cache and the useSchemaCache effect re-runs (slot is undefined) and
     // re-fetches.
     const execHook = renderHook(() => useQueryExecution({ tab }));
-    await act(async () => {
-      await execHook.result.current.handleExecute();
-    });
+    await executeThroughPreview(execHook.result);
 
     await waitFor(() => {
       // Second mount-effect run: schemas + tables refetched.
@@ -398,9 +417,7 @@ describe("useQueryExecution — sprint-360 Phase 2 Q23 self-invalidate", () => {
     // Now fire DDL — the cache wipe still runs but no listSchemas IPC
     // because nothing is mounted.
     const execHook = renderHook(() => useQueryExecution({ tab }));
-    await act(async () => {
-      await execHook.result.current.handleExecute();
-    });
+    await executeThroughPreview(execHook.result);
 
     // schemaStore is cleared
     expect(useSchemaStore.getState().schemas.conn1).toBeUndefined();

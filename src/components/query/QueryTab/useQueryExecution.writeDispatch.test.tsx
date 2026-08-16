@@ -259,6 +259,75 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     expect(deleteManyMock).not.toHaveBeenCalled();
   });
 
+  // ── 이슈 #2375 — 비프로덕션 + `warn` 에서 danger 도 미리보기를 받는다 ──
+  //
+  // `seedDocTab` 이 심는 연결 환경은 `development` 이고 위 beforeEach 가
+  // `mode` 를 `warn` 으로 둔다 — 출하 기본 설정이다. 그 조합에서
+  // `decideSafeModeAction` 은 파괴적 문장에도 `allow` 를 주므로, 회귀 전에는
+  // 아래 세 문장이 창 하나 없이 IPC 로 나갔다. `pendingMongoConfirm` 이
+  // 대신 서면 안 된다 — 그건 ADR 0022 의 매트릭스를 고쳤다는 뜻이다.
+
+  it("preview[danger] empty-filter deleteMany → 미리보기 pending; confirm 후에야 IPC", async () => {
+    deleteManyMock.mockResolvedValueOnce(9);
+    const tab = seedDocTab("db.users.deleteMany({})");
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await actAsync(result.current.handleExecute);
+
+    expect(result.current.pendingMongoWarn).not.toBeNull();
+    expect(result.current.pendingMongoConfirm).toBeNull();
+    expect(deleteManyMock).not.toHaveBeenCalled();
+
+    await actAsync(result.current.confirmMongoWarn);
+
+    await waitFor(() => {
+      expect(deleteManyMock).toHaveBeenCalledTimes(1);
+    });
+    expect(deleteManyMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      "table_view_test",
+      "users",
+      {},
+      true,
+    );
+  });
+
+  it("preview[danger] empty-filter updateMany → 미리보기 pending; confirm 후에야 IPC", async () => {
+    updateManyMock.mockResolvedValueOnce(4);
+    const tab = seedDocTab("db.users.updateMany({}, {$set:{reviewed:true}})");
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await actAsync(result.current.handleExecute);
+
+    expect(result.current.pendingMongoWarn).not.toBeNull();
+    expect(result.current.pendingMongoConfirm).toBeNull();
+    expect(updateManyMock).not.toHaveBeenCalled();
+
+    await actAsync(result.current.confirmMongoWarn);
+
+    await waitFor(() => {
+      expect(updateManyMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("preview[danger] bulkWrite with empty-filter *-many sub-op → 미리보기 pending", async () => {
+    bulkWriteDocumentsMock.mockResolvedValueOnce(EMPTY_BULK_RESULT);
+    const tab = seedDocTab("db.users.bulkWrite([{deleteMany:{filter:{}}}])");
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await actAsync(result.current.handleExecute);
+
+    expect(result.current.pendingMongoWarn).not.toBeNull();
+    expect(result.current.pendingMongoConfirm).toBeNull();
+    expect(bulkWriteDocumentsMock).not.toHaveBeenCalled();
+
+    await actAsync(result.current.confirmMongoWarn);
+
+    await waitFor(() => {
+      expect(bulkWriteDocumentsMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // [AC-312-write-05] updateMany WARN → MqlPreviewModal mount; confirm calls
   // updateMany IPC.
   it("non-empty updateMany → WARN; confirm dispatches updateMany", async () => {

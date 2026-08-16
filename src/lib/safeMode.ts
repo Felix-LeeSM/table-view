@@ -1,5 +1,5 @@
 import type { EnvironmentTag } from "@/features/connection/model";
-import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
+import type { Severity, StatementAnalysis } from "@/lib/sql/sqlSafety";
 
 /**
  * Paradigm-agnostic Safe Mode decision matrix as a pure function.
@@ -68,14 +68,18 @@ export function decideSafeModeAction(
   // Sprint 254 (2026-05-09) — `severity` union split to 3-tier:
   // `info` (read / metadata) / `warn` (bounded write surface) / `danger`
   // (STOP). The matrix *result* is regression-zero — INFO and WARN both
-  // pass through here (`action: "allow"`); the WARN-tier raw editor
-  // SqlPreviewDialog mount is QueryTab-level (Sprint 255) so the
-  // decision function only differentiates STOP. ADR 0023 grill Q2-(a).
+  // pass through here (`action: "allow"`); the raw editor SqlPreviewDialog
+  // mount is QueryTab-level (Sprint 255) so the decision function only
+  // differentiates STOP. ADR 0023 grill Q2-(a). Issue #2375 widened that
+  // QueryTab-level mount from WARN-tier to every non-INFO tier
+  // (`requiresPreviewDialog` below) without touching this matrix.
   const isDanger = analysis.severity === "danger";
 
   // Read / WARN write are never gated at the `decideSafeModeAction` layer.
   // Pass-through everywhere — the QueryTab's `pendingRdbWarn` /
-  // `pendingMongoWarn` (Sprint 255) catches WARN at a higher surface.
+  // `pendingMongoWarn` (Sprint 255) catches them at a higher surface, and
+  // since #2375 it also catches the destructive statements this function
+  // hands back as `allow` (non-production + `warn` / `off`).
   if (!isDanger) return { action: "allow" };
 
   // From here on: destructive (`severity === "danger"`).
@@ -108,4 +112,47 @@ export function decideSafeModeAction(
   }
 
   return { action: "allow" };
+}
+
+/**
+ * Issue #2375 — the QueryTab preview-dialog gate. Every write surface that
+ * mounts `pendingRdbWarn` / `pendingMongoWarn` asks this function instead of
+ * testing `severity` against a literal itself.
+ *
+ * Why it isn't just the WARN tier: `decideSafeModeAction` above returns
+ * `allow` for a destructive statement on a non-production connection under
+ * Safe Mode `warn` (the shipped default) or `off`, and that pass-through is
+ * deliberate (ADR 0022 — dev workflows aren't disrupted). Each mount used to
+ * gate on the WARN tier alone, so those allowed destructive statements fell
+ * past the preview and reached the driver with no dialog at all: on the
+ * shipped default `DELETE FROM t WHERE a = 1` (warn) got a preview while
+ * `DROP TABLE t` (danger) got nothing. Friction ran backwards against tier.
+ *
+ * The test is `!== "info"` rather than an enumeration of the tiers that need
+ * a dialog, so a tier added to `Severity` later gets the preview by default
+ * instead of silently inheriting the hole this closed.
+ *
+ * `src/lib/safeMode.previewGate.test.ts` reads the dispatch sources and fails
+ * if any file that mounts the preview compares a value against the `warn`
+ * string literal — including inside a comment, which is why the prose here
+ * spells the tier names out instead of quoting the old condition.
+ */
+export function requiresPreviewDialog(severity: Severity): boolean {
+  return severity !== "info";
+}
+
+/**
+ * Issue #2375 — baseline test for the dry-run impact escalation
+ * (`escalateWarnIfLargeImpact`, which takes `"warn"` as the severity the
+ * probe starts from). Deliberately narrower than `requiresPreviewDialog`:
+ * only a WARN-tier bounded write can be *raised* by a row-count probe. INFO
+ * never writes, and a DANGER statement is already at the top tier, so
+ * probing it would bill a dry-run count query for a decision that cannot
+ * change and would hand the helper a starting severity it does not hold.
+ *
+ * Kept as its own predicate so that widening the preview gate cannot widen
+ * the escalation gate by accident — one flag used to drive both.
+ */
+export function canEscalateByImpact(severity: Severity): boolean {
+  return severity === "warn";
 }

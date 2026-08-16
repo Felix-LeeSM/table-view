@@ -736,14 +736,19 @@ export default function QueryTab({ tab }: QueryTabProps) {
         />
       )}
 
-      {/* Sprint 255 — raw RDB WARN-tier preview dialog. Mounts ONLY when
-          the batch contains at least one non-INFO safe statement
-          (INSERT / UPDATE WHERE / CREATE / ALTER additive) AND no STOP
-          statement. STOP > WARN priority is enforced inside
-          `handleExecute`, so `pendingRdbWarn` is `null` when
+      {/* Sprint 255 — raw RDB preview dialog. Mounts when the batch has at
+          least one statement the analyzer puts above the INFO tier and the
+          Safe Mode gate raised no STOP. That STOP priority is enforced
+          inside `handleExecute`, so `pendingRdbWarn` is `null` when
           `pendingRdbConfirm` is set — the two dialogs never co-mount.
           INFO statements (SELECT / EXPLAIN / SHOW / DESCRIBE / WITH …
-          SELECT) bypass this dialog entirely (direct IPC). */}
+          SELECT / INSERT / CREATE) bypass this dialog entirely (direct
+          IPC).
+          Issue #2375 widened the mount from the WARN tier to every
+          non-INFO tier: on a non-production connection under Safe Mode
+          `warn` / `off` the gate hands destructive statements back as
+          `allow`, and they used to fall past this dialog and reach the
+          driver with nothing shown. */}
       {pendingRdbWarn && (
         <SqlPreviewDialog
           sql={pendingRdbWarn.statements.join(";\n")}
@@ -756,13 +761,16 @@ export default function QueryTab({ tab }: QueryTabProps) {
         />
       )}
 
-      {/* Sprint 255 — raw Mongo aggregate WARN-tier preview modal.
-          Mounts when `severity: "safe"` aggregate is non-INFO (currently
-          a thin slice — `analyzeMongoPipeline` classifies all safe
-          pipelines as `mongo-other` which `isInfoMongoOperation` treats
-          as INFO; Sprint 254's 3-tier split will widen WARN coverage).
-          Mongo find path never WARNs (always INFO); $out / $merge
-          ($out / $merge) route to `pendingMongoConfirm` (STOP). */}
+      {/* Sprint 255 — raw Mongo preview modal, plus the parser-driven
+          write dispatch (Sprint 312). Mounts when `analyzeMongoPipeline` /
+          `analyzeMongoOperation` puts the call above the INFO tier and the
+          Safe Mode gate raised no STOP. The find path never mounts it
+          (always INFO).
+          Issue #2375 — `$out` / `$merge` and the empty-filter `*-many`
+          writes reach `pendingMongoConfirm` only where the gate returns
+          `confirm` (production, or non-production under `strict`). On a
+          non-production connection under `warn` / `off` the gate returns
+          `allow` and they now land here instead of executing unannounced. */}
       {pendingMongoWarn && (
         <MqlPreviewModal
           // Sprint 312 — write WARN cases prefer the parser-formatted

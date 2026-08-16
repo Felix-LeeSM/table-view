@@ -16,6 +16,7 @@ import {
 import type { DocumentRecordHistoryQueryMode } from "@lib/runtime/history/recordHistoryEntry";
 import { runMongoCommand } from "@lib/tauri";
 import type { QueryTab } from "@stores/workspaceStore";
+import { requiresPreviewDialog } from "@/lib/safeMode";
 import type { FindBody } from "@/types/document";
 import type { QueryResult, QueryState } from "@/types/query";
 import {
@@ -273,7 +274,7 @@ async function dispatchMongoshCall(
       });
       return;
     }
-    if (analysis.severity === "warn") {
+    if (requiresPreviewDialog(analysis.severity)) {
       setPendingMongoWarn({ pipeline: pipelineWithCursor });
       return;
     }
