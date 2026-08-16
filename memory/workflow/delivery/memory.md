@@ -1,7 +1,7 @@
 ---
 title: Delivery — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 행동 계약
 type: workflow-rule
-updated: 2026-08-16
+updated: 2026-08-17
 task: delivery, commit, push, pr, review, merge
 keywords: 커밋, commit, push, PR 생성, squash, squash body, squash 제목, 머지 제목, 교정 대상 표면, --body-file, --subject, COMMIT_MESSAGES, COMMIT_OR_PR_TITLE, 뒤집힌 주장, 철회문, scorecard 대조, staleness, 머지 정책, review:approved, reflect:done, 자율 실행, 중단 조건, GPG, pinentry, 노드 표
 trigger:
@@ -47,8 +47,14 @@ SOT 는 없다.
 - 머지 방식이 아래 기본값과 다르게 지시됐을 때 — 종결자가 사용자에게 확인.
 - 라운드 회고 트리거(라운드 3 이상 / 유형 재발 / 리뷰어 사이클 보고) — 구현자는
   같은 유형에 fix 를 더 쌓지 말고 종료한다. 판정은 회고 모드 리뷰어가,
-  재설계는 interface 를 거쳐 사용자가 한다(`reflect:done` label). 단 verdict 가 green 이면 중단이 아니다 — 라운드 3
-  이상이어도 종결자가 `reflect:done` 붙이고 머지한다. 게이트 진단은
+  재설계는 interface 를 거쳐 사용자가 한다(`reflect:done` label).
+  **「유형 재발」은 [orchestration](../orchestration/memory.md) §3 의 트리거를 가리키고
+  구현자가 scorecard 를 읽어 스스로 재단하지 않는다.** 라운드 2 이상 scorecard 가 싣는
+  직전 라운드와의 blocking 대조([review](../review/memory.md) 「행동 계약」)에서
+  「둘 다에 있는 것」이 비지 않은 것은 그 트리거가 아니다 — 남은 blocking 을 보는 §3
+  트리거는 k 의 것이 하나도 안 없어졌을 때 걸려서, 일부만 남은 것은 안 걸린다.
+  단 verdict 가 green 이면 중단이 아니다 — 라운드 3 이상이어도 종결자가
+  `reflect:done` 붙이고 머지한다. 게이트 진단은
   [diagnosing-merge-gates](../../../.agents/skills/diagnosing-merge-gates/SKILL.md),
   required context 목록은
   [runbook/pr-merge-gates](../../runbook/pr-merge-gates/memory.md).
