@@ -302,6 +302,33 @@ describe("check-prompt-fail-silently", () => {
     expect(run.status).toBe(1);
   });
 
+  // 이슈 #2409 의 자리 그대로 — base `7798aa752` 의 리뷰어 판이다. `tr` 이 스트림의
+  // 탭·개행·연속 공백을 한 칸으로 접는데 조각은 원문이라, 오타가 없어도 0 이 난다.
+  it("fails when a normalized stream is matched with a raw literal needle", () => {
+    const root = seed({
+      ".agents/prompts/role.md": "# role\n",
+      "memory/workflow/review/memory.md":
+        "# review\n\n```bash\nprintf '%s\\n' \"$MSGS\" | LC_ALL=C tr -s '[:space:]' ' ' \\\n  | grep -o -F '<문구>' | wc -l\n```\n",
+    });
+    const run = runGate(root);
+    expect(run.out).toContain("memory/workflow/review/memory.md:4");
+    expect(run.out).toContain("정규화한 스트림을 원문 조각으로 건다");
+    expect(run.status).toBe(1);
+  });
+
+  // 접기 **전** 스트림을 거는 `grep` 은 조각을 접을 이유가 없다. 이 자리까지 잡으면
+  // 게이트가 멀쩡한 파이프라인을 막는다 — 헤더의 천장 셋 중 하나가 이것이다.
+  it("leaves alone a grep that runs before the normalization", () => {
+    const root = seed(
+      prompt(
+        `printf '%s\\n' "$MSGS" | grep -o -F '<문구>' | LC_ALL=C tr -s '[:space:]' ' '`,
+      ),
+    );
+    const run = runGate(root);
+    expect(run.out).toMatch(/^ok:/);
+    expect(run.status).toBe(0);
+  });
+
   // 산문의 `ABORT` 언급은 가드가 아니다. 이슈 #2403 이 「15자리 대 13자리」로 센
   // 차이가 전부 이것이었다 — 펜스 밖을 세면 멀쩡한 고정부가 영구 red 가 된다.
   it("ignores an ABORT mentioned in prose outside any fence", () => {
@@ -339,7 +366,7 @@ describe("check-prompt-fail-silently", () => {
     },
     {
       label: "the replacement commit-message compare — both role copies",
-      body: `MSGS="$(gh api --paginate repos/o/r/pulls/<N>/commits \\\n          --jq '.[].commit.message')" || { echo "ABORT: 커밋 메시지 조회 실패" >&2; exit 1; }\nprintf '%s\\n' "$MSGS" | LC_ALL=C tr -s '[:space:]' ' ' \\\n  | grep -o -F '<문구>' | wc -l`,
+      body: `NEEDLE="$(printf '%s' '<문구>' | LC_ALL=C tr -s '[:space:]' ' ')"\nMSGS="$(gh api --paginate repos/o/r/pulls/<N>/commits \\\n          --jq '.[].commit.message')" || { echo "ABORT: 커밋 메시지 조회 실패" >&2; exit 1; }\nprintf '%s\\n' "$MSGS" | LC_ALL=C tr -s '[:space:]' ' ' \\\n  | grep -o -F -- "$NEEDLE" | wc -l`,
     },
   ];
 

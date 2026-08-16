@@ -213,8 +213,13 @@ jobs:
       # in scope because the same command is duplicated per role — the
       # finalizer's copy in `.agents/prompts/pr-finalize.md` and the reviewer's
       # in `memory/workflow/review/memory.md` — so a gate on one tree watches
-      # half of it. `docs/` stays out: measured on 2026-08-16 it reports 36
-      # sites, most of them the search recipes in `docs/README.md`.
+      # half of it. That duplication is also why #2409 added the needle rule:
+      # `04e64f3ee` (#2264) put `NEEDLE=` in the finalizer's copy alone, which
+      # left the reviewer's copy matching a normalized stream with an
+      # unnormalized needle, so a phrase that was present counted 0 and the
+      # falsehood rode into main history. `docs/` stays out: measured on
+      # 2026-08-16 it reports 36 sites, most of them the search recipes in
+      # `docs/README.md`.
       # What counts as a violation is decided by
       # `scripts/check-prompt-fail-silently.sh` alone; its header states the
       # rule, the printf/echo allowlist and why quoting a forbidden form in a
