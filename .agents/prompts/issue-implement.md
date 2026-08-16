@@ -30,7 +30,8 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 - `memory/workflow/delivery/memory.md` — 커밋~PR 구간 행동 계약 · 중단 조건 ·
   PR body 제약.
 - `memory/workflow/documentation/memory.md` — 문서화 필요 트리거 · 기존 SOT
-  라우팅 · evidence portability. 「Reviewer 판정」이 문서화 impact 게이트 사유의
+  라우팅 · evidence portability · **PR body 에 무엇만 쓰는가**(「결정만 적는다」).
+  「Reviewer 판정」이 문서화 impact 게이트 사유의
   상세라(`memory/workflow/review/memory.md` 「행동 계약」) 저자가 착수 전에 본다.
 - `memory/workflow/git-policy/memory.md` — hard block 목록과 push 계약.
 - `.agents/skills/recovering-push-rejects/SKILL.md` — push reject 4-step 회복 ·
@@ -124,17 +125,19 @@ PR body 의 기존 주장이 낡았을 때 무엇을 하는지는 그 방이 갖
 - push: <ls-remote 로 대조한 원격 SHA>
 - PR: #<번호>
 - 검증: 돌린 명령 → 결과 / 못 돌린 것 → 이유
-- 주장 근거: <body 의 정량·전칭 주장> — <만든 명령> → <출력 요약> (주장마다 한 줄)
+- 주장 근거: <body 에 남은 주장> — <만든 명령> → <출력 요약> (주장마다 한 줄)
 - 남은 위험: 없으면 "없음"
 ```
 
 서사 없이 위 항목만. 출처: `memory/workflow/implementation/memory.md` §1.
 
-`주장 근거` 는 `검증` 과 세는 축이 다르다 — `검증` 은 돌린 명령을 세고, 이쪽은
-body 에 남은 주장을 센다. 그래서 body 를 다 쓴 뒤 한 줄씩 되짚어야 채워진다.
-구분자가 `|` 가 아닌 이유는 명령 자리가 파이프를 낄 수 있어서다. 명령 자리가 빈
-주장은 body 에 두지 않고, 뺐다는 사실을 그 줄에 적는다. 쓸 주장이 하나도 없으면
-"없음". 명령이 붙었다고 주장이 서는 게 아니라, 그 명령이 주장의 집합을 덮어야
-선다. 제약 본문은 여기 없다 — `memory/workflow/implementation/memory.md` §5
-「수치가 추론으로 생산됨」 · 「새로 쓴 전칭 서술이 실측을 넘어섬」 ·
-「전수 명령의 필터가 검증 안 됨」 이 SOT 다.
+**`주장 근거` 의 길이는 body 가 정한다** — body 에 무엇만 남기는지의 SOT 는
+`memory/workflow/documentation/memory.md` 「결정만 적는다」이고, 결론에 이르는
+과정이면 수치도 명령도 body 에서 빠진다. 빠진 것은 여기에도 안 온다.
+`검증` 과는 세는 축이 다르다 — `검증` 은 돌린 명령을 세고 이쪽은 body 에 남은
+주장을 센다. 구분자가 `|` 가 아닌 이유는 명령 자리가 파이프를 낄 수 있어서다.
+명령 자리가 빈 주장은 body 에 두지 않고, 뺐다는 사실을 그 줄에 적는다. 쓸 주장이
+하나도 없으면 "없음". 명령이 붙었다고 주장이 서는 게 아니라, 그 명령이 주장의
+집합을 덮어야 선다. 제약 본문은 여기 없다 —
+`memory/workflow/implementation/memory.md` §5 「수치가 추론으로 생산됨」 ·
+「새로 쓴 전칭 서술이 실측을 넘어섬」 · 「전수 명령의 필터가 검증 안 됨」 이 SOT 다.

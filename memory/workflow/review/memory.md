@@ -1,9 +1,9 @@
 ---
 title: PR Review Behavior
 type: workflow-rule
-updated: 2026-08-11
+updated: 2026-08-17
 task: review, pr, delivery
-keywords: scorecard, verdict, blocking, non-blocking, 사본이 필요한가, 설치가 필요한가, 판정 입력, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상, LC_ALL, LC_ALL=C, 0xA0, GNU tr, BSD tr, 로케일, gnubin, coreutils, 한글 음절, 거짓 0, grep -c, grep -o, wc -l, 자리 수, 개수를 1 로 뭉갠다
+keywords: scorecard, verdict, blocking, non-blocking, 결정만 싣는다, 증거 열거, 재현 서사, 확인했고 참이던 주장, 사본이 필요한가, 설치가 필요한가, 판정 입력, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상, LC_ALL, LC_ALL=C, 0xA0, GNU tr, BSD tr, 로케일, gnubin, coreutils, 한글 음절, 거짓 0, grep -c, grep -o, wc -l, 자리 수, 개수를 1 로 뭉갠다
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -118,31 +118,26 @@ trigger:
   자체가 사이클 신호다 — fix 를 더 얹으라는 지적 대신 유형 재발 표(유형 × 라운드별
   건수)를 먼저 낸다. 트리거와 보고 항목은
   [orchestration](../orchestration/memory.md) §3 이 SOT 다.
-- Scorecard의 차원별 판정 표는 **어떤 경우에도 생략 금지** — 요청자가 반환
-  형식을 `review:approved`/`review:changes-requested` 한 줄로 좁게 지정해도,
-  delta 재검증이어도 표를 출력한다.
-  (2026-07-04 실제 회귀: 요청 프롬프트의 반환 형식 지정이 rubric을 밀어냄.)
-- **scorecard 의 「확인했고 참이던 주장」절은 항목 이름과 판정만 싣고 근거 인용을
-  뺀다** — 고칠 것이 없는 자리라, 근거까지 실으면 다음 라운드 구현자의 컨텍스트만
-  늘린다. 절 자체는 없애지 않는다.
+- **scorecard 는 결정만 싣는다 — 무엇만 담는지의 SOT 는
+  [documentation](../documentation/memory.md) 「결정만 적는다」다.** 「확인했고
+  참이던 주장」 절은 그 규칙이 없앴다. 차원별 판정 표는 그 규칙의 예외가 아니라
+  결정 자체이므로 **어떤 경우에도 생략 금지** — 요청자가 반환 형식을 verdict 한
+  줄로 좁게 지정해도, delta 재검증이어도 낸다 (2026-07-04 회귀: 요청 프롬프트의
+  형식 지정이 표를 밀어냈다).
 - **scorecard 한 장은 12,000 문자 이하다** (#2321). `review-gate` 가 `## Scorecard`
-  로 여는 코멘트를 장마다 재고, 판정 정의와 그 수의 출처는
-  `scripts/check-review-size-cap.sh` 헤더가 갖는다. 합이 아니라 장 단위인 이유도
-  거기 있다. 넘으면 그 코멘트를 줄이고 job 을 re-run 한다 — 이 게이트는 코멘트를
-  API 로 다시 읽어서 새 commit 없이 풀린다 (같은 cap 이 걸린 PR body 쪽은 반대다:
-  [delivery](../delivery/memory.md) 「PR body」).
-- Verdict는 label로 공표한다. add와 remove를 한 명령에 같이 쓰지 않는다 — 같은
-  초에 label 이벤트가 둘 나면 `cancel-in-progress`가 `review-gate` run 하나를 죽이고,
-  그 이름의 최신 suite가 non-success인 채 남아 BLOCKED가 고착된다(#1879 실측).
-
-  ```
-  green: gh pr edit <N> --remove-label review:changes-requested
-         뗀 명령이 만든 review-gate run 이 완료될 때까지 대기
-         gh pr edit <N> --add-label review:approved
-  red:   gh pr edit <N> --remove-label review:approved
-         뗀 명령이 만든 review-gate run 이 완료될 때까지 대기
-         gh pr edit <N> --add-label review:changes-requested
-  ```
+  로 여는 코멘트를 장마다 재고, 판정 정의 · 그 수의 출처 · 합이 아니라 장 단위인
+  이유는 `scripts/check-review-size-cap.sh` 헤더가 갖는다. 넘으면 그 코멘트를
+  줄이고 job 을 re-run 한다 — 코멘트를 API 로 다시 읽어서 새 commit 없이 풀린다
+  (같은 cap 이 걸린 PR body 쪽은 반대다: [delivery](../delivery/memory.md)
+  「PR body」). **cap 을 지키는 것이 이 계약을 지키는 것은 아니다** — cap 은
+  잘라내기로도 만족되고 잘리는 것은 대개 결론이 아니라 근거다.
+- Verdict는 label로 공표한다 — green 이면 `review:approved`, red 면
+  `review:changes-requested`. 순서는 **기존 verdict 를 뗀다 → 뗀 명령이 만든
+  `review-gate` run 이 끝나기를 기다린다 → 새 verdict 를 붙인다** 이고 두 방향이
+  같다. add와 remove를 한 명령에 같이 쓰지 않는다 — 같은 초에 label 이벤트가 둘
+  나면 `cancel-in-progress`가 `review-gate` run 하나를 죽이고, 그 이름의 최신
+  suite가 non-success인 채 남아 BLOCKED가 고착된다(#1879 실측). 명령 형태는
+  `.agents/prompts/pr-review.md` 「Verdict label」이 갖는다.
 
   **기다리는 것은 시간이 아니라 run 의 상태다.** 고정 초는 조건이 못 된다 —
   run 의 벽시계 시간은 job 실행(2-3초)이 아니라 runner queue 가 지배하고 queue 에는
@@ -150,9 +145,8 @@ trigger:
   **기다릴 대상은 conclusion 이 아니라 완료다** — 뗀 직후에는 대개
   `review:approved` 가 없어 그 run 이 red 로 끝난다. 뗄 label 이 애초에 없으면
   label 이벤트가 안 나서 기다릴 run 도 없다.
-  명령 형태는 `.agents/prompts/pr-review.md` 「Verdict label」.
 
-  두 방향 모두 **기존 verdict 를 먼저 떼고 새 verdict 를 나중에 붙인다.**
+  **순서를 뒤집으면 양방향으로 샌다.**
   red 에서 안 떼면 같은 SHA 재리뷰로 green 이 red 로 뒤집혀도 approved 가 남아
   게이트가 통과하고(`Dismiss stale approval`은 `synchronize` 전용 — #1884),
   green 에서 approved 를 먼저 붙이면 두 label 공존 창에서 red 표식이 남은 채
