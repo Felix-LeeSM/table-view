@@ -767,13 +767,12 @@ export default function QueryTab({ tab }: QueryTabProps) {
       {/* Sprint 255 — raw Mongo preview modal, plus the parser-driven
           write dispatch (Sprint 312). Mounts when the dispatch branch's
           analysis is above the INFO tier and the Safe Mode gate raised no
-          STOP. The find path never mounts it (always INFO). `dropIndex`
-          builds its analysis inline rather than through
-          `analyzeMongoOperation`, so the branch — not the analyzer roster
-          — is what decides.
+          STOP. The find path never mounts it. `dropIndex` builds its
+          analysis inline rather than through `analyzeMongoOperation`, so
+          the branch — not the analyzer roster — is what decides.
           `db.runCommand` / `db.adminCommand` never land here: that branch
-          sends everything outside its read-only allowlist to
-          `pendingMongoConfirm`, a stricter gate than this preview.
+          routes a non-INFO command to `pendingMongoConfirm`, a stricter
+          gate than this preview.
           Issue #2375 — `$out` / `$merge` and the empty-filter `*-many`
           writes reach `pendingMongoConfirm` only where the gate returns
           `confirm` (production, or non-production under `strict`). On a

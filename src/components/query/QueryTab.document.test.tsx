@@ -798,11 +798,11 @@ describe("QueryTab — document", () => {
       // `allow` here, so no ConfirmDestructiveDialog opens.
       //
       // Issue #2375 — `allow` no longer means "straight to the driver".
-      // The QueryTab preview mounts for every non-INFO tier, so the
+      // The QueryTab preview gate now covers every tier above INFO, so the
       // destructive pipeline gets the same MQL Preview a bounded write
       // gets, and the dispatch happens on confirm. Before this the
-      // shipped default gave `$out` less friction than a $match-bounded
-      // updateMany.
+      // shipped default gave `$out` less friction than an `updateMany`
+      // with a non-empty filter.
       mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
       useConnectionStore.setState({
         connections: [

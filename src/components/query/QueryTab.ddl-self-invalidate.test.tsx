@@ -182,8 +182,9 @@ function seedTab(sql: string) {
   // `runRdbSingleNow` on the first click: the QueryTab preview now mounts
   // for every non-INFO tier, not just WARN. `executeThroughPreview` below
   // walks past it so those cases keep testing schema invalidation rather
-  // than dialog mechanics. The last case in this file seeds an INFO-tier
-  // SELECT instead, which still goes direct on the first click.
+  // than dialog mechanics. The `does not clear the cache for non-DDL
+  // results` case seeds an INFO-tier SELECT instead, which still goes
+  // direct on the first click.
   const tab = makeQueryTab({ sql, database: "db1" });
   useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
   useConnectionStore.setState({
@@ -194,8 +195,8 @@ function seedTab(sql: string) {
 
 // Issue #2375 — a DROP TABLE reaches the driver only after the QueryTab
 // preview is confirmed, so every DDL case here needs the second step. The
-// INFO-tier SELECT guard at the bottom of this file still goes direct and
-// must NOT use this helper.
+// INFO-tier SELECT guard (`does not clear the cache for non-DDL results`)
+// still goes direct and must NOT use this helper.
 async function executeThroughPreview(result: {
   current: {
     handleExecute: () => Promise<void>;

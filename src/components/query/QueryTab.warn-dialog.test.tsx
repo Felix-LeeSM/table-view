@@ -19,8 +19,8 @@
 // - Mongo aggregate read-only ($match) → dialog NOT mount (INFO skip)
 // - Mongo aggregate write ($out) → ConfirmDestructiveDialog (STOP 우선)
 //
-// INFO tier 만 dialog 를 건너뛴다. INFO / STOP 분기는 위와 같이 회귀
-// 테스트로 가드.
+// INFO tier 만 preview dialog 를 건너뛴다. INFO / STOP 분기는 위와 같이
+// 회귀 테스트로 가드.
 //
 // 이슈 #2375 (2026-08-16) — dialog mount 조건이 WARN tier 에서 non-INFO
 // 전체로 넓어졌다. 출하 기본 설정(연결 환경 태그 비-production + Safe Mode
@@ -331,8 +331,9 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
   });
 
   it("[AC-2375-01b] preview[danger] DELETE without WHERE — 환경 태그 없음 + off 에서도 dialog mount", async () => {
-    // 태그 없는 연결 + Safe Mode `off` 는 `decideSafeModeAction` 의 나머지
-    // `allow` 칸이다. 같은 미리보기를 받아야 마찰이 등급을 거스르지 않는다.
+    // 태그 없는 연결 + Safe Mode `off` 도 `decideSafeModeAction` 이 파괴적
+    // 문장에 `allow` 를 주는 칸이다. 같은 미리보기를 받아야 마찰이 등급을
+    // 거스르지 않는다.
     seedConnection(null);
     useSafeModeStore.setState({ mode: "off" });
     const tab = seedTab("DELETE FROM users");

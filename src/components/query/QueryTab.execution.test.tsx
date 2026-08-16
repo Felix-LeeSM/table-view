@@ -503,8 +503,7 @@ describe("QueryTab — execution", () => {
       // The preview path rebuilds the batch text from the split statements
       // (`confirmRdbWarn` → `pending.statements.join(";\n")`) rather than
       // replaying the raw editor buffer, so the recorded separator is
-      // `;\n`. That has been the shape for every WARN-tier batch since
-      // Sprint 255; issue #2375 only routed this batch onto the same path.
+      // `;\n`. Issue #2375 only routed this batch onto that path.
       expect(history[0]!.sqlRedacted).toBe("SELECT 1;\nDROP TABLE nope");
     });
   });

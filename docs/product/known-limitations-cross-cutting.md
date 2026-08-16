@@ -71,24 +71,14 @@ connection that momentarily reads as unresolved during a frontend hydration race
 is still covered structurally by the backend gate, which re-reads `environment`
 from its own SQLite store; non-canonical stored tags ("Production", "prod")
 canonicalize to unset and surface an "Unknown" badge rather than silently
-masquerading as production. A Safe Mode `allow` does not mean the statement
-runs unannounced. In the raw SQL/MQL editor a statement the analyzer puts above
-the info tier gets a review step before the driver: normally the preview dialog
-(`SqlPreviewDialog` / `MqlPreviewModal`), and the stricter confirm dialog
-instead when the RDB dry-run row-impact escalation raises a bounded write to
-danger — that escalated confirm returns before the preview branch
-(`src/components/query/QueryTab/rdbQueryExecution.ts`), so the two never stack.
-Until #2375 the preview was gated on the warn tier alone, which ran friction
-backwards against severity: on the shipped Safe Mode `warn` default
-`DELETE FROM t WHERE id = 1` was previewed while `DROP TABLE t` went straight to
-the driver. The decision matrix is unchanged by that widening — `allow` still
-carries no confirmation proof to the backend, and the confirm dialog is still
-what production connections and Safe Mode `strict` raise. Two edges of the
-preview path are worth knowing. It records the split statements re-joined with
-`;\n` rather than the editor text, so a batch the widening moved onto that path
-appears in query history with its blank lines and indentation normalised and
-any comment-only chunk dropped; comments attached to a statement survive. And
-the Redis command console mounts no preview at all
+masquerading as production. Issue #2375 widened the raw SQL/MQL editor's
+preview gate from the warn tier to every tier above info. On a non-production
+connection under Safe Mode `warn` / `off` the matrix returns `allow` for a
+destructive statement, and before that widening `DROP TABLE t` dispatched on
+the first click while `DELETE FROM t WHERE id = 1` got the preview dialog;
+`DROP TABLE t` and a Mongo `$out` pipeline now open that same dialog
+(`SqlPreviewDialog` / `MqlPreviewModal`). The Safe Mode decision matrix is
+unchanged by the widening. The Redis command console mounts no preview at all
 (`src/components/query/QueryTab/kvQueryExecution.ts`), so a destructive command
 the matrix allows there still dispatches on the first click. Destructive
 classification reuses the native

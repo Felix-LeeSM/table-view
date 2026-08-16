@@ -36,19 +36,18 @@
 //     DANGER tier only and so still skips WARN — it passes A, B and C while
 //     gating the wrong half;
 //   - a decision site outside an `if (parsed.method === "…")` arm, since C's
-//     population is those arms. Two live examples. `rdbQueryExecution.ts`
-//     has no arms at all and holds B only because it has exactly one
-//     `requiresPreviewDialog(` call — that is arity, not structure: adding a
-//     second, ungated `setPendingRdbWarn` mount to that file leaves the whole
-//     suite green (measured — the file-level `text.includes` in B still sees
-//     the first call). And `executeMongoRunCommandIfPresent` in
+//     population is those arms. `rdbQueryExecution.ts` has no arms at all and
+//     holds B only because it has exactly one `requiresPreviewDialog(` call —
+//     that is arity, not structure: adding a second, ungated
+//     `setPendingRdbWarn` mount to that file leaves the whole suite green
+//     (measured — the file-level `text.includes` in B still sees the first
+//     call). And `executeMongoRunCommandIfPresent` in
 //     `mongoQueryExecution.ts` sits ahead of the first arm, so its decision
 //     site is in the dropped head of the split; it carries no
 //     `requiresPreviewDialog(` today and the suite is green, which is the
-//     same measurement. What covers that one is
-//     its own stricter gate — everything outside the read-only allowlist goes
-//     to the confirm dialog, not to this preview — so do not "fix" it by
-//     routing it through the preview predicate.
+//     same measurement. What covers that one is its own stricter gate — it
+//     routes a non-INFO command to the confirm dialog, not to this preview —
+//     so do not "fix" it by routing it through the preview predicate.
 // The behavioural tests in `src/components/query/QueryTab.warn-dialog.test.tsx`
 // and `src/components/query/QueryTab/useQueryExecution.writeDispatch.test.tsx`
 // are what cover those; this file covers the shape.
@@ -63,8 +62,7 @@ import { describe, expect, it } from "vitest";
 import { canEscalateByImpact, requiresPreviewDialog } from "@/lib/safeMode";
 
 // `process.cwd()` is the vitest root (the repo root), the same anchor
-// `src/types/dataSourceProfileParity.test.ts` uses. `import.meta.url` is not
-// a file URL under the jsdom environment these suites run in.
+// `src/types/dataSourceProfileParity.test.ts` uses.
 const SRC_ROOT = resolve(process.cwd(), "src");
 
 // A preview mount: `setPendingRdbWarn({...})` / `setPendingMongoWarn({...})`.
