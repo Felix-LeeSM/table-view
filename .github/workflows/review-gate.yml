@@ -192,8 +192,27 @@ jobs:
       # checkout 은 실패할 수 있다 — 맨 앞에 두면 그 실패가 유일한 stale-approval
       # 가드를 skip 시킨다. 여기서 실패하면 `Require review:approved` 가 skip 되지만
       # 게이트는 red 라 머지는 그대로 막힌다 (fail-closed).
+      #
+      # **그래서 아래 `Checkout` 과 `Scorecard size cap` 은 `always()` 로 돈다 (#2372).**
+      # 자리를 지키는 것만으로는 부족하다 — 바로 앞 `Stop at review round 3` 이
+      # 의도적으로 exit 1 하므로 암묵 `success()` 가 「rounds >= 3 이고
+      # `reflect:done` 이 없는」 구간에서 이 검사를 통째로 skip 시켰다. 그러면 재는
+      # 자리가 `reflect:done` 이 붙은 뒤로 좁혀지는데, 하필 그 구간의 scorecard 가
+      # 가장 길고(그 라운드부터 유형 재발 표를 더 싣는다) 거기서 red 가 나면 남의
+      # scorecard 를 줄일 자격이 있는 노드가 없다.
+      # 위 `Release reflect:done on a new round` 가 같은 함정을 같은 방식으로 피한다.
+      #
+      # 대가: `Checkout` 이 실패해도 cap 스텝이 돌아 오류가 겹친다. 그 겹침을
+      # `steps.<id>.outcome` 으로 막지 않는다 — 이 검사의 실행을 남의 스텝 결과에
+      # 묶으면 그 스텝이 skip 되는 날 검사도 같이 조용히 사라져 지금 고치는 결함이
+      # 그대로 돌아온다. 겹친 오류는 시끄럽고 사라진 검사는 조용하다.
+      #
+      # `Require review:approved` 는 안 고친다. 그 스텝은 red 만 더하는데 앞이 red 면
+      # 게이트는 이미 막혀 있어 skip 이 아무것도 안 놓친다. 형태의 회귀 가드는
+      # scripts/__tests__/check-review-size-cap.test.ts 의
+      # "runs review-gate's … even after `Stop at review round 3` exits 1" 케이스다.
       - name: Checkout
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         uses: actions/checkout@v6
 
       # 코멘트는 payload 가 아니라 API 로 읽는다 — ci.yml 의 PR body cap 과 정반대로,
@@ -215,7 +234,7 @@ jobs:
       # 끝날 때만 성립한다. 여기서 재는 것은 **끝 개행을 뗀 코멘트**다 — 늘 실제 이하라
       # 거짓 red 를 못 만든다.
       - name: Scorecard size cap
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}

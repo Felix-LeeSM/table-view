@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { parse as parseYaml } from "yaml";
 
 // `scripts/check-review-size-cap.sh` 는 두 required workflow 에서 도는 blocking
 // 게이트다 — PR body 는 `.github/workflows/ci.yml` 의 `PR Body Contract` 잡,
@@ -105,11 +106,16 @@ describe("check-review-size-cap", () => {
   // 이슈 #2374 가 보고한 증상 그대로: 인자 계약이 <LABEL> [FILE] 인데 파일 경로를
   // LABEL 자리에 넣으면 FILE 이 없어 stdin 을 읽고, stdin 이 비면 0 문자가 된다.
   // 20,000 자 문서가 `ok: <경로> 0 chars <= 12000` 으로 통과하던 자리다.
+  //
+  // exit 는 1(상한 초과)이 아니라 2(검사 불성립)로 박는다 — 이 호출은 문서를 재서
+  // 넘긴 것이 아니라 문서를 아예 못 받은 것이고, 스크립트도 위 "refuses empty input"
+  // 과 같은 0 문자 분기에서 끊는다. `not.toBe(0)` 로 두면 그 구분이 1 로 미끄러져도
+  // 통과해, 호출자가 「줄여라」로 읽고 인자 자리를 안 고친다.
   it("refuses a FILE path put in the LABEL slot with no stdin", () => {
     const over = seed("x".repeat(MAX + 8_000));
     const run = runGate([over], "");
     expect(run.out).not.toMatch(/^ok:/);
-    expect(run.status).not.toBe(0);
+    expect(run.status).toBe(2);
   });
 
   it("refuses a FILE that is not there", () => {
@@ -148,6 +154,41 @@ describe("check-review-size-cap", () => {
         expect(call).toMatch(/printf '%s' "\$\{?\w+\}?"\s*\|\s*bash /);
         expect(call).toContain(gate);
       }
+    },
+  );
+
+  // 스텝이 호출을 갖고 있어도 **돌지 않으면** 게이트는 없는 것과 같다. review-gate
+  // 의 `Stop at review round 3` 은 의도적으로 exit 1 하고, GitHub 은 `if:` 에 아무
+  // 것도 안 적힌 뒤 스텝에 암묵 `success()` 를 건다 — 그래서 라운드 3 이상 ·
+  // `reflect:done` 없음 구간에서는 cap 스텝이 통째로 skip 됐다. 하필 그 구간의
+  // scorecard 가 가장 길다 (issue #2372). 같은 함정을 같은 파일의
+  // `Release reflect:done on a new round` 가 이미 `always()` 로 피한다.
+  //
+  // 통과 형태는 둘 중 하나다 — `if:` 가 `always()` 를 갖거나, 스텝이 그 exit 1
+  // **앞**에 온다. `always()` 만 요구하면 자리를 옮기는 처방이 거짓 red 를 맞는다.
+  // `Checkout` 도 같이 잠근다: cap 스텝은 그 checkout 이 놓은 스크립트를 부르므로
+  // 둘 중 하나만 돌면 남은 쪽이 없는 파일을 찾는다.
+  it.each(["Checkout", "Scorecard size cap"])(
+    "runs review-gate's %s even after `Stop at review round 3` exits 1",
+    (stepName) => {
+      const workflow = parseYaml(
+        readFileSync(
+          join(repoRoot, ".github/workflows/review-gate.yml"),
+          "utf8",
+        ),
+      ) as {
+        jobs: Record<string, { steps: { name?: string; if?: string }[] }>;
+      };
+      const steps = workflow.jobs["review-gate"].steps;
+      const names = steps.map((s) => s.name);
+      const stopAt = names.indexOf("Stop at review round 3");
+      const at = names.indexOf(stepName);
+      expect(stopAt).toBeGreaterThanOrEqual(0);
+      expect(at).toBeGreaterThanOrEqual(0);
+      expect(
+        at < stopAt || (steps[at].if ?? "").includes("always()"),
+        `${stepName}(#${at}) 이 Stop at review round 3(#${stopAt}) 뒤인데 if: ${JSON.stringify(steps[at].if ?? null)} 에 always() 가 없다 — 그 exit 1 뒤로는 영영 안 돈다`,
+      ).toBe(true);
     },
   );
 });
