@@ -100,6 +100,7 @@ function runGate(root?: string, env: NodeJS.ProcessEnv = {}) {
   });
   return {
     status: run.status,
+    stdout: run.stdout ?? "",
     stderr: run.stderr ?? "",
     out: `${run.stdout ?? ""}${run.stderr ?? ""}`,
   };
@@ -248,7 +249,12 @@ describe("check-ci-test-calls", () => {
       workflow: `${DEFAULT_WORKFLOW}      - run: cargo test --manifest-path src-tauri/Cargo.toml -p tvw --test query_url_live\n`,
     });
     const run = runGate(root);
-    expect(run.out).toMatch(/^ok: /);
+    // `ok: ` 로만 단언하면 member 루트를 아예 안 스캔하는 게이트도 통과한다 — 그때
+    // 이 픽스처의 target 은 `called_one` 하나뿐이라 위반이 안 생긴다. 줄을 통째로
+    // 못 박아 member 가 세어졌다는 것과 호출로 상쇄됐다는 것을 갈라 놓는다.
+    expect(run.out).toBe(
+      "ok: 통합 테스트 target 2 종 — CI 호출 2 종, 사유 달린 미호출 allowlist 0 종 (스캔 루트: src-tauri/tests, src-tauri/tvw/tests)\n",
+    );
     expect(run.status).toBe(0);
   });
 
@@ -265,6 +271,20 @@ describe("check-ci-test-calls", () => {
     expect(run.status).toBe(0);
   });
 
+  // 전수는 이름의 집합이다 (스크립트 헤더 「전수」). 호출도 이름으로만 세므로 두
+  // 루트에 같은 이름이 있을 때 두 번 세면 집계와 FAIL 줄이 같은 이름을 두 벌 낸다.
+  it("counts a target name shared by two roots once", () => {
+    const root = seed({
+      tests: { ...CALLED, "shared_probe.rs": "fn main() {}\n" },
+      members: { tvw: { "shared_probe.rs": "fn main() {}\n" } },
+    });
+    const run = runGate(root);
+    expect(run.out).toContain("통합 테스트 target 2 종");
+    expect(failedNames(run.out)).toEqual(["shared_probe"]);
+    expect(run.out).toContain("위반 1 건");
+    expect(run.status).toBe(1);
+  });
+
   // 집계가 통과 경로에만 있으면 인용할 수 있는 상태가 반쪽이 된다. red 를 받은
   // 사람이 가장 먼저 묻는 것이 "내 crate 가 스캔되긴 했나" 인데 (#2336 이 바로 안
   // 스캔된 루트였다) 그 답이 위반이 있을 때만 사라지면 안 된다. 아래는 수치와 두
@@ -275,9 +295,12 @@ describe("check-ci-test-calls", () => {
       members: { tvw: { "query_url_live.rs": "fn main() {}\n" } },
     });
     const run = runGate(root);
-    expect(run.out).toMatch(
+    expect(run.stderr).toMatch(
       /^집계: 통합 테스트 target 3 종 — CI 호출 1 종, 사유 달린 미호출 allowlist 0 종 \(스캔 루트: src-tauri\/tests, src-tauri\/tvw\/tests\)$/m,
     );
+    // rc 1 은 세 줄이 다 stderr 다 (스크립트의 「출력 계약」 블록). stdout 이 비었다는
+    // 단언 하나가 `FAIL` · `집계:` · `::error::` 세 자리의 리디렉션을 같이 잠근다.
+    expect(run.stdout).toBe("");
     expect(run.status).toBe(1);
   });
 
@@ -449,11 +472,14 @@ describe("check-ci-test-calls", () => {
     it(`prints FAIL, 집계 and ::error:: on the exit 2 path (${label})`, () => {
       const run = runGate(makeTree());
       expect(run.status).toBe(2);
-      expect(run.out).toMatch(/^FAIL 검사 불성립: \S/m);
-      expect(run.out).toMatch(
+      expect(run.stderr).toMatch(/^FAIL 검사 불성립: \S/m);
+      expect(run.stderr).toMatch(
         /^집계: 통합 테스트 target \S+ 종 — CI 호출 \S+ 종, 사유 달린 미호출 allowlist \S+ 종 \(스캔 루트: .+\)$/m,
       );
-      expect(run.out).toMatch(/^::error::\S/m);
+      expect(run.stderr).toMatch(/^::error::\S/m);
+      // rc 2 의 세 줄도 같은 자리다 — `die()` 하나를 지나므로 이 단언이 여섯 경로를
+      // 한 번에 덮는다.
+      expect(run.stdout).toBe("");
     });
   }
 
