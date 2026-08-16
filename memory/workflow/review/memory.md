@@ -3,7 +3,7 @@ title: PR Review Behavior
 type: workflow-rule
 updated: 2026-08-11
 task: review, pr, delivery
-keywords: scorecard, verdict, blocking, non-blocking, 사본이 필요한가, 설치가 필요한가, 판정 입력, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상, LC_ALL, LC_ALL=C, 0xA0, GNU tr, BSD tr, 로케일, gnubin, coreutils, 한글 음절, 거짓 0
+keywords: scorecard, verdict, blocking, non-blocking, 사본이 필요한가, 설치가 필요한가, 판정 입력, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상, LC_ALL, LC_ALL=C, 0xA0, GNU tr, BSD tr, 로케일, gnubin, coreutils, 한글 음절, 거짓 0, grep -c, grep -o, wc -l, 자리 수, 개수를 1 로 뭉갠다
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -77,8 +77,14 @@ trigger:
 
   ```
   gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
-    --jq '.[].commit.message' | LC_ALL=C tr -s '[:space:]' ' ' | grep -c -F '<문구>'
+    --jq '.[].commit.message' | LC_ALL=C tr -s '[:space:]' ' ' \
+    | grep -o -F '<문구>' | wc -l
   ```
+
+  **`grep -c` 로 바꾸지 마라 — 앞의 `tr` 이 스트림을 개행 없는 한 줄로 만들어 그
+  형태는 0 아니면 1 밖에 못 낸다** (`grep -c` 는 매치 횟수가 아니라 매치된 줄 수를
+  센다). 위 값은 **자리 수**다 — 2 면 커밋 둘에 있고, 종결자가 한 자리만 고치면
+  나머지가 main 히스토리로 간다 (2026-08-16 #2354: `adac4cc6` · `6f35ac44`).
 
   **`LC_ALL=C` 는 이 명령이 한국어 문구에 대해 성립하는 조건이다.** GNU `tr` 은
   UTF-8 로케일에서 바이트 `0xA0` 을 공백으로 접는다. UTF-8 한글은 3바이트이고 뒤

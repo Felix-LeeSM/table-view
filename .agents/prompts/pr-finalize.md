@@ -139,7 +139,8 @@ gh pr view <N> --json comments -q '.comments[].body'   # 라운드별 scorecard
 # 조각에도 같은 정규화를 건다 — 안 걸면 아래 문단의 탭·개행·연속 공백에 뚫린다
 NEEDLE="$(printf '%s' '<문구>' | LC_ALL=C tr -s '[:space:]' ' ')"
 gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
-  --jq '.[].commit.message' | LC_ALL=C tr -s '[:space:]' ' ' | grep -c -F -- "$NEEDLE"
+  --jq '.[].commit.message' | LC_ALL=C tr -s '[:space:]' ' ' \
+  | grep -o -F -- "$NEEDLE" | wc -l
 ```
 
 **`gh pr view` 의 `commits` 필드로 되돌리지 마라.** 그 형태가 거짓 0 을 내는 기전 셋과
@@ -161,6 +162,12 @@ gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
 **hit 0 은 「커밋 메시지에 없다」의 증명이 아니다.** 정규화해도 인증 실패와 `--jq`
 오타는 똑같이 0 이다. 0 이면 교정 대상에서 빼기 전에 위 원문 덤프를 육안으로 훑는다 —
 0 을 잘못 믿는 값이 한쪽으로만 크기 때문이다 (같은 방).
+
+**그 값은 hit 여부가 아니라 자리 수다 — N 이면 커밋 메시지 N 곳에 있고 N 곳을 다
+고친다.** scorecard 가 커밋 하나를 지목했어도 그것을 자리 수로 읽지 마라: 2026-08-16
+#2354 라운드 2 의 scorecard 는 `6f35ac44` 만 적었는데 같은 문구가 `adac4cc6` 에도
+있었다. **`grep -c` 로 바꾸지 마라** — 앞의 `tr` 이 개행을 없애 그 형태는 0 아니면 1
+밖에 못 낸다. 기전은 `memory/workflow/review/memory.md` 「행동 계약」이 갖는다.
 
 각 라운드 scorecard 의 blocking / non-blocking 목록을 커밋 메시지와 대조한다.
 **라운드 N 의 finding 이 지목한 주장이 라운드 N 이전 커밋 메시지에 그대로 남아
