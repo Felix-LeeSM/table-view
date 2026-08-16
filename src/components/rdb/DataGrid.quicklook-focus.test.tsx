@@ -465,9 +465,7 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
   // `RdbQuickLookBody`, which rendered `null` while `showQuickLook` stayed true:
   // the panel vanished and the toggle then flipped a flag no visible body read,
   // so `Cmd/Ctrl+L` could not bring it back and F6 / Escape were dead with it
-  // (`useQuickLookFocus.ts` returns early on a null panel node). A refresh
-  // reaches the same state, which is why the last case here used to sit in the
-  // block above.
+  // (`useQuickLookFocus.ts` returns early on a null panel node).
   describe("rows shrinking under the selection (#2133)", () => {
     it("keeps the panel on the last row that still exists", async () => {
       serveOneRowOnTheSmallerPage();

@@ -326,10 +326,8 @@ describe("QuickLookPanel", () => {
     });
 
     // #2384 — these two used to render nothing. Unmounting is the caller's
-    // decision (`DataGrid`'s `quickLookOpen`), and a body that took it instead
-    // left `showQuickLook` true with no visible body reading it: the toggle
-    // went dead and `Cmd/Ctrl+L` could not bring the panel back. Both inputs
-    // now produce the empty state inside a mounted shell — the same answer
+    // decision (`DataGrid`'s `quickLookOpen`). Both inputs now produce the
+    // empty state inside a mounted shell — the same answer
     // `DocumentQuickLookBody` already gave them.
     it("shows the empty state when the page has no rows at all", () => {
       render(

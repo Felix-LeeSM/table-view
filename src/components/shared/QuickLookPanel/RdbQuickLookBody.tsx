@@ -5,16 +5,12 @@
 // External invariants:
 // - Region `aria-label` = `"Row Details"`.
 // - Close button `aria-label` = `"Close row details"`.
-// - #2384 — no input removes the panel. Out-of-bounds / empty selection /
-//   a page with no rows all produce the empty state (`/No row selected/i`)
-//   inside a mounted shell, matching what `DocumentQuickLookBody` does for
-//   the same inputs. Whether the panel is open is the caller's decision
-//   (`DataGrid`'s `quickLookOpen`); a body that answered by unmounting
-//   overrode it, and the toggle was then flipping a flag no visible body
-//   read.
+// - #2384 — out-of-bounds / empty selection / a page with no rows all produce
+//   the empty state (`/No row selected/i`) inside a mounted shell, matching
+//   what `DocumentQuickLookBody` does for the same inputs. Whether the panel
+//   is open is the caller's decision (`DataGrid`'s `quickLookOpen`).
 // - No Edit toggle (#1734 (4)): passing `editState` is what makes the fields
-//   editable, so every editable column shows its editor as soon as the panel
-//   opens. Read-only call-sites simply omit `editState`.
+//   editable. Read-only call-sites simply omit `editState`.
 // - Multi-select suffix = `({n} selected, showing first)` when
 //   `selectedRowIds.size > 1`.
 // - Schema prefix shows iff `schema` is non-empty.

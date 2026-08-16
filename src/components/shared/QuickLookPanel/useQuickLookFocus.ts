@@ -38,8 +38,7 @@
 // Enumerating close handlers can only ever be as complete as the last audit, so
 // the restore hangs off the one event all of them share instead: the panel node
 // leaving the DOM, which React reports by calling `panelRef` with `null`.
-// Nothing a call site does (or forgets to do) can bypass it — there is no longer
-// a `focusGridCell` to forget.
+// Nothing a call site does (or forgets to do) can bypass it.
 //
 // The condition is on where focus ENDED UP, not on why the panel went away and
 // not on where focus was before: after the panel is gone, focus that landed
