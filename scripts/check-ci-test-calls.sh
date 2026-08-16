@@ -84,6 +84,8 @@ ALLOWLIST_NAME="ci-uncalled-tests.txt"
 # 아직 못 잰 축은 `?` / `미측정` 으로 찍고 자리는 남긴다. 빼 버리면 그 실행이 어디까지
 # 갔는지를 물을 자리 자체가 없어진다. 계약의 SOT 는
 # `memory/runbook/pr-merge-gates/memory.md` 의 이 게이트 문단이다.
+# `scripts/check-non-blocking-jobs.sh` 의 위반 경로가 같은 이유로 같은 형태를 쓴다 —
+# 그 파일의 rc 2 는 아직 `ERROR:` 한 줄뿐이다.
 
 targets_n="?"
 called_n="?"
@@ -151,13 +153,10 @@ if [ "${#tests_dirs[@]}" -eq 0 ]; then
 	die "$CRATES_DIR 아래 manifest 옆에 tests 디렉토리가 하나도 없다 — 트리가 옮겨졌거나 경로가 틀렸다"
 fi
 
-# 이 가드는 위 `$CRATES_DIR` find 가 못 잡는 경우만 받는다. 실사용에서 그런 경우는
-# 관측되지 않는다 — 위 find 는 스캔 루트를 **포함하는** 트리를 깊이 제한 없이 훑으므로
-# 못 읽는 디렉토리가 있으면 항상 먼저 실패한다 (`chmod 000` 실측: 두 번 다 위 가드가
-# 잡았다, #2347). 그래도 남겨 둔다: 도달 불가는 이 가드의 성질이 아니라 위 find 의
-# 범위가 만드는 성질이라, 위쪽에 `-maxdepth` 를 붙이거나 manifest 목록을
-# `cargo metadata` 로 바꾸는 순간 이 자리가 되살아난다. 지우면 그 편집이 게이트를
-# 조용한 fail-open 으로 만든다 — 이 파일이 애초에 막으려는 상태다.
+# 이 가드는 위 `$CRATES_DIR` find 가 못 잡는 경우를 받는다. 위 find 는 깊이 제한이
+# 없지만 `-name target -prune` 으로 폭이 좁다 — 스캔 루트 아래 못 읽는 `target`
+# 디렉토리는 거기서 프룬돼 rc 0 으로 지나가고, prune 이 없는 아래 `-mindepth 2` find
+# 가 그것을 열다 실패한다. 그 경로는 이 파일의 테스트가 픽스처로 밟는다 (#2347).
 if ! flat_files="$(find "${tests_dirs[@]}" -maxdepth 1 -type f -name '*.rs')" ||
 	! dir_files="$(find "${tests_dirs[@]}" -mindepth 2 -maxdepth 2 -type f -name 'main.rs')"; then
 	die "find 가 스캔 루트($roots_label)를 다 훑지 못했다 (위 stderr)"

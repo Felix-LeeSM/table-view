@@ -135,6 +135,15 @@ const COLLATING_LOCALE = collatingLocale();
 const RUNNING_AS_ROOT =
   typeof process.getuid === "function" && process.getuid() === 0;
 
+// 이 파일의 skip 은 `it.skipIf(조건)` 이 아니라 `ctx.skip(사유)` 로 한다. `skipIf` 는
+// 사유를 어디에도 안 남기므로, 러너 이미지가 로케일을 떨어뜨리거나 job 에 `container:`
+// 가 붙어 그 축이 통째로 안 재어져도 로그에서 갈라볼 것이 없다. 실측 (vitest 4.1.3):
+// CI 가 쓰는 `--reporter=default` 는 파일 줄에 `| N skipped` 까지, `--reporter=verbose`
+// 는 `↓ <케이스 이름> [<사유>]` 까지 찍는다. 모듈 스코프 `console.warn` 은 어느 쪽에도
+// 안 찍혀서 쓰지 않는다.
+const ROOT_SKIP =
+  "root 로 도는 중 — chmod 000 픽스처는 권한 비트가 무시돼 아무것도 안 잰다";
+
 /** 가장 흔한 픽스처: 호출되는 테스트 하나 + 이름을 바꿔 가며 쓰는 두 번째. */
 const CALLED = { "called_one.rs": "fn main() {}\n" };
 
@@ -450,63 +459,84 @@ describe("check-ci-test-calls", () => {
   }
 
   // exit 2 가드 중 `find` 실패를 받는 둘은 어느 케이스도 안 밟았다 (#2347 결함 3).
-  // 아래는 그중 실사용에서 실제로 도달하는 쪽 — `$CRATES_DIR` 전체를 훑는 첫 find —
-  // 을 밟는다. 나머지 하나(스캔 루트만 훑는 find)는 이 find 가 같은 트리를 더 넓게
-  // 훑어 항상 먼저 실패하므로 트리 픽스처로는 도달할 수 없고, 그 사실과 남겨 두는
-  // 사유는 스크립트 쪽 주석이 갖는다.
-  //
-  // root 로 돌면 권한 비트가 무시돼 이 픽스처가 아무것도 안 재므로 건너뛴다.
-  it.skipIf(RUNNING_AS_ROOT)(
-    "refuses a tree whose scan root cannot be read",
-    () => {
-      const root = seed({ tests: CALLED });
-      const sealed = join(root, "src-tauri", "tests");
-      chmodSync(sealed, 0o000);
-      try {
-        const run = runGate(root);
-        expect(run.out).toContain("다 훑지 못했다");
-        expect(run.out).toMatch(/^FAIL 검사 불성립: /m);
-        expect(run.out).toMatch(/^집계: /m);
-        expect(run.status).toBe(2);
-      } finally {
-        chmodSync(sealed, 0o755);
-      }
-    },
-  );
+  // 아래 둘이 하나씩 밟는다. 두 메시지가 다 `다 훑지 못했다` 로 끝나므로 어느 가드가
+  // 걸렸는지는 그 낱말로 안 갈린다 — 첫 find 는 스캔 루트를 모으기 전에 죽어 집계 줄이
+  // `스캔 루트: 미측정` 이고, 두 번째 find 는 그 라벨을 이미 갖고 있어 die 메시지가
+  // `스캔 루트(...)` 를 싣는다. 그 두 문면을 단언해 케이스가 서로의 자리를 안 밟게 한다.
+  it("refuses a tree whose scan root cannot be read", (ctx) => {
+    if (RUNNING_AS_ROOT) ctx.skip(ROOT_SKIP);
+    const root = seed({ tests: CALLED });
+    const sealed = join(root, "src-tauri", "tests");
+    chmodSync(sealed, 0o000);
+    try {
+      const run = runGate(root);
+      expect(run.out).toContain("다 훑지 못했다");
+      expect(run.out).toMatch(/^FAIL 검사 불성립: /m);
+      expect(run.out).toMatch(/^집계: .*\(스캔 루트: 미측정\)$/m);
+      expect(run.status).toBe(2);
+    } finally {
+      chmodSync(sealed, 0o755);
+    }
+  });
+
+  // 스캔 루트만 훑는 두 번째 find 의 실패 경로. 첫 find 는 깊이 제한이 없지만
+  // `-name target -prune` 으로 폭이 좁아서, 스캔 루트 아래 못 읽는 `target` 디렉토리를
+  // 프룬해 rc 0 으로 지나간다 — 그것을 여는 것은 prune 이 없는 두 번째 find 뿐이다.
+  // 상류를 안 고쳐도 오늘 도달하는 자리라 케이스로 잠근다.
+  it("refuses a tree whose scan root holds an unreadable target directory", (ctx) => {
+    if (RUNNING_AS_ROOT) ctx.skip(ROOT_SKIP);
+    const root = seed({ tests: CALLED });
+    const sealed = join(root, "src-tauri", "tests", "target");
+    mkdirSync(sealed, { recursive: true });
+    chmodSync(sealed, 0o000);
+    try {
+      const run = runGate(root);
+      expect(run.out).toContain(
+        "FAIL 검사 불성립: find 가 스캔 루트(src-tauri/tests)를 다 훑지 못했다",
+      );
+      expect(run.out).toMatch(/^집계: .*\(스캔 루트: src-tauri\/tests\)$/m);
+      expect(run.out).toMatch(/^::error::\S/m);
+      expect(run.status).toBe(2);
+    } finally {
+      chmodSync(sealed, 0o755);
+    }
+  });
 
   // 출력 순서를 정하는 `sort` 가 로케일에 걸려 있으면 같은 트리가 환경마다 다른
   // 줄을 낸다 (#2347 결함 4). 이슈는 스캔 루트 라벨만 짚었지만 target 이름을 정렬하는
   // 자리도 같은 축이다 — 그쪽은 FAIL 줄 차례를 정한다. 아래 픽스처는 대문자로
   // 시작하는 이름을 넣어 byte 순서와 사전 순서가 갈리게 만들고, 두 자리를 한 번에
   // 잠근다. `alpha` 는 사전 순서로 `Zed`/`Zeta` 앞, byte 순서로는 뒤다.
-  it.skipIf(COLLATING_LOCALE === null)(
-    "orders roots and FAIL lines by byte value, not by the ambient locale",
-    () => {
-      const root = seed({
-        tests: { ...CALLED, "Zeta.rs": "fn main() {}\n" },
-        members: {
-          Zed: { "zed_probe.rs": "fn main() {}\n" },
-          alpha: { "alpha_probe.rs": "fn main() {}\n" },
-          tvw: { "tvw_probe.rs": "fn main() {}\n" },
-        },
-      });
-      const underC = runGate(root, { LC_ALL: "C" });
-      const underLocale = runGate(root, {
-        LC_ALL: COLLATING_LOCALE as string,
-      });
-
-      // 둘이 같기만 하면 "양쪽이 똑같이 틀린" 회귀를 놓치므로 차례를 직접 못 박는다.
-      expect(underC.out).toContain(
-        "(스캔 루트: src-tauri/tests, src-tauri/Zed/tests, src-tauri/alpha/tests, src-tauri/tvw/tests)",
+  it("orders roots and FAIL lines by byte value, not by the ambient locale", (ctx) => {
+    if (COLLATING_LOCALE === null) {
+      ctx.skip(
+        "collation 이 C 와 다른 로케일을 이 머신에서 못 찾았다 — 두 실행이 저절로 같아져 아무것도 안 잰다",
       );
-      expect(failedNames(underC.out)).toEqual([
-        "Zeta",
-        "alpha_probe",
-        "tvw_probe",
-        "zed_probe",
-      ]);
-      expect(underLocale.out).toBe(underC.out);
-      expect(underLocale.status).toBe(underC.status);
-    },
-  );
+    }
+    const root = seed({
+      tests: { ...CALLED, "Zeta.rs": "fn main() {}\n" },
+      members: {
+        Zed: { "zed_probe.rs": "fn main() {}\n" },
+        alpha: { "alpha_probe.rs": "fn main() {}\n" },
+        tvw: { "tvw_probe.rs": "fn main() {}\n" },
+      },
+    });
+    const underC = runGate(root, { LC_ALL: "C" });
+    const underLocale = runGate(root, {
+      LC_ALL: COLLATING_LOCALE as string,
+    });
+
+    // 둘이 같기만 하면 "양쪽이 똑같이 틀린" 회귀를 놓치므로 차례를 직접 못 박는다.
+    expect(underC.out).toContain(
+      "(스캔 루트: src-tauri/tests, src-tauri/Zed/tests, src-tauri/alpha/tests, src-tauri/tvw/tests)",
+    );
+    expect(failedNames(underC.out)).toEqual([
+      "Zeta",
+      "alpha_probe",
+      "tvw_probe",
+      "zed_probe",
+    ]);
+    expect(underLocale.out).toBe(underC.out);
+    expect(underLocale.status).toBe(underC.status);
+  });
 });
