@@ -42,7 +42,7 @@
 // nowhere (`<body>`) goes to the grid, and focus anything else is holding stays
 // put. "Where it was before" was the obvious rule and it is wrong — a
 // successful commit unmounts the SQL preview too, so the button the user
-// pressed dies with the panel.
+// pressed is gone as well.
 //
 // Two things this still does NOT promise. Escape and `F6` move focus without
 // removing the panel, so they stay explicit below. And when the whole grid goes
@@ -117,8 +117,12 @@ export function useQuickLookFocus(
     // A modal owns focus while it is open (same guard as F6/Escape below), so
     // where focus belongs is not settled yet — keep the flag and re-check on
     // the commit that closes it. Commit-success is exactly this shape: the
-    // dialog's own restore then aims at the element it captured before it
-    // opened, which was inside the panel and no longer exists.
+    // panel and the SQL preview go in separate commits — the panel is a plain
+    // conditional render, while the dialog's content sits behind Radix
+    // `Presence`, which still reports the closing render as present and only
+    // drops the node from a later one. The dialog's own restore then aims at
+    // the element it captured before it opened, which was inside the panel and
+    // no longer exists.
     if (
       document.querySelector('[role="dialog"], [role="alertdialog"]') !== null
     ) {

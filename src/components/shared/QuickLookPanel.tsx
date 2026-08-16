@@ -32,9 +32,12 @@ import RdbQuickLookBody from "./QuickLookPanel/RdbQuickLookBody";
  * paradigm-aware call-site opts in with `mode: "document"` and supplies
  * `rawDocuments` plus `database`/`collection` labels.
  *
- * Optional `editState` enables in-panel editing. When present, per-column
- * cells become editable (RDB) or the BSON tree swaps to per-field FieldRows
- * (document). When absent the panel stays fully read-only.
+ * Optional `editState` enables in-panel editing, and the two paradigms reach
+ * it differently. RDB: per-column cells become editable and there is no Edit
+ * toggle — `RdbQuickLookBody` hands the shell no `onToggleEdit`. Document:
+ * the header surfaces an Edit toggle, and turning it on swaps the BSON tree
+ * for per-field FieldRows when the call-site also supplied `data`. When
+ * `editState` is absent the panel stays fully read-only.
  */
 export interface QuickLookPanelRdbProps {
   mode?: "rdb";

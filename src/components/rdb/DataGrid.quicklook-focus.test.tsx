@@ -1,9 +1,9 @@
 // Issue #1734 (5) — keyboard focus visibility between the grid and Quick Look.
 //
-// The grid publishes a single tab stop (roving tabindex), so Tab reaches the
-// panel only by walking its controls and re-enters the grid at that one tab
-// stop. `F6` is the direct walk in both directions, and the panel disappearing
-// must not leave focus on `<body>`, where the next arrow key goes nowhere.
+// The grid body roves a single tab stop (the header row keeps its own), so Tab
+// reaches the panel only by walking its controls. `F6` is the direct walk in
+// both directions, and the panel disappearing must not leave focus on
+// `<body>`, where the next arrow key goes nowhere.
 //
 // An earlier fix held that second half by calling a restore from each close
 // handler, and what broke it was the paths that reach no handler at all: a
@@ -17,7 +17,8 @@
 // The refetch half was narrowed in two steps and is now closed. #2133 clamped
 // a merely out-of-range selection onto the last surviving row; #2384 gave the
 // zero-row page an empty state inside a mounted panel. A successful commit is
-// the handler-less removal the block below still pins.
+// the handler-less removal the `removing the panel without a close handler`
+// block still pins.
 //
 // Also pins the owner's stated default from the 2026-08-02 decision comment:
 // moving the row selection while the panel is open re-syncs the detail body.
@@ -224,8 +225,8 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
     resetMockTabStore();
   });
 
-  // Reason: the grid's roving tabindex leaves exactly one tab stop, so without
-  // F6 there is no keyboard route into the panel at all.
+  // Reason: `F6` is the direct grid ↔ panel route in both directions; Tab only
+  // gets into the panel by walking its controls.
   it("F6 walks focus grid → panel → grid", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");

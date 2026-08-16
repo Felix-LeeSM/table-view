@@ -2,9 +2,9 @@
 // (`Row Details — schema.table` with multi-select suffix), per-column
 // `FieldRow` list, and `BlobViewerDialog` wiring.
 //
-// External invariants. The user-visible strings are `shared:rowDetails` keys
-// (`src/lib/i18n/locales/shared.ts`), so the rendered text follows the active
-// locale; `regionLabel` is a literal prop and does not.
+// External invariants. The user-visible strings listed below are
+// `shared:rowDetails` keys (`src/lib/i18n/locales/shared.ts`), so the rendered
+// text follows the active locale; `regionLabel` is a literal prop and does not.
 // - Region `aria-label` = `"Row Details"`.
 // - Close button `aria-label` = `t("rowDetails.closeLabel")`.
 // - #2384 — out-of-bounds / empty selection / a page with no rows all produce
