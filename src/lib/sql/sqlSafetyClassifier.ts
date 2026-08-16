@@ -520,24 +520,42 @@ export function analyzeStatement(
     };
   }
 
-  // Issue #2272 — SQLite spells the same destructive upsert
-  // `INSERT OR REPLACE INTO …`: the conflict algorithm DELETEs the
-  // conflicting row before inserting, so a column the new row omits is reset
-  // to its default. Neither anchor above catches it (`^REPLACE\b` sees INSERT
-  // as the leading keyword, `^INSERT\s+INTO\b` below sees OR as the next
-  // word), so it used to reach the fail-open `other`/info default. The AST
-  // gate above cannot classify it either — the grammar's `parse_insert`
-  // expects INTO right after INSERT and returns `error`, which falls through
-  // to here. Only REPLACE deletes an existing row. ABORT / FAIL abort the
-  // statement, IGNORE skips the row, and ROLLBACK also rolls back the open
-  // transaction — but only its own uncommitted work, nothing already
-  // durable — so they are deliberately left where they are.
-  if (/^INSERT\s+OR\s+REPLACE\b/.test(upper)) {
+  // Issue #2272 / #2288 — SQLite spells the same destructive upsert with an
+  // `OR <conflict-algorithm>` clause between the verb and the rest of the
+  // statement, and it hangs that clause on BOTH write verbs:
+  // `INSERT OR REPLACE INTO …` and `UPDATE OR REPLACE … SET …`. REPLACE is the
+  // one algorithm that DELETEs the conflicting row before writing, and that
+  // deletion voids whatever premise the tier rested on:
+  //   - INSERT — a column the new row omits is reset to its default.
+  //   - UPDATE — the deleted row is one the WHERE never selected, so the WHERE
+  //     bounds which row is written but NOT which row is destroyed. The
+  //     "bounded UPDATE WHERE = warn" premise of the `^UPDATE\s+\S` branch
+  //     below simply does not hold here.
+  // Anchoring on one verb is what let the UPDATE spelling through (#2288):
+  // `^REPLACE\b` above sees UPDATE as the leading keyword, `^INSERT\s+INTO\b`
+  // and `^UPDATE\s+\S` read past the clause, so the statement landed on
+  // `dml-update`/warn with no dialog while a row silently disappeared. The
+  // branch is therefore anchored on the conflict clause, not on a verb — but
+  // over a CLOSED verb set, because widening it to any verb would swallow
+  // `CREATE OR REPLACE VIEW …`, info by design (AC-1115-05).
+  //
+  // The AST gate above classifies neither spelling — the grammar's
+  // `parse_insert` expects INTO right after INSERT and `parse_update` expects a
+  // table name, so both return `error` and fall through to here.
+  //
+  // Only REPLACE deletes an existing row. ABORT / FAIL abort the statement,
+  // IGNORE skips the row, and ROLLBACK also rolls back the open transaction —
+  // but only its own uncommitted work, nothing already durable — so on either
+  // verb they are deliberately left where they are.
+  const orReplaceVerb = upper.match(/^(INSERT|UPDATE)\s+OR\s+REPLACE\b/)?.[1];
+  if (orReplaceVerb !== undefined) {
     return {
       kind: "dml-replace",
       severity: "danger",
       reasons: [
-        "INSERT OR REPLACE — 기존 행 덮어쓰기 (충돌 행 DELETE 후 INSERT)",
+        orReplaceVerb === "INSERT"
+          ? "INSERT OR REPLACE — 기존 행 덮어쓰기 (충돌 행 DELETE 후 INSERT)"
+          : "UPDATE OR REPLACE — 충돌 행 DELETE 후 갱신 (WHERE 밖의 행이 사라짐)",
       ],
     };
   }

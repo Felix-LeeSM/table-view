@@ -602,6 +602,121 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   });
 
   // -------------------------------------------------------------------------
+  // Issue #2288 (2026-08-15) — SQLite hangs the same `OR <conflict-algorithm>`
+  // clause on the UPDATE verb too: `UPDATE OR REPLACE t SET … WHERE …`. On a
+  // uniqueness conflict the algorithm DELETEs the *conflicting* row — a row
+  // the WHERE never selected — and then applies the update. So the WHERE
+  // bounds which row is written but NOT which row is destroyed, and the
+  // "bounded UPDATE WHERE = warn" premise this classifier's `dml-update`
+  // branch rests on does not hold for this spelling. Measured on the branch
+  // point (16476549a) it read `dml-update` / `warn` here and `Severity::Info`
+  // on the Rust side — a silent row deletion leaving with no dialog.
+  //
+  // Fix shape (issue text): not "patch these two callsites" but "both
+  // classifiers see `OR REPLACE` as the modifier that voids the tier premise",
+  // so the branch is anchored on the conflict clause with a closed verb set
+  // instead of on one verb. The verb set stays closed because widening it to
+  // any verb swallows `CREATE OR REPLACE VIEW` (info by design — AC-1115-05).
+  // -------------------------------------------------------------------------
+  describe("Issue #2288 — SQLite UPDATE OR REPLACE destructive upsert → danger", () => {
+    it("[AC-2288-01] UPDATE OR REPLACE … WHERE … → dml-replace / danger", () => {
+      const a = analyzeStatement(
+        "UPDATE OR REPLACE t SET id = 1 WHERE rowid = 5",
+      );
+      expect(a).toEqual({
+        kind: "dml-replace",
+        severity: "danger",
+        reasons: [
+          "UPDATE OR REPLACE — 충돌 행 DELETE 후 갱신 (WHERE 밖의 행이 사라짐)",
+        ],
+      });
+      expect(isDangerous(a)).toBe(true);
+    });
+
+    it("[AC-2288-02] lower-case and multi-whitespace/newline/comment forms → danger", () => {
+      for (const sql of [
+        "update or replace t set id = 1 where rowid = 5",
+        "UPDATE   OR\n  REPLACE t SET id = 1 WHERE rowid = 5",
+        "UPDATE /* c */ OR REPLACE t SET id = 1 WHERE rowid = 5",
+      ]) {
+        expect(analyzeStatement(sql).severity).toBe("danger");
+      }
+    });
+
+    // ── false-positive guards ────────────────────────────────────────────
+    it("[AC-2288-03] the four non-deleting conflict algorithms stay bounded warn", () => {
+      // Only REPLACE deletes the conflicting row. ROLLBACK / ABORT / FAIL
+      // abort the statement and IGNORE skips the row, so the WHERE still
+      // bounds the blast radius and the bounded-UPDATE tier is correct.
+      for (const algorithm of ["ROLLBACK", "ABORT", "FAIL", "IGNORE"]) {
+        const a = analyzeStatement(
+          `UPDATE OR ${algorithm} t SET id = 1 WHERE rowid = 5`,
+        );
+        expect(a.kind).toBe("dml-update");
+        expect(a.severity).toBe("warn");
+        expect(isDangerous(a)).toBe(false);
+      }
+    });
+
+    it("[AC-2288-04] the phrase inside a string literal → still dml-update / warn", () => {
+      const a = analyzeStatement(
+        "UPDATE notes SET body = 'UPDATE OR REPLACE' WHERE id = 1",
+      );
+      expect(a.kind).toBe("dml-update");
+      expect(a.severity).toBe("warn");
+    });
+
+    it("[AC-2288-05] trailing UPDATE OR REPLACE in a batch → danger (worst tier wins)", () => {
+      expect(
+        analyzeStatement(
+          "SELECT 1; UPDATE OR REPLACE t SET id = 1 WHERE rowid = 5",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    it("[AC-2288-06] the CTE body form inherits the danger tier", () => {
+      expect(
+        analyzeStatement(
+          "WITH x AS (UPDATE OR REPLACE t SET id = 1 WHERE rowid = 5 RETURNING id) SELECT * FROM x",
+        ).severity,
+      ).toBe("danger");
+    });
+
+    // Reason: #2288 — the Rust side compared whitespace-split tokens and
+    // read `REPLACE"t"` as one word, so a quoted table name hugging
+    // the keyword classified `Info` there while this `\b` anchor said danger,
+    // and the enforcing layer is the Rust one (#1112). SQLite accepts all four
+    // delimiters with nothing before them and each still DELETEs the
+    // conflicting row. Both layers now match on the word boundary; this locks
+    // the frontend half so the pair cannot drift back apart. (2026-08-16)
+    it("[AC-2288-07] a quoted table name hugging REPLACE → still danger", () => {
+      for (const [open, close] of [
+        ['"', '"'],
+        ["[", "]"],
+        ["`", "`"],
+        ["'", "'"],
+      ]) {
+        expect(
+          analyzeStatement(
+            `UPDATE OR REPLACE${open}t${close} SET b = 20 WHERE a = 1`,
+          ).severity,
+        ).toBe("danger");
+        expect(
+          analyzeStatement(`INSERT OR REPLACE INTO${open}t${close} VALUES (1)`)
+            .severity,
+        ).toBe("danger");
+      }
+      // The three words still have to be three words: a table actually NAMED
+      // `OR REPLACE` is a bounded UPDATE, not a conflict clause.
+      const named = analyzeStatement(
+        'UPDATE "OR REPLACE" SET b = 20 WHERE a = 1',
+      );
+      expect(named.kind).toBe("dml-update");
+      expect(named.severity).toBe("warn");
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Sprint 255 (2026-05-09) — `isInfoStatement` 휴리스틱은 raw editor 의 WARN
   // dialog mount 직전에 INFO (read-only / metadata) statement 을 식별해
   // dialog skip → 직접 IPC 로 우회하는 분기를 위해 신설. INFO corpus =
