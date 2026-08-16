@@ -112,11 +112,18 @@ pub(crate) fn quarantine_timestamp() -> u64 {
 /// next candidate rather than renaming over the winner.
 ///
 /// The empty file left behind is the reservation itself; the caller renames the
-/// quarantined file over it. A caller that fails afterwards deliberately leaves
-/// it in place rather than releasing the name: the source file is still where it
-/// was (that is what lets the next boot retry), so the placeholder cannot be
-/// mistaken for lost data, and releasing it would re-open the name while any
-/// sidecar already moved beside it stays.
+/// quarantined file over it.
+///
+/// Issue #2362 — a caller that fails after this point has to give the name back
+/// before it returns the error, because nothing else ever will: `legacy_cleanup`
+/// sweeps `.legacy.json` and no retention reaches these files at all. A
+/// placeholder that outlived one failed quarantine therefore held `state.db.bak`
+/// for the life of the install, and `quarantine` reads `primary.exists()` to
+/// pick its name — so every quarantine after that failure went to the
+/// timestamped fallback while `src/lib/runtime/snapshot/loadAll.ts` went on
+/// telling the user their data was in `state.db.bak`. Giving the name back is
+/// safe because the caller undoes the rest of its move with it: nothing this
+/// quarantine relocated is still sitting beside a name it releases.
 pub(crate) fn claim_quarantine_path(preferred: &Path) -> Result<PathBuf, AppError> {
     for attempt in 0..QUARANTINE_NAME_ATTEMPTS {
         let candidate = if attempt == 0 {
@@ -155,6 +162,15 @@ pub(crate) fn claim_quarantine_path(preferred: &Path) -> Result<PathBuf, AppErro
 /// the main file in place means the next boot re-probes and retries, whereas
 /// renaming the main file while a sidecar lingers would let boot start fresh
 /// over stale WAL — the exact re-corruption this fixes.
+///
+/// Issue #2362: that abort now rewinds instead of stopping where it stood. A
+/// quarantine that fails partway had already taken a name and moved whatever
+/// sidecars it got to, and none of that came back — the claimed name stayed
+/// occupied by an empty file forever (see [`claim_quarantine_path`]) and the
+/// moved sidecars sat beside it, one epoch away from the main file the next
+/// boot would quarantine. Undoing the move is what makes "the next boot
+/// re-probes and retries" true: the retry starts from the directory this call
+/// found, so it takes the same name and re-pairs the same files.
 pub fn quarantine(path: &Path) -> Result<PathBuf, AppError> {
     let primary = path.with_extension(format!(
         "{}.bak",
@@ -170,14 +186,17 @@ pub fn quarantine(path: &Path) -> Result<PathBuf, AppError> {
         primary
     };
     let backup = claim_quarantine_path(&preferred)?;
-    // Sidecars first so a failure leaves the main file untouched for retry.
-    for suffix in ["-wal", "-shm"] {
-        let src = with_suffix(path, suffix);
-        if src.exists() {
-            fs::rename(&src, with_suffix(&backup, suffix))?;
+    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+    if let Err(e) = relocate_onto_claim(path, &backup, &mut moved) {
+        // Reverse order, and only the renames that actually happened: a `-wal`
+        // that was already beside the backup name before this call is not ours
+        // to move back onto the live DB.
+        for (src, dst) in moved.iter().rev() {
+            let _ = fs::rename(dst, src);
         }
+        let _ = fs::remove_file(&backup);
+        return Err(e);
     }
-    fs::rename(path, &backup)?;
     info!(
         target: "storage",
         path = %path.display(),
@@ -185,6 +204,27 @@ pub fn quarantine(path: &Path) -> Result<PathBuf, AppError> {
         "Quarantined corrupt SQLite file (with WAL sidecars)"
     );
     Ok(backup)
+}
+
+/// Move `path` and its WAL sidecars onto the already-claimed `backup` name,
+/// pushing every rename that succeeded onto `moved` so the caller can rewind
+/// them. Sidecars go first for the reason [`quarantine`] gives; the main file
+/// last is what makes a failure here recoverable at all.
+fn relocate_onto_claim(
+    path: &Path,
+    backup: &Path,
+    moved: &mut Vec<(PathBuf, PathBuf)>,
+) -> Result<(), AppError> {
+    for suffix in ["-wal", "-shm"] {
+        let src = with_suffix(path, suffix);
+        if src.exists() {
+            let dst = with_suffix(backup, suffix);
+            fs::rename(&src, &dst)?;
+            moved.push((src, dst));
+        }
+    }
+    fs::rename(path, backup)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -195,6 +235,17 @@ mod tests {
 
     use super::*;
     use tempfile::TempDir;
+
+    /// Sorted names of everything sitting in `dir` — the view a user recovering
+    /// by hand gets of that directory.
+    fn dir_entry_names(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
 
     #[tokio::test]
     async fn test_probe_accepts_valid_sqlite_header() {
@@ -362,5 +413,67 @@ mod tests {
             return;
         }
         panic!("could not land two quarantines inside one second in 32 tries");
+    }
+
+    /// #2362 — [`claim_quarantine_path`] takes a name by creating an empty file
+    /// at it, so every step after the claim runs against a name this process
+    /// already holds. When one of those steps failed, that empty file stayed
+    /// and nothing in the repo deletes it: `legacy_cleanup` sweeps
+    /// `.legacy.json` and nothing else. The sidecars already moved beside it
+    /// stayed too, which is the pairing a manual recovery reads.
+    ///
+    /// The failure is injected by putting a directory where the main file goes:
+    /// `fs::rename` will not move one onto the empty file the claim just
+    /// created. Which error it is does not matter to the property — the name is
+    /// taken and the sidecars are moved by the time it fires, and what is
+    /// asserted is that the call handed all of that back.
+    #[test]
+    fn test_failed_quarantine_leaves_nothing_behind() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("state.db");
+        fs::create_dir(&path).unwrap();
+        fs::write(dir.path().join("state.db-wal"), b"stale wal").unwrap();
+        fs::write(dir.path().join("state.db-shm"), b"stale shm").unwrap();
+        let before = dir_entry_names(dir.path());
+
+        let err = quarantine(&path).unwrap_err();
+
+        assert_eq!(
+            dir_entry_names(dir.path()),
+            before,
+            "a quarantine that failed ({err}) has to leave the directory as it found it"
+        );
+    }
+
+    /// #2362 — the empty file a failed quarantine left at `state.db.bak` is the
+    /// name the *next* quarantine wants. [`quarantine`] reads
+    /// `primary.exists()` to choose between `state.db.bak` and the timestamped
+    /// fallback, so one failed quarantine sent every later one on that install
+    /// to `state.db.bak.<seconds>` — with no retention to ever take the
+    /// placeholder back, and with `src/lib/runtime/snapshot/loadAll.ts` still
+    /// naming `state.db.bak` to the user as where their data went.
+    ///
+    /// This reads the name rather than the absence of the placeholder, because
+    /// the name is the only place the two branches part.
+    #[test]
+    fn test_quarantine_after_a_failed_one_still_takes_the_bak_name() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("state.db");
+
+        // First quarantine — fails after claiming `state.db.bak` (the test
+        // above says why a directory in the main file's place is what fails it).
+        fs::create_dir(&path).unwrap();
+        quarantine(&path).unwrap_err();
+
+        // Second quarantine of the same slot, this time a real corrupt file.
+        fs::remove_dir(&path).unwrap();
+        fs::write(&path, b"corrupt").unwrap();
+        let backup = quarantine(&path).unwrap();
+
+        assert_eq!(
+            backup,
+            dir.path().join("state.db.bak"),
+            "a failed quarantine must not push the next one onto the timestamped name"
+        );
     }
 }
