@@ -299,9 +299,9 @@ describe("QuickLookPanel", () => {
     // so a page that shrinks under an open panel (a page-1 page-size change
     // keeps the selection) leaves the index pointing past the rows. Rendering
     // nothing took the whole panel down while the caller still had it open, and
-    // the Quick Look toggle then flipped a flag with no visible body reading it
-    // — unrecoverable until the user selected an in-range row. The derivation
-    // clamps instead, so the panel lands on the last row that still exists.
+    // the Quick Look toggle then flipped a flag with no visible body reading
+    // it. The derivation clamps instead, so the panel lands on the last row
+    // that still exists.
     it("clamps a selected row index past the end onto the last row", () => {
       render(
         <QuickLookPanel {...defaultProps} selectedRowIds={new Set([99])} />,

@@ -193,12 +193,9 @@ async function pressCmdL() {
 
 /**
  * Serves fewer rows once the grid asks for a smaller page, keyed off the
- * `pageSize` argument `useRdbTableData` actually sends (5th positional). The
- * fixture cannot shrink 300 → 100 by arithmetic: that needs >100 rows on the
- * page, and past `VIRTUALIZE_THRESHOLD` (200) jsdom's missing layout keeps the
- * row this test has to click out of the DOM — the same limit the anchor case
- * above documents. Stubbing the boundary reproduces the one observable that
- * matters, a page whose row count dropped below the selected index.
+ * `pageSize` argument `useRdbTableData` actually sends (5th positional).
+ * Stubbing the boundary reproduces the one observable that matters, a page
+ * whose row count dropped below the selected index.
  */
 function serveOneRowOnTheSmallerPage() {
   mockQueryTableData.mockImplementation((...args: unknown[]) => {
@@ -499,9 +496,9 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
   // `RdbQuickLookBody`, which rendered `null` while `showQuickLook` stayed true:
   // the panel vanished and the toggle then flipped a flag no visible body read,
   // so `Cmd/Ctrl+L` could not bring it back and F6 / Escape were dead with it
-  // (`useQuickLookFocus.ts` returns early on a null panel node). Selecting an
-  // in-range row was the only way out. A refresh reaches the same state, which
-  // is why the last case here used to sit in the block above.
+  // (`useQuickLookFocus.ts` returns early on a null panel node). A refresh
+  // reaches the same state, which is why the last case here used to sit in the
+  // block above.
   describe("rows shrinking under the selection (#2133)", () => {
     it("keeps the panel on the last row that still exists", async () => {
       serveOneRowOnTheSmallerPage();
