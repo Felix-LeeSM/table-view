@@ -9,16 +9,18 @@
 // An earlier fix held that second half by calling a restore from each close
 // handler, and what broke it was the paths that reach no handler at all: a
 // successful commit, and a refetch that leaves nothing for the panel to show.
-// Both sit in the "paths that remove the panel without a close handler" block
-// below. `useQuickLookFocus` now hangs the restore off the panel node leaving
-// the DOM, so the close-button and `Cmd+L` cases below prove the same mechanism
-// the commit case does — deleting the `focusGridCell()` call from that hook's
+// `useQuickLookFocus` now hangs the restore off the panel node leaving the DOM,
+// so the close-button and `Cmd+L` cases below prove the same mechanism the
+// commit case does — deleting the `focusGridCell()` call from that hook's
 // focus-restore effect (it runs on every commit; it is not an unmount cleanup)
 // reds cases in this file and in `useQuickLookFocus.test.tsx` alike.
 //
-// #2133 narrowed the refetch half instead of deleting it. A page that still has
-// rows keeps the panel now (the derivation clamps the selection onto the last of
-// them), so the panel goes away there only when the page comes back empty.
+// The refetch half was narrowed in two steps and is now closed. #2133 clamped
+// a merely out-of-range selection onto the last surviving row; #2384 gave the
+// zero-row page an empty state inside a mounted panel. Its case moved out of
+// the "paths that remove the panel without a close handler" block and into the
+// `#2384` block, leaving a successful commit as the handler-less removal that
+// block still pins.
 //
 // Also pins the owner's stated default from the 2026-08-02 decision comment:
 // moving the row selection while the panel is open re-syncs the detail body.
@@ -398,14 +400,11 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
   // `useQuickLookFocus.test.tsx` because what it pins is the real wiring — a
   // commit, which does not know Quick Look exists.
   //
-  // #1734 (5) listed a refetch alongside the commit. #2133 moved where that
-  // refetch lands rather than deleting it: a page that still has rows now
-  // clamps the selection and keeps the panel (the shrink block below pins
-  // that), while an EMPTY page has nothing to clamp onto and still removes it.
-  // Both halves stay pinned — the empty-page case below asserts the removal
-  // only, because that page takes the grid rows with it and leaves no anchor
-  // cell to hand focus to, which is the one case `useQuickLookFocus`'s header
-  // already declines to promise.
+  // #1734 (5) listed a refetch alongside the commit, and both later fixes moved
+  // the refetch out of this block rather than deleting the case: #2133 clamps a
+  // shrunken page onto its last row (the shrink block below pins that) and
+  // #2384 gives the zero-row page an empty state (the `#2384` block below).
+  // A successful commit is what is left here.
   describe("paths that remove the panel without a close handler", () => {
     /** Grid-cell edit on the selected row, so a commit has something to write. */
     async function makePendingEdit() {
@@ -456,36 +455,6 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
       ).not.toBeInTheDocument();
       expect(document.activeElement).toBe(rovingAnchor());
     });
-
-    // Reason: the removal half of the refetch case. #2133 clamps onto the last
-    // surviving row, so a shorter page keeps the panel — but a page with zero
-    // rows has no row to clamp onto and the derivation returns `null`, which
-    // still takes the panel down with no close handler in the path. Asserting
-    // only the removal (not the focus landing) is what makes this case
-    // expressible: `rovingAnchor()` throws on an empty grid.
-    it("a refetch onto an empty page still removes the panel", async () => {
-      renderDataGrid();
-      await screen.findByText("3 rows");
-      await selectRowAndOpenPanel(2);
-      expect(
-        screen.queryByRole("region", { name: "Row Details" }),
-      ).toBeInTheDocument();
-
-      mockQueryTableData.mockResolvedValue({
-        ...MOCK_DATA,
-        rows: [],
-        total_count: 0,
-      });
-      await act(async () => {
-        window.dispatchEvent(new Event("refresh-data"));
-      });
-
-      await waitFor(() => {
-        expect(
-          screen.queryByRole("region", { name: "Row Details" }),
-        ).not.toBeInTheDocument();
-      });
-    });
   });
 
   // Issue #2133 — the rows under an open panel shrink while the selection stays.
@@ -496,9 +465,7 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
   // `RdbQuickLookBody`, which rendered `null` while `showQuickLook` stayed true:
   // the panel vanished and the toggle then flipped a flag no visible body read,
   // so `Cmd/Ctrl+L` could not bring it back and F6 / Escape were dead with it
-  // (`useQuickLookFocus.ts` returns early on a null panel node). A refresh
-  // reaches the same state, which is why the last case here used to sit in the
-  // block above.
+  // (`useQuickLookFocus.ts` returns early on a null panel node).
   describe("rows shrinking under the selection (#2133)", () => {
     it("keeps the panel on the last row that still exists", async () => {
       serveOneRowOnTheSmallerPage();
@@ -563,6 +530,67 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
         screen.queryByRole("region", { name: "Row Details" }),
       ).toBeInTheDocument();
       expect(document.activeElement).toBe(panel());
+    });
+  });
+
+  // Issue #2384 — the disappearance #2133 closed, one step further in. A page
+  // that comes back with ZERO rows leaves the clamp nothing to land on, and
+  // `RdbQuickLookBody` used to answer that by rendering `null`: the panel left
+  // the DOM while `showQuickLook` stayed true, so the toggle flipped a flag no
+  // visible body read — `Cmd/Ctrl+L` could not bring the panel back, and F6 /
+  // Escape died with the node (`useQuickLookFocus.ts` returns early on a null
+  // panel node). The body now renders an empty state instead, which is the
+  // answer `DocumentQuickLookBody` already gave the same input.
+  describe("an empty page under the selection (#2384)", () => {
+    /**
+     * Refetches the open page onto zero rows. The wait is on a grid row
+     * disappearing rather than on anything the panel renders, so the helper
+     * says the same thing before and after the fix.
+     */
+    async function refetchOntoEmptyPage() {
+      mockQueryTableData.mockResolvedValue({
+        ...MOCK_DATA,
+        rows: [],
+        total_count: 0,
+      });
+      await act(async () => {
+        window.dispatchEvent(new Event("refresh-data"));
+      });
+      await waitFor(() => {
+        expect(screen.queryByText("Charlie")).not.toBeInTheDocument();
+      });
+    }
+
+    it("keeps the panel mounted and shows its empty state", async () => {
+      renderDataGrid();
+      await screen.findByText("3 rows");
+      await selectRowAndOpenPanel(2);
+      expect(within(panel()).getByDisplayValue("Charlie")).toBeInTheDocument();
+
+      await refetchOntoEmptyPage();
+
+      expect(
+        screen.queryByRole("region", { name: "Row Details" }),
+      ).toBeInTheDocument();
+      expect(within(panel()).getByText(/No row selected/i)).toBeInTheDocument();
+    });
+
+    it("leaves Cmd+L able to close and reopen the panel", async () => {
+      renderDataGrid();
+      await screen.findByText("3 rows");
+      await selectRowAndOpenPanel(2);
+
+      await refetchOntoEmptyPage();
+
+      await pressCmdL();
+      expect(
+        screen.queryByRole("region", { name: "Row Details" }),
+      ).not.toBeInTheDocument();
+
+      await pressCmdL();
+      expect(
+        screen.queryByRole("region", { name: "Row Details" }),
+      ).toBeInTheDocument();
     });
   });
 
