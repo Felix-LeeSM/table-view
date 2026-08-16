@@ -1,8 +1,8 @@
 ---
 title: 비-E2E 테스트 시나리오 설계 원칙 (Rust unit/integration · React component · Zustand store · Hook · Async)
 type: memory
-updated: 2026-07-17
-keywords: 9 가지 원칙, 레이어 분리, getByRole, vi.clearAllMocks(), mockall, vi.useFakeTimers(), tokio::time::pause, src/test-setup.ts, 무의미 테스트 금지, tautology, change-detector, assertion-roulette
+updated: 2026-08-16
+keywords: 9 가지 원칙, 레이어 분리, getByRole, vi.clearAllMocks(), mockall, vi.useFakeTimers(), tokio::time::pause, src/test-setup.ts, 무의미 테스트 금지, tautology, change-detector, assertion-roulette, 경로 미분리, path-ambiguous, 프로덕션 경로가 둘, 갈라지는 지점
 ---
 
 # 비-E2E 테스트 시나리오 설계 원칙
@@ -115,6 +115,13 @@ tautological / assertion-roulette, testsmells.org).
   *어떻게 쓰는지의 계약*만 검증한다.
 - **약한 중복(subset)**: 더 강한 단언에 포함되는 약한 subset 은 제거. 입력/방언
   만 다른 반복은 table-driven(`it.each` / `for (input,expected)`) 하나로. (P1 강화)
+- **경로 미분리(path-ambiguous)**: 프로덕션을 부르고 단언도 실패 가능한데 **같은
+  관측을 만들 수 있는 프로덕션 경로가 둘**이라, 이름이 지목한 기전을 지워도 다른
+  기전이 같은 값을 채워 green 이 남는다 — 백업 슬롯을 seed 와 저장 시 rename 이,
+  격리 이름을 timestamp 분기와 `-N` 접미가 같이 만든다. 판별: *이 관측을 만들 수
+  있는 프로덕션 경로가 하나뿐인가? 둘이면 단언을 두 경로가 갈라지는 지점으로
+  옮겨라* — 한쪽 경로만 살아 있는 상태(이미 찬 슬롯에 두 번째 저장), 또는 경로마다
+  갈리는 값의 모양(`-1` 이 아니라 timestamp). 지목한 기전만 지운 변형이 RED 여야 선다.
 
 **단, 지울지 애매하면 KEEP**: 표면상 중복이라도 *다른 프로덕션 코드경로*
 (예: AST 경로 vs regex fallback)거나 *cross-boundary SOT 미러*(FE↔Rust fixture
@@ -177,7 +184,7 @@ suite green, (c) 보안·데이터무결성 테스트(redact/injection/escape/cr
 - [ ] mock이 internal 모듈을 가리지 않는가? (P6)
 - [ ] 작성 이유 + 날짜 코멘트 있는가? (P7)
 - [ ] 깨진 테스트를 약화시키지 않았는가? (P8)
-- [ ] 프로덕션 코드가 깨지면 이 테스트가 fail 하는가? tautology/source-grep/type-only/framework/subset 아닌가? (P9)
+- [ ] 프로덕션 코드가 깨지면 이 테스트가 fail 하는가? 이 관측을 만드는 프로덕션 경로가 하나뿐인가? tautology/source-grep/type-only/framework/subset/path-ambiguous 아닌가? (P9)
 
 ---
 
