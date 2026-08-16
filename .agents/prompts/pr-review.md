@@ -104,7 +104,11 @@ NEW=<위 표의 값>
 gate_run() { gh run list --workflow review-gate.yml --branch <head-branch> --limit 1 \
   --json databaseId -q '.[0].databaseId'; }
 
-if gh pr view <N> --json labels -q '.labels[].name' | grep -qx "$OLD"; then
+# 조회 실패는 「OLD 가 없다」가 아니라 「모른다」다 — grep 에 바로 물리면 실패가 grep 의
+# rc 로 덮여 「없다」로 강등되고, OLD 를 안 뗀 채 NEW 만 붙어 verdict 둘이 공존한다.
+# 모르면 떼는 가지로 간다 — 그 가지 안의 rc 가드가 아래를 이어 받는다
+LABELS="$(gh pr view <N> --json labels -q '.labels[].name')" || LABELS=UNREADABLE
+if [ "$LABELS" = UNREADABLE ] || printf '%s\n' "$LABELS" | grep -qx "$OLD"; then
   # run 없음(rc 0)과 조회 실패(rc≠0)가 똑같이 빈 문자열로 온다 — 값이 아니라 rc 로 가른다.
   # 실패를 삼켜 PREV="" 가 되면 첫 회차가 옛 완료 run 과 달라 보여 0초 만에 break 한다
   PREV=$(gate_run); RC=$?
