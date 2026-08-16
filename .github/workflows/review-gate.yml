@@ -207,6 +207,13 @@ jobs:
       # 묶으면 그 스텝이 skip 되는 날 검사도 같이 조용히 사라져 지금 고치는 결함이
       # 그대로 돌아온다. 겹친 오류는 시끄럽고 사라진 검사는 조용하다.
       #
+      # 다만 겹친 오류가 **틀린 원인을 지목하면** 시끄러운 것이 이득이 아니다 —
+      # checkout 이 실패하면 cap 스텝의 스크립트가 없어 bash 가 rc=127 을 내고, 그
+      # 스텝의 `|| over=$((over + 1))` 이 그것을 「분량 초과」로 세어 남의 scorecard 를
+      # 줄이라고 지시했다. 그래서 그 스텝이 세기 전에 산출물 존재를 먼저 본다
+      # (아래 `Scorecard size cap` 의 `test -f`). 이것도 스텝 결과가 아니라 산출물을
+      # 보므로 위 원칙을 안 깬다.
+      #
       # `Require review:approved` 는 안 고친다. 그 스텝은 red 만 더하는데 앞이 red 면
       # 게이트는 이미 막혀 있어 skip 이 아무것도 안 놓친다. 형태의 회귀 가드는
       # scripts/__tests__/check-review-size-cap.test.ts 의
@@ -240,6 +247,16 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           set -o pipefail
+          # 위 `always()` 의 대가를 여기서 받는다 — `Checkout` 이 실패해도 이 스텝은
+          # 돌고, 아래가 부르는 스크립트는 그 checkout 이 놓는 파일이다. 없으면 bash 가
+          # rc=127 을 내는데 `|| over=$((over + 1))` 은 비영 rc 를 전부 「상한 초과」로
+          # 세므로, 아무것도 안 쟀는데 "scorecard 를 줄인 뒤 re-run 해라" 가 찍힌다.
+          # 스텝 결과가 아니라 **산출물**을 보는 이유는 위 `Checkout` 앞 주석의
+          # 「`steps.<id>.outcome` 으로 막지 않는다」와 같다.
+          test -f scripts/check-review-size-cap.sh || {
+            echo "::error::scripts/check-review-size-cap.sh 이 없다 — 분량 cap 검사 불성립이다 (위 Checkout 이 실패했거나 skip 됐다). 통과로 강등하지 않는다. scorecard 를 줄이는 것은 이 red 의 처방이 아니다 — 먼저 Checkout 을 고쳐라"
+            exit 1
+          }
           if ! ids="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
             --jq '.[] | select(.body | startswith("## Scorecard")) | .id')"; then
             echo "::error::scorecard 코멘트 목록을 못 읽었다 — 검사 불성립. 분량 cap 을 통과로 강등하지 않는다"

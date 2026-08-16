@@ -38,6 +38,19 @@ function runGate(args: string[], input = "") {
   };
 }
 
+/** review-gate.yml 의 `review-gate` job 스텝 목록 (이름 · `if:` · `run:`). */
+function reviewGateSteps(): { name?: string; if?: string; run?: string }[] {
+  const workflow = parseYaml(
+    readFileSync(join(repoRoot, ".github/workflows/review-gate.yml"), "utf8"),
+  ) as {
+    jobs: Record<
+      string,
+      { steps: { name?: string; if?: string; run?: string }[] }
+    >;
+  };
+  return workflow.jobs["review-gate"].steps;
+}
+
 /** 임시 파일에 문서를 써서 경로를 돌려준다 (FILE 인자 경로용). */
 function seed(body: string): string {
   const dir = mkdtempSync(join(tmpdir(), "review-size-cap-"));
@@ -140,6 +153,12 @@ describe("check-review-size-cap", () => {
   // 통과한다. 「첫 비공백이 `#` 가 아닌 줄」이라는 같은 판정을 형제 가드
   // scripts/check-ci-test-calls.sh 가 먼저 쓴다 (그 헤더 「무엇을 세는가」).
   //
+  // **호출은 `bash <경로>` 로 고른다.** 주석이 아니면서 경로만 적는 줄이 있다 —
+  // review-gate 의 `test -f scripts/check-review-size-cap.sh` 가 그것이다. 그 줄까지
+  // 호출로 세면 아래 파이프 단언이 「호출이 아닌 줄」에 걸려 거짓 red 가 된다.
+  // 좁혀도 「스텝이 통째로 사라짐」은 그대로 잡힌다 — 그때는 호출이 0 줄이라
+  // `not.toHaveLength(0)` 이 죽는다.
+  //
   // 파이프 모양까지 고정하는 이유: 이 게이트는 개행도 한 글자로 세므로 호출자가
   // `printf '%s\n'` 으로 넘기면 문서에 없던 한 글자가 더해지고, 그러면 같은
   // 「12,000」이 호출 자리마다 다른 수가 된다 (#2321).
@@ -148,7 +167,9 @@ describe("check-review-size-cap", () => {
     (workflow) => {
       const calls = readFileSync(join(repoRoot, workflow), "utf8")
         .split("\n")
-        .filter((l) => l.includes(gate) && !l.trimStart().startsWith("#"));
+        .filter(
+          (l) => l.includes(`bash ${gate}`) && !l.trimStart().startsWith("#"),
+        );
       expect(calls).not.toHaveLength(0);
       for (const call of calls) {
         expect(call).toMatch(/printf '%s' "\$\{?\w+\}?"\s*\|\s*bash /);
@@ -171,15 +192,7 @@ describe("check-review-size-cap", () => {
   it.each(["Checkout", "Scorecard size cap"])(
     "runs review-gate's %s even after `Stop at review round 3` exits 1",
     (stepName) => {
-      const workflow = parseYaml(
-        readFileSync(
-          join(repoRoot, ".github/workflows/review-gate.yml"),
-          "utf8",
-        ),
-      ) as {
-        jobs: Record<string, { steps: { name?: string; if?: string }[] }>;
-      };
-      const steps = workflow.jobs["review-gate"].steps;
+      const steps = reviewGateSteps();
       const names = steps.map((s) => s.name);
       const stopAt = names.indexOf("Stop at review round 3");
       const at = names.indexOf(stepName);
@@ -191,4 +204,31 @@ describe("check-review-size-cap", () => {
       ).toBe(true);
     },
   );
+
+  // 위 `always()` 는 skip 을 막는 대신 `Checkout` 이 실패한 뒤에도 cap 스텝을
+  // 돌린다. 그런데 그 스텝이 부르는 스크립트는 checkout 이 놓는 파일이라, 없으면
+  // bash 가 rc=127 을 내고 루프의 `|| over=$((over + 1))` 은 비영 rc 를 전부
+  // 「상한 초과」로 센다 — 아무것도 안 쟀는데 "분량 cap 을 넘은 scorecard N 장 …
+  // 그 코멘트를 줄인 뒤 re-run 해라" 가 찍힌다. 이 파일이 같은 미끄러짐을 스크립트
+  // 쪽에서 이미 한 번 막았다 (위 "refuses a FILE path put in the LABEL slot" 의
+  // `toBe(2)`): exit 1(상한 초과)과 검사 불성립이 섞이면 호출자가 「줄여라」로 읽는다.
+  //
+  // 잠그는 것: 존재 확인이 호출보다 **앞**에 온다. 안 잠그는 것: 그 확인이 무슨
+  // 메시지를 내는지, 어떤 rc 로 끊는지. `-f` 검사 형태(`test -f` / `[ -f ]` /
+  // `[ ! -f ]`)는 전부 통과시켜 표기만 바꾼 편집이 거짓 red 를 안 맞게 한다.
+  it("checks the gate script is there before it counts scorecards", () => {
+    const lines = (
+      reviewGateSteps().find((s) => s.name === "Scorecard size cap")?.run ?? ""
+    ).split("\n");
+    const guard = lines.findIndex((l) =>
+      new RegExp(`-f\\s+\\S*${gate.replace(/[/.]/g, "\\$&")}`).test(l),
+    );
+    const call = lines.findIndex((l) => l.includes(`| bash ${gate}`));
+    expect(call).toBeGreaterThanOrEqual(0);
+    expect(
+      guard,
+      `Scorecard size cap 의 run: 에 ${gate} 존재 확인이 없다 — checkout 이 실패하면 rc=127 이 「분량 초과」로 세어진다`,
+    ).toBeGreaterThanOrEqual(0);
+    expect(guard).toBeLessThan(call);
+  });
 });
