@@ -120,13 +120,13 @@ gh pr checks <N>
 교정 대상인지의 SOT 는 `memory/workflow/delivery/memory.md` 「squash 커밋 교정」이고,
 여기는 표면마다 **어느 명령이 닿는지**만 둔다.
 
-| 표면 | 착지할 값 | 읽는 명령 | 교정 지점 |
-|---|---|---|---|
-| 제목 | 커밋 하나면 그 커밋 제목 · 둘 이상이면 PR 제목 | 아래 `TITLE=` | `--subject` |
-| body | 브랜치 커밋 메시지를 이어붙인 것 | 아래 REST 덤프 전문 | `--body-file` |
+| 표면 | 읽는 명령 | 교정 지점 |
+|---|---|---|
+| 제목 | 아래 `TITLE=` | `--subject` |
+| body | 아래 REST 덤프 전문 | `--body-file` |
 
-**두 표면을 가르는 것은 커밋 수 하나뿐이다** (repo 설정
-`squash_merge_commit_title=COMMIT_OR_PR_TITLE`) — 그 수는 `.commits|length` 로 읽는다.
+**제목 쪽 가지를 가르는 것은 커밋 수 하나뿐이다** — 무엇이 착지하는지와 그 repo
+설정 이름은 위 방의 표가 갖고, 여기서 쓰는 것은 그 수를 읽는 `.commits|length` 다.
 **`gh pr view --json commits` 는 개수에만 쓴다.** 제목 문자열을 거기 `messageHeadline`
 에서 읽으면 69자에서 잘린 값을 교정 대상으로 삼는다 (기전은
 `memory/workflow/review/memory.md` 「행동 계약」).
@@ -145,7 +145,7 @@ gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
   --jq '.[].commit.message'
 gh pr view <N> --json comments -q '.comments[].body'   # 라운드별 scorecard
 
-# 착지할 제목. 커밋 하나면 위 덤프 첫 커밋의 첫 줄이고, 둘 이상이면 PR 제목이 그대로 온다.
+# 착지할 제목 — 가지가 갈리는 사유는 위 방이고 여기는 가지마다 읽는 명령만 둔다.
 # 읽기 실패를 빈 값으로 접으면 커밋 하나짜리가 조용히 PR 제목 가지로 새 — 못 고치는
 # 표면에 안 착지할 문자열을 대조하게 되므로 판정 불가는 값으로 남기고 멈춘다
 CNT="$(gh pr view <N> --json commits -q '.commits|length')" || CNT=UNREADABLE
@@ -153,7 +153,7 @@ case "$CNT" in
   1)      TITLE="$(gh api repos/Felix-LeeSM/table-view/pulls/<N>/commits \
                      --jq '.[0].commit.message' | head -1)" ;;
   [0-9]*) TITLE="$(gh pr view <N> --json title -q .title)" ;;
-  *)      echo "ABORT: 커밋 수를 못 읽어 제목 출처를 못 가른다 ($CNT)" >&2 ;;
+  *)      echo "ABORT: 커밋 수를 못 읽어 제목 출처를 못 가른다 ($CNT)" >&2; exit 1 ;;
 esac
 printf '%s\n' "$TITLE"
 
@@ -208,11 +208,11 @@ gh pr merge <N> --squash --delete-branch \
   --subject '<교정 제목>' --body-file <교정본 경로>
 ```
 
-**`--subject` 에 넘긴 문자열이 곧 제목이다 — 기본 계산이 붙여 주던 ` (#<PR>)` 꼬리도
-직접 넣는다.** 그 꼬리가 기본 계산의 산물이라는 것까지만 실측돼 있고 (#2369 는 커밋이
-넷이라 PR 제목을 썼고 착지 제목이 그 제목 + ` (#2369)` 였다), `--subject` 를 줬을 때
-GitHub 이 또 붙이는지는 실측이 없다. **그래서 머지 뒤 착지 제목을 읽어 반환 형식에
-그대로 싣는다** — 꼬리가 빠졌거나 둘이면 거기서 드러난다.
+**`--subject` 를 줬을 때 GitHub 이 ` (#<PR>)` 꼬리를 또 붙이는지는 실측이 없다** —
+재려면 실제 머지가 필요하다. 실측된 것은 **기본** 계산이 그 꼬리를 붙인다는 것까지다
+(#2369 는 커밋이 넷이라 PR 제목을 썼고 착지 제목이 그 제목 + ` (#2369)` 였다).
+**꼬리를 직접 넣어 넘기고, 머지 뒤 착지 제목을 읽어 반환 형식에 그대로 싣는다** —
+빠졌거나 둘이면 거기서 드러나고, 그 보고가 다음 종결자의 실측이 된다.
 
 ```bash
 # REST 로 읽는다 — 종결자는 회수 대상 사본 밖에 서 있어(「MANDATORY 첫 명령」) 그 머지
