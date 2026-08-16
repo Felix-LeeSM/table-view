@@ -84,8 +84,10 @@ red 면 그 줄과 파일이 그대로인지(들여쓰기·트레일링 CR 도 r
 `src-tauri test binaries called or allowlisted` (#2113) 는 workflow 의 `--test`
 밖에 있는 통합 테스트 target 을 `ci-uncalled-tests.txt` 와 대조한다 — red 면
 `FAIL <이름>: …` 줄 뒤에 `집계: … (스캔 루트: …)` 를 찍어 그 실행이 무엇을
-스캔했는지 같이 보여 준다. 스캔 루트는 `src-tauri` 아래 manifest 옆 `tests/`
-전부이고(#2336), fix 는 그 테스트를 부르거나 사유를 적는 것이다.
+스캔했는지 같이 보여 준다. **여기서 red 는 rc 1(위반)과 rc 2(검사 불성립) 둘 다고
+양쪽이 같은 모양을 낸다** — rc 2 가 아무 줄도 안 찍던 자리를 #2347 이 닫았고, 그
+경우 이름 자리는 `검사 불성립` 고정이다. 스캔 루트는 `src-tauri` 아래 manifest 옆
+`tests/` 전부이고(#2336), fix 는 그 테스트를 부르거나 사유를 적는 것이다.
 `no review-round narrative in source comments` (#2114) 는 `src/` · `src-tauri/` ·
 `e2e/` 주석의 리뷰 라운드 표기를, `(non-blocking) job names carry
 continue-on-error` (#2174) 는 그 접미사를 단 job 의 `continue-on-error: true`

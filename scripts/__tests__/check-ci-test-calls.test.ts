@@ -1,5 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -84,12 +90,13 @@ function seed({
   return root;
 }
 
-function runGate(root?: string) {
+function runGate(root?: string, env: NodeJS.ProcessEnv = {}) {
   const run = spawnSync("bash", root ? [gate, root] : [gate], {
     cwd: repoRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 60_000,
+    env: { ...process.env, ...env },
   });
   return {
     status: run.status,
@@ -97,6 +104,36 @@ function runGate(root?: string) {
     out: `${run.stdout ?? ""}${run.stderr ?? ""}`,
   };
 }
+
+/** 출력에 찍힌 `FAIL <이름>:` 의 이름을 찍힌 차례 그대로 뽑는다. */
+function failedNames(out: string): string[] {
+  return out
+    .split("\n")
+    .filter((line) => line.startsWith("FAIL "))
+    .map((line) => line.slice("FAIL ".length).split(":")[0]);
+}
+
+/**
+ * collation 이 `C` 와 실제로 다른 로케일을 이 머신에서 찾는다. glibc 는 설치 안 된
+ * 로케일을 조용히 C 로 떨어뜨리므로, 이름만 믿고 돌리면 두 실행이 저절로 같아지면서
+ * 아무것도 안 재고 green 이 되는 테스트가 된다 — `sort` 로 판별력을 먼저 증명한다.
+ * `Zeta` 는 byte 순서로 `alpha` 앞이고 사전 순서로는 뒤다.
+ */
+function collatingLocale(): string | null {
+  for (const loc of ["en_US.UTF-8", "en_US.utf8", "de_DE.UTF-8"]) {
+    const probe = spawnSync("sort", [], {
+      input: "Zeta\nalpha\n",
+      encoding: "utf8",
+      env: { ...process.env, LC_ALL: loc },
+    });
+    if (probe.status === 0 && probe.stdout === "alpha\nZeta\n") return loc;
+  }
+  return null;
+}
+const COLLATING_LOCALE = collatingLocale();
+
+const RUNNING_AS_ROOT =
+  typeof process.getuid === "function" && process.getuid() === 0;
 
 /** 가장 흔한 픽스처: 호출되는 테스트 하나 + 이름을 바꿔 가며 쓰는 두 번째. */
 const CALLED = { "called_one.rs": "fn main() {}\n" };
@@ -351,4 +388,125 @@ describe("check-ci-test-calls", () => {
     expect(run.out).toContain("검사할 디렉토리가 없다");
     expect(run.status).toBe(2);
   });
+
+  // 집계 줄의 `사유 달린 미호출 allowlist N 종` 은 사유가 붙은 항목만 세야 라벨이
+  // 참이다. 세는 자리가 사유를 안 보던 동안 `beta`(사유 없음)가 그 수에 들어가,
+  // 위반 경로가 「사유 달린 … 2 종」을 찍으면서 사유를 가진 것은 `gamma` 하나였다
+  // (#2347 결함 1). 아래는 그 수를 못 박는다.
+  //
+  // FAIL 줄 차례까지 못 박는 이유: 사유 없는 항목을 `continue` 로 통째로 건너뛰면
+  // 수는 맞는데 2 차 루프가 `ci-uncalled-tests.txt 에 없다` 를 한 줄 더 찍어,
+  // 파일에 버젓이 있는 이름을 없다고 말하면서 위반을 2 건으로 센다. 그 우회로도
+  // red 가 되게 이름 목록을 통째로 비교한다.
+  it("counts only reason-carrying entries in the allowlist tally", () => {
+    const root = seed({
+      tests: {
+        ...CALLED,
+        "beta.rs": "fn main() {}\n",
+        "gamma.rs": "fn main() {}\n",
+      },
+      allowlist: "beta\ngamma\t사유 있음\n",
+    });
+    const run = runGate(root);
+    expect(run.out).toContain("사유 달린 미호출 allowlist 1 종");
+    expect(failedNames(run.out)).toEqual(["beta"]);
+    expect(run.out).toContain("위반 1 건");
+    expect(run.status).toBe(1);
+  });
+
+  // rc 2 도 red 다. 그런데 rc 2 경로에만 `FAIL` 도 `집계:` 도 `::error::` 도 없어서,
+  // 검사가 아예 성립 못 한 red 가 셋 중 가장 적게 말하고 있었다 (#2347 결함 2).
+  // 아래는 rc 2 를 내는 자리를 전부 같은 계약으로 묶는다 — 새 rc 2 분기가 계약
+  // 밖으로 나가면 그 분기를 여기 더하는 순간 red 다.
+  const refusals: Record<string, () => string> = {
+    "no crate manifest": () => {
+      const root = seed({ tests: CALLED });
+      rmSync(`${root}/src-tauri/Cargo.toml`);
+      return root;
+    },
+    "no integration test target": () => seed({ tests: {} }),
+    "no --test call": () =>
+      seed({
+        tests: CALLED,
+        workflow: "      - run: cargo test\n",
+        allowlist: "called_one\t사유\n",
+      }),
+    "no .github/workflows": () =>
+      seed({ tests: CALLED, workflow: null, allowlist: "called_one\t사유\n" }),
+    "no allowlist file": () => seed({ tests: CALLED, allowlist: null }),
+    "root that is not there": () => join(tmpdir(), "ci-test-calls-없는경로"),
+  };
+
+  for (const [label, makeTree] of Object.entries(refusals)) {
+    it(`prints FAIL, 집계 and ::error:: on the exit 2 path (${label})`, () => {
+      const run = runGate(makeTree());
+      expect(run.status).toBe(2);
+      expect(run.out).toMatch(/^FAIL 검사 불성립: \S/m);
+      expect(run.out).toMatch(
+        /^집계: 통합 테스트 target \S+ 종 — CI 호출 \S+ 종, 사유 달린 미호출 allowlist \S+ 종 \(스캔 루트: .+\)$/m,
+      );
+      expect(run.out).toMatch(/^::error::\S/m);
+    });
+  }
+
+  // exit 2 가드 중 `find` 실패를 받는 둘은 어느 케이스도 안 밟았다 (#2347 결함 3).
+  // 아래는 그중 실사용에서 실제로 도달하는 쪽 — `$CRATES_DIR` 전체를 훑는 첫 find —
+  // 을 밟는다. 나머지 하나(스캔 루트만 훑는 find)는 이 find 가 같은 트리를 더 넓게
+  // 훑어 항상 먼저 실패하므로 트리 픽스처로는 도달할 수 없고, 그 사실과 남겨 두는
+  // 사유는 스크립트 쪽 주석이 갖는다.
+  //
+  // root 로 돌면 권한 비트가 무시돼 이 픽스처가 아무것도 안 재므로 건너뛴다.
+  it.skipIf(RUNNING_AS_ROOT)(
+    "refuses a tree whose scan root cannot be read",
+    () => {
+      const root = seed({ tests: CALLED });
+      const sealed = join(root, "src-tauri", "tests");
+      chmodSync(sealed, 0o000);
+      try {
+        const run = runGate(root);
+        expect(run.out).toContain("다 훑지 못했다");
+        expect(run.out).toMatch(/^FAIL 검사 불성립: /m);
+        expect(run.out).toMatch(/^집계: /m);
+        expect(run.status).toBe(2);
+      } finally {
+        chmodSync(sealed, 0o755);
+      }
+    },
+  );
+
+  // 출력 순서를 정하는 `sort` 가 로케일에 걸려 있으면 같은 트리가 환경마다 다른
+  // 줄을 낸다 (#2347 결함 4). 이슈는 스캔 루트 라벨만 짚었지만 target 이름을 정렬하는
+  // 자리도 같은 축이다 — 그쪽은 FAIL 줄 차례를 정한다. 아래 픽스처는 대문자로
+  // 시작하는 이름을 넣어 byte 순서와 사전 순서가 갈리게 만들고, 두 자리를 한 번에
+  // 잠근다. `alpha` 는 사전 순서로 `Zed`/`Zeta` 앞, byte 순서로는 뒤다.
+  it.skipIf(COLLATING_LOCALE === null)(
+    "orders roots and FAIL lines by byte value, not by the ambient locale",
+    () => {
+      const root = seed({
+        tests: { ...CALLED, "Zeta.rs": "fn main() {}\n" },
+        members: {
+          Zed: { "zed_probe.rs": "fn main() {}\n" },
+          alpha: { "alpha_probe.rs": "fn main() {}\n" },
+          tvw: { "tvw_probe.rs": "fn main() {}\n" },
+        },
+      });
+      const underC = runGate(root, { LC_ALL: "C" });
+      const underLocale = runGate(root, {
+        LC_ALL: COLLATING_LOCALE as string,
+      });
+
+      // 둘이 같기만 하면 "양쪽이 똑같이 틀린" 회귀를 놓치므로 차례를 직접 못 박는다.
+      expect(underC.out).toContain(
+        "(스캔 루트: src-tauri/tests, src-tauri/Zed/tests, src-tauri/alpha/tests, src-tauri/tvw/tests)",
+      );
+      expect(failedNames(underC.out)).toEqual([
+        "Zeta",
+        "alpha_probe",
+        "tvw_probe",
+        "zed_probe",
+      ]);
+      expect(underLocale.out).toBe(underC.out);
+      expect(underLocale.status).toBe(underC.status);
+    },
+  );
 });
