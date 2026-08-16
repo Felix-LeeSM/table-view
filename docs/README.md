@@ -336,8 +336,14 @@ command grep -rl lefthook docs/ | /usr/bin/grep -cE 'docs/(archives|explorations
 
 **둘째 함정 — `-I` 가 binary 판정 입력을 통째로 건너뛴다.** 거짓 0 보다 나쁘다:
 `0` 조차 안 찍고 rc=1 이라 **진짜 0건과 구분이 안 된다.** 커밋 메시지를 `tr` 로
-정규화해 `grep -c` 로 세는 자리가 실제로 닿는 경로다 —
-`memory/workflow/review/memory.md:57` 과 `.agents/prompts/pr-finalize.md:137`.
+정규화해 문구의 자리 수를 세는 명령이 실제로 닿는 경로다 —
+`memory/workflow/review/memory.md` 「행동 계약」과 `.agents/prompts/pr-finalize.md`
+「3단계」. 좌표를 안 쓰는 이유는 두 파일이 편집될 때마다 줄 번호가 밀려서다.
+
+**그 두 자리는 `grep -o -F … | wc -l` 로 센다 — 건너뛴 결과가 `wc` 를 지나 `0`·rc=0 이
+되고, 그것은 진짜 0건과 출력도 rc 도 같다.** 그래서 값만 보고는 못 가르는데, 가를
+필요도 없게 두 자리 다 「hit 0 은 없다는 증명이 아니다」를 문면에 이미 갖는다 — 0 이면
+값을 믿지 말고 원문 덤프를 훑거나 문구를 줄여 다시 재라고 처방한다.
 
 ```sh
 printf 'hello\0world needle here\n' | grep -c needle            # 출력 없음, rc=1
@@ -345,6 +351,8 @@ printf 'hello\0world needle here\n' | grep -a -c needle         # 1, rc=0
 printf 'hello\0world needle here\n' | command grep -c needle    # 1, rc=0
 printf 'hello\0world needle here\n' | /usr/bin/grep -c needle   # 1, rc=0
 bash -c 'printf "hello\0world needle here\n" | grep -c needle'  # 1, rc=0
+printf 'hello\0world needle here\n' | grep -o needle | wc -l    # 0, rc=0
+printf 'nothing here\n'             | grep -o needle | wc -l    # 0, rc=0  ← 위와 같다
 ```
 
 **커밋되는 스크립트와 CI 는 두 함정 다 안 물린다.** 근거는 대화형 여부도, 프로필을
