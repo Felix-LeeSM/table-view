@@ -112,16 +112,16 @@ smoke or measurement gates:
   `src/components/datagrid/DataGridTable.tsx` hands a non-null `tabCol` only to
   the anchor's row, and moving focus into the Quick Look panel does not move
   the anchor because the panel renders no `[data-grid-row]` for `syncFocus` to
-  fire from. The body virtualizes when the row count passes the threshold in
+  fire from. The body virtualizes when
+  `data.rows.length + pendingNewRows.length` passes the threshold in
   `src/components/datagrid/DataGridTable/columnUtils.ts` (200, under the
-  default page size 300 in `src/lib/gridPolicy.ts`) and no inline nested-JSON
-  cell is expanded; while it does, the anchor row can sit outside the rendered
-  window, and then no cell carries `tabIndex=0` at all and Tab has no way onto
-  a data cell. Tab still re-enters the grid container — the header row
-  (`src/components/datagrid/DataGridTable/HeaderRow.tsx`) renders whether or
-  not the body virtualizes and keeps a tab stop of its own, separate from the
-  body's: one `columnheader` at `tabIndex=0` plus a `tabIndex={0}` resize
-  separator per column. What is out of reach is the anchor cell. `F6` and
+  default page size 300 in `src/lib/gridPolicy.ts`) and no inline jsonb or
+  Postgres ARRAY cell is expanded; while it does, the anchor row can sit
+  outside the rendered window. Tab still re-enters the grid container — the
+  header row (`src/components/datagrid/DataGridTable/HeaderRow.tsx`) renders
+  whether or not the body virtualizes and keeps tab stops of its own, separate
+  from the body's: one `columnheader` at `tabIndex=0` plus a `tabIndex={0}`
+  resize separator per column. What is out of reach is the anchor cell. `F6` and
   Escape are unaffected — they route through `useGridRoving.focusAnchorCell`,
   which scrolls the anchor row back in first.
 - Quick Look grows its long-value editors to fit their content with the CSS

@@ -151,7 +151,7 @@ vi.mock("@stores/workspaceStore", async () => {
   };
 });
 
-/** The single grid tab stop — what focus must come back to. */
+/** The single grid body tab stop — what focus must come back to. */
 function rovingAnchor(): HTMLElement {
   const el = document.querySelector<HTMLElement>(
     '[data-grid-row][tabindex="0"]',
