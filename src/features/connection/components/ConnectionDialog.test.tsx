@@ -84,6 +84,16 @@ function renderDialog(
   return { ...result, onClose };
 }
 
+/**
+ * #2437 — Test Connection runs the same required-field rule as Save, so a
+ * spec that wants the IPC dispatched has to fill Name first. `createEmptyDraft`
+ * seeds everything else the default PostgreSQL shape needs (host `localhost`,
+ * database `postgres`), leaving Name as the only blank required field.
+ */
+function fillNameForTest(value = "Testable DB") {
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value } });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -351,6 +361,7 @@ describe("ConnectionDialog", () => {
     renderDialog();
 
     await act(async () => {
+      fillNameForTest();
       fireEvent.click(screen.getByText("Test Connection"));
     });
 
@@ -375,6 +386,7 @@ describe("ConnectionDialog", () => {
     expect(screen.queryByText(/Edit/i)).not.toBeInTheDocument();
 
     await act(async () => {
+      fillNameForTest();
       fireEvent.click(screen.getByText("Test Connection"));
     });
 
@@ -400,6 +412,7 @@ describe("ConnectionDialog", () => {
     renderDialog();
 
     await act(async () => {
+      fillNameForTest();
       fireEvent.click(screen.getByText("Test Connection"));
     });
 
@@ -415,6 +428,7 @@ describe("ConnectionDialog", () => {
     renderDialog();
 
     act(() => {
+      fillNameForTest();
       fireEvent.click(screen.getByText("Test Connection"));
     });
 
@@ -1244,6 +1258,7 @@ describe("ConnectionDialog", () => {
       renderDialog();
 
       await act(async () => {
+        fillNameForTest();
         fireEvent.click(screen.getByText("Test Connection"));
       });
 
@@ -1301,6 +1316,7 @@ describe("ConnectionDialog", () => {
 
       // Click Test → pending state. Slot must still be the same node.
       await act(async () => {
+        fillNameForTest();
         fireEvent.click(screen.getByText("Test Connection"));
       });
       stable.assertStillSame("after pending");
@@ -1330,6 +1346,7 @@ describe("ConnectionDialog", () => {
       const stable = expectNodeStable(getSlot);
 
       await act(async () => {
+        fillNameForTest();
         fireEvent.click(screen.getByText("Test Connection"));
       });
       stable.assertStillSame("after pending");
@@ -1363,6 +1380,7 @@ describe("ConnectionDialog", () => {
 
       // Click 1 → pending
       await act(async () => {
+        fillNameForTest();
         fireEvent.click(screen.getByText("Test Connection"));
       });
       stable.assertStillSame("click 1 pending");
@@ -1415,6 +1433,7 @@ describe("ConnectionDialog", () => {
       renderDialog();
 
       await act(async () => {
+        fillNameForTest();
         fireEvent.click(screen.getByText("Test Connection"));
       });
 
@@ -1438,6 +1457,7 @@ describe("ConnectionDialog", () => {
       renderDialog();
 
       await act(async () => {
+        fillNameForTest();
         fireEvent.click(screen.getByText("Test Connection"));
       });
       // pending

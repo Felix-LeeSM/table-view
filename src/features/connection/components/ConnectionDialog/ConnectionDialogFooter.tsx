@@ -3,9 +3,20 @@ import {
   DialogFeedback,
   type DialogFeedbackState,
 } from "@components/ui/dialog";
-import { Loader2, Plug } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Plug,
+} from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CONNECTION_ERROR_ID } from "../forms/fieldValidation";
+
+/** id of the test-result region the details toggle controls (#2437). */
+export const TEST_FEEDBACK_ID = "connection-test-feedback";
 
 export interface ConnectionDialogFooterProps {
   feedbackState: DialogFeedbackState;
@@ -29,8 +40,11 @@ export interface ConnectionDialogFooterProps {
  *     dialog-level escape-hatch split documented at the top of
  *     `ConnectionDialog.tsx`.
  *
- * Stateless. All decisions (state -> message, error string, loading
- * flags) come from props.
+ * Issue #2437 — the Test Connection button *is* the result: its icon and
+ * colour carry idle / pending / success / failure, and the feedback region
+ * below is `sr-only` until the user opens the details disclosure beside the
+ * button. The only state this component owns is that disclosure; every
+ * decision about *what* to show still comes from props.
  */
 export default function ConnectionDialogFooter({
   feedbackState,
@@ -44,25 +58,37 @@ export default function ConnectionDialogFooter({
   onSave,
 }: ConnectionDialogFooterProps) {
   const { t } = useTranslation("featuresConnection");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  // Only success/error carry a message worth reading; idle has none and
+  // pending says nothing the spinner doesn't already.
+  const hasDetails = feedbackMessage !== undefined;
   return (
     <>
-      {/* Alerts — pinned outside the scroll container so Test result /
-          save error are always visible regardless of scroll position or
-          Advanced Settings being open.
+      {/* Test result — pinned outside the scroll container so it is always
+          reachable regardless of scroll position or Advanced Settings being
+          open.
 
-          Sprint-95 Layer-1 migration: this slot is now rendered by the
-          base `<DialogFeedback>` primitive. The `slotName` override keeps
-          the sprint-92 `data-slot="test-feedback"` selector contract
-          intact so `expectNodeStable` continues to track the same DOM
-          node across state transitions. `DialogFeedback` itself owns the
-          "always mounted + min-h reserved" guarantee that previously
-          lived inline here. */}
+          Sprint-95 Layer-1 migration: this slot is rendered by the base
+          `<DialogFeedback>` primitive. The `slotName` override keeps the
+          sprint-92 `data-slot="test-feedback"` selector contract intact so
+          `expectNodeStable` continues to track the same DOM node across
+          state transitions.
+
+          #2437: `sr-only` while collapsed. That keeps the node mounted with
+          its `role="status"` / `role="alert"` / `aria-live` semantics — a
+          screen reader hears the full sanitised message as soon as it
+          arrives, with or without the disclosure — while the empty band it
+          used to reserve before any test costs nothing. Removing the region
+          outright would have been an accessibility regression; hiding it
+          with `hidden`/`display:none` would have been the same regression
+          in a quieter form. */}
       <DialogFeedback
+        id={TEST_FEEDBACK_ID}
         slotName="test-feedback"
         state={feedbackState}
         message={feedbackMessage}
         loadingText={t("footer.testingText")}
-        className="border-t border-border px-4 py-3"
+        className={detailsOpen ? "border-t border-border px-4 py-3" : "sr-only"}
       />
       {error && (
         <div
@@ -84,10 +110,43 @@ export default function ConnectionDialogFooter({
             size="sm"
             onClick={onTest}
             disabled={testing}
+            className={
+              feedbackState === "success"
+                ? "text-success"
+                : feedbackState === "error"
+                  ? "text-destructive"
+                  : undefined
+            }
           >
-            {testing ? <Loader2 className="animate-spin size-3.5" /> : <Plug />}
+            {/* #2437 — the status is the icon, not colour alone: four
+                distinct glyphs so it survives a monochrome or
+                colour-blind read (WCAG 1.4.1). */}
+            {feedbackState === "loading" ? (
+              <Loader2 className="animate-spin size-3.5" />
+            ) : feedbackState === "success" ? (
+              <CheckCircle />
+            ) : feedbackState === "error" ? (
+              <AlertCircle />
+            ) : (
+              <Plug />
+            )}
             {t("footer.testConnection")}
           </Button>
+          {hasDetails && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setDetailsOpen((open) => !open)}
+              aria-expanded={detailsOpen}
+              aria-controls={TEST_FEEDBACK_ID}
+              /* Name stays constant across both states; `aria-expanded`
+                 carries open/closed, per the disclosure pattern. */
+              aria-label={t("footer.testDetails")}
+            >
+              {detailsOpen ? <ChevronUp /> : <ChevronDown />}
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={onCancel}>

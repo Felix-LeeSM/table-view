@@ -196,6 +196,11 @@ describe("SQLite file workflow smoke", () => {
       await setInput("#conn-name", "E2E SQLite App State Rejected");
       await setInput("#conn-sqlite-path", stateDbPath);
       await (await $("button=Test Connection")).click();
+      // #2437 — the Test Connection button carries the result state itself and
+      // the reason sits behind the details disclosure beside it. The region is
+      // `sr-only` until opened, so the assertion below has to open it rather
+      // than rely on whether `getText()` surfaces visually hidden text.
+      await clickAria("Test result details");
       await waitForElementTextAll(
         dialog,
         ["internal app data"],

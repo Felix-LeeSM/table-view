@@ -109,6 +109,11 @@ describe("ConnectionDialog critical accessibility smoke", () => {
     render(<ConnectionDialog onClose={vi.fn()} />);
 
     await act(async () => {
+      // #2437 — Test Connection runs the same required-field rule as Save, so
+      // the draft needs a Name before the IPC is dispatched at all.
+      fireEvent.change(screen.getByLabelText("Name"), {
+        target: { value: "Leak guard" },
+      });
       fireEvent.change(screen.getByLabelText("Password"), {
         target: { value: secret },
       });
