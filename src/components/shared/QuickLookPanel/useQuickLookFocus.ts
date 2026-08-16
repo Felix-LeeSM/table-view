@@ -31,15 +31,15 @@
 // The second trap is WHERE the restore hangs. #1734 (5) first wired it into each
 // close handler and wrote that every close path went through them. Some did not,
 // and none of those was a handler at all — a successful commit empties the
-// selection the panel's mount gate reads, and a refetch can leave the page with
-// no row for the panel to show. (#2133 narrowed that second one: an index past
-// the end is now clamped onto the last surviving row, so only a page that comes
-// back EMPTY still removes the panel.) Enumerating close handlers can
-// only ever be as complete as the last audit, so the restore hangs off the one
-// event all of them share instead: the panel node leaving the DOM, which React
-// reports by calling `panelRef` with `null`. Nothing a call site does (or
-// forgets to do) can bypass it — there is no longer a `focusGridCell` to
-// forget.
+// selection the panel's mount gate reads, and a refetch could leave the page with
+// no row for the panel to show. (Two later fixes closed that second one: #2133
+// clamps an index past the end onto the last surviving row, and #2384 renders an
+// empty state for a page that comes back with zero rows instead of unmounting.)
+// Enumerating close handlers can only ever be as complete as the last audit, so
+// the restore hangs off the one event all of them share instead: the panel node
+// leaving the DOM, which React reports by calling `panelRef` with `null`.
+// Nothing a call site does (or forgets to do) can bypass it — there is no longer
+// a `focusGridCell` to forget.
 //
 // The condition is on where focus ENDED UP, not on why the panel went away and
 // not on where focus was before: after the panel is gone, focus that landed

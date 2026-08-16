@@ -67,6 +67,8 @@ export const en = {
     heading: "Row Details —",
     closeLabel: "Close row details",
     multiSelect: "({{count}} selected, showing first)",
+    // #2384 — RDB counterpart of `bson.noDocumentSelected`.
+    emptyState: "No row selected",
   },
 
   // QuickLookPanel — FieldRow
@@ -237,6 +239,7 @@ export const ko = {
     heading: "행 상세 —",
     closeLabel: "행 상세 닫기",
     multiSelect: "({{count}}개 선택됨, 첫 번째 표시)",
+    emptyState: "선택된 행 없음",
   },
 
   // QuickLookPanel — FieldRow

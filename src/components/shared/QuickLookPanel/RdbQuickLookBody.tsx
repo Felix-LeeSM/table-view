@@ -1,11 +1,17 @@
 // RDB-paradigm body of QuickLook: header title
 // (`Row Details — schema.table` with multi-select suffix), per-column
-// `FieldRow` list, and `BlobViewerDialog` wiring. Returns `null` when the
-// selected row index is out of bounds or selection is empty.
+// `FieldRow` list, and `BlobViewerDialog` wiring.
 //
 // External invariants:
 // - Region `aria-label` = `"Row Details"`.
 // - Close button `aria-label` = `"Close row details"`.
+// - #2384 — no input removes the panel. Out-of-bounds / empty selection /
+//   a page with no rows all produce the empty state (`/No row selected/i`)
+//   inside a mounted shell, matching what `DocumentQuickLookBody` does for
+//   the same inputs. Whether the panel is open is the caller's decision
+//   (`DataGrid`'s `quickLookOpen`); a body that answered by unmounting
+//   overrode it, and the toggle was then flipping a flag no visible body
+//   read.
 // - No Edit toggle (#1734 (4)): passing `editState` is what makes the fields
 //   editable, so every editable column shows its editor as soon as the panel
 //   opens. Read-only call-sites simply omit `editState`.
@@ -63,9 +69,10 @@ export default function RdbQuickLookBody({
   // the derivation, `useDataGridSelection.handleSelectRow` is the only writer of
   // `selectedRowIds`, and its call sites pass `.map()` / virtualizer indices, so
   // nothing hands this a negative today. It also changes nothing observable on
-  // its own — `data.rows[-1]` is `undefined` and the `!row` return below already
-  // caught that. What it buys is that the two bodies now defend the same range;
-  // a split defense is what lets a future path in break only one paradigm.
+  // its own — `data.rows[-1]` is `undefined`, which the empty-state branch below
+  // renders the same way. What it buys is that the two bodies now defend the
+  // same range; a split defense is what lets a future path in break only one
+  // paradigm.
   const row = useMemo(() => {
     if (
       firstSelectedId == null ||
@@ -89,8 +96,6 @@ export default function RdbQuickLookBody({
       selectedRowIsDirty(firstSelectedId, editState?.pendingEdits ?? new Map()),
     [firstSelectedId, editState?.pendingEdits],
   );
-
-  if (!row) return null;
 
   const displayTable = schema ? `${schema}.${table}` : table;
 
@@ -119,26 +124,35 @@ export default function RdbQuickLookBody({
       editState={editState}
       panelRef={panelRef}
     >
-      {data.columns.map((col, idx) => {
-        const cellValue = (row as unknown[])[idx];
-        return (
-          <FieldRow
-            // Row index is part of the key so moving the selection remounts the
-            // fields (same idiom as the grid's `row-${page}-${rowIdx}`).
-            // `EditableValue` seeds a local draft from the cell on mount; with a
-            // row-independent key the draft would survive the switch and show
-            // the previous row's text over the new row's value. Always-on
-            // editing (#1734 (4)) makes that visible on every selection move.
-            key={`${firstSelectedId}-${col.name}`}
-            column={col}
-            value={cellValue}
-            rowIdx={firstSelectedId ?? 0}
-            colIdx={idx}
-            onBlobView={handleBlobView}
-            editState={editState}
-          />
-        );
-      })}
+      {row ? (
+        data.columns.map((col, idx) => {
+          const cellValue = (row as unknown[])[idx];
+          return (
+            <FieldRow
+              // Row index is part of the key so moving the selection remounts
+              // the fields (same idiom as the grid's `row-${page}-${rowIdx}`).
+              // `EditableValue` seeds a local draft from the cell on mount; with
+              // a row-independent key the draft would survive the switch and
+              // show the previous row's text over the new row's value. Always-on
+              // editing (#1734 (4)) makes that visible on every selection move.
+              key={`${firstSelectedId}-${col.name}`}
+              column={col}
+              value={cellValue}
+              rowIdx={firstSelectedId ?? 0}
+              colIdx={idx}
+              onBlobView={handleBlobView}
+              editState={editState}
+            />
+          );
+        })
+      ) : (
+        // #2384 — the counterpart of the BSON tree's "No document selected",
+        // down to the class list, so the two paradigms read the same when
+        // there is nothing to show.
+        <div className="p-3 text-xs italic text-muted-foreground">
+          {t("rowDetails.emptyState")}
+        </div>
+      )}
       {blobViewer && (
         <BlobViewerDialog
           open={blobViewer !== null}

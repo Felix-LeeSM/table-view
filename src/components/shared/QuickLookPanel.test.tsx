@@ -325,22 +325,34 @@ describe("QuickLookPanel", () => {
       expect(screen.getByText("Alice")).toBeInTheDocument();
     });
 
-    it("renders nothing when the page has no rows at all", () => {
-      const { container } = render(
+    // #2384 — these two used to render nothing. Unmounting is the caller's
+    // decision (`DataGrid`'s `quickLookOpen`), and a body that took it instead
+    // left `showQuickLook` true with no visible body reading it: the toggle
+    // went dead and `Cmd/Ctrl+L` could not bring the panel back. Both inputs
+    // now produce the empty state inside a mounted shell — the same answer
+    // `DocumentQuickLookBody` already gave them.
+    it("shows the empty state when the page has no rows at all", () => {
+      render(
         <QuickLookPanel
           {...defaultProps}
           data={{ ...MOCK_DATA, rows: [], total_count: 0 }}
           selectedRowIds={new Set([0])}
         />,
       );
-      expect(container.innerHTML).toBe("");
+
+      expect(
+        screen.getByRole("region", { name: "Row Details" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/No row selected/i)).toBeInTheDocument();
     });
 
-    it("renders nothing when selection is empty", () => {
-      const { container } = render(
-        <QuickLookPanel {...defaultProps} selectedRowIds={new Set()} />,
-      );
-      expect(container.innerHTML).toBe("");
+    it("shows the empty state when selection is empty", () => {
+      render(<QuickLookPanel {...defaultProps} selectedRowIds={new Set()} />);
+
+      expect(
+        screen.getByRole("region", { name: "Row Details" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/No row selected/i)).toBeInTheDocument();
     });
 
     it("shows first row when multiple rows are selected", () => {

@@ -84,12 +84,15 @@ export default function QuickLookPanel(props: QuickLookPanelProps) {
   // rows without clearing it: `useDataGridEdit` drops the selection from a
   // `[page]` effect, and `handleSetPageSize` resets a page that is already 1.
   // The stale index then outlives its row. Unclamped it reached the bodies,
-  // where `RdbQuickLookBody` renders `null` for an out-of-range index and takes
-  // the whole panel down while `showQuickLook` stays true — leaving the toggle
-  // flipping a flag no visible body reads, so `Cmd/Ctrl+L` could not reopen it
-  // and F6 / Escape died with the panel node. Clamping at the single derivation
-  // covers both paradigms; the bodies keep their own bounds guards as a second
-  // line for the props they can be handed directly.
+  // where `RdbQuickLookBody` used to render `null` for an out-of-range index and
+  // take the whole panel down while `showQuickLook` stayed true — leaving the
+  // toggle flipping a flag no visible body read, so `Cmd/Ctrl+L` could not
+  // reopen it and F6 / Escape died with the panel node. Clamping at the single
+  // derivation covers both paradigms; the bodies keep their own bounds guards as
+  // a second line for the props they can be handed directly. #2384 removed the
+  // unmounting answer itself — both bodies now render an empty state for an
+  // index the page lacks, so the clamp is no longer the only thing standing
+  // between a stale index and a vanished panel.
   const rowCount =
     props.mode === "document"
       ? props.rawDocuments.length
