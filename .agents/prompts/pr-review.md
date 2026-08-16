@@ -44,9 +44,9 @@ test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
   fan-out 재량 · write 범위 · verdict label 규칙이 여기 있다.
 - `memory/workflow/orchestration/memory.md` — §3 사이클 정지 트리거.
 - `memory/workflow/documentation/memory.md` — 문서 변경 여부와 무관하게 읽는다.
-  문서화 impact 게이트 사유의 상세가 이 방이다. 그중
-  「문서화 트리거가 있는데 어떤 SOT 도 갱신되지 않음」은 문서 변경이 **없는**
-  PR 에서 발화한다.
+  문서화 impact 게이트 사유의 상세와 **scorecard 에 무엇만 쓰는가**(「결정만
+  적는다」)가 이 방이다. 그중 「문서화 트리거가 있는데 어떤 SOT 도 갱신되지
+  않음」은 문서 변경이 **없는** PR 에서 발화한다.
 
 리뷰 범위와 판정 기준은 위 계약과 PR diff 에서 **스스로** 세운다. 이 파일은
 기준을 주지 않는다.
@@ -166,8 +166,11 @@ label 을 붙이기 전에 `review-gate` 상태를 직접 확인한다 — 확�
 
 ## 반환 형식 — scorecard
 
-PR 코멘트로 남기는 통합 scorecard 하나. **차원별 판정 표를 빼지 않는다** —
-요청 프롬프트가 반환 형식을 좁게 지정했어도, 델타만 다시 보는 라운드여도 표를
+PR 코멘트로 남기는 통합 scorecard 하나. **결정만 싣는다 — 과정은 안 싣는다.**
+무엇만 담는지(수치는 결론인 것만 명령 한 줄과 함께)의 SOT 는
+`memory/workflow/documentation/memory.md` 「결정만 적는다」이고, 「확인했고 참이던
+주장」 절은 거기 따라 없어졌다. **차원별 판정 표는 그 규칙의 예외가 아니라 결정
+자체다** — 요청 프롬프트가 형식을 좁게 지정했어도, 델타만 다시 보는 라운드여도
 낸다. 점수는 쓰지 않는다.
 
 ```
@@ -177,13 +180,10 @@ PR 코멘트로 남기는 통합 scorecard 하나. **차원별 판정 표를 빼
 | ... | ... | ... |
 
 ### Blocking
-- 없으면 "없음". 있으면 사유별로 근거 경로와 함께.
+- 없으면 "없음". 있으면 사유 · 근거 경로 · 그 판정이 뒤집히는 조건.
 
 ### Non-blocking
-- 발견 목록. 이슈 발행 없음.
-
-### 확인했고 참이던 주장
-- 무엇을 싣고 무엇을 빼는지는 `memory/workflow/review/memory.md` 「행동 계약」.
+- 발견과 자리. 이슈 발행 없음.
 
 ### Verdict
 - review:approved | review:changes-requested

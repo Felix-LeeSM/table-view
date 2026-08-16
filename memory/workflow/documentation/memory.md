@@ -1,9 +1,9 @@
 ---
 title: Documentation Impact Gate
 type: workflow-rule
-updated: 2026-08-11
+updated: 2026-08-17
 task: documentation, docs, pr, review, delivery
-keywords: 문서화, documentation impact, 문서화 impact 게이트, Reviewer 판정, SOT 라우팅, evidence portability, repo-relative, retire 조건, 개수 서술, 닫힌 개수, 자리 나열, scorecard 수치, 가변 상태, 조회 명령, 움직이는 ref, head SHA, 현재형 단정, 옮겨 적은 값, 앵커, 종점, merge-base
+keywords: 문서화, documentation impact, 문서화 impact 게이트, Reviewer 판정, SOT 라우팅, evidence portability, repo-relative, retire 조건, 결정만 적는다, 무엇만 담는가, 증거 열거, 재현 서사, 결론인 수치, 명령 한 줄, 과정, scorecard 분량, PR body 분량, 개수 서술, 닫힌 개수, 자리 나열, scorecard 수치, 가변 상태, 조회 명령, 움직이는 ref, head SHA, 현재형 단정, 옮겨 적은 값, 앵커, 종점, merge-base
 trigger:
   signal: PR 작성 / 문서 추가 / workflow·contract·user-facing 변경
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -60,6 +60,32 @@ PR body / review comment / handoff 는 GitHub 에서 확인 가능한 증거만 
   로컬 plan path.
 - 로컬 임시 로그는 요약을 붙이고, 재현 명령 또는 repo artifact 로 대체.
 
+## 결정만 적는다 — 무엇을 담는가가 아니라 무엇만 담는가
+
+담을 것을 열거하는 계약은 늘기만 한다. 이 절은 **남길 것만** 정하고 여기 없는
+것은 안 적는다. 걸리는 자리는 아래 「개수 서술」이 나열하는 자리와 같고, 그 절과
+「가변 상태」가 이 규칙의 두 특수 사례다.
+
+**남긴다** — 판정과 그 사유(무엇을 blocking 으로 봤나, 왜 그렇게 봤나) · 안
+고치기로 한 것과 그 사유 · 그 판단이 뒤집히는 조건 · 결론인 수치 하나와 그것을
+만든 명령 한 줄.
+**뺀다** — 재현 서사(「돌렸더니 rc=1 이었고 되돌리니 rc=0 이었다」의 나열) ·
+판정이 안 바뀐 확인의 열거 · 코드 동작을 옮긴 산문 · 같은 사실의 두 번째 사본.
+읽는 노드는 같은 저장소에서 도니 동작을 옮겨 적지 말고 **자리만 가리킨다**
+(`path:line`).
+
+**증거와 명령의 경계** — 위 「명령 한 줄」이 재현 명령 요구와 겹치는 자리는 물음
+하나로 가른다: **그 수치가 결론인가, 결론에 이르는 과정인가.** 결론이면 명령 한
+줄과 함께 남기고, 과정이면 수치도 명령도 뺀다. 몇 번 · 어떤 순서로 · 무엇을
+되돌려 가며 돌렸는지는 언제나 과정이다. **애매하면 빼는 쪽이다** — 뺀 과정은
+명령을 다시 돌리면 되살아나지만, 실린 과정은 아무도 안 지운다.
+
+```
+❌ base 에서 rc=1, 패치 뒤 rc=0, 변형 A 를 넣으니 다시 rc=1, 되돌리니 rc=0 —
+   가드가 실제로 잡는 것을 확인했다.
+✅ 가드가 변형 A 를 잡는다 (`bash scripts/check-x.sh` → rc=1).
+```
+
 ## 개수 서술 대신 자리를 나열한다
 
 「N개뿐」·「넷이다」·「둘 다」 같은 닫힌 개수 서술은 그것이 세는 목록이 늘거나
@@ -68,12 +94,9 @@ PR body / review comment / handoff 는 GitHub 에서 확인 가능한 증거만 
 
 **저장소 산문을 쓰는 자리면 걸린다 — 특정 역할의 목록이 아니다.** 저자의 PR
 body · 커밋 메시지 · 소스 주석, 리뷰어의 scorecard · 리뷰 코멘트, 티켓 저자의
-이슈 본문, 종결자의 squash body 가 그 자리다. 역할이 늘면 자리도 는다 — 이
-규약을 낳은 #2229 자신이 「범위」를 「두 파일.」로 열고 같은 파일만 나열했고,
-PR #2232 의 squash body 를 이 규약에 맞게 고친 것은 저자도 리뷰어도 아닌
-종결자였다. scorecard 의 수는 다음 라운드 저자의 입력이라, 리뷰어가 잘못 센
-수를 저자가 body 로 옮기고 다음 라운드가 그것을 blocking 으로 잡는다
-(PR #2218 — 라운드 2 scorecard 가 그 수의 출처를 라운드 1 scorecard 로 밝혔다).
+이슈 본문, 종결자의 squash body 가 그 자리다. 역할이 늘면 자리도 는다.
+scorecard 의 수는 다음 라운드 저자의 입력이라, 리뷰어가 잘못 센 수가 body 로
+옮겨져 다음 라운드에 blocking 으로 돌아온다 (#2218 · #2229 · #2232).
 
 ```
 ❌ 승격 claim 이 5곳에 남아 있다.
@@ -84,7 +107,7 @@ PR #2232 의 squash body 를 이 규약에 맞게 고친 것은 저자도 리뷰
 ```
 
 목록은 줄마다 대조되고, 빠진 자리가 있어도 틀린 수가 아니라 참인 부분집합이다.
-옮겨 적을 수가 애초에 안 생긴다. 수 자체가 결론이면 그것을 만든 명령을 붙인다 —
+수 자체가 결론이면 그것을 만든 명령을 붙인다 —
 [implementation](../implementation/memory.md) §5 「수치가 추론으로 생산됨」이 SOT 다.
 
 ## 가변 상태는 값이 아니라 조회 명령으로 쓴다
@@ -131,9 +154,6 @@ PR #2232 의 squash body 를 이 규약에 맞게 고친 것은 저자도 리뷰
 ✅ #2259 의 머지 커밋은 3c16b24c 다 (gh pr view 2259 --json mergeCommit).
    그 커밋이 지금 origin/main head 인지는 읽는 시점마다 다르다 — 안 쓴다.
 ```
-
-값이 아니라 명령이 남으면 읽는 노드가 스스로 돌려 그 시점의 값을 얻는다. 옮겨
-적힌 값이 다음 라운드의 거짓 전제가 되는 사슬은 그 자리에서 끊긴다.
 
 ## Reviewer 판정
 
