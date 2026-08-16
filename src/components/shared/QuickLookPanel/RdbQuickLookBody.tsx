@@ -2,16 +2,18 @@
 // (`Row Details — schema.table` with multi-select suffix), per-column
 // `FieldRow` list, and `BlobViewerDialog` wiring.
 //
-// External invariants:
+// External invariants. The user-visible strings listed below are
+// `shared:rowDetails` keys (`src/lib/i18n/locales/shared.ts`), so the rendered
+// text follows the active locale; `regionLabel` is a literal prop and does not.
 // - Region `aria-label` = `"Row Details"`.
-// - Close button `aria-label` = `"Close row details"`.
+// - Close button `aria-label` = `t("rowDetails.closeLabel")`.
 // - #2384 — out-of-bounds / empty selection / a page with no rows all produce
-//   the empty state (`/No row selected/i`) inside a mounted shell, matching
-//   what `DocumentQuickLookBody` does for the same inputs. Whether the panel
-//   is open is the caller's decision (`DataGrid`'s `quickLookOpen`).
+//   the empty state (`t("rowDetails.emptyState")`) inside a mounted shell,
+//   matching what `DocumentQuickLookBody` does for the same inputs. Whether the
+//   panel is open is the caller's decision (`DataGrid`'s `quickLookOpen`).
 // - No Edit toggle (#1734 (4)): passing `editState` is what makes the fields
 //   editable. Read-only call-sites simply omit `editState`.
-// - Multi-select suffix = `({n} selected, showing first)` when
+// - Multi-select suffix = `t("rowDetails.multiSelect")` when
 //   `selectedRowIds.size > 1`.
 // - Schema prefix shows iff `schema` is non-empty.
 // - `BlobViewerDialog` mounts iff a BLOB cell was clicked; closing it via
@@ -62,9 +64,10 @@ export default function RdbQuickLookBody({
 
   // #2133 — the same three-part bounds test `DocumentQuickLookBody` uses. The
   // lower bound is regression defense, not a live fix: `QuickLookPanel` clamps
-  // the derivation, `useDataGridSelection.handleSelectRow` is the only writer of
-  // `selectedRowIds`, and its call sites pass `.map()` / virtualizer indices, so
-  // nothing hands this a negative today. It also changes nothing observable on
+  // the derivation, `useDataGridSelection.handleSelectRow` is the only writer
+  // that puts an index into `selectedRowIds` (`clearSelection` writes an empty
+  // Set), and its call sites pass `.map()` / virtualizer indices, so nothing
+  // hands this a negative today. It also changes nothing observable on
   // its own — `data.rows[-1]` is `undefined`, which the empty-state branch below
   // renders the same way. What it buys is that the two bodies now defend the
   // same range; a split defense is what lets a future path in break only one

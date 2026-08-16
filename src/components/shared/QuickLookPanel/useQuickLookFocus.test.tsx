@@ -7,7 +7,7 @@
 // `<body>` and the arrow keys died. The fix delegates to the focuser the grid
 // publishes (`useGridRoving.focusAnchorCell`, which scrolls the row back in and
 // retries). These tests pin that delegation from the panel's side; the
-// scroll-in + retry itself is `useGridRoving.test.tsx:67`, and the grid's end
+// scroll-in + retry itself is `useGridRoving.test.tsx`, and the grid's end
 // of the wire is `DataGridTable.roving.test.tsx`.
 //
 // The fix then moved WHERE the restore hangs, and that is what the harness below
@@ -82,8 +82,9 @@ const focusPanel = () => {
 };
 
 describe("useQuickLookFocus", () => {
-  // Reason: THE round-1 bug. With the anchor row unmounted the DOM lookup finds
-  // nothing, so if the hook did not delegate, focus would sit on <body>.
+  // Reason: THE original #1734 (5) bug. With the anchor row unmounted the DOM
+  // lookup finds nothing, so if the hook did not delegate, focus would sit on
+  // <body>.
   it("restores focus through the grid's focuser when the anchor row is not in the DOM", () => {
     const gridFocuser = vi.fn();
     render(<Harness hasAnchor={false} gridFocuser={gridFocuser} />);

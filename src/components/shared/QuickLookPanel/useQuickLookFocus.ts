@@ -8,9 +8,7 @@
 // and Escape inside the panel (outside a text field) hands focus back to the
 // grid without closing anything. Tab does reach the panel (it is the grid's
 // next sibling and owns a `tabIndex={0}` resize handle and a Close button), but
-// only by walking through them, and the grid's roving tabindex means Tab
-// re-enters the grid at its single tab stop rather than where the user was.
-// `F6` is the direct route in both directions.
+// only by walking through them. `F6` is the direct route in both directions.
 //
 // Returning focus to "the cell the user came from" has one trap. The obvious
 // implementations both break on the RDB grid, which virtualizes past 200 rows
@@ -38,19 +36,18 @@
 // Enumerating close handlers can only ever be as complete as the last audit, so
 // the restore hangs off the one event all of them share instead: the panel node
 // leaving the DOM, which React reports by calling `panelRef` with `null`.
-// Nothing a call site does (or forgets to do) can bypass it.
 //
 // The condition is on where focus ENDED UP, not on why the panel went away and
 // not on where focus was before: after the panel is gone, focus that landed
 // nowhere (`<body>`) goes to the grid, and focus anything else is holding stays
 // put. "Where it was before" was the obvious rule and it is wrong — a
-// successful commit unmounts the SQL preview in a later commit than the panel,
-// so the button the user pressed dies too, one step after the panel did.
+// successful commit unmounts the SQL preview too, so the button the user
+// pressed is gone as well.
 //
 // Two things this still does NOT promise. Escape and `F6` move focus without
 // removing the panel, so they stay explicit below. And when the whole grid goes
 // away with the panel (tab close), there is no anchor cell left to hand focus
-// to — `focusAnchorCell` finds nothing and gives up after its bounded retries.
+// to.
 
 import { useCallback, useEffect, useRef } from "react";
 
@@ -105,10 +102,8 @@ export function useQuickLookFocus(
     panelNodeRef.current = node;
     if (previous !== null && node === null) panelWentAwayRef.current = true;
     // `useCallback([])` only avoids the detach/re-attach churn React performs
-    // on a callback ref whose identity changed. It is not what keeps that churn
-    // from reading as "the panel went away" — the effect's focus condition is
-    // (measured: rebuilding this per render leaves every test in this suite
-    // green).
+    // on a callback ref whose identity changed (measured: rebuilding this per
+    // render leaves every test in this suite green).
   }, []);
 
   // Runs on every commit, and deliberately not inside the ref callback: the
@@ -122,9 +117,12 @@ export function useQuickLookFocus(
     // A modal owns focus while it is open (same guard as F6/Escape below), so
     // where focus belongs is not settled yet — keep the flag and re-check on
     // the commit that closes it. Commit-success is exactly this shape: the
-    // panel and the SQL preview go in separate commits, and the dialog's own
-    // restore then aims at the element it captured before it opened, which was
-    // inside the panel and no longer exists.
+    // panel and the SQL preview go in separate commits — the panel is a plain
+    // conditional render, while the dialog's content sits behind Radix
+    // `Presence`, which still reports the closing render as present and only
+    // drops the node from a later one. The dialog's own restore then aims at
+    // the element it captured before it opened, which was inside the panel and
+    // no longer exists.
     if (
       document.querySelector('[role="dialog"], [role="alertdialog"]') !== null
     ) {
