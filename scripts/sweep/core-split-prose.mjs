@@ -438,6 +438,12 @@ const SELF_TEST = "scripts/__tests__/core-split-prose.test.ts";
 // 게이트 스크립트를 spawn 해서 그 문자열을 파싱시킨다 — cargo 는 안 돈다.
 const GATE_TEST_FIXTURE = "scripts/__tests__/check-ci-test-calls.test.ts";
 
+// `.github/workflows/ci.yml` 의 release-graph 스텝을 회귀 대상으로 삼는 스위트
+// (#2356 이 넣었다). 그 스텝의 `run:` 블록을 뽑아 **스텁을 PATH 에 올려** 돌리므로
+// 진짜 cargo 가 안 돈다. 이 파일에 있는 그 호출 표기는 회귀 대상을 가리키는
+// 이름이고, 호출 자체는 워크플로가 소유한다.
+const CI_GATE_SUITE = "scripts/review/measure-rounds.test.sh";
+
 // 이슈 본문이 N3 를 #2091 로 넘겼다 — "여기가 아니라 #2091 범위다, 중복 수리 금지".
 const OWNED_BY_2091 = new Set([
   "docs/contributor-guide/repository-topology-inventory.md",
@@ -555,6 +561,11 @@ const DISPOSITIONS = [
     id: "B/gate-test-fixture",
     why: "게이트 테스트가 임시 트리에 뿌리는 픽스처 workflow 문자열이다 — `scripts/check-ci-test-calls.sh` 가 그 텍스트를 파싱만 하고 cargo 는 안 돈다. 셋 중 둘은 명령 줄도 아니다: step `name:` 줄(바로 아래 `run:` 이 manifest 를 준다)과, 주석 안의 `--test` 가 호출로 안 세어지는지 보는 주석 픽스처다",
     test: (h) => h.arm === "B" && h.path === GATE_TEST_FIXTURE,
+  },
+  {
+    id: "B/gate-call-under-stub",
+    why: "게이트 워크플로의 cargo 호출을 회귀 대상으로 이름지어 부르는 스위트다 — 그 호출은 `.github/workflows/ci.yml` 이 소유하고(`B/gate-passes-manifest` 가 처분한다), 이쪽은 스텝 body 를 스텁 cargo 로 돌려서 진짜 cargo 가 안 돈다. manifest 를 붙이면 워크플로의 실제 표기와 어긋나 그 단언이 거짓이 된다",
+    test: (h) => h.arm === "B" && h.path === CI_GATE_SUITE,
   },
   {
     id: "B/names-the-lane",
