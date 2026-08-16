@@ -139,8 +139,7 @@ const RUNNING_AS_ROOT =
 // 사유를 어디에도 안 남기므로, 러너 이미지가 로케일을 떨어뜨리거나 job 에 `container:`
 // 가 붙어 그 축이 통째로 안 재어져도 로그에서 갈라볼 것이 없다. 실측 (vitest 4.1.3):
 // CI 가 쓰는 `--reporter=default` 는 파일 줄에 `| N skipped` 까지, `--reporter=verbose`
-// 는 `↓ <케이스 이름> [<사유>]` 까지 찍는다. 모듈 스코프 `console.warn` 은 어느 쪽에도
-// 안 찍혀서 쓰지 않는다.
+// 는 `↓ <케이스 이름> [<사유>]` 까지 찍는다.
 const ROOT_SKIP =
   "root 로 도는 중 — chmod 000 픽스처는 권한 비트가 무시돼 아무것도 안 잰다";
 
