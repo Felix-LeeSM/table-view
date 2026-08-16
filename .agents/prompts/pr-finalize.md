@@ -139,7 +139,8 @@ gh pr view <N> --json comments -q '.comments[].body'   # 라운드별 scorecard
 # 조각에도 같은 정규화를 건다 — 안 걸면 아래 문단의 탭·개행·연속 공백에 뚫린다
 NEEDLE="$(printf '%s' '<문구>' | LC_ALL=C tr -s '[:space:]' ' ')"
 gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
-  --jq '.[].commit.message' | LC_ALL=C tr -s '[:space:]' ' ' | grep -c -F -- "$NEEDLE"
+  --jq '.[].commit.message' | LC_ALL=C tr -s '[:space:]' ' ' \
+  | grep -o -F -- "$NEEDLE" | wc -l
 ```
 
 **`gh pr view` 의 `commits` 필드로 되돌리지 마라.** 그 형태가 거짓 0 을 내는 기전 셋과
@@ -150,8 +151,10 @@ gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
 **조각을 손으로 줄이지 말고 위 `NEEDLE=` 처럼 정규화해라.** `tr -s '[:space:]' ' '` 는
 연속 공백을 접을 뿐 아니라 탭·개행도 한 칸으로 **치환**한다. 원문 그대로의 조각은
 그래서 세 방향으로 어긋난다 — 들여쓴 이어짐(연속 공백)도 탭 하나도 0 이 나고, 개행이
-들면 `grep -F` 가 대안 패턴 둘로 읽어 뒷부분이 없어도 1 이 난다. **새 형태는 옛 형태의
-상위집합이 아니다.** 정규화하면 문구를 안 짧게 하고도 걸린다.
+들면 `grep -F` 가 대안 패턴 둘로 읽어 **뒷부분이 없어도 앞부분 출현 횟수가 그대로 값이
+된다** (`aaa\nbbb` 를 `aaa aaa xxx` 에 걸면 2). 어긋났는데도 정상 hit 수와 구분이 안
+되니 값으로는 못 잡는다. **새 형태는 옛 형태의 상위집합이 아니다.** 정규화하면 문구를
+안 짧게 하고도 걸린다.
 
 **그래도 줄여야 하면 자를 자리는 공백이 아니라 연속 공백 구간이다** — 한 칸까지 빼면
 조각이 짧아지고 짧을수록 무관한 PR 에 걸린다. `# 39` 를 `39` 로 줄이면 SHA `539d05f3`
@@ -161,6 +164,12 @@ gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
 **hit 0 은 「커밋 메시지에 없다」의 증명이 아니다.** 정규화해도 인증 실패와 `--jq`
 오타는 똑같이 0 이다. 0 이면 교정 대상에서 빼기 전에 위 원문 덤프를 육안으로 훑는다 —
 0 을 잘못 믿는 값이 한쪽으로만 크기 때문이다 (같은 방).
+
+**그 값은 hit 여부가 아니라 자리 수다 — N 이면 커밋 메시지 N 곳에 있고 N 곳을 다
+고친다.** scorecard 가 커밋 하나를 지목했어도 그것을 자리 수로 읽지 마라: 2026-08-16
+#2354 라운드 2 의 scorecard 는 `6f35ac44` 만 적었는데 같은 문구가 `adac4cc6` 에도
+있었다. **`grep -c` 로 바꾸지 마라** — 앞의 `tr` 이 개행을 없애 그 형태는 0 아니면 1
+밖에 못 낸다. 기전은 `memory/workflow/review/memory.md` 「행동 계약」이 갖는다.
 
 각 라운드 scorecard 의 blocking / non-blocking 목록을 커밋 메시지와 대조한다.
 **라운드 N 의 finding 이 지목한 주장이 라운드 N 이전 커밋 메시지에 그대로 남아
