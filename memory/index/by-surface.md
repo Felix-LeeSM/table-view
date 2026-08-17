@@ -101,6 +101,10 @@ generator: none — 손으로 갱신한다
 
 - [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
 
+### `src/components/layout/BottomPanel.tsx`
+
+- [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
+
 ### `src/components/query/**`
 
 - [Cross-paradigm UI Parity 머지 기준](../../memory/product/ui-parity/memory.md)
