@@ -28,7 +28,11 @@
  * Each `it(...)` name embeds the AC label (AC-141-N) for grep-ability.
  */
 
-import { WorkspacePage } from "@features/workspace";
+// #2431 — the Back control moved out of `WorkspacePage` into the toolbar, and
+// `MainArea` (which mounts the toolbar) is stubbed below. The AC cases whose
+// subject is Back therefore render the button itself; the page is still
+// rendered where the subject is the page's own mount behaviour.
+import { BackToConnectionsButton, WorkspacePage } from "@features/workspace";
 import * as windowControls from "@lib/window-controls";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
@@ -226,7 +230,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       activeStatuses: { c1: { type: "connected" } },
       focusedConnId: "c1",
     });
-    render(<WorkspacePage />);
+    render(<BackToConnectionsButton />);
 
     await act(async () => {
       fireEvent.click(
@@ -371,7 +375,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     hideWindowMock.mockClear();
     focusWindowMock.mockClear();
     destroyCurrentWindowMock.mockClear();
-    render(<WorkspacePage />);
+    render(<BackToConnectionsButton />);
     await act(async () => {
       fireEvent.click(
         screen.getByRole("button", { name: /^back to connections$/i }),

@@ -9,6 +9,7 @@ export type {
   UseTabDragResult,
 } from "@components/layout/useTabDrag";
 export { useTabDrag } from "@components/layout/useTabDrag";
+export { default as BackToConnectionsButton } from "@components/workspace/BackToConnectionsButton";
 export { default as ConfirmDestructiveDialog } from "@components/workspace/ConfirmDestructiveDialog";
 export { default as DbSwitcher } from "@components/workspace/DbSwitcher";
 export { default as DisconnectButton } from "@components/workspace/DisconnectButton";

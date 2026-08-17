@@ -47,10 +47,17 @@ keywords: UI parity, 같은 진입점, 머지 보류, DbSwitcher, ConfirmDestruc
 | 쿼리 기록 (전역) | 하단 패널 `History` 탭 (`BottomPanel` → `GlobalQueryLogPanel`, #2426) |
 | 선택 행 상세 | 하단 패널 `Details` 탭 (`BottomPanel` → `QuickLookPanel`, #2426) — 그리드가 portal 로 실어 보낸다 |
 | 컬렉션 통계 (U3: collection stats) | document 테이블 `Structure` 탭 → `Stats` 서브탭 (`CollectionStatsPanel`, #1054) — §3 예외: 컬렉션 컨텍스트 필요라 connection-level flyout 부적합, paradigm 게이트 |
+| 런처 복귀 (workspace → connections) | 상단 툴바 오른쪽 `BackToConnectionsButton` (#2431) |
+| 테마 · 언어 | 상단 툴바 오른쪽 `AppearanceButton` 팝오버 (#2431) |
 
 기준은 rdb/document 의 현 구현에서 온다. 다른 paradigm 이 같은 작업을 다른 곳에
 둘 때, capability 게이트(`switchDatabase` 등)만으로 위치를 정하면 안 된다 — 위치는
 이 표 또는 등록된 예외를 따른다.
+
+마지막 두 행은 paradigm 을 안 타는 창 chrome 이라 툴바가 유일한 자리다. **사이드바
+열에는 못 둔다** — #2431 이 접힘 분기의 잔여 레일을 없애 접으면 그 열이 통째로
+사라진다. 접힌 사용자가 런처로도 테마로도 못 가는 것을 막던 것이 그 레일이었고,
+지금은 접힘과 무관한 툴바가 그 역할을 한다.
 
 서버 운영 뷠(U1/U4/U5) 는 capability 가 없는 paradigm(kv/search)에서 진입점 자체가
 숨겨진다 — disabled-only 진입점이 아니라 capability 부재 = 진입점 없음 (#1054).

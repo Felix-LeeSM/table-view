@@ -4,6 +4,8 @@ import { useLayoutStore } from "@stores/layoutStore";
 import { PanelBottom, PanelLeft } from "lucide-react";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
+import AppearanceButton from "./AppearanceButton";
+import BackToConnectionsButton from "./BackToConnectionsButton";
 import DbSwitcher from "./DbSwitcher";
 import DisconnectButton from "./DisconnectButton";
 import SafeModeToggle from "./SafeModeToggle";
@@ -12,8 +14,9 @@ import { useToolbarRoving } from "./useToolbarRoving";
 /**
  * Workspace toolbar — top-of-pane container that hosts the `[DB ▼]` chip
  * and the Disconnect control. Mounted by `MainArea` directly above
- * `<TabBar>` so it sits between the back-to-connections row and the
- * open-tabs strip without prop-drilling tab/connection state.
+ * `<TabBar>`, and unconditionally: nothing about it reacts to a sidebar or
+ * dock collapse, which is what lets #2431 park the window-level controls
+ * here without prop-drilling tab/connection state.
  *
  * Connection swap path: Home → double-click. Schema selection is unified
  * into the sidebar tree (`SchemaTree`), which folds the schema row away on
@@ -111,14 +114,24 @@ export default function WorkspaceToolbar() {
           connection-scoped controls rather than in the trailing group. */}
       <LayoutCluster />
       <DbSwitcher />
-      {/* Disconnect lives at the trailing edge of the toolbar, adjacent
-          to the (keyboard-only) refresh action. Disabled when the focused
-          connection is not currently connected, so it never silently
-          no-ops. */}
+      {/* Trailing group, in two tiers. The connection-scoped controls come
+          first — Disconnect closes that tier at its trailing edge, adjacent
+          to the (keyboard-only) refresh action, and is disabled when the
+          focused connection is not currently connected so it never silently
+          no-ops.
+
+          #2431 — the two window-level controls sit outside them at the far
+          edge, mirroring the panel toggles at the far leading edge: both
+          tiers act on the window rather than on the connection. Keeping
+          Appearance between Disconnect and Back also stops the two
+          "leave" actions from becoming neighbours, and they are emphatically
+          not the same action (Back keeps the pool alive). */}
       <div className="ml-auto flex items-center gap-2">
         <RowCapSetting />
         <SafeModeToggle />
         <DisconnectButton />
+        <AppearanceButton />
+        <BackToConnectionsButton />
       </div>
     </div>
   );
