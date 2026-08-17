@@ -4,13 +4,8 @@ import { useLayoutStore } from "@stores/layoutStore";
 import { useThemeFavoritesStore } from "@stores/themeFavoritesStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  getTestWorkspace,
-  seedWorkspace,
-} from "@/stores/__tests__/workspaceStoreTestHelpers";
-import type { ConnectionId, TabId } from "@/types/branded";
 import WorkspacePage from "./WorkspacePage";
 
 // Wrap the runtime implementation in a spy so the workspace's mount + focus
@@ -110,23 +105,54 @@ describe("WorkspacePage", () => {
   });
 
   // #1734 owner decision 1 — the Layout cluster's left-panel toggle drives
-  // this. Collapsing hides the schema-tree column but must keep the header
-  // rail, which owns the only route back to the launcher and the only
-  // theme / language control (#1738) — otherwise a collapsed user is
-  // stranded with neither.
-  describe("collapsed left panel (#1734)", () => {
-    it("hides the sidebar while keeping back-to-connections and the theme control", () => {
+  // this. Collapsing hid the schema-tree column but kept the header strip
+  // alive as a narrow rail, because that strip owned the only route back to
+  // the launcher and the only theme / language control (#1738).
+  //
+  // #2431 moved both controls into `WorkspaceToolbar` (mocked away with
+  // `MainArea` in this file — their collapsed reachability is asserted in
+  // `src/components/workspace/WorkspaceToolbar.collapsed-rail.test.tsx`), so
+  // the collapse now takes the column whole and no rail is left behind.
+  describe("collapsed left panel (#1734, rail removed by #2431)", () => {
+    it("[collapsed-rail] hides the sidebar and leaves no rail behind", () => {
       useLayoutStore.setState({ sidebarCollapsed: true });
       render(<WorkspacePage />);
 
       expect(screen.getByTestId("sidebar-mock")).not.toBeVisible();
+      // Nothing of the old strip survives the collapse in the page shell.
       expect(
-        screen.getByRole("button", { name: /back to connections/i }),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByRole("button", { name: /theme|테마/i }),
-      ).toBeInTheDocument();
+        screen.queryByRole("button", { name: /back to connections/i }),
+      ).toBeNull();
+      expect(screen.queryByRole("button", { name: /theme|테마/i })).toBeNull();
+      // `MainArea` is a sibling of the column, so it — and the toolbar it
+      // mounts — is untouched by the collapse. This is what makes the two
+      // controls reachable at all in the collapsed state.
       expect(screen.getByTestId("main-area-mock")).toBeInTheDocument();
+    });
+
+    // The column is gone, so its landmark goes with it. An empty <nav> would
+    // announce a navigation region the user just closed.
+    it("[collapsed-rail] drops the sidebar's <nav> landmark while collapsed", () => {
+      render(<WorkspacePage />);
+      expect(screen.getByRole("navigation")).toBeInTheDocument();
+
+      act(() => {
+        useLayoutStore.setState({ sidebarCollapsed: true });
+      });
+
+      expect(screen.queryByRole("navigation")).toBeNull();
+    });
+
+    // The heading moved out of the <nav> in the same change. A window that
+    // opens collapsed would otherwise mount its <h1> under `display: none`,
+    // where it is neither announced nor focusable.
+    it("[collapsed-rail] still focuses the workspace heading when mounted collapsed", () => {
+      useLayoutStore.setState({ sidebarCollapsed: true });
+      render(<WorkspacePage />);
+
+      const heading = screen.getByRole("heading", { level: 1 });
+      expect(heading).toBeVisible();
+      expect(heading).toHaveFocus();
     });
 
     // The regression this pins: an earlier revision gated the column with
@@ -171,29 +197,6 @@ describe("WorkspacePage", () => {
         screen.queryByRole("button", { name: /sidebar stub/i }),
       ).toBeNull();
     });
-
-    // The rail drops the button's text but not its accessible name, so the
-    // route back to the launcher stays reachable by name and by voice.
-    it("narrows the back button to an icon rail without losing its name", () => {
-      render(<WorkspacePage />);
-      expect(screen.getByText("Connections")).toBeInTheDocument();
-
-      act(() => {
-        useLayoutStore.setState({ sidebarCollapsed: true });
-      });
-
-      expect(screen.queryByText("Connections")).toBeNull();
-      expect(
-        screen.getByRole("button", { name: /back to connections/i }),
-      ).toBeInTheDocument();
-    });
-  });
-
-  it("renders the [← Connections] back button with the contract aria-label", () => {
-    render(<WorkspacePage />);
-    expect(
-      screen.getByRole("button", { name: /back to connections/i }),
-    ).toBeInTheDocument();
   });
 
   it("does NOT render the SidebarModeToggle (sprint 125 contract AC-04)", () => {
@@ -202,21 +205,6 @@ describe("WorkspacePage", () => {
       screen.queryByRole("radio", { name: /connections mode/i }),
     ).toBeNull();
     expect(screen.queryByRole("radio", { name: /schemas mode/i })).toBeNull();
-  });
-
-  it("clicking [← Connections] focuses launcher then closes the current workspace window (Wave 9.5, 2026-05-16)", async () => {
-    render(<WorkspacePage />);
-
-    await act(async () => {
-      fireEvent.click(
-        screen.getByRole("button", { name: /back to connections/i }),
-      );
-    });
-
-    // 사용자 desired UX: launcher 는 항상 visible — focus 만 주고 현재
-    // workspace 윈도우는 close.
-    expect(windowControls.focusWindow).toHaveBeenCalledWith("launcher");
-    expect(windowControls.destroyCurrentWindow).toHaveBeenCalled();
   });
 
   // Wave 9.5 회귀 4 (2026-05-16) — `close-requested` listener trap.
@@ -244,100 +232,23 @@ describe("WorkspacePage", () => {
     expect(windowControls.onCurrentWindowCloseRequested).not.toHaveBeenCalled();
   });
 
-  it("clicking [← Connections] does NOT clear tabStore (tabs persist across screen swaps)", () => {
-    useWorkspaceStore.setState(
-      seedWorkspace(
-        [
-          {
-            type: "table",
-            id: "tab-1" as TabId,
-            title: "users",
-            connectionId: "c1" as ConnectionId,
-            closable: true,
-            schema: "public",
-            table: "users",
-            subView: "records",
-          },
-        ],
-        "tab-1",
-      ),
-    );
+  // --- Sprint 161 / #1738: the appearance popover ---
+  //
+  // #2431 moved the trigger, the popover and the back button into
+  // `WorkspaceToolbar`. `MainArea` is mocked here, so what those cases used to
+  // assert — the trigger exists, it opens onto ThemePicker + LanguageSwitcher,
+  // its aria-label tracks the store — now lives in
+  // `src/components/workspace/WorkspaceToolbar.collapsed-rail.test.tsx`. What
+  // stays here is the one piece the page still owns: the gallery mount, above.
 
-    render(<WorkspacePage />);
-    act(() => {
-      fireEvent.click(
-        screen.getByRole("button", { name: /back to connections/i }),
-      );
-    });
-
-    // seedWorkspace auto-derives connId from `firstTab.connectionId` ("c1").
-    const state = getTestWorkspace("c1", "db1");
-    expect(state.tabs).toHaveLength(1);
-    expect(state.tabs[0]!.id).toBe("tab-1");
-    expect(state.activeTabId).toBe("tab-1");
-  });
-
-  // --- Sprint 161: ThemePicker in Workspace header ---
-
-  // Reason: Phase 14 AC-161-01 — Workspace에 ThemePicker 마운트 검증 (2026-04-28)
-  it("renders ThemePicker trigger button in workspace header", () => {
-    render(<WorkspacePage />);
-    // The trigger button has an aria-label containing "Workspace theme"
-    expect(
-      screen.getByRole("button", { name: /workspace theme/i }),
-    ).toBeInTheDocument();
-  });
-
-  // Reason: Phase 14 AC-161-01 — ThemePicker 팝오버 열면 mock 렌더링 확인 (2026-04-28)
-  it("opens ThemePicker popover on trigger click", async () => {
-    render(<WorkspacePage />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /workspace theme/i }));
-    });
-
-    expect(screen.getByTestId("theme-picker-mock")).toBeInTheDocument();
-  });
-
-  // Reason: #1738 (2026-07-25) — 테마/언어 컨트롤을 사이드바 상단 단일
-  // 영역(theme 팝오버)으로 통합. 상단 트리거를 열면 테마 + 언어 컨트롤이
-  // 함께 노출되어야 한다 (하단 footer 의 중복 theme/language 제거의 대응).
-  it("top theme popover also exposes the language switcher (#1738 상단 단일화)", async () => {
-    render(<WorkspacePage />);
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /workspace theme/i }));
-    });
-    expect(screen.getByTestId("theme-picker-mock")).toBeInTheDocument();
-    expect(screen.getByTestId("language-switcher-mock")).toBeInTheDocument();
-  });
-
-  // Reason: Phase 14 AC-161-02 — Workspace에서 theme mode 변경 시 store 업데이트 검증 (2026-04-28)
-  it("theme trigger reflects current mode and theme from store", () => {
-    useThemeStore.setState({
-      themeId: "github",
-      mode: "light",
-      resolvedMode: "light",
-    });
-
-    render(<WorkspacePage />);
-    const trigger = screen.getByRole("button", { name: /workspace theme/i });
-    // aria-label should contain "light" and "GitHub"
-    expect(trigger).toHaveAttribute(
-      "aria-label",
-      expect.stringContaining("light"),
-    );
-    expect(trigger).toHaveAttribute(
-      "aria-label",
-      expect.stringContaining("GitHub"),
-    );
-  });
-
-  // Reason: Phase 14 AC-161-04 — 회귀 테스트: ThemePicker 추가 후에도 기존 기능 정상 동작 (2026-04-28)
-  it("still renders Back button and Sidebar/MainArea after adding ThemePicker", () => {
+  it("the page shell renders neither control itself after #2431", () => {
     render(<WorkspacePage />);
     expect(
-      screen.getByRole("button", { name: /back to connections/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /back to connections/i }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /workspace theme/i }),
+    ).toBeNull();
     expect(screen.getByTestId("sidebar-mock")).toBeInTheDocument();
     expect(screen.getByTestId("main-area-mock")).toBeInTheDocument();
   });

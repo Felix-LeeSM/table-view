@@ -1,8 +1,8 @@
 /**
  * #2118 — full-catalog theme gallery.
  *
- * The ThemePicker lives in a narrow popover (launcher footer, workspace header
- * strip) where a two-column grid barely fits, so it can only show the user's
+ * The ThemePicker lives in a narrow popover (launcher footer, workspace
+ * toolbar) where a two-column grid barely fits, so it can only show the user's
  * favorites. This overlay is where the whole `THEME_CATALOG` is browsable:
  * every entry gets a card that paints itself in its own tokens, the card body
  * applies the theme and closes, and the star toggles the favorite without

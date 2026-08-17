@@ -22,7 +22,11 @@
  * `workspace.show()` rejects (AC-154 contract Test Requirements).
  */
 
-import { WorkspacePage } from "@features/workspace";
+// #2431 — the Back control moved out of `WorkspacePage` into the toolbar, and
+// `MainArea` (which mounts the toolbar) is stubbed below. AC-154-02's subject
+// is Back, so it renders the button; AC-154-05's subject is the page's own
+// mount behaviour, so that one still renders the page.
+import { BackToConnectionsButton, WorkspacePage } from "@features/workspace";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -239,7 +243,7 @@ describe("AC-154-*: Window lifecycle wiring", () => {
       activeStatuses: { c1: { type: "connected" } },
       focusedConnId: "c1",
     });
-    render(<WorkspacePage />);
+    render(<BackToConnectionsButton />);
 
     await act(async () => {
       fireEvent.click(

@@ -56,9 +56,10 @@ export default function Sidebar() {
   // engagement with the connection.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
-  // #1738 (2026-07-25) — theme/language controls (and the system-mode
-  // subscription that backed them) moved to the single top area owned by
-  // `WorkspacePage`. The sidebar footer no longer renders a theme popover.
+  // #1738 (2026-07-25) — theme/language controls moved out of here into a
+  // single place, and the system-mode subscription that backed them moved to
+  // `WorkspacePage`. #2431 then moved the controls again, to `AppearanceButton`
+  // in the workspace toolbar. The sidebar footer renders no theme popover.
 
   // sprint-366 (Phase 4, Q15) — Removed the two `setFocusedConn` effects
   // ("focus active tab's conn" + "heal vanished focus") that previously
@@ -287,9 +288,9 @@ export default function Sidebar() {
       </div>
 
       {/* Sidebar footer. #1738 (2026-07-25) — the duplicate theme popover +
-            LanguageSwitcher were removed from here; theme/language now live in
-            the single top area (`WorkspacePage` header). Only the "Reset
-            width" affordance remains. */}
+            LanguageSwitcher were removed from here; theme/language live in a
+            single place, which #2431 moved on to `AppearanceButton` in the
+            workspace toolbar. Only the "Reset width" affordance remains. */}
       <div className="border-t border-border px-3 py-2">
         {/* Sprint 376 (Phase 6 Q21 #3-a) — "Reset sidebar width" 가시
               버튼. 우클릭 컨텍스트 메뉴 대신 직관적 위치 (sidebar
