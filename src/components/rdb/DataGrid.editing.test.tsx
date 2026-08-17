@@ -14,6 +14,7 @@
 
 import { SELECTED_ROW_FILL } from "@components/datagrid";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useLayoutStore } from "@stores/layoutStore";
 import {
   act,
   fireEvent,
@@ -682,8 +683,10 @@ describe("DataGrid", () => {
         fireEvent.click(cell);
         cell.focus();
       });
+      // #2426 — the panel is up when the workspace dock shows Details;
+      // `Cmd+L` (now owned by `App.tsx`) calls exactly this action.
       await act(async () => {
-        fireEvent.keyDown(document, { key: "l", metaKey: true });
+        useLayoutStore.getState().showBottomTab("details");
       });
       return screen.getByRole("region", { name: "Row Details" });
     }

@@ -87,6 +87,10 @@ export default function ShortcutCheatsheet() {
           { label: t("shortcuts.toggleHomeWorkspace"), keys: ["Cmd+,"] },
           { label: t("shortcuts.toggleFavorites"), keys: ["Cmd+Shift+F"] },
           { label: t("shortcuts.toggleQueryLog"), keys: ["Cmd+Shift+C"] },
+          // #2426 — the badge that used to advertise this combo lived on the
+          // grid toolbar's Quick Look button, which the bottom dock replaced.
+          // The cheatsheet is where the combo stays discoverable.
+          { label: t("shortcuts.toggleRowDetails"), keys: ["Cmd+L"] },
         ],
       },
       {

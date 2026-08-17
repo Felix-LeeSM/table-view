@@ -28,6 +28,7 @@
 // them (see that helper's header).
 
 import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
+import { useLayoutStore } from "@stores/layoutStore";
 import {
   act,
   fireEvent,
@@ -166,8 +167,8 @@ function panel(): HTMLElement {
 
 /**
  * Selects data row `rowIdx` by clicking its first cell, leaves DOM focus on
- * that cell (jsdom does not focus on click), then opens Quick Look with
- * Cmd+L. Returns the focused cell.
+ * that cell (jsdom does not focus on click), then shows the dock's Details
+ * tab. Returns the focused cell.
  */
 async function selectRowAndOpenPanel(rowIdx: number): Promise<HTMLElement> {
   const cell = document.querySelector<HTMLElement>(
@@ -178,16 +179,19 @@ async function selectRowAndOpenPanel(rowIdx: number): Promise<HTMLElement> {
     fireEvent.click(cell);
     cell.focus();
   });
-  await act(async () => {
-    fireEvent.keyDown(document, { key: "l", metaKey: true });
-  });
+  await toggleDetailsTab();
   return cell;
 }
 
-/** `Cmd+L` — the Quick Look toggle (`useRdbDataGridShortcuts`). */
-async function pressCmdL() {
+/**
+ * What `Cmd+L` reaches. #2426 moved the binding to `App.tsx` (which this
+ * suite does not mount) and the panel's open state from a grid-local flag to
+ * the workspace dock's tab, so the toggle these cases exercise is the store
+ * action the shortcut calls.
+ */
+async function toggleDetailsTab() {
   await act(async () => {
-    fireEvent.keyDown(document, { key: "l", metaKey: true });
+    useLayoutStore.getState().showBottomTab("details");
   });
 }
 
@@ -330,9 +334,7 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
     });
     expect(document.activeElement).toBe(panel());
 
-    await act(async () => {
-      fireEvent.keyDown(document, { key: "l", metaKey: true });
-    });
+    await toggleDetailsTab();
     expect(
       screen.queryByRole("region", { name: "Row Details" }),
     ).not.toBeInTheDocument();
@@ -488,12 +490,12 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
 
       await shrinkPageSize();
 
-      await pressCmdL();
+      await toggleDetailsTab();
       expect(
         screen.queryByRole("region", { name: "Row Details" }),
       ).not.toBeInTheDocument();
 
-      await pressCmdL();
+      await toggleDetailsTab();
       expect(
         screen.queryByRole("region", { name: "Row Details" }),
       ).toBeInTheDocument();
@@ -580,12 +582,12 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
 
       await refetchOntoEmptyPage();
 
-      await pressCmdL();
+      await toggleDetailsTab();
       expect(
         screen.queryByRole("region", { name: "Row Details" }),
       ).not.toBeInTheDocument();
 
-      await pressCmdL();
+      await toggleDetailsTab();
       expect(
         screen.queryByRole("region", { name: "Row Details" }),
       ).toBeInTheDocument();

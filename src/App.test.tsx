@@ -8,6 +8,7 @@ import {
 import type { ConnectionId, TabId } from "@/types/branded";
 import App from "./App";
 import { useConnectionStore } from "./stores/connectionStore";
+import { useLayoutStore } from "./stores/layoutStore";
 import { useThemeStore } from "./stores/themeStore";
 import {
   type QueryTab,
@@ -117,6 +118,64 @@ describe("App global shortcuts", () => {
     // (per `AppRouter.tsx`), so the workspace context is implied by the
     // file-under-test rendering `<App />`. The legacy app-shell screen seed
     // is no longer needed.
+  });
+
+  // #2426 — `Cmd/Ctrl+L` used to be registered twice, once in
+  // `useRdbDataGridShortcuts` and once inside `DocumentDataGrid`, each
+  // flipping its own grid-local flag. Row details became a tab of the
+  // workspace bottom dock, so the binding lives here and drives the dock.
+  it("[bottom-panel] Cmd+L opens the bottom dock on Details", () => {
+    render(<App />);
+    expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(true);
+
+    fireShortcut("l");
+
+    expect(useLayoutStore.getState().bottomPanelTab).toBe("details");
+    expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(false);
+  });
+
+  it("[bottom-panel] Cmd+L again collapses the dock — same toggle as before", () => {
+    render(<App />);
+    fireShortcut("l");
+    fireShortcut("l");
+    expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(true);
+    // The tab keeps the pick so the next Cmd+L reopens on Details.
+    expect(useLayoutStore.getState().bottomPanelTab).toBe("details");
+  });
+
+  it("[bottom-panel] Ctrl+L reaches the dock on non-mac keyboards", () => {
+    render(<App />);
+    act(() => {
+      fireEvent(
+        document,
+        new KeyboardEvent("keydown", {
+          key: "l",
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(useLayoutStore.getState().bottomPanelTab).toBe("details");
+  });
+
+  // Cmd+Shift+L cycles the theme. Sharing the `l` key with an unguarded
+  // handler would move the dock on every theme cycle.
+  it("[bottom-panel] Cmd+Shift+L cycles the theme and leaves the dock alone", () => {
+    render(<App />);
+    act(() => {
+      fireEvent(
+        document,
+        new KeyboardEvent("keydown", {
+          key: "L",
+          metaKey: true,
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(true);
   });
 
   it("Cmd+W closes the active tab", () => {
@@ -818,6 +877,10 @@ describe("App global shortcuts", () => {
       focusPolicy: "skip-in-editable",
     },
     { label: "Cmd+P (quick open)", key: "p", focusPolicy: "skip-in-editable" },
+    // Cmd+L — #2426 이전 grid 바인딩이 editable 검사 없이 걸려 있었고, 셀
+    // 인라인 편집 중에 눌러 상세를 여는 것이 실제 사용이라 "always" 를
+    // 그대로 유지한다. `l` 은 편집기에 글자를 넣는 조합이 아니다.
+    { label: "Cmd+L (row details)", key: "l", focusPolicy: "always" },
   ];
 
   function dispatchAndCheckPrevented(

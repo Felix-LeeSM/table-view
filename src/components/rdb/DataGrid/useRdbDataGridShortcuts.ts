@@ -11,7 +11,6 @@ interface UseRdbDataGridShortcutsParams {
    */
   hasPendingChanges: boolean;
   onToggleFilters: () => void;
-  onToggleQuickLook: () => void;
   onCancelEdit: () => void;
   /**
    * Opens the SAME confirm gate as the toolbar's Discard button (PR #1013).
@@ -29,7 +28,6 @@ export function useRdbDataGridShortcuts({
   canRedo,
   hasPendingChanges,
   onToggleFilters,
-  onToggleQuickLook,
   onCancelEdit,
   onRequestDiscard,
   onUndo,
@@ -46,16 +44,10 @@ export function useRdbDataGridShortcuts({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onToggleFilters]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "l" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        onToggleQuickLook();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onToggleQuickLook]);
+  // #2426 — `Cmd/Ctrl+L` used to live here (and again in
+  // `DocumentDataGrid`). Row details became a tab of the workspace bottom
+  // dock, which outlives any one grid, so the binding moved to `App.tsx`
+  // alongside the other workspace-level shortcuts and both copies are gone.
 
   useEffect(() => {
     const handler = () => {

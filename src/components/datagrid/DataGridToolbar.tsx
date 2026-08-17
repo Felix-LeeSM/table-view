@@ -14,7 +14,6 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Copy,
-  Eye,
   Filter,
   Loader2,
   Plus,
@@ -51,7 +50,6 @@ export interface DataGridToolbarProps {
   sorts: SortInfo[];
   activeFilterCount: number;
   showFilters: boolean;
-  showQuickLook: boolean;
   hasPendingChanges: boolean;
   canEditRows?: boolean;
   /**
@@ -85,7 +83,6 @@ export interface DataGridToolbarProps {
   onSetPage: (page: number) => void;
   onSetPageSize: (size: number) => void;
   onToggleFilters: () => void;
-  onToggleQuickLook: () => void;
   onCommit: () => void;
   onDiscard: () => void;
   /**
@@ -131,7 +128,6 @@ export default function DataGridToolbar({
   sorts,
   activeFilterCount,
   showFilters,
-  showQuickLook,
   hasPendingChanges,
   canEditRows = true,
   isCommitFlashing = false,
@@ -148,7 +144,6 @@ export default function DataGridToolbar({
   onSetPage,
   onSetPageSize,
   onToggleFilters,
-  onToggleQuickLook,
   onCommit,
   onDiscard,
   discardConfirmOpen,
@@ -330,46 +325,13 @@ export default function DataGridToolbar({
         )}
         {bulkOpsSlot}
         {exportSlot}
-        {/* Issue #1734 owner decision 2 — Quick Look leaves the icon crowd
-            (add / delete / duplicate / export / filter). Rules on BOTH sides
-            take it out of the crowd — filter is on the crowd's list too and
-            sits immediately to the right, so a left rule alone would leave
-            Quick Look glued to it. It carries a text label plus its shortcut
-            badge, so the entry point is discoverable without hovering every
-            icon. Cmd/Ctrl+L still toggles the same state; the cluster in the
-            workspace toolbar deliberately does NOT hold it — Quick Look is
-            scoped to this grid, not to the workspace layout. `border-l` is
-            this repo's vertical rule (see `ExplainViewer`). */}
-        <span
-          aria-hidden="true"
-          className="h-4 shrink-0 border-l border-border"
-        />
-        <Button
-          variant="ghost"
-          size="xs"
-          className={showQuickLook ? "text-primary" : "text-muted-foreground"}
-          onClick={onToggleQuickLook}
-          aria-pressed={showQuickLook}
-          aria-label={t("quickLookAria")}
-          title={t("quickLookTitle")}
-        >
-          <Eye />
-          <span>{t("quickLookLabel")}</span>
-          {/* The badge is decorative for AT without needing aria-hidden: the
-              button's `aria-label` already wins over its contents in the
-              accessible-name computation, and `title` spells the combo out
-              for pointer users. */}
-          {/* Same token set as the repo's other `<kbd>`
-              (`ShortcutCheatsheet`), only the padding/size scaled down for a
-              toolbar row. */}
-          <kbd className="rounded border border-border bg-background px-1 font-mono text-3xs text-foreground shadow-sm dark:bg-muted/30">
-            {t("quickLookShortcut")}
-          </kbd>
-        </Button>
-        <span
-          aria-hidden="true"
-          className="h-4 shrink-0 border-l border-border"
-        />
+        {/* #2426 — the Quick Look button and its `Cmd/Ctrl+L` badge used to
+            sit here, fenced off from the icon crowd by a `border-l` rule on
+            each side. Row details are a tab of the workspace bottom dock now,
+            so both rules went with the button: filter belongs to the crowd
+            and a leftover rule would fence it off for no reason. The
+            shortcut still works — `App.tsx` owns it and
+            `ShortcutCheatsheet` lists it. */}
         <Button
           variant="ghost"
           size="icon-xs"

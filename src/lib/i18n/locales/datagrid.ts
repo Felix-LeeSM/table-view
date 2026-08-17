@@ -54,10 +54,6 @@ export const en = {
   // (`ShortcutCheatsheet.tsx`), so the badge spells both out the way the
   // sibling `workspace.toolbar.history.title` already does — a bare `Cmd+L`
   // names the wrong key on Windows/Linux.
-  quickLookLabel: "Details",
-  quickLookAria: "Toggle row details",
-  quickLookTitle: "Row details (Cmd/Ctrl+L)",
-  quickLookShortcut: "Cmd/Ctrl+L",
   toggleFiltersAria: "Toggle filters",
   toggleFiltersTitle: "Toggle filters",
 
@@ -209,10 +205,6 @@ export const ko = {
   resizeColumnTitle: "드래그하여 크기 조절 · 더블클릭하면 너비 초기화",
 
   // DataGridToolbar — column / view controls
-  quickLookLabel: "상세",
-  quickLookAria: "행 상세 전환",
-  quickLookTitle: "행 상세 (Cmd/Ctrl+L)",
-  quickLookShortcut: "Cmd/Ctrl+L",
   toggleFiltersAria: "필터 전환",
   toggleFiltersTitle: "필터 전환",
 

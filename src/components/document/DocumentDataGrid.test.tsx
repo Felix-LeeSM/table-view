@@ -1,5 +1,6 @@
 import { EditorView } from "@codemirror/view";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useLayoutStore } from "@stores/layoutStore";
 import {
   act,
   fireEvent,
@@ -17,6 +18,17 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { DatabaseType } from "@/types/connection";
 import type { DocumentQueryResult } from "@/types/document";
 import DocumentDataGrid from "./DocumentDataGrid";
+
+/**
+ * What `Cmd+L` reaches after #2426 — the binding lives in `App.tsx`, which
+ * this suite does not mount, and the panel now renders into the workspace
+ * dock's Details tab. Toggling, so a second call closes it.
+ */
+function showDetailsTab() {
+  act(() => {
+    useLayoutStore.getState().showBottomTab("details");
+  });
+}
 
 // Canned results used by the mocked store. Shaped to mirror the backend's
 // flattening: `rows` carry sentinels, `rawDocuments` keep the nested
@@ -225,15 +237,15 @@ describe("DocumentDataGrid", () => {
     expect(rowAlice).toHaveAttribute("aria-selected", "false");
   });
 
-  it("does not mount QuickLookPanel when Cmd+L is pressed without a selection", async () => {
+  it("does not mount QuickLookPanel when the Details tab opens without a selection", async () => {
     renderGrid();
 
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    // No selection yet. Cmd+L toggles `showQuickLook` to true but the
-    // mount gate requires `selectedRowIds.size > 0`, so the panel stays
-    // absent.
-    fireEvent.keyDown(document, { key: "l", metaKey: true });
+    // No selection yet. Showing the dock's Details tab is what `Cmd+L`
+    // reaches (#2426), but the mount gate requires
+    // `selectedRowIds.size > 0`, so the panel stays absent.
+    showDetailsTab();
 
     expect(
       screen.queryByRole("region", { name: "Document Details" }),
@@ -254,7 +266,7 @@ describe("DocumentDataGrid", () => {
     fireEvent.click(
       screen.getByText("Alice").closest('[role="row"]') as HTMLElement,
     );
-    fireEvent.keyDown(document, { key: "l", metaKey: true });
+    showDetailsTab();
     const panel = await screen.findByRole("region", {
       name: "Document Details",
     });
@@ -262,7 +274,7 @@ describe("DocumentDataGrid", () => {
     fireEvent.keyDown(window, { key: "F6" });
     expect(document.activeElement).toBe(panel);
 
-    fireEvent.keyDown(document, { key: "l", metaKey: true });
+    showDetailsTab();
 
     expect(
       screen.queryByRole("region", { name: "Document Details" }),
@@ -272,7 +284,7 @@ describe("DocumentDataGrid", () => {
     );
   });
 
-  it("mounts QuickLookPanel with BsonTreeViewer after selecting a row and pressing Cmd+L", async () => {
+  it("mounts QuickLookPanel with BsonTreeViewer after selecting a row and opening the Details tab", async () => {
     renderGrid();
 
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
@@ -282,7 +294,7 @@ describe("DocumentDataGrid", () => {
       .closest('[role="row"]') as HTMLElement;
     fireEvent.click(rowAlice);
 
-    fireEvent.keyDown(document, { key: "l", metaKey: true });
+    showDetailsTab();
 
     const panel = await screen.findByRole("region", {
       name: "Document Details",
@@ -298,8 +310,8 @@ describe("DocumentDataGrid", () => {
     expect(tree).toHaveTextContent("meta");
     expect(tree).toHaveTextContent("tags");
 
-    // Second Cmd+L hides the panel again (toggle behaviour).
-    fireEvent.keyDown(document, { key: "l", metaKey: true });
+    // Showing the Details tab again collapses the dock (toggle behaviour).
+    showDetailsTab();
     expect(
       screen.queryByRole("region", { name: "Document Details" }),
     ).not.toBeInTheDocument();
