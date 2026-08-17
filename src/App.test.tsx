@@ -178,6 +178,126 @@ describe("App global shortcuts", () => {
     expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(true);
   });
 
+  // ── #2428 — the two panel-collapse hotkeys. ────────────────────────────
+  // The layout cluster's buttons already drove `toggleSidebar` /
+  // `toggleBottomPanel`; these cases lock the keyboard route to the same two
+  // actions and the three owner decisions the issue delegated: which layer
+  // registers them (App, next to Cmd+L), that they fire inside editable
+  // surfaces (matrix rows below), and that Cmd+J stays distinct from Cmd+L.
+  it("[hotkey] Cmd+B collapses the schema sidebar and restores it", () => {
+    render(<App />);
+    expect(useLayoutStore.getState().sidebarCollapsed).toBe(false);
+
+    fireShortcut("b");
+    expect(useLayoutStore.getState().sidebarCollapsed).toBe(true);
+
+    fireShortcut("b");
+    expect(useLayoutStore.getState().sidebarCollapsed).toBe(false);
+  });
+
+  it("[hotkey] Ctrl+B reaches the sidebar on non-mac keyboards", () => {
+    render(<App />);
+    act(() => {
+      fireEvent(
+        document,
+        new KeyboardEvent("keydown", {
+          key: "b",
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(useLayoutStore.getState().sidebarCollapsed).toBe(true);
+  });
+
+  it("[hotkey] Cmd+J toggles the bottom dock without changing its tab", () => {
+    useLayoutStore.setState({
+      bottomPanelTab: "operations",
+      bottomPanelCollapsed: false,
+    });
+    render(<App />);
+
+    fireShortcut("j");
+    expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(true);
+    expect(useLayoutStore.getState().bottomPanelTab).toBe("operations");
+
+    fireShortcut("j");
+    expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(false);
+    expect(useLayoutStore.getState().bottomPanelTab).toBe("operations");
+  });
+
+  it("[hotkey] Ctrl+J reaches the dock on non-mac keyboards", () => {
+    render(<App />);
+    act(() => {
+      fireEvent(
+        document,
+        new KeyboardEvent("keydown", {
+          key: "j",
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(false);
+  });
+
+  // Owner decision 3: the two keys keep separate jobs. Cmd+L asks for a
+  // view and always lands on Details; Cmd+J asks for space and never moves
+  // the tab. Collapsing is the only half they share.
+  it("[hotkey] Cmd+J leaves the tab alone where Cmd+L switches it to Details", () => {
+    useLayoutStore.setState({
+      bottomPanelTab: "history",
+      bottomPanelCollapsed: false,
+    });
+    render(<App />);
+
+    // Both halves matter: Cmd+J has to *do* something (collapse) while
+    // leaving the tab where it was. Asserting only the unchanged tab would
+    // still pass against a handler that never fired.
+    fireShortcut("j");
+    expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(true);
+    expect(useLayoutStore.getState().bottomPanelTab).toBe("history");
+
+    fireShortcut("l");
+    expect(useLayoutStore.getState().bottomPanelTab).toBe("details");
+    expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(false);
+  });
+
+  // Modified variants stay unclaimed. The Alt rows are what make the
+  // `e.altKey` guard load-bearing: on Windows/Linux AltGr *is* Ctrl+Alt, so
+  // `e.key` still arrives as plain "b"/"j" and a guardless handler would
+  // collapse a panel every time such a layout types one of those characters.
+  // The Shift rows document the casing contract instead — `e.key` is already
+  // "B"/"J" with Shift held, so they hold even with `e.shiftKey` removed, and
+  // they are what fails if anyone lowercases `e.key` the way the Cmd+R
+  // handler does (that would hand Cmd+Shift+B the sidebar).
+  it("[hotkey] Shift- and Alt-modified Cmd+B / Cmd+J leave both panels alone", () => {
+    render(<App />);
+    const variants: Partial<KeyboardEventInit>[] = [
+      { key: "B", shiftKey: true },
+      { key: "J", shiftKey: true },
+      { key: "b", altKey: true },
+      { key: "j", altKey: true },
+    ];
+    for (const variant of variants) {
+      act(() => {
+        fireEvent(
+          document,
+          new KeyboardEvent("keydown", {
+            metaKey: true,
+            bubbles: true,
+            cancelable: true,
+            ...variant,
+          }),
+        );
+      });
+    }
+    expect(useLayoutStore.getState().sidebarCollapsed).toBe(false);
+    expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(true);
+  });
+
   it("Cmd+W closes the active tab", () => {
     const tab = makeTableTab();
     useWorkspaceStore.setState(seedWorkspace([tab], "tab-1"));
@@ -881,6 +1001,22 @@ describe("App global shortcuts", () => {
     // 인라인 편집 중에 눌러 상세를 여는 것이 실제 사용이라 "always" 를
     // 그대로 유지한다. `l` 은 편집기에 글자를 넣는 조합이 아니다.
     { label: "Cmd+L (row details)", key: "l", focusPolicy: "always" },
+    // #2428 owner decision 2 — the panel collapses resize the chrome
+    // *around* the editor, and the moment you want the sidebar gone is
+    // while the editor holds focus, so they fire there too. No CodeMirror
+    // keymap in this repo binds `b`/`j` (only Mod-Enter and Mod-z), so
+    // nothing in-app loses the keystroke; preventDefault additionally keeps
+    // the webview's native contenteditable bold off Cmd+B.
+    {
+      label: "[hotkey] Cmd+B (toggle sidebar)",
+      key: "b",
+      focusPolicy: "always",
+    },
+    {
+      label: "[hotkey] Cmd+J (toggle bottom panel)",
+      key: "j",
+      focusPolicy: "always",
+    },
   ];
 
   function dispatchAndCheckPrevented(

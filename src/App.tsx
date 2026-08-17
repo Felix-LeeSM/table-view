@@ -554,6 +554,39 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [showBottomTab]);
 
+  // Cmd+B / Ctrl+B — collapse or restore the schema sidebar.
+  // Cmd+J / Ctrl+J — collapse or restore the bottom dock, leaving whichever
+  // tab it is showing alone. Cmd+L above is the tab-targeted sibling: it
+  // asks for a *view* ("show me row details"), this asks for *space* ("give
+  // me the grid back"). Overlapping only on the collapse half is the same
+  // split editors ship (a panel-visibility toggle plus per-view commands),
+  // so both stay.
+  //
+  // Both deliberately skip the `isEditableTarget` guard that Cmd+T/N/S/P/R/I
+  // use — same call as Cmd+L and Cmd+1..9 above. These resize the chrome
+  // *around* the editor, and the moment you want the sidebar out of the way
+  // is while the editor holds focus; guarding would kill the shortcut in its
+  // main use. Nothing in the app loses a keystroke: the CodeMirror keymaps
+  // bind only Mod-Enter and Mod-z, so `b`/`j` reach no editor command. The
+  // `preventDefault()` also stops the webview's own contenteditable bold
+  // from running inside CodeMirror's editable DOM.
+  const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
+  const toggleBottomPanel = useLayoutStore((s) => s.toggleBottomPanel);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      if (e.key === "b") {
+        e.preventDefault();
+        toggleSidebar();
+      } else if (e.key === "j") {
+        e.preventDefault();
+        toggleBottomPanel();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [toggleSidebar, toggleBottomPanel]);
+
   // Cmd+Shift+L / Ctrl+Shift+L — cycle theme mode
   // (dark → light → system → dark).
   useEffect(() => {

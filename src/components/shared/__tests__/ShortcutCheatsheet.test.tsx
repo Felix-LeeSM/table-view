@@ -158,6 +158,19 @@ describe("ShortcutCheatsheet", () => {
     expect(screen.getByText("Switch to tab 1–9")).toBeInTheDocument();
   });
 
+  // #2428 — the layout cluster's two toggles are icon-only buttons, so this
+  // list is the only surface that spells their combos out. If it drifts the
+  // shortcuts become undiscoverable rather than broken, which no other test
+  // would catch.
+  it("[hotkey] renders Cmd+B and Cmd+J with their panel labels", () => {
+    fireGlobalKey("?");
+
+    expect(screen.getByText("Toggle schema sidebar")).toBeInTheDocument();
+    expect(screen.getByText("Cmd+B")).toBeInTheDocument();
+    expect(screen.getByText("Toggle bottom panel")).toBeInTheDocument();
+    expect(screen.getByText("Cmd+J")).toBeInTheDocument();
+  });
+
   // Sprint 134 — `Open connection switcher` (Cmd+K) was removed from the
   // cheatsheet alongside the deletion of `<ConnectionSwitcher>`. Guard
   // against a regression by asserting the label is gone.
