@@ -272,6 +272,53 @@ pub struct ConnectionConfig {
     pub wallet_password: String,
 }
 
+/// Issue #2429 — seconds a dial waits before failing when the user left
+/// [`ConnectionConfig::connection_timeout`] unset.
+///
+/// Ten is the value MSSQL (`MssqlAdapter::connection_timeout`) and the
+/// Elasticsearch/OpenSearch HTTP client (`db::search_http`) already chose, so
+/// the app is converging on a number it was shipping rather than inventing
+/// one. It buys roughly ten round trips to a remote/VPN'd server (typical
+/// intercontinental RTT is well under a second) plus the TLS and auth
+/// handshakes, while a host that drops packets now surfaces in ten seconds
+/// instead of thirty. A link slow enough to need more raises the connection's
+/// own `connection_timeout`, which each adapter honours up to its own ceiling
+/// and clamps above it.
+pub const CONNECT_TIMEOUT_DEFAULT_SECS: u32 = 10;
+
+impl ConnectionConfig {
+    /// Resolve the dial timeout this connection hands its driver.
+    ///
+    /// Issue #2429 — the place the unset default is decided. The adapters that
+    /// dial a network host read it here instead of each keeping a private
+    /// fallback; the one remaining direct reader of `connection_timeout` under
+    /// `db/` is the file-backed SQLite pool, which has no host to be
+    /// unreachable (`git grep -n '\.connection_timeout' --
+    /// src-tauri/table-view-core/src/db/`). Each driver keeps its own
+    /// `max_secs` ceiling, which is a per-driver property (a pool-acquire
+    /// budget is not a TCP dial budget) and stays with it.
+    ///
+    /// **Reaching this function is not the same as reaching the wait.** A
+    /// driver can take the value and ignore it — oracle-rs 0.1.7 does, so
+    /// `db::oracle::OracleAdapter::dial` enforces the budget in the app
+    /// instead. What each adapter actually hands its driver is asserted in
+    /// `db::connect_timeout_tests`, not inferred from this call site.
+    ///
+    /// The lower bound is 1s: a stored `Some(0)` used to mean "fail every
+    /// connect instantly" wherever the value became a pool `acquire_timeout`,
+    /// which reads as an unreachable server rather than a bad setting. The
+    /// SQLite pool named above is outside this resolver and still takes a
+    /// raw `0`.
+    pub fn connect_timeout(&self, max_secs: u32) -> std::time::Duration {
+        std::time::Duration::from_secs(
+            self.connection_timeout
+                .unwrap_or(CONNECT_TIMEOUT_DEFAULT_SECS)
+                .clamp(1, max_secs)
+                .into(),
+        )
+    }
+}
+
 /// #1649 (ADR 0058) — deserialize shim that migrates the legacy
 /// `(tls_enabled, trust_server_certificate)` boolean pair into `ssl_mode` in a
 /// single stage. [`ConnectionConfig`] deserializes *through* this type

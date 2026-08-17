@@ -28,10 +28,17 @@ use super::version::{parse_mysql_server_version, MysqlServerVersion};
 const MYSQL_POOL_MAX_CONNECTIONS: u32 = 5;
 
 /// Hard ceiling for `MySqlPoolOptions::acquire_timeout`. PG 패턴 답습.
-const MYSQL_POOL_ACQUIRE_TIMEOUT_MAX_SECS: u64 = 30;
+pub(crate) const MYSQL_POOL_ACQUIRE_TIMEOUT_MAX_SECS: u32 = 30;
 
-/// Default fallback for `ConnectionConfig::connection_timeout` when unset.
-const MYSQL_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS: u32 = 300;
+/// Issue #2429 — PG `postgres::connection::pool_options` 와 같은 자리. 최초
+/// `connect_pool` 과 `switch_database` cache miss 가 같은 knob 을 쓰게 묶는다.
+/// 미설정 timeout 의 기본값은 이 어댑터가 아니라
+/// [`ConnectionConfig::connect_timeout`] 이 갖는다.
+pub(crate) fn pool_options(config: &ConnectionConfig) -> MySqlPoolOptions {
+    MySqlPoolOptions::new()
+        .max_connections(MYSQL_POOL_MAX_CONNECTIONS)
+        .acquire_timeout(config.connect_timeout(MYSQL_POOL_ACQUIRE_TIMEOUT_MAX_SECS))
+}
 
 /// PG `PG_SUBPOOL_CAP` (8) 와 동일 — sub-pool cache 가 무한히 자라지 않게
 /// 막는 LRU 한계. 매 DB switch 마다 새 pool 을 열 수 있으므로 user 가 10+
@@ -142,14 +149,7 @@ impl MysqlAdapter {
 
     pub async fn connect_pool(&self, config: &ConnectionConfig) -> Result<(), AppError> {
         let options = Self::connect_options(config)?;
-        let timeout_secs = config
-            .connection_timeout
-            .unwrap_or(MYSQL_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS);
-        let pool = MySqlPoolOptions::new()
-            .max_connections(MYSQL_POOL_MAX_CONNECTIONS)
-            .acquire_timeout(std::time::Duration::from_secs(
-                (timeout_secs as u64).min(MYSQL_POOL_ACQUIRE_TIMEOUT_MAX_SECS),
-            ))
+        let pool = pool_options(config)
             .connect_with(options)
             .await
             .map_err(mysql_connection_error)?;
@@ -244,14 +244,7 @@ impl MysqlAdapter {
                 let mut config = *boxed_config;
                 config.database = db_name.to_string();
                 let options = Self::connect_options(&config)?;
-                let timeout_secs = config
-                    .connection_timeout
-                    .unwrap_or(MYSQL_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS);
-                let new_pool = MySqlPoolOptions::new()
-                    .max_connections(MYSQL_POOL_MAX_CONNECTIONS)
-                    .acquire_timeout(std::time::Duration::from_secs(
-                        (timeout_secs as u64).min(MYSQL_POOL_ACQUIRE_TIMEOUT_MAX_SECS),
-                    ))
+                let new_pool = pool_options(&config)
                     .connect_with(options)
                     .await
                     .map_err(|e| {

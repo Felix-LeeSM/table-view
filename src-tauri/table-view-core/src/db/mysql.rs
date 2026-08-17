@@ -14,7 +14,7 @@
 //! body shape 이 달라 `Unsupported` reject 한다.
 
 mod checks;
-mod connection;
+pub(crate) mod connection;
 mod mutations;
 mod queries;
 mod schema;

@@ -38,12 +38,19 @@ const PG_POOL_MAX_CONNECTIONS: u32 = 5;
 /// this via `ConnectionConfig::connection_timeout`, but it is clamped to
 /// this maximum so a misconfigured connection cannot hang the UI for
 /// minutes — the connection error surfaces within 30s either way.
-const PG_POOL_ACQUIRE_TIMEOUT_MAX_SECS: u64 = 30;
+pub(crate) const PG_POOL_ACQUIRE_TIMEOUT_MAX_SECS: u32 = 30;
 
-/// Default fallback for `ConnectionConfig::connection_timeout` when unset.
-/// Larger than `PG_POOL_ACQUIRE_TIMEOUT_MAX_SECS` so the saturation path is
-/// the explicit `min` clamp rather than this fallback.
-const PG_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS: u32 = 300;
+/// Issue #2429 — where the *session* pool's knobs are assembled: the initial
+/// `connect_pool` and every `switch_active_db` cache miss share this, so the
+/// two cannot drift. The short-lived pools in `test` and the cancel
+/// side-connection stay on their own fixed 5s budget and deliberately do not
+/// come through here. The unset-timeout default belongs to
+/// [`ConnectionConfig::connect_timeout`], not to this adapter.
+pub(crate) fn pool_options(config: &ConnectionConfig) -> PgPoolOptions {
+    PgPoolOptions::new()
+        .max_connections(PG_POOL_MAX_CONNECTIONS)
+        .acquire_timeout(config.connect_timeout(PG_POOL_ACQUIRE_TIMEOUT_MAX_SECS))
+}
 
 /// Sprint 130 — pure helper that picks the next eviction target from an
 /// LRU order, skipping the protected `current` database.
@@ -156,14 +163,7 @@ impl PostgresAdapter {
 
     pub async fn connect_pool(&self, config: &ConnectionConfig) -> Result<(), AppError> {
         let options = Self::connect_options(config)?;
-        let timeout_secs = config
-            .connection_timeout
-            .unwrap_or(PG_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS);
-        let pool = PgPoolOptions::new()
-            .max_connections(PG_POOL_MAX_CONNECTIONS)
-            .acquire_timeout(std::time::Duration::from_secs(
-                (timeout_secs as u64).min(PG_POOL_ACQUIRE_TIMEOUT_MAX_SECS),
-            ))
+        let pool = pool_options(config)
             .connect_with(options)
             .await
             .map_err(pg_connection_error)?;
@@ -279,14 +279,7 @@ impl PostgresAdapter {
                 let mut config = *boxed_config;
                 config.database = db_name.to_string();
                 let options = Self::connect_options(&config)?;
-                let timeout_secs = config
-                    .connection_timeout
-                    .unwrap_or(PG_POOL_ACQUIRE_TIMEOUT_DEFAULT_SECS);
-                let new_pool = PgPoolOptions::new()
-                    .max_connections(PG_POOL_MAX_CONNECTIONS)
-                    .acquire_timeout(std::time::Duration::from_secs(
-                        (timeout_secs as u64).min(PG_POOL_ACQUIRE_TIMEOUT_MAX_SECS),
-                    ))
+                let new_pool = pool_options(&config)
                     .connect_with(options)
                     .await
                     .map_err(|e| {

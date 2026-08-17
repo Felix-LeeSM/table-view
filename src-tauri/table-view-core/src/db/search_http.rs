@@ -57,6 +57,16 @@ struct SearchHttpAuth {
     password: String,
 }
 
+/// Hard ceiling for the reqwest request timeout derived from
+/// `ConnectionConfig::connection_timeout`.
+pub(crate) const SEARCH_HTTP_TIMEOUT_MAX_SECS: u32 = 300;
+
+/// Issue #2429 — the timeout this adapter hands `reqwest`. The unset default
+/// lives in [`ConnectionConfig::connect_timeout`]; only the ceiling is local.
+pub(crate) fn search_http_timeout(config: &ConnectionConfig) -> Duration {
+    config.connect_timeout(SEARCH_HTTP_TIMEOUT_MAX_SECS)
+}
+
 pub(crate) async fn open_elasticsearch_connection(
     config: &ConnectionConfig,
 ) -> Result<SearchHttpConnection, AppError> {
@@ -74,9 +84,8 @@ async fn open_search_connection(
     product: SearchProductKind,
 ) -> Result<SearchHttpConnection, AppError> {
     let label = product.label();
-    let timeout_secs = config.connection_timeout.unwrap_or(10).clamp(1, 300);
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(timeout_secs.into()))
+        .timeout(search_http_timeout(config))
         // #1063 / #1649 — the `require` posture opts into skip-verify; for the
         // reqwest-backed search adapters this is `danger_accept_invalid_certs`
         // (applies only over https, which the `https` scheme selects when TLS is

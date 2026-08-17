@@ -51,7 +51,7 @@
 
 mod capability;
 mod category;
-mod connection;
+pub(crate) mod connection;
 mod mutations;
 mod queries;
 mod schema;

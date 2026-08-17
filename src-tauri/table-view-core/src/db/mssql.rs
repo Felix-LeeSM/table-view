@@ -38,8 +38,7 @@ pub struct MssqlConnectionOnlyAdapter {
 }
 
 impl MssqlAdapter {
-    const DEFAULT_CONNECTION_TIMEOUT_SECS: u64 = 10;
-    const MAX_CONNECTION_TIMEOUT_SECS: u64 = 300;
+    pub(crate) const MAX_CONNECTION_TIMEOUT_SECS: u32 = 300;
 
     pub fn new() -> Self {
         Self {
@@ -188,14 +187,8 @@ impl MssqlAdapter {
         Ok(tds_config)
     }
 
-    fn connection_timeout(config: &ConnectionConfig) -> Duration {
-        Duration::from_secs(
-            config
-                .connection_timeout
-                .map(u64::from)
-                .unwrap_or(Self::DEFAULT_CONNECTION_TIMEOUT_SECS)
-                .clamp(1, Self::MAX_CONNECTION_TIMEOUT_SECS),
-        )
+    pub(crate) fn connection_timeout(config: &ConnectionConfig) -> Duration {
+        config.connect_timeout(Self::MAX_CONNECTION_TIMEOUT_SECS)
     }
 }
 
