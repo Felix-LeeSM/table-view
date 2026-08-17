@@ -182,8 +182,9 @@ describe("App global shortcuts", () => {
   // The layout cluster's buttons already drove `toggleSidebar` /
   // `toggleBottomPanel`; these cases lock the keyboard route to the same two
   // actions and the three owner decisions the issue delegated: which layer
-  // registers them (App, next to Cmd+L), that they fire inside editable
-  // surfaces (matrix rows below), and that Cmd+J stays distinct from Cmd+L.
+  // registers them (App, next to Cmd+L), what each does inside an editable
+  // surface (the two matrix rows below, which land on opposite policies),
+  // and that Cmd+J stays distinct from Cmd+L.
   it("[hotkey] Cmd+B collapses the schema sidebar and restores it", () => {
     render(<App />);
     expect(useLayoutStore.getState().sidebarCollapsed).toBe(false);
@@ -1001,17 +1002,20 @@ describe("App global shortcuts", () => {
     // 인라인 편집 중에 눌러 상세를 여는 것이 실제 사용이라 "always" 를
     // 그대로 유지한다. `l` 은 편집기에 글자를 넣는 조합이 아니다.
     { label: "Cmd+L (row details)", key: "l", focusPolicy: "always" },
-    // #2428 owner decision 2 — the panel collapses resize the chrome
-    // *around* the editor, and the moment you want the sidebar gone is
-    // while the editor holds focus, so they fire there too. No CodeMirror
-    // keymap in this repo binds `b`/`j` (only Mod-Enter and Mod-z), so
-    // nothing in-app loses the keystroke; preventDefault additionally keeps
-    // the webview's native contenteditable bold off Cmd+B.
+    // #2428 결정 2 — 두 키의 정책이 갈리고, 갈린 사유는 글자마다 다르다.
+    // `b` 는 흘려보낸다: CodeMirror `standardKeymap` 이 `emacsStyleKeymap`
+    // 을 mac 전용으로 접어 넣어 `Ctrl-b` 가 `cursorCharLeft` 이고, 이 앱의
+    // 편집기가 전부 `defaultKeymap` 을 깐다. CodeMirror 는 preventDefault
+    // 만 하고 전파를 안 막으므로(#1224) 가로채면 캐럿이 한 글자 왼쪽으로
+    // 가는 것과 사이드바 접힘이 같이 일어난다.
     {
       label: "[hotkey] Cmd+B (toggle sidebar)",
       key: "b",
-      focusPolicy: "always",
+      focusPolicy: "skip-in-editable",
     },
+    // `j` 는 가로챈다: `standardKeymap` 에도 이 저장소 어느 편집기에도
+    // `Ctrl-j` / `Mod-j` 바인딩이 없어 뺏기는 키 입력이 없고, 그리드를 다시
+    // 넓히고 싶은 순간이 편집기에 포커스가 있을 때다.
     {
       label: "[hotkey] Cmd+J (toggle bottom panel)",
       key: "j",

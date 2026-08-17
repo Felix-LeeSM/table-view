@@ -558,24 +558,27 @@ export default function App() {
   // Cmd+J / Ctrl+J — collapse or restore the bottom dock, leaving whichever
   // tab it is showing alone. Cmd+L above is the tab-targeted sibling: it
   // asks for a *view* ("show me row details"), this asks for *space* ("give
-  // me the grid back"). Overlapping only on the collapse half is the same
-  // split editors ship (a panel-visibility toggle plus per-view commands),
-  // so both stay.
+  // me the grid back"). They overlap only on the collapse half, so both stay.
   //
-  // Both deliberately skip the `isEditableTarget` guard that Cmd+T/N/S/P/R/I
-  // use — same call as Cmd+L and Cmd+1..9 above. These resize the chrome
-  // *around* the editor, and the moment you want the sidebar out of the way
-  // is while the editor holds focus; guarding would kill the shortcut in its
-  // main use. Nothing in the app loses a keystroke: the CodeMirror keymaps
-  // bind only Mod-Enter and Mod-z, so `b`/`j` reach no editor command. The
-  // `preventDefault()` also stops the webview's own contenteditable bold
-  // from running inside CodeMirror's editable DOM.
+  // The focus policy differs per letter, and the matrix in `App.test.tsx`
+  // carries the two rows:
+  //   - `b` skips editable targets. `standardKeymap` folds `emacsStyleKeymap`
+  //     in as mac-only bindings and `Ctrl-b` there is `cursorCharLeft`, which
+  //     every editor in this app inherits through `defaultKeymap`. CodeMirror
+  //     preventDefaults without stopping propagation (#1224), so an unguarded
+  //     handler here would collapse the sidebar *on top of* the caret moving
+  //     one character left.
+  //   - `j` does not skip them, like Cmd+L and Cmd+1..9 above. Neither
+  //     `standardKeymap` nor any editor in this repo binds it, so no
+  //     keystroke is taken away — and wanting the grid back is at its most
+  //     useful while the editor holds focus.
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
   const toggleBottomPanel = useLayoutStore((s) => s.toggleBottomPanel);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
       if (e.key === "b") {
+        if (isEditableTarget(e.target)) return;
         e.preventDefault();
         toggleSidebar();
       } else if (e.key === "j") {
