@@ -2,6 +2,7 @@ import { expect } from "@wdio/globals";
 import {
   clickDialogAction,
   createPostgresConnection,
+  executeSqlPreview,
   expectNoVisibleDialogText,
   openConnection,
   openNewQueryTab,
@@ -28,18 +29,25 @@ import {
  * destructive (`severity === "danger"`) statement only, since read / safe
  * writes are never gated:
  *
- *   | env       | mode         | result                                    |
- *   |-----------|--------------|-------------------------------------------|
- *   | non-prod  | warn / off   | allow (no dialog)                         |  ← class A
- *   | non-prod  | strict       | confirm (non-prod "strict" copy)          |  ← class B
- *   | prod      | strict / warn| confirm (bare reason)                     |  ← class C
- *   | prod      | off          | confirm (prod-auto "forces Safe Mode")    |  ← class D
+ *   | env       | mode         | decideSafeModeAction | what the user sees  |
+ *   |-----------|--------------|----------------------|---------------------|
+ *   | non-prod  | warn / off   | allow                | SQL preview         |  ← class A
+ *   | non-prod  | strict       | confirm              | non-prod "strict"   |  ← class B
+ *   | prod      | strict / warn| confirm              | bare reason         |  ← class C
+ *   | prod      | off          | confirm              | prod-auto copy      |  ← class D
+ *
+ * The two result columns come from two different gates. `decideSafeModeAction`
+ * decides the CONFIRM dialog; the SQL preview is a separate QueryTab-level
+ * surface gated by `requiresPreviewDialog` (`src/lib/safeMode.ts`), which
+ * issue #2375 widened from the WARN tier to every non-INFO tier. So an
+ * `allow` from the matrix no longer means "nothing is shown".
  *
  * Collapse rationale (per #1124 "cover distinct behavior classes, not the
  * full cartesian product"):
- *   - non-prod {warn, off} collapse to class A — both `allow`, dialog-less
- *     and indistinguishable at the UI. We assert the default (warn) cell;
- *     off/non-prod is the identical code path.
+ *   - non-prod {warn, off} collapse to class A — both `allow`, so both get
+ *     the preview and neither gets a confirm; indistinguishable at the UI.
+ *     We assert the default (warn) cell; off/non-prod is the identical code
+ *     path.
  *   - prod {strict, warn} collapse to class C — already covered verbatim by
  *     `postgres-safe-mode.spec.ts` (prod + warn default). Not re-asserted
  *     here; this spec adds the UNCOVERED dial cells (B and D) plus the
@@ -78,11 +86,24 @@ describe("PostgreSQL Safe Mode mode-dial matrix", () => {
     });
 
     await step(
-      "class A — non-prod + warn (default): destructive allowed, no dialog",
+      "class A — non-prod + warn (default): preview, not a destructive confirm",
       async () => {
         await runSqlInNewTab(dropSql);
+        // Issue #2375 — the QueryTab preview gate covers every non-INFO
+        // tier, so the statement this matrix cell *allows* still gets a
+        // review surface before it reaches the driver. What class A pins
+        // is the absence of the CONFIRM gate, not the absence of a dialog.
+        await waitForDialogTextAll(
+          ["Review SQL Changes", "DROP TABLE"],
+          15000,
+          "non-production warn SQL preview dialog did not appear",
+        );
         await expectNoVisibleDialogText("Destructive statement");
         await expectNoVisibleDialogText("PRODUCTION DATABASE");
+        // Executing dismisses the preview. Leaving it open would keep a
+        // modal overlay over the toolbar and the next step's mode-dial
+        // click would fail as "element not interactable".
+        await executeSqlPreview();
       },
     );
 
