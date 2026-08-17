@@ -71,7 +71,17 @@ connection that momentarily reads as unresolved during a frontend hydration race
 is still covered structurally by the backend gate, which re-reads `environment`
 from its own SQLite store; non-canonical stored tags ("Production", "prod")
 canonicalize to unset and surface an "Unknown" badge rather than silently
-masquerading as production. Destructive classification reuses the native
+masquerading as production. Issue #2375 widened the raw SQL/MQL editor's
+preview gate from the warn tier to every tier above info. On a non-production
+connection under Safe Mode `warn` / `off` the matrix returns `allow` for a
+destructive statement, and before that widening `DROP TABLE t` dispatched on
+the first click while `DELETE FROM t WHERE id = 1` got the preview dialog;
+`DROP TABLE t` and a Mongo `$out` pipeline now open that same dialog
+(`SqlPreviewDialog` / `MqlPreviewModal`). The Safe Mode decision matrix is
+unchanged by the widening. The Redis command console mounts no preview at all
+(`src/components/query/QueryTab/kvQueryExecution.ts`), so a destructive command
+the matrix allows there still dispatches on the first click. Destructive
+classification reuses the native
 `sql-parser-core` crate (the same parser the frontend compiles to WASM); the one
 intentional divergence is the frontend's dynamic dry-run WARN→danger escalation,
 a UI-only runtime escalation outside the Safe Mode decision matrix that the

@@ -792,10 +792,17 @@ describe("QueryTab — document", () => {
       ).toBeGreaterThan(0);
     });
 
-    it("[AC-188-03e-2] non-production × warn × $out → dispatch proceeds (warn unguarded outside prod)", async () => {
-      // Sprint 245 — paired with the M.1 strict flow above so the
-      // matrix coverage stays complete: warn / off on non-prod do not
-      // open the dialog even on destructive Mongo pipelines.
+    it("[AC-188-03e-2] preview[danger] non-production × warn × $out → MQL Preview, confirm 후 dispatch", async () => {
+      // Sprint 245 — paired with the M.1 strict flow above so the matrix
+      // coverage stays complete: `decideSafeModeAction` still returns
+      // `allow` here, so no ConfirmDestructiveDialog opens.
+      //
+      // Issue #2375 — `allow` no longer means "straight to the driver".
+      // The QueryTab preview gate now covers every tier above INFO, so the
+      // destructive pipeline gets the same MQL Preview a bounded write
+      // gets, and the dispatch happens on confirm. Before this the
+      // shipped default gave `$out` less friction than an `updateMany`
+      // with a non-empty filter.
       mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
       useConnectionStore.setState({
         connections: [
@@ -814,6 +821,19 @@ describe("QueryTab — document", () => {
 
       await act(async () => {
         screen.getByTestId("execute-btn").click();
+      });
+
+      expect(mockAggregateDocuments).not.toHaveBeenCalled();
+      await screen.findByText("MQL Preview");
+      expect(
+        screen.queryByTestId("confirm-destructive-confirm"),
+      ).not.toBeInTheDocument();
+
+      const executeBtn = await screen.findByRole("button", {
+        name: /execute/i,
+      });
+      await act(async () => {
+        executeBtn.click();
       });
 
       await waitFor(() => {

@@ -18,6 +18,7 @@ import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
 import type { QueryHistorySource } from "@stores/queryHistoryStore";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { MultiStatementPayload } from "@stores/workspaceStore/types";
+import { canEscalateByImpact, requiresPreviewDialog } from "@/lib/safeMode";
 import type { ConnectionId, TabId } from "@/types/branded";
 import type { DatabaseType } from "@/types/connection";
 import type { FileAnalyticsSourceMetadata } from "@/types/fileAnalytics";
@@ -511,7 +512,11 @@ export async function executeRdbQuery({
 
   let worstAction: "allow" | "confirm" | "block" = "allow";
   let worstReason = "";
-  let hasWarn = false;
+  // Issue #2375 — preview mount and dry-run escalation used to share one
+  // `hasWarn` flag. They now ask two different predicates: the preview
+  // covers every non-INFO tier, the escalation stays on the WARN tier that
+  // `escalateWarnIfLargeImpact` takes as its baseline below.
+  let needsPreview = false;
   const escalationCandidates: {
     stmt: string;
     kind: "dml-update" | "dml-delete" | "dml-merge";
@@ -530,17 +535,21 @@ export async function executeRdbQuery({
       worstAction = "confirm";
       worstReason = decision.reason;
     }
-    if (decision.action === "allow" && analysis.severity === "warn") {
-      hasWarn = true;
+    if (
+      decision.action === "allow" &&
+      requiresPreviewDialog(analysis.severity)
+    ) {
+      needsPreview = true;
       // Issue #1116 — MERGE is a bounded conditional write (warn), but a
       // WHEN MATCHED THEN DELETE/UPDATE branch carries the same blast radius
       // as an equivalent DELETE/UPDATE WHERE. It must participate in the
       // dry-run impact escalation so a MERGE deleting 100+ rows escalates to
       // a confirm gate, matching "same risk = same gate".
       if (
-        analysis.kind === "dml-update" ||
-        analysis.kind === "dml-delete" ||
-        analysis.kind === "dml-merge"
+        canEscalateByImpact(analysis.severity) &&
+        (analysis.kind === "dml-update" ||
+          analysis.kind === "dml-delete" ||
+          analysis.kind === "dml-merge")
       ) {
         escalationCandidates.push({ stmt, kind: analysis.kind });
       }
@@ -561,7 +570,10 @@ export async function executeRdbQuery({
     setPendingRdbConfirm({ statements, reason: worstReason });
     return;
   }
-  if (hasWarn && escalationCandidates.length > 0) {
+  // A candidate only lands in this array through `canEscalateByImpact`
+  // above, so its severity is the `"warn"` baseline passed below and the
+  // old `hasWarn &&` conjunct is already implied by a non-empty array.
+  if (escalationCandidates.length > 0) {
     for (const candidate of escalationCandidates) {
       const escalated = await escalateWarnIfLargeImpact(
         tab.connectionId,
@@ -577,7 +589,7 @@ export async function executeRdbQuery({
       }
     }
   }
-  if (hasWarn) {
+  if (needsPreview) {
     setPendingRdbWarn({ statements });
     return;
   }

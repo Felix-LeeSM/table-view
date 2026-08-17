@@ -120,6 +120,7 @@ function isPipelineStage(value: unknown): value is Record<string, unknown> {
 // the user's intent + impact match. `bulkWrite` evaluates each sub-op
 // against the same rule set so a hidden empty-filter `*-many` inside a
 // batch still escalates the whole bulk to `"danger"`.
+import { requiresPreviewDialog } from "@/lib/safeMode";
 import type { BulkWriteOp } from "@/types/documentMutate";
 
 export type MongoOperation =
@@ -292,7 +293,13 @@ function isEmptyFilter(filter: Record<string, unknown>): boolean {
  * Sprint 254 — `severity === "info"` 직접 비교로 단순화. 기존 매핑
  * (`mongo-other` + safe) 동일 의미 보존: read-only pipeline 만 severity:"info"
  * 로 분류된다.
+ *
+ * Issue #2375 — 같은 INFO 경계를 두 벌 두지 않으려고 QueryTab 게이트가 쓰는
+ * `requiresPreviewDialog` 의 부정으로 위임한다. 지금 이 함수의 production
+ * 호출자는 없고 (`git grep isInfoMongoOperation -- src/`) 남은 것은
+ * `mongoSafety.test.ts` 의 단언뿐이지만, 정의가 갈라지면 그 단언이 게이트와
+ * 다른 것을 지키게 된다.
  */
 export function isInfoMongoOperation(analysis: StatementAnalysis): boolean {
-  return analysis.severity === "info";
+  return !requiresPreviewDialog(analysis.severity);
 }

@@ -243,6 +243,50 @@ describe("useQueryExecution — Sprint 254 dry-run WARN escalation", () => {
     expect(executeQueryDryRunMock).not.toHaveBeenCalled();
   });
 
+  // ── 이슈 #2375 — 미리보기 게이트를 넓혀도 승격 경로는 그대로다 ────────
+  //
+  // 미리보기 mount 조건과 dry-run 승격 조건이 `hasWarn` 플래그 하나를
+  // 나눠 쓰고 있었다. 미리보기만 넓히려고 그 한 줄을 고치면 이미 danger 인
+  // 문장이 승격 경로로 들어가, `escalateWarnIfLargeImpact` 가 기준선으로 받는
+  // `"warn"` 이 거짓이 되고 쓸데없는 dry-run 카운트 질의가 붙는다. 아래
+  // `[AC-2375-03]` 과 `[AC-2375-04]` 가 플래그가 실제로 갈라졌는지를 잰다.
+
+  it("[AC-2375-03] preview[danger] DELETE without WHERE (비프로덕션) → 미리보기, dry-run 프로브 미발동", async () => {
+    const tab = seedTab("DELETE FROM users");
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    await waitFor(() => {
+      expect(result.current.pendingRdbWarn).not.toBeNull();
+    });
+    expect(result.current.pendingRdbConfirm).toBeNull();
+    expect(executeQueryMock).not.toHaveBeenCalled();
+    // 핵심: danger 는 승격 후보가 아니다. 프로브가 한 번이라도 나가면
+    // 미리보기 조건과 승격 조건이 아직 한 플래그를 공유하고 있다는 뜻이다.
+    expect(executeQueryDryRunMock).not.toHaveBeenCalled();
+  });
+
+  it("[AC-2375-04] DELETE WHERE dry-run rowCount=120 → STOP escalate 그대로 (승격 경로 회귀)", async () => {
+    executeQueryDryRunMock.mockResolvedValueOnce([makeDmlResult(120)]);
+    const tab = seedTab("DELETE FROM logs WHERE level = 'debug'");
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    await waitFor(() => {
+      expect(result.current.pendingRdbConfirm).not.toBeNull();
+    });
+    expect(result.current.pendingRdbWarn).toBeNull();
+    expect(result.current.pendingRdbConfirm!.reason).toMatch(/100\+ rows/);
+    expect(executeQueryDryRunMock).toHaveBeenCalledTimes(1);
+    expect(executeQueryMock).not.toHaveBeenCalled();
+  });
+
   // [AC-254-06h] 다중 statement: INFO + WARN UPDATE escalates → STOP wins.
   // 다중 statement 의 worst-tier 결정 (STOP > WARN > INFO) 와 escalation 의
   // 정합성 가드.
