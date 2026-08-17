@@ -61,18 +61,17 @@ import { X } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ConnectionConfig, ConnectionDraft } from "../model";
-import {
-  DATABASE_DEFAULTS,
-  getMssqlConnectionUnsupportedMessage,
-  usesTnsDescriptor,
-} from "../model";
+import { DATABASE_DEFAULTS } from "../model";
 import { useConnectionStore } from "../store";
 import ConnectionDialogBody from "./ConnectionDialog/ConnectionDialogBody";
 import ConnectionDialogFooter from "./ConnectionDialog/ConnectionDialogFooter";
 import { sanitizeMessage } from "./ConnectionDialog/sanitize";
 import { useConnectionDraftForm } from "./ConnectionDialog/useConnectionDraftForm";
 import { useConnectionUrlImport } from "./ConnectionDialog/useConnectionUrlImport";
-import type { ConnFieldKey } from "./forms/fieldValidation";
+import {
+  type ConnFieldKey,
+  validateConnectionDraft,
+} from "./forms/fieldValidation";
 
 // Sprint 213 — re-export the (relocated) `sanitizeMessage` helper so
 // external callers keep using `import { sanitizeMessage } from
@@ -95,6 +94,13 @@ interface ConnectionDialogProps {
  * caused the alert slot to unmount/remount between clicks. The slot is now
  * always mounted (see `data-slot="test-feedback"` below) and only its content
  * varies with `status`.
+ *
+ * Issue #2437 — the Test Connection button carries this status itself (a
+ * distinct glyph per state), and the slot is `sr-only` until the user opens
+ * the details disclosure next to it. The slot keeps its roles and its mount,
+ * so screen readers still get the full message announced the moment it
+ * arrives; what went away is the empty band it used to reserve before any
+ * test ran. See `ConnectionDialogFooter`.
  */
 type TestResultState =
   | { status: "idle" }
@@ -166,23 +172,26 @@ export default function ConnectionDialog({
   const testConnection = useConnectionStore((s) => s.testConnection);
 
   const handleTest = async () => {
+    // #2437 — validate before anything leaves the dialog. An empty form used
+    // to reach the driver and burn its 30s timeout (#2429); now the same rule
+    // Save enforces fails it here, in the same banner, with the same focus
+    // move. No IPC is dispatched.
+    const draft = validateAndTrim();
+    if (!draft) {
+      // The button *is* the result, so a pre-flight that dispatched nothing
+      // must not leave the previous verdict standing: a success icon plus a
+      // stale "Connection successful" behind the disclosure would claim a run
+      // that never happened against a draft that no longer validates. Idle,
+      // not error — nothing was tested. The banner and the focus move are the
+      // signal.
+      setTestResult({ status: "idle" });
+      return;
+    }
     // Sprint-92: publish pending first so the alert slot shows the spinner +
     // "Testing..." while the request is in flight; the slot itself stays
     // mounted across this transition.
     setTestResult({ status: "pending" });
     try {
-      // Sprint 178 (AC-178-02): trim non-password string fields before
-      // dispatching the test. Password is sent verbatim per ADR-0005.
-      const draft: ConnectionDraft = trimDraft({
-        ...form,
-        password: resolvePassword(),
-        walletPassword: resolveWalletPassword(),
-      });
-      const unsupportedMessage = getMssqlConnectionUnsupportedMessage(draft);
-      if (unsupportedMessage) {
-        setTestResult({ status: "error", message: unsupportedMessage });
-        return;
-      }
       const msg = await testConnection(draft, connection?.id ?? null);
       setTestResult({ status: "success", message: msg });
     } catch (e) {
@@ -214,74 +223,48 @@ export default function ConnectionDialog({
     document.getElementById(id)?.focus();
   };
 
-  const failValidation = (field: ConnFieldKey, message: string) => {
+  const failValidation = (field: ConnFieldKey | null, message: string) => {
     setError(message);
     setInvalidField(field);
-    focusInvalidField(field);
+    // A form-wide failure (MSSQL auth-method combo) owns no input to focus.
+    if (field) focusInvalidField(field);
   };
 
-  const handleSave = async () => {
-    // Sprint 178: validate against trimmed values so a user typing only
-    // whitespace into Name/Host gets the same "required" error they'd
-    // get from a blank input. The existing `.trim()` checks already
-    // covered Name; the trim helper centralises the policy.
+  /**
+   * #2437 — the pre-flight both Save and Test Connection run. Returns the
+   * trimmed draft to dispatch, or `null` when validation failed (the banner,
+   * the `aria-invalid` flag and the focus move are already published).
+   *
+   * Sprint 178: validation reads trimmed values so a user typing only
+   * whitespace into Name/Host gets the same "required" error a blank input
+   * would give. Password is left verbatim per ADR-0005 — `trimDraft` only
+   * trims non-password keys.
+   */
+  const validateAndTrim = (): ConnectionDraft | null => {
     const trimmed = trimDraft({
       ...form,
       password: resolvePassword(),
       walletPassword: resolveWalletPassword(),
     });
-    if (!trimmed.name) {
-      failValidation("name", t("dialog.errorNameRequired"));
-      return;
+    const failure = validateConnectionDraft(
+      trimmed,
+      { isFileConnection, isMongo, isSearch },
+      t,
+    );
+    if (failure) {
+      failValidation(failure.field, failure.message);
+      return null;
     }
-    // File-backed DBMSes use `database` as the file path; host is irrelevant.
-    // The host check applies only to network DBMSes.
-    //
-    // #2154 — an Oracle TNS descriptor carries its own HOST/PORT and the
-    // backend dials those, so requiring the form's host too would demand a
-    // value nothing reads. `OracleFormFields` disables that input on the same
-    // predicate.
-    if (!isFileConnection && !usesTnsDescriptor(trimmed) && !trimmed.host) {
-      failValidation("host", t("dialog.errorHostRequired"));
-      return;
-    }
-    if (isFileConnection && !trimmed.database) {
-      failValidation("database", t("dialog.errorDatabaseFileRequired"));
-      return;
-    }
-    // Sprint 345 — non-SQLite DBMSes also require a database name.
-    // Empty submit used to silently default to the server-side fallback
-    // (Postgres → `postgres`, Mongo → no DB at all) which surprised users
-    // who expected the form's intent to round-trip. The form now seeds
-    // a paradigm-appropriate default at draft init, so blank here means
-    // the user deleted it on purpose — reject explicitly.
-    //
-    // Sprint 381 (2026-05-17) — Mongo db-contract α: MongoDB connections
-    // do *not* require a default database. The toolbar chip picks the
-    // per-tab database at runtime, and admin commands
-    // (`db.runCommand({...})`) target the admin DB context regardless of
-    // any pre-bound default. RDB connections still require it.
-    if (!isFileConnection && !isMongo && !isSearch && !trimmed.database) {
-      failValidation(
-        "database",
-        trimmed.dbType === "oracle"
-          ? t("dialog.errorServiceNameRequired")
-          : t("dialog.errorDatabaseRequired"),
-      );
-      return;
-    }
-    const unsupportedMessage = getMssqlConnectionUnsupportedMessage(trimmed);
-    if (unsupportedMessage) {
-      // Not a single-field error (auth-method combo) — MssqlFormFields renders
-      // its own inline alert; clear any prior field flag.
-      setError(unsupportedMessage);
-      setInvalidField(null);
-      return;
-    }
-
-    setSaving(true);
     setError(null);
     setInvalidField(null);
+    return trimmed;
+  };
+
+  const handleSave = async () => {
+    const trimmed = validateAndTrim();
+    if (!trimmed) return;
+
+    setSaving(true);
     try {
       // Sprint 178 (AC-178-02): outgoing payload uses trimmed values.
       // Password (resolvePassword()) is set on the trimmed copy

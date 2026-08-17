@@ -52,6 +52,9 @@ export const en = {
   footer: {
     testingText: "Testing...",
     testConnection: "Test Connection",
+    // #2437 — disclosure that reveals the full test result next to the
+    // button. Constant name; `aria-expanded` carries open/closed.
+    testDetails: "Test result details",
     cancel: "Cancel",
     saving: "Saving...",
     update: "Update",
@@ -436,6 +439,7 @@ export const ko = {
   footer: {
     testingText: "테스트 중...",
     testConnection: "연결 테스트",
+    testDetails: "테스트 결과 자세히",
     cancel: "취소",
     saving: "저장 중...",
     update: "업데이트",
