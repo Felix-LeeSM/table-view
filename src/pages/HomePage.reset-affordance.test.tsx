@@ -3,8 +3,12 @@
  * sprint-377 회귀 가드 #1+#3 추가).
  *
  * 사유: Q21 9 affordance 중
- *   (2) Home "Recent" 헤더 우클릭 "Reset" → reset_setting("home_recent_collapsed") 1회.
  *   (8) Home action bar "Clear recent" → clear_mru IPC 1회.
+ *
+ * #2440 (2026-08-17): affordance (2) — Home "Recent" 헤더의 "Reset" —
+ * 제거. Recent 가 footer 에서 group rail 의 view 로 옮겨져 접히는 footer
+ * 자체가 없어졌고, 초기화할 접힘 상태가 남지 않았다. 해당 케이스도 같이
+ * 지웠다.
  *
  * 본 spec 은 HomePage 의 사용자 entry point — 우클릭 메뉴 / 액션 바
  * 버튼 — 가 위 IPC 를 정확한 wire shape 으로 발사하는지 lock. Confirm
@@ -62,11 +66,10 @@ vi.mock("@features/connection", async () => {
 
   return {
     ...connectionStore,
-    ConnectionList: () => <div data-testid="connection-list" />,
+    ConnectionBrowser: () => <div data-testid="connection-browser" />,
     ConnectionDialog: () => <div data-testid="connection-dialog" />,
     ImportExportDialog: () => <div data-testid="import-export-dialog" />,
     GroupDialog: () => <div data-testid="group-dialog" />,
-    RecentConnections: () => <div data-testid="recent-connections-mock" />,
   };
 });
 
@@ -109,25 +112,6 @@ describe("HomePage reset affordances (Q21 #2 + #8)", () => {
     // the other window.
     expect(useMruStore.getState().recentConnections).toEqual([]);
     expect(useMruStore.getState().lastUsedConnectionId).toBeNull();
-  });
-
-  it("AC-376-02: Recent 'Reset' 버튼 클릭 → reset_setting('home_recent_collapsed') 1회", () => {
-    render(<HomePage />);
-    // The Reset button lives alongside the chevron toggle on the home-
-    // recent footer. It's a flat button rather than a context-menu item
-    // so keyboard users can find it (Q21 — 직관적 위치 contract; the
-    // home-recent footer is a small surface where a context-menu would
-    // be discoverable only via right-click).
-    const btn = screen.getByRole("button", { name: /reset recent collapse/i });
-    fireEvent.click(btn);
-
-    const calls = invokeMock.mock.calls.filter(
-      (call) => call[0] === "reset_setting",
-    );
-    expect(calls).toHaveLength(1);
-    const firstCall = calls[0];
-    expect(firstCall).toBeDefined();
-    expect(firstCall?.[1]).toEqual({ key: "home_recent_collapsed" });
   });
 
   // 작성 2026-05-17 (sprint-377 회귀 가드). 사유: 사용자 직접 요청 —

@@ -56,7 +56,10 @@ vi.mock("@features/connection", async () => {
 
   return {
     ...connectionStore,
-    ConnectionList: ({
+    // #2440 — HomePage mounts `ConnectionBrowser` (group rail + pane). The stub
+    // keeps the old testids: these cases prove HomePage's own wiring, and the
+    // rail/pane composition is proven in ConnectionBrowser.test.tsx.
+    ConnectionBrowser: ({
       selectedId,
       onSelect,
       onActivate,
@@ -92,9 +95,6 @@ vi.mock("@features/connection", async () => {
         <button onClick={onClose}>Close Group</button>
       </div>
     ),
-    // Sprint 296 — RecentConnections 본체는 별도 vitest 파일에서 다룸.
-    // 여기서는 collapse wrapper 의 위치/책임만 검증한다.
-    RecentConnections: () => <div data-testid="recent-connections-mock" />,
   };
 });
 
@@ -138,7 +138,7 @@ describe("HomePage", () => {
     vi.mocked(windowControls.focusWindow).mockResolvedValue(undefined);
   });
 
-  it("renders the ConnectionList", () => {
+  it("renders the ConnectionBrowser", () => {
     render(<HomePage />);
     expect(screen.getByTestId("connection-list")).toBeInTheDocument();
   });
@@ -198,12 +198,13 @@ describe("HomePage", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the Recent placeholder section", () => {
+  // #2440 — Recent left the footer for the group rail. A second Recent surface
+  // on this page is the sprint-296 regression ("탭이 하나 더 생긴" 모양), so the
+  // footer must stay gone.
+  it("[launcher] no longer renders a Recent footer strip", () => {
     render(<HomePage />);
-    expect(screen.getByTestId("home-recent")).toBeInTheDocument();
-    // The copy is intentionally a placeholder until sprint 127 wires real
-    // data in — assert the marker rather than the exact phrasing.
-    expect(screen.getByTestId("home-recent")).toHaveTextContent(/recent/i);
+    expect(screen.queryByTestId("home-recent")).toBeNull();
+    expect(screen.queryByRole("button", { name: /toggle recent/i })).toBeNull();
   });
 
   it("does NOT render the SidebarModeToggle (Home is single-mode)", () => {
@@ -408,70 +409,10 @@ describe("HomePage", () => {
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // ── Sprint 296: Recent footer collapse 단위 재구성 ──
-  //
-  // 작성 이유 (2026-05-13, Sprint 296): Sprint 290 은 collapse 책임을
-  // RecentConnections 내부 chevron header 에 두어 "Recent" 라벨 헤더가
-  // 외부(HomePage) + 내부(RecentConnections) 로 중첩됐다 — 사용자에겐
-  // "탭이 하나 더 생겼다" 로 보임. 올바른 행위는: theme picker 를 제외한
-  // footer 영역 전체 (Recent 라벨 헤더 + 리스트) 가 한 단위로 접혀야 한다.
-  // RecentConnections 가 더 이상 자체 collapse chevron 을 갖지 않고,
-  // HomePage 의 `home-recent` 영역이 그 책임을 가진다. localStorage 키
-  // `table-view-recent-collapsed` 는 호환을 위해 유지.
-
-  it("AC-296-01: Recent footer 토글은 home-recent 의 헤더 버튼 한 곳에서 일어난다", () => {
-    render(<HomePage />);
-    // 정확히 1 개의 Recent 토글 버튼 — 외부(home-recent) 만 존재.
-    const toggles = screen.getAllByRole("button", { name: /toggle recent/i });
-    expect(toggles).toHaveLength(1);
-    expect(toggles[0]).toHaveAttribute("aria-expanded", "true");
-  });
-
-  it("AC-296-02: 토글 시 home-recent 의 list 가 숨어도 theme picker 는 그대로 노출된다", () => {
-    render(<HomePage />);
-    const toggle = screen.getByRole("button", { name: /toggle recent/i });
-    // theme picker 는 동일 footer 묶음 밖 — 토글 전후 모두 노출.
-    const themeBefore = screen.getByRole("button", { name: /theme picker/i });
-    expect(themeBefore).toBeInTheDocument();
-    act(() => {
-      fireEvent.click(toggle);
-    });
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(
-      screen.getByRole("button", { name: /theme picker/i }),
-    ).toBeInTheDocument();
-  });
-
-  // Sprint 369 (Phase 4, Q20.1) — `table-view-recent-collapsed` LS 영속 폐기.
-  // 본 토글은 이제 `persist_setting("home_recent_collapsed", bool)` IPC 로
-  // SQLite SOT 에 commit. LS getItem/setItem 0 회.
-  it("Sprint 369: toggle dispatches persistSetting IPC and never touches the legacy LS key", async () => {
-    const getSpy = vi.spyOn(window.localStorage, "getItem");
-    const setSpy = vi.spyOn(window.localStorage, "setItem");
-    render(<HomePage />);
-    act(() => {
-      fireEvent.click(screen.getByRole("button", { name: /toggle recent/i }));
-    });
-    // IPC 가 미시동기로 fire — `void promise` 패턴이므로 microtask flush.
-    await Promise.resolve();
-    // Snapshot spy calls BEFORE we ourselves call getItem in the assertion
-    // below (which would otherwise contaminate the spy state).
-    const reads = getSpy.mock.calls.filter(
-      (c) => c[0] === "table-view-recent-collapsed",
-    );
-    const writes = setSpy.mock.calls.filter(
-      (c) => c[0] === "table-view-recent-collapsed",
-    );
-    expect(reads).toEqual([]);
-    expect(writes).toEqual([]);
-    getSpy.mockRestore();
-    setSpy.mockRestore();
-    // Now safe to read directly — the spies are restored, this call no
-    // longer affects the assertion above.
-    expect(
-      window.localStorage.getItem("table-view-recent-collapsed"),
-    ).toBeNull();
-  });
+  // #2440 — Sprint 296 의 Recent footer collapse 케이스 셋 (AC-296-01 /
+  // AC-296-02 / sprint-369 persistSetting) 제거. 접히던 footer 가 group rail
+  // 의 Recent view 로 대체돼 토글할 대상이 없다. footer 부재 자체의 회귀
+  // 가드는 위 `[launcher] no longer renders a Recent footer strip`.
 
   // Reason (revised Wave 9.5, 2026-05-16): Sprint 157 의 activatingRef 가드는
   // 여전히 유효 — `hideWindow("launcher")` 가 reject 한 후에도 activatingRef

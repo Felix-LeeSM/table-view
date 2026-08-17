@@ -25,9 +25,10 @@ interface RecentConnectionsProps {
 /**
  * Sprint 167 — Recent Connections UI for the launcher.
  * Sprint 290 — 항목별 X 삭제.
- * Sprint 296 — collapse 책임은 HomePage 의 home-recent footer wrapper 로
- * 이관. 내부 chevron header 가 외부 라벨 헤더와 중첩되어 사용자가 "탭이
- * 하나 더 생긴" 모양으로 인식한 회귀를 막기 위함.
+ * Sprint 296 — 내부 chevron header 제거. 외부 라벨 헤더와 중첩되어 사용자가
+ * "탭이 하나 더 생긴" 모양으로 인식한 회귀를 막기 위함.
+ * #2440 — 마운트 지점이 HomePage 의 footer 에서 `ConnectionBrowser` 의
+ * `Recent` rail view 로 옮겨졌다. 이 컴포넌트 자체는 그대로다.
  *
  * Renders the user's most recently used connections (from `mruStore`) resolved
  * against the full connection list from `connectionStore`. Shows up to 5

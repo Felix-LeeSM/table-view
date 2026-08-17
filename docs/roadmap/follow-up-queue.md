@@ -275,5 +275,12 @@ or drop the figures.
 active feature work or remove current maintenance cost. 2026-07-25 검증에서 기존
 near-term candidate 3종이 전부 완료/규범화로 판명돼 걷어냈다 (#1790): `src/lib/runtime/**` 이동은
 완료됐고, legacy 직접 `setState` 는 0건이며 ESLint `tv-local/no-direct-zustand-setstate` 가
-강제하고, dialog preset mandate 는 이미 retired 다. 현재 등록된 near-term candidate 는 없다.
+강제하고, dialog preset mandate 는 이미 retired 다.
+
+2026-08-17 (#2440) 등록: settings key `home_recent_collapsed` 가 프런트에서 고아가 됐다.
+Connections 창의 Recent 가 접히는 footer 에서 group rail 의 한 view 로 옮겨져 접힘 상태를
+쓰는 쪽이 남지 않았다. key 자체는 migration
+(`src-tauri/table-view-core/migrations/0001_initial.sql`) 과 dual-write 테스트
+(`src-tauri/tests/dual_write_connections.rs`) 에 박혀 있어, 걷어내려면 그 둘과 settings
+수신부를 같이 봐야 한다 — 그만한 값을 치를 때 승격한다.
 

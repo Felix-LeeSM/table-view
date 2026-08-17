@@ -8,18 +8,13 @@ import {
   PopoverTrigger,
 } from "@components/ui/popover";
 import {
+  ConnectionBrowser,
   ConnectionDialog,
-  ConnectionList,
   GroupDialog,
   ImportExportDialog,
-  RecentConnections,
   useConnectionStore,
 } from "@features/connection";
 import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
-import i18n from "@lib/i18n";
-import { logger } from "@lib/logger";
-import { toast } from "@lib/runtime/toast";
-import { persistSettingValue, resetSetting } from "@lib/tauri/settings";
 import { subscribeSystemModeChange } from "@lib/themeBoot";
 import { THEME_CATALOG } from "@lib/themeCatalog";
 import { useMruStore } from "@stores/mruStore";
@@ -27,15 +22,11 @@ import { useThemeStore } from "@stores/themeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
   ArrowDownUp,
-  ChevronDown,
-  ChevronRight,
-  Clock,
   Eraser,
   FolderPlus,
   Monitor,
   Moon,
   Plus,
-  RotateCcw,
   Sun,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -44,9 +35,8 @@ import { useTranslation } from "react-i18next";
 /**
  * HomePage — paradigm-agnostic connection management screen (sprint 125).
  *
- * Renders the existing `ConnectionList` (which transitively includes
- * `ConnectionGroup` headers + drag/drop + import/export plumbing) along with
- * a "Recent" placeholder slot reserved for sprint 127.
+ * Renders `ConnectionBrowser` — the group rail plus the connections it filters
+ * to (which transitively includes `ConnectionGroup` headers + drag/drop).
  *
  * "Open" semantics: a single click selects (focuses) a connection; a double
  * click (or Enter) on a connected row activates it and swaps the app shell
@@ -60,12 +50,9 @@ import { useTranslation } from "react-i18next";
  * `[+ Connection]` / `[+ Group]` / `[Import / Export]` buttons live in the
  * top header strip.
  */
-// Sprint 296 — theme picker 를 제외한 footer (현재는 Recent 묶음) 가 한
-// 단위로 접힌다.
-// Sprint 369 (Phase 4, Q20.1) — `table-view-recent-collapsed` localStorage 영속
-// 폐기. `settings.home_recent_collapsed` 의 SQLite SOT 로 전환. 본 컴포넌트는
-// 초기 default = false 로 가벼운 mount 만 하고 (boot snapshot 가 차후 sprint
-// 에서 hydrate 추가), 사용자 토글 시 `persistSetting` IPC 로 즉시 commit.
+// #2440 — Recent 는 footer 가 아니라 group rail 의 한 view 다. footer 를
+// 접던 `settings.home_recent_collapsed` 는 접을 대상이 없어져 이 컴포넌트에서
+// 빠졌다 (SQLite key 자체는 backend 에 남아 있고 쓰는 쪽이 없다).
 
 export default function HomePage() {
   const { t } = useTranslation("pages");
@@ -83,42 +70,7 @@ export default function HomePage() {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
-  const [recentCollapsed, setRecentCollapsed] = useState<boolean>(false);
   const clearRecentConnections = useMruStore((s) => s.clearRecentConnections);
-
-  const toggleRecentCollapsed = useCallback(() => {
-    setRecentCollapsed((prev) => {
-      const next = !prev;
-      // #1092 — SQLite is the SOT with no boot reconcile; surface a failed
-      // write (dev log + toast) instead of swallowing it. The in-process
-      // state stays updated so the UX is uninterrupted.
-      void persistSettingValue("home_recent_collapsed", next).catch(
-        (e: unknown) => {
-          const message = e instanceof Error ? e.message : String(e ?? "");
-          logger.warn(
-            `[HomePage] persist_setting(home_recent_collapsed) failed: ${message}`,
-          );
-          toast.error(i18n.t("feedback:storageWriteFailed"));
-        },
-      );
-      return next;
-    });
-  }, []);
-
-  // Sprint 376 (Phase 6 Q21 #2) — Recent collapse reset. Backend deletes
-  // the SQLite row and emits setting.reset; the strategy contract
-  // line 1389 says receivers don't refetch — they apply the frontend
-  // default (false) directly. Local window: collapse to default false
-  // synchronously to mirror the cross-window outcome.
-  const handleResetRecentCollapse = useCallback(() => {
-    setRecentCollapsed(false);
-    void resetSetting("home_recent_collapsed").catch((e: unknown) => {
-      const message = e instanceof Error ? e.message : String(e ?? "");
-      logger.warn(
-        `[HomePage] reset_setting(home_recent_collapsed) failed: ${message}`,
-      );
-    });
-  }, []);
 
   // Sprint 376 (Phase 6 Q21 #8) — "Clear recent" affordance. Empties
   // the local zustand store + fires `clear_mru` IPC. No confirm dialog
@@ -266,67 +218,19 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Body — connection list. Single-column layout intentionally. */}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex flex-1 flex-col overflow-auto">
-          <ConnectionList
-            selectedId={focusedConnId}
-            onSelect={handleSelect}
-            onActivate={handleActivate}
-          />
-        </div>
-      </div>
-
-      {/* Recent — MRU connection list. Sprint 296: 라벨 헤더가 토글
-          버튼 역할을 한다. theme picker 는 별도 footer 영역에 머무르며
-          이 collapse 의 영향을 받지 않는다.
-
-          Sprint 376 (Phase 6 Q21 #2) — 헤더에 "Reset" 버튼 추가. 우클릭
-          context-menu 대신 가시 버튼 — 키보드 사용자가 발견 가능하도록
-          (Q21 직관적 위치 contract). */}
-      <div
-        className="border-t border-border px-3 py-2"
-        data-testid="home-recent"
-      >
-        <div className="mb-1 flex w-full items-center gap-1.5">
-          <button
-            type="button"
-            onClick={toggleRecentCollapsed}
-            aria-expanded={!recentCollapsed}
-            aria-controls="home-recent-body"
-            aria-label={t("toggleRecent")}
-            className="flex flex-1 items-center gap-1.5 text-3xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
-          >
-            {recentCollapsed ? (
-              <ChevronRight size={10} />
-            ) : (
-              <ChevronDown size={10} />
-            )}
-            <Clock size={10} />
-            <span>{t("recent")}</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleResetRecentCollapse}
-            aria-label={t("resetRecentCollapse")}
-            title={t("resetRecentCollapseTitle")}
-            className="rounded p-0.5 text-3xs text-muted-foreground hover:bg-muted hover:text-foreground"
-            data-testid="home-recent-reset"
-          >
-            <RotateCcw size={10} />
-          </button>
-        </div>
-        {!recentCollapsed && (
-          <div id="home-recent-body">
-            <RecentConnections onActivate={handleActivate} />
-          </div>
-        )}
-      </div>
+      {/* Body — group rail on the left, its connections on the right (#2440).
+          "Recent" is a rail view, so there is no footer list any more. */}
+      <ConnectionBrowser
+        selectedId={focusedConnId}
+        onSelect={handleSelect}
+        onActivate={handleActivate}
+      />
 
       {/* Sprint 377 (2026-05-17) — sprint-376 의 Settings panel reset
           버튼 strip 제거. 사용자 직접 요청; Q21 9 affordance contract
-          의 #1 / #3-b 는 sidebar handle 우클릭 (#3-a) + home-recent
-          footer reset (#2) + 다른 7 affordance 로 충분. */}
+          의 #1 / #3-b 는 sidebar handle 우클릭 (#3-a) + 나머지 affordance
+          로 충분. #2440 에서 home-recent footer reset (#2) 은 접을 footer
+          자체가 없어져 같이 빠졌다. */}
 
       {/* Diagnostics footer — reveal the rotating log folder (#1566 / #1599)
           so a user can attach logs to a bug report without hunting the

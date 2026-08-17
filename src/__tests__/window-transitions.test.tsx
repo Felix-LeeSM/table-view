@@ -83,7 +83,10 @@ vi.mock("@features/connection", async () => {
 
   return {
     ...connectionStore,
-    ConnectionList: ({
+    // #2440 — HomePage mounts `ConnectionBrowser` (rail + pane). The stub keeps
+    // the old testids: what these cases prove is HomePage's activation handler,
+    // not which child fired it.
+    ConnectionBrowser: ({
       onSelect,
       onActivate,
     }: {
@@ -106,7 +109,6 @@ vi.mock("@features/connection", async () => {
     ConnectionDialog: () => <div data-testid="connection-dialog-stub" />,
     ImportExportDialog: () => <div data-testid="import-export-dialog-stub" />,
     GroupDialog: () => <div data-testid="group-dialog-stub" />,
-    RecentConnections: () => <div data-testid="recent-connections-stub" />,
   };
 });
 vi.mock("@components/theme/ThemePicker", () => ({

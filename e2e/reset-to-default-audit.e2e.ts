@@ -26,7 +26,8 @@
 //      으로 settings panel UI 자체 unmount. IPC `reset_setting` 는 유지.
 //      현재 e2e step 0 — audit-checklist item #1 의 \"e2e 시나리오 1 은
 //      sprint-377 follow-up 에서 갱신\" 충족.
-//   2. Home Recent "Reset" 버튼 클릭 — home_recent_collapsed 초기화.
+//   2. (#2440 제거) Home Recent "Reset" 버튼 — Recent 가 group rail 의
+//      view 가 되며 접히는 footer 가 사라졌다.
 //   3. (sprint-377 부분 제거) Sidebar handle context-menu 만 — settings
 //      panel entry (#3a) 는 sprint-377 에서 제거. sidebar handle (#3b)
 //      만 fire 해 `sidebar_width` 초기화.
@@ -74,9 +75,9 @@ describe("Sprint 376 — Reset-to-default audit (Q21 9 affordance)", () => {
     // (`src/pages/HomePage.reset-affordance.test.tsx` AC-377-01) 가 담당.
     await switchToLauncherWindow();
 
-    // ----- 시나리오 2: Home Recent "Reset" 버튼 -----
-    step("#2 Home Recent 'Reset' 버튼 클릭");
-    await clickByAriaLabel("Reset recent collapse");
+    // ----- 시나리오 2: (#2440 제거) Home Recent "Reset" 버튼 -----
+    // #2440 에서 Recent 가 footer 에서 group rail 의 view 로 옮겨져 접을
+    // footer 자체가 없어졌다. 접힘 상태가 없으니 초기화할 것도 없다.
 
     // ----- 시나리오 3 (a): (sprint-377 제거) Settings panel "Reset sidebar width" -----
     // sprint-377 에서 settings panel 의 두 번째 entry point 제거.

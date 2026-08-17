@@ -22,6 +22,7 @@ export {
   testConnection,
 } from "./api";
 export { CONNECTION_COLOR_PALETTE, getConnectionColor } from "./color";
+export { default as ConnectionBrowser } from "./components/ConnectionBrowser";
 export {
   default as ConnectionDialog,
   sanitizeMessage,
