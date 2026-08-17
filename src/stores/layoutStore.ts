@@ -11,30 +11,50 @@ import { create } from "zustand";
  * both would force `MainArea` and `WorkspaceToolbar` to take props they
  * otherwise don't need.
  *
- * `globalLogVisible` / `operationsVisible` moved here from `MainArea`'s
- * local `useState` so the toolbar buttons can advertise `aria-pressed`
- * without the same drilling. The `toggle-global-query-log` /
- * `toggle-operations-panel` custom-event channel is unchanged — `MainArea`
- * still owns the listeners (so `App.tsx`'s Cmd+Shift+C keeps working), it
- * just writes here instead of to local state.
+ * #2426 folded the two separate bottom flyout flags (`globalLogVisible` /
+ * `operationsVisible`) plus the grid-local Quick Look flag into ONE dock:
+ * `bottomPanelTab` picks which view the dock shows and
+ * `bottomPanelCollapsed` hides its body. Two buttons drive the collapse (the
+ * toolbar cluster and the dock's own tab strip) and the owner required both
+ * to render the same `aria-pressed` — they can only do that by reading this
+ * one field, so neither surface gets its own copy.
  *
  * ponytail: session-only, deliberately not persisted. Nothing here calls
  * `persistSettingValue`, so it carries no reset affordance obligation —
- * a reload starts from the expanded default. Persist it (with a reset)
- * only if users ask for the collapse to survive a restart.
+ * a reload starts from the expanded-sidebar / collapsed-dock default.
+ * Persist it (with a reset) only if users ask for the layout to survive a
+ * restart.
  */
+export type BottomPanelTab = "history" | "operations" | "details";
+
 export interface LayoutState {
   /** Left panel (schema tree column) hidden. */
   sidebarCollapsed: boolean;
-  /** Bottom panel — global query log flyout. */
-  globalLogVisible: boolean;
-  /** Bottom panel — server operations flyout. */
-  operationsVisible: boolean;
+  /** Bottom dock body hidden. The tab strip stays visible either way. */
+  bottomPanelCollapsed: boolean;
+  /** Which view the bottom dock shows. Survives tab and connection swaps. */
+  bottomPanelTab: BottomPanelTab;
+  /**
+   * Published by the mounted grid: a row is selected and its data is loaded,
+   * so the Details tab has something to portal in. `false` whenever no grid
+   * is mounted (query / ERD / KV tabs) or nothing is selected — the Details
+   * tab then renders its empty state instead of a blank dock.
+   */
+  detailsAvailable: boolean;
   toggleSidebar: () => void;
-  toggleGlobalLog: () => void;
-  toggleOperations: () => void;
-  setGlobalLogVisible: (visible: boolean) => void;
-  setOperationsVisible: (visible: boolean) => void;
+  toggleBottomPanel: () => void;
+  setBottomPanelCollapsed: (collapsed: boolean) => void;
+  /** Pick a tab and expand the dock. What the tab strip's buttons do. */
+  selectBottomTab: (tab: BottomPanelTab) => void;
+  /**
+   * Tab-targeted toggle behind `Cmd/Ctrl+L` (Details) and
+   * `Cmd/Ctrl+Shift+C` (History): show `tab`, expanding the dock — or
+   * collapse the dock when it is already showing that tab. Distinct from
+   * `selectBottomTab` (never collapses, so clicking the selected tab does not
+   * yank the panel away) and from `toggleBottomPanel` (never changes the tab).
+   */
+  showBottomTab: (tab: BottomPanelTab) => void;
+  setDetailsAvailable: (available: boolean) => void;
 }
 
 /**
@@ -45,27 +65,38 @@ export interface LayoutState {
  */
 const INITIAL_PANELS = {
   sidebarCollapsed: false,
-  globalLogVisible: false,
-  operationsVisible: false,
+  // Collapsed by default: the dock replaces two flyouts that both started
+  // hidden, so first paint keeps the same vertical space for the grid.
+  bottomPanelCollapsed: true,
+  bottomPanelTab: "history",
+  detailsAvailable: false,
 } as const satisfies Omit<
   LayoutState,
   | "toggleSidebar"
-  | "toggleGlobalLog"
-  | "toggleOperations"
-  | "setGlobalLogVisible"
-  | "setOperationsVisible"
+  | "toggleBottomPanel"
+  | "setBottomPanelCollapsed"
+  | "selectBottomTab"
+  | "showBottomTab"
+  | "setDetailsAvailable"
 >;
 
 export const useLayoutStore = create<LayoutState>((set) => ({
   ...INITIAL_PANELS,
   toggleSidebar: () =>
     set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-  toggleGlobalLog: () =>
-    set((state) => ({ globalLogVisible: !state.globalLogVisible })),
-  toggleOperations: () =>
-    set((state) => ({ operationsVisible: !state.operationsVisible })),
-  setGlobalLogVisible: (visible) => set({ globalLogVisible: visible }),
-  setOperationsVisible: (visible) => set({ operationsVisible: visible }),
+  toggleBottomPanel: () =>
+    set((state) => ({ bottomPanelCollapsed: !state.bottomPanelCollapsed })),
+  setBottomPanelCollapsed: (collapsed) =>
+    set({ bottomPanelCollapsed: collapsed }),
+  selectBottomTab: (tab) =>
+    set({ bottomPanelTab: tab, bottomPanelCollapsed: false }),
+  showBottomTab: (tab) =>
+    set((state) =>
+      state.bottomPanelTab === tab && !state.bottomPanelCollapsed
+        ? { bottomPanelCollapsed: true }
+        : { bottomPanelTab: tab, bottomPanelCollapsed: false },
+    ),
+  setDetailsAvailable: (available) => set({ detailsAvailable: available }),
 }));
 
 /**

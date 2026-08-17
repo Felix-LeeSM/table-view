@@ -4,8 +4,8 @@ import {
   type TableTab,
   useWorkspaceStore,
 } from "@stores/workspaceStore";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
 import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { ConnectionId, TabId } from "@/types/branded";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
@@ -193,20 +193,14 @@ describe("WorkspaceToolbar", () => {
     ).toBeInTheDocument();
   });
 
-  // Post-Sprint-187 hotfix [HF-187-A3] — the History button surfaces the
-  // existing `GlobalQueryLogPanel` from the toolbar so the panel is
-  // discoverable without the Cmd+Shift+C shortcut. It must dispatch the
-  // canonical `toggle-global-query-log` CustomEvent on click. date 2026-05-01.
-  it("[HF-187-A3] History button mounts and dispatches toggle-global-query-log", () => {
+  // Post-Sprint-187 hotfix [HF-187-A3] put a History button here so the query
+  // log was discoverable without Cmd+Shift+C. #2426 moved that discovery to
+  // the bottom dock's tab strip and deleted the button; the
+  // `toggle-global-query-log` channel it dispatched survives in `App.tsx`
+  // (Cmd+Shift+C) and in the e2e smoke specs, and `MainArea` still listens.
+  it("[bottom-panel] the History button is gone — the dock's tab replaced it", () => {
     render(<WorkspaceToolbar />);
-
-    const btn = screen.getByRole("button", { name: /toggle query history/i });
-    expect(btn).toBeInTheDocument();
-
-    const handler = vi.fn();
-    window.addEventListener("toggle-global-query-log", handler);
-    fireEvent.click(btn);
-    expect(handler).toHaveBeenCalledTimes(1);
-    window.removeEventListener("toggle-global-query-log", handler);
+    expect(screen.queryByTestId("workspace-history-toggle")).toBeNull();
+    expect(screen.queryByRole("button", { name: /query history/i })).toBeNull();
   });
 });

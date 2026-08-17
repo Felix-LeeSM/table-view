@@ -20,6 +20,17 @@ export const en = {
     newQuery: "New Query",
     selectConnection: "Select a connection from the sidebar to get started",
   },
+  bottomPanel: {
+    tablistAria: "Bottom panel views",
+    tab: {
+      history: "History",
+      operations: "Operations",
+      details: "Details",
+    },
+    detailsEmpty: "Select a row to see its details.",
+    toggleAria: "Toggle the bottom panel",
+    toggleTitle: "Bottom panel",
+  },
   sidebar: {
     schemasLabel: "Schemas",
     expandAll: "Expand all {{objectPlural}}",
@@ -70,6 +81,17 @@ export const ko = {
       "사이드바에서 키를 열거나, 아래 연결에 {{dbLabel}} 명령을 작성하세요 ",
     newQuery: "새 쿼리",
     selectConnection: "사이드바에서 연결을 선택해 시작하세요",
+  },
+  bottomPanel: {
+    tablistAria: "하단 패널 보기",
+    tab: {
+      history: "기록",
+      operations: "운영",
+      details: "상세",
+    },
+    detailsEmpty: "행을 선택하면 상세가 표시됩니다.",
+    toggleAria: "하단 패널 토글",
+    toggleTitle: "하단 패널",
   },
   sidebar: {
     schemasLabel: "스키마",

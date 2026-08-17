@@ -1,13 +1,12 @@
 import RowCapSetting from "@components/settings/RowCapSetting";
 import { Button } from "@components/ui/button";
 import { useLayoutStore } from "@stores/layoutStore";
-import { Activity, History, PanelLeft } from "lucide-react";
+import { PanelBottom, PanelLeft } from "lucide-react";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import DbSwitcher from "./DbSwitcher";
 import DisconnectButton from "./DisconnectButton";
 import SafeModeToggle from "./SafeModeToggle";
-import { useOperationsConnection } from "./useOperationsConnection";
 import { useToolbarRoving } from "./useToolbarRoving";
 
 /**
@@ -25,95 +24,31 @@ import { useToolbarRoving } from "./useToolbarRoving";
  * The toolbar itself is paradigm-agnostic — every paradigm shows the same
  * slots. Children read tab + connection state directly from zustand
  * selectors; there is no orchestration here.
- *
- * The History button surfaces the existing `GlobalQueryLogPanel` (already
- * reachable via Cmd+Shift+C) as a visible toolbar entry point. It
- * dispatches the same custom event that `App.tsx` wires for the keyboard
- * shortcut so the toggle channel has one source of truth.
  */
-function HistoryButton() {
-  const { t } = useTranslation("workspace");
-  // #1734 — the panel's open state now lives in `layoutStore`, so the button
-  // can advertise `aria-pressed`. The click still goes through the custom
-  // event so the Cmd+Shift+C binding in `App.tsx` stays the same channel.
-  const visible = useLayoutStore((s) => s.globalLogVisible);
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      type="button"
-      aria-pressed={visible}
-      aria-label={t("toolbar.history.ariaLabel")}
-      title={t("toolbar.history.title")}
-      data-testid="workspace-history-toggle"
-      onClick={() =>
-        window.dispatchEvent(new CustomEvent("toggle-global-query-log"))
-      }
-    >
-      <History
-        className={`h-4 w-4 ${visible ? "text-primary" : "text-muted-foreground"}`}
-        aria-hidden="true"
-      />
-      <span className="ml-1 text-xs">{t("toolbar.history.label")}</span>
-    </Button>
-  );
-}
 
 /**
- * #1054 — Operations flyout toggle. Mirrors `HistoryButton`'s event
- * channel: dispatches `toggle-operations-panel`, which `MainArea`
- * listens for and mounts `<OperationsPanel>`. Hidden entirely when the
- * driving connection has no `operations.*` capability so the toolbar
- * never offers a dead button (ui-parity §3: no disabled-only entry).
- */
-function OperationsButton() {
-  const { t } = useTranslation("workspace");
-  const drv = useOperationsConnection();
-  // Hook order is fixed — read the flag before the capability early-return.
-  const visible = useLayoutStore((s) => s.operationsVisible);
-  if (!drv) return null;
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      type="button"
-      aria-pressed={visible}
-      aria-label={t("toolbar.operations.ariaLabel")}
-      title={t("toolbar.operations.title")}
-      data-testid="workspace-operations-toggle"
-      onClick={() =>
-        window.dispatchEvent(new CustomEvent("toggle-operations-panel"))
-      }
-    >
-      <Activity
-        className={`h-4 w-4 ${visible ? "text-primary" : "text-muted-foreground"}`}
-        aria-hidden="true"
-      />
-      <span className="ml-1 text-xs">{t("toolbar.operations.label")}</span>
-    </Button>
-  );
-}
-
-/**
- * #1734 owner decision 1 — the layout cluster. A `role="group"` of
- * `aria-pressed` toggles for the workspace panels, at the trailing
- * (top-right) edge of the toolbar.
+ * The layout cluster (#1734 owner decision 1, narrowed by #2426). A
+ * `role="group"` of `aria-pressed` toggles for the two workspace *panels* —
+ * the schema sidebar on the left and the dock at the bottom — sitting at the
+ * toolbar's leading edge next to each other.
  *
- * Surface mapping (measured, prototype → this app):
- *   - prototype "left panel"  → `Sidebar`, the schema-tree column mounted by
- *     `WorkspacePage` next to `MainArea`. It had no collapse before; the
- *     toggle below is the new one.
- *   - prototype "bottom panel" → the two bottom-docked flyouts `MainArea`
- *     already owns, `GlobalQueryLogPanel` and `OperationsPanel`. Their
- *     buttons are grouped in here rather than duplicated, and they gained
- *     the `aria-pressed` state they were missing.
- * Quick Look stays out of the cluster (owner decision 2) — it is a
- * grid-scoped panel and lives in the grid toolbar as a labelled button.
+ * #2426 took the History and Operations buttons out. Those two opened
+ * *views*, not panels; grouping them with a collapse toggle put three
+ * different kinds of control under one `role="group"` label. Both views are
+ * now tabs of the bottom dock, so what is left in the cluster is one kind of
+ * thing: "hide/show this panel".
+ *
+ * The dock toggle here and the one in the dock's own tab strip are two
+ * buttons for one action. Both read `bottomPanelCollapsed` straight from the
+ * store rather than holding a copy, which is what keeps their `aria-pressed`
+ * in step (owner requirement).
  */
 function LayoutCluster() {
   const { t } = useTranslation("workspace");
   const sidebarCollapsed = useLayoutStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
+  const bottomPanelCollapsed = useLayoutStore((s) => s.bottomPanelCollapsed);
+  const toggleBottomPanel = useLayoutStore((s) => s.toggleBottomPanel);
   return (
     <div
       role="group"
@@ -138,8 +73,21 @@ function LayoutCluster() {
           aria-hidden="true"
         />
       </Button>
-      <OperationsButton />
-      <HistoryButton />
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        type="button"
+        aria-pressed={!bottomPanelCollapsed}
+        aria-label={t("toolbar.layout.bottomPanelAriaLabel")}
+        title={t("toolbar.layout.bottomPanelTitle")}
+        data-testid="workspace-bottom-panel-toggle"
+        onClick={toggleBottomPanel}
+      >
+        <PanelBottom
+          className={`h-4 w-4 ${bottomPanelCollapsed ? "text-muted-foreground" : "text-primary"}`}
+          aria-hidden="true"
+        />
+      </Button>
     </div>
   );
 }
@@ -158,13 +106,16 @@ export default function WorkspaceToolbar() {
       onKeyDown={onKeyDown}
       className="flex h-9 items-center gap-2 border-b border-border bg-secondary px-2"
     >
+      {/* Panel toggles lead the toolbar (owner: "툴바 왼쪽"). They act on the
+          window chrome that frames everything else, so they sit outside the
+          connection-scoped controls rather than in the trailing group. */}
+      <LayoutCluster />
       <DbSwitcher />
       {/* Disconnect lives at the trailing edge of the toolbar, adjacent
           to the (keyboard-only) refresh action. Disabled when the focused
           connection is not currently connected, so it never silently
           no-ops. */}
       <div className="ml-auto flex items-center gap-2">
-        <LayoutCluster />
         <RowCapSetting />
         <SafeModeToggle />
         <DisconnectButton />

@@ -3,7 +3,6 @@ import {
   MongoStructurePanel,
   type MongoStructureSubTab,
 } from "@components/document/MongoStructurePanel";
-import GlobalQueryLogPanel from "@components/query/GlobalQueryLogPanel";
 import QueryTab from "@components/query/QueryTab";
 import DataGrid from "@components/rdb/DataGrid";
 import SearchIndexDetailPanel from "@components/search/SearchIndexDetailPanel";
@@ -13,7 +12,6 @@ import { useTablistRoving } from "@components/shared/tablist/useTablistRoving";
 import { Button } from "@components/ui/button";
 import { Skeleton } from "@components/ui/skeleton";
 import KvKeyDetailPanel from "@components/workspace/KvKeyDetailPanel";
-import OperationsPanel from "@components/workspace/OperationsPanel";
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
 import {
   SchemaErdPanel,
@@ -36,6 +34,8 @@ import { Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { assertNever, type Paradigm } from "@/lib/paradigm";
+import BottomPanel from "./BottomPanel";
+import { BottomPanelDetailsSlotContext } from "./bottomPanelSlot";
 import TabBar from "./TabBar";
 
 interface TableTabProps {
@@ -366,34 +366,23 @@ export default function MainArea() {
   // hydrate) and `EmptyState` (post-hydrate). Once flipped to true the
   // skeleton never re-renders for the remainder of the session.
   const hasLoadedOnce = useConnectionStore((s) => s.hasLoadedOnce);
-  // #1734 — the two bottom flyout flags live in `layoutStore` (they used to
-  // be local `useState` here) so the toolbar's Layout cluster can render
-  // `aria-pressed` for them. The custom-event channel below is unchanged.
-  const showGlobalLog = useLayoutStore((s) => s.globalLogVisible);
-  const toggleGlobalLog = useLayoutStore((s) => s.toggleGlobalLog);
-  const setShowGlobalLog = useLayoutStore((s) => s.setGlobalLogVisible);
-  // #1054 — workspace operations flyout (U1/U4/U5). Toggled from the
-  // toolbar via the same custom-event channel as the query log so both
-  // workspace-level flyouts share one discovery pattern.
-  const showOperations = useLayoutStore((s) => s.operationsVisible);
-  const toggleOperations = useLayoutStore((s) => s.toggleOperations);
-  const setShowOperations = useLayoutStore((s) => s.setOperationsVisible);
+  // #2426 — the bottom dock replaced the two stacked flyouts. The
+  // `toggle-global-query-log` channel survives unchanged (App.tsx's
+  // Cmd+Shift+C and the e2e smoke specs both dispatch it); it now selects the
+  // dock's History tab instead of flipping a flag of its own.
+  const showBottomTab = useLayoutStore((s) => s.showBottomTab);
+  // The dock's Details tab body, republished to the grid subtree below.
+  // `null` until `BottomPanel` mounts it, and while Details is not active.
+  const [detailsSlot, setDetailsSlot] = useState<HTMLDivElement | null>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   // Listen for toggle-global-query-log custom event
   useEffect(() => {
-    window.addEventListener("toggle-global-query-log", toggleGlobalLog);
-    return () =>
-      window.removeEventListener("toggle-global-query-log", toggleGlobalLog);
-  }, [toggleGlobalLog]);
-
-  // Listen for toggle-operations-panel custom event
-  useEffect(() => {
-    window.addEventListener("toggle-operations-panel", toggleOperations);
-    return () =>
-      window.removeEventListener("toggle-operations-panel", toggleOperations);
-  }, [toggleOperations]);
+    const handler = () => showBottomTab("history");
+    window.addEventListener("toggle-global-query-log", handler);
+    return () => window.removeEventListener("toggle-global-query-log", handler);
+  }, [showBottomTab]);
 
   return (
     <main
@@ -402,74 +391,69 @@ export default function MainArea() {
     >
       <WorkspaceToolbar />
       <TabBar />
-      <div
-        className="flex flex-1 overflow-hidden bg-background"
-        // Wires the active editor tab (TabItem `id={`tab-${id}`}`) to its
-        // content. Only meaningful while a tab is active; the empty/skeleton
-        // fallback carries no tab so the tabpanel role is applied
-        // conditionally to avoid a panel labelled by a non-existent tab.
-        {...(activeTab
-          ? {
-              role: "tabpanel",
-              id: `tabpanel-${activeTab.id}`,
-              "aria-labelledby": `tab-${activeTab.id}`,
-              tabIndex: 0,
-            }
-          : {})}
-      >
-        {/* #1312 — isolate the active tab's content (grid / query result /
+      <BottomPanelDetailsSlotContext.Provider value={detailsSlot}>
+        <div
+          className="flex flex-1 overflow-hidden bg-background"
+          // Wires the active editor tab (TabItem `id={`tab-${id}`}`) to its
+          // content. Only meaningful while a tab is active; the empty/skeleton
+          // fallback carries no tab so the tabpanel role is applied
+          // conditionally to avoid a panel labelled by a non-existent tab.
+          {...(activeTab
+            ? {
+                role: "tabpanel",
+                id: `tabpanel-${activeTab.id}`,
+                "aria-labelledby": `tab-${activeTab.id}`,
+                tabIndex: 0,
+              }
+            : {})}
+        >
+          {/* #1312 — isolate the active tab's content (grid / query result /
             detail panel) so a render crash degrades to a retryable panel
             fallback while TabBar, toolbar, and sidebar keep working. Keyed by
             the active tab id so both the boundary and the underlying panel
             reset when the user swaps tabs. */}
-        <ErrorBoundary
-          key={activeTab?.id ?? "empty"}
-          variant="panel"
-          label={t("mainArea.mainLandmarkAria")}
-        >
-          {activeTab?.type === "table" &&
-          (activeTab.table ?? activeTab.collection) &&
-          (activeTab.schema ?? activeTab.database) ? (
-            // Keying by `activeTab.id` forces React to unmount the previous
-            // tab's grid and mount a fresh instance when the user swaps tabs.
-            // Without this the same `useDataGridEdit` hook instance survives
-            // the prop change and its locally-held `pendingEdits` Map leaks
-            // across tabs — making the dirty marker flip onto the newly
-            // focused tab.
-            <TableTabView
-              tab={activeTab}
-              onSubViewChange={(subView) => {
-                if (!workspaceKey) return;
-                setSubView(
-                  workspaceKey.connId,
-                  workspaceKey.db,
-                  activeTab.id,
-                  subView,
-                );
-              }}
-            />
-          ) : activeTab?.type === "erd" ? (
-            <SchemaErdPanel
-              connectionId={activeTab.connectionId}
-              database={activeTab.database}
-            />
-          ) : activeTab?.type === "query" ? (
-            <QueryTab tab={activeTab} />
-          ) : hasLoadedOnce ? (
-            <EmptyState />
-          ) : (
-            <MainAreaSkeleton />
-          )}
-        </ErrorBoundary>
-      </div>
-      <GlobalQueryLogPanel
-        visible={showGlobalLog}
-        onClose={() => setShowGlobalLog(false)}
-      />
-      <OperationsPanel
-        visible={showOperations}
-        onClose={() => setShowOperations(false)}
-      />
+          <ErrorBoundary
+            key={activeTab?.id ?? "empty"}
+            variant="panel"
+            label={t("mainArea.mainLandmarkAria")}
+          >
+            {activeTab?.type === "table" &&
+            (activeTab.table ?? activeTab.collection) &&
+            (activeTab.schema ?? activeTab.database) ? (
+              // Keying by `activeTab.id` forces React to unmount the previous
+              // tab's grid and mount a fresh instance when the user swaps tabs.
+              // Without this the same `useDataGridEdit` hook instance survives
+              // the prop change and its locally-held `pendingEdits` Map leaks
+              // across tabs — making the dirty marker flip onto the newly
+              // focused tab.
+              <TableTabView
+                tab={activeTab}
+                onSubViewChange={(subView) => {
+                  if (!workspaceKey) return;
+                  setSubView(
+                    workspaceKey.connId,
+                    workspaceKey.db,
+                    activeTab.id,
+                    subView,
+                  );
+                }}
+              />
+            ) : activeTab?.type === "erd" ? (
+              <SchemaErdPanel
+                connectionId={activeTab.connectionId}
+                database={activeTab.database}
+              />
+            ) : activeTab?.type === "query" ? (
+              <QueryTab tab={activeTab} />
+            ) : hasLoadedOnce ? (
+              <EmptyState />
+            ) : (
+              <MainAreaSkeleton />
+            )}
+          </ErrorBoundary>
+        </div>
+        <BottomPanel onDetailsSlotChange={setDetailsSlot} />
+      </BottomPanelDetailsSlotContext.Provider>
     </main>
   );
 }
