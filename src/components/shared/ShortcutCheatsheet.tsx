@@ -83,6 +83,11 @@ export default function ShortcutCheatsheet() {
       {
         label: t("shortcuts.groupPanels"),
         items: [
+          // #2428 — the two panel collapses. Their toolbar buttons are
+          // icon-only toggles, so this list is the only place the combos are
+          // spelled out (same call #2426 made for Cmd+L below).
+          { label: t("shortcuts.toggleSidebar"), keys: ["Cmd+B"] },
+          { label: t("shortcuts.toggleBottomPanel"), keys: ["Cmd+J"] },
           // Cmd+, toggles the Home / Workspace screens.
           { label: t("shortcuts.toggleHomeWorkspace"), keys: ["Cmd+,"] },
           { label: t("shortcuts.toggleFavorites"), keys: ["Cmd+Shift+F"] },

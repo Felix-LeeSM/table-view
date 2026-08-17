@@ -554,6 +554,42 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [showBottomTab]);
 
+  // Cmd+B / Ctrl+B — collapse or restore the schema sidebar.
+  // Cmd+J / Ctrl+J — collapse or restore the bottom dock, leaving whichever
+  // tab it is showing alone. Cmd+L above is the tab-targeted sibling: it
+  // asks for a *view* ("show me row details"), this asks for *space* ("give
+  // me the grid back"). They overlap only on the collapse half, so both stay.
+  //
+  // The focus policy differs per letter, and the matrix in `App.test.tsx`
+  // carries the two rows:
+  //   - `b` skips editable targets. `standardKeymap` folds `emacsStyleKeymap`
+  //     in as mac-only bindings and `Ctrl-b` there is `cursorCharLeft`, which
+  //     every editor in this app inherits through `defaultKeymap`. CodeMirror
+  //     preventDefaults without stopping propagation (#1224), so an unguarded
+  //     handler here would collapse the sidebar *on top of* the caret moving
+  //     one character left.
+  //   - `j` does not skip them, like Cmd+L and Cmd+1..9 above. Neither
+  //     `standardKeymap` nor any editor in this repo binds it, so no
+  //     keystroke is taken away — and wanting the grid back is at its most
+  //     useful while the editor holds focus.
+  const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
+  const toggleBottomPanel = useLayoutStore((s) => s.toggleBottomPanel);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      if (e.key === "b") {
+        if (isEditableTarget(e.target)) return;
+        e.preventDefault();
+        toggleSidebar();
+      } else if (e.key === "j") {
+        e.preventDefault();
+        toggleBottomPanel();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [toggleSidebar, toggleBottomPanel]);
+
   // Cmd+Shift+L / Ctrl+Shift+L — cycle theme mode
   // (dark → light → system → dark).
   useEffect(() => {
