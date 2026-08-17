@@ -98,8 +98,10 @@ smoke or measurement gates:
 - VoiceOver/NVDA paths for Quick Open, DataGrid, and SchemaTree.
 - The Quick Look panel is keyboard-reachable through `F6` (grid cell ↔ panel,
   and Escape inside the panel hands focus back without closing it), but that
-  binding is not listed in the in-app shortcut cheatsheet — neither is the
-  `Cmd/Ctrl+L` that opens the panel. In the RDB grid
+  binding is not listed in the in-app shortcut cheatsheet. `Cmd/Ctrl+L` is
+  listed there as of #2426, which also moved the panel into the workspace
+  bottom panel's Details tab and deleted the grid-toolbar button that used to
+  carry the combo as a badge. In the RDB grid
   with pending edits, Escape inside the panel also opens the discard confirm:
   that gate has no focus-position condition and the panel's Escape deliberately
   does not consume the event, so the collision fires from inside a panel field

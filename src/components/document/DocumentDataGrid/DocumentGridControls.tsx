@@ -26,7 +26,6 @@ export interface DocumentGridControlsProps {
   activeFilterCount: number;
   filterFieldNames: readonly string[];
   showFilters: boolean;
-  showQuickLook: boolean;
   editState: DataGridEditState;
   /** #1461 — gates the cell-edit / add / delete / commit affordances on the
    *  connection's `edit.editDocuments` capability. Mirrors the RDB grid, which
@@ -44,7 +43,6 @@ export interface DocumentGridControlsProps {
   onSetPage: (page: number) => void;
   onSetPageSize: (size: number) => void;
   onToggleFilters: () => void;
-  onToggleQuickLook: () => void;
   onAddRow: () => void;
   onApplyFilter: (filter: Record<string, unknown>) => void;
   onCloseFilters: () => void;
@@ -66,7 +64,6 @@ export default function DocumentGridControls({
   activeFilterCount,
   filterFieldNames,
   showFilters,
-  showQuickLook,
   editState,
   editEnabled,
   bulkOpsEnabled,
@@ -79,7 +76,6 @@ export default function DocumentGridControls({
   onSetPage,
   onSetPageSize,
   onToggleFilters,
-  onToggleQuickLook,
   onAddRow,
   onApplyFilter,
   onCloseFilters,
@@ -155,8 +151,6 @@ export default function DocumentGridControls({
         onSetPage={onSetPage}
         onSetPageSize={onSetPageSize}
         onToggleFilters={onToggleFilters}
-        showQuickLook={showQuickLook}
-        onToggleQuickLook={onToggleQuickLook}
         onCommit={editState.handleCommit}
         onDiscard={editState.handleDiscard}
         onAddRow={onAddRow}

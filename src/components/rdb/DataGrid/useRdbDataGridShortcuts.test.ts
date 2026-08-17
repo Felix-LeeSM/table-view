@@ -14,7 +14,6 @@ type Overrides = Partial<Parameters<typeof useRdbDataGridShortcuts>[0]>;
 
 function setup(overrides: Overrides = {}) {
   const onRequestDiscard = vi.fn();
-  const onToggleQuickLook = vi.fn();
   const onToggleFilters = vi.fn();
   const params = {
     editingCell: null,
@@ -22,7 +21,6 @@ function setup(overrides: Overrides = {}) {
     canRedo: false,
     hasPendingChanges: true,
     onToggleFilters,
-    onToggleQuickLook,
     onCancelEdit: vi.fn(),
     onRequestDiscard,
     onUndo: vi.fn(),
@@ -32,7 +30,7 @@ function setup(overrides: Overrides = {}) {
   const view = renderHook((p: typeof params) => useRdbDataGridShortcuts(p), {
     initialProps: params,
   });
-  return { onRequestDiscard, onToggleQuickLook, onToggleFilters, ...view };
+  return { onRequestDiscard, onToggleFilters, ...view };
 }
 
 function pressKey(key: string, init: KeyboardEventInit = {}) {
@@ -91,36 +89,30 @@ describe("useRdbDataGridShortcuts — Escape discard gate", () => {
 });
 
 /**
- * Issue #1734 owner decision 2 — the Quick Look toggle moved out of the
- * toolbar's icon crowd into a labelled button, and `Cmd/Ctrl+L` stays its
- * keyboard path. This pins the binding so the button restyle can't quietly
- * take the shortcut with it, and pins the neighbouring Cmd+F so the two
- * grid-level bindings don't cross-fire.
+ * Issue #1734 owner decision 2 gave this hook the `Cmd/Ctrl+L` binding for
+ * the grid-owned Quick Look panel. #2426 made row details a tab of the
+ * workspace bottom dock, which outlives any one grid, so the binding moved to
+ * `App.tsx` — and with it the duplicate copy `DocumentDataGrid` kept. Two
+ * live handlers for one combo would double-toggle, so this pins that the hook
+ * no longer registers it, and that the neighbouring Cmd+F it does still own
+ * is unaffected.
  */
-describe("useRdbDataGridShortcuts — Quick Look shortcut (#1734)", () => {
-  it("Cmd+L toggles Quick Look and consumes the event", () => {
-    const { onToggleQuickLook } = setup();
+describe("useRdbDataGridShortcuts — Cmd+L left this hook (#2426)", () => {
+  it("[bottom-panel] Cmd+L is not handled here and is left for App.tsx", () => {
+    setup();
     const event = pressKey("l", { metaKey: true });
-    expect(onToggleQuickLook).toHaveBeenCalledTimes(1);
-    expect(event.defaultPrevented).toBe(true);
+    expect(event.defaultPrevented).toBe(false);
   });
 
-  it("Ctrl+L toggles Quick Look on non-mac keyboards", () => {
-    const { onToggleQuickLook } = setup();
-    pressKey("l", { ctrlKey: true });
-    expect(onToggleQuickLook).toHaveBeenCalledTimes(1);
+  it("[bottom-panel] Ctrl+L is not handled here either", () => {
+    setup();
+    expect(pressKey("l", { ctrlKey: true }).defaultPrevented).toBe(false);
   });
 
-  it("a bare L types normally — no modifier, no toggle", () => {
-    const { onToggleQuickLook } = setup();
-    pressKey("l");
-    expect(onToggleQuickLook).not.toHaveBeenCalled();
-  });
-
-  it("Cmd+F still toggles filters only — the two bindings don't cross-fire", () => {
-    const { onToggleFilters, onToggleQuickLook } = setup();
-    pressKey("f", { metaKey: true });
+  it("[bottom-panel] Cmd+F still toggles filters — the removal took only the L binding", () => {
+    const { onToggleFilters } = setup();
+    const event = pressKey("f", { metaKey: true });
     expect(onToggleFilters).toHaveBeenCalledTimes(1);
-    expect(onToggleQuickLook).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(true);
   });
 });

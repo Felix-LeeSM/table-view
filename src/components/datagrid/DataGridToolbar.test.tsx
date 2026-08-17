@@ -505,47 +505,27 @@ describe("DataGridToolbar — Issue #1061 row range summary", () => {
 });
 
 /**
- * Issue #1734 owner decision 2 — Quick Look leaves the icon crowd.
- * It is now a labelled button carrying its shortcut badge, and the badge is
- * decorative so the accessible name stays the aria-label. `Cmd/Ctrl+L` is
- * untouched and keeps driving the same `onToggleQuickLook` handler
- * (registered in `useRdbDataGridShortcuts`).
+ * Issue #1734 owner decision 2 put a labelled Quick Look button with a
+ * `Cmd/Ctrl+L` badge in this toolbar. #2426 moved row details into the
+ * workspace bottom dock's Details tab, so the button and its badge both left
+ * — the issue asked for the badge to go and the button went with it, being
+ * the badge's only host. The shortcut itself did not go: `App.tsx` owns
+ * `Cmd/Ctrl+L` now and `ShortcutCheatsheet` lists it.
  */
-describe("DataGridToolbar — Quick Look entry point (#1734)", () => {
-  function quickLookButton(): HTMLElement {
-    return screen.getByRole("button", { name: /toggle row details/i });
-  }
-
-  it("renders a labelled button, not a bare icon", () => {
+describe("DataGridToolbar — Quick Look entry point removed (#2426)", () => {
+  it("[bottom-panel] renders no Quick Look button", () => {
     renderToolbar();
-    const button = quickLookButton();
-    // The visible label is inside the accessible name (WCAG 2.5.3).
-    expect(within(button).getByText("Details")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /toggle row details/i }),
+    ).toBeNull();
+    expect(screen.queryByText("Details")).toBeNull();
   });
 
-  // The badge names both modifiers: the binding accepts `metaKey || ctrlKey`
-  // and the repo does not branch key labels per platform, so a bare `Cmd+L`
-  // would name the wrong key on Windows/Linux.
-  it("shows the Cmd/Ctrl+L shortcut badge without polluting the accessible name", () => {
-    renderToolbar();
-    const button = quickLookButton();
-    expect(within(button).getByText("Cmd/Ctrl+L")).toBeInTheDocument();
-    expect(button).toHaveAccessibleName("Toggle row details");
-  });
-
-  it("advertises the panel state through aria-pressed", () => {
-    const { unmount } = renderToolbar({ showQuickLook: false });
-    expect(quickLookButton()).toHaveAttribute("aria-pressed", "false");
-    unmount();
-
-    renderToolbar({ showQuickLook: true });
-    expect(quickLookButton()).toHaveAttribute("aria-pressed", "true");
-  });
-
-  it("calls onToggleQuickLook on click", () => {
-    const onToggleQuickLook = vi.fn();
-    renderToolbar({ onToggleQuickLook });
-    fireEvent.click(quickLookButton());
-    expect(onToggleQuickLook).toHaveBeenCalledTimes(1);
+  it("[bottom-panel] renders no Cmd/Ctrl+L badge anywhere in the toolbar", () => {
+    const { container } = renderToolbar();
+    expect(screen.queryByText("Cmd/Ctrl+L")).toBeNull();
+    // The badge was this toolbar's only `<kbd>`; a leftover one would mean
+    // some other control picked up a shortcut caption.
+    expect(container.querySelectorAll("kbd")).toHaveLength(0);
   });
 });

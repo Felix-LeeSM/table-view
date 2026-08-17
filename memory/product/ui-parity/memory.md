@@ -43,15 +43,21 @@ keywords: UI parity, 같은 진입점, 머지 보류, DbSwitcher, ConfirmDestruc
 | 삭제            | 그리드 컨텍스트 메뉴 / 툴바 🗑           |
 | 위험 write 확인 | `ConfirmDestructiveDialog` (Safe Mode 게이트) |
 | 결과 export     | 결과 액션바                              |
-| 서버 운영 뷰 (U1/U4/U5: activity / server info / slow query) | 상단 툴바 `Operations` 버튼 → flyout (`OperationsPanel`, #1054) — `operations.*` capability 게이트 |
+| 서버 운영 뷰 (U1/U4/U5: activity / server info / slow query) | 하단 패널 `Operations` 탭 (`BottomPanel` → `OperationsPanel`, #2426) — `operations.*` capability 게이트 |
+| 쿼리 기록 (전역) | 하단 패널 `History` 탭 (`BottomPanel` → `GlobalQueryLogPanel`, #2426) |
+| 선택 행 상세 | 하단 패널 `Details` 탭 (`BottomPanel` → `QuickLookPanel`, #2426) — 그리드가 portal 로 실어 보낸다 |
 | 컬렉션 통계 (U3: collection stats) | document 테이블 `Structure` 탭 → `Stats` 서브탭 (`CollectionStatsPanel`, #1054) — §3 예외: 컬렉션 컨텍스트 필요라 connection-level flyout 부적합, paradigm 게이트 |
 
 기준은 rdb/document 의 현 구현에서 온다. 다른 paradigm 이 같은 작업을 다른 곳에
 둘 때, capability 게이트(`switchDatabase` 등)만으로 위치를 정하면 안 된다 — 위치는
 이 표 또는 등록된 예외를 따른다.
 
-서버 운영 뷠(U1/U4/U5) 는 capability 가 없는 paradigm(kv/search)에서 버튼 자체가
+서버 운영 뷠(U1/U4/U5) 는 capability 가 없는 paradigm(kv/search)에서 진입점 자체가
 숨겨진다 — disabled-only 진입점이 아니라 capability 부재 = 진입점 없음 (#1054).
+#2426 이 그 진입점을 상단 툴바 버튼에서 하단 패널 탭으로 옮겼고 게이트는 같은
+`useOperationsConnection` 이 그대로 건다. **세 하단 탭은 한 자리다** — 같은 작업을
+paradigm 마다 다른 층(툴바 / 그리드 툴바 / 하단)에 두던 것을 한 층으로 모은 것이
+그 이슈의 목적이므로, 새 paradigm 이 셋 중 하나를 다른 곳에 두려면 §3 예외가 필요하다.
 
 ## 3. 예외 등록
 

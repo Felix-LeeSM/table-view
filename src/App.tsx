@@ -18,6 +18,7 @@ import { destroyCurrentWindow } from "./lib/window-controls";
 import { getCurrentWindowLabel, parseWorkspaceLabel } from "./lib/window-label";
 import WorkspacePage from "./pages/WorkspacePage";
 import { useFavoritesStore } from "./stores/favoritesStore";
+import { useLayoutStore } from "./stores/layoutStore";
 import { useMruStore } from "./stores/mruStore";
 import { useSnippetsStore } from "./stores/snippetsStore";
 import { useTableActivityStore } from "./stores/tableActivityStore";
@@ -534,6 +535,24 @@ export default function App() {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Cmd+L / Ctrl+L — show the bottom dock's Details tab, or collapse the dock
+  // when it is already showing it. #2426 lifted this from the two grids (RDB
+  // and document each registered their own copy) once row details became a
+  // dock tab instead of a grid-owned panel. `!e.shiftKey` keeps it off
+  // Cmd+Shift+L below; the grids never needed that guard because `e.key` is
+  // `"L"` with Shift held.
+  const showBottomTab = useLayoutStore((s) => s.showBottomTab);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "l") {
+        e.preventDefault();
+        showBottomTab("details");
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showBottomTab]);
 
   // Cmd+Shift+L / Ctrl+Shift+L — cycle theme mode
   // (dark → light → system → dark).

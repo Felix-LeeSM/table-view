@@ -16,16 +16,8 @@ export const en = {
       // sentences for one button.
       sidebarAriaLabel: "Toggle the schema sidebar",
       sidebarTitle: "Schema sidebar",
-    },
-    history: {
-      ariaLabel: "Toggle query history",
-      title: "Query history (Cmd/Ctrl+Shift+C)",
-      label: "History",
-    },
-    operations: {
-      ariaLabel: "Toggle server operations panel",
-      title: "Server activity, info, and slow queries",
-      label: "Operations",
+      bottomPanelAriaLabel: "Toggle the bottom panel",
+      bottomPanelTitle: "Bottom panel",
     },
   },
   operations: {
@@ -354,16 +346,8 @@ export const ko = {
       groupAriaLabel: "레이아웃 패널",
       sidebarAriaLabel: "스키마 사이드바 토글",
       sidebarTitle: "스키마 사이드바",
-    },
-    history: {
-      ariaLabel: "쿼리 기록 토글",
-      title: "쿼리 기록 (Cmd/Ctrl+Shift+C)",
-      label: "기록",
-    },
-    operations: {
-      ariaLabel: "서버 운영 패널 토글",
-      title: "서버 활동, 정보, 슬로우 쿼리",
-      label: "운영",
+      bottomPanelAriaLabel: "하단 패널 토글",
+      bottomPanelTitle: "하단 패널",
     },
   },
   operations: {

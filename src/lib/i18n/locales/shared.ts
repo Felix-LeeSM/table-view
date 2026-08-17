@@ -152,6 +152,7 @@ export const en = {
     toggleHomeWorkspace: "Toggle Home/Workspace",
     toggleFavorites: "Toggle favorites",
     toggleQueryLog: "Toggle global query log",
+    toggleRowDetails: "Toggle row details",
     showCheatsheet: "Show this cheatsheet",
   },
 
@@ -322,6 +323,7 @@ export const ko = {
     toggleHomeWorkspace: "홈/워크스페이스 전환",
     toggleFavorites: "즐겨찾기 전환",
     toggleQueryLog: "전역 쿼리 로그 전환",
+    toggleRowDetails: "행 상세 전환",
     showCheatsheet: "이 치트시트 표시",
   },
 

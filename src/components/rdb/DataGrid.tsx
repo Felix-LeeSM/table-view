@@ -1,9 +1,14 @@
 import { useRdbDataGridEdit } from "@components/datagrid/useRdbDataGridEdit";
+import {
+  renderIntoDetailsSlot,
+  useBottomPanelDetailsSlot,
+} from "@components/layout/bottomPanelSlot";
 import FilterBar from "@components/rdb/FilterBar";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { useQuickLookFocus } from "@components/shared/QuickLookPanel/useQuickLookFocus";
 import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useLayoutStore } from "@stores/layoutStore";
 import { useMruStore } from "@stores/mruStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -56,7 +61,6 @@ export default function DataGrid({
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [showQuickLook, setShowQuickLook] = useState(false);
   // Shared discard-confirm gate (PR #1013). Owned here so both the toolbar
   // Discard button and the Escape shortcut open the *same* dialog.
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
@@ -155,20 +159,34 @@ export default function DataGrid({
   // into; without it the RDB grid's anchor row can be scrolled out of the DOM
   // and the restore silently no-ops.
   const focusAnchorRef = useRef<(() => void) | null>(null);
-  const quickLookOpen =
-    showQuickLook && editState.selectedRowIds.size > 0 && data !== null;
+  // #2426 — the grid no longer owns a `showQuickLook` flag. Whether the panel
+  // is up is now "the workspace dock is showing its Details tab", and the
+  // panel itself renders into that tab through a portal.
+  const detailsTabOpen = useLayoutStore(
+    (s) => s.bottomPanelTab === "details" && !s.bottomPanelCollapsed,
+  );
+  const setDetailsAvailable = useLayoutStore((s) => s.setDetailsAvailable);
+  const collapseBottomPanel = useLayoutStore((s) => s.setBottomPanelCollapsed);
+  const detailsSlot = useBottomPanelDetailsSlot();
+  const hasDetailsRow = editState.selectedRowIds.size > 0 && data !== null;
+  const quickLookOpen = detailsTabOpen && hasDetailsRow;
   const { rootRef, panelRef } = useQuickLookFocus(
     quickLookOpen,
     focusAnchorRef,
   );
 
-  const toggleQuickLook = useCallback(() => {
-    setShowQuickLook((visible) => !visible);
-  }, []);
+  // Tells the dock whether its Details tab has a row to show, so it can put
+  // up an empty state instead of a blank body. Cleared on unmount — a query
+  // or ERD tab publishes nothing and must not inherit this grid's answer.
+  useEffect(() => {
+    setDetailsAvailable(hasDetailsRow);
+    return () => setDetailsAvailable(false);
+  }, [hasDetailsRow, setDetailsAvailable]);
 
-  const closeQuickLook = useCallback(() => {
-    setShowQuickLook(false);
-  }, []);
+  const closeQuickLook = useCallback(
+    () => collapseBottomPanel(true),
+    [collapseBottomPanel],
+  );
 
   const handleSetPageSize = useCallback(
     (size: number) => {
@@ -226,7 +244,6 @@ export default function DataGrid({
     canRedo: editState.canRedo,
     hasPendingChanges: editState.hasPendingChanges,
     onToggleFilters: filters.toggleFilters,
-    onToggleQuickLook: toggleQuickLook,
     onCancelEdit: editState.cancelEdit,
     onRequestDiscard: () => setShowDiscardConfirm(true),
     onUndo: editState.undo,
@@ -245,7 +262,6 @@ export default function DataGrid({
         sorts={sorts}
         activeFilterCount={filters.activeFilterCount}
         showFilters={filters.showFilters}
-        showQuickLook={showQuickLook}
         editState={editState}
         canEditRows={canEditRows}
         discardConfirmOpen={showDiscardConfirm}
@@ -253,7 +269,6 @@ export default function DataGrid({
         onSetPage={setPage}
         onSetPageSize={handleSetPageSize}
         onToggleFilters={filters.toggleFilters}
-        onToggleQuickLook={toggleQuickLook}
       />
 
       <HiddenColumnsBadge
@@ -304,17 +319,20 @@ export default function DataGrid({
         focusAnchorRef={focusAnchorRef}
       />
 
-      {quickLookOpen && data && (
-        <QuickLookPanel
-          data={data}
-          selectedRowIds={editState.selectedRowIds}
-          schema={schema}
-          table={table}
-          onClose={closeQuickLook}
-          editState={editState}
-          panelRef={panelRef}
-        />
-      )}
+      {quickLookOpen &&
+        data &&
+        renderIntoDetailsSlot(
+          detailsSlot,
+          <QuickLookPanel
+            data={data}
+            selectedRowIds={editState.selectedRowIds}
+            schema={schema}
+            table={table}
+            onClose={closeQuickLook}
+            editState={editState}
+            panelRef={panelRef}
+          />,
+        )}
 
       {data && <ExecutedQueryBar sql={data.executed_query} />}
 

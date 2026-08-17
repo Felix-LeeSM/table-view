@@ -3,6 +3,7 @@ import {
   setFakeWindowConnectionId,
 } from "@stores/__tests__/fakeWindowConnectionId";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useLayoutStore } from "@stores/layoutStore";
 import { __resetMruStoreForTests, useMruStore } from "@stores/mruStore";
 import {
   type ErdTab as ErdTabType,
@@ -19,6 +20,11 @@ import {
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { ConnectionId, TabId } from "@/types/branded";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
+
+vi.mock("./BottomPanel", () => ({
+  default: () => <div data-testid="mock-bottom-panel" />,
+}));
+
 import MainArea from "./MainArea";
 
 // Sprint 142 (AC-147-4) — mount counter so tests can assert that
@@ -1314,6 +1320,51 @@ describe("MainArea", () => {
       expect(
         screen.queryByText(/start writing Redis commands against/i),
       ).toBeNull();
+    });
+  });
+
+  // #2426 — the dock replaced the two stacked flyouts, but the
+  // `toggle-global-query-log` custom event did NOT change: `App.tsx` fires it
+  // for Cmd+Shift+C and six e2e smoke specs dispatch it directly and then
+  // wait for `[data-testid="global-query-log-panel"]` to appear and vanish.
+  // MainArea is the listener, so the toggle semantics live here.
+  describe("bottom dock event channel", () => {
+    it("[bottom-panel] toggle-global-query-log opens the dock on History", () => {
+      render(<MainArea />);
+      expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(true);
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent("toggle-global-query-log"));
+      });
+
+      expect(useLayoutStore.getState().bottomPanelTab).toBe("history");
+      expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(false);
+    });
+
+    it("[bottom-panel] a second toggle-global-query-log collapses it again", () => {
+      render(<MainArea />);
+      act(() => {
+        window.dispatchEvent(new CustomEvent("toggle-global-query-log"));
+        window.dispatchEvent(new CustomEvent("toggle-global-query-log"));
+      });
+
+      expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(true);
+    });
+
+    it("[bottom-panel] the event reopens History even when Details is the current tab", () => {
+      render(<MainArea />);
+      act(() => {
+        useLayoutStore.getState().showBottomTab("details");
+      });
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent("toggle-global-query-log"));
+      });
+
+      // Not a blind toggle of the collapsed flag — the dock was already open
+      // on another tab, so the event has to switch tabs, not close the dock.
+      expect(useLayoutStore.getState().bottomPanelTab).toBe("history");
+      expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(false);
     });
   });
 });

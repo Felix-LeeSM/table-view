@@ -12,6 +12,10 @@ import AddDocumentModal from "@components/document/AddDocumentModal";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import ProjectionDialog from "@components/document/ProjectionDialog";
 import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
+import {
+  renderIntoDetailsSlot,
+  useBottomPanelDetailsSlot,
+} from "@components/layout/bottomPanelSlot";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { useQuickLookFocus } from "@components/shared/QuickLookPanel/useQuickLookFocus";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
@@ -21,6 +25,7 @@ import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { insertDocument } from "@lib/tauri";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useDocumentCatalogStore } from "@stores/documentCatalogStore";
+import { useLayoutStore } from "@stores/layoutStore";
 import {
   type CSSProperties,
   useCallback,
@@ -89,7 +94,6 @@ export default function DocumentDataGrid({
   // different row at the same index.
   const [expandedNested, setExpandedNested] =
     useState<ExpandedNestedCell | null>(null);
-  const [showQuickLook, setShowQuickLook] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [activeFilter, setActiveFilter] = useState<Record<string, unknown>>({});
   // Sprint 315 — Slice C.1: multi-column sort. Local state mirrors the
@@ -245,8 +249,16 @@ export default function DocumentDataGrid({
   // for 1s — sub-second refetches resolve before this flips.
   const overlayVisible = useDelayedFlag(loading, 1000);
 
-  const showQuickLookMounted =
-    showQuickLook && editState.selectedRowIds.size > 0 && !!queryResult;
+  // #2426 — the panel is up when the workspace dock shows its Details tab;
+  // the grid keeps no flag of its own and portals the panel into that tab.
+  const detailsTabOpen = useLayoutStore(
+    (s) => s.bottomPanelTab === "details" && !s.bottomPanelCollapsed,
+  );
+  const setDetailsAvailable = useLayoutStore((s) => s.setDetailsAvailable);
+  const collapseBottomPanel = useLayoutStore((s) => s.setBottomPanelCollapsed);
+  const detailsSlot = useBottomPanelDetailsSlot();
+  const hasDetailsRow = editState.selectedRowIds.size > 0 && !!queryResult;
+  const showQuickLookMounted = detailsTabOpen && hasDetailsRow;
 
   // #1734 (5) — F6 walks focus grid ↔ panel. Handing focus back when the panel
   // disappears is not wired into these two handlers: `useQuickLookFocus` hangs
@@ -255,27 +267,20 @@ export default function DocumentDataGrid({
   // selection this grid's mount gate reads.
   const { rootRef, panelRef } = useQuickLookFocus(showQuickLookMounted);
 
-  const closeQuickLook = useCallback(() => {
-    setShowQuickLook(false);
-  }, []);
+  const closeQuickLook = useCallback(
+    () => collapseBottomPanel(true),
+    [collapseBottomPanel],
+  );
 
-  const toggleQuickLook = useCallback(() => {
-    setShowQuickLook((prev) => !prev);
-  }, []);
-
-  // Cmd+L (Mac) / Ctrl+L (other) toggles the Quick Look panel. Same shape
-  // as `DataGrid.tsx` so keyboard behaviour stays consistent across
-  // paradigms.
+  // Tells the dock whether its Details tab has a document to show. Cleared
+  // on unmount so a tab without a grid does not inherit this answer.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "l" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        toggleQuickLook();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [toggleQuickLook]);
+    setDetailsAvailable(hasDetailsRow);
+    return () => setDetailsAvailable(false);
+  }, [hasDetailsRow, setDetailsAvailable]);
+
+  // Cmd/Ctrl+L moved to `App.tsx` (#2426) — the dock outlives this grid, so
+  // the binding no longer needs a copy per paradigm.
 
   const rowKeyOf = useCallback(
     (rowIdx: number) => `row-${page}-${rowIdx}`,
@@ -608,7 +613,6 @@ export default function DocumentDataGrid({
         activeFilterCount={activeFilterCount}
         filterFieldNames={filterFieldNames}
         showFilters={showFilters}
-        showQuickLook={showQuickLook}
         editState={editState}
         editEnabled={canEditDocuments}
         bulkOpsEnabled={canBulkWrite}
@@ -624,7 +628,6 @@ export default function DocumentDataGrid({
           setPage(1);
         }}
         onToggleFilters={() => setShowFilters((prev) => !prev)}
-        onToggleQuickLook={toggleQuickLook}
         onAddRow={handleAddClick}
         onApplyFilter={(filter) => {
           setActiveFilter(filter);
@@ -698,19 +701,22 @@ export default function DocumentDataGrid({
         </div>
       )}
 
-      {showQuickLookMounted && queryResult && (
-        <QuickLookPanel
-          mode="document"
-          rawDocuments={queryResult.rawDocuments}
-          selectedRowIds={editState.selectedRowIds}
-          database={database}
-          collection={collection}
-          onClose={closeQuickLook}
-          editState={editState}
-          data={data ?? undefined}
-          panelRef={panelRef}
-        />
-      )}
+      {showQuickLookMounted &&
+        queryResult &&
+        renderIntoDetailsSlot(
+          detailsSlot,
+          <QuickLookPanel
+            mode="document"
+            rawDocuments={queryResult.rawDocuments}
+            selectedRowIds={editState.selectedRowIds}
+            database={database}
+            collection={collection}
+            onClose={closeQuickLook}
+            editState={editState}
+            data={data ?? undefined}
+            panelRef={panelRef}
+          />,
+        )}
 
       {mqlPreview && (
         <MqlPreviewModal
