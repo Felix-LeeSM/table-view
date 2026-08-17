@@ -27,9 +27,12 @@ use super::super::{BoxFuture, DbAdapter};
 use super::capability::detect_runtime_capabilities;
 
 /// Hard ceiling for the dial timeouts derived from
-/// `ConnectionConfig::connection_timeout`. Issue #2429 — Mongo was the only
-/// dialing adapter with no ceiling at all; 300 matches the two that already
-/// clamp (`MssqlAdapter::MAX_CONNECTION_TIMEOUT_SECS`, `db::search_http`).
+/// `ConnectionConfig::connection_timeout`. Issue #2429 — Mongo passed a stored
+/// value straight through with no clamp; 300 matches
+/// `MssqlAdapter::MAX_CONNECTION_TIMEOUT_SECS` and `db::search_http`, which
+/// like Mongo already honoured whatever was stored. (Redis takes the lower 30
+/// instead, for the reason its own constant gives: it honoured nothing before
+/// this branch, so a high ceiling there would lengthen an existing wait.)
 pub(crate) const MONGO_CONNECT_TIMEOUT_MAX_SECS: u32 = 300;
 
 /// Document-paradigm adapter backed by the official `mongodb` driver.

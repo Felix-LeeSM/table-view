@@ -40,9 +40,11 @@ const PG_POOL_MAX_CONNECTIONS: u32 = 5;
 /// minutes — the connection error surfaces within 30s either way.
 pub(crate) const PG_POOL_ACQUIRE_TIMEOUT_MAX_SECS: u32 = 30;
 
-/// Issue #2429 — the one place PG pool knobs are assembled, shared by the
-/// initial `connect_pool` and every `switch_active_db` cache miss so the two
-/// cannot drift. The unset-timeout default belongs to
+/// Issue #2429 — where the *session* pool's knobs are assembled: the initial
+/// `connect_pool` and every `switch_active_db` cache miss share this, so the
+/// two cannot drift. The short-lived pools in `test` and the cancel
+/// side-connection stay on their own fixed 5s budget and deliberately do not
+/// come through here. The unset-timeout default belongs to
 /// [`ConnectionConfig::connect_timeout`], not to this adapter.
 pub(crate) fn pool_options(config: &ConnectionConfig) -> PgPoolOptions {
     PgPoolOptions::new()

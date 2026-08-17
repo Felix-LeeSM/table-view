@@ -6,18 +6,28 @@ use crate::error::AppError;
 use crate::models::ConnectionConfig;
 
 /// Hard ceiling for the dial timeout derived from
-/// `ConnectionConfig::connection_timeout`. Matches the other adapters that
-/// clamp explicitly (`MssqlAdapter::MAX_CONNECTION_TIMEOUT_SECS`,
-/// `db::search_http::SEARCH_HTTP_TIMEOUT_MAX_SECS`).
-pub(crate) const REDIS_CONNECT_TIMEOUT_MAX_SECS: u32 = 300;
+/// `ConnectionConfig::connection_timeout`. Thirty, matching the adapters that
+/// already clamp there (`postgres::connection::PG_POOL_ACQUIRE_TIMEOUT_MAX_SECS`,
+/// `mysql::connection::MYSQL_POOL_ACQUIRE_TIMEOUT_MAX_SECS`,
+/// `oracle::ORACLE_CONNECT_TIMEOUT_MAX_SECS`) rather than the 300 that
+/// MSSQL/Mongo/Search carry.
+///
+/// #2429 — the split is not cosmetic. Those three honoured a stored value
+/// before this branch, so a large one was already the wait the connection had.
+/// Redis handed the driver no timeout at all, so its wait was the OS TCP
+/// default no matter what the field said — a 300 ceiling here would make a
+/// stored `Some(300)` wait *longer* than it used to, which is the direction
+/// the issue asked to move away from. See
+/// `db::connect_timeout_tests::redis_ceiling_keeps_a_stored_300_from_outwaiting_the_old_default`.
+pub(crate) const REDIS_CONNECT_TIMEOUT_MAX_SECS: u32 = 30;
 
 /// Issue #2429 — the dial timeout handed to the driver.
 ///
 /// Redis/Valkey used to pass none at all, so an unreachable host fell through
-/// to the OS TCP connect timeout — over a minute on a host that silently drops
-/// SYNs, i.e. the worst wait in the app and the one nothing here had chosen.
-/// The unset default lives in [`ConnectionConfig::connect_timeout`]; only the
-/// ceiling above is local to this adapter.
+/// to the OS TCP connect timeout — a wait nothing in this app had chosen and
+/// that ignored the connection's own setting. The unset default lives in
+/// [`ConnectionConfig::connect_timeout`]; only the ceiling above is local to
+/// this adapter.
 pub(crate) fn connect_timeout(config: &ConnectionConfig) -> Duration {
     config.connect_timeout(REDIS_CONNECT_TIMEOUT_MAX_SECS)
 }

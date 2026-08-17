@@ -33,6 +33,7 @@ use std::time::Duration;
 
 use oracle_rs::{Config as OracleConfig, Connection as OracleConnection, TlsConfig};
 use tokio::sync::Mutex;
+use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -89,9 +90,7 @@ impl OracleAdapter {
         // logging the form fields would name a server we never dialed.
         let oracle_config = Self::connect_config(config, timeout_secs)?;
         let (dialed_host, dialed_port) = (oracle_config.host.clone(), oracle_config.port);
-        let connection = OracleConnection::connect_with_config(oracle_config)
-            .await
-            .map_err(map_oracle_connection_error)?;
+        let connection = Self::dial(oracle_config, timeout_secs).await?;
         if let Err(err) = connection.ping().await {
             let _ = connection.close().await;
             return Err(map_oracle_connection_error(err));
@@ -376,9 +375,43 @@ impl OracleAdapter {
         timeout_secs: u64,
     ) -> Result<OracleConnection, AppError> {
         let oracle_config = Self::connect_config(config, timeout_secs)?;
-        OracleConnection::connect_with_config(oracle_config)
-            .await
-            .map_err(map_oracle_connection_error)
+        Self::dial(oracle_config, timeout_secs).await
+    }
+
+    /// Issue #2429 — the app, not the driver, ends an Oracle dial.
+    ///
+    /// `connect_config` still sets `Config::connect_timeout`, but oracle-rs
+    /// 0.1.7 never reads it on this path: `Connection::connect_with_config`
+    /// dials with a bare `TcpStream::connect` (`src/connection.rs:782`) and
+    /// then runs `perform_handshake`, whose reads are equally untimed. The
+    /// crate's only reader of that field is `TcpTransport`
+    /// (`src/transport/tcp.rs:79`), a type constructed nowhere outside its own
+    /// `#[cfg(test)] mod tests`. Left to the driver, an unreachable host waits
+    /// out the OS TCP timeout and a host that accepts but never answers waits
+    /// forever.
+    ///
+    /// So the whole connect runs under one budget here — the same shape
+    /// `MssqlAdapter::connect_client` uses over `TcpStream::connect` and
+    /// `Client::connect`. The value keeps going to `Config::connect_timeout`
+    /// too, so a driver release that starts honouring it cannot end up with a
+    /// different number than this wrapper.
+    async fn dial(
+        oracle_config: OracleConfig,
+        timeout_secs: u64,
+    ) -> Result<OracleConnection, AppError> {
+        match timeout(
+            Duration::from_secs(timeout_secs),
+            OracleConnection::connect_with_config(oracle_config),
+        )
+        .await
+        {
+            Ok(result) => result.map_err(map_oracle_connection_error),
+            // No driver text to redact here — the message is built from the
+            // budget alone and names neither host nor credentials.
+            Err(_) => Err(AppError::Connection(format!(
+                "Oracle connection failed: timed out after {timeout_secs}s"
+            ))),
+        }
     }
 }
 
