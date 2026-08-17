@@ -95,12 +95,12 @@ interface ConnectionDialogProps {
  * always mounted (see `data-slot="test-feedback"` below) and only its content
  * varies with `status`.
  *
- * Issue #2437 — the Test Connection button carries this status itself (icon +
- * colour), and the slot is `sr-only` until the user opens the details
- * disclosure next to it. The slot keeps its roles and its mount, so screen
- * readers still get the full message announced the moment it arrives; what
- * went away is the empty band it used to reserve before any test ran. See
- * `ConnectionDialogFooter`.
+ * Issue #2437 — the Test Connection button carries this status itself (a
+ * distinct glyph per state), and the slot is `sr-only` until the user opens
+ * the details disclosure next to it. The slot keeps its roles and its mount,
+ * so screen readers still get the full message announced the moment it
+ * arrives; what went away is the empty band it used to reserve before any
+ * test ran. See `ConnectionDialogFooter`.
  */
 type TestResultState =
   | { status: "idle" }
@@ -177,7 +177,16 @@ export default function ConnectionDialog({
     // Save enforces fails it here, in the same banner, with the same focus
     // move. No IPC is dispatched.
     const draft = validateAndTrim();
-    if (!draft) return;
+    if (!draft) {
+      // The button *is* the result, so a pre-flight that dispatched nothing
+      // must not leave the previous verdict standing: a success icon plus a
+      // stale "Connection successful" behind the disclosure would claim a run
+      // that never happened against a draft that no longer validates. Idle,
+      // not error — nothing was tested. The banner and the focus move are the
+      // signal.
+      setTestResult({ status: "idle" });
+      return;
+    }
     // Sprint-92: publish pending first so the alert slot shows the spinner +
     // "Testing..." while the request is in flight; the slot itself stays
     // mounted across this transition.

@@ -73,6 +73,17 @@ function feedbackSlot() {
   return document.querySelector('[data-slot="test-feedback"]') as HTMLElement;
 }
 
+/**
+ * The button's status channel is the glyph, so the assertions read the glyph.
+ * lucide-react renders `<svg class="lucide lucide-circle-alert ...">`, named
+ * after the icon the import resolves to — the deprecated `CheckCircle` /
+ * `AlertCircle` aliases the footer imports land on `circle-check-big` and
+ * `circle-alert`, and idle is `plug`.
+ */
+function testButtonGlyph(name: string) {
+  return testButton().querySelector(`svg.lucide-${name}`);
+}
+
 async function clickTest() {
   await act(async () => {
     fireEvent.click(testButton());
@@ -168,15 +179,53 @@ describe("ConnectionDialog Test Connection (#2437)", () => {
 
   it("[conn-test] the button carries failure, and success replaces it", async () => {
     await runFailingTest("nope");
-    expect(testButton().className).toContain("text-destructive");
+    expect(testButtonGlyph("circle-alert")).not.toBeNull();
+    // The glyph is the only status channel. Tinting the label put 14px/500
+    // text at 3.15:1 (success) / 3.60:1 (error) on the dialog's `bg-secondary`
+    // surface in the default light theme, under the 4.5:1 WCAG 1.4.3 asks
+    // for, so the tint must not come back.
+    expect(testButton().className).not.toMatch(/text-(success|destructive)/);
 
     tauriMock.testConnection.mockResolvedValue("Connection successful");
     await clickTest();
 
     await waitFor(() => {
-      expect(testButton().className).toContain("text-success");
+      expect(testButtonGlyph("circle-check-big")).not.toBeNull();
     });
-    expect(testButton().className).not.toContain("text-destructive");
+    expect(testButtonGlyph("circle-alert")).toBeNull();
+    expect(testButton().className).not.toMatch(/text-(success|destructive)/);
+  });
+
+  it("[conn-test] a failed pre-flight drops the previous result", async () => {
+    renderDialog();
+    setField("Name", "Reporting replica");
+    await clickTest();
+    await waitFor(() => {
+      expect(detailsToggle()).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(detailsToggle());
+    });
+    expect(feedbackSlot()).toHaveTextContent("Connection successful");
+
+    // Invalidate the draft and press Test again. Nothing is dispatched, so
+    // every trace of the run that did happen has to go: a button still
+    // claiming success would be reporting a result for a draft the dialog
+    // just refused to send.
+    setField("Name", "");
+    await clickTest();
+
+    expect(tauriMock.testConnection).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("alert")).toHaveTextContent("Name is required");
+    expect(testButtonGlyph("circle-check-big")).toBeNull();
+    expect(testButtonGlyph("plug")).not.toBeNull();
+    expect(feedbackSlot()).not.toHaveTextContent("Connection successful");
+    // The disclosure goes with the message, and the panel it had expanded
+    // collapses with it instead of leaving an empty band nothing can close.
+    expect(
+      screen.queryByRole("button", { name: "Test result details" }),
+    ).toBeNull();
+    expect(feedbackSlot().className).toContain("sr-only");
   });
 
   it("[conn-test] the details disclosure reveals the full failure reason", async () => {

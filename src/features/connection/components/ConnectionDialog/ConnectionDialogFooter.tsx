@@ -40,11 +40,11 @@ export interface ConnectionDialogFooterProps {
  *     dialog-level escape-hatch split documented at the top of
  *     `ConnectionDialog.tsx`.
  *
- * Issue #2437 — the Test Connection button *is* the result: its icon and
- * colour carry idle / pending / success / failure, and the feedback region
- * below is `sr-only` until the user opens the details disclosure beside the
- * button. The only state this component owns is that disclosure; every
- * decision about *what* to show still comes from props.
+ * Issue #2437 — the Test Connection button *is* the result: its icon carries
+ * idle / pending / success / failure, and the feedback region below is
+ * `sr-only` until the user opens the details disclosure beside the button.
+ * The only state this component owns is that disclosure; every decision about
+ * *what* to show still comes from props.
  */
 export default function ConnectionDialogFooter({
   feedbackState,
@@ -62,6 +62,12 @@ export default function ConnectionDialogFooter({
   // Only success/error carry a message worth reading; idle has none and
   // pending says nothing the spinner doesn't already.
   const hasDetails = feedbackMessage !== undefined;
+  // The panel and the control that collapses it mount on the same condition.
+  // `detailsOpen` alone survives the message going away (a cleared result, a
+  // retry passing through pending) and would leave an expanded empty band with
+  // no way to close it. Reopening is free: `detailsOpen` is remembered, so the
+  // next message comes back expanded for a user who asked for details once.
+  const expanded = detailsOpen && hasDetails;
   return (
     <>
       {/* Test result — pinned outside the scroll container so it is always
@@ -88,7 +94,7 @@ export default function ConnectionDialogFooter({
         state={feedbackState}
         message={feedbackMessage}
         loadingText={t("footer.testingText")}
-        className={detailsOpen ? "border-t border-border px-4 py-3" : "sr-only"}
+        className={expanded ? "border-t border-border px-4 py-3" : "sr-only"}
       />
       {error && (
         <div
@@ -110,17 +116,16 @@ export default function ConnectionDialogFooter({
             size="sm"
             onClick={onTest}
             disabled={testing}
-            className={
-              feedbackState === "success"
-                ? "text-success"
-                : feedbackState === "error"
-                  ? "text-destructive"
-                  : undefined
-            }
           >
-            {/* #2437 — the status is the icon, not colour alone: four
-                distinct glyphs so it survives a monochrome or
-                colour-blind read (WCAG 1.4.1). */}
+            {/* #2437 — four distinct glyphs are the whole status channel, so
+                the state survives a monochrome or colour-blind read (WCAG
+                1.4.1). The label itself is deliberately not tinted: on this
+                dialog's `bg-secondary` surface (`#f8fafc`, default light
+                theme) `text-success` measures 3.15:1 and `text-destructive`
+                3.60:1, under the 4.5:1 WCAG 1.4.3 asks of 14px/500 text.
+                Picking a darker value would not settle it either —
+                `--color-success` aliases `--tv-status-connected`
+                (`src/index.css`), which every theme block sets for itself. */}
             {feedbackState === "loading" ? (
               <Loader2 className="animate-spin size-3.5" />
             ) : feedbackState === "success" ? (
