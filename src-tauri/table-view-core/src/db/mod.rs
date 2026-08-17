@@ -229,6 +229,8 @@ mod single_row_guard_tests {
 }
 
 #[cfg(test)]
+mod connect_timeout_tests;
+#[cfg(test)]
 mod tests;
 
 /// Stub adapter 묶음. `table-view` 의 command 테스트가 crate 경계 너머로 쓰기

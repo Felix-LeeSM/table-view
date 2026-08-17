@@ -1,8 +1,32 @@
-use ::redis::{ConnectionAddr, ConnectionInfo, RedisConnectionInfo};
+use ::redis::{AsyncConnectionConfig, ConnectionAddr, ConnectionInfo, RedisConnectionInfo};
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::AppError;
 use crate::models::ConnectionConfig;
+
+/// Hard ceiling for the dial timeout derived from
+/// `ConnectionConfig::connection_timeout`. Matches the other adapters that
+/// clamp explicitly (`MssqlAdapter::MAX_CONNECTION_TIMEOUT_SECS`,
+/// `db::search_http::SEARCH_HTTP_TIMEOUT_MAX_SECS`).
+pub(crate) const REDIS_CONNECT_TIMEOUT_MAX_SECS: u32 = 300;
+
+/// Issue #2429 — the dial timeout handed to the driver.
+///
+/// Redis/Valkey used to pass none at all, so an unreachable host fell through
+/// to the OS TCP connect timeout — over a minute on a host that silently drops
+/// SYNs, i.e. the worst wait in the app and the one nothing here had chosen.
+/// The unset default lives in [`ConnectionConfig::connect_timeout`]; only the
+/// ceiling above is local to this adapter.
+pub(crate) fn connect_timeout(config: &ConnectionConfig) -> Duration {
+    config.connect_timeout(REDIS_CONNECT_TIMEOUT_MAX_SECS)
+}
+
+/// Driver-side connection options carrying [`connect_timeout`]. Shared by
+/// `test_for` and `connect` so the probe and the real dial cannot drift.
+pub(super) fn async_connection_config(config: &ConnectionConfig) -> AsyncConnectionConfig {
+    AsyncConnectionConfig::new().set_connection_timeout(connect_timeout(config))
+}
 
 pub(super) const DEFAULT_REDIS_DATABASES: u16 = 16;
 pub(super) const DEFAULT_SCAN_LIMIT: u32 = 100;

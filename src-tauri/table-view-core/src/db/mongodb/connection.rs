@@ -26,6 +26,12 @@ use crate::models::{ConnectionConfig, DatabaseType, MongoRuntimeCapabilities};
 use super::super::{BoxFuture, DbAdapter};
 use super::capability::detect_runtime_capabilities;
 
+/// Hard ceiling for the dial timeouts derived from
+/// `ConnectionConfig::connection_timeout`. Issue #2429 — Mongo was the only
+/// dialing adapter with no ceiling at all; 300 matches the two that already
+/// clamp (`MssqlAdapter::MAX_CONNECTION_TIMEOUT_SECS`, `db::search_http`).
+pub(crate) const MONGO_CONNECT_TIMEOUT_MAX_SECS: u32 = 300;
+
 /// Document-paradigm adapter backed by the official `mongodb` driver.
 pub struct MongoAdapter {
     pub(super) client: Arc<Mutex<Option<Client>>>,
@@ -72,7 +78,7 @@ impl MongoAdapter {
     /// Done programmatically (rather than via URI parsing) so that password
     /// special characters never need to be percent-encoded, and TLS / replica
     /// set / auth-source flags map to typed option fields.
-    pub(super) fn build_options(config: &ConnectionConfig) -> Result<ClientOptions, AppError> {
+    pub(crate) fn build_options(config: &ConnectionConfig) -> Result<ClientOptions, AppError> {
         let mut opts = ClientOptions::default();
 
         opts.hosts = vec![ServerAddress::Tcp {
@@ -126,11 +132,14 @@ impl MongoAdapter {
             opts.tls = Some(Tls::Enabled(tls_options));
         }
 
-        if let Some(timeout_secs) = config.connection_timeout {
-            opts.connect_timeout = Some(std::time::Duration::from_secs(timeout_secs as u64));
-            opts.server_selection_timeout =
-                Some(std::time::Duration::from_secs(timeout_secs as u64));
-        }
+        // Issue #2429 — set both unconditionally. Leaving them `None` handed
+        // the wait back to the driver's own defaults (10s connect, 30s server
+        // selection), and server selection is what actually decides how long an
+        // unreachable host takes to fail: it keeps re-dialing until its own
+        // deadline, so capping `connect_timeout` alone changes nothing.
+        let dial = config.connect_timeout(MONGO_CONNECT_TIMEOUT_MAX_SECS);
+        opts.connect_timeout = Some(dial);
+        opts.server_selection_timeout = Some(dial);
 
         opts.app_name = Some("table-view".to_string());
         Ok(opts)
@@ -614,7 +623,11 @@ mod tests {
         // sets no TLS option at all, leaving the driver's own default; only the
         // three `tls_on()` postures reach `Tls::Enabled`. (2026-08-02)
         assert!(opts.tls.is_none());
-        assert!(opts.connect_timeout.is_none());
+        // #2429 — the dial timeouts are no longer left to the driver's own
+        // defaults (10s connect, 30s server selection) when the user set none.
+        // The value is pinned in `db::connect_timeout_tests`.
+        assert!(opts.connect_timeout.is_some());
+        assert!(opts.server_selection_timeout.is_some());
     }
 
     #[tokio::test]

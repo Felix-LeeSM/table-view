@@ -530,20 +530,25 @@ export default function ConnectionDialogBody({
                   <label htmlFor="conn-timeout" className={labelClass}>
                     {t("body.labelConnectionTimeout")}
                   </label>
+                  {/* #2429 — 10 mirrors `CONNECT_TIMEOUT_DEFAULT_SECS` in
+                      src-tauri/table-view-core/src/models/connection.rs, which
+                      is what an unset field actually gets. The old 300 named a
+                      per-adapter fallback that every adapter then clamped
+                      away. */}
                   <input
                     id="conn-timeout"
                     className={inputClass}
                     type="number"
                     min={5}
                     max={600}
-                    value={form.connectionTimeout ?? 300}
+                    value={form.connectionTimeout ?? 10}
                     onChange={(e) =>
                       setForm((f) => ({
                         ...f,
-                        connectionTimeout: parseInt(e.target.value, 10) || 300,
+                        connectionTimeout: parseInt(e.target.value, 10) || 10,
                       }))
                     }
-                    placeholder="300"
+                    placeholder="10"
                   />
                 </div>
                 <div>

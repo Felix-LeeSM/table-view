@@ -35,7 +35,7 @@
 //! pre-split monolith — the split is module-organisational only.
 
 mod category;
-mod connection;
+pub(crate) mod connection;
 mod mutations;
 mod queries;
 mod schema;

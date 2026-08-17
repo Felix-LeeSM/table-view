@@ -272,6 +272,42 @@ pub struct ConnectionConfig {
     pub wallet_password: String,
 }
 
+/// Issue #2429 — seconds a dial waits before failing when the user left
+/// [`ConnectionConfig::connection_timeout`] unset.
+///
+/// Ten is the value MSSQL (`MssqlAdapter::connection_timeout`) and the
+/// Elasticsearch/OpenSearch HTTP client (`db::search_http`) already chose, so
+/// the app is converging on a number it was shipping rather than inventing
+/// one. It buys roughly ten round trips to a remote/VPN'd server (typical
+/// intercontinental RTT is well under a second) plus the TLS and auth
+/// handshakes, while a host that drops packets now surfaces in ten seconds
+/// instead of thirty. A link slow enough to need more raises the connection's
+/// own `connection_timeout`, which every ceiling below still honours.
+pub const CONNECT_TIMEOUT_DEFAULT_SECS: u32 = 10;
+
+impl ConnectionConfig {
+    /// Resolve the dial timeout this connection hands its driver.
+    ///
+    /// Issue #2429 — the **single** place the unset default is decided. Every
+    /// adapter that dials a network host routes its timeout through here, so a
+    /// change to [`CONNECT_TIMEOUT_DEFAULT_SECS`] cannot miss a driver and no
+    /// adapter can grow a private fallback without deleting this call. Each
+    /// driver keeps its own `max_secs` ceiling, which is a per-driver property
+    /// (a pool-acquire budget is not a TCP dial budget) and stays with it.
+    ///
+    /// The lower bound is 1s: a stored `Some(0)` used to mean "fail every
+    /// connect instantly" on the pool-backed adapters, which reads as an
+    /// unreachable server rather than a bad setting.
+    pub fn connect_timeout(&self, max_secs: u32) -> std::time::Duration {
+        std::time::Duration::from_secs(
+            self.connection_timeout
+                .unwrap_or(CONNECT_TIMEOUT_DEFAULT_SECS)
+                .clamp(1, max_secs)
+                .into(),
+        )
+    }
+}
+
 /// #1649 (ADR 0058) — deserialize shim that migrates the legacy
 /// `(tls_enabled, trust_server_certificate)` boolean pair into `ssl_mode` in a
 /// single stage. [`ConnectionConfig`] deserializes *through* this type

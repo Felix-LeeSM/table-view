@@ -47,8 +47,7 @@ use crate::models::{
 
 use super::{BoxFuture, DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
 
-const ORACLE_CONNECT_TIMEOUT_DEFAULT_SECS: u32 = 300;
-const ORACLE_CONNECT_TIMEOUT_MAX_SECS: u64 = 30;
+pub(crate) const ORACLE_CONNECT_TIMEOUT_MAX_SECS: u32 = 30;
 const ORACLE_TEST_CONNECT_TIMEOUT_SECS: u64 = 5;
 
 #[derive(Default)]
@@ -701,11 +700,10 @@ where
     })
 }
 
-fn connection_timeout_secs(config: &ConnectionConfig) -> u64 {
-    (config
-        .connection_timeout
-        .unwrap_or(ORACLE_CONNECT_TIMEOUT_DEFAULT_SECS) as u64)
-        .min(ORACLE_CONNECT_TIMEOUT_MAX_SECS)
+pub(crate) fn connection_timeout_secs(config: &ConnectionConfig) -> u64 {
+    config
+        .connect_timeout(ORACLE_CONNECT_TIMEOUT_MAX_SECS)
+        .as_secs()
 }
 
 /// Issue #1453 — Oracle connect/ping errors can echo a DSN / URL with

@@ -677,8 +677,12 @@ fn configured_timeout_is_clamped_for_runtime_connect() {
     config.connection_timeout = Some(120);
     assert_eq!(connection_timeout_secs(&config), 30);
 
+    // #2429 — an unset timeout no longer saturates the 30s ceiling; the shared
+    // default in `ConnectionConfig::connect_timeout` decides it. The
+    // driver-facing value for every adapter is pinned in
+    // `db::connect_timeout_tests`.
     config.connection_timeout = None;
-    assert_eq!(connection_timeout_secs(&config), 30);
+    assert_eq!(connection_timeout_secs(&config), 10);
 }
 
 #[test]

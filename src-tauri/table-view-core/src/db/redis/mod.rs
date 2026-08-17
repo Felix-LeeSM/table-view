@@ -1,7 +1,7 @@
 mod command;
 mod command_parser;
 mod command_result;
-mod helpers;
+pub(crate) mod helpers;
 #[cfg(test)]
 mod test_support;
 mod values;
@@ -19,9 +19,9 @@ use crate::error::AppError;
 use crate::models::{ConnectionConfig, DatabaseType};
 
 use helpers::{
-    bounded_limit, connection_info, connection_info_for, ensure_not_cancelled,
-    redis_connection_error, redis_database_error, require_confirm_key, validate_key,
-    RedisConnection, DEFAULT_REDIS_DATABASES,
+    async_connection_config, bounded_limit, connection_info, connection_info_for,
+    ensure_not_cancelled, redis_connection_error, redis_database_error, require_confirm_key,
+    validate_key, RedisConnection, DEFAULT_REDIS_DATABASES,
 };
 use values::{
     read_database_count, read_hash, read_json, read_key_length, read_key_type,
@@ -124,7 +124,7 @@ impl RedisAdapter {
         let (info, _) = product.connection_info(config)?;
         let client = ::redis::Client::open(info).map_err(|err| product.connection_error(err))?;
         let mut connection = client
-            .get_multiplexed_async_connection()
+            .get_multiplexed_async_connection_with_config(&async_connection_config(config))
             .await
             .map_err(|err| product.connection_error(err))?;
         let _: String = ::redis::cmd("PING")
@@ -201,7 +201,7 @@ impl DbAdapter for RedisAdapter {
             let client =
                 ::redis::Client::open(info).map_err(|err| self.product.connection_error(err))?;
             let mut connection = client
-                .get_multiplexed_async_connection()
+                .get_multiplexed_async_connection_with_config(&async_connection_config(config))
                 .await
                 .map_err(|err| self.product.connection_error(err))?;
             let _: String = ::redis::cmd("PING")
