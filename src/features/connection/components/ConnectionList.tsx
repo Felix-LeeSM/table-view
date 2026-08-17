@@ -9,6 +9,12 @@ import ConnectionItem, { draggedConnectionId } from "./ConnectionItem";
 
 interface ConnectionListProps {
   environmentFilter?: string | null;
+  /**
+   * #2440 — when the launcher rail has a group selected, render only that
+   * group's members: no header (the rail already names it) and no ungroup
+   * drop target.
+   */
+  groupFilter?: string | null;
   /** Currently focused connection. Drives the selected ring on items. */
   selectedId?: string | null;
   /** Single-click selects a connection without connecting. */
@@ -19,6 +25,7 @@ interface ConnectionListProps {
 
 export default function ConnectionList({
   environmentFilter = null,
+  groupFilter = null,
   selectedId = null,
   onSelect,
   onActivate,
@@ -63,18 +70,28 @@ export default function ConnectionList({
     ? allConnections.filter((c) => c.environment === environmentFilter)
     : allConnections;
 
-  const rootConnections = connections.filter((c) => !c.groupId);
-  const groupedConnections = groups.map((group) => ({
-    group,
-    connections: connections.filter((c) => c.groupId === group.id),
-  }));
+  // Filtered to one group: its members take the header-less slot that the
+  // ungrouped connections normally occupy, and no group blocks are rendered.
+  const filtered = groupFilter != null;
+  const rootConnections = filtered
+    ? connections.filter((c) => c.groupId === groupFilter)
+    : connections.filter((c) => !c.groupId);
+  const groupedConnections = filtered
+    ? []
+    : groups.map((group) => ({
+        group,
+        connections: connections.filter((c) => c.groupId === group.id),
+      }));
 
   return (
     <div
       data-testid="connection-list-root"
-      aria-label={t("list.ariaLabel")}
+      aria-label={filtered ? t("list.groupAriaLabel") : t("list.ariaLabel")}
       className="flex min-h-full flex-col py-1 select-none"
       onDragOver={(e) => {
+        // A group's own pane is not an ungroup target — a stray drop inside it
+        // must not silently pull the connection out of the group being viewed.
+        if (filtered) return;
         if (!draggedConnectionId) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
@@ -86,6 +103,7 @@ export default function ConnectionList({
       // Esc cancel, so this is the single cleanup point for the highlight.
       onDragEnd={() => setDragOverGroupId(null)}
       onDrop={async (e) => {
+        if (filtered) return;
         e.preventDefault();
         setDragOverGroupId(null);
         const connId =
@@ -128,8 +146,18 @@ export default function ConnectionList({
         </div>
       )}
 
+      {/* Empty group — the rail can select a group nothing lives in yet. */}
+      {filtered && rootConnections.length === 0 && (
+        <div
+          className="px-3 py-2 text-xs text-muted-foreground italic"
+          role="status"
+        >
+          {t("list.emptyGroup")}
+        </div>
+      )}
+
       {/* Empty state — visible only when there are no connections at all */}
-      {allConnections.length === 0 && (
+      {!filtered && allConnections.length === 0 && (
         <div
           className="flex flex-1 flex-col items-center justify-center px-4 py-8 text-center"
           role="status"

@@ -107,9 +107,17 @@ export const en = {
   // ConnectionList
   list: {
     ariaLabel: "Ungrouped connections drop area",
+    groupAriaLabel: "Connections in the selected group",
     dragHint: "Drag connections onto each other to create groups",
     emptyTitle: "No connections yet",
     emptySubtitle: "Click the + button to add your first database",
+    emptyGroup: "No connections in this group",
+  },
+  // ConnectionBrowser — launcher group rail
+  rail: {
+    ariaLabel: "Connection groups",
+    all: "All",
+    recent: "Recent",
   },
   // DbLifecycleDialog
   lifecycle: {
@@ -489,9 +497,16 @@ export const ko = {
   },
   list: {
     ariaLabel: "그룹 없는 연결 드롭 영역",
+    groupAriaLabel: "선택한 그룹의 연결",
     dragHint: "연결을 서로 드래그해 그룹을 만드세요",
     emptyTitle: "연결이 없습니다",
     emptySubtitle: "+ 버튼을 클릭해 첫 번째 데이터베이스를 추가하세요",
+    emptyGroup: "이 그룹에 연결이 없습니다",
+  },
+  rail: {
+    ariaLabel: "연결 그룹",
+    all: "전체",
+    recent: "최근",
   },
   lifecycle: {
     headerMode: "데이터베이스 {{mode}}",
