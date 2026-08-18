@@ -81,9 +81,11 @@ export default function FilterBar({
   const [rawSqlError, setRawSqlError] = useState<string | null>(null);
   const rawSqlErrorId = useId();
 
-  // #2430 — 드롭다운에 뜨는 목록만 방언으로 좁힌다. `opInfo` 는 아래에서
-  // 전체 `OPERATORS` 를 계속 보므로, 이미 걸려 있던 조건은 방언이 그 연산자를
-  // 잃어도 라벨과 값 입력 여부를 그대로 찾는다.
+  // #2430 — 고를 수 있는 목록을 방언으로 좁힌다. `opInfo` 는 전체 `OPERATORS`
+  // 를 계속 보므로, 이미 걸려 있던 조건은 방언이 그 연산자를 잃어도 값 입력
+  // 여부를 그대로 찾는다. 트리거에 뜨는 표기는 여기서 안 나온다 — `SelectValue`
+  // 가 마운트된 `SelectItem` 에서 읽으므로 아래 `SelectContent` 가 목록 밖
+  // 항목을 따로 그린다.
   const visibleOperators = useMemo(() => {
     const capabilities =
       getSqlDialectProfileForDatabaseType(dbType)?.capabilities;
@@ -294,6 +296,18 @@ export default function FilterBar({
                       {op.label}
                     </SelectItem>
                   ))}
+                  {/* 연결의 DBMS 종류가 바뀌어 지금 걸린 연산자가 위 목록에서
+                      빠지면 그 항목도 예외적으로 추가해 트리거가 빈값으로
+                      보이지 않게 한다 — `SelectValue` 는 마운트된 항목에서
+                      표기를 읽는다. `ConnectionDialogBody` 의 dbType Select 가
+                      쓰는 갈래와 같다 (#2430). */}
+                  {!visibleOperators.some(
+                    (op) => op.value === filter.operator,
+                  ) && (
+                    <SelectItem value={filter.operator}>
+                      {opInfo(filter.operator).label}
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
 

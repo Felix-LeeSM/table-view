@@ -29,12 +29,23 @@ const FILTER: FilterCondition = {
   id: "test-uuid-1",
 };
 
-function renderFilterBar(dbType?: DatabaseType) {
+// PostgreSQL 에서 걸고 그 연결의 DBMS 종류를 바꾸면 남는 조건이 이 모양이다.
+const ILIKE_FILTER: FilterCondition = {
+  column: "name",
+  operator: "Ilike",
+  value: "a%",
+  id: "test-uuid-2",
+};
+
+function renderFilterBar(
+  dbType?: DatabaseType,
+  filter: FilterCondition = FILTER,
+) {
   const onFiltersChange = vi.fn();
   render(
     <FilterBar
       columns={COLUMNS}
-      filters={[FILTER]}
+      filters={[filter]}
       onFiltersChange={onFiltersChange}
       onApply={vi.fn()}
       onClose={vi.fn()}
@@ -94,6 +105,42 @@ describe("FilterBar operator list follows the connected dialect (#2430)", () => 
 
     expect(screen.queryByRole("option", { name: "ILIKE" })).toBeNull();
     expect(screen.getByRole("option", { name: "LIKE" })).toBeInTheDocument();
+  });
+
+  // #2430 실측: `dbType` 이 바뀌어 지금 걸린 연산자가 목록에서 빠지면
+  // 트리거가 빈칸이 됐다. 트리거를 그리는 것은 `<SelectValue />` 이고 그것은
+  // 마운트된 `SelectItem` 에서 텍스트를 읽으므로, 목록 밖 항목을 하나 더
+  // 그려야 표기가 남는다 (`ConnectionDialogBody.tsx:463-468` 과 같은 처방).
+
+  it("keeps the selected operator readable after the dialect drops it", () => {
+    renderFilterBar("sqlite", ILIKE_FILTER);
+
+    expect(screen.getByLabelText("Filter operator")).toHaveTextContent("ILIKE");
+  });
+
+  it("still hides the dropped operator from the dropdown", async () => {
+    renderFilterBar("sqlite", ILIKE_FILTER);
+    await openOperatorMenu();
+
+    // 목록 밖 항목을 하나 더 그리는 처방이 드롭다운을 도로 넓히면 안 된다 —
+    // 그 항목은 지금 걸린 연산자 하나이고, 고를 수 있는 나머지는 방언 목록이다.
+    expect(screen.getAllByRole("option", { name: "ILIKE" })).toHaveLength(1);
+    expect(screen.getByRole("option", { name: "LIKE" })).toBeInTheDocument();
+  });
+
+  it("keeps the value input for an operator the dialect dropped", () => {
+    renderFilterBar("sqlite", ILIKE_FILTER);
+
+    expect(screen.getByLabelText("Filter value for name")).toBeInTheDocument();
+  });
+
+  // 목록 밖 항목을 그리는 갈래가 조건 없이 돌면 방언이 이미 주는 연산자가 두
+  // 번 뜬다. 이 단언이 그 갈래의 조건을 잠근다.
+  it("does not duplicate an operator the dialect already offers", async () => {
+    renderFilterBar("postgresql", ILIKE_FILTER);
+    await openOperatorMenu();
+
+    expect(screen.getAllByRole("option", { name: "ILIKE" })).toHaveLength(1);
   });
 
   // 라벨이 아니라 백엔드 enum 으로 나가는 값을 잰다. `FilterOperator::Ilike`
