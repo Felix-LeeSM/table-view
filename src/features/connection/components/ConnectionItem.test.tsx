@@ -866,6 +866,116 @@ describe("ConnectionItem", () => {
   });
 
   // -----------------------------------------------------------------------
+  // #2434 — the drag ghost. Dragging a launcher row used to put nothing under
+  // the cursor, so the user could not tell what was in flight.
+  // -----------------------------------------------------------------------
+  const dragTransfer = () => ({ effectAllowed: "", setData: vi.fn() });
+
+  // jsdom ships no `DragEvent`, so `fireEvent.dragStart` / `fireEvent.drag`
+  // fall back to a bare `Event` and silently drop clientX/clientY — the ghost
+  // would then read NaN, hold its last position, and pass for the wrong
+  // reason. A MouseEvent under the drag event name carries the coordinates
+  // and React routes it to `onDragStart` / `onDrag` all the same;
+  // `dataTransfer` is bolted on the way @testing-library does it.
+  function fireDrag(
+    item: HTMLElement,
+    name: "dragstart" | "drag",
+    clientX: number,
+    clientY: number,
+    dataTransfer?: object,
+  ) {
+    const event = new MouseEvent(name, {
+      bubbles: true,
+      cancelable: true,
+      clientX,
+      clientY,
+    });
+    if (dataTransfer) {
+      Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+    }
+    act(() => {
+      fireEvent(item, event);
+    });
+  }
+
+  /** Grabs the row 30px in and 10px down, so the ghost's offset math shows. */
+  function startDrag() {
+    setStoreState({});
+    const view = render(<ConnectionItem connection={makeConnection()} />);
+    const item = screen.getByRole("button", { name: /Test DB/ });
+    fireDrag(item, "dragstart", 30, 10, dragTransfer());
+    return { ...view, item };
+  }
+
+  const ghostOf = (container: HTMLElement) =>
+    container.querySelector<HTMLElement>("[data-drag-ghost]");
+
+  const dragTo = (item: HTMLElement, clientX: number, clientY: number) =>
+    fireDrag(item, "drag", clientX, clientY);
+
+  it("[drag-ghost] dragging a row raises a ghost naming that connection", () => {
+    setStoreState({});
+    const { container } = render(
+      <ConnectionItem connection={makeConnection()} />,
+    );
+    expect(ghostOf(container)).toBeNull();
+
+    fireDrag(
+      screen.getByRole("button", { name: /Test DB/ }),
+      "dragstart",
+      30,
+      10,
+      dragTransfer(),
+    );
+
+    expect(ghostOf(container)).toHaveTextContent("Test DB");
+  });
+
+  it("[drag-ghost] the ghost follows the cursor, keeping the spot it was grabbed by", () => {
+    const { container, item } = startDrag();
+
+    dragTo(item, 240, 96);
+
+    const ghost = ghostOf(container);
+    expect(ghost?.style.left).toBe("210px");
+    expect(ghost?.style.top).toBe("86px");
+  });
+
+  it("[drag-ghost] the ghost ignores the terminal (0, 0) drag report", () => {
+    const { container, item } = startDrag();
+
+    dragTo(item, 240, 96);
+    // Several engines report (0, 0) on the last `drag` before `dragend`.
+    // Honouring it would fling the ghost to the viewport corner for a frame.
+    dragTo(item, 0, 0);
+
+    const ghost = ghostOf(container);
+    expect(ghost?.style.left).toBe("210px");
+    expect(ghost?.style.top).toBe("86px");
+  });
+
+  it("[drag-ghost] dragend takes the ghost away", () => {
+    const { container, item } = startDrag();
+    expect(ghostOf(container)).not.toBeNull();
+
+    act(() => {
+      fireEvent.dragEnd(item);
+    });
+
+    expect(ghostOf(container)).toBeNull();
+  });
+
+  it("[drag-ghost] the ghost sits out of the drag it belongs to", () => {
+    const { container } = startDrag();
+
+    // An overlay parked under the cursor would otherwise eat the `dragover`
+    // that resolves the drop target, and read out as a second copy of the row.
+    const ghost = ghostOf(container);
+    expect(ghost?.className).toContain("pointer-events-none");
+    expect(ghost).toHaveAttribute("aria-hidden");
+  });
+
+  // -----------------------------------------------------------------------
   // Keyboard: Enter triggers double-click handler
   // -----------------------------------------------------------------------
   it("calls connectToDatabase when Enter is pressed while disconnected", async () => {

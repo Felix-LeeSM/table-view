@@ -749,4 +749,92 @@ describe("ConnectionList", () => {
       expect(g1).toHaveAttribute("data-drop-target", "false");
     });
   });
+
+  // -----------------------------------------------------------------------
+  // #2434 — the root (ungroup) area is the third drop target and was the one
+  // with no affordance: the rail row and the group block both light up, this
+  // one showed nothing. The 2026-05-05 removal that stripped the earlier root
+  // indicator was about a mark that *stayed* after the drag; the cases below
+  // pin the clearing paths that caused it.
+  // -----------------------------------------------------------------------
+  describe("root drop destination", () => {
+    beforeEach(() => {
+      setStoreState({
+        connections: [
+          makeConnection({ id: "c1", name: "DB A", groupId: "g1" }),
+        ],
+        groups: [makeGroup({ id: "g1", name: "Group 1" })],
+      });
+      _draggedConnectionId = "c1";
+    });
+
+    it("[drag-ghost] marks the ungrouped area while a dragged connection hovers it", () => {
+      const { container } = render(<ConnectionList />);
+      const root = container.firstElementChild as HTMLElement;
+      expect(root).not.toHaveAttribute("data-drop-target");
+
+      act(() => {
+        fireEvent.dragOver(root, { dataTransfer: { dropEffect: "" } });
+      });
+
+      expect(root).toHaveAttribute("data-drop-target", "true");
+    });
+
+    it("[drag-ghost] takes the root mark off on dragend", () => {
+      const { container } = render(<ConnectionList />);
+      const root = container.firstElementChild as HTMLElement;
+      act(() => {
+        fireEvent.dragOver(root, { dataTransfer: { dropEffect: "" } });
+      });
+
+      act(() => {
+        fireEvent.dragEnd(root);
+      });
+
+      expect(root).not.toHaveAttribute("data-drop-target");
+    });
+
+    it("[drag-ghost] takes the root mark off once the drop lands", () => {
+      const { container } = render(<ConnectionList />);
+      const root = container.firstElementChild as HTMLElement;
+      act(() => {
+        fireEvent.dragOver(root, { dataTransfer: { dropEffect: "" } });
+      });
+
+      act(() => {
+        fireEvent.drop(root, { dataTransfer: { getData: () => "" } });
+      });
+
+      expect(root).not.toHaveAttribute("data-drop-target");
+    });
+
+    it("[drag-ghost] hands the mark to a group the pointer moves onto", () => {
+      const { container } = render(<ConnectionList />);
+      const root = container.firstElementChild as HTMLElement;
+      const [g1] = screen.getAllByTestId("connection-group");
+      act(() => {
+        fireEvent.dragOver(root, { dataTransfer: { dropEffect: "" } });
+      });
+
+      act(() => {
+        fireEvent.dragOver(g1!);
+      });
+
+      expect(root).not.toHaveAttribute("data-drop-target");
+      expect(g1).toHaveAttribute("data-drop-target", "true");
+    });
+
+    it("[drag-ghost] a group-filtered pane never offers itself as an ungroup destination", () => {
+      // #2440 — a stray drop inside the group being viewed must not quietly
+      // pull the connection out of it, so the pane must not advertise itself.
+      const { container } = render(<ConnectionList groupFilter="g1" />);
+      const root = container.firstElementChild as HTMLElement;
+
+      act(() => {
+        fireEvent.dragOver(root, { dataTransfer: { dropEffect: "" } });
+      });
+
+      expect(root).not.toHaveAttribute("data-drop-target");
+    });
+  });
 });
