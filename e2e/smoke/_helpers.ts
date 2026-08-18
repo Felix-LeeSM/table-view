@@ -206,6 +206,31 @@ export async function openNewConnectionDialog() {
   return dialog;
 }
 
+/**
+ * #2436 — the connection dialog mounts one segment at a time, so a control
+ * outside Basic is absent from the DOM until its tab is selected.
+ *
+ * `clickDomSelector` is the wrong tool here: Radix activates a tab on
+ * `mousedown`/`focus`, and `HTMLElement.click()` fires neither. Dispatching
+ * `mousedown` also cannot be intercepted by an overlay the way a real
+ * WebDriver click can, and it matches how the component tests drive the same
+ * control (`fireEvent.mouseDown` in ConnectionDialog.test.tsx). The wait on
+ * `data-state="active"` is what makes a silent no-op fail here rather than as
+ * a confusing missing-field timeout further down.
+ */
+export async function openConnectionSegment(
+  section: "basic" | "advanced" | "security",
+) {
+  const selector = `[data-testid="conn-segment-${section}"]`;
+  await waitForDomSelector(selector);
+  await browser.execute((sel) => {
+    const tab = document.querySelector<HTMLElement>(sel);
+    if (!tab) throw new Error(`${sel} did not appear in the DOM`);
+    tab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  }, selector);
+  await waitForDomSelector(`${selector}[data-state="active"]`, 5000);
+}
+
 async function isLauncherDocument() {
   return await hasDomSelector(LAUNCHER_MARKER_SELECTOR);
 }
@@ -522,6 +547,12 @@ export async function createMongoConnection(name = "E2E MongoDB") {
     "#conn-database",
     process.env.E2E_MONGO_DB ?? "table_view_test",
   );
+  // #2436 — `authSource` is an Advanced control, so it is not mounted while the
+  // dialog stands on Basic. The smoke fixture cannot drop it: the root user is
+  // created in `admin` (docker-compose.yml `MONGO_INITDB_ROOT_USERNAME`) and the
+  // credential source otherwise falls back to `database`
+  // (src-tauri/table-view-core/src/db/mongodb/connection.rs).
+  await openConnectionSegment("advanced");
   await setInput("#conn-auth-source", process.env.E2E_MONGO_AUTH_DB ?? "admin");
 
   await saveConnectionDialog(dialog);

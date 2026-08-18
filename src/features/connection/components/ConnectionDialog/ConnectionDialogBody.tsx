@@ -513,17 +513,25 @@ export default function ConnectionDialogBody({
             value={activeSegment}
             onValueChange={(v) => setSegment(v as ConnFormSection)}
           >
+            {/* The `data-testid`s are the e2e handle on a segment. Radix emits
+                no attribute carrying a trigger's `value`, and overriding `id`
+                would strand the panel's `aria-labelledby`; matching the visible
+                label instead would tie `e2e/smoke/_helpers.ts` to the UI
+                language. `e2e-scenarios` P7 is the standing allowance. */}
             <TabsList className="gap-1 border-b border-border">
-              <TabsTrigger value="basic">
+              <TabsTrigger value="basic" data-testid="conn-segment-basic">
                 {t("body.segmentBasic")}
                 {flaggedSegment === "basic" && <SegmentErrorMark />}
               </TabsTrigger>
-              <TabsTrigger value="advanced">
+              <TabsTrigger value="advanced" data-testid="conn-segment-advanced">
                 {t("body.segmentAdvanced")}
                 {flaggedSegment === "advanced" && <SegmentErrorMark />}
               </TabsTrigger>
               {hasSecuritySegment && (
-                <TabsTrigger value="security">
+                <TabsTrigger
+                  value="security"
+                  data-testid="conn-segment-security"
+                >
                   {t("body.segmentSecurity")}
                   {flaggedSegment === "security" && <SegmentErrorMark />}
                 </TabsTrigger>
