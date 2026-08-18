@@ -14,6 +14,7 @@ import {
   type ToastVariant,
   useToastStore,
 } from "@/stores/toastStore";
+import { FOCUS_RING_BORDERLESS } from "./focusRing";
 
 /**
  * Global toast container. Mounted once at the App root, intentionally
@@ -129,7 +130,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
             toast.action?.onClick();
             onDismiss();
           }}
-          className="ml-1 inline-flex shrink-0 cursor-pointer rounded-sm px-1.5 py-0.5 text-xs font-medium underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
+          className={`ml-1 inline-flex shrink-0 cursor-pointer rounded-sm px-1.5 py-0.5 text-xs font-medium underline-offset-2 outline-none hover:underline ${FOCUS_RING_BORDERLESS}`}
         >
           {toast.action.label}
         </button>
@@ -138,7 +139,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         type="button"
         onClick={onDismiss}
         aria-label={t("dismissNotification")}
-        className="ml-1 inline-flex shrink-0 cursor-pointer rounded-sm p-0.5 opacity-70 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50"
+        className={`ml-1 inline-flex shrink-0 cursor-pointer rounded-sm p-0.5 opacity-70 outline-none hover:opacity-100 ${FOCUS_RING_BORDERLESS}`}
       >
         <X className="size-3.5" />
       </button>
