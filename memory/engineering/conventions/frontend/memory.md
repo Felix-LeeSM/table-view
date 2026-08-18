@@ -49,6 +49,15 @@ backend contract 를 통해서만 다룬다.
   공유 `TreeSkeleton` (`@components/shared/tree`) 으로 동일하게 로드된다 (#1586).
   refetch/부분 로드(pagination "load more", on-expand fetch)·control-busy(refresh)
   는 스피너 유지.
+- 드래그 미리보기 규약 (#2434): 끌리는 것을 보이는 **고스트**는 client 좌표
+  `position: fixed` + `pointer-events-none` + `aria-hidden` 오버레이이고 원본은
+  `opacity-40` 으로 죽인다 — 커서 밑 오버레이가 hit-test 를 먹으면 드롭 과녁
+  해석이 깨진다. 놓일 자리를 보이는 쪽은 **커밋이 하는 일**을 따른다: 목록 안
+  위치를 바꾸면 삽입선(`TabBar` 의 `dropIndicator`), 목적지로 옮기기만 하면
+  목적지 영역 강조(launcher 의 rail 행 · 그룹 블록 · 뿌리 영역). 강조는 붙이는
+  경로마다 dragend 와 drop 두 해제 경로를 같이 잠근다 — 2026-05-05 에 표시가
+  드래그 뒤에도 남아 통째로 걷어낸 전력이 있다. substrate(네이티브 HTML5 dnd /
+  pointer capture)는 그 표면이 이미 쓰는 쪽을 따르고 새로 갈지 않는다.
 - Dialog 수정은 기존 component contract/test 를 먼저 보며 close button,
   feedback slot, alert role, toast hookup 같은 테스트된 invariant 를 깨지 않는다.
   preset/layout source-order 강제 규칙은 retired 상태다.
