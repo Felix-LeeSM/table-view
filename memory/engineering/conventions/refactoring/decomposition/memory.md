@@ -16,7 +16,7 @@ keywords: 분해 boundary, 데이터/UI 분리 axis, data hook, Paradigm 분기 
   두 layer 로 갈라낸다.
 - store wiring 은 hook 안. 컴포넌트는 props 만.
 - **이득**: 컴포넌트 테스트는 props mock (store mock 불필요), hook 테스트
-  는 store mock. smell §8.1 (god test file mock 비대) 자연 해소.
+  는 store mock. god test file 의 mock 비대가 자연 해소된다.
 - **예시 (Sprint 191)**: SchemaTree → `useSchemaCache(connectionId)` +
   `<SchemaTree>`.
 
