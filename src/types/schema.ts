@@ -79,6 +79,9 @@ export type FilterOperator =
   | "Gte"
   | "Lte"
   | "Like"
+  // 대소문자를 무시하는 LIKE. 방언마다 있고 없다 — 필터 목록에 뜨는 조건은
+  // `sqlDialectProfile` 의 `capabilities.ilike` 다 (#2430).
+  | "Ilike"
   | "IsNull"
   | "IsNotNull";
 

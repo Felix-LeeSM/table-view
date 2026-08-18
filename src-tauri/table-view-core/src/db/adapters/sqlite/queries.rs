@@ -546,15 +546,12 @@ fn build_filter_clause(
             FilterOperator::IsNull => conditions.push(format!("{column} IS NULL")),
             FilterOperator::IsNotNull => conditions.push(format!("{column} IS NOT NULL")),
             _ => {
-                let op = match &filter.operator {
-                    FilterOperator::Eq => "=",
-                    FilterOperator::Neq => "<>",
-                    FilterOperator::Gt => ">",
-                    FilterOperator::Lt => "<",
-                    FilterOperator::Gte => ">=",
-                    FilterOperator::Lte => "<=",
-                    FilterOperator::Like => "LIKE",
-                    _ => unreachable!(),
+                // #2430 — 손으로 복제한 토큰 표를 이식 가능 토큰 표로 바꾼다.
+                // 복제본은 `_ => unreachable!()` 로 닫혀 있어서, 이 방언에 철자가
+                // 없는 연산자(`Ilike`)가 들어오면 컴파일은 지나가고 런타임에
+                // 패닉했다. duckdb·mssql·oracle 어댑터가 이미 쓰는 갈래와 같다.
+                let Some(op) = filter.operator.comparison_sql() else {
+                    continue;
                 };
                 if let Some(value) = &filter.value {
                     conditions.push(format!("{column} {op} ?"));

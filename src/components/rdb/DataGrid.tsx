@@ -278,6 +278,9 @@ export default function DataGrid({
 
       {filters.showFilters && (
         <FilterBar
+          // #2430 — 이 값으로 필터 연산자 목록이 연결된 DBMS 의 방언을
+          // 따라간다. 못 읽으면 방언 고유 연산자(ILIKE)는 안 뜬다.
+          dbType={rowEditConnection?.dbType}
           columns={data?.columns ?? []}
           filters={filters.filters}
           onFiltersChange={filters.setFilters}
