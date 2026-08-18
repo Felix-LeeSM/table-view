@@ -5,9 +5,7 @@
 // A thinner band paints less area, so its colour has to carry more of the
 // signal; the alpha bump is the payment, not decoration. Asserting that the
 // token contains some class name would pass on a ring nobody can see, so this
-// measures the colour instead, over every palette the app can render against —
-// `--tv-ring` and `--tv-background` are declared in `src/themes.css` and
-// `src/index.css` and nowhere else under `src/`.
+// measures the colour instead, over every palette the app can render against.
 //
 // The shipped alphas are read out of `focusRing.ts`, so editing a token moves
 // what gets measured rather than leaving this file green on a stale value.

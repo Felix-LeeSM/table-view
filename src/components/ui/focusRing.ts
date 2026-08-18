@@ -30,9 +30,8 @@
 
 /**
  * Focus ring for the primitives #2435 named — `Input`, `SelectTrigger`,
- * `Checkbox` and `Button`. Its reach is exactly the files that import it;
- * other bordered controls in this app write their own focus ring and this
- * token does not reach them.
+ * `Checkbox` and `Button`. Its reach is exactly the files that import it, so
+ * it does not govern the other bordered controls in this app.
  *
  * Two layers, not one, wherever the control draws a border of its own —
  * `Input`, `SelectTrigger`, `Checkbox`, and the `outline` `Button` variant.
