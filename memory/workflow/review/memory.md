@@ -3,7 +3,7 @@ title: PR Review Behavior
 type: workflow-rule
 updated: 2026-08-17
 task: review, pr, delivery
-keywords: scorecard, verdict, blocking, non-blocking, 결정만 싣는다, 증거 열거, 재현 서사, 확인했고 참이던 주장, 사본이 필요한가, 설치가 필요한가, 판정 입력, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상, LC_ALL, LC_ALL=C, 0xA0, GNU tr, BSD tr, 로케일, gnubin, coreutils, 한글 음절, 거짓 0, grep -c, grep -o, wc -l, 자리 수, 개수를 1 로 뭉갠다
+keywords: scorecard, verdict, blocking, non-blocking, 결정만 싣는다, 증거 열거, 재현 서사, 확인했고 참이던 주장, 사본이 필요한가, 설치가 필요한가, 판정 입력, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상, LC_ALL, LC_ALL=C, 0xA0, GNU tr, BSD tr, 로케일, gnubin, coreutils, 한글 음절, 하드랩, 거짓 0, grep -c, grep -o, wc -l, 자리 수, 개수를 1 로 뭉갠다
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -75,7 +75,7 @@ trigger:
   커밋 메시지에 있는지 먼저 대조한다:
 
   ```bash
-  # 조각에도 같은 정규화를 건다 — 안 걸면 아래 문단의 탭·개행·연속 공백에 뚫린다
+  # 조각에도 같은 정규화를 건다 — 안 걸면 하드랩된 커밋 메시지의 탭·개행·연속 공백에 뚫린다
   NEEDLE="$(printf '%s' '<문구>' | LC_ALL=C tr -s '[:space:]' ' ')"
   MSGS="$(gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
             --jq '.[].commit.message')" || { echo "ABORT: 커밋 메시지 조회 실패" >&2; exit 1; }
