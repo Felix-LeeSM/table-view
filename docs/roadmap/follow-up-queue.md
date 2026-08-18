@@ -35,6 +35,23 @@ semantics 는 그대로 자체 구현 근거를 요구한다. Keep DuckDB split 
 COPY/ATTACH/DETACH, extension install/load, raw external-file SQL functions,
 automatic import/export workflow, structured DDL/write UI, or admin parity.
 
+### Grid filter operators
+
+**Follow-up**: The RDBMS DataGrid filter reads its operator list from the
+connected dialect's `SqlDialectCapabilities`
+(`src/lib/sql/sqlDialectProfile.ts`), and #2430 wired PostgreSQL through it with
+`ILIKE`. The other RDBMS lanes are untouched — DuckDB, MySQL/MariaDB, SQLite,
+MSSQL and Oracle still declare `ilike: false`, so the operator is not offered
+and no adapter emits it. Each lane is its own slice because the
+case-insensitive story differs per engine:
+DuckDB spells the same `ILIKE` keyword, while the others reach case-insensitive
+matching through collation or a functional predicate, which is a different
+product decision from adding a dropdown row. A slice lands the capability flag,
+the adapter spelling and a test that measures two dialects together. Emulating
+a missing operator with `LOWER(col) LIKE LOWER(?)` stays out of scope until the
+index-loss notice it needs is designed
+([`docs/product/known-limitations-cross-cutting.md`](../product/known-limitations-cross-cutting.md)).
+
 ### Query language widening
 
 **Follow-up**: Widen SQL/Mongo client semantic support by tested slices: future

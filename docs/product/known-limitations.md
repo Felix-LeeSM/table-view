@@ -35,7 +35,7 @@ limitation. Layout is per-page: an entry is either a row of the original
 - [`docs/product/known-limitations-cross-cutting.md`](known-limitations-cross-cutting.md) —
   credential lifecycle, connection import/export privacy, security/admin
   surface, runtime E2E smoke, adapter/workspace boundary, query results,
-  ERD/FK, CHECK constraints.
+  ERD/FK, CHECK constraints, grid filter operators.
 
 ## UI, Accessibility, And Performance
 

@@ -371,6 +371,45 @@ async fn query_table_data_filters_sorts_and_paginates() {
     assert!(data.executed_query.contains("LIMIT 1 OFFSET 0"));
 }
 
+// #2430 — SQLite 에는 `ILIKE` 철자가 없다. 이 갈래는 손으로 복제한 토큰 표가
+// `_ => unreachable!()` 로 닫혀 있던 자리라, 이 방언에 없는 연산자가 들어오면
+// 컴파일은 지나가고 런타임에 패닉했다. 지금은 이식 가능 토큰 표를 거쳐 조건을
+// 버리고, 쿼리에는 `ILIKE` 가 실리지 않는다.
+#[tokio::test]
+async fn query_table_data_drops_ilike_filter_sqlite_cannot_spell() {
+    let (_dir, adapter) = connected_adapter().await;
+    let filters = vec![FilterCondition {
+        column: "name".into(),
+        operator: FilterOperator::Ilike,
+        value: Some("a%".into()),
+    }];
+
+    let data = <SqliteAdapter as RdbAdapter>::query_table_data(
+        &adapter,
+        "main",
+        "users",
+        1,
+        10,
+        None,
+        Some(&filters),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        !data.executed_query.contains("ILIKE"),
+        "SQLite 쿼리에 ILIKE 가 실렸다: {}",
+        data.executed_query
+    );
+    assert!(
+        !data.executed_query.contains(" WHERE "),
+        "버려야 할 조건이 WHERE 에 남았다: {}",
+        data.executed_query
+    );
+}
+
 #[tokio::test]
 async fn query_table_data_rejects_raw_where_semicolon() {
     let (_dir, adapter) = connected_adapter().await;

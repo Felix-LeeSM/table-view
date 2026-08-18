@@ -87,16 +87,25 @@ pub enum FilterOperator {
     Gte,
     Lte,
     Like,
+    /// 대소문자를 무시하는 `LIKE`. 철자가 방언마다 갈려서 아래
+    /// `comparison_sql` 의 이식 가능 토큰 표에는 안 들어간다 — PostgreSQL
+    /// 어댑터가 `pg_comparison_sql` 로 `ILIKE` 를 얹는다 (#2430).
+    Ilike,
     IsNull,
     IsNotNull,
 }
 
 impl FilterOperator {
-    /// SQL binary comparison token for this operator, or `None` for the
-    /// null-check operators (`IsNull`/`IsNotNull`) which take no right-hand
-    /// operand. #1354 — the single source every RDB adapter maps through, so a
-    /// new variant is a compile error in every caller instead of a runtime
-    /// `unreachable!()` panic in the postgres/mysql/duckdb filter builders.
+    /// 어느 RDB 어댑터에서나 같은 철자로 나가는 SQL 이항 비교 토큰. `None` 을
+    /// 내는 경우가 둘이다 — 오른쪽 피연산자가 없는 null 검사
+    /// (`IsNull`/`IsNotNull`), 그리고 철자가 방언마다 갈리는 `Ilike`. `None` 을
+    /// 받은 어댑터는 자기 방언의 철자를 스스로 얹거나 그 조건을 버린다.
+    /// PostgreSQL 쪽 해석기는 `db::postgres::queries::pg_comparison_sql` 이다.
+    ///
+    /// #1354 — 어댑터가 여기를 거치게 두면 새 variant 가 `unreachable!()` 패닉
+    /// 대신 `None` 갈래로 떨어진다. 다만 갈래를 `_` 로 받는 자리는 새 variant 를
+    /// 컴파일 에러로 못 잡으므로, 방언 철자를 더할 때는 그 어댑터를 직접 고친다
+    /// (#2430).
     pub fn comparison_sql(&self) -> Option<&'static str> {
         match self {
             FilterOperator::Eq => Some("="),
@@ -106,7 +115,7 @@ impl FilterOperator {
             FilterOperator::Gte => Some(">="),
             FilterOperator::Lte => Some("<="),
             FilterOperator::Like => Some("LIKE"),
-            FilterOperator::IsNull | FilterOperator::IsNotNull => None,
+            FilterOperator::Ilike | FilterOperator::IsNull | FilterOperator::IsNotNull => None,
         }
     }
 }
@@ -135,5 +144,14 @@ mod filter_operator_tests {
         // instead of reaching an `unreachable!()`.
         assert_eq!(FilterOperator::IsNull.comparison_sql(), None);
         assert_eq!(FilterOperator::IsNotNull.comparison_sql(), None);
+    }
+
+    // #2430 — `ILIKE` 는 PostgreSQL 철자다. 이식 가능 토큰 표가 그것을 내면
+    // MySQL·MSSQL·Oracle 어댑터가 자기 방언에 없는 토큰을 그대로 쿼리에 실어
+    // 보낸다. 그래서 여기서는 `None` 이고, 철자는 방언 쪽이 얹는다
+    // (`db::postgres::queries` 의 `pg_comparison_sql` 테스트가 짝이다).
+    #[test]
+    fn comparison_sql_has_no_portable_token_for_ilike() {
+        assert_eq!(FilterOperator::Ilike.comparison_sql(), None);
     }
 }

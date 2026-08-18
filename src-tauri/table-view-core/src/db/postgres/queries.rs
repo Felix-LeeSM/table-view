@@ -264,6 +264,18 @@ fn pg_cast_type(data_type: &str) -> Option<&'static str> {
     }
 }
 
+/// #2430 — PostgreSQL 방언의 비교 토큰. 이식 가능 토큰 표
+/// (`FilterOperator::comparison_sql`) 는 어느 어댑터에서나 같은 철자인 것만
+/// 담으므로 `ILIKE` 가 거기 없다. 이 함수가 PostgreSQL 철자를 얹고 나머지는 그
+/// 표로 넘긴다 — 다른 방언이 자기 철자를 갖게 되면 그 어댑터에 같은 모양의
+/// 해석기를 둔다.
+fn pg_comparison_sql(operator: &FilterOperator) -> Option<&'static str> {
+    match operator {
+        FilterOperator::Ilike => Some("ILIKE"),
+        other => other.comparison_sql(),
+    }
+}
+
 /// #1086 — heuristic: does a top-level `WITH …` statement contain a
 /// data-modifying CTE (`INSERT`/`UPDATE`/`DELETE`/`MERGE`)? Such statements
 /// cannot be wrapped in `SELECT row_to_json(q) FROM (<query>) q` — PostgreSQL
@@ -1090,7 +1102,7 @@ impl PostgresAdapter {
                                 conditions.push(format!("{} IS NOT NULL", quoted_col));
                             }
                             _ => {
-                                let Some(op) = f.operator.comparison_sql() else {
+                                let Some(op) = pg_comparison_sql(&f.operator) else {
                                     continue;
                                 };
                                 if let Some(val) = &f.value {
@@ -1850,6 +1862,28 @@ mod tests {
     #[test]
     fn strip_trailing_terminator_empty_input_returns_empty() {
         assert_eq!(strip_trailing_terminator(""), "");
+    }
+
+    // ── pg_comparison_sql (#2430) ─────────────────────────────────────────
+    // 두 축을 같이 잰다: PostgreSQL 해석기는 `ILIKE` 를 내고, 이식 가능 토큰
+    // 표는 안 낸다. 뒤엣것이 깨지면 MySQL·MSSQL·Oracle 어댑터가 자기 방언에
+    // 없는 토큰을 그대로 쿼리에 싣는다.
+
+    #[test]
+    fn pg_comparison_sql_renders_ilike_for_postgres() {
+        assert_eq!(pg_comparison_sql(&FilterOperator::Ilike), Some("ILIKE"));
+    }
+
+    #[test]
+    fn portable_token_table_leaves_ilike_to_the_dialect() {
+        assert_eq!(FilterOperator::Ilike.comparison_sql(), None);
+    }
+
+    #[test]
+    fn pg_comparison_sql_defers_portable_operators_to_the_shared_table() {
+        assert_eq!(pg_comparison_sql(&FilterOperator::Like), Some("LIKE"));
+        assert_eq!(pg_comparison_sql(&FilterOperator::Eq), Some("="));
+        assert_eq!(pg_comparison_sql(&FilterOperator::IsNull), None);
     }
 
     // ── pg_cast_type ──────────────────────────────────────────────────────

@@ -8,9 +8,12 @@ import {
   SelectValue,
 } from "@components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
+import { getSqlDialectProfileForDatabaseType } from "@lib/sql/sqlDialectProfile";
 import { Plus, Trash2, X } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { SqlDialectCapabilities } from "@/lib/sql/sqlDialectProfile";
+import type { DatabaseType } from "@/types/connection";
 import type {
   ColumnInfo,
   FilterCondition,
@@ -30,12 +33,24 @@ interface FilterBarProps {
   rawSql: string;
   onFilterModeChange: (mode: FilterMode) => void;
   onRawSqlChange: (sql: string) => void;
+  /**
+   * 연결된 DBMS. 연산자 목록이 이 방언의 capability 를 따라간다 (#2430).
+   * 없으면(연결을 아직 못 읽었을 때) 방언 고유 연산자는 안 뜬다.
+   */
+  dbType?: DatabaseType;
 }
 
+/**
+ * 연산자 표기(라벨 · 값 입력 필요 여부)의 SOT. `capability` 가 붙은 줄은 그
+ * 이름의 `SqlDialectCapabilities` 플래그가 참인 방언에서만 목록에 뜬다 —
+ * 어느 방언이 무엇을 갖는지의 SOT 는 `src/lib/sql/sqlDialectProfile.ts` 이고
+ * 여기 복제하지 않는다 (#2430).
+ */
 const OPERATORS: {
   value: FilterOperator;
   label: string;
   needsValue: boolean;
+  capability?: keyof SqlDialectCapabilities;
 }[] = [
   { value: "Eq", label: "=", needsValue: true },
   { value: "Neq", label: "\u2260", needsValue: true },
@@ -44,6 +59,7 @@ const OPERATORS: {
   { value: "Gte", label: "\u2265", needsValue: true },
   { value: "Lte", label: "\u2264", needsValue: true },
   { value: "Like", label: "LIKE", needsValue: true },
+  { value: "Ilike", label: "ILIKE", needsValue: true, capability: "ilike" },
   { value: "IsNull", label: "IS NULL", needsValue: false },
   { value: "IsNotNull", label: "IS NOT NULL", needsValue: false },
 ];
@@ -59,10 +75,22 @@ export default function FilterBar({
   rawSql,
   onFilterModeChange,
   onRawSqlChange,
+  dbType,
 }: FilterBarProps) {
   const { t } = useTranslation("rdb");
   const [rawSqlError, setRawSqlError] = useState<string | null>(null);
   const rawSqlErrorId = useId();
+
+  // #2430 — 드롭다운에 뜨는 목록만 방언으로 좁힌다. `opInfo` 는 아래에서
+  // 전체 `OPERATORS` 를 계속 보므로, 이미 걸려 있던 조건은 방언이 그 연산자를
+  // 잃어도 라벨과 값 입력 여부를 그대로 찾는다.
+  const visibleOperators = useMemo(() => {
+    const capabilities =
+      getSqlDialectProfileForDatabaseType(dbType)?.capabilities;
+    return OPERATORS.filter(
+      (op) => op.capability === undefined || capabilities?.[op.capability],
+    );
+  }, [dbType]);
 
   const addFilter = () => {
     const firstCol = columns[0]?.name ?? "";
@@ -261,7 +289,7 @@ export default function FilterBar({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {OPERATORS.map((op) => (
+                  {visibleOperators.map((op) => (
                     <SelectItem key={op.value} value={op.value}>
                       {op.label}
                     </SelectItem>

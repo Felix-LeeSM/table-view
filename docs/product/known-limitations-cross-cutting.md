@@ -426,6 +426,24 @@ row navigation claims.
 CHECK constraint expressions are shown as raw SQL by design, matching
 database-tool behavior.
 
+### Grid filter operators
+
+The RDBMS DataGrid structured filter builds its operator dropdown from the
+connected dialect's `SqlDialectCapabilities`
+(`src/lib/sql/sqlDialectProfile.ts`): an operator whose capability the dialect
+does not declare is not offered.
+`ILIKE` is wired that way (#2430) and rides on `capabilities.ilike`, which the
+profile declares for PostgreSQL. An operator a dialect lacks is hidden, not
+emulated — no `LOWER(col) LIKE LOWER(?)` rewrite is generated, because that
+rewrite loses the column index and warning the user about that is a separate UI
+decision. The backend keeps the same split: spellings shared across adapters
+live in `FilterOperator::comparison_sql`, and a dialect-specific spelling lives
+in that adapter (`pg_comparison_sql` in
+`src-tauri/table-view-core/src/db/postgres/queries.rs`). An adapter handed an
+operator it cannot spell drops that one condition, so the
+browse returns a wider result set rather than an error. The document (MongoDB)
+filter bar keeps its own operator set and is outside this list.
+
 ## Related
 
 - [`docs/product/known-limitations.md`](known-limitations.md) — boundary index
