@@ -1,11 +1,19 @@
-// Purpose: #2435 — the focus ring dropped from 3px at 50% alpha to 1px at 60%.
+// Purpose: #2435 — on the four primitives it named, the focus ring dropped
+// from 3px at 50% alpha to 1px at 60%; the borderless overlay buttons took the
+// alpha half of that decision and stayed 2px. Rings elsewhere in the app were
+// left alone and are not what this measures.
 // A thinner band paints less area, so its colour has to carry more of the
 // signal; the alpha bump is the payment, not decoration. Asserting that the
 // token contains some class name would pass on a ring nobody can see, so this
-// measures the colour instead, over every palette the app can render against.
+// measures the colour instead, over every palette the app can render against —
+// `--tv-ring` and `--tv-background` are declared in `src/themes.css` and
+// `src/index.css` and nowhere else under `src/`.
 //
-// Both alphas below are read out of `focusRing.ts`, so editing the token moves
+// The shipped alphas are read out of `focusRing.ts`, so editing a token moves
 // what gets measured rather than leaving this file green on a stale value.
+// `REPLACED_ALPHA` below is deliberately not read from there: it is the
+// historical bound being compared against, and it has to stay put when the
+// token moves.
 //
 // Sweep population: every `[data-theme][data-mode]` block in `src/themes.css`
 // plus the two `:where(:root[data-mode="…"])` fallbacks in `src/index.css` —
@@ -36,22 +44,32 @@ import { FOCUS_RING, FOCUS_RING_BORDERLESS } from "./focusRing";
 const SRC_ROOT = resolve(process.cwd(), "src");
 
 /**
- * The ring shapes #2435 removed. Either back under `src/` is the failure — a
- * shared constant nobody is obliged to import does not stop the next
- * `npx shadcn add` from pasting the upstream 3px string into one more
- * component. The sweep drops `*.test.ts(x)`, which is why this file may name
- * them at all; `focusRing.ts` deliberately does not.
+ * The ring shapes #2435 removed. Either one back in a file `sourceFiles` walks
+ * is the failure — a shared constant nobody is obliged to import does not stop
+ * the next `npx shadcn add` from pasting the upstream 3px string into one more
+ * component.
  *
- * Patterns rather than plain strings for a second reason: Tailwind v4 scans
- * `src/` for class candidates and skips neither test files nor comments, so
- * either name written out verbatim anywhere in this file regenerates the very
- * rules this change deletes back into the shipped stylesheet. The backslashes
- * below stop the scanner from reading a whole candidate, which is also why the
- * prose here describes the two shapes instead of quoting them.
+ * What that walk does not reach: `*.test.ts(x)`, `*.d.ts`, and every file under
+ * `src/` that is not `.ts` or `.tsx` — CSS included. Dropping test files is
+ * what lets this file name the shapes at all; `focusRing.ts` deliberately does
+ * not.
+ *
+ * Tailwind v4 draws a different line — it scans `src/` for class candidates and
+ * skips neither test files nor comments — and two things follow. Either name
+ * written out verbatim anywhere in this file would regenerate the very rules
+ * this change deletes, so the shapes below are patterns and the backslashes
+ * stop the scanner from reading a whole candidate; the prose here describes
+ * them rather than quoting them for the same reason. And the test-file
+ * exclusion above is a real gap, not a free one: a removed shape written
+ * verbatim in any other test file rebuilds the deleted rule in the shipped
+ * stylesheet while this sweep stays green.
  */
 const REPLACED = [/ring-\[3px\]/, /ring-ring\/50/];
 
-/** Alpha the ring shipped with before #2435, kept as the comparison bound. */
+/**
+ * Alpha the four primitives #2435 named shipped with before it, kept as the
+ * comparison bound. Not every ring in the app was on this value.
+ */
 const REPLACED_ALPHA = 0.5;
 
 /** `focus-visible:ring-ring/60` → `0.6`. Throws rather than defaulting. */
