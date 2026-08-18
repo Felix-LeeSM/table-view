@@ -5,14 +5,21 @@
  * 사유: Q21 9 affordance 중
  *   (8) Home action bar "Clear recent" → clear_mru IPC 1회.
  *
+ * #2433 (2026-08-18): affordance (8) 이 Recent 목록 끝으로 옮겨가 이 트리
+ * 에서 사라졌다. 여기 남은 케이스는 옛 자리 부재 단언이고, 동작은
+ * `src/features/connection/components/RecentConnections.test.tsx` 와
+ * `src/stores/mruStore.test.ts` 가 나눠 갖는다.
+ *
  * #2440 (2026-08-17): affordance (2) — Home "Recent" 헤더의 "Reset" —
  * 제거. Recent 가 footer 에서 group rail 의 view 로 옮겨져 접히는 footer
  * 자체가 없어졌고, 초기화할 접힘 상태가 남지 않았다. 해당 케이스도 같이
  * 지웠다.
  *
  * 본 spec 은 HomePage 의 사용자 entry point — 우클릭 메뉴 / 액션 바
- * 버튼 — 가 위 IPC 를 정확한 wire shape 으로 발사하는지 lock. Confirm
- * dialog 가 도입되면 test 가 fail 해야 함 (Q21 contract — 직접 IPC).
+ * 버튼 — 가 위 IPC 를 정확한 wire shape 으로 발사하는지 lock. #2433 이전
+ * 에는 "confirm dialog 가 도입되면 fail" 이 여기 걸려 있었는데, 그 계약은
+ * affordance (8) 과 함께 옮겨갔다 — 되돌릴 수 없는 전체 삭제라 지금은
+ * 확인 창을 거치는 쪽이 계약이다.
  *
  * sprint-377 (2026-05-17): 사용자 직접 요청으로 settings panel 의
  * "Reset settings" / "Reset sidebar width" 두 버튼 제거. 본 spec 에
@@ -20,7 +27,7 @@
  * 두 버튼 부재 회귀 가드.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invokeMock } = vi.hoisted(() => ({
@@ -99,19 +106,23 @@ describe("HomePage reset affordances (Q21 #2 + #8)", () => {
     });
   });
 
-  it("AC-376-08: Home action-bar 'Clear recent' 클릭 → clear_mru IPC 1회 + store empty", () => {
+  // 갱신 (2026-08-18, #2433): affordance (8) 이 launcher action bar 를 떠나
+  // Recent 목록 끝으로 갔다. HomePage 는 `ConnectionBrowser` 를 stub 으로
+  // 갈아 끼우므로 그 버튼은 이 트리에 아예 없다. 여기 남는 것은 옛 자리에
+  // 다시 mount 되는 것을 막는 부재 단언이고 — AC-377-01/02 와 같은 형태다 —
+  // 실제 동작은 두 곳이 나눠 갖는다:
+  //   - 버튼 · 확인 창: src/features/connection/components/RecentConnections.test.tsx
+  //   - clear_mru wire shape: src/stores/mruStore.test.ts
+  it("AC-376-08 (#2433 이관): 'Clear recent' 가 launcher action bar 에 없다", () => {
     render(<HomePage />);
-    const btn = screen.getByRole("button", { name: /clear recent/i });
-    fireEvent.click(btn);
 
-    const calls = invokeMock.mock.calls.filter(
-      (call) => call[0] === "clear_mru",
-    );
-    expect(calls).toHaveLength(1);
-    // store also reset locally (optimistic) — the backend emit handles
-    // the other window.
-    expect(useMruStore.getState().recentConnections).toEqual([]);
-    expect(useMruStore.getState().lastUsedConnectionId).toBeNull();
+    expect(screen.queryByRole("button", { name: /clear recent/i })).toBeNull();
+    expect(screen.queryByTestId("home-clear-recent")).toBeNull();
+    // 버튼이 없으니 mount 만으로 IPC 가 나가지도 않는다.
+    expect(
+      invokeMock.mock.calls.filter((call) => call[0] === "clear_mru"),
+    ).toHaveLength(0);
+    expect(useMruStore.getState().recentConnections).toHaveLength(2);
   });
 
   // 작성 2026-05-17 (sprint-377 회귀 가드). 사유: 사용자 직접 요청 —

@@ -35,8 +35,15 @@
 //   5. DataGrid header 우클릭 "Reset column widths" — widths 만 default.
 //   6. DataGrid header 우클릭 "Show all columns" — hidden 만 default.
 //   7. Sidebar 헤더 "Collapse all" — sidebar.expanded 빈 array.
-//   8. Home "Clear recent" — mru empty.
+//   8. (#2433 이동) Recent rail 끝의 "Clear all" — 확인 창을 거쳐 mru empty.
+//      옛 자리는 Home action bar 의 Eraser 였다. 목록을 겨냥한 파괴적
+//      동작이라 목록 끝으로 내려갔고, 되돌릴 수 없어 확인 창이 붙었다.
+//      아래 시나리오 순서도 그래서 바뀐다 — 목록이 비어 있으면 버튼 자체가
+//      렌더되지 않으므로 workspace 를 한 번 연 뒤에 fire 한다.
 //   9. Favorites entry remove — 해당 entry 사라짐.
+//
+// #2433 주의: 아래 "confirm dialog 0건" 단언은 시나리오 8 을 제외한다.
+// 나머지 여덟은 여전히 직접 IPC 다.
 
 import { $, browser, expect } from "@wdio/globals";
 import {
@@ -64,7 +71,7 @@ async function clickByAriaLabel(label: string) {
 }
 
 describe("Sprint 376 — Reset-to-default audit (Q21 9 affordance)", () => {
-  it("9 시나리오 모두 user-visible UI 에서 발사 가능 — confirm dialog 없음", async () => {
+  it("9 시나리오 모두 user-visible UI 에서 발사 가능 — #8 만 확인 창을 거친다", async () => {
     step("launcher 부팅 + PG 연결 생성");
     await waitForLauncher();
     await createPostgresConnection(PG_CONNECTION);
@@ -83,10 +90,10 @@ describe("Sprint 376 — Reset-to-default audit (Q21 9 affordance)", () => {
     // sprint-377 에서 settings panel 의 두 번째 entry point 제거.
     // sidebar handle 우클릭 entry (#3b) 는 workspace 윈도우에서 fire (아래).
 
-    // ----- 시나리오 8: Home "Clear recent" -----
-    // (먼저 fire — 시나리오 9 의 favorites 도달 전에 launcher 측 작업)
-    step("#8 Home action bar 'Clear recent' 클릭");
-    await clickByAriaLabel("Clear recent");
+    // ----- 시나리오 8 은 아래로 내려갔다 (#2433) -----
+    // Recent 목록 끝의 "Clear all" 은 목록이 비면 렌더되지 않는다. 이 지점
+    // 에서는 아직 connection 을 연 적이 없어 mru 가 비어 있으므로,
+    // workspace 를 연 뒤 launcher 로 돌아와 fire 한다.
 
     // ----- 시나리오 4: Group 우클릭 "Reset collapse states" -----
     // Group 있는 경우만 fire — 사용자가 group 0 인 환경에선 자동 skip.
@@ -150,9 +157,29 @@ describe("Sprint 376 — Reset-to-default audit (Q21 9 affordance)", () => {
       await favRemove.click();
     }
 
-    step("9 시나리오 종료 — confirm dialog 가 0건 나타났음을 단언");
-    // alertdialog 가 mount 됐으면 fail — Q21 contract: 직접 IPC + no confirm.
+    // ----- 시나리오 8: Recent rail 끝의 "Clear all" (#2433) -----
+    // launcher 로 돌아와 Recent view 를 고르고 목록 끝의 버튼을 누른다.
+    // 목록이 비어 있으면 버튼이 없다 — 위 시나리오 4/5/6/9 와 같은
+    // isExisting 가드를 쓴다.
+    step("#8 Recent rail 끝 'Clear all' + 확인 창 (recent 항목이 있을 때만)");
+    await switchToLauncherWindow();
+    const railRecent = await $('[data-testid="rail-recent"]');
+    await railRecent.waitForDisplayed({ timeout: 10000 });
+    await railRecent.click();
+    const clearAll = await $('[data-testid="recent-clear-all"]');
+    if (await clearAll.isExisting()) {
+      await clearAll.click();
+      const clearConfirm = await $('[data-testid="recent-clear-confirm"]');
+      await clearConfirm.waitForDisplayed({ timeout: 10000 });
+      await clearConfirm.click();
+    }
+
+    step("종료 — 열린 채로 남은 confirm dialog 가 없음을 단언");
+    // #2433 이전에는 "confirm 이 한 번도 안 떴다" 였다. 시나리오 8 이 이제
+    // 일부러 하나를 띄우므로, 단언은 "확인 뒤 닫혔다" 로 좁아진다. 나머지
+    // 여덟 affordance 는 여전히 직접 IPC 라 dialog 를 안 띄운다.
     const dialog = await $('[role="alertdialog"]');
+    await dialog.waitForExist({ reverse: true, timeout: 10000 });
     expect(await dialog.isExisting()).toBe(false);
   });
 });
