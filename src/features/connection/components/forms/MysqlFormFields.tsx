@@ -12,11 +12,14 @@
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
 import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
+import type { ConnFormSection } from "./formSection";
 import SslModeField from "./SslModeField";
 
 export interface MysqlFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
+  /** #2436 — segment currently on screen; see `formSection.ts` for the rule. */
+  section: ConnFormSection;
   passwordInput: string;
   setPasswordInput: (value: string) => void;
   isEditing: boolean;
@@ -31,6 +34,7 @@ export interface MysqlFormFieldsProps {
 export default function MysqlFormFields({
   draft,
   onChange,
+  section,
   passwordInput,
   setPasswordInput,
   isEditing,
@@ -42,6 +46,20 @@ export default function MysqlFormFields({
   invalidField,
 }: MysqlFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
+  if (section === "security") {
+    // TLS (#1063) — same sslmode dropdown as PG.
+    return (
+      <SslModeField
+        draft={draft}
+        onChange={onChange}
+        inputClass={inputClass}
+        labelClass={labelClass}
+      />
+    );
+  }
+  // Nothing MySQL-specific the driver connects without — `advanced` is left to
+  // the dialog-level settings `ConnectionDialogBody` renders itself.
+  if (section !== "basic") return null;
   return (
     <>
       {/* Host & Port */}
@@ -151,14 +169,6 @@ export default function MysqlFormFields({
           {...fieldValidationProps("database", true, invalidField)}
         />
       </div>
-
-      {/* TLS (#1063) — same sslmode dropdown as PG. */}
-      <SslModeField
-        draft={draft}
-        onChange={onChange}
-        inputClass={inputClass}
-        labelClass={labelClass}
-      />
     </>
   );
 }

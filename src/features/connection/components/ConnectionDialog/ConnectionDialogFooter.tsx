@@ -71,8 +71,8 @@ export default function ConnectionDialogFooter({
   return (
     <>
       {/* Test result — pinned outside the scroll container so it is always
-          reachable regardless of scroll position or Advanced Settings being
-          open.
+          reachable regardless of scroll position or which form segment
+          (#2436) is open.
 
           Sprint-95 Layer-1 migration: this slot is rendered by the base
           `<DialogFeedback>` primitive. The `slotName` override keeps the

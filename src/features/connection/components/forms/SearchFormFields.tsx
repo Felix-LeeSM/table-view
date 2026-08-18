@@ -2,11 +2,14 @@ import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
 import { sslModeTlsOn } from "../../model";
 import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
+import type { ConnFormSection } from "./formSection";
 import TlsSkipVerifyToggle from "./TlsSkipVerifyToggle";
 
 export interface SearchFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
+  /** #2436 — segment currently on screen; see `formSection.ts` for the rule. */
+  section: ConnFormSection;
   passwordInput: string;
   setPasswordInput: (value: string) => void;
   isEditing: boolean;
@@ -21,6 +24,7 @@ export interface SearchFormFieldsProps {
 export default function SearchFormFields({
   draft,
   onChange,
+  section,
   passwordInput,
   setPasswordInput,
   isEditing,
@@ -32,6 +36,35 @@ export default function SearchFormFields({
   invalidField,
 }: SearchFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
+  if (section === "security") {
+    return (
+      <>
+        <label className="flex items-center gap-2 text-xs text-secondary-foreground">
+          <input
+            id="conn-tls-enabled"
+            type="checkbox"
+            className="cursor-pointer"
+            checked={sslModeTlsOn(draft.sslMode)}
+            onChange={(e) =>
+              onChange({
+                // #1649 — on selects the verifying posture, off returns to the
+                // driver default. Either way the CA reference goes: neither
+                // posture reads it, and leaving it would let the adjacent
+                // skip-verify checkbox restore a `verify-ca` this connection
+                // never had (see `draftVerifyingSslMode`).
+                sslMode: e.target.checked ? "verify-full" : "prefer",
+                caCertPath: null,
+              })
+            }
+          />
+          {t("form.enableTlsSearch")}
+        </label>
+        <TlsSkipVerifyToggle draft={draft} onChange={onChange} />
+      </>
+    );
+  }
+  // No Elasticsearch/OpenSearch-specific setting the driver connects without.
+  if (section !== "basic") return null;
   return (
     <>
       <div className="flex gap-3">
@@ -123,28 +156,6 @@ export default function SearchFormFields({
           </label>
         )}
       </div>
-
-      <label className="flex items-center gap-2 text-xs text-secondary-foreground">
-        <input
-          id="conn-tls-enabled"
-          type="checkbox"
-          className="cursor-pointer"
-          checked={sslModeTlsOn(draft.sslMode)}
-          onChange={(e) =>
-            onChange({
-              // #1649 — on selects the verifying posture, off returns to the
-              // driver default. Either way the CA reference goes: neither
-              // posture reads it, and leaving it would let the adjacent
-              // skip-verify checkbox restore a `verify-ca` this connection
-              // never had (see `draftVerifyingSslMode`).
-              sslMode: e.target.checked ? "verify-full" : "prefer",
-              caCertPath: null,
-            })
-          }
-        />
-        {t("form.enableTlsSearch")}
-      </label>
-      <TlsSkipVerifyToggle draft={draft} onChange={onChange} />
     </>
   );
 }

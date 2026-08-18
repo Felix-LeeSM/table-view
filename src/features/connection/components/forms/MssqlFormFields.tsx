@@ -18,10 +18,13 @@ import {
   type ConnFieldKey,
   fieldValidationProps,
 } from "./fieldValidation";
+import type { ConnFormSection } from "./formSection";
 
 export interface MssqlFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
+  /** #2436 — segment currently on screen; see `formSection.ts` for the rule. */
+  section: ConnFormSection;
   passwordInput: string;
   setPasswordInput: (value: string) => void;
   isEditing: boolean;
@@ -36,6 +39,7 @@ export interface MssqlFormFieldsProps {
 export default function MssqlFormFields({
   draft,
   onChange,
+  section,
   passwordInput,
   setPasswordInput,
   isEditing,
@@ -58,6 +62,79 @@ export default function MssqlFormFields({
     ]
       .filter(Boolean)
       .join(" ") || undefined;
+
+  if (section === "security") {
+    return (
+      <>
+        <div className="grid grid-cols-1 gap-2 text-xs text-secondary-foreground sm:grid-cols-2">
+          <label className="flex items-center gap-2">
+            <input
+              id="conn-tls-enabled"
+              type="checkbox"
+              className="cursor-pointer"
+              checked={sslModeTlsOn(draft.sslMode)}
+              onChange={(e) =>
+                // #1649 — the checkbox is controlled by the posture itself, so
+                // `e.target.checked === true` means the draft posture is
+                // currently *off*: the handler can never read back the
+                // verification posture that was selected before encryption was
+                // turned off. Encrypt on therefore lands on the verifying
+                // posture — the same place the pre-#1649 pair landed, since
+                // turning encryption off wrote `trust: false` and turning it back
+                // on restored `(tls=true, trust=false)` = verify-full. Skip-verify
+                // stays one deliberate click away on the adjacent checkbox.
+                // Off is the explicit forced-plaintext `disable`. Either way the
+                // CA reference goes, matching the mongo/redis/search toggles:
+                // neither posture reads it, and leaving it would let the adjacent
+                // trust checkbox restore a `verify-ca` this connection never had
+                // (see `draftVerifyingSslMode`).
+                onChange({
+                  sslMode: e.target.checked ? "verify-full" : "disable",
+                  caCertPath: null,
+                })
+              }
+            />
+            {t("form.enableTls")}
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              id="conn-trust-server-certificate"
+              type="checkbox"
+              className="cursor-pointer"
+              checked={draftSslMode(draft) === "require"}
+              disabled={!sslModeTlsOn(draft.sslMode)}
+              onChange={(e) =>
+                // #1649 — same shape as `TlsSkipVerifyToggle`: the box is
+                // controlled by the posture, so the unchecked branch derives the
+                // verifying posture from the draft's CA anchor rather than
+                // hard-coding `verify-full`, which demoted a stored `verify-ca`
+                // on a single check/uncheck round trip. MSSQL has no sslmode
+                // dropdown, so that demotion was unrecoverable in the dialog.
+                onChange({
+                  sslMode: e.target.checked
+                    ? "require"
+                    : draftVerifyingSslMode(draft),
+                })
+              }
+            />
+            {t("form.trustServerCert")}
+          </label>
+        </div>
+
+        {/* #1063 — SQL Server defaults to trust=true (encrypt-by-default UX), so
+            the encrypted-but-unverified posture is easy to keep by accident.
+            Surface the MITM exposure when it is active. Persistent advisory copy
+            (not a live alert region, which is reserved for the auth-combo error
+            in the basic segment). */}
+        {draftSslMode(draft) === "require" && (
+          <p className="text-2xs text-destructive">{t("form.trustWarning")}</p>
+        )}
+      </>
+    );
+  }
+  // The auth-method select decides whether user/password are read at all, so it
+  // stays with them in `basic`; nothing else here is post-connect tuning.
+  if (section !== "basic") return null;
 
   return (
     <>
@@ -192,70 +269,6 @@ export default function MssqlFormFields({
           {...fieldValidationProps("database", true, invalidField)}
         />
       </div>
-
-      <div className="grid grid-cols-1 gap-2 text-xs text-secondary-foreground sm:grid-cols-2">
-        <label className="flex items-center gap-2">
-          <input
-            id="conn-tls-enabled"
-            type="checkbox"
-            className="cursor-pointer"
-            checked={sslModeTlsOn(draft.sslMode)}
-            onChange={(e) =>
-              // #1649 — the checkbox is controlled by the posture itself, so
-              // `e.target.checked === true` means the draft posture is
-              // currently *off*: the handler can never read back the
-              // verification posture that was selected before encryption was
-              // turned off. Encrypt on therefore lands on the verifying
-              // posture — the same place the pre-#1649 pair landed, since
-              // turning encryption off wrote `trust: false` and turning it back
-              // on restored `(tls=true, trust=false)` = verify-full. Skip-verify
-              // stays one deliberate click away on the adjacent checkbox.
-              // Off is the explicit forced-plaintext `disable`. Either way the
-              // CA reference goes, matching the mongo/redis/search toggles:
-              // neither posture reads it, and leaving it would let the adjacent
-              // trust checkbox restore a `verify-ca` this connection never had
-              // (see `draftVerifyingSslMode`).
-              onChange({
-                sslMode: e.target.checked ? "verify-full" : "disable",
-                caCertPath: null,
-              })
-            }
-          />
-          {t("form.enableTls")}
-        </label>
-        <label className="flex items-center gap-2">
-          <input
-            id="conn-trust-server-certificate"
-            type="checkbox"
-            className="cursor-pointer"
-            checked={draftSslMode(draft) === "require"}
-            disabled={!sslModeTlsOn(draft.sslMode)}
-            onChange={(e) =>
-              // #1649 — same shape as `TlsSkipVerifyToggle`: the box is
-              // controlled by the posture, so the unchecked branch derives the
-              // verifying posture from the draft's CA anchor rather than
-              // hard-coding `verify-full`, which demoted a stored `verify-ca`
-              // on a single check/uncheck round trip. MSSQL has no sslmode
-              // dropdown, so that demotion was unrecoverable in the dialog.
-              onChange({
-                sslMode: e.target.checked
-                  ? "require"
-                  : draftVerifyingSslMode(draft),
-              })
-            }
-          />
-          {t("form.trustServerCert")}
-        </label>
-      </div>
-
-      {/* #1063 — SQL Server defaults to trust=true (encrypt-by-default UX), so
-          the encrypted-but-unverified posture is easy to keep by accident.
-          Surface the MITM exposure when it is active. Persistent advisory copy
-          (not a live alert region, which is reserved for the auth-combo error
-          below). */}
-      {draftSslMode(draft) === "require" && (
-        <p className="text-2xs text-destructive">{t("form.trustWarning")}</p>
-      )}
 
       {unsupportedMessage && (
         <div

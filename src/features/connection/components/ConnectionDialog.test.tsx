@@ -32,6 +32,18 @@ vi.mock("@lib/runtime/toast", () => ({
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * #2436 — the connection form is split into Basic / Advanced / SSH-SSL
+ * segments and Radix unmounts the inactive panels, so a test that reads a
+ * control has to open the segment that owns it. `TabsTrigger` selects on
+ * `mousedown`, not `click`.
+ */
+async function openSegment(name: "Basic" | "Advanced" | "SSH/SSL") {
+  await act(async () => {
+    fireEvent.mouseDown(screen.getByRole("tab", { name }));
+  });
+}
+
 function makeConnection(
   overrides: Partial<ConnectionConfig> = {},
 ): ConnectionConfig {
@@ -571,6 +583,7 @@ describe("ConnectionDialog", () => {
     expect(screen.getByLabelText("Host")).toHaveValue("redis.local");
     expect(screen.getByLabelText("Port")).toHaveValue(6380);
     expect(screen.getByLabelText("Redis database index (0-15)")).toHaveValue(5);
+    await openSegment("SSH/SSL");
     expect(screen.getByLabelText("Enable TLS")).toBeChecked();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -593,6 +606,7 @@ describe("ConnectionDialog", () => {
     expect(screen.getByLabelText("Port")).toHaveValue(1433);
     expect(screen.getByLabelText("User")).toHaveValue("sa");
     expect(screen.getByLabelText("Database")).toHaveValue("master");
+    await openSegment("SSH/SSL");
     expect(screen.getByLabelText("Enable encryption (TLS)")).toBeChecked();
     expect(screen.getByLabelText("Trust server certificate")).toBeChecked();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -616,6 +630,7 @@ describe("ConnectionDialog", () => {
     });
 
     expect(screen.getByLabelText("Host")).toHaveValue("mssql.local");
+    await openSegment("SSH/SSL");
     expect(screen.getByLabelText("Enable encryption (TLS)")).not.toBeChecked();
     expect(screen.getByLabelText("Trust server certificate")).not.toBeChecked();
   });
@@ -1036,10 +1051,14 @@ describe("ConnectionDialog", () => {
   // Sprint 65: MongoDB-specific conditional fields
   // -----------------------------------------------------------------------
   describe("MongoDB conditional fields", () => {
-    it("does not render mongo-only fields when dbType is postgresql", () => {
+    it("does not render mongo-only fields when dbType is postgresql", async () => {
       renderDialog();
+      // #2436 — look where these fields would be if PG had them. Asserting
+      // their absence on the Basic segment alone would pass for MongoDB too.
+      await openSegment("Advanced");
       expect(screen.queryByLabelText("Auth Source")).not.toBeInTheDocument();
       expect(screen.queryByLabelText("Replica Set")).not.toBeInTheDocument();
+      await openSegment("SSH/SSL");
       expect(screen.queryByLabelText("Enable TLS")).not.toBeInTheDocument();
     });
 
@@ -1051,8 +1070,10 @@ describe("ConnectionDialog", () => {
       await user.click(trigger);
       await user.click(screen.getByRole("option", { name: "MongoDB" }));
 
+      await openSegment("Advanced");
       expect(screen.getByLabelText("Auth Source")).toBeInTheDocument();
       expect(screen.getByLabelText("Replica Set")).toBeInTheDocument();
+      await openSegment("SSH/SSL");
       expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
     });
 
@@ -1084,17 +1105,21 @@ describe("ConnectionDialog", () => {
       await user.click(trigger);
       await user.click(screen.getByRole("option", { name: "MongoDB" }));
 
+      await openSegment("Advanced");
       const authSource = screen.getByLabelText(
         "Auth Source",
       ) as HTMLInputElement;
       const replicaSet = screen.getByLabelText(
         "Replica Set",
       ) as HTMLInputElement;
-      const tls = screen.getByLabelText("Enable TLS") as HTMLInputElement;
-
       await act(async () => {
         fireEvent.change(authSource, { target: { value: "admin" } });
         fireEvent.change(replicaSet, { target: { value: "rs0" } });
+      });
+
+      await openSegment("SSH/SSL");
+      const tls = screen.getByLabelText("Enable TLS") as HTMLInputElement;
+      await act(async () => {
         fireEvent.click(tls);
       });
 
@@ -1190,8 +1215,9 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Port")).toHaveValue(9200);
       expect(screen.getByLabelText("Username (optional)")).toBeInTheDocument();
       expect(screen.getByLabelText("Password (optional)")).toBeInTheDocument();
-      expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
       expect(screen.queryByLabelText("Database")).not.toBeInTheDocument();
+      await openSegment("SSH/SSL");
+      expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
     });
 
     it("saves Elasticsearch with TLS enabled and no database requirement", async () => {
@@ -1205,6 +1231,7 @@ describe("ConnectionDialog", () => {
       });
       await user.click(screen.getByLabelText("Database Type"));
       await user.click(screen.getByRole("option", { name: "Elasticsearch" }));
+      await openSegment("SSH/SSL");
       await act(async () => {
         fireEvent.click(screen.getByLabelText("Enable TLS"));
       });
@@ -1817,8 +1844,10 @@ describe("ConnectionDialog", () => {
         (screen.getByLabelText("User (optional)") as HTMLInputElement).value,
       ).toBe("");
       // Mongo-specific fields.
+      await openSegment("Advanced");
       expect(screen.getByLabelText("Auth Source")).toBeInTheDocument();
       expect(screen.getByLabelText("Replica Set")).toBeInTheDocument();
+      await openSegment("SSH/SSL");
       expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
     });
 
@@ -1849,6 +1878,7 @@ describe("ConnectionDialog", () => {
           /Windows authentication and Azure AD are unsupported/i,
         ),
       ).toBeInTheDocument();
+      await openSegment("SSH/SSL");
       expect(screen.getByLabelText("Enable encryption (TLS)")).toBeChecked();
       expect(screen.getByLabelText("Trust server certificate")).toBeChecked();
     });
@@ -1866,6 +1896,7 @@ describe("ConnectionDialog", () => {
       await user.click(
         screen.getByRole("option", { name: "Microsoft SQL Server" }),
       );
+      await openSegment("SSH/SSL");
       await act(async () => {
         fireEvent.click(screen.getByLabelText("Enable encryption (TLS)"));
       });
@@ -2020,6 +2051,7 @@ describe("ConnectionDialog", () => {
         }),
       });
 
+      await openSegment("SSH/SSL");
       const trust = screen.getByLabelText(
         "Trust server certificate",
       ) as HTMLInputElement;
@@ -2101,9 +2133,12 @@ describe("ConnectionDialog", () => {
         expect(screen.getByLabelText(databaseLabel)).toBeInTheDocument();
 
         if (dbType === "mongodb") {
+          await openSegment("Advanced");
           expect(screen.getByLabelText("Auth Source")).toBeInTheDocument();
           expect(screen.getByLabelText("Replica Set")).toBeInTheDocument();
+          await openSegment("SSH/SSL");
           expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
+          await openSegment("Basic");
         }
 
         expect(

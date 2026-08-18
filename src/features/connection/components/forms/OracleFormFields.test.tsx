@@ -32,25 +32,38 @@ const walletProps = {
   setClearWalletPassword: vi.fn(),
 };
 
+/**
+ * #2436 — the dialog renders this component once per segment. Oracle splits
+ * across `basic` (host/port/user/password/connect method/identifier) and
+ * `security` (SSL posture + wallet), so a test spanning the whole Oracle field
+ * set stacks both. The two render disjoint controls, so ids and labels stay
+ * unique and every assertion below reads the same DOM it read before the split.
+ */
 function renderForm(
   draft: ConnectionDraft,
-  overrides: Partial<React.ComponentProps<typeof OracleFormFields>> = {},
+  overrides: Partial<
+    Omit<React.ComponentProps<typeof OracleFormFields>, "section">
+  > = {},
 ) {
+  const props = {
+    draft,
+    onChange: vi.fn(),
+    passwordInput: "",
+    setPasswordInput: vi.fn(),
+    isEditing: false,
+    hadPassword: false,
+    clearPassword: false,
+    setClearPassword: vi.fn(),
+    ...walletProps,
+    inputClass: "input",
+    labelClass: "label",
+    ...overrides,
+  };
   return render(
-    <OracleFormFields
-      draft={draft}
-      onChange={vi.fn()}
-      passwordInput=""
-      setPasswordInput={vi.fn()}
-      isEditing={false}
-      hadPassword={false}
-      clearPassword={false}
-      setClearPassword={vi.fn()}
-      {...walletProps}
-      inputClass="input"
-      labelClass="label"
-      {...overrides}
-    />,
+    <>
+      <OracleFormFields section="basic" {...props} />
+      <OracleFormFields section="security" {...props} />
+    </>,
   );
 }
 

@@ -31,6 +31,7 @@ describe("PgFormFields", () => {
     const setClearPassword = vi.fn();
     render(
       <PgFormFields
+        section="basic"
         draft={makeDraft()}
         onChange={onChange}
         passwordInput=""
@@ -63,6 +64,7 @@ describe("PgFormFields", () => {
     const onChange = vi.fn();
     render(
       <PgFormFields
+        section="basic"
         draft={makeDraft()}
         onChange={onChange}
         passwordInput=""
@@ -92,6 +94,7 @@ describe("PgFormFields", () => {
     function renderPg(draft: Partial<ConnectionDraft>, onChange = vi.fn()) {
       render(
         <PgFormFields
+          section="security"
           draft={makeDraft(draft)}
           onChange={onChange}
           passwordInput=""

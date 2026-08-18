@@ -14,11 +14,14 @@
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
 import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
+import type { ConnFormSection } from "./formSection";
 import SslModeField from "./SslModeField";
 
 export interface PgFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
+  /** #2436 — segment currently on screen; see `formSection.ts` for the rule. */
+  section: ConnFormSection;
   passwordInput: string;
   setPasswordInput: (value: string) => void;
   isEditing: boolean;
@@ -35,6 +38,7 @@ export interface PgFormFieldsProps {
 export default function PgFormFields({
   draft,
   onChange,
+  section,
   passwordInput,
   setPasswordInput,
   isEditing,
@@ -48,6 +52,24 @@ export default function PgFormFields({
   databasePlaceholder = "postgres",
 }: PgFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
+  if (section === "security") {
+    return (
+      // TLS — #1063 promotes the previous two-checkbox toggle to the shared
+      // sslmode dropdown; #1649 makes the selection the persisted `sslMode`
+      // rather than a view over a boolean pair, so PG's old invalid residue
+      // (TLS on with no trust decision) is no longer expressible. Unset stays
+      // `prefer` so localhost dev connects without friction.
+      <SslModeField
+        draft={draft}
+        onChange={onChange}
+        inputClass={inputClass}
+        labelClass={labelClass}
+      />
+    );
+  }
+  // PostgreSQL adds nothing the driver connects without, so `advanced` holds
+  // only the dialog-level settings `ConnectionDialogBody` renders itself.
+  if (section !== "basic") return null;
   return (
     <>
       {/* Host & Port */}
@@ -157,18 +179,6 @@ export default function PgFormFields({
           {...fieldValidationProps("database", true, invalidField)}
         />
       </div>
-
-      {/* TLS — #1063 promotes the previous two-checkbox toggle to the shared
-          sslmode dropdown; #1649 makes the selection the persisted `sslMode`
-          rather than a view over a boolean pair, so PG's old invalid residue
-          (TLS on with no trust decision) is no longer expressible. Unset stays
-          `prefer` so localhost dev connects without friction. */}
-      <SslModeField
-        draft={draft}
-        onChange={onChange}
-        inputClass={inputClass}
-        labelClass={labelClass}
-      />
     </>
   );
 }

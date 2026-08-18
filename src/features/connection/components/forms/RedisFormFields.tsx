@@ -19,11 +19,14 @@ import {
   sslModeTlsOn,
 } from "../../model";
 import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
+import type { ConnFormSection } from "./formSection";
 import TlsSkipVerifyToggle from "./TlsSkipVerifyToggle";
 
 export interface RedisFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
+  /** #2436 — segment currently on screen; see `formSection.ts` for the rule. */
+  section: ConnFormSection;
   passwordInput: string;
   setPasswordInput: (value: string) => void;
   isEditing: boolean;
@@ -50,6 +53,7 @@ function clampDbIndex(raw: string): string {
 export default function RedisFormFields({
   draft,
   onChange,
+  section,
   passwordInput,
   setPasswordInput,
   isEditing,
@@ -62,6 +66,37 @@ export default function RedisFormFields({
 }: RedisFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
   const productLabel = DATABASE_TYPE_LABELS[draft.dbType];
+
+  if (section === "security") {
+    return (
+      <>
+        {/* TLS toggle */}
+        <label className="flex items-center gap-2 text-xs text-secondary-foreground">
+          <input
+            id="conn-tls-enabled"
+            type="checkbox"
+            className="cursor-pointer"
+            checked={sslModeTlsOn(draft.sslMode)}
+            onChange={(e) =>
+              onChange({
+                // #1649 — on selects the verifying posture, off returns to the
+                // driver default. Either way the CA reference goes: neither
+                // posture reads it, and leaving it would let the adjacent
+                // skip-verify checkbox restore a `verify-ca` this connection
+                // never had (see `draftVerifyingSslMode`).
+                sslMode: e.target.checked ? "verify-full" : "prefer",
+                caCertPath: null,
+              })
+            }
+          />
+          {t("form.enableTlsRedis")}
+        </label>
+        <TlsSkipVerifyToggle draft={draft} onChange={onChange} />
+      </>
+    );
+  }
+  // No Redis/Valkey-specific setting the driver connects without.
+  if (section !== "basic") return null;
 
   return (
     <>
@@ -178,29 +213,6 @@ export default function RedisFormFields({
           {t("form.redisDbIndexHint", { productLabel })}
         </p>
       </div>
-
-      {/* TLS toggle */}
-      <label className="flex items-center gap-2 text-xs text-secondary-foreground">
-        <input
-          id="conn-tls-enabled"
-          type="checkbox"
-          className="cursor-pointer"
-          checked={sslModeTlsOn(draft.sslMode)}
-          onChange={(e) =>
-            onChange({
-              // #1649 — on selects the verifying posture, off returns to the
-              // driver default. Either way the CA reference goes: neither
-              // posture reads it, and leaving it would let the adjacent
-              // skip-verify checkbox restore a `verify-ca` this connection
-              // never had (see `draftVerifyingSslMode`).
-              sslMode: e.target.checked ? "verify-full" : "prefer",
-              caCertPath: null,
-            })
-          }
-        />
-        {t("form.enableTlsRedis")}
-      </label>
-      <TlsSkipVerifyToggle draft={draft} onChange={onChange} />
     </>
   );
 }

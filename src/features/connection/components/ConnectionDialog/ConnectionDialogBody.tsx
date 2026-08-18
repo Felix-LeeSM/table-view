@@ -6,8 +6,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
-import { Link, List, LockKeyhole } from "lucide-react";
+import { AlertCircle, Link, List, LockKeyhole } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { assertNever } from "@/lib/paradigm";
 import type { ConnectionKind } from "@/types/dataSource";
@@ -27,6 +28,7 @@ import {
   type ConnFieldKey,
   fieldValidationProps,
 } from "../forms/fieldValidation";
+import type { ConnFormSection } from "../forms/formSection";
 import MongoFormFields from "../forms/MongoFormFields";
 import MssqlFormFields from "../forms/MssqlFormFields";
 import MysqlFormFields from "../forms/MysqlFormFields";
@@ -77,14 +79,44 @@ export interface ConnectionDialogBodyProps {
   labelClass: string;
   /** Issue #1135 — field flagged by the last failed save, or `null`. */
   invalidField: ConnFieldKey | null;
+  /** #2436 — segment on screen. Owned by the entry so validation can move it. */
+  segment: ConnFormSection;
+  setSegment: React.Dispatch<React.SetStateAction<ConnFormSection>>;
+}
+
+/**
+ * #2436 — the segment a flagged field is reachable from, or `null` when the
+ * field is rendered outside the segment control entirely.
+ *
+ * The exhaustive switch is the guard: adding a `ConnFieldKey` without deciding
+ * where it renders fails the `assertNever` compile-time check rather than
+ * silently badging nothing. Every key returning `null` or `"basic"` is what
+ * lets `ConnectionDialog` recover a failed save with one `setSegment("basic")`.
+ */
+function segmentForField(field: ConnFieldKey): ConnFormSection | null {
+  switch (field) {
+    case "name":
+      // Rendered above the segment control, so it is never behind a tab.
+      return null;
+    case "host":
+    case "database":
+      return "basic";
+    default:
+      return assertNever(field);
+  }
 }
 
 /**
  * Sprint 213 — presentational body of `ConnectionDialog`. Hosts the Form/URL
- * toggle (new connections only), the URL input + Parse & Continue button,
- * and the form-mode field group (Name / Database Type / Environment / DBMS-
- * aware fields / detected affordance / Advanced Settings). Stateless — all
- * state lives in the entry / hooks; this component only renders.
+ * toggle (new connections only), the URL input + Parse & Continue button, and
+ * the form-mode fields. Stateless — all state lives in the entry / hooks; this
+ * component only renders.
+ *
+ * #2436 — form mode is now an always-visible identity block (Name / Database
+ * Type / Environment) above a Basic / Advanced / SSH-SSL segment control. Which
+ * control belongs to which segment is a rule, not a list, and `forms/formSection.ts`
+ * owns it; each DBMS form component is handed the segment being rendered and
+ * emits only its share.
  *
  * The `assertNever` exhaustive switch in `renderDbmsFields` lives here per
  * Sprint 213 contract (entry or body acceptable; body chosen so the entry
@@ -119,15 +151,21 @@ export default function ConnectionDialogBody({
   inputClass,
   labelClass,
   invalidField,
+  segment,
+  setSegment,
 }: ConnectionDialogBodyProps) {
   const { t } = useTranslation("featuresConnection");
   /**
    * Sprint 138 — exhaustive switch on `dbType`. Adding a new
    * `DatabaseType` variant without updating this switch fails the
    * `assertNever` compile-time check.
+   *
+   * #2436 — called once per segment; each form component renders only the
+   * controls that belong to the segment it is handed.
    */
-  const renderDbmsFields = () => {
+  const renderDbmsFields = (section: ConnFormSection) => {
     const sharedAuth = {
+      section,
       passwordInput,
       setPasswordInput,
       isEditing,
@@ -220,6 +258,9 @@ export default function ConnectionDialogBody({
             return assertNever(form.dbType);
         }
       case "file":
+        // #2436 — a file connection has no transport to secure and no
+        // post-connect knob of its own; its whole form is the basic segment.
+        if (section !== "basic") return null;
         switch (form.dbType) {
           case "sqlite":
             return (
@@ -289,6 +330,17 @@ export default function ConnectionDialogBody({
         return assertNeverConnectionKind(profile.connectionKind);
     }
   };
+
+  // #2436 — a file connection dials nothing, so it has no transport to secure.
+  // Offering an empty SSH/SSL tab would be a dead affordance.
+  const hasSecuritySegment =
+    getDataSourceProfile(form.dbType).connectionKind !== "file";
+  // Switching to SQLite while standing on SSH/SSL would otherwise select a tab
+  // that no longer exists and render an empty panel. The stored segment is left
+  // alone so switching back to a server DBMS returns the user where they were.
+  const activeSegment =
+    segment === "security" && !hasSecuritySegment ? "basic" : segment;
+  const flaggedSegment = invalidField ? segmentForField(invalidField) : null;
 
   return (
     <div className="max-h-[60vh] overflow-y-auto px-4 py-3">
@@ -453,130 +505,182 @@ export default function ConnectionDialogBody({
             </Select>
           </div>
 
-          {/* DBMS-aware fields (Sprint 138) */}
-          {renderDbmsFields()}
+          {/* #2436 — segments. Name / Database Type / Environment stay above
+              this control: the type reshapes every segment so it cannot live
+              inside one, and keeping Name always on screen means its `autoFocus`
+              does not re-fire whenever a segment is switched back in. */}
+          <Tabs
+            value={activeSegment}
+            onValueChange={(v) => setSegment(v as ConnFormSection)}
+          >
+            <TabsList className="gap-1 border-b border-border">
+              <TabsTrigger value="basic">
+                {t("body.segmentBasic")}
+                {flaggedSegment === "basic" && <SegmentErrorMark />}
+              </TabsTrigger>
+              <TabsTrigger value="advanced">
+                {t("body.segmentAdvanced")}
+                {flaggedSegment === "advanced" && <SegmentErrorMark />}
+              </TabsTrigger>
+              {hasSecuritySegment && (
+                <TabsTrigger value="security">
+                  {t("body.segmentSecurity")}
+                  {flaggedSegment === "security" && <SegmentErrorMark />}
+                </TabsTrigger>
+              )}
+            </TabsList>
 
-          {/* Issue #1529 — read-only toggle for server RDB connections. File
-              forms (sqlite/duckdb) render their own driver-level toggle inside
-              SqliteFormFields, so this is gated to server connections that
-              declare the `connection.readOnly` capability. The backend
-              `enforce_read_only` chokepoint is what actually blocks writes. */}
-          {getDataSourceProfile(form.dbType).connectionKind === "server" &&
-            hasConnectionCapability(form.dbType, "readOnly") && (
-              <div>
-                <label className="flex items-center gap-2 text-xs text-secondary-foreground">
-                  <input
-                    type="checkbox"
-                    checked={form.readOnly === true}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, readOnly: e.target.checked }))
-                    }
-                    className="h-3.5 w-3.5 rounded border-border"
-                  />
-                  <LockKeyhole
-                    className="h-3.5 w-3.5 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  {t("body.readOnlyConnection")}
-                </label>
-                <p className="mt-1 text-2xs text-muted-foreground">
-                  {t("body.readOnlyConnectionHint")}
+            <TabsContent value="basic" className="space-y-3 pt-3">
+              {/* DBMS-aware fields (Sprint 138) */}
+              {renderDbmsFields("basic")}
+
+              {/* Sprint 178 (AC-178-01) — non-modal "detected" affordance.
+                  This is a calm, advisory inline note shown after a
+                  successful URL paste into the host field. It deliberately
+                  does NOT carry `role="alert"` or `role="status"` so it
+                  cannot be confused with an error region (AC-178-04
+                  silence on malformed pastes) and the AC-178-05 password
+                  leak guard does not need to walk this region (it never
+                  contains password text either way). The copy is
+                  declarative ("Detected … URL — fields populated") and
+                  matches the muted-foreground tone of the URL-mode help
+                  text. It sits with the host field the paste landed in. */}
+              {detectedScheme && (
+                <p
+                  className="text-2xs text-muted-foreground"
+                  data-testid="connection-url-detected"
+                >
+                  {t("body.detectedScheme", { scheme: detectedScheme })}
                 </p>
+              )}
+
+              {/* #1063 — a TLS parameter in the pasted URL could not be mapped
+                  (e.g. `sslmode=verify-ca`). Advisory, role="alert" so it is
+                  announced but non-blocking; the user sets the posture manually
+                  in the SSH/SSL segment. */}
+              {tlsNotice && (
+                <p
+                  role="alert"
+                  className="text-2xs text-destructive"
+                  data-testid="connection-url-tls-notice"
+                >
+                  {t("body.tlsParamNotice", { param: tlsNotice })}
+                </p>
+              )}
+            </TabsContent>
+
+            <TabsContent value="advanced" className="space-y-3 pt-3">
+              {renderDbmsFields("advanced")}
+
+              {/* Issue #1529 — read-only toggle for server RDB connections. File
+                  forms (sqlite/duckdb) render their own driver-level toggle
+                  inside SqliteFormFields, so this is gated to server connections
+                  that declare the `connection.readOnly` capability. The backend
+                  `enforce_read_only` chokepoint is what actually blocks writes —
+                  it is enforcement applied after the connection is up, which is
+                  what puts it here rather than in the basic segment. */}
+              {getDataSourceProfile(form.dbType).connectionKind === "server" &&
+                hasConnectionCapability(form.dbType, "readOnly") && (
+                  <div>
+                    <label className="flex items-center gap-2 text-xs text-secondary-foreground">
+                      <input
+                        type="checkbox"
+                        checked={form.readOnly === true}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, readOnly: e.target.checked }))
+                        }
+                        className="h-3.5 w-3.5 rounded border-border"
+                      />
+                      <LockKeyhole
+                        className="h-3.5 w-3.5 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      {t("body.readOnlyConnection")}
+                    </label>
+                    <p className="mt-1 text-2xs text-muted-foreground">
+                      {t("body.readOnlyConnectionHint")}
+                    </p>
+                  </div>
+                )}
+
+              <div>
+                <label htmlFor="conn-timeout" className={labelClass}>
+                  {t("body.labelConnectionTimeout")}
+                </label>
+                {/* #2429 — 10 mirrors `CONNECT_TIMEOUT_DEFAULT_SECS` in
+                    src-tauri/table-view-core/src/models/connection.rs, which
+                    is what an unset field actually gets. The old 300 named a
+                    per-adapter fallback that every adapter then clamped
+                    away. */}
+                <input
+                  id="conn-timeout"
+                  className={inputClass}
+                  type="number"
+                  min={5}
+                  max={600}
+                  value={form.connectionTimeout ?? 10}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      connectionTimeout: parseInt(e.target.value, 10) || 10,
+                    }))
+                  }
+                  placeholder="10"
+                />
               </div>
+              <div>
+                <label htmlFor="conn-keepalive" className={labelClass}>
+                  {t("body.labelKeepAliveInterval")}
+                </label>
+                <input
+                  id="conn-keepalive"
+                  className={inputClass}
+                  type="number"
+                  min={5}
+                  max={300}
+                  value={form.keepAliveInterval ?? 30}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      keepAliveInterval: parseInt(e.target.value, 10) || 30,
+                    }))
+                  }
+                  placeholder="30"
+                />
+              </div>
+            </TabsContent>
+
+            {hasSecuritySegment && (
+              <TabsContent value="security" className="space-y-3 pt-3">
+                {renderDbmsFields("security")}
+              </TabsContent>
             )}
-
-          {/* Sprint 178 (AC-178-01) — non-modal "detected" affordance.
-              This is a calm, advisory inline note shown after a
-              successful URL paste into the host field. It deliberately
-              does NOT carry `role="alert"` or `role="status"` so it
-              cannot be confused with an error region (AC-178-04
-              silence on malformed pastes) and the AC-178-05 password
-              leak guard does not need to walk this region (it never
-              contains password text either way). The copy is
-              declarative ("Detected … URL — fields populated") and
-              matches the muted-foreground tone of the URL-mode help
-              text. */}
-          {detectedScheme && (
-            <p
-              className="text-2xs text-muted-foreground"
-              data-testid="connection-url-detected"
-            >
-              {t("body.detectedScheme", { scheme: detectedScheme })}
-            </p>
-          )}
-
-          {/* #1063 — a TLS parameter in the pasted URL could not be mapped
-              (e.g. `sslmode=verify-ca`). Advisory, role="alert" so it is
-              announced but non-blocking; the user sets the posture manually via
-              the TLS control below. */}
-          {tlsNotice && (
-            <p
-              role="alert"
-              className="text-2xs text-destructive"
-              data-testid="connection-url-tls-notice"
-            >
-              {t("body.tlsParamNotice", { param: tlsNotice })}
-            </p>
-          )}
-
-          {/* Advanced Settings */}
-          <div className="border-t border-border pt-3">
-            <details>
-              <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-secondary-foreground">
-                {t("body.advancedSettings")}
-              </summary>
-              <div className="mt-2 space-y-3">
-                <div>
-                  <label htmlFor="conn-timeout" className={labelClass}>
-                    {t("body.labelConnectionTimeout")}
-                  </label>
-                  {/* #2429 — 10 mirrors `CONNECT_TIMEOUT_DEFAULT_SECS` in
-                      src-tauri/table-view-core/src/models/connection.rs, which
-                      is what an unset field actually gets. The old 300 named a
-                      per-adapter fallback that every adapter then clamped
-                      away. */}
-                  <input
-                    id="conn-timeout"
-                    className={inputClass}
-                    type="number"
-                    min={5}
-                    max={600}
-                    value={form.connectionTimeout ?? 10}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        connectionTimeout: parseInt(e.target.value, 10) || 10,
-                      }))
-                    }
-                    placeholder="10"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="conn-keepalive" className={labelClass}>
-                    {t("body.labelKeepAliveInterval")}
-                  </label>
-                  <input
-                    id="conn-keepalive"
-                    className={inputClass}
-                    type="number"
-                    min={5}
-                    max={300}
-                    value={form.keepAliveInterval ?? 30}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        keepAliveInterval: parseInt(e.target.value, 10) || 30,
-                      }))
-                    }
-                    placeholder="30"
-                  />
-                </div>
-              </div>
-            </details>
-          </div>
+          </Tabs>
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * #2436 — marks the segment trigger whose panel holds the field the last failed
+ * save flagged. Without it a user standing on another segment sees the save
+ * blocked with no clue where the offending input is.
+ *
+ * The icon is decorative; the `sr-only` phrase is what puts the state into the
+ * tab's accessible name, so the marker survives a monochrome read and a screen
+ * reader alike (WCAG 1.4.1 — colour is not the only channel).
+ */
+function SegmentErrorMark() {
+  const { t } = useTranslation("featuresConnection");
+  return (
+    <>
+      <AlertCircle
+        className="ml-1 size-3 text-destructive"
+        aria-hidden="true"
+      />
+      <span className="sr-only">{t("body.segmentError")}</span>
+    </>
   );
 }
 
