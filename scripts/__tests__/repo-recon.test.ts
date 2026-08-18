@@ -98,22 +98,28 @@ const probeDir = mkdtempSync(join(tmpdir(), "repo-recon-"));
 const probeFile = join(probeDir, "MARKER");
 
 // 저장소 밖을 가리키는 심링크와 커밋 안 된 파일. 둘 다 저장소 루트에 실물로 있어야 뜻이
-// 있는 단언이라 여기서 만들고 afterAll 에서 지운다 — 앞 실행이 죽어 남았을 수 있으니
-// 만들기 전에 지운다.
+// 있는 단언이라 beforeAll 에서 만들고 afterAll 에서 지운다 — 앞 실행이 죽어 남았을 수
+// 있으니 만들기 전에 지운다.
+//
+// **모듈 최상위가 아니라 beforeAll 이어야 한다** (#2483). `vitest list` 는 수집만 하고
+// 실행하지 않는데 모듈은 import 하므로, 최상위에 두면 프로브가 만들어지고 짝인 afterAll 은
+// 안 돌아 저장소 루트에 남는다. 남은 심링크의 대상은 이 머신의 TMPDIR 절대 경로라 다른
+// 노드의 `git add -A` 가 집으면 깨진 링크가 커밋된다. `beforeAll` 은 `list` 가 안 돌린다.
 const outsideMarker = "repo-recon outside-the-tree marker";
 const outsideFile = join(probeDir, "OUTSIDE");
 const symlinkProbe = "RR_SYMLINK_PROBE";
 const untrackedProbe = "RR_UNTRACKED_PROBE";
-writeFileSync(outsideFile, outsideMarker);
-for (const probe of [symlinkProbe, untrackedProbe]) {
-  rmSync(join(repoRoot, probe), { force: true });
-}
-symlinkSync(outsideFile, join(repoRoot, symlinkProbe));
-writeFileSync(join(repoRoot, untrackedProbe), "uncommitted\n");
 
 let client: Client;
 
 beforeAll(async () => {
+  writeFileSync(outsideFile, outsideMarker);
+  for (const probe of [symlinkProbe, untrackedProbe]) {
+    rmSync(join(repoRoot, probe), { force: true });
+  }
+  symlinkSync(outsideFile, join(repoRoot, symlinkProbe));
+  writeFileSync(join(repoRoot, untrackedProbe), "uncommitted\n");
+
   client = new Client({ name: "repo-recon-test", version: "0" });
   await client.connect(
     new StdioClientTransport({
