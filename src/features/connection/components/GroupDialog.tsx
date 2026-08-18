@@ -1,10 +1,12 @@
 import FormDialog from "@components/ui/dialog/FormDialog";
 import { Input } from "@components/ui/input";
+import { ChevronDown } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CONNECTION_COLOR_PALETTE } from "../color";
 import type { ConnectionGroup } from "../model";
 import { useConnectionStore } from "../store";
+import GroupColorDot from "./GroupColorDot";
 
 interface GroupDialogProps {
   /** Existing group for rename/recolor; undefined for create. */
@@ -31,6 +33,11 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
 
   const addGroup = useConnectionStore((s) => s.addGroup);
   const updateGroup = useConnectionStore((s) => s.updateGroup);
+  // Member count shown in the preview. A group being created has none yet;
+  // editing shows what the list header already shows for that group.
+  const memberCount = useConnectionStore((s) =>
+    group ? s.connections.filter((c) => c.groupId === group.id).length : 0,
+  );
 
   // WAI-ARIA radiogroup roving: the palette is a single tab stop (the checked
   // swatch) and arrows move *and* select in one step. Ordered `null` sentinel
@@ -183,6 +190,28 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
               style={{ backgroundColor: swatch }}
             />
           ))}
+        </div>
+      </div>
+
+      {/* Result preview — mirrors the list's group header row
+          (`ConnectionGroup.tsx`) so the picked color is judged where it will
+          actually be seen. The accent dot is the shared `GroupColorDot`, so
+          "No color" looks here exactly like it does in the list: a bordered
+          dot with no fill. */}
+      <div className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-secondary-foreground">
+          {t("groupDialog.labelPreview")}
+        </span>
+        <div
+          data-testid="group-dialog-preview"
+          className="flex items-center gap-1 rounded-md bg-background px-3 py-1 text-xs font-medium uppercase tracking-wider text-muted-foreground"
+        >
+          <ChevronDown size={12} />
+          <GroupColorDot color={color} testId="group-preview-color-accent" />
+          <span className="truncate">
+            {name.trim() || t("groupDialog.previewUnnamed")}
+          </span>
+          <span className="ml-1 text-3xs">({memberCount})</span>
         </div>
       </div>
 

@@ -9,14 +9,15 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConnectionGroup } from "@/types/connection";
+import type { ConnectionConfig, ConnectionGroup } from "@/types/connection";
 import GroupDialog from "./GroupDialog";
 
 const mockAddGroup = vi.fn();
 const mockUpdateGroup = vi.fn();
 
-function setStoreState() {
+function setStoreState(connections: ConnectionConfig[] = []) {
   useConnectionStore.setState({
+    connections,
     addGroup: mockAddGroup.mockResolvedValue({
       id: "new-gid",
       name: "stub",
@@ -25,6 +26,25 @@ function setStoreState() {
     }),
     updateGroup: mockUpdateGroup.mockResolvedValue(undefined),
   } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
+}
+
+function makeConnection(
+  overrides: Partial<ConnectionConfig> = {},
+): ConnectionConfig {
+  return {
+    id: "conn-1",
+    name: "Test DB",
+    dbType: "postgresql",
+    host: "localhost",
+    port: 5432,
+    user: "postgres",
+    hasPassword: false,
+    database: "testdb",
+    groupId: null,
+    color: null,
+    paradigm: "rdb",
+    ...overrides,
+  };
 }
 
 describe("GroupDialog", () => {
@@ -64,7 +84,7 @@ describe("GroupDialog", () => {
     ).toBeInTheDocument();
   });
 
-  it("radiogroup: single tab stop on the checked radio, arrows move + select", async () => {
+  it("[group-dialog] radiogroup: single tab stop on the checked radio, arrows move + select", async () => {
     const user = userEvent.setup();
     render(<GroupDialog onClose={() => {}} />);
     const radios = screen.getAllByRole("radio");
@@ -90,6 +110,88 @@ describe("GroupDialog", () => {
     await user.keyboard("{ArrowLeft}");
     expect(radios[radios.length - 1]).toHaveFocus();
     expect(radios[radios.length - 1]).toHaveAttribute("aria-checked", "true");
+  });
+
+  // -------------------------------------------------------------------------
+  // #2439 — result preview inside the dialog
+  // -------------------------------------------------------------------------
+
+  it("[group-dialog] preview swatch takes the color picked from the palette", () => {
+    render(<GroupDialog onClose={() => {}} />);
+    // A new group starts on "No color", so the dot carries no inline fill.
+    expect(
+      screen.getByTestId("group-preview-color-accent").getAttribute("style"),
+    ).toBeFalsy();
+
+    act(() => {
+      fireEvent.click(
+        screen.getByRole("radio", {
+          name: `Color ${CONNECTION_COLOR_PALETTE[2]}`,
+        }),
+      );
+    });
+
+    expect(screen.getByTestId("group-preview-color-accent")).toHaveStyle({
+      backgroundColor: CONNECTION_COLOR_PALETTE[2],
+    });
+  });
+
+  it("[group-dialog] preview shows the bordered placeholder dot for 'No color'", () => {
+    render(<GroupDialog onClose={() => {}} />);
+    act(() => {
+      fireEvent.click(
+        screen.getByRole("radio", {
+          name: `Color ${CONNECTION_COLOR_PALETTE[0]}`,
+        }),
+      );
+    });
+    expect(
+      screen.getByTestId("group-preview-color-accent").getAttribute("style"),
+    ).toBeTruthy();
+
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: /no color/i }));
+    });
+
+    // Same shape the list header uses for a color=null group: bordered, no fill.
+    const dot = screen.getByTestId("group-preview-color-accent");
+    expect(dot.getAttribute("style")).toBeFalsy();
+    expect(dot.className).toContain("border-border");
+    expect(dot.className).toContain("bg-transparent");
+  });
+
+  it("[group-dialog] preview mirrors the typed name and the group's connection count", () => {
+    setStoreState([
+      makeConnection({ id: "c1", groupId: "g1" }),
+      makeConnection({ id: "c2", groupId: "g1" }),
+      makeConnection({ id: "c3", groupId: "g2" }),
+    ]);
+    const group: ConnectionGroup = {
+      id: "g1",
+      name: "Prod",
+      color: null,
+      collapsed: false,
+    };
+    render(<GroupDialog group={group} onClose={() => {}} />);
+
+    const preview = screen.getByTestId("group-dialog-preview");
+    expect(preview).toHaveTextContent("Prod");
+    expect(preview).toHaveTextContent("(2)");
+
+    act(() => {
+      fireEvent.change(screen.getByLabelText(/name/i), {
+        target: { value: "Staging" },
+      });
+    });
+    expect(preview).toHaveTextContent("Staging");
+
+    // Blank name falls back to a placeholder instead of an empty row.
+    act(() => {
+      fireEvent.change(screen.getByLabelText(/name/i), {
+        target: { value: "" },
+      });
+    });
+    expect(preview).toHaveTextContent(/untitled group/i);
   });
 
   it("disables the Create button when the name is blank", () => {
