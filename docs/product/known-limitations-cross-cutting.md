@@ -442,12 +442,8 @@ in that adapter (`pg_comparison_sql` in
 `src-tauri/table-view-core/src/db/postgres/queries.rs`). An adapter handed an
 operator it cannot spell drops that one condition, so the browse returns a wider
 result set rather than an error, and the grid gives no signal that the condition
-was dropped. A condition can reach that state without the user retyping it:
-changing a saved connection's DBMS type leaves the open grid's filter list
-alone, so an operator picked under the old dialect stays selected. The dropdown
-keeps rendering that operator so the trigger is not blank, but the row it
-produces is inert. The document (MongoDB) filter bar keeps its own operator set
-and is outside this list.
+was dropped. The document (MongoDB) filter bar keeps its own operator set and is
+outside this list.
 
 ## Related
 
