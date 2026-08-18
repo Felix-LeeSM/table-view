@@ -3,7 +3,7 @@ title: PR Review Behavior
 type: workflow-rule
 updated: 2026-08-17
 task: review, pr, delivery
-keywords: scorecard, verdict, blocking, non-blocking, 결정만 싣는다, 증거 열거, 재현 서사, 확인했고 참이던 주장, 사본이 필요한가, 설치가 필요한가, 판정 입력, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상, LC_ALL, LC_ALL=C, 0xA0, GNU tr, BSD tr, 로케일, gnubin, coreutils, 한글 음절, 거짓 0, grep -c, grep -o, wc -l, 자리 수, 개수를 1 로 뭉갠다
+keywords: scorecard, verdict, blocking, non-blocking, 결정만 싣는다, 증거 열거, 재현 서사, 확인했고 참이던 주장, 사본이 필요한가, 설치가 필요한가, 판정 입력, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상, LC_ALL, LC_ALL=C, 0xA0, GNU tr, BSD tr, 로케일, gnubin, coreutils, 한글 음절, 하드랩, 거짓 0, grep -c, grep -o, wc -l, 자리 수, 개수를 1 로 뭉갠다
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -75,7 +75,7 @@ trigger:
   커밋 메시지에 있는지 먼저 대조한다:
 
   ```bash
-  # 조각에도 같은 정규화를 건다 — 안 걸면 아래 문단의 탭·개행·연속 공백에 뚫린다
+  # 조각에도 같은 정규화를 건다 — 안 걸면 하드랩된 커밋 메시지의 탭·개행·연속 공백에 뚫린다
   NEEDLE="$(printf '%s' '<문구>' | LC_ALL=C tr -s '[:space:]' ' ')"
   MSGS="$(gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
             --jq '.[].commit.message')" || { echo "ABORT: 커밋 메시지 조회 실패" >&2; exit 1; }
@@ -174,8 +174,10 @@ trigger:
 ## Merge 전 요구
 
 - 자동 gate와 CI가 green이어야 한다. `review-gate` check는 `review:approved`
-  label이 있어야 pass — branch protection required check + enforce_admins라 우회
-  불가. 새 commit push 시 label이 자동 해제되므로 fix 후에는 재리뷰가 필수다.
+  label이 있어야 pass 다. 왜 `--admin` 으로도 못 넘기는지는
+  [pr-merge-gates](../../runbook/pr-merge-gates/memory.md) 「계약」이 갖는다 —
+  여기 옮겨 적으면 SOT 가 갈라진다. 새 commit push 시 label이 자동 해제되므로
+  fix 후에는 재리뷰가 필수다.
 - 라운드가 3 이상이면 `reflect:done` label 도 있어야 한다 — 없으면
   `review:approved` 가 붙어 있어도 `review-gate` 가 fail 한다. 라운드는 서로 다른
   head 커밋에 붙은 리뷰 인계의 수이고 코멘트 수는 그 **상한**이다 — 같은 커밋에

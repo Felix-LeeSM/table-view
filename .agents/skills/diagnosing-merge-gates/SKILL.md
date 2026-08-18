@@ -143,6 +143,7 @@ merge 막히면 방의 「Required 게이트는 두 곳에 분산」 → 이 파
 
 - `memory/runbook/pr-merge-gates/memory.md` — required context 목록과 게이트 계약.
   「두 곳 분산」이 그 방에 있다.
-- `memory/workflow/delivery/memory.md` — 리뷰~정리 구간의 review-gate label /
-  enforce_admins 계약.
+- `memory/workflow/delivery/memory.md` — 리뷰~정리 구간에서 `review:approved` ·
+  `reflect:done` 을 누가 언제 붙이나. `enforce_admins` 는
+  `memory/runbook/pr-merge-gates/memory.md` 「계약」이 갖는다.
 - `memory/workflow/review/memory.md` — 라운드 판정과 label 대기 계약.
