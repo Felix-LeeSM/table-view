@@ -174,8 +174,10 @@ trigger:
 ## Merge 전 요구
 
 - 자동 gate와 CI가 green이어야 한다. `review-gate` check는 `review:approved`
-  label이 있어야 pass — branch protection required check + enforce_admins라 우회
-  불가. 새 commit push 시 label이 자동 해제되므로 fix 후에는 재리뷰가 필수다.
+  label이 있어야 pass 다. 왜 `--admin` 으로도 못 넘기는지는
+  [pr-merge-gates](../../runbook/pr-merge-gates/memory.md) 「계약」이 갖는다 —
+  여기 옮겨 적으면 SOT 가 갈라진다. 새 commit push 시 label이 자동 해제되므로
+  fix 후에는 재리뷰가 필수다.
 - 라운드가 3 이상이면 `reflect:done` label 도 있어야 한다 — 없으면
   `review:approved` 가 붙어 있어도 `review-gate` 가 fail 한다. 라운드는 서로 다른
   head 커밋에 붙은 리뷰 인계의 수이고 코멘트 수는 그 **상한**이다 — 같은 커밋에
