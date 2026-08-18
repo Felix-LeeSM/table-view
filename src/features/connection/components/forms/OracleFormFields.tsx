@@ -14,7 +14,7 @@ import SslModeField from "./SslModeField";
 export interface OracleFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
-  /** #2436 — segment currently on screen; see `formSection.ts` for the rule. */
+  /** #2436 — segment currently on screen; see `formSection.ts`. */
   section: ConnFormSection;
   passwordInput: string;
   setPasswordInput: (value: string) => void;

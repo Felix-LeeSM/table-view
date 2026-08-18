@@ -23,7 +23,7 @@ import type { ConnFormSection } from "./formSection";
 export interface MssqlFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
-  /** #2436 — segment currently on screen; see `formSection.ts` for the rule. */
+  /** #2436 — segment currently on screen; see `formSection.ts`. */
   section: ConnFormSection;
   passwordInput: string;
   setPasswordInput: (value: string) => void;
@@ -132,8 +132,7 @@ export default function MssqlFormFields({
       </>
     );
   }
-  // The auth-method select decides whether user/password are read at all, so it
-  // stays with them in `basic`; MSSQL adds nothing that belongs in `advanced`.
+  // MSSQL adds nothing that belongs in `advanced`.
   if (section !== "basic") return null;
 
   return (

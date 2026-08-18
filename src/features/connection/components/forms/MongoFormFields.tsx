@@ -20,7 +20,7 @@ import TlsSkipVerifyToggle from "./TlsSkipVerifyToggle";
 export interface MongoFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
-  /** #2436 — segment currently on screen; see `formSection.ts` for the rule. */
+  /** #2436 — segment currently on screen; see `formSection.ts`. */
   section: ConnFormSection;
   passwordInput: string;
   setPasswordInput: (value: string) => void;
@@ -49,12 +49,10 @@ export default function MongoFormFields({
 }: MongoFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
   if (section === "advanced") {
-    // MongoDB-specific extension block (Sprint 65 compatibility). Neither field
-    // is one `validateConnectionDraft` can reject and both fall back, so they
-    // sit in `advanced` rather than crowding the shared basic shape. A fallback
-    // is not a promise the server accepts it: an empty `authSource`
-    // authenticates against `database`, which is the wrong realm when the user
-    // lives in `admin` (src-tauri/table-view-core/src/db/mongodb/connection.rs
+    // MongoDB-specific extension block (Sprint 65 compatibility). A fallback is
+    // not a promise the server accepts it: an empty `authSource` authenticates
+    // against `database`, which is the wrong realm when the user lives in
+    // `admin` (src-tauri/table-view-core/src/db/mongodb/connection.rs
     // `build_options`), and that is why the smoke fixture has to fill it in.
     return (
       <div className="space-y-3 rounded border border-border bg-background/40 p-3">
