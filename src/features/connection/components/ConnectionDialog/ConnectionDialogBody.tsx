@@ -258,8 +258,9 @@ export default function ConnectionDialogBody({
             return assertNever(form.dbType);
         }
       case "file":
-        // #2436 — a file connection has no transport to secure and no
-        // post-connect knob of its own; its whole form is the basic segment.
+        // #2436 — a file connection has no transport to secure, and its one
+        // optional knob (read-only) rides inside `SqliteFormFields`; its whole
+        // form is the basic segment.
         if (section !== "basic") return null;
         switch (form.dbType) {
           case "sqlite":
@@ -584,9 +585,10 @@ export default function ConnectionDialogBody({
                   forms (sqlite/duckdb) render their own driver-level toggle
                   inside SqliteFormFields, so this is gated to server connections
                   that declare the `connection.readOnly` capability. The backend
-                  `enforce_read_only` chokepoint is what actually blocks writes —
-                  it is enforcement applied after the connection is up, which is
-                  what puts it here rather than in the basic segment. */}
+                  `enforce_read_only` chokepoint is what actually blocks writes.
+                  The validator cannot reject the toggle and it defaults to off,
+                  which is what puts it here rather than in the basic segment
+                  (see `forms/formSection.ts` for the rule). */}
               {getDataSourceProfile(form.dbType).connectionKind === "server" &&
                 hasConnectionCapability(form.dbType, "readOnly") && (
                   <div>

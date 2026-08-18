@@ -57,8 +57,8 @@ export default function MysqlFormFields({
       />
     );
   }
-  // Nothing MySQL-specific the driver connects without — `advanced` is left to
-  // the dialog-level settings `ConnectionDialogBody` renders itself.
+  // MySQL adds nothing that belongs in `advanced` — that segment is left to the
+  // dialog-level settings `ConnectionDialogBody` renders itself.
   if (section !== "basic") return null;
   return (
     <>

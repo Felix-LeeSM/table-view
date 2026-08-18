@@ -67,7 +67,7 @@ export default function PgFormFields({
       />
     );
   }
-  // PostgreSQL adds nothing the driver connects without, so `advanced` holds
+  // PostgreSQL adds nothing that belongs in `advanced`, so that segment holds
   // only the dialog-level settings `ConnectionDialogBody` renders itself.
   if (section !== "basic") return null;
   return (

@@ -95,7 +95,7 @@ export default function RedisFormFields({
       </>
     );
   }
-  // No Redis/Valkey-specific setting the driver connects without.
+  // Redis/Valkey adds nothing that belongs in `advanced`.
   if (section !== "basic") return null;
 
   return (

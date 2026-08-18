@@ -12,13 +12,20 @@
  *                  shape is therefore fixed by the validator, not by how many
  *                  DBMSes exist.
  *   - `advanced` — settings the validator never rejects: each has a fallback,
- *                  so the dialog saves without it, and what it changes is how
- *                  an already-established connection behaves (timeouts,
- *                  keep-alive, read-only enforcement, Mongo's auth source /
- *                  replica set). A fallback is not a promise the server accepts
- *                  it — Mongo's auth source falls back to the connection
- *                  database, so a deployment whose user lives in `admin` still
- *                  has to come here.
+ *                  so the dialog saves without it, and none of them is one of
+ *                  the host / port / user / password / database controls every
+ *                  form draws in `basic` (timeouts, keep-alive, read-only
+ *                  enforcement, Mongo's auth source / replica set). Several are
+ *                  read while the connection is being made, not after it: the
+ *                  auth source becomes `Credential.source` for the
+ *                  authentication handshake and the replica set becomes
+ *                  `ClientOptions::repl_set_name`
+ *                  (src-tauri/table-view-core/src/db/mongodb/connection.rs
+ *                  `build_options`), and the timeout is the dial budget. A
+ *                  fallback is not a promise the server accepts it — Mongo's
+ *                  auth source falls back to the connection database, so a
+ *                  deployment whose user lives in `admin` still has to come
+ *                  here.
  *   - `security` — transport security: TLS on/off, verification posture,
  *                  certificate trust, wallet. An SSH tunnel lands here when
  *                  one is built — no SSH field exists anywhere today.

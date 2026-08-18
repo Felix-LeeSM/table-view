@@ -133,7 +133,7 @@ export default function MssqlFormFields({
     );
   }
   // The auth-method select decides whether user/password are read at all, so it
-  // stays with them in `basic`; nothing else here is post-connect tuning.
+  // stays with them in `basic`; MSSQL adds nothing that belongs in `advanced`.
   if (section !== "basic") return null;
 
   return (

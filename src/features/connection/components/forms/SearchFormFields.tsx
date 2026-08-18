@@ -63,7 +63,7 @@ export default function SearchFormFields({
       </>
     );
   }
-  // No Elasticsearch/OpenSearch-specific setting the driver connects without.
+  // Elasticsearch/OpenSearch adds nothing that belongs in `advanced`.
   if (section !== "basic") return null;
   return (
     <>
