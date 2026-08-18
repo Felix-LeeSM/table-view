@@ -8,11 +8,14 @@ import {
 import { useTranslation } from "react-i18next";
 import { type ConnectionDraft, usesTnsDescriptor } from "../../model";
 import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
+import type { ConnFormSection } from "./formSection";
 import SslModeField from "./SslModeField";
 
 export interface OracleFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
+  /** #2436 — segment currently on screen; see `formSection.ts`. */
+  section: ConnFormSection;
   passwordInput: string;
   setPasswordInput: (value: string) => void;
   isEditing: boolean;
@@ -33,6 +36,7 @@ export interface OracleFormFieldsProps {
 export default function OracleFormFields({
   draft,
   onChange,
+  section,
   passwordInput,
   setPasswordInput,
   isEditing,
@@ -56,6 +60,91 @@ export default function OracleFormFields({
   // dial; `usesTnsDescriptor` is the same rule the dialog's host-required
   // check reads, so the two cannot drift apart.
   const descriptorDial = usesTnsDescriptor(draft);
+  if (section === "security") {
+    return (
+      <>
+        {/* #2154 — wallet-less 1-way TLS (TCPS). The wallet below is the mTLS
+            path and the two are mutually exclusive; the backend rejects a
+            connection that names both. The narrowed posture list (no `require`)
+            comes from `sslModeOptionsFor`, which the URL-paste path reads too. */}
+        <SslModeField
+          draft={draft}
+          onChange={onChange}
+          inputClass={inputClass}
+          labelClass={labelClass}
+        />
+
+        {/* #1065 — Oracle wallet (mTLS) for Oracle Cloud ADB. */}
+        <div>
+          <label htmlFor="conn-wallet-dir" className={labelClass}>
+            {t("form.labelWalletDir")}
+          </label>
+          <input
+            id="conn-wallet-dir"
+            className={inputClass}
+            value={draft.walletPath ?? ""}
+            onChange={(e) => onChange({ walletPath: e.target.value })}
+            placeholder="/path/to/wallet"
+          />
+          <p className="mt-1 text-2xs text-muted-foreground">
+            {t("form.walletDirHint")}
+          </p>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between">
+            <label htmlFor="conn-wallet-password" className={labelClass}>
+              {t("form.labelWalletPassword")}
+            </label>
+            {isEditing && (
+              <span
+                className={`mb-1 rounded px-1.5 py-0.5 text-3xs font-medium ${
+                  hadWalletPassword
+                    ? "bg-success/10 text-success"
+                    : "bg-muted text-muted-foreground"
+                }`}
+                data-testid="wallet-password-status-badge"
+              >
+                {hadWalletPassword
+                  ? t("form.walletPasswordSet")
+                  : t("form.noWalletPassword")}
+              </span>
+            )}
+          </div>
+          <input
+            id="conn-wallet-password"
+            className={inputClass}
+            type="password"
+            value={walletPasswordInput}
+            disabled={isEditing && clearWalletPassword}
+            onChange={(e) => setWalletPasswordInput(e.target.value)}
+            placeholder={
+              isEditing && hadWalletPassword
+                ? t("form.placeholderKeepWalletPassword")
+                : "••••••••"
+            }
+          />
+          {isEditing && hadWalletPassword && (
+            <label className="mt-1 flex items-center gap-1.5 text-2xs text-muted-foreground">
+              <input
+                type="checkbox"
+                className="cursor-pointer"
+                checked={clearWalletPassword}
+                onChange={(e) => {
+                  setClearWalletPassword(e.target.checked);
+                  if (e.target.checked) setWalletPasswordInput("");
+                }}
+              />
+              {t("form.clearWalletPassword")}
+            </label>
+          )}
+        </div>
+      </>
+    );
+  }
+  // The connect-method select decides whether the identifier below is a service
+  // name, a SID or a descriptor, so it belongs with it in `basic`.
+  if (section !== "basic") return null;
   return (
     <>
       <div className="flex gap-3">
@@ -203,83 +292,6 @@ export default function OracleFormFields({
         <p className="mt-1 text-2xs text-muted-foreground">
           {t("form.oracleServiceFieldHint")}
         </p>
-      </div>
-
-      {/* #2154 — wallet-less 1-way TLS (TCPS). The wallet below is the mTLS
-          path and the two are mutually exclusive; the backend rejects a
-          connection that names both. The narrowed posture list (no `require`)
-          comes from `sslModeOptionsFor`, which the URL-paste path reads too. */}
-      <SslModeField
-        draft={draft}
-        onChange={onChange}
-        inputClass={inputClass}
-        labelClass={labelClass}
-      />
-
-      {/* #1065 — Oracle wallet (mTLS) for Oracle Cloud ADB. */}
-      <div>
-        <label htmlFor="conn-wallet-dir" className={labelClass}>
-          {t("form.labelWalletDir")}
-        </label>
-        <input
-          id="conn-wallet-dir"
-          className={inputClass}
-          value={draft.walletPath ?? ""}
-          onChange={(e) => onChange({ walletPath: e.target.value })}
-          placeholder="/path/to/wallet"
-        />
-        <p className="mt-1 text-2xs text-muted-foreground">
-          {t("form.walletDirHint")}
-        </p>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between">
-          <label htmlFor="conn-wallet-password" className={labelClass}>
-            {t("form.labelWalletPassword")}
-          </label>
-          {isEditing && (
-            <span
-              className={`mb-1 rounded px-1.5 py-0.5 text-3xs font-medium ${
-                hadWalletPassword
-                  ? "bg-success/10 text-success"
-                  : "bg-muted text-muted-foreground"
-              }`}
-              data-testid="wallet-password-status-badge"
-            >
-              {hadWalletPassword
-                ? t("form.walletPasswordSet")
-                : t("form.noWalletPassword")}
-            </span>
-          )}
-        </div>
-        <input
-          id="conn-wallet-password"
-          className={inputClass}
-          type="password"
-          value={walletPasswordInput}
-          disabled={isEditing && clearWalletPassword}
-          onChange={(e) => setWalletPasswordInput(e.target.value)}
-          placeholder={
-            isEditing && hadWalletPassword
-              ? t("form.placeholderKeepWalletPassword")
-              : "••••••••"
-          }
-        />
-        {isEditing && hadWalletPassword && (
-          <label className="mt-1 flex items-center gap-1.5 text-2xs text-muted-foreground">
-            <input
-              type="checkbox"
-              className="cursor-pointer"
-              checked={clearWalletPassword}
-              onChange={(e) => {
-                setClearWalletPassword(e.target.checked);
-                if (e.target.checked) setWalletPasswordInput("");
-              }}
-            />
-            {t("form.clearWalletPassword")}
-          </label>
-        )}
       </div>
     </>
   );

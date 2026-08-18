@@ -43,8 +43,13 @@ export const en = {
       "Blocks INSERT, UPDATE, DELETE, and schema changes on this connection. Enforced by the backend.",
     detectedScheme: "Detected {{scheme}} URL — fields populated.",
     tlsParamNotice:
-      "The connection string's TLS parameter ({{param}}) was not applied — set encryption manually below.",
-    advancedSettings: "Advanced Settings",
+      "The connection string's TLS parameter ({{param}}) was not applied — set encryption manually in SSH/SSL.",
+    // #2436 — form segments.
+    segmentBasic: "Basic",
+    segmentAdvanced: "Advanced",
+    segmentSecurity: "SSH/SSL",
+    /** Appended to a segment's accessible name while it holds a flagged field. */
+    segmentError: "has an error",
     labelConnectionTimeout: "Connection Timeout (seconds)",
     labelKeepAliveInterval: "Keep-Alive Interval (seconds)",
   },
@@ -445,8 +450,11 @@ export const ko = {
       "이 연결에서 INSERT, UPDATE, DELETE 및 스키마 변경을 차단합니다. 백엔드에서 강제됩니다.",
     detectedScheme: "{{scheme}} URL 감지됨 — 필드가 채워졌습니다.",
     tlsParamNotice:
-      "연결 문자열의 TLS 파라미터({{param}})는 반영되지 않았습니다 — 아래에서 암호화를 직접 설정하세요.",
-    advancedSettings: "고급 설정",
+      "연결 문자열의 TLS 파라미터({{param}})는 반영되지 않았습니다 — SSH/SSL 탭에서 암호화를 직접 설정하세요.",
+    segmentBasic: "기본",
+    segmentAdvanced: "고급",
+    segmentSecurity: "SSH/SSL",
+    segmentError: "오류 있음",
     labelConnectionTimeout: "연결 타임아웃 (초)",
     labelKeepAliveInterval: "연결 유지 간격 (초)",
   },

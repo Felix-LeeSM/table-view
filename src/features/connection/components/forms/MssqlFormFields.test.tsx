@@ -27,6 +27,7 @@ function renderMssql(overrides: Partial<ConnectionDraft> = {}) {
   const onChange = vi.fn();
   const fields = (draft: Partial<ConnectionDraft>) => (
     <MssqlFormFields
+      section="security"
       draft={makeDraft(draft)}
       onChange={onChange}
       passwordInput=""

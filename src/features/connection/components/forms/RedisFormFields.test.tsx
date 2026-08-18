@@ -26,19 +26,27 @@ const labelClass = "label";
 
 describe("RedisFormFields", () => {
   it("renders the database index defaulting to 0 with port 6379", () => {
+    // #2436 — the dialog renders this component once per segment, and the TLS
+    // toggle asserted below now belongs to `security`. Stacking both sections
+    // reads the same DOM this test read before the split; the two render
+    // disjoint controls, so ids and labels stay unique.
+    const shared = {
+      draft: makeDraft(),
+      onChange: vi.fn(),
+      passwordInput: "",
+      setPasswordInput: vi.fn(),
+      isEditing: false,
+      hadPassword: false,
+      clearPassword: false,
+      setClearPassword: vi.fn(),
+      inputClass,
+      labelClass,
+    };
     render(
-      <RedisFormFields
-        draft={makeDraft()}
-        onChange={vi.fn()}
-        passwordInput=""
-        setPasswordInput={vi.fn()}
-        isEditing={false}
-        hadPassword={false}
-        clearPassword={false}
-        setClearPassword={vi.fn()}
-        inputClass={inputClass}
-        labelClass={labelClass}
-      />,
+      <>
+        <RedisFormFields section="basic" {...shared} />
+        <RedisFormFields section="security" {...shared} />
+      </>,
     );
     const dbIndex = screen.getByLabelText(
       "Redis database index (0-15)",
@@ -56,6 +64,7 @@ describe("RedisFormFields", () => {
     const onChange = vi.fn();
     render(
       <RedisFormFields
+        section="basic"
         draft={makeDraft()}
         onChange={onChange}
         passwordInput=""
@@ -98,6 +107,7 @@ describe("RedisFormFields", () => {
     ) {
       render(
         <RedisFormFields
+          section="security"
           draft={makeDraft(overrides)}
           onChange={onChange}
           passwordInput=""

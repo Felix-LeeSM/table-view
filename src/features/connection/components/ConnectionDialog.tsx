@@ -32,8 +32,9 @@
 //   - `ConnectionDialog/useConnectionUrlImport`  (URL parse + paste detect
 //                                                 + host:port blur split)
 //   - `ConnectionDialog/ConnectionDialogBody`    (presentational form/URL
-//                                                 toggle + DBMS fields +
-//                                                 Advanced + detected note)
+//                                                 toggle + identity fields +
+//                                                 the Basic/Advanced/SSH-SSL
+//                                                 segments and their panels)
 //   - `ConnectionDialog/ConnectionDialogFooter`  (DialogFeedback + save
 //                                                 error + Test/Cancel/Save)
 //   - `ConnectionDialog/sanitize`                (`sanitizeMessage` body;
@@ -59,6 +60,7 @@ import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 import { useConnectionMutations } from "@lib/runtime/connection/useConnectionMutations";
 import { X } from "lucide-react";
 import { useState } from "react";
+import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { ConnectionConfig, ConnectionDraft } from "../model";
 import { DATABASE_DEFAULTS } from "../model";
@@ -72,6 +74,7 @@ import {
   type ConnFieldKey,
   validateConnectionDraft,
 } from "./forms/fieldValidation";
+import type { ConnFormSection } from "./forms/formSection";
 
 // Sprint 213 — re-export the (relocated) `sanitizeMessage` helper so
 // external callers keep using `import { sanitizeMessage } from
@@ -123,6 +126,17 @@ export default function ConnectionDialog({
   // Issue #1135 — which field the last failed save flagged, so the offending
   // input can carry `aria-invalid` + `aria-describedby` and receive focus.
   const [invalidField, setInvalidField] = useState<ConnFieldKey | null>(null);
+  /**
+   * Issue #2436 — the form segment on screen.
+   *
+   * Deliberately plain component state, so closing and reopening the dialog
+   * starts on `basic` again. Remembering the last segment across opens would
+   * mean lifting it into a store, i.e. new persistent UI state, which this
+   * repo requires to ship with a reset affordance — an unreasonable price for
+   * a tab position, and a surprise for a user who reopens a connection and
+   * cannot see the field they came for.
+   */
+  const [segment, setSegment] = useState<ConnFormSection>("basic");
 
   const draftForm = useConnectionDraftForm(connection);
   const {
@@ -211,23 +225,35 @@ export default function ConnectionDialog({
   // reading the id here is far less code than threading a ref through every
   // form. ponytail: focus by stable id; upgrade to refs only if a form drops
   // its stable id.
-  const focusInvalidField = (field: ConnFieldKey) => {
-    const id =
-      field === "name"
-        ? "conn-name"
-        : field === "host"
-          ? "conn-host"
-          : isFileConnection
-            ? "conn-sqlite-path"
-            : "conn-database";
-    document.getElementById(id)?.focus();
-  };
+  const invalidFieldInputId = (field: ConnFieldKey) =>
+    field === "name"
+      ? "conn-name"
+      : field === "host"
+        ? "conn-host"
+        : isFileConnection
+          ? "conn-sqlite-path"
+          : "conn-database";
 
   const failValidation = (field: ConnFieldKey | null, message: string) => {
     setError(message);
     setInvalidField(field);
+    /**
+     * Issue #2436 — every field the validator can reject renders in the basic
+     * segment (see `forms/formSection.ts`), and a form-wide failure implicates
+     * controls that live there too (the MSSQL auth-method combo, whose inline
+     * alert is in that panel). One switch therefore covers the whole union; if
+     * a validated field ever moves out of `basic`, this needs the per-field map
+     * `segmentForField` already provides in `ConnectionDialogBody`.
+     *
+     * `flushSync` is what makes the focus move below survive the split. Radix
+     * unmounts an inactive segment's panel, so the plain state update would
+     * leave `getElementById` looking for an input that is not in the document
+     * yet — the save refuses and nothing on screen moves except a banner naming
+     * a field the user cannot see. Flushing lands the panel first.
+     */
+    flushSync(() => setSegment("basic"));
     // A form-wide failure (MSSQL auth-method combo) owns no input to focus.
-    if (field) focusInvalidField(field);
+    if (field) document.getElementById(invalidFieldInputId(field))?.focus();
   };
 
   /**
@@ -372,6 +398,8 @@ export default function ConnectionDialog({
             inputClass={inputClass}
             labelClass={labelClass}
             invalidField={invalidField}
+            segment={segment}
+            setSegment={setSegment}
           />
 
           <ConnectionDialogFooter

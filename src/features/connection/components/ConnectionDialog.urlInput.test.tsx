@@ -351,6 +351,18 @@ const PASTE_CASES: PasteCase[] = [
   },
 ];
 
+/**
+ * #2436 — the connection form is split into Basic / Advanced / SSH-SSL
+ * segments and Radix unmounts the inactive panels, so a test that reads a
+ * control has to open the segment that owns it. `TabsTrigger` selects on
+ * `mousedown`, not `click`.
+ */
+async function openSegment(name: "Basic" | "Advanced" | "SSH/SSL") {
+  await act(async () => {
+    fireEvent.mouseDown(screen.getByRole("tab", { name }));
+  });
+}
+
 describe("[AC-178-01] form-mode host paste detection", () => {
   for (const c of PASTE_CASES) {
     // Reason: pasting a recognised URL into the host field must populate
@@ -425,7 +437,10 @@ describe("[AC-178-01] form-mode host paste detection", () => {
                 .find((el) => el.tagName === "INPUT") as HTMLInputElement);
         expect(dbInput.value).toBe(c.expected.database ?? "");
       }
+      // #2436 — the TLS posture the paste wrote now lives in SSH/SSL; the
+      // affordance asserted below is back on Basic with the host it annotates.
       if (isMssql) {
+        await openSegment("SSH/SSL");
         expect(screen.getByLabelText("Enable encryption (TLS)")).toHaveProperty(
           "checked",
           sslModeTlsOn(c.expected.sslMode),
@@ -433,11 +448,14 @@ describe("[AC-178-01] form-mode host paste detection", () => {
         expect(
           screen.getByLabelText("Trust server certificate"),
         ).toHaveProperty("checked", c.expected.sslMode === "require");
+        await openSegment("Basic");
       } else if (isKvProtocol || isSearchProtocol) {
+        await openSegment("SSH/SSL");
         const tlsInput = screen.getByLabelText(
           "Enable TLS",
         ) as HTMLInputElement;
         expect(tlsInput.checked).toBe(sslModeTlsOn(c.expected.sslMode));
+        await openSegment("Basic");
       }
       // Password is not directly readable — we save and inspect the
       // outgoing payload instead. Skip here unless the AC explicitly

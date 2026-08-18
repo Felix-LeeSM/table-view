@@ -41,6 +41,14 @@ Elasticsearch/OpenSearch 는 `SearchFormFields`, MongoDB 는 `MongoFormFields`,
 Redis/Valkey 는 `RedisFormFields`, SQLite/DuckDB 는 file-form `SqliteFormFields`
 를 쓴다. MSSQL/Oracle/Search 는 Pg form reuse claim 을 하지 않는다.
 
+폼은 `기본` · `고급` · `SSH/SSL` 세그먼트로 나뉜다. 어느 컨트롤이 어느
+세그먼트에 가는지는 `ConnectionDialogBody.tsx` 의 세 `TabsContent` 패널과 각 폼
+컴포넌트의 `section` 분기가 정하고, 여기에 옮겨 적지 않는다 —
+`src/features/connection/components/forms/formSection.ts` 는 세그먼트 이름의
+타입이다. 저장이 거부되면 폼은 `기본` 세그먼트로 돌아간다. Name / Database Type /
+Environment 는 세그먼트 밖에 남아, 폼 모드에서는 어느 세그먼트를 열어도 화면에
+있다. 파일 연결(SQLite/DuckDB)에는 `SSH/SSL` 세그먼트가 없다.
+
 Support audit artifacts are historical inputs only.
 `docs/archives/audits/refactor-05-support-claims-ledger-2026-06-12.md` 는
 snapshot 으로 보존하고, durable result 는 `docs/product/**` (이 index 와 Detail

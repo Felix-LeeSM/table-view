@@ -14,11 +14,14 @@ import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
 import { sslModeTlsOn } from "../../model";
 import { type ConnFieldKey, fieldValidationProps } from "./fieldValidation";
+import type { ConnFormSection } from "./formSection";
 import TlsSkipVerifyToggle from "./TlsSkipVerifyToggle";
 
 export interface MongoFormFieldsProps {
   draft: ConnectionDraft;
   onChange: (patch: Partial<ConnectionDraft>) => void;
+  /** #2436 — segment currently on screen; see `formSection.ts`. */
+  section: ConnFormSection;
   passwordInput: string;
   setPasswordInput: (value: string) => void;
   isEditing: boolean;
@@ -33,6 +36,7 @@ export interface MongoFormFieldsProps {
 export default function MongoFormFields({
   draft,
   onChange,
+  section,
   passwordInput,
   setPasswordInput,
   isEditing,
@@ -44,6 +48,71 @@ export default function MongoFormFields({
   invalidField,
 }: MongoFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
+  if (section === "advanced") {
+    // MongoDB-specific extension block (Sprint 65 compatibility). A fallback is
+    // not a promise the server accepts it: an empty `authSource` authenticates
+    // against `database`, which is the wrong realm when the user lives in
+    // `admin` (src-tauri/table-view-core/src/db/mongodb/connection.rs
+    // `build_options`), and that is why the smoke fixture has to fill it in.
+    return (
+      <div className="space-y-3 rounded border border-border bg-background/40 p-3">
+        <div className="text-xs font-semibold text-secondary-foreground">
+          {t("form.mongoOptionsTitle")}
+        </div>
+        <div>
+          <label htmlFor="conn-auth-source" className={labelClass}>
+            {t("form.labelAuthSource")}
+          </label>
+          <input
+            id="conn-auth-source"
+            className={inputClass}
+            value={draft.authSource ?? ""}
+            onChange={(e) => onChange({ authSource: e.target.value || null })}
+            placeholder="admin"
+          />
+        </div>
+        <div>
+          <label htmlFor="conn-replica-set" className={labelClass}>
+            {t("form.labelReplicaSet")}
+          </label>
+          <input
+            id="conn-replica-set"
+            className={inputClass}
+            value={draft.replicaSet ?? ""}
+            onChange={(e) => onChange({ replicaSet: e.target.value || null })}
+            placeholder="rs0"
+          />
+        </div>
+      </div>
+    );
+  }
+  if (section === "security") {
+    return (
+      <>
+        <label className="flex items-center gap-2 text-xs text-secondary-foreground">
+          <input
+            id="conn-tls-enabled"
+            type="checkbox"
+            className="cursor-pointer"
+            checked={sslModeTlsOn(draft.sslMode)}
+            onChange={(e) =>
+              onChange({
+                // #1649 — on selects the verifying posture, off returns to the
+                // driver default. Either way the CA reference goes: neither
+                // posture reads it, and leaving it would let the adjacent
+                // skip-verify checkbox restore a `verify-ca` this connection
+                // never had (see `draftVerifyingSslMode`).
+                sslMode: e.target.checked ? "verify-full" : "prefer",
+                caCertPath: null,
+              })
+            }
+          />
+          {t("form.enableTlsMongo")}
+        </label>
+        <TlsSkipVerifyToggle draft={draft} onChange={onChange} />
+      </>
+    );
+  }
   return (
     <>
       {/* Host & Port */}
@@ -156,58 +225,6 @@ export default function MongoFormFields({
           onChange={(e) => onChange({ database: e.target.value })}
           placeholder={t("form.placeholderMongoDatabaseBlank")}
         />
-      </div>
-
-      {/* MongoDB-specific extension block (Sprint 65 compatibility) */}
-      <div className="space-y-3 rounded border border-border bg-background/40 p-3">
-        <div className="text-xs font-semibold text-secondary-foreground">
-          {t("form.mongoOptionsTitle")}
-        </div>
-        <div>
-          <label htmlFor="conn-auth-source" className={labelClass}>
-            {t("form.labelAuthSource")}
-          </label>
-          <input
-            id="conn-auth-source"
-            className={inputClass}
-            value={draft.authSource ?? ""}
-            onChange={(e) => onChange({ authSource: e.target.value || null })}
-            placeholder="admin"
-          />
-        </div>
-        <div>
-          <label htmlFor="conn-replica-set" className={labelClass}>
-            {t("form.labelReplicaSet")}
-          </label>
-          <input
-            id="conn-replica-set"
-            className={inputClass}
-            value={draft.replicaSet ?? ""}
-            onChange={(e) => onChange({ replicaSet: e.target.value || null })}
-            placeholder="rs0"
-          />
-        </div>
-        <label className="flex items-center gap-2 text-xs text-secondary-foreground">
-          <input
-            id="conn-tls-enabled"
-            type="checkbox"
-            className="cursor-pointer"
-            checked={sslModeTlsOn(draft.sslMode)}
-            onChange={(e) =>
-              onChange({
-                // #1649 — on selects the verifying posture, off returns to the
-                // driver default. Either way the CA reference goes: neither
-                // posture reads it, and leaving it would let the adjacent
-                // skip-verify checkbox restore a `verify-ca` this connection
-                // never had (see `draftVerifyingSslMode`).
-                sslMode: e.target.checked ? "verify-full" : "prefer",
-                caCertPath: null,
-              })
-            }
-          />
-          {t("form.enableTlsMongo")}
-        </label>
-        <TlsSkipVerifyToggle draft={draft} onChange={onChange} />
       </div>
     </>
   );

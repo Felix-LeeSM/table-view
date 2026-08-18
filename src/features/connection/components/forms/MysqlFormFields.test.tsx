@@ -28,6 +28,7 @@ describe("MysqlFormFields", () => {
   it("renders MySQL defaults — user=root (NOT postgres), port=3306", () => {
     render(
       <MysqlFormFields
+        section="basic"
         draft={makeDraft()}
         onChange={vi.fn()}
         passwordInput=""
@@ -51,6 +52,7 @@ describe("MysqlFormFields", () => {
     const onChange = vi.fn();
     render(
       <MysqlFormFields
+        section="basic"
         draft={makeDraft()}
         onChange={onChange}
         passwordInput=""
@@ -81,6 +83,7 @@ describe("MysqlFormFields", () => {
     ) {
       render(
         <MysqlFormFields
+          section="security"
           draft={makeDraft(overrides)}
           onChange={onChange}
           passwordInput=""

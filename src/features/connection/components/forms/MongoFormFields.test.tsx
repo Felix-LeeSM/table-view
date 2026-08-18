@@ -26,22 +26,38 @@ function makeDraft(overrides: Partial<ConnectionDraft> = {}): ConnectionDraft {
 const inputClass = "input";
 const labelClass = "label";
 
+/**
+ * #2436 — the dialog now renders this component once per segment, so a test
+ * that spans the whole Mongo field set stacks all three. The rendered controls
+ * are disjoint per segment, so the ids and labels stay unique and every
+ * assertion below reads the same DOM it read before the split.
+ */
+function renderAllSections(onChange = vi.fn()) {
+  const shared = {
+    draft: makeDraft(),
+    onChange,
+    passwordInput: "",
+    setPasswordInput: vi.fn(),
+    isEditing: false,
+    hadPassword: false,
+    clearPassword: false,
+    setClearPassword: vi.fn(),
+    inputClass,
+    labelClass,
+  };
+  render(
+    <>
+      <MongoFormFields section="basic" {...shared} />
+      <MongoFormFields section="advanced" {...shared} />
+      <MongoFormFields section="security" {...shared} />
+    </>,
+  );
+  return onChange;
+}
+
 describe("MongoFormFields", () => {
   it("renders Mongo-specific fields (authSource / replicaSet / tls) + optional user/password labels", () => {
-    render(
-      <MongoFormFields
-        draft={makeDraft()}
-        onChange={vi.fn()}
-        passwordInput=""
-        setPasswordInput={vi.fn()}
-        isEditing={false}
-        hadPassword={false}
-        clearPassword={false}
-        setClearPassword={vi.fn()}
-        inputClass={inputClass}
-        labelClass={labelClass}
-      />,
-    );
+    renderAllSections();
     expect(screen.getByLabelText("User (optional)")).toBeInTheDocument();
     expect(screen.getByLabelText("Password (optional)")).toBeInTheDocument();
     // Sprint 381 (2026-05-17) — Mongo db-contract α: database 의 required
@@ -56,21 +72,7 @@ describe("MongoFormFields", () => {
   });
 
   it("propagates authSource / replicaSet / TLS posture through onChange", () => {
-    const onChange = vi.fn();
-    render(
-      <MongoFormFields
-        draft={makeDraft()}
-        onChange={onChange}
-        passwordInput=""
-        setPasswordInput={vi.fn()}
-        isEditing={false}
-        hadPassword={false}
-        clearPassword={false}
-        setClearPassword={vi.fn()}
-        inputClass={inputClass}
-        labelClass={labelClass}
-      />,
-    );
+    const onChange = renderAllSections();
     act(() => {
       fireEvent.change(
         screen.getByLabelText("Auth Source") as HTMLInputElement,
@@ -102,6 +104,7 @@ describe("MongoFormFields", () => {
     ) {
       render(
         <MongoFormFields
+          section="security"
           draft={makeDraft(overrides)}
           onChange={onChange}
           passwordInput=""
