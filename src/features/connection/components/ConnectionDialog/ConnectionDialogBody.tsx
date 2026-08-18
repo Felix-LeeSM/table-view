@@ -113,10 +113,9 @@ function segmentForField(field: ConnFieldKey): ConnFormSection | null {
  * component only renders.
  *
  * #2436 — form mode is now an always-visible identity block (Name / Database
- * Type / Environment) above a Basic / Advanced / SSH-SSL segment control. Which
- * control belongs to which segment is a rule, not a list, and `forms/formSection.ts`
- * owns it; each DBMS form component is handed the segment being rendered and
- * emits only its share.
+ * Type / Environment) above a Basic / Advanced / SSH-SSL segment control. Each
+ * DBMS form component is handed the segment being rendered and emits only its
+ * share.
  *
  * The `assertNever` exhaustive switch in `renderDbmsFields` lives here per
  * Sprint 213 contract (entry or body acceptable; body chosen so the entry
