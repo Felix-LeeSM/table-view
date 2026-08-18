@@ -3,8 +3,11 @@
     needs: build
     # Report the tagged SHA's verdict even when a build leg died. A dead leg is
     # evidence about the runner, not about the commit, and the maintainer still
-    # has a draft in front of them either way.
-    if: always()
+    # has a draft in front of them either way. Same reason as the job above for
+    # the event guard: `always()` survives a SKIPPED `build`, and this verdict
+    # is for the maintainer standing in front of the Publish button — after the
+    # click there is nothing left for it to gate.
+    if: always() && github.event_name != 'release'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     # Narrower than the workflow-level `contents: write` — this job only reads.
@@ -115,3 +118,4 @@
           fi
 
           echo "::notice::${GITHUB_SHA}: $(printf '%s\n' "$rows" | grep -c .) check runs green. The draft still needs the manual Post-Release Verification in docs/contributor-guide/release/versioning-and-artifacts.md before publishing."
+

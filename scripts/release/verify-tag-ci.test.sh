@@ -636,8 +636,12 @@ YML
 			"$LBL_NO_CONTINUE_ON_ERROR"
 		job_mutation_case "needs-build-dropped" '    needs: build
 ' '' "$LBL_NEEDS_BUILD"
-		job_mutation_case "if-always-dropped" '    if: always()
-' '' "$LBL_IF_ALWAYS"
+		# 치환 대상은 그 줄 **전체**다. `if: always()` 만 적으면 #2454 가 뒤에
+		# 붙인 이벤트 가드가 남아 `    if:  && github.event_name != 'release'`
+		# 라는 깨진 YAML 이 되고, 그때 나는 red 는 이 단언이 아니라 파싱이 낸
+		# 것이라 무엇을 지키는지 증명하지 못한다.
+		job_mutation_case "if-always-dropped" "    if: always() && github.event_name != 'release'
+" '' "$LBL_IF_ALWAYS"
 		job_mutation_case "self-run-checks-counted" \
 			'NF && index($4, self) == 0 && ' 'NF && ' "$LBL_SELF_RUN_EXCLUDED"
 		job_mutation_case "non-blocking-filter-dropped" \

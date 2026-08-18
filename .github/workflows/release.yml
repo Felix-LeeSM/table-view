@@ -16,13 +16,31 @@ name: Release
 #   updater endpoint `releases/latest/download/latest.json` therefore cannot
 #   serve a dry-run to clients. The dry-run still signs and runs every gate, so
 #   it remains a faithful rehearsal.
+# - `release` (`published`): the maintainer's manual publish click, and nothing
+#   else — #2454. Only `update-homebrew-tap` runs on it; `build` and the two
+#   verify jobs are guarded off with `github.event_name != 'release'` so that
+#   publishing a draft cannot rebuild and re-upload the very bundles the
+#   maintainer just reviewed. Those three guards are no-ops on the two triggers
+#   above, where `github.event_name` is `push` or `workflow_dispatch`.
 on:
   push:
     tags: ["v*.*.*"]
   workflow_dispatch:
+  release:
+    types: [published]
 
 # Two release runs on the same tag would race against the same draft release;
 # cancel the older one.
+#
+# The `release: published` run shares this group with its tag's build run —
+# `github.ref` is the same `refs/tags/vX.Y.Z` for both. Publishing while the
+# build run is still going therefore leaves the tap job PENDING until that run
+# ends (up to 60 min), which is harmless and arguably right: the tap should not
+# be bumped while assets are still uploading. Accepted ceiling, not an
+# oversight — splitting the group by `github.event_name` would rewrite the key
+# for the existing triggers too, and the manual fallback in
+# docs/contributor-guide/release/homebrew-cask.md covers the rare case where a
+# re-push of the same tag cancels a pending tap run.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -33,6 +51,10 @@ permissions:
 jobs:
   build:
     name: Bundle (${{ matrix.label }})
+    # Never on the `release: published` event — that event fires AFTER these
+    # bundles are public, and rebuilding would re-upload over assets users are
+    # already downloading. Only `update-homebrew-tap` belongs to that trigger.
+    if: github.event_name != 'release'
     strategy:
       fail-fast: false
       matrix:
@@ -316,8 +338,10 @@ jobs:
     name: Verify latest.json is present
     needs: build
     # Run even when a build leg failed — a dead leg is exactly the case that can
-    # leave the draft with no manifest at all.
-    if: always()
+    # leave the draft with no manifest at all. `always()` also survives a
+    # SKIPPED `build`, so the event guard has to be spelled out here too or this
+    # job would fire on `release: published` with no draft of its own to read.
+    if: always() && github.event_name != 'release'
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
@@ -367,8 +391,11 @@ jobs:
     needs: build
     # Report the tagged SHA's verdict even when a build leg died. A dead leg is
     # evidence about the runner, not about the commit, and the maintainer still
-    # has a draft in front of them either way.
-    if: always()
+    # has a draft in front of them either way. Same reason as the job above for
+    # the event guard: `always()` survives a SKIPPED `build`, and this verdict
+    # is for the maintainer standing in front of the Publish button — after the
+    # click there is nothing left for it to gate.
+    if: always() && github.event_name != 'release'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     # Narrower than the workflow-level `contents: write` — this job only reads.
@@ -479,3 +506,116 @@ jobs:
           fi
 
           echo "::notice::${GITHUB_SHA}: $(printf '%s\n' "$rows" | grep -c .) check runs green. The draft still needs the manual Post-Release Verification in docs/contributor-guide/release/versioning-and-artifacts.md before publishing."
+
+  # #2454 — the Homebrew cask sat at 0.4.1 while v0.7.1 shipped, three versions
+  # behind, because bumping the tap was a manual step nobody performed after
+  # v0.5.0. `brew install --cask` users were stranded on 0.4.1 straight through
+  # the v0.7.0 saved-connection data-loss bug that v0.7.1 fixed.
+  #
+  # Why `release: published` and not the tag push. This repo tags into a DRAFT
+  # and a maintainer publishes by hand (trigger policy at the top of this file).
+  # On a tag-push trigger the tap would move BEFORE a human looked at the draft,
+  # so a tag that gets pulled would still have shipped its version to every
+  # `brew upgrade`. `published` is the first moment the artifacts are public.
+  #
+  # This job cannot break a release. The event that starts it only exists after
+  # the bundles are already published, and it lands in its own workflow run —
+  # the build/sign/draft path is a different run that never waits on this one.
+  # A red job here means the tap is stale, and
+  # docs/contributor-guide/release/homebrew-cask.md carries the manual fallback.
+  #
+  # Not run for prereleases. A `workflow_dispatch` dry-run leaves a draft
+  # flagged `prerelease: true`; an unpublished draft fires no event at all, but
+  # the head comment above is explicit that a maintainer might publish one by
+  # mistake, and that is the case this condition covers. The tag-shape check in
+  # the step below is the second layer — a dry-run draft is tagged
+  # `manual-<sha>`, which names no version.
+  update-homebrew-tap:
+    name: Update Homebrew tap cask
+    if: github.event_name == 'release' && github.event.release.prerelease == false
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    # Narrower than the workflow-level `contents: write`. The write target is
+    # another repository and it is reached with HOMEBREW_TAP_TOKEN; nothing in
+    # this job writes to this one.
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # HOMEBREW_TAP_TOKEN and not RELEASE_PAT: RELEASE_PAT carries
+      # `contents: write` on THIS repo (auto-tag-release.yml pushes tags with
+      # it), and handing that to a step whose only write target is the tap would
+      # widen the blast radius of a leak for no gain. HOMEBREW_TAP_TOKEN exists
+      # for the tap and is scoped to it.
+      - name: Update the tap cask
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          TAP_REPO: Felix-LeeSM/homebrew-table-view
+        run: |
+          set -euo pipefail
+
+          # An unset secret arrives as the empty string, and the tap is public,
+          # so `git clone` with an empty credential SUCCEEDS and the failure
+          # would not surface until `git push` returns 403 several steps later.
+          if [ -z "${TAP_TOKEN}" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is empty, so nothing can be pushed to $TAP_REPO. Bump the cask by hand — docs/contributor-guide/release/homebrew-cask.md." >&2
+            exit 1
+          fi
+
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *)
+              echo "::error::tag '$TAG' is not vX.Y.Z, so it names no version to publish. A workflow_dispatch dry-run draft is tagged manual-<sha>; publishing one of those is the case this refuses." >&2
+              exit 1
+              ;;
+          esac
+          version="${TAG#v}"
+
+          # The digest GitHub reports for the published asset — not a
+          # re-download and re-hash. It is the same field the `Upload SHA256
+          # checksums` step joins its sidecars on, so the cask and the sidecars
+          # cannot disagree about what the published bytes are.
+          #
+          # `--jq` is not used here: `gh` takes at most one positional arg and
+          # rejects the `--arg` that carries the asset name into the filter, so
+          # the JSON goes to a real `jq` instead of being spliced into a filter
+          # string.
+          asset="Table.View_${version}_aarch64.dmg"
+          digest="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets |
+            jq -r --arg n "$asset" '[.assets[] | select(.name == $n) | .digest] | if length == 1 then .[0] else "" end')"
+          if [ -z "$digest" ]; then
+            echo "::error::no single $TAG asset is named $asset with a digest. The cask would keep the previous checksum while claiming the new version, which fails every user's install with a SHA256 mismatch." >&2
+            exit 1
+          fi
+          case "$digest" in
+            sha256:*) sha="${digest#sha256:}" ;;
+            *)
+              echo "::error::$asset reports digest '$digest', which is not sha256:<hex>." >&2
+              exit 1
+              ;;
+          esac
+
+          # `--depth 1` is enough to rewrite one file and push one commit, and
+          # the tap is small. The credential in the URL is masked in the log by
+          # Actions (it is a secret) and the workspace dies with the run.
+          git clone --quiet --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
+
+          # Rewrites the two value lines and re-reads the file to prove they
+          # landed. Regression suite: scripts/release/update-homebrew-cask.test.sh
+          bash scripts/release/update-homebrew-cask.sh tap/Casks/table-view.rb "$version" "$sha"
+
+          if git -C tap diff --quiet -- Casks/table-view.rb; then
+            echo "::notice::$TAP_REPO already carries $version with that checksum — nothing to push"
+            exit 0
+          fi
+
+          git -C tap -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit --quiet -m "table-view $version" -m "$RELEASE_URL" -- Casks/table-view.rb
+          git -C tap push origin HEAD:main
+          echo "::notice::$TAP_REPO Casks/table-view.rb bumped to $version"
