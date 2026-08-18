@@ -53,6 +53,18 @@ import { sanitizeMessage } from "./ConnectionDialog/sanitize";
 /** Module-level drag state shared between ConnectionItem, ConnectionGroup, ConnectionList */
 export let draggedConnectionId: string | null = null;
 
+/**
+ * Client-space placement of the drag ghost. Fed by the `drag` event on the
+ * source row — `dragover` is unusable as the cursor channel because
+ * `ConnectionGroup` stops its propagation, which would freeze the ghost
+ * whenever the pointer crossed a group block.
+ */
+interface GhostPosition {
+  x: number;
+  y: number;
+  width: number;
+}
+
 interface ConnectionItemProps {
   connection: ConnectionConfig;
   /** When true, shows a selected ring around the row. */
@@ -131,6 +143,11 @@ export default function ConnectionItem({
 }: ConnectionItemProps) {
   const { t } = useTranslation("featuresConnection");
   const [dragging, setDragging] = useState(false);
+  const [ghost, setGhost] = useState<GhostPosition | null>(null);
+  // Where inside the row the cursor grabbed it. Kept so the ghost stays
+  // pinned to that same spot for the whole drag instead of snapping its
+  // corner to the pointer.
+  const grabRef = useRef({ x: 0, y: 0, width: 0 });
   const dragRef = useRef<HTMLDivElement>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -219,10 +236,30 @@ export default function ConnectionItem({
               setDragging(true);
               e.dataTransfer.effectAllowed = "move";
               e.dataTransfer.setData("text/plain", connection.id);
+              const rect = e.currentTarget.getBoundingClientRect();
+              grabRef.current = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top,
+                width: rect.width,
+              };
+              setGhost({ x: rect.left, y: rect.top, width: rect.width });
+            }}
+            onDrag={(e) => {
+              // The final `drag` before `dragend` reports (0, 0) in several
+              // engines; rendering it flings the ghost to the viewport corner
+              // for one frame right as the drop lands.
+              if (e.clientX === 0 && e.clientY === 0) return;
+              const grab = grabRef.current;
+              setGhost({
+                x: e.clientX - grab.x,
+                y: e.clientY - grab.y,
+                width: grab.width,
+              });
             }}
             onDragEnd={() => {
               draggedConnectionId = null;
               setDragging(false);
+              setGhost(null);
             }}
           >
             <GripVertical
@@ -364,6 +401,34 @@ export default function ConnectionItem({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
+
+      {/* Drag ghost — a row-shaped copy pinned under the cursor so the user
+          can see *what* is being dragged (the launcher showed nothing before
+          #2434). Same overlay contract as the tab-strip ghost in
+          `src/components/layout/TabBar.tsx`: client-space `fixed`, inert to
+          hit-testing, hidden from AT. `pointer-events-none` is load-bearing
+          and not just polish — an overlay sitting under the cursor would
+          otherwise swallow the `dragover` that resolves the drop target. */}
+      {ghost && (
+        <div
+          aria-hidden
+          data-drag-ghost
+          className="pointer-events-none fixed z-50 flex items-center gap-2 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground opacity-90 shadow-md"
+          style={{ left: ghost.x, top: ghost.y, width: ghost.width }}
+        >
+          <Database size={14} className="shrink-0 text-muted-foreground" />
+          <span className="truncate">{connection.name}</span>
+          <span
+            className="ml-auto shrink-0 rounded px-1 py-0.5 text-4xs font-semibold leading-none"
+            style={{
+              backgroundColor: `${DB_TYPE_META[connection.dbType].color}20`,
+              color: DB_TYPE_META[connection.dbType].color,
+            }}
+          >
+            {DB_TYPE_META[connection.dbType].short}
+          </span>
+        </div>
+      )}
 
       {errorMessage && !showErrorDetail && (
         <Button

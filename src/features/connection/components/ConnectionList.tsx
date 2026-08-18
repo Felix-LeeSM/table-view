@@ -7,6 +7,13 @@ import { useConnectionStore } from "../store";
 import ConnectionGroup from "./ConnectionGroup";
 import ConnectionItem, { draggedConnectionId } from "./ConnectionItem";
 
+/**
+ * Which destination the dragged connection is currently over. The drag only
+ * ever moves a connection between groups — there is no reorder path — so the
+ * drop preview is a destination highlight, not an insertion line (#2434).
+ */
+type DropZone = { kind: "root" } | { kind: "group"; id: string };
+
 interface ConnectionListProps {
   environmentFilter?: string | null;
   /**
@@ -37,11 +44,14 @@ export default function ConnectionList({
     (s) => s.moveConnectionToGroup,
   );
 
-  // Drop-location preview: which group the dragged connection is currently
-  // hovering. Owned here (not per-group) so a single `dragend`/`drop` on this
-  // root — which bubbles up from the dragged ConnectionItem, including on an
-  // Esc cancel — clears the highlight with no per-group state to leak.
-  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
+  // Drop-location preview: which destination the dragged connection is
+  // currently hovering. Owned here (not per-group) so a single `dragend`/`drop`
+  // on this root — which bubbles up from the dragged ConnectionItem, including
+  // on an Esc cancel — clears the highlight with no per-group state to leak.
+  // #2434 — the root (ungroup) area is a destination too, and it was the one
+  // of the three targets with no affordance at all.
+  const [dropZone, setDropZone] = useState<DropZone | null>(null);
+  const overRoot = dropZone?.kind === "root";
 
   // Sprint 363 (Phase 3, Q13) — connection double-click 시 per-conn
   // workspace window 를 open/focus 한다. 같은 conn 두 번째 클릭은
@@ -87,7 +97,12 @@ export default function ConnectionList({
     <div
       data-testid="connection-list-root"
       aria-label={filtered ? t("list.groupAriaLabel") : t("list.ariaLabel")}
-      className="flex min-h-full flex-col py-1 select-none"
+      data-drop-target={overRoot ? "true" : undefined}
+      className={`flex min-h-full flex-col py-1 select-none${
+        overRoot
+          ? " rounded-md bg-primary/10 ring-1 ring-inset ring-primary/40"
+          : ""
+      }`}
       onDragOver={(e) => {
         // A group's own pane is not an ungroup target — a stray drop inside it
         // must not silently pull the connection out of the group being viewed.
@@ -97,15 +112,15 @@ export default function ConnectionList({
         e.dataTransfer.dropEffect = "move";
         // Over the root (ungroup) area — no group is the drop target. Groups
         // stopPropagation their own dragover, so this only fires outside them.
-        setDragOverGroupId(null);
+        setDropZone({ kind: "root" });
       }}
       // dragend bubbles up from the dragged ConnectionItem on both drop and
       // Esc cancel, so this is the single cleanup point for the highlight.
-      onDragEnd={() => setDragOverGroupId(null)}
+      onDragEnd={() => setDropZone(null)}
       onDrop={async (e) => {
         if (filtered) return;
         e.preventDefault();
-        setDragOverGroupId(null);
+        setDropZone(null);
         const connId =
           draggedConnectionId ?? e.dataTransfer.getData("text/plain");
         if (connId) {
@@ -133,8 +148,8 @@ export default function ConnectionList({
           selectedId={selectedId}
           onSelect={onSelect}
           onActivate={handleActivate}
-          isDropTarget={dragOverGroupId === group.id}
-          onDragOverGroup={setDragOverGroupId}
+          isDropTarget={dropZone?.kind === "group" && dropZone.id === group.id}
+          onDragOverGroup={(id) => setDropZone({ kind: "group", id })}
         />
       ))}
 
