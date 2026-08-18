@@ -118,8 +118,9 @@ rc 로 안 끝나는 줄을 본다 — red 면 자리마다 `파이프가 ... �
 
 - [diagnosing-merge-gates](../../../.agents/skills/diagnosing-merge-gates/SKILL.md)
   — 막힌 PR 의 진단 순서 · 트리거 함정 · review-gate run 고착 · 올바른 순서
-- [delivery](../../workflow/delivery/memory.md) — 리뷰~정리 구간의 review-gate
-  label / enforce_admins 계약
+- [delivery](../../workflow/delivery/memory.md) — 리뷰~정리 구간에서
+  `review:approved` · `reflect:done` 을 누가 언제 붙이나. `enforce_admins` 는
+  이 방 「계약」이 갖는다
 - [worktree](../worktree/memory.md) — merge 후 사본(clone) 회수
 - [git-policy](../../workflow/git-policy/memory.md) — force push 금지 (집행 훅
   없음)
