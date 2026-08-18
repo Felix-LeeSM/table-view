@@ -291,12 +291,14 @@ macOS debug 앱 번들은 `src-tauri/target/debug/bundle/macos/Table View.app`�
 
 ## 🍺 Homebrew 배포 (Homebrew)
 
-이 저장소에는 cask를 갱신하는 워크플로가 없습니다. draft 릴리스를 손으로 publish한 뒤
-`Felix-LeeSM/homebrew-table-view` tap의 `Casks/table-view.rb`를 직접 갱신합니다.
+draft 릴리스를 손으로 publish하면 `.github/workflows/release.yml`의
+`update-homebrew-tap` job이 `Felix-LeeSM/homebrew-table-view` tap의
+`Casks/table-view.rb`를 갱신합니다.
 
 ```bash
 brew tap Felix-LeeSM/table-view
 brew install --cask table-view
 ```
 
-설치 방법은 [`docs/contributor-guide/release/homebrew-cask.md`](./docs/contributor-guide/release/homebrew-cask.md)를 확인하세요.
+설치 방법, 자동 갱신이 안 도는 경우, 그때의 수동 절차는
+[`docs/contributor-guide/release/homebrew-cask.md`](./docs/contributor-guide/release/homebrew-cask.md)를 확인하세요.

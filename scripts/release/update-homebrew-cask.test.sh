@@ -43,7 +43,9 @@ for f in "$SCRIPT" "$RELEASE_WORKFLOW"; do
 done
 
 # 실제 v0.7.1 릴리스의 값이다. `Table.View_0.7.1_aarch64.dmg` 의 asset digest 를
-# 그대로 옮긴 것이고, tap 의 `Casks/table-view.rb` 가 손으로 그 값을 담고 있다.
+# 그대로 옮겼다. 같은 값이 tap PR Felix-LeeSM/homebrew-table-view#9 (`95794f8`) 로
+# 손으로 들어갔다 — 머지된 PR 이라 그 사실은 안 움직인다. tap 이 **지금** 무엇을
+# 담고 있는지는 이 스위트가 안 본다 (자동 갱신이 돌면 바뀌는 값이다).
 #   gh release view v0.7.1 --repo Felix-LeeSM/table-view --json assets
 NEW_VERSION="0.7.1"
 NEW_SHA="fd20e2497625aaee00e81237235f7f98ab5e46774e757f1fdc813c3ff225e8ee"

@@ -119,7 +119,7 @@ concerns follow from that:
 | Linux x64 | `Linux x64`, `x86_64-unknown-linux-gnu` | Linux bundles produced by Tauri, such as `.deb`, `.rpm`, or `.AppImage`, plus `.sha256`. This lane is automation packaging evidence, not the primary supported desktop distribution target. |
 | Checksums | `Upload SHA256 checksums` step | The step hashes each `artifactPaths` entry that is a file and uploads a `.sha256` for it in standard `shasum -a 256` format, under the name the asset was published as — that name goes in the sidecar's own filename and in the filename column inside it. It reads the name off the release by matching the local file's sha256 against the assets' `digest` field instead of deriving it, because two renames sit in between: GitHub rewrites spaces to dots, and `tauri-action` gives the macOS updater tarball an arch suffix (#2307 — `v0.7.1` published `Table.View.app.tar.gz.sha256`, which pairs with no asset, while the published `Table.View_aarch64.app.tar.gz` got none; every sidecar in that release also wrote `Table View_…` with a space in its filename column, so the `shasum -a 256 -c` the release body tells users to run failed on all of them). It ends the leg red when an entry resolves to neither a file nor a directory, when no single published asset carries an entry's digest, and when nothing was hashed at all (#2207: Git Bash cannot stat the backslash paths `tauri-action` reports on Windows, and `[ -f "$f" ] || continue` turned that into a silent skip — `v0.7.0` and `v0.7.1` published `.msi` and `.exe` with no checksum under a green step). A green leg still does not mean every published asset has a sidecar: a directory bundle (the macOS `.app`) gets none by design and is logged as skipped, and `latest.json` gets none because it is not an `artifactPaths` entry and every matrix leg rewrites it after upload, which would leave any checksum stale. `scripts/release/checksum-sidecars.test.sh` pins the step's shape. |
 | Updater artifacts | `createUpdaterArtifacts: true` in `tauri.conf.json`; `tauri-action` signs each with the minisign key | Each platform's updater bundle plus a sibling minisign `.sig` (macOS: `<app>.app.tar.gz` + `<app>.app.tar.gz.sig`), aggregated into one `latest.json` manifest on the draft release. This is the auto-update path — no job verifies it; check it by hand in Post-Release Verification. |
-| Homebrew cask | [`homebrew-cask.md`](homebrew-cask.md) after release publish | No workflow updates the tap. After publishing, edit `Casks/table-view.rb` in the tap repo by hand from the macOS arm64 `.dmg` and its checksum, and open the tap PR. |
+| Homebrew cask | `update-homebrew-tap`, on `release: published` | The job rewrites `version` and `sha256` in the tap repo's `Casks/table-view.rb` from the published macOS arm64 `.dmg`'s asset digest and pushes one commit to the tap's `main`. It opens no pull request there. It is skipped for a prerelease, refuses a tag that is not `vX.Y.Z`, and stops without touching the file when the cask's shape does not match; [`homebrew-cask.md`](homebrew-cask.md) carries the manual path for those cases. |
 
 ## Post-Release Verification
 
@@ -204,12 +204,24 @@ After publishing:
   installs cannot self-update (no writable in-place target) and show a
   manual-upgrade hint instead of a prompt (#1437), so run the roundtrip on a
   macOS, Windows, or Linux AppImage install.
-- Update the Homebrew tap by hand — no workflow does it. The procedure is in
-  [`homebrew-cask.md`](homebrew-cask.md).
-- Confirm the Homebrew tap PR points at the published macOS arm64 `.dmg` and
-  matching checksum.
-- If the tap PR is merged, run a fresh `brew update` and cask install check on a
-  compatible macOS arm64 machine before announcing Homebrew availability.
+- Confirm the Homebrew tap picked the release up. The publish click fires
+  `update-homebrew-tap` in `release.yml`, which pushes the version and checksum
+  bump straight to the tap's `main` — there is no tap pull request to review.
+  Check that the cask now names this version and that its `sha256` matches the
+  published macOS arm64 `.dmg`:
+
+  ```sh
+  brew update && brew info --cask felix-leesm/table-view/table-view
+  ```
+
+  This check is not redundant with the job's own colour. The job is skipped for a
+  prerelease, and it can be **cancelled while pending** — its run shares the
+  `concurrency` group with the tag's build run, so publishing while that run is
+  still going leaves it queued, and a queued run that gets displaced ends
+  `cancelled`, not red. [`homebrew-cask.md`](homebrew-cask.md) lists the cases
+  and carries the manual path.
+- Then run a fresh `brew update` and cask install check on a compatible macOS
+  arm64 machine before announcing Homebrew availability.
 
 ## Rollback Notes
 
@@ -220,8 +232,9 @@ After publishing:
   over retargeting a tag after the workflow has produced artifacts. Any tag
   deletion or retargeting is maintainer-owned.
 - Bad published release: publish a superseding patch release (procedure below),
-  mark the previous release notes as superseded, and close or revert any Homebrew
-  tap PR that points at the bad assets.
+  mark the previous release notes as superseded, and revert the Homebrew tap
+  commit that points at the bad assets. Publishing already pushed that bump to
+  the tap's `main`, so the thing to undo is a commit there, not a pull request.
 - Do not silently replace published assets under the same tag. Users and
   downstream checksums need a new version or a clearly documented superseding
   release.
@@ -253,8 +266,10 @@ stays put. The only way to move users off a bad published release is to ship a
    publish it becomes `latest`, and every install on the bad version auto-updates
    forward to it on next launch + user approval.
 4. **Mark the bad release superseded.** Edit the bad release's notes to point at
-   the patch, and close or revert any Homebrew tap PR that referenced the bad
-   assets so downstream installs pick up the patch.
+   the patch. Publishing the patch draft in step 3 ran `update-homebrew-tap`
+   again, so the tap should already name the patch version — confirm that with
+   the `brew info` check in Post-Release Verification, and revert the bad commit
+   on the tap's `main` by hand if it does not.
 5. **Announce — there is no telemetry (ADR 0036).** Auto-update reaches a client
    only when it launches and the user approves, and nothing reports adoption. If
    the bad release is severe (data loss, security), also add a
