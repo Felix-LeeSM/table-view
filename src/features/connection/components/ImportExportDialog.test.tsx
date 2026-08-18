@@ -65,6 +65,56 @@ const ENCRYPTED_PAYLOAD =
   '{"v":1,"kdf":"argon2id","salt":"AAAA","nonce":"AAAA","alg":"aes-256-gcm","ciphertext":"AAAA","tag_attached":true}';
 
 describe("ImportExportDialog", () => {
+  // Issue #2438 — the two panes are a left "what" / right "how" split. These
+  // assert the split itself and that the two guards the issue names (master
+  // password required, acknowledgement) still bite from their new column.
+  describe("Split layout", () => {
+    it("[import-export] export pane shows the selection tree and the options side by side without a tab switch", () => {
+      useConnectionStore.setState({
+        connections: [makeConn("c1"), makeConn("c2")],
+      });
+      render(<ImportExportDialog onClose={vi.fn()} />);
+
+      const what = screen.getByRole("region", {
+        name: /connections to export/i,
+      });
+      const how = screen.getByRole("region", { name: /export options/i });
+
+      expect(what).toContainElement(
+        screen.getByRole("checkbox", { name: /select all/i }),
+      );
+      expect(how).toContainElement(
+        screen.getByRole("button", { name: /generate encrypted export/i }),
+      );
+
+      // Siblings in one grid with two column tracks — a vertical re-stack
+      // (either column moved out, or the grid template dropped) fails here.
+      expect(what.parentElement).toBe(how.parentElement);
+      expect(what.parentElement?.className).toMatch(/\bmd:grid-cols-\[/);
+    });
+
+    it("[import-export] import pane's left column holds the payload box and states nothing is pasted yet", async () => {
+      render(<ImportExportDialog onClose={vi.fn()} initialTab="import" />);
+
+      const what = screen.getByRole("region", { name: /payload to import/i });
+      const how = screen.getByRole("region", { name: /import options/i });
+      const ta = screen.getByLabelText(
+        "Import JSON input",
+      ) as HTMLTextAreaElement;
+
+      expect(what).toContainElement(ta);
+      expect(what).toHaveTextContent(/nothing pasted yet/i);
+      expect(what.parentElement).toBe(how.parentElement);
+      expect(what.parentElement?.className).toMatch(/\bmd:grid-cols-\[/);
+
+      await act(async () => {
+        fireEvent.change(ta, { target: { value: ENCRYPTED_PAYLOAD } });
+      });
+      expect(what).not.toHaveTextContent(/nothing pasted yet/i);
+      expect(what).toHaveTextContent(/encrypted envelope detected/i);
+    });
+  });
+
   describe("Export", () => {
     it("renders 'No connections to export' when store is empty", () => {
       render(<ImportExportDialog onClose={vi.fn()} />);
@@ -140,7 +190,7 @@ describe("ImportExportDialog", () => {
       ).toBeDisabled();
     });
 
-    it("hides the encrypted JSON textarea behind a 'I have saved the recovery phrase' acknowledgement", async () => {
+    it("[import-export] hides the encrypted JSON textarea behind a 'I have saved the recovery phrase' acknowledgement", async () => {
       const { exportConnectionsEncrypted } = await import("@lib/tauri");
       (
         exportConnectionsEncrypted as ReturnType<typeof vi.fn>
@@ -161,6 +211,14 @@ describe("ImportExportDialog", () => {
       const ta = screen.getByLabelText(
         "Generated export JSON",
       ) as HTMLTextAreaElement;
+      // #2438 moved the acknowledgement into the right-hand options column;
+      // the gate must still be the acknowledgement, not the column.
+      const ack = screen.getByRole("checkbox", {
+        name: /i have saved the recovery phrase/i,
+      });
+      expect(
+        screen.getByRole("region", { name: /export options/i }),
+      ).toContainElement(ack);
       // Until the user ticks the acknowledgement, the JSON is hidden and
       // the copy button is disabled.
       expect(ta).toBeDisabled();
@@ -354,7 +412,7 @@ describe("ImportExportDialog", () => {
       ).toBeInTheDocument();
     });
 
-    it("envelope without recovery phrase shows inline 'master password required' error", async () => {
+    it("[import-export] envelope without recovery phrase shows inline 'master password required' error", async () => {
       const { importConnectionsEncrypted } = await import("@lib/tauri");
       render(<ImportExportDialog onClose={vi.fn()} initialTab="import" />);
 
@@ -364,6 +422,11 @@ describe("ImportExportDialog", () => {
       await act(async () => {
         fireEvent.change(ta, { target: { value: ENCRYPTED_PAYLOAD } });
       });
+      // #2438 moved the master password field into the right-hand options
+      // column; the required check must still reject an empty value there.
+      expect(
+        screen.getByRole("region", { name: /import options/i }),
+      ).toContainElement(screen.getByLabelText(/^recovery phrase$/i));
       // Leave recovery phrase empty.
       await act(async () => {
         fireEvent.click(screen.getByRole("button", { name: /^import$/i }));

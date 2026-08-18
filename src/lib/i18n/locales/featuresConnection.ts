@@ -168,6 +168,12 @@ export const en = {
       "Move saved connection records between machines as an encrypted JSON envelope. Passwords and active-session file analytics registrations are not embedded.",
     tabExport: "Export",
     tabImport: "Import",
+    paneExportWhat: "Connections to export",
+    paneExportOptions: "Export options",
+    paneImportWhat: "Payload to import",
+    paneImportOptions: "Import options",
+    importEmptyState:
+      "Nothing pasted yet — paste an exported payload to see what will be imported.",
     exportIntro:
       "Select saved connections to include. Saved connection records only: active-session file analytics sources and local file registrations are not included. A 12-word recovery phrase is generated automatically and used to encrypt the export with AES-256-GCM via an Argon2id key. Individual connection passwords are never embedded — only the data needed to recreate them.",
     generating: "Generating…",
@@ -563,6 +569,12 @@ export const ko = {
       "암호화된 JSON 봉투로 저장된 연결 기록을 다른 기기로 이동합니다. 비밀번호와 파일 분석 등록 정보는 포함되지 않습니다.",
     tabExport: "내보내기",
     tabImport: "가져오기",
+    paneExportWhat: "내보낼 연결",
+    paneExportOptions: "내보내기 옵션",
+    paneImportWhat: "가져올 페이로드",
+    paneImportOptions: "가져오기 옵션",
+    importEmptyState:
+      "아직 붙여넣은 내용이 없습니다 — 내보낸 페이로드를 붙여넣으면 무엇을 가져올지 표시됩니다.",
     exportIntro:
       "포함할 저장된 연결을 선택하세요. 저장된 연결 기록만 포함됩니다. 12단어 복구 문구가 자동으로 생성되어 AES-256-GCM 방식으로 내보내기를 암호화합니다. 개별 연결 비밀번호는 포함되지 않습니다.",
     generating: "생성 중…",
