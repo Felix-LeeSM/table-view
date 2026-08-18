@@ -227,4 +227,37 @@ describe("MRU list (Sprint 166)", () => {
       expect(useMruStore.getState().recentConnections).toHaveLength(0);
     });
   });
+
+  // 작성 이유 (2026-08-18, #2433): `clear_mru` 의 wire shape 을 잠그던
+  // 유일한 자리가 `src/pages/HomePage.reset-affordance.test.tsx` 의
+  // AC-376-08 이었는데, #2433 이 그 버튼을 launcher action bar 에서
+  // Recent 목록 끝으로 옮기면서 HomePage 트리에서 사라졌다. 액션을 소유한
+  // store 로 옮겨 잠근다 — 위 `removeRecentConnection` 블록이 `persist_mru`
+  // 에 대해 하는 것과 같은 축이다.
+  describe("clearRecentConnections (#2433 — wire lock 이관)", () => {
+    it("목록을 비우고 clear_mru IPC 를 1회 발사한다", async () => {
+      const store = useMruStore.getState();
+      store.markConnectionUsed("c1");
+      store.markConnectionUsed("c2");
+      invokeMock.mockClear();
+
+      useMruStore.getState().clearRecentConnections();
+      await Promise.resolve();
+
+      expect(useMruStore.getState().recentConnections).toEqual([]);
+      expect(useMruStore.getState().lastUsedConnectionId).toBeNull();
+      expect(
+        invokeMock.mock.calls.filter((c) => c[0] === "clear_mru"),
+      ).toHaveLength(1);
+    });
+
+    it("이미 비어 있어도 IPC 는 나간다 (다른 창의 잔여 row 정리 — idempotent)", async () => {
+      useMruStore.getState().clearRecentConnections();
+      await Promise.resolve();
+
+      expect(
+        invokeMock.mock.calls.filter((c) => c[0] === "clear_mru"),
+      ).toHaveLength(1);
+    });
+  });
 });

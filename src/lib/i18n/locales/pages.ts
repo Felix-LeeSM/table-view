@@ -7,8 +7,9 @@
 
 export const en = {
   connections: "Connections",
-  clearRecent: "Clear recent",
-  clearRecentTitle: "Clear recent connections",
+  // #2433 — `clearRecent` / `clearRecentTitle` left with the launcher action
+  // bar's Eraser button. The strings the Recent list uses now live under
+  // `recent.clear*` in featuresConnection.ts.
   importExport: "Import / Export",
   newGroup: "New Group",
   newConnection: "New Connection",
@@ -23,8 +24,6 @@ export const en = {
 
 export const ko = {
   connections: "연결",
-  clearRecent: "최근 항목 지우기",
-  clearRecentTitle: "최근 연결 목록 지우기",
   importExport: "가져오기 / 내보내기",
   newGroup: "새 그룹",
   newConnection: "새 연결",

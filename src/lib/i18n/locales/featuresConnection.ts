@@ -218,6 +218,12 @@ export const en = {
     ariaList: "Recent connections",
     ariaItem: "{{name}} — used {{time}}",
     removeAria: "Remove {{name}} from recent connections",
+    clearAll: "Clear all",
+    clearTitle: "Clear the Recent list?",
+    clearDescription:
+      "The Recent list will be emptied in every window. Your saved connections are not deleted, but the list itself cannot be restored.",
+    clearCancel: "Cancel",
+    clearConfirm: "Clear",
   },
   // ServerActivityPanel
   serverActivity: {
@@ -600,6 +606,12 @@ export const ko = {
     ariaList: "최근 연결",
     ariaItem: "{{name}} — {{time}} 사용",
     removeAria: "최근 연결에서 {{name}} 제거",
+    clearAll: "전체 지우기",
+    clearTitle: "최근 목록을 지울까요?",
+    clearDescription:
+      "모든 창에서 최근 목록이 비워집니다. 저장된 연결은 지워지지 않지만, 목록 자체는 되살릴 수 없습니다.",
+    clearCancel: "취소",
+    clearConfirm: "지우기",
   },
   serverActivity: {
     ariaSection: "서버 활동",

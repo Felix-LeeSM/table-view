@@ -17,12 +17,10 @@ import {
 import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
 import { subscribeSystemModeChange } from "@lib/themeBoot";
 import { THEME_CATALOG } from "@lib/themeCatalog";
-import { useMruStore } from "@stores/mruStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
   ArrowDownUp,
-  Eraser,
   FolderPlus,
   Monitor,
   Moon,
@@ -70,14 +68,6 @@ export default function HomePage() {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
-  const clearRecentConnections = useMruStore((s) => s.clearRecentConnections);
-
-  // Sprint 376 (Phase 6 Q21 #8) — "Clear recent" affordance. Empties
-  // the local zustand store + fires `clear_mru` IPC. No confirm dialog
-  // (Q21 contract — direct IPC).
-  const handleClearRecent = useCallback(() => {
-    clearRecentConnections();
-  }, [clearRecentConnections]);
 
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
   const setFocusedConn = useConnectionStore((s) => s.setFocusedConn);
@@ -173,18 +163,11 @@ export default function HomePage() {
         >
           {t("connections")}
         </h1>
+        {/* #2433 — the "Clear recent" Eraser used to sit here, first in this
+            row. It aims at the Recent list, so it now lives at the foot of
+            that list (`RecentConnections`) behind a confirm; this bar keeps
+            only the connection-management actions. */}
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-            aria-label={t("clearRecent")}
-            title={t("clearRecentTitle")}
-            onClick={handleClearRecent}
-            data-testid="home-clear-recent"
-          >
-            <Eraser />
-          </Button>
           <Button
             variant="ghost"
             size="icon-xs"
