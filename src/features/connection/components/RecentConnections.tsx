@@ -158,13 +158,15 @@ export default function RecentConnections({
       {/* #2433 — `clear_mru` 는 SQLite `mru` 테이블을 잘라내고 되돌리는
           경로가 없다. 게다가 이제 행마다의 remove 버튼 바로 아래에 서므로
           하나를 지우려던 손이 전부를 지우기 쉽다. 파괴적 confirm 규약
-          (`memory/engineering/conventions/frontend/memory.md`)의 두 형태 중
-          `ConfirmDestructiveDialog` 는 `sqlPreview`/`statements`/`paradigm`
-          을 요구하고 `DryRunPreview` 로 `execute_query_dry_run` 을 쏘는
-          SQL 전용이라 여기 맞지 않는다. 같은 feature 의 `ConnectionItem`
-          삭제·`ConnectionGroup` 삭제가 쓰는 AlertDialog 프리셋을 그대로
-          쓴다 — 그 규약이 그 둘을 "role/focus 통일만 (arm 미적용)" 으로
-          지정하므로 150ms arm 도 없다. */}
+          (`memory/engineering/conventions/frontend/memory.md:64-65`)이 허용
+          하는 `ConfirmDestructiveDialog` 는 `sqlPreview`/`statements`/
+          `paradigm` 을 요구하고 `DryRunPreview` 로 `execute_query_dry_run`
+          을 쏘는 SQL 전용이라 여기 맞지 않는다. 그래서 같은 규약이 인정하는
+          다른 쪽인 AlertDialog 프리셋(`role="alertdialog"`)을 쓴다 — 같은
+          feature 의 `ConnectionItem` 삭제·`ConnectionGroup` 삭제가 쓰는 모양
+          그대로다. 150ms arm 은 안 넣었다: 그 규약(`:65-66`)이 arm 을
+          `ConfirmDestructiveDialog` 와 RDB `SqlPreviewDialog` 에만 걸어 두어
+          이 다이얼로그는 대상 밖이다. */}
       <AlertDialog
         open={confirmClear}
         onOpenChange={(open) => !open && setConfirmClear(false)}
