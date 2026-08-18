@@ -18,7 +18,7 @@
 //!
 //! The unset-default tests run one per adapter that dials a network host, off
 //! the same `connection_timeout: None` the UI stores for a connection whose
-//! Advanced Settings were never touched; the rest pin the ceilings and the
+//! Advanced segment was never opened; the rest pin the ceilings and the
 //! floor. File-backed adapters (SQLite, DuckDB) are out of the population:
 //! they have no host to be unreachable, and their `connection_timeout` is a
 //! pool-acquire budget on a local file.
@@ -42,7 +42,7 @@ use crate::models::{ConnectionConfig, DatabaseType, SslMode};
 /// constant it is testing passes for whatever value that constant drifts to.
 const EXPECTED_DEFAULT_SECS: u64 = 10;
 
-/// A connection saved without touching Advanced Settings — the shape behind
+/// A connection saved without opening the Advanced segment — the shape behind
 /// the report. `db_type` is per-test irrelevant: the resolvers below read
 /// `connection_timeout` alone, and the one test that really dials overrides
 /// `host` and `port` itself.
