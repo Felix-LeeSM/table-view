@@ -25,6 +25,7 @@ import { logger } from "@lib/logger";
 import { AlertTriangle, X } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { FOCUS_RING_BORDERLESS } from "@/components/ui/focusRing";
 import { setKeyringFallbackDismissed } from "@/lib/keyringFallback";
 import { cn } from "@/lib/utils";
 
@@ -79,7 +80,7 @@ export function KeyringFallbackToast({
         type="button"
         onClick={handleDismiss}
         aria-label={t("keyring.dismissAria")}
-        className="ml-1 inline-flex shrink-0 cursor-pointer rounded-sm p-0.5 opacity-70 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50"
+        className={`ml-1 inline-flex shrink-0 cursor-pointer rounded-sm p-0.5 opacity-70 outline-none hover:opacity-100 ${FOCUS_RING_BORDERLESS}`}
       >
         <X className="size-3.5" />
       </button>
