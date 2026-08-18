@@ -11,10 +11,14 @@
  *                  (Oracle's service/SID method, MSSQL's auth method). Its
  *                  shape is therefore fixed by the validator, not by how many
  *                  DBMSes exist.
- *   - `advanced` — settings the driver connects without because they carry a
- *                  default, and that change behaviour once the connection is
- *                  already up (timeouts, keep-alive, read-only enforcement,
- *                  Mongo's auth source / replica set).
+ *   - `advanced` — settings the validator never rejects: each has a fallback,
+ *                  so the dialog saves without it, and what it changes is how
+ *                  an already-established connection behaves (timeouts,
+ *                  keep-alive, read-only enforcement, Mongo's auth source /
+ *                  replica set). A fallback is not a promise the server accepts
+ *                  it — Mongo's auth source falls back to the connection
+ *                  database, so a deployment whose user lives in `admin` still
+ *                  has to come here.
  *   - `security` — transport security: TLS on/off, verification posture,
  *                  certificate trust, wallet. An SSH tunnel lands here when
  *                  one is built — no SSH field exists anywhere today.

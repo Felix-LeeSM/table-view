@@ -46,7 +46,8 @@ Redis/Valkey 는 `RedisFormFields`, SQLite/DuckDB 는 file-form `SqliteFormField
 `src/features/connection/components/forms/formSection.ts` 가 그 규칙의 SOT 다.
 DBMS 를 더할 때 `기본` 의 모양이 안 바뀌는 것과, 검증이 거부한 필드가 늘 도달
 가능한 것이 그 규칙에 걸려 있다. Name / Database Type / Environment 는 세그먼트
-밖에 남아 항상 보인다. 파일 연결(SQLite/DuckDB)에는 `SSH/SSL` 세그먼트가 없다.
+밖에 남아, 폼 모드에서는 어느 세그먼트를 열어도 화면에 있다. 파일
+연결(SQLite/DuckDB)에는 `SSH/SSL` 세그먼트가 없다.
 
 Support audit artifacts are historical inputs only.
 `docs/archives/audits/refactor-05-support-claims-ledger-2026-06-12.md` 는
