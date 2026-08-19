@@ -79,8 +79,17 @@ the first click while `DELETE FROM t WHERE id = 1` got the preview dialog;
 `DROP TABLE t` and a Mongo `$out` pipeline now open that same dialog
 (`SqlPreviewDialog` / `MqlPreviewModal`). The Safe Mode decision matrix is
 unchanged by the widening. The Redis command console mounts no preview at all
-(`src/components/query/QueryTab/kvQueryExecution.ts`), so a destructive command
-the matrix allows there still dispatches on the first click. Destructive
+(`src/components/query/QueryTab/kvQueryExecution.ts`), so issue #2421 closed the
+same hole there with the confirm dialog instead: `DEL k` now opens
+`ConfirmDestructiveDialog` whatever the matrix returned, and the dispatch seam
+refuses a data-loss command that did not come from that dialog. Before #2421 it
+dispatched on the first click *and* passed the backend `require_confirm_key`
+gate, because the frontend derived the confirm key from the same command text
+the backend parses it from — that gate cannot distinguish a confirmed request
+from an unconfirmed one, so the confirm dialog is the boundary. `KEYS` and
+`PERSIST` keep dispatching on the first click under `warn` / `off`: the backend
+gates them but a keyspace scan and a TTL removal lose no data. The Safe Mode
+decision matrix is unchanged by #2421 as well. Destructive
 classification reuses the native
 `sql-parser-core` crate (the same parser the frontend compiles to WASM); the one
 intentional divergence is the frontend's dynamic dry-run WARN→danger escalation,

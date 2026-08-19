@@ -3,6 +3,7 @@ import type { ConnectionId, TabId } from "@/types/branded";
 import type { QueryResult } from "@/types/query";
 import {
   analyzeKvCommandSafety,
+  executeConfirmedKvCommand,
   executeKvCommandNow,
   executeKvQuery,
 } from "./kvQueryExecution";
@@ -157,6 +158,100 @@ describe("kvQueryExecution seam", () => {
       confirmKey: "session:1",
       reason: "Redis DEL permanently removes the key",
     });
+  });
+
+  // Issue #2421 — the backend `require_confirm_key` gate compares the request's
+  // key against the key the backend parsed out of the same command string, so a
+  // frontend that derives the key from the command text satisfies it without a
+  // dialog. These two lock the halves of the fix separately: the dispatch seam
+  // refuses an unconfirmed data-loss command at all, and the router sends DEL to
+  // the dialog whatever the Safe Mode matrix returned.
+  it("[kv-confirm-gate] refuses an unconfirmed data-loss dispatch and only runs it with the dialog's confirmation", async () => {
+    const actions = createActions();
+
+    await executeKvCommandNow({
+      tab,
+      command: "DEL session:1",
+      database: 2,
+      updateQueryState: actions.updateQueryState,
+      completeQuery: actions.completeQuery,
+      failQuery: actions.failQuery,
+      recordHistory: actions.recordHistory,
+    });
+
+    expect(executeKvCommandMock).not.toHaveBeenCalled();
+    expect(actions.updateQueryState).toHaveBeenCalledWith("query-redis", {
+      status: "error",
+      error:
+        "Redis DEL permanently removes the key. Confirm it in the destructive-action dialog before running it.",
+    });
+
+    // The same command dispatched with the staged confirmation does reach IPC —
+    // the guard gates on where the request came from, not on the verb.
+    executeKvCommandMock.mockResolvedValueOnce(REDIS_RESULT);
+    await executeConfirmedKvCommand({
+      tab,
+      confirmation: {
+        command: "DEL session:1",
+        database: 2,
+        confirmKey: "session:1",
+        reason: "Redis DEL permanently removes the key",
+      },
+      updateQueryState: actions.updateQueryState,
+      completeQuery: actions.completeQuery,
+      failQuery: actions.failQuery,
+      recordHistory: actions.recordHistory,
+    });
+
+    expect(executeKvCommandMock).toHaveBeenCalledWith(
+      "conn-redis",
+      { command: "DEL session:1", database: 2, confirmKey: "session:1" },
+      expect.stringMatching(/^query-redis-/),
+    );
+  });
+
+  it("[kv-confirm-gate] stages DEL for confirmation even when Safe Mode allows, and leaves KEYS on the direct path", async () => {
+    const actions = createActions();
+
+    await executeKvQuery({
+      tab,
+      sql: "DEL session:1",
+      workspaceDb: "2",
+      canExecuteQuery: true,
+      queryProductLabel: "Redis",
+      // The shipped default (non-production + mode "warn") resolves to this.
+      decideSafeMode: () => ({ action: "allow" }),
+      ...actions,
+    });
+
+    expect(executeKvCommandMock).not.toHaveBeenCalled();
+    expect(actions.setPendingKvConfirm).toHaveBeenCalledWith({
+      command: "DEL session:1",
+      database: 2,
+      confirmKey: "session:1",
+      reason: "Redis DEL permanently removes the key",
+    });
+
+    // KEYS is gated by the backend but loses nothing (#2421 kept it on the
+    // direct path), so the same `allow` still dispatches it with its pattern.
+    executeKvCommandMock.mockResolvedValueOnce(REDIS_RESULT);
+    const keysActions = createActions();
+    await executeKvQuery({
+      tab,
+      sql: "KEYS *",
+      workspaceDb: "2",
+      canExecuteQuery: true,
+      queryProductLabel: "Redis",
+      decideSafeMode: () => ({ action: "allow" }),
+      ...keysActions,
+    });
+
+    expect(keysActions.setPendingKvConfirm).not.toHaveBeenCalled();
+    expect(executeKvCommandMock).toHaveBeenCalledWith(
+      "conn-redis",
+      { command: "KEYS *", database: 2, confirmKey: "*" },
+      expect.stringMatching(/^query-redis-/),
+    );
   });
 
   it("rejects invalid Redis database chips before KV IPC dispatch", async () => {
