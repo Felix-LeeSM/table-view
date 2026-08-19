@@ -91,10 +91,11 @@ PR body 의 기존 주장이 낡았을 때 무엇을 하는지는 그 방이 갖
 ## PR body 틀 — 닫힌 목록
 
 **형식 틀의 SOT 는 여기다.** `memory/workflow/delivery/memory.md` 「PR body」와
-`memory/workflow/documentation/memory.md` 는 「형식 요구는 없다」로 열고 제약(이식성
-· 전칭 · 분량 · 정량 주장)만 갖는다. 그래서 틀이 빈 자리에 노드가 매 PR 자기 절을
-만들었고 그 절이 과정으로 찼다 (이슈 #2507). scorecard 의 틀이
-`.agents/prompts/pr-review.md` 「반환 형식」에 있는 것과 같은 자리다.
+`memory/workflow/documentation/memory.md` 는 제약(이식성 · 전칭 · 분량 · 정량
+주장)만 갖고 틀은 이 파일로 넘긴다 — 그 넘기는 줄은 이슈 #2514 가 놨고, 그전엔 틀이
+빈 자리에 노드가 매 PR 자기 절을 만들어 그 절이 과정으로 찼다 (이슈 #2507).
+scorecard 의 틀이 `.agents/prompts/pr-review.md` 「반환 형식」에 있는 것과 같은
+자리다.
 
 **아래 절이 전부다 — 절을 더하지 마라.** 해당 없는 절은 통째로 뺀다(「없음」으로
 채우지 않는다). 무엇을 남기고 무엇을 빼는지는
