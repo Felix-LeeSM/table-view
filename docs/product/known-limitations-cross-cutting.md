@@ -97,17 +97,16 @@ frontend's `KV_CONFIRM_COMMANDS` map
 (`src/components/query/QueryTab/kvCommandConfirmation.ts`), so a typed command
 classifies as `info`, the matrix returns `allow` for that classification in
 every tier, and neither the dialog routing nor the dispatch refusal engages.
-That is the console's behaviour, not this app's verdict on those verbs:
-removing the same elements from the KV structure editor (`KvKeyDetailPanel` /
-`KvMutationPanel`) analyzes them with `analyzeKvMutationSafety`
-(`src/components/workspace/kvMutationCommands.ts`), which marks a destructive
-removal `danger`, so that surface does open the strict / production confirm
-dialog. The same `HDEL` is judged by where it was raised. That gap predates
-#2421, which scoped itself to `DEL`, and is tracked in #2513. `KEYS` and
-`PERSIST` also keep dispatching on the first click under `warn` / `off`, but by
-design: the backend
-gates them and a keyspace scan and a TTL removal lose no data. The Safe Mode
-decision matrix is unchanged by #2421 as well. Destructive
+That is the console's behaviour, not this app's verdict on those verbs: the KV
+structure editor (`KvKeyDetailPanel` / `KvMutationPanel`) classifies the same
+removals differently, with `analyzeKvMutationSafety`
+(`src/components/workspace/kvMutationCommands.ts`). The same `HDEL` is judged by
+where it was raised, and which tiers actually confirm on that path is issue
+#2513. The console gap predates #2421, which scoped itself to `DEL`. `KEYS` and
+`PERSIST` stay on whatever the matrix decided rather than taking the dialog
+unconditionally the way `DEL` now does, by design: the backend gates them and a
+keyspace scan and a TTL removal lose no data. The Safe Mode decision matrix is
+unchanged by #2421 as well. Destructive
 classification reuses the native
 `sql-parser-core` crate (the same parser the frontend compiles to WASM); the one
 intentional divergence is the frontend's dynamic dry-run WARN→danger escalation,

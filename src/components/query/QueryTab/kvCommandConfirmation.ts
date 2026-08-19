@@ -27,13 +27,12 @@
  * (`src-tauri/table-view-core/src/db/redis/command_parser.rs`) yet are absent
  * below, so a command typed in the console classifies as `info`, the Safe Mode
  * matrix returns `allow` for that classification in every tier, and it reaches
- * IPC with no dialog. The console is not the only surface those verbs come
- * from: removing the same elements in the KV structure editor goes through
- * `analyzeKvMutationSafety` (`src/components/workspace/kvMutationCommands.ts`),
- * which marks a destructive removal `danger`, so that surface does open the
- * confirm dialog. Registering one here with `losesData: true` is what closes
- * the console side; the gap predates #2421, which scoped itself to `DEL`, and
- * is tracked in #2513
+ * IPC with no dialog. Registering one here with `losesData: true` is what
+ * closes the console side; that gap predates #2421, which scoped itself to
+ * `DEL`. The console is not the only surface those verbs come from — the KV
+ * structure editor classifies them differently, with `analyzeKvMutationSafety`
+ * (`src/components/workspace/kvMutationCommands.ts`). Which tiers actually
+ * confirm there is issue #2513
  * (`docs/product/known-limitations-cross-cutting.md`).
  */
 interface KvConfirmCommand {

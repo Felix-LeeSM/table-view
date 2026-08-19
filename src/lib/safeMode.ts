@@ -60,14 +60,12 @@ import type { Severity, StatementAnalysis } from "@/lib/sql/sqlSafety";
  * up in `KV_CONFIRM_COMMANDS` and they are absent — so `allow` comes back for
  * them even on production + `strict` (#2513).
  *
- * Those six verbs are not ungated everywhere: which analyzer ran decides, and
- * the KV structure editor uses a different one. Removing the same elements from
- * `KvKeyDetailPanel` / `KvMutationPanel` goes through
- * `analyzeKvMutationSafety` (`src/components/workspace/kvMutationCommands.ts`),
- * which marks a destructive removal `danger`, so this matrix answers `confirm`
- * for it on production / `strict` like any other destructive statement. Read a
- * claim about this matrix's answer as a claim about the analysis handed to it,
- * never about the verb alone; see
+ * Those verbs are not ungated everywhere: which analyzer ran decides, and the
+ * KV structure editor (`KvKeyDetailPanel` / `KvMutationPanel`) classifies the
+ * same removals differently, with `analyzeKvMutationSafety`
+ * (`src/components/workspace/kvMutationCommands.ts`). Which tiers actually
+ * confirm there is issue #2513. Read a claim about this matrix's answer as a
+ * claim about the analysis handed to it, never about the verb alone; see
  * `docs/product/known-limitations-cross-cutting.md`.
  *
  * Block action survives in the type union for the Mongo single-node
