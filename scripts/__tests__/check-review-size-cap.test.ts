@@ -15,7 +15,7 @@ import { parse as parseYaml } from "yaml";
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 const gate = "scripts/check-review-size-cap.sh";
-const MAX = 12_000;
+const MAX = 8_000;
 
 const dirs: string[] = [];
 
@@ -65,14 +65,14 @@ describe("check-review-size-cap", () => {
   // 붙이므로 bash 가 오류를 stderr 로 뱉어도 `^ok:` 는 그대로 맞는다.
   it("passes a document under the cap", () => {
     const run = runGate(["PR body"], "a".repeat(MAX - 1));
-    expect(run.out).toContain(`PR body 11999 chars <= ${MAX}`);
+    expect(run.out).toContain(`PR body ${MAX - 1} chars <= ${MAX}`);
     expect(run.stderr).toBe("");
     expect(run.status).toBe(0);
   });
 
   it("fails a document over the cap", () => {
     const run = runGate(["PR body"], "a".repeat(MAX + 1));
-    expect(run.out).toContain(`FAIL PR body: 12001 chars > ${MAX}`);
+    expect(run.out).toContain(`FAIL PR body: ${MAX + 1} chars > ${MAX}`);
     expect(run.out).not.toMatch(/^ok:/);
     expect(run.status).toBe(1);
   });
@@ -80,13 +80,13 @@ describe("check-review-size-cap", () => {
   // 상한은 "이하" 라서 정각은 통과해야 한다 — 비교가 `>=` 로 미끄러지면 red 다.
   it("passes at exactly the cap", () => {
     const run = runGate(["scorecard 1"], "a".repeat(MAX));
-    expect(run.out).toContain(`scorecard 1 12000 chars <= ${MAX}`);
+    expect(run.out).toContain(`scorecard 1 ${MAX} chars <= ${MAX}`);
     expect(run.stderr).toBe("");
     expect(run.status).toBe(0);
   });
 
   // 리뷰 산출물은 한국어 산문이고 UTF-8 에서 한 글자가 3 byte 다. 아래 문서는
-  // 5,000 문자 / 15,000 byte — cap 안이지만 byte 로 재면 12,000 을 한참 넘는다.
+  // 5,000 문자 / 15,000 byte — cap 안이지만 byte 로 재면 상한을 한참 넘는다.
   // 게이트가 `wc -c` 로 (또는 LC_ALL=C 아래 `wc -m` 으로) 회귀하면 여기서만
   // red 가 된다. 위의 ASCII 케이스들은 어느 단위로 재든 같은 답이라 단위를
   // 증명하지 못한다.
@@ -102,7 +102,7 @@ describe("check-review-size-cap", () => {
   it("reads the document from a FILE argument", () => {
     const over = seed("나".repeat(MAX + 1));
     const run = runGate(["scorecard 1", over]);
-    expect(run.out).toContain(`FAIL scorecard 1: 12001 chars > ${MAX}`);
+    expect(run.out).toContain(`FAIL scorecard 1: ${MAX + 1} chars > ${MAX}`);
     expect(run.status).toBe(1);
   });
 
@@ -118,7 +118,7 @@ describe("check-review-size-cap", () => {
 
   // 이슈 #2374 가 보고한 증상 그대로: 인자 계약이 <LABEL> [FILE] 인데 파일 경로를
   // LABEL 자리에 넣으면 FILE 이 없어 stdin 을 읽고, stdin 이 비면 0 문자가 된다.
-  // 20,000 자 문서가 `ok: <경로> 0 chars <= 12000` 으로 통과하던 자리다.
+  // 상한을 한참 넘는 문서가 `ok: <경로> 0 chars <= <상한>` 으로 통과하던 자리다.
   //
   // exit 는 1(상한 초과)이 아니라 2(검사 불성립)로 박는다 — 이 호출은 문서를 재서
   // 넘긴 것이 아니라 문서를 아예 못 받은 것이고, 스크립트도 위 "refuses empty input"
@@ -161,7 +161,7 @@ describe("check-review-size-cap", () => {
   //
   // 파이프 모양까지 고정하는 이유: 이 게이트는 개행도 한 글자로 세므로 호출자가
   // `printf '%s\n'` 으로 넘기면 문서에 없던 한 글자가 더해지고, 그러면 같은
-  // 「12,000」이 호출 자리마다 다른 수가 된다 (#2321).
+  // 상한이 호출 자리마다 다른 수가 된다 (#2321).
   it.each([".github/workflows/ci.yml", ".github/workflows/review-gate.yml"])(
     "calls %s's gate outside a comment, with a pipe that adds no characters",
     (workflow) => {

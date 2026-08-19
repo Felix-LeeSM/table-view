@@ -94,6 +94,13 @@ rc=0 을 낸다) / 분기 / `Already up to date.` 로 지나가는 앞선 HEAD(�
 - **가변부 = spawn 메시지에는 이것만 싣는다.** 이슈/PR 번호, 브랜치, 사본 경로
   (preamble 의 `<사본 경로>` 를 채운다), 라운드 번호와 맥락, 이전 scorecard
   포인터, 작업 유형에 맞는 추가 read 경로(AGENTS.md 매트릭스).
+- **거기 실은 「이것도 봐라 · 저것도 재라」는 노드의 판정 입력이지 산출물 항목이
+  아니다.** 그 구분을 안 실으면 노드가 확인 요청을 그대로 scorecard · PR body 의
+  절로 옮겨 적어 산출물이 결정 대신 과정으로 찬다 — 2026-08-19 세션이 그렇게 했고
+  그날 산출물이 길어진 원인 중 하나다 (이슈 #2507). 확인 요청을 실을 때는
+  **「확인했다는 사실이 아니라 판정이 바뀐 것만 적어라」를 같이 싣는다.** 두 역할
+  preamble 의 닫힌 목록 틀(`.agents/prompts/pr-review.md` 「반환 형식」 ·
+  `.agents/prompts/issue-implement.md` 「PR body 틀」)이 받는 쪽 가드다.
 - 사본 생성·회수는 `memory/runbook/worktree/memory.md` 절차.
 - 점유 기록: spawn 시 해당 이슈에 `착수: <branch>` 코멘트 — 사본 경로는
   규약(`../table-view-clones/<branch-sanitized>`)에서 파생되므로 로컬 경로를
