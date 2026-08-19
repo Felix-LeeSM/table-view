@@ -276,8 +276,9 @@ jobs:
       # AGENTS.md 「강제 룰」 puts on one memory room; #2316 reached the point
       # where the body's own factuality became a blocking finding. What counts
       # as a violation is decided by `scripts/check-review-size-cap.sh` alone;
-      # its header states the rule, the 12,000 figure and where that number
-      # comes from. The script needs no toolchain, so it adds no setup here.
+      # its header states the rule, the cap itself and where that number comes
+      # from — #2507 re-derived it from the rewritten floor, so do not restate
+      # the figure here. The script needs no toolchain, so it adds no setup here.
       #
       # The clearing rule below is not decoration. This workflow does not
       # listen for `edited` (see the `on:` comment at the top of this file), so
@@ -288,9 +289,10 @@ jobs:
       #
       # `printf '%s'`, without the `\n` the step above uses. That newline is a
       # character, and a character cap counts it: with `'%s\n'` this step read
-      # 5517 for a 5516-character body, so «12,000 이하» meant 11,999 here while
-      # the scorecard site — where `$( )` strips the trailing newline before
-      # `printf` puts one back — kept meaning 12,000. One cap, two numbers. The
+      # 5517 for a 5516-character body, so back when the cap was 12,000 «이하»
+      # meant 11,999 here while the scorecard site — where `$( )` strips the
+      # trailing newline before `printf` puts one back — kept the full 12,000.
+      # One cap, two numbers, whatever the figure is. The
       # neighbouring universals step keeps its `\n` on purpose: that check is
       # line-oriented and its last line needs a terminator.
       - name: PR body size cap

@@ -172,10 +172,11 @@ jobs:
           echo "::error::rounds=${{ steps.rounds.outputs.rounds }} (서로 다른 head 커밋에 붙은 리뷰 인계 수) — 리뷰 3라운드. green 이면 reflect:done 을 붙이고 머지해라 (게이트는 라운드만 세고 verdict 는 안 본다). red 면 같은 유형에 fix 를 더 쌓지 말고 재발 유형 / 라운드별 건수 / 시도한 것을 사용자에게 올려라 — 진행 승인이 reflect:done 이다. 그 승인은 이 라운드에만 유효하다: 새 커밋이 오면 자동으로 떨어진다."
           exit 1
 
-      # scorecard 한 장의 분량 cap (#2321). scorecard 는 다음 라운드 구현자가
-      # 읽는 입력인데 한 장이 memory 방 하나의 cap 을 넘게 자라 있었다. 판정과
-      # 상한 12,000 의 출처는 scripts/check-review-size-cap.sh 헤더이고, 실측
-      # 분포는 issue #2321 과 그 PR body 가 재현 명령과 함께 갖는다.
+      # scorecard 한 장의 분량 cap (#2321, 값 재조정 #2507). scorecard 는 다음
+      # 라운드 구현자가 읽는 입력인데 한 장이 memory 방 하나의 cap 을 넘게 자라
+      # 있었다. 판정과 상한의 값·출처는 scripts/check-review-size-cap.sh 헤더가
+      # 갖는다 — 여기 옮겨 적으면 값이 두 벌이 된다. 실측 분포는 issue #2321 ·
+      # #2507 이 재현 명령과 함께 갖는다.
       #
       # **여기가 집행 자리인 이유**: scorecard 는 PR body 가 아니라 코멘트라
       # ci.yml 이 못 본다 — 그 workflow 는 `labeled` 를 안 듣는다. 이 workflow 는
