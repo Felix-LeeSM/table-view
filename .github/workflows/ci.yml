@@ -721,7 +721,17 @@ jobs:
       # clippy --all-features pulls the full Tauri feature graph, which needs
       # the WebKitGTK/GTK system libraries to compile on Linux. Mirrors the
       # integration-tests job's apt step.
+      #
+      # #2495 — the retry wrapper below runs *inside* this step, so it only
+      # ever sees apt fail; a hung apt never returns and the loop never reaches
+      # attempt 2. Without a step timeout the job burns its whole budget, GitHub
+      # cancels it, and every later step is left `skipped` — a required check
+      # that reported nothing. A step timeout kills the process instead, so this
+      # step fails and the job goes red. The 20m is not a recovery budget: it
+      # sits above the slowest successful run of this step in the runs #2495
+      # sampled and below every job budget that carries this step.
       - name: Install Tauri Linux dependencies
+        timeout-minutes: 20
         # Retry wrapper (#1293): transient apt mirror failures (e.g.
         # packages.microsoft.com 403) fail the whole setup. Up to 3 attempts
         # with linear backoff.
@@ -905,7 +915,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # #2495 — step timeout so a hung apt fails here instead of cancelling the
+      # job with every later step `skipped`. The `Rust Static Analysis` job
+      # above carries the reasoning and the value's derivation.
       - name: Install Tauri Linux dependencies
+        timeout-minutes: 20
         # Retry wrapper (#1293): transient apt mirror failures (e.g.
         # packages.microsoft.com 403) fail the whole setup. Up to 3 attempts
         # with linear backoff. The `Rust Static Analysis` job above runs the

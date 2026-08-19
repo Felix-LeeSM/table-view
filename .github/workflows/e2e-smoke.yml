@@ -150,8 +150,14 @@ jobs:
             echo "- services: ${services:-none}"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # #2495 — the retry wrapper below only sees apt fail, never hang. Without
+      # a step timeout a hung apt burns this job's 330m budget before GitHub
+      # cancels it and leaves every later step `skipped`, so a required check
+      # reports nothing. The copies of this step in `.github/workflows/ci.yml`
+      # carry the same guard and the same value.
       - name: Install Tauri Linux dependencies
         if: steps.select.outputs.count != '0'
+        timeout-minutes: 20
         # Retry wrapper: transient apt mirror failures (e.g.
         # packages.microsoft.com 403) otherwise fail the whole setup.
         run: |
