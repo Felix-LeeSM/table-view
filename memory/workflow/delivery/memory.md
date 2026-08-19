@@ -1,9 +1,9 @@
 ---
 title: Delivery — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 행동 계약
 type: workflow-rule
-updated: 2026-08-17
+updated: 2026-08-19
 task: delivery, commit, push, pr, review, merge
-keywords: 커밋, commit, push, PR 생성, squash, squash body, squash 제목, 머지 제목, 교정 대상 표면, --body-file, --subject, COMMIT_MESSAGES, COMMIT_OR_PR_TITLE, 뒤집힌 주장, 철회문, scorecard 대조, staleness, 머지 정책, review:approved, reflect:done, 자율 실행, 중단 조건, 회고 모드 진입 조건, GPG, pinentry, 노드 표
+keywords: 커밋, commit, push, PR 생성, PR body 틀, 형식 틀, squash, squash body, squash 제목, 머지 제목, 교정 대상 표면, --body-file, --subject, COMMIT_MESSAGES, COMMIT_OR_PR_TITLE, 뒤집힌 주장, 철회문, scorecard 대조, staleness, 머지 정책, review:approved, reflect:done, 자율 실행, 중단 조건, 회고 모드 진입 조건, GPG, pinentry, 노드 표
 trigger:
   signal: implementation 완료 / 사용자가 "마무리해" / sprint 종료
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -84,8 +84,10 @@ head OID 로 센 라운드가 3 이상이면 `reflect:done` 까지, mergeable, �
 
 ## PR body
 
-형식 요구는 없다. CI 가 집행하는 제약은 근거의 이식성 · 전칭 서술의 반증 명령 ·
-분량이다.
+이 절은 제약만 둔다. body 의 **형식 틀**만 `.agents/prompts/issue-implement.md`
+「PR body 틀」이 갖는다 (무엇을 주장할지는 여전히 저자가 세운다). 그 파일은 구현자
+spawn 에만 실리니 **다른 노드는 이 줄을 보고 직접 연다.** CI 가 집행하는 제약은
+근거의 이식성 · 전칭 서술의 반증 명령 · 분량이다.
 **이식성** — PR body / comment 는 GitHub 에서 열리는 repo-relative path 와 URL 만
 쓴다. `/Users`, `/tmp`, `file://`, `worktrees/`, `clones/` 금지.
 **분량** — body 한 벌이 8,000 문자 이하다 (#2321 · #2507). 집행은

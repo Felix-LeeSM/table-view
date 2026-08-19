@@ -1,7 +1,7 @@
 ---
 title: Documentation Impact Gate
 type: workflow-rule
-updated: 2026-08-17
+updated: 2026-08-19
 task: documentation, docs, pr, review, delivery
 keywords: 문서화, documentation impact, 문서화 impact 게이트, Reviewer 판정, SOT 라우팅, evidence portability, repo-relative, retire 조건, 결정만 적는다, 무엇만 담는가, 증거 열거, 재현 서사, 결론인 수치, 명령 한 줄, 과정, scorecard 분량, PR body 분량, 개수 서술, 닫힌 개수, 자리 나열, scorecard 수치, 가변 상태, 조회 명령, 움직이는 ref, head SHA, 현재형 단정, 옮겨 적은 값, 앵커, 종점, merge-base
 trigger:
@@ -16,8 +16,8 @@ trigger:
 
 ## Documentation impact 판단
 
-PR body 형식 요구는 없다. 아래 질문에 스스로 답하고, 답을 남길 곳은
-PR body / 커밋 메시지 / 리뷰 코멘트 중 아무 곳이나 고른다.
+아래 질문에 스스로 답한다. PR body 에서 그 답이 앉는 자리는 「문서화 impact」
+절이고, 그 틀의 소유자는 [delivery](../delivery/memory.md) 「PR body」가 가리킨다.
 
 - 문서화가 필요한가 (아래 트리거 목록).
 - 필요하면 기존 SOT 중 어디를 갱신했나 (repo-relative path).
