@@ -51,10 +51,13 @@ import type { Severity, StatementAnalysis } from "@/lib/sql/sqlSafety";
  * `off` opens `SqlPreviewDialog` instead of reaching the driver. That gate is
  * the editor's surface, not this matrix — the Redis command console
  * (`src/components/query/QueryTab/kvQueryExecution.ts`) mounts no preview and
- * since #2421 routes a data-loss command (`DEL`) to the confirm dialog on its
- * own instead, again above this matrix rather than inside it. A KV command that
- * loses nothing (`KEYS`, `PERSIST`) still dispatches straight away when this
- * function returns `allow`.
+ * since #2421 routes `DEL` to the confirm dialog on its own instead, again
+ * above this matrix rather than inside it. `DEL` is the only KV command that
+ * gets it — every other one still dispatches straight away when this function
+ * returns `allow`, including the ones the backend classifies as destructive
+ * (`HDEL`, `LREM`, `SREM`, `ZREM`, `XDEL`, `XTRIM`). Those reach this matrix as
+ * `info`, so `allow` comes back for them even on production + `strict`; see
+ * `docs/product/known-limitations-cross-cutting.md`.
  *
  * Block action survives in the type union for the Mongo single-node
  * fallback (where dry-run is unavailable). This function never returns

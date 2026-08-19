@@ -79,16 +79,27 @@ the first click while `DELETE FROM t WHERE id = 1` got the preview dialog;
 `DROP TABLE t` and a Mongo `$out` pipeline now open that same dialog
 (`SqlPreviewDialog` / `MqlPreviewModal`). The Safe Mode decision matrix is
 unchanged by the widening. The Redis command console mounts no preview at all
-(`src/components/query/QueryTab/kvQueryExecution.ts`), so issue #2421 closed the
-same hole there with the confirm dialog instead: `DEL k` now opens
-`ConfirmDestructiveDialog` whatever the matrix returned, and the dispatch seam
-refuses a data-loss command that did not come from that dialog. Before #2421 it
-dispatched on the first click *and* passed the backend `require_confirm_key`
-gate, because the frontend derived the confirm key from the same command text
-the backend parses it from — that gate cannot distinguish a confirmed request
-from an unconfirmed one, so the confirm dialog is the boundary. `KEYS` and
-`PERSIST` keep dispatching on the first click under `warn` / `off`: the backend
-gates them but a keyspace scan and a TTL removal lose no data. The Safe Mode
+(`src/components/query/QueryTab/kvQueryExecution.ts`), so a destructive command
+the matrix allows there still dispatches on the first click. Issue #2421 closed
+that for `DEL` alone, using the confirm dialog rather than a preview: `DEL k`
+now opens `ConfirmDestructiveDialog` whatever the matrix returned, and the
+dispatch seam refuses a `DEL` that did not come from that dialog. Before #2421
+`DEL k` dispatched on the first click *and* passed the backend
+`require_confirm_key` gate, because the frontend derived the confirm key from
+the same command text the backend parses it from — that gate cannot distinguish
+a confirmed request from an unconfirmed one, so the confirm dialog is the
+boundary. The console's other data-loss commands still dispatch on the first
+click, and unlike the SQL/MQL editors they do so in every Safe Mode tier,
+production + `strict` included: `HDEL`, `LREM`, `SREM`, `ZREM`, `XDEL` and
+`XTRIM` are `RedisCommandEffect::Destructive` in
+`src-tauri/table-view-core/src/db/redis/command_parser.rs` but sit outside the
+frontend's `KV_CONFIRM_COMMANDS` map
+(`src/components/query/QueryTab/kvCommandConfirmation.ts`), so they classify as
+`info`, the matrix returns `allow` for them everywhere, and neither the dialog
+routing nor the dispatch refusal engages. That gap predates #2421, which scoped
+itself to `DEL`, and is tracked separately. `KEYS` and `PERSIST` also keep
+dispatching on the first click under `warn` / `off`, but by design: the backend
+gates them and a keyspace scan and a TTL removal lose no data. The Safe Mode
 decision matrix is unchanged by #2421 as well. Destructive
 classification reuses the native
 `sql-parser-core` crate (the same parser the frontend compiles to WASM); the one

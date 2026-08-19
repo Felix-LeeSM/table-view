@@ -137,8 +137,11 @@ export function useQueryExecution({
   } | null>(null);
 
   // #2421 — takes the staged confirmation whole rather than a loose command +
-  // confirm key, so the only value that can carry a KV confirm key to the
-  // backend is one the confirm dialog produced.
+  // confirm key, so the key that travels on this path is the one the dialog
+  // produced rather than one recomputed from the command text. This is not the
+  // only path that carries a confirm key: `executeKvCommandNow` derives and
+  // sends one for `KEYS` / `PERSIST` (`kvQueryExecution.ts`). What it cannot
+  // send is a confirm key for a command `kvDataLossReason` names.
   const runConfirmedKvCommand = useCallback(
     async (confirmation: PendingKvConfirmation) => {
       await executeConfirmedKvCommand({

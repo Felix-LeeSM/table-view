@@ -13,13 +13,23 @@
  * string, and the frontend can derive that value from the command text (see
  * `kvCommandConfirmationKey` below). A dispatch that skipped the dialog used to
  * satisfy the gate by itself, so `DEL k` ran with no dialog and no rejection on
- * the shipped default (non-production + Safe Mode `warn`). The real boundary
- * for a data-loss command is the confirm dialog, and enforcing it is
+ * the shipped default (non-production + Safe Mode `warn`). The boundary that
+ * replaced it is the confirm dialog, and enforcing it is
  * `kvQueryExecution.ts`'s job: `executeKvCommandNow` refuses any command
  * `kvDataLossReason` names, and only `executeConfirmedKvCommand` — reachable
  * solely from a cleared dialog — can dispatch one. What the backend allowlist
  * still bounds is *which* commands exist at all; it cannot tell a confirmed
  * request from an unconfirmed one.
+ *
+ * That boundary covers this map, not everything that loses data. `HDEL`,
+ * `LREM`, `SREM`, `ZREM`, `XDEL` and `XTRIM` are
+ * `RedisCommandEffect::Destructive` on the backend
+ * (`src-tauri/table-view-core/src/db/redis/command_parser.rs`) yet are absent
+ * below, so they classify as `info`, the Safe Mode matrix returns `allow` for
+ * them in every tier, and they reach IPC with no dialog. Registering one here
+ * with `losesData: true` is what closes that; the gap predates #2421, which
+ * scoped itself to `DEL`, and is tracked separately
+ * (`docs/product/known-limitations-cross-cutting.md`).
  */
 interface KvConfirmCommand {
   /** Confirm-dialog reason copy. */

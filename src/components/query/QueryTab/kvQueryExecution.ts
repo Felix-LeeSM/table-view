@@ -92,15 +92,25 @@ export function analyzeKvCommandSafety(command: string): StatementAnalysis {
 /**
  * Issue #2421 — dispatch a command the user was never asked about.
  *
- * A data-loss command is refused here rather than sent. The backend's
+ * A command `kvDataLossReason` names is refused here rather than sent — today
+ * that predicate names `DEL` and nothing else. The backend's
  * `require_confirm_key` gate compares the request's key against the key it
  * parsed out of the same command string, so any caller can satisfy it by
  * deriving the key from the command text — which is exactly what this seam used
  * to do on the no-dialog path, leaving `DEL k` to run silently on the shipped
  * default. The guard sits inside the dispatch instead of at each call site so a
  * branch added later fails closed: forgetting the dialog produces a refusal,
- * not a deletion. Getting a data-loss command through requires
+ * not a deletion. Getting a command that predicate names through requires
  * `executeConfirmedKvCommand`, which only a cleared dialog reaches.
+ *
+ * The refusal is bounded by that predicate, not by what actually loses data.
+ * `HDEL`, `LREM`, `SREM`, `ZREM`, `XDEL` and `XTRIM` are
+ * `RedisCommandEffect::Destructive` on the backend
+ * (`src-tauri/table-view-core/src/db/redis/command_parser.rs`) but are absent
+ * from `KV_CONFIRM_COMMANDS`, so they classify as `info` and pass through here
+ * with no dialog in every Safe Mode tier. That gap predates #2421, which scoped
+ * itself to `DEL`, and is tracked separately
+ * (`docs/product/known-limitations-cross-cutting.md`).
  *
  * The confirm key is still echoed for the gated-but-not-data-loss commands
  * (KEYS pattern / PERSIST key): the backend rejects those without it and they
