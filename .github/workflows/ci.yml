@@ -721,7 +721,24 @@ jobs:
       # clippy --all-features pulls the full Tauri feature graph, which needs
       # the WebKitGTK/GTK system libraries to compile on Linux. Mirrors the
       # integration-tests job's apt step.
+      #
+      # #2495 — the retry wrapper below runs *inside* this step, so it only
+      # ever sees apt fail; a hung apt never returns and the loop never reaches
+      # attempt 2. Without a step timeout the job burns its whole budget and
+      # GitHub cancels it, so the job reports `cancelled` and its later steps
+      # report `skipped`. A step timeout kills the process instead: the step
+      # fails, so does the job, and the rest of the budget is released. The
+      # later steps are still skipped either way — what changes is the job
+      # conclusion and the reclaimed time.
+      #
+      # The value is not a recovery budget. It is bounded on both sides: above
+      # the slowest *successful* run of this step in this job (26m33s, job
+      # 90623812555) so it cannot turn a passing run red, and below this job's
+      # own budget above (30m) so it can fire at all. Those two leave almost no
+      # room here — 28m clears the observed maximum by 87s and beats the job
+      # cancel by 2m. #2495 carries the measurement and the population.
       - name: Install Tauri Linux dependencies
+        timeout-minutes: 28
         # Retry wrapper (#1293): transient apt mirror failures (e.g.
         # packages.microsoft.com 403) fail the whole setup. Up to 3 attempts
         # with linear backoff.
@@ -905,7 +922,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # #2495 — step timeout so a hung apt fails this job instead of letting it
+      # run out its budget and be cancelled. The `Rust Static Analysis` job
+      # above carries the reasoning; the value differs because it is derived per
+      # job. Here the slowest successful run of this step was 35m59s (job
+      # 86392971927) against a 60m budget, so 45m clears it by 9m and still cuts
+      # a hang by 15m.
       - name: Install Tauri Linux dependencies
+        timeout-minutes: 45
         # Retry wrapper (#1293): transient apt mirror failures (e.g.
         # packages.microsoft.com 403) fail the whole setup. Up to 3 attempts
         # with linear backoff. The `Rust Static Analysis` job above runs the
