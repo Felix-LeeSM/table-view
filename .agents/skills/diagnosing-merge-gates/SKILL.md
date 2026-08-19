@@ -1,6 +1,6 @@
 ---
 name: diagnosing-merge-gates
-description: PR 이 mergeable 인데 BLOCKED 이거나 merge 가 base branch policy 로 거부될 때의 진단 순서. review-gate run 고착, 라운드 게이트, 트리거 반복 함정을 다룬다.
+description: PR 이 mergeable 인데 BLOCKED 이거나 merge 가 base branch policy 로 거부될 때의 진단 순서. review-gate run 고착, 라운드 게이트, 트리거 반복 함정, 그리고 이 head 에서 안 끝난 required check 를 직전 head 에서 읽는 법을 다룬다.
 ---
 
 # PR merge 게이트 진단
@@ -117,6 +117,33 @@ N 개 중 `FAIL <key>` 를 찍은 spec 이 원인이다.
    **`--admin` 으로는 못 넘긴다** — required 를 실제로 충족시켜야 한다. 왜 못
    넘기는지(`enforce_admins` · ruleset)는 `memory/runbook/pr-merge-gates/memory.md`
    「계약」이 소유한다.
+
+## 안 끝난 check 를 직전 head 에서 읽는 법
+
+`IN_PROGRESS` 인 required check 는 「아직 모른다」가 아니다 — **같은 이름의 run 이
+직전 head 에서 이미 결론을 냈다.** force-push 가 hard block 이라
+(`memory/workflow/git-policy/memory.md`) 브랜치 커밋 목록이 곧 지나간 head 목록이고,
+head 마다 같은 이름을 읽으면 그 결론이 head 를 넘어 반복되는지가 보인다. 반복되면
+`gh run rerun` 으로 뒤집힐 실패로 보지 않는다 — 확정은 실패한 스텝을 읽어서 한다.
+
+```bash
+SHAS="$(gh api --paginate "repos/Felix-LeeSM/table-view/pulls/<N>/commits" -q '.[].sha')" \
+  || { echo "ABORT: PR 커밋 조회 실패 — 지나간 head 목록을 못 얻었다" >&2; exit 1; }
+printf '%s\n' "$SHAS" | while read -r sha; do
+  printf '%s ' "$sha"
+  gh api "repos/Felix-LeeSM/table-view/commits/$sha/check-runs?per_page=100" \
+    -q '[.check_runs[] | select(.name=="<check 이름>")] | sort_by(.completed_at) | last | "\(.status) \(.conclusion) \(.completed_at)"'
+done
+```
+
+출력은 오래된 head 부터다 — 마지막 줄이 `completed` 가 아니면 위로 올라가 가장 최근
+결론을 읽는다. **그 head 에 그 이름의 run 이 아예 없으면 `null null null` 이 나온다**
+(rc=0). 조회 실패가 아니라 「없다」이고, 거슬러 올라가도 계속 그러면 그때가 「못
+쟀다」다. `--jq`/`-q` 에 `--arg` 를 붙이면 `accepts at most 1 arg(s)` 로 죽으니 이름은
+필터 안에 박는다.
+
+리뷰어가 이 값을 어디에 적고 어떻게 판정하는지는 `.agents/prompts/pr-review.md`
+「자동 layer」가 갖는다.
 
 ## 진단 명령
 
