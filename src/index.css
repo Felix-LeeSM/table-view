@@ -274,11 +274,11 @@ body {
  * Where the line is drawn, since it decides every future addition: machine
  * output earns its exception through the ELEMENT that prints it, not through
  * the role of whatever wraps it. `[role="status"]` is the case that settles
- * the rule — it looks like the twin of `[role="alert"]`, but
- * `git grep -n 'role="status"' -- src/ | grep -v '\.test\.'` is 87 lines and
- * most are skeletons, spinners and empty states, so adding it would flip a
- * screenful of chrome back on to rescue the handful of error strings under
- * it. Those strings are reached the other way instead: the thing that prints
+ * the rule — it looks like the twin of `[role="alert"]`, but walk what it
+ * actually marks in this repo and most of it is skeletons, spinners and
+ * empty states, so adding it would flip a screenful of chrome back on to
+ * rescue the few error strings under it. Those are reached the other way
+ * instead: the thing that prints
  * them renders `pre` or `code` (`src/components/query/QueryErrorDetail.tsx`,
  * `src/components/shared/SqlSyntax.tsx`), which this list already covers
  * wherever it is mounted. Adding a role here is the last resort, not the
