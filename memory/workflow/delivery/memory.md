@@ -88,7 +88,7 @@ head OID 로 센 라운드가 3 이상이면 `reflect:done` 까지, mergeable, �
 분량이다.
 **이식성** — PR body / comment 는 GitHub 에서 열리는 repo-relative path 와 URL 만
 쓴다. `/Users`, `/tmp`, `file://`, `worktrees/`, `clones/` 금지.
-**분량** — body 한 벌이 12,000 문자 이하다 (#2321). 집행은
+**분량** — body 한 벌이 8,000 문자 이하다 (#2321 · #2507). 집행은
 `scripts/check-review-size-cap.sh` 이고 판정 정의와 그 수의 출처는 그 헤더가 갖는다 —
 같은 cap 이 scorecard 에도 장 단위로 걸리고 그쪽 자리는 [review](../review/memory.md)
 「행동 계약」이다. **전칭** — 트리거

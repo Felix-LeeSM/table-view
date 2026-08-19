@@ -124,7 +124,7 @@ trigger:
   결정 자체이므로 **어떤 경우에도 생략 금지** — 요청자가 반환 형식을 verdict 한
   줄로 좁게 지정해도, delta 재검증이어도 낸다 (2026-07-04 회귀: 요청 프롬프트의
   형식 지정이 표를 밀어냈다).
-- **scorecard 한 장은 12,000 문자 이하다** (#2321). `review-gate` 가 `## Scorecard`
+- **scorecard 한 장은 8,000 문자 이하다** (#2321 · #2507). `review-gate` 가 `## Scorecard`
   로 여는 코멘트를 장마다 재고, 판정 정의 · 그 수의 출처 · 합이 아니라 장 단위인
   이유는 `scripts/check-review-size-cap.sh` 헤더가 갖는다. 넘으면 그 코멘트를
   줄이고 job 을 re-run 한다 — 코멘트를 API 로 다시 읽어서 새 commit 없이 풀린다
