@@ -30,18 +30,21 @@ describe("MongoSyntax", () => {
     expect(() => render(<MongoSyntax sql={'{"$match":{'} />)).not.toThrow();
   });
 
-  it("applies the supplied className on the parent span alongside font-mono", () => {
+  // The parent tag is `<code>`, not a styling detail: selection is off by
+  // default and `src/index.css` grants it per element (#2432), so this is
+  // what keeps the rendered MQL liftable at every call-site.
+  it("applies the supplied className on the parent code element alongside font-mono", () => {
     const { container } = render(
       <MongoSyntax sql={'{"a":1}'} className="truncate text-xs" />,
     );
     const parent = container.firstElementChild as HTMLElement;
-    expect(parent.tagName).toBe("SPAN");
+    expect(parent.tagName).toBe("CODE");
     expect(parent.className).toMatch(/font-mono/);
     expect(parent.className).toMatch(/truncate/);
     expect(parent.className).toMatch(/text-xs/);
   });
 
-  it("renders the full source bytes inside the parent span", () => {
+  it("renders the full source bytes inside the parent element", () => {
     const src = '{"$match": {"$eq": 1}}';
     const { container } = render(<MongoSyntax sql={src} />);
     expect(container.textContent).toBe(src);

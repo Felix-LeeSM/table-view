@@ -13,22 +13,11 @@
 // `index-css.select-policy.test.ts` covers the other one, that the rule is
 // the only place selection is decided.
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { selectableSelector } from "@/test-utils/selectPolicy";
 import type { TableData } from "@/types/schema";
 import DataGridTable from "./DataGridTable";
-
-/** The selector `src/index.css` re-enables text selection on. */
-function selectableSelector(): string {
-  const css = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8")
-    // Comments first — one of them quotes a `{ … }` block.
-    .replace(/\/\*[\s\S]*?\*\//g, "");
-  const match = css.match(/([^{}]*)\{[^{}]*user-select:\s*text;[^{}]*\}/);
-  if (!match) throw new Error("no `user-select: text` rule in src/index.css");
-  return match[1]!.trim();
-}
 
 function makeData(): TableData {
   return {

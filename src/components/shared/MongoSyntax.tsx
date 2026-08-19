@@ -33,16 +33,20 @@ const TOKEN_CLASS: Record<MongoTokenKind, string> = {
  * live highlighting. Malformed JSON is tolerated by the underlying
  * `tokenizeMongo` — the component never throws for unterminated
  * strings or truncated payloads.
+ *
+ * The parent is a `<code>` for the reason `SqlSyntax` states: selection is
+ * off by default and `src/index.css` grants it per element, so the element
+ * is what keeps this machine output liftable at every call-site (#2432).
  */
 export default function MongoSyntax({ sql, className }: MongoSyntaxProps) {
   const tokens = useMemo(() => tokenizeMongo(sql), [sql]);
   return (
-    <span className={cn("font-mono", className)}>
+    <code className={cn("font-mono", className)}>
       {tokens.map((tok, idx) => (
         <span key={idx} className={TOKEN_CLASS[tok.kind]}>
           {tok.text}
         </span>
       ))}
-    </span>
+    </code>
   );
 }

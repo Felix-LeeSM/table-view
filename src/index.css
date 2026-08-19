@@ -269,7 +269,20 @@ body {
  * classes rather than a list of files. `[role="alert"]` is the loosest
  * of them — it also catches the app's own short form-validation strings, and
  * that cost is accepted because the alternative loses the driver error text
- * the user wants to paste into a search box. `[contenteditable="true"]` is
+ * the user wants to paste into a search box.
+ *
+ * Where the line is drawn, since it decides every future addition: machine
+ * output earns its exception through the ELEMENT that prints it, not through
+ * the role of whatever wraps it. `[role="status"]` is the case that settles
+ * the rule — it looks like the twin of `[role="alert"]`, but
+ * `git grep -n 'role="status"' -- src/ | grep -v '\.test\.'` is 87 lines and
+ * most are skeletons, spinners and empty states, so adding it would flip a
+ * screenful of chrome back on to rescue the handful of error strings under
+ * it. Those strings are reached the other way instead: the thing that prints
+ * them renders `pre` or `code` (`src/components/query/QueryErrorDetail.tsx`,
+ * `src/components/shared/SqlSyntax.tsx`), which this list already covers
+ * wherever it is mounted. Adding a role here is the last resort, not the
+ * first move. `[contenteditable="true"]` is
  * the CodeMirror editors: `.cm-content` sets no `user-select` of its own, so
  * without this line the SQL you typed would not be selectable.
  *
