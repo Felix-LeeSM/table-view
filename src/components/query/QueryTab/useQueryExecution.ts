@@ -7,7 +7,7 @@ import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ConnectionId, TabId } from "@/types/branded";
 import {
-  executeKvCommandNow,
+  executeConfirmedKvCommand,
   executeKvQuery,
   type PendingKvConfirmation,
 } from "./kvQueryExecution";
@@ -136,17 +136,17 @@ export function useQueryExecution({
     previewLines?: string[];
   } | null>(null);
 
-  const runKvCommandNow = useCallback(
-    async (
-      command: string,
-      database: number | undefined,
-      confirmKey?: string,
-    ) => {
-      await executeKvCommandNow({
+  // #2421 — takes the staged confirmation whole rather than a loose command +
+  // confirm key, so the key that travels on this path is the one the dialog
+  // produced rather than one recomputed from the command text. This is not the
+  // only path that carries a confirm key: `executeKvCommandNow` derives and
+  // sends one for `KEYS` / `PERSIST` (`kvQueryExecution.ts`). What it cannot
+  // send is a confirm key for a command `kvDataLossReason` names.
+  const runConfirmedKvCommand = useCallback(
+    async (confirmation: PendingKvConfirmation) => {
+      await executeConfirmedKvCommand({
         tab,
-        command,
-        database,
-        confirmKey,
+        confirmation,
         updateQueryState,
         completeQuery,
         failQuery,
@@ -160,12 +160,8 @@ export function useQueryExecution({
     const pending = pendingKvConfirm;
     if (!pending) return;
     setPendingKvConfirm(null);
-    await runKvCommandNow(
-      pending.command,
-      pending.database,
-      pending.confirmKey,
-    );
-  }, [pendingKvConfirm, runKvCommandNow]);
+    await runConfirmedKvCommand(pending);
+  }, [pendingKvConfirm, runConfirmedKvCommand]);
 
   const cancelKvDangerous = useCallback(() => {
     setPendingKvConfirm(null);
@@ -615,7 +611,6 @@ export function useQueryExecution({
     failQuery,
     recordHistory,
     updateQueryState,
-    runKvCommandNow,
     runMongoAggregateNow,
     mongoWriteDispatchers,
     runRdbSingleNow,

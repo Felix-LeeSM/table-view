@@ -51,7 +51,22 @@ import type { Severity, StatementAnalysis } from "@/lib/sql/sqlSafety";
  * `off` opens `SqlPreviewDialog` instead of reaching the driver. That gate is
  * the editor's surface, not this matrix — the Redis command console
  * (`src/components/query/QueryTab/kvQueryExecution.ts`) mounts no preview and
- * dispatches an allowed command straight away.
+ * since #2421 routes `DEL` to the confirm dialog on its own instead, again
+ * above this matrix rather than inside it. In that console `DEL` is the only KV
+ * command that gets it: every other one still dispatches straight away when
+ * this function returns `allow`, and the ones the backend classifies as
+ * destructive (`HDEL`, `LREM`, `SREM`, `ZREM`, `XDEL`, `XTRIM`) reach this
+ * matrix from there as `info` — `analyzeKvCommandSafety` looks the typed verb
+ * up in `KV_CONFIRM_COMMANDS` and they are absent — so `allow` comes back for
+ * them even on production + `strict` (#2513).
+ *
+ * Those verbs are not ungated everywhere: which analyzer ran decides, and the
+ * KV structure editor (`KvKeyDetailPanel` / `KvMutationPanel`) classifies the
+ * same removals differently, with `analyzeKvMutationSafety`
+ * (`src/components/workspace/kvMutationCommands.ts`). Which tiers actually
+ * confirm there is issue #2513. Read a claim about this matrix's answer as a
+ * claim about the analysis handed to it, never about the verb alone; see
+ * `docs/product/known-limitations-cross-cutting.md`.
  *
  * Block action survives in the type union for the Mongo single-node
  * fallback (where dry-run is unavailable). This function never returns

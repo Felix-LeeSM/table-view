@@ -1,5 +1,6 @@
 import { $, browser } from "@wdio/globals";
 import {
+  clickDialogAction,
   expectConnectionVisible,
   openConnection,
   openNewConnectionDialog,
@@ -8,6 +9,7 @@ import {
   setInput,
   step,
   switchToWorkspaceWindow,
+  waitForDialogTextAll,
   waitForKvKeyVisible,
   waitForLauncher,
   waitForWorkspaceTextAll,
@@ -117,32 +119,36 @@ describe("Valkey smoke", () => {
       );
     });
 
-    await step(
-      "run destructive DEL through the mirrored confirm-key flow",
-      async () => {
-        // Issue #1120: the command editor now mirrors the backend
-        // `required_confirmation_key` set, so DEL auto-supplies its target
-        // key and runs like a SQL destructive statement — non-production +
-        // default Safe Mode (off) → allow, no bare backend rejection. The
-        // production/strict confirm-dialog path is unit-tested in
-        // kvQueryExecution.test.ts.
-        await setCodeMirrorText("DEL vk:cmd");
-        await runQuery();
-        await waitForWorkspaceTextAll(
-          ["1 row affected"],
-          15000,
-          "Valkey DEL command did not render DML summary after auto-confirming the target key",
-        );
+    await step("run destructive DEL through the confirm dialog", async () => {
+      // Issue #2421 (P5 regression pin): DEL takes the destructive confirm
+      // dialog, and a dispatch that did not come from that dialog is
+      // refused. One predicate drives both halves — `kvDataLossReason` in
+      // src/components/query/QueryTab/kvCommandConfirmation.ts. Until #2421
+      // this step ran DEL with no dialog step at all, so the dialog wait
+      // below is what goes red if the routing is dropped. Which surface
+      // confirms which verbs differs per path — issue #2513 decides that.
+      await setCodeMirrorText("DEL vk:cmd");
+      await runQuery();
+      await waitForDialogTextAll(
+        ["Destructive statement", "DEL vk:cmd"],
+        15000,
+        "Valkey DEL command did not open the destructive confirm dialog",
+      );
+      await clickDialogAction("Confirm");
+      await waitForWorkspaceTextAll(
+        ["1 row affected"],
+        15000,
+        "Valkey DEL command did not render DML summary after the confirm dialog was cleared",
+      );
 
-        await setCodeMirrorText("FLUSHDB");
-        await runQuery();
-        await waitForWorkspaceTextAll(
-          ["outside the bounded runtime slice"],
-          15000,
-          "Valkey unsupported command did not surface bounded-slice guard",
-        );
-      },
-    );
+      await setCodeMirrorText("FLUSHDB");
+      await runQuery();
+      await waitForWorkspaceTextAll(
+        ["outside the bounded runtime slice"],
+        15000,
+        "Valkey unsupported command did not surface bounded-slice guard",
+      );
+    });
   });
 });
 

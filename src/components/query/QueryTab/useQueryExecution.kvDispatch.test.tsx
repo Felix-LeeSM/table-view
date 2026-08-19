@@ -224,6 +224,55 @@ describe("useQueryExecution — Redis command dispatch", () => {
     },
   );
 
+  // Issue #2421 — the shipped default is a non-production connection under Safe
+  // Mode "warn", where `decideSafeModeAction` answers `allow` for the `danger`
+  // tier. The KV console mounts no preview, so DEL used to reach the driver on
+  // the first click while self-supplying the confirm key the backend gate
+  // checks. This is the whole-hook view of that path.
+  it("[kv-confirm-gate] opens the confirm dialog for DEL on the shipped default (non-production + warn)", async () => {
+    executeKvCommandMock.mockResolvedValueOnce(REDIS_RESULT);
+    useSafeModeStore.setState({ mode: "warn" });
+    const tab = seedRedisTab("DEL session:1", "2", "development");
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(executeKvCommandMock).not.toHaveBeenCalled();
+    expect(result.current.pendingKvConfirm).toMatchObject({
+      command: "DEL session:1",
+      confirmKey: "session:1",
+      reason: "Redis DEL permanently removes the key",
+    });
+
+    await act(async () => {
+      await result.current.confirmKvDangerous();
+    });
+
+    expect(executeKvCommandMock).toHaveBeenCalledWith(
+      "conn-redis",
+      { command: "DEL session:1", database: 2, confirmKey: "session:1" },
+      expect.stringMatching(/^query-redis-/),
+    );
+  });
+
+  it("[kv-confirm-gate] dismissing the DEL dialog leaves the key untouched", async () => {
+    useSafeModeStore.setState({ mode: "warn" });
+    const tab = seedRedisTab("DEL session:1", "2", "development");
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+    act(() => {
+      result.current.cancelKvDangerous();
+    });
+
+    expect(result.current.pendingKvConfirm).toBeNull();
+    expect(executeKvCommandMock).not.toHaveBeenCalled();
+  });
+
   it("allows Redis KEYS in non-production warn mode", async () => {
     executeKvCommandMock.mockResolvedValueOnce(REDIS_RESULT);
     useSafeModeStore.setState({ mode: "warn" });
