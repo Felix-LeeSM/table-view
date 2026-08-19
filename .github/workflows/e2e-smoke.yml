@@ -151,13 +151,17 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       # #2495 — the retry wrapper below only sees apt fail, never hang. Without
-      # a step timeout a hung apt burns this job's 330m budget before GitHub
-      # cancels it and leaves every later step `skipped`, so a required check
-      # reports nothing. The copies of this step in `.github/workflows/ci.yml`
-      # carry the same guard and the same value.
+      # a step timeout a hung apt runs out this job's 330m budget before GitHub
+      # cancels it, so a required check reports `cancelled` after burning five
+      # and a half hours. The copies of this step in
+      # `.github/workflows/ci.yml` carry the same guard with values derived per
+      # job. Here the slowest successful run of this step was 26m13s (job
+      # 92334080271) and the slowest one this workflow has ever recorded, back
+      # when it ran as a matrix, was 37m02s (job 85918781681) — 45m clears both
+      # and still returns 285m of the budget.
       - name: Install Tauri Linux dependencies
         if: steps.select.outputs.count != '0'
-        timeout-minutes: 20
+        timeout-minutes: 45
         # Retry wrapper: transient apt mirror failures (e.g.
         # packages.microsoft.com 403) otherwise fail the whole setup.
         run: |
