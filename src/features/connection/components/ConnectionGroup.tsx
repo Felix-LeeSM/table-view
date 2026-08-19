@@ -36,6 +36,7 @@ import type {
 } from "../model";
 import { useConnectionStore } from "../store";
 import ConnectionItem, { draggedConnectionId } from "./ConnectionItem";
+import GroupColorDot from "./GroupColorDot";
 import GroupDialog from "./GroupDialog";
 
 // ---------------------------------------------------------------------------
@@ -201,21 +202,10 @@ export default function ConnectionGroup({
               ) : (
                 <ChevronDown size={12} />
               )}
-              {/* Color accent dot — Sprint 78. Legacy groups with color=null
-                  fall back to a muted border-only dot so the column stays
-                  balanced across the list. */}
-              <span
-                data-testid="group-color-accent"
-                aria-hidden="true"
-                className={`inline-block h-2 w-2 shrink-0 rounded-full border ${
-                  group.color
-                    ? "border-transparent"
-                    : "border-border bg-transparent"
-                }`}
-                style={
-                  group.color ? { backgroundColor: group.color } : undefined
-                }
-              />
+              {/* Color accent dot — Sprint 78. Shared with the GroupDialog
+                  preview via `GroupColorDot` so both render a color the same
+                  way. */}
+              <GroupColorDot color={group.color} testId="group-color-accent" />
               {renaming ? (
                 <Input
                   ref={renameRef}
