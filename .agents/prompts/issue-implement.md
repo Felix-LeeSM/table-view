@@ -74,7 +74,8 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
    `git ls-remote origin <branch>` 로 원격 SHA 를 대조해 성공을 확인한다.
    출처: `.agents/skills/recovering-push-rejects/SKILL.md` 「SHA refspec push
    패턴」 (계약은 `memory/workflow/git-policy/memory.md`).
-5. PR 생성 (base main, 본문에 `Closes #<이슈>`). body 를 쓰기 전에 read 목록의
+5. PR 생성 (base main, 본문에 `Closes #<이슈>`). body 는 아래 「PR body 틀」의
+   닫힌 목록으로 쓰고, 쓰기 전에 read 목록의
    제약을 그대로 적용한다 — 정량 주장은 implementation §5 표, 그 밖은
    `memory/workflow/delivery/memory.md` 「PR body」 절 전체다. 제약 본문은 그
    방들에 있고 여기 옮겨 적지 않는다 — 그 절이 늘어도 이 줄은 안 고친다.
@@ -86,6 +87,58 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 수정 라운드도 같은 사본, 같은 브랜치에서 이 절차를 다시 밟는다. 이번 라운드의 변경으로
 PR body 의 기존 주장이 낡았을 때 무엇을 하는지는 그 방이 갖는다 — 옮겨 적지 않는다.
 출처: `memory/workflow/delivery/memory.md` 「PR body」.
+
+## PR body 틀 — 닫힌 목록
+
+**형식 틀의 SOT 는 여기다.** `memory/workflow/delivery/memory.md` 「PR body」와
+`memory/workflow/documentation/memory.md` 는 「형식 요구는 없다」로 열고 제약(이식성
+· 전칭 · 분량 · 정량 주장)만 갖는다. 그래서 틀이 빈 자리에 노드가 매 PR 자기 절을
+만들었고 그 절이 과정으로 찼다 (이슈 #2507). scorecard 의 틀이
+`.agents/prompts/pr-review.md` 「반환 형식」에 있는 것과 같은 자리다.
+
+**아래 절이 전부다 — 절을 더하지 마라.** 해당 없는 절은 통째로 뺀다(「없음」으로
+채우지 않는다). 무엇을 남기고 무엇을 빼는지는
+`memory/workflow/documentation/memory.md` 「결정만 적는다」가 SOT 이고, 이 틀은 그
+규칙이 남기라는 것에 자리를 준 것뿐이다.
+
+**spawn 메시지가 실은 「이것도 봐라 · 저것도 재라」는 판정 입력이지 산출물 항목이
+아니다** — 확인했다는 사실이 아니라 **판정이 바뀐 것만** 적는다. 안 바뀌었으면
+body 에 그 자리가 없다. 돌린 명령의 나열은 body 가 아니라 이 파일 「반환 형식」의
+`검증` 줄로 간다.
+
+```
+Closes #<이슈>
+
+## 무엇을 바꿨나
+- 판정과 그 사유. 코드 동작을 옮기지 말고 자리를 가리킨다 (`path:line`).
+
+## 수용 기준
+- 이슈가 준 명령과 base/head 결과.
+
+## 안 고친 것
+- 무엇을 · 왜 · 어디서 추적하나.
+
+## 뒤집히는 조건
+- 이 판단이 무엇을 보면 뒤집히나.
+
+## 못 잰 축
+- 무엇을 왜 못 쟀나. 「못 쟀다」는 과정이 아니라 판정이라 못 뺀다.
+
+## 문서화 impact
+- 트리거가 있나 · 어느 SOT 를 갱신했나 · 없으면 왜 없나.
+```
+
+수치마다 그것을 만든 명령을 붙인다 — 제약 본문은
+`memory/workflow/implementation/memory.md` §5 와
+`memory/workflow/delivery/memory.md` 「PR body」다.
+
+**push 전에 body 를 직접 재라.** 분량 cap 의 값과 출처는
+`scripts/check-review-size-cap.sh` 헤더가 갖고, PR body 쪽 red 는 body 를 고쳐도 안
+풀린다 — 새 commit 이 있어야 풀린다 (같은 헤더 「red 가 풀리는 법」).
+
+```bash
+printf '%s' "$BODY" | bash scripts/check-review-size-cap.sh 'pr body'
+```
 
 ## 중단 조건
 
