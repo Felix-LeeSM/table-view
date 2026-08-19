@@ -143,16 +143,19 @@ describe("DataGrid — bottom executed-query strip (Sprint 233)", () => {
     mockQueryTableData.mockResolvedValue({ ...USER_REPRO_DATA });
   });
 
-  // AC-233-04 (a) — the strip is no longer a plain `<code>`. SqlSyntax wraps
-  // the SQL in a parent `<span>` that contains one `<span>` per token. Assert
-  // both the parent shape (font-mono root) and at least one keyword span.
+  // AC-233-04 (a) — the strip is no longer an unhighlighted `<code>`.
+  // SqlSyntax wraps the SQL in a parent that contains one `<span>` per token.
+  // Assert both the parent shape (font-mono root) and at least one keyword
+  // span. That parent is a `<code>` again as of #2432, now carrying the token
+  // spans: the element is what keeps the executed SQL selectable once
+  // selection is off by default, so the tag is asserted rather than ignored.
   it("renders the executed query through SqlSyntax with keyword token spans (AC-233-04)", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
     const region = screen.getByRole("region", { name: /SQL query/i });
 
-    // The font-mono root is the SqlSyntax component's outer span.
-    const root = region.querySelector("span.font-mono");
+    // The font-mono root is the SqlSyntax component's outer element.
+    const root = region.querySelector("code.font-mono");
     expect(root).not.toBeNull();
 
     // At least one keyword span exists (SELECT, at minimum).

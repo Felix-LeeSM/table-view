@@ -30,6 +30,8 @@ export const en = {
   nothingToCopy: "Nothing to copy.",
   copiedToClipboard: "Copied to clipboard.",
   copyFailed: "Copy failed: {{message}}",
+  // CopyableText — hover/focus hint for a value that copies on activation.
+  clickToCopy: "Click to copy",
 
   // ErrorBoundary
   errorTitle: "Something went wrong",
@@ -205,6 +207,8 @@ export const ko = {
   nothingToCopy: "복사할 내용이 없습니다.",
   copiedToClipboard: "클립보드에 복사되었습니다.",
   copyFailed: "복사 실패: {{message}}",
+  // CopyableText — hover/focus hint for a value that copies on activation.
+  clickToCopy: "클릭하면 복사됩니다",
 
   // ErrorBoundary
   errorTitle: "오류가 발생했습니다",

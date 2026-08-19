@@ -6,7 +6,8 @@
 // Behavior contract:
 // - Read-only path renders one of: NULL pill / boolean badge / BLOB button
 //   / `<pre>` (object/json-string) / read-only `<textarea>` (large text)
-//   / `<span>` (plain).
+//   / `CopyableText` (plain scalar — copies itself on click or Enter/Space,
+//   #2432; an empty value degrades to inert text).
 // - Edit path swaps in: 3-way `<Select>` (boolean) / `<textarea>` (jsonb /
 //   object / json-string / large text) / `<input>` (everything else).
 // - #1734 (4): editing is always on when the call-site supplies `editState`.
@@ -34,6 +35,7 @@ import {
   getInputTypeForColumn,
 } from "@components/datagrid/dataGridEditFsm";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
+import { CopyableText } from "@components/shared/CopyTextButton";
 import { Button } from "@components/ui/button";
 import { INLINE_EDIT_INPUT } from "@components/ui/inlineEdit";
 import {
@@ -161,7 +163,13 @@ export function FieldRow({
             aria-label={t("fieldRow.valueFor", { column: column.name })}
           />
         ) : (
-          <span className="font-mono text-foreground">{displayValue}</span>
+          // #2432 — a scalar cell value read outside the grid is the shape
+          // click-to-copy is for: one line, straight from the database, and
+          // nothing else claims a click here.
+          <CopyableText
+            text={displayValue}
+            className="font-mono text-foreground"
+          />
         )}
 
         {/* Read-only marker for PK / BLOB so the user understands the input

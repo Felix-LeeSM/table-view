@@ -58,6 +58,16 @@ backend contract 를 통해서만 다룬다.
   경로마다 dragend 와 drop 두 해제 경로를 같이 잠근다 — 2026-05-05 에 표시가
   드래그 뒤에도 남아 통째로 걷어낸 전력이 있다. substrate(네이티브 HTML5 dnd /
   pointer capture)는 그 표면이 이미 쓰는 쪽을 따르고 새로 갈지 않는다.
+- 텍스트 선택 정책 (#2432): 드래그 선택은 `:root` 에서 꺼져 있고 `src/index.css`
+  의 예외 rule 하나가 되켠다 — 새 화면에 `select-none` 을 붙이지 말고, 선택돼야
+  하는 표면이 늘면 그 목록을 넓힌다. 예외 자격은 "앱이 만들지 않은 텍스트"다
+  (DB 값·드라이버 에러·생성된 문장·입력 필드). 기계 출력은 감싸개의 role 이
+  아니라 **요소**로 건다 — `pre`/`code` 로 내면 어디에 마운트돼도 걸리고, 목록에
+  role 을 더하는 것은 마지막 수단이다 (`role="status"` 를 넣으면 스켈레톤·빈
+  상태 크롬까지 뒤집힌다). 예외 밖인데 사용자가 가져가야
+  하는 값은 `CopyableText` (`@components/shared/CopyTextButton`) 로 클릭·Enter
+  복사를 단다 — 그리드 밖에서 한 줄로 읽히고 그 자리에 클릭의 다른 뜻이 없을 때.
+  긴 출력(문서·문장·플랜)은 옆에 `CopyTextButton` 을 두는 쪽이다.
 - Dialog 수정은 기존 component contract/test 를 먼저 보며 close button,
   feedback slot, alert role, toast hookup 같은 테스트된 invariant 를 깨지 않는다.
   preset/layout source-order 강제 규칙은 retired 상태다.

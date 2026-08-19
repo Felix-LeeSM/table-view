@@ -251,8 +251,62 @@ body {
   box-sizing: border-box;
 }
 
+/* ===== Text-selection policy (#2432) — the whole of it is these two rules.
+ *
+ * Dragging across the app's own chrome used to highlight it, which is never
+ * what the drag meant. So selection is off at the root and the rule below is
+ * the exhaustive list of surfaces that turn it back on. Two consequences,
+ * both deliberate: a screen added later inherits the default and needs no
+ * `select-none` of its own, and widening the policy means editing this list
+ * rather than hunting call-sites. (The `select-none` classes already spread
+ * through the tree are now redundant, not wrong — removing them is not this
+ * change.)
+ *
+ * What earns an exception is text that did not come from the app: values and
+ * errors the database sent back, statements it generated, and the fields the
+ * user types into. `pre` / `code` carry machine output in this app, and
+ * `[role="gridcell"]` is how the grids mark a data cell, so both are whole
+ * classes rather than a list of files. `[role="alert"]` is the loosest
+ * of them — it also catches the app's own short form-validation strings, and
+ * that cost is accepted because the alternative loses the driver error text
+ * the user wants to paste into a search box.
+ *
+ * Where the line is drawn, since it decides every future addition: machine
+ * output earns its exception through the ELEMENT that prints it, not through
+ * the role of whatever wraps it. `[role="status"]` is the case that settles
+ * the rule — it looks like the twin of `[role="alert"]`, but walk what it
+ * actually marks in this repo and most of it is skeletons, spinners and
+ * empty states, so adding it would flip a screenful of chrome back on to
+ * rescue the few error strings under it. Those are reached the other way
+ * instead: the thing that prints
+ * them renders `pre` or `code` (`src/components/query/QueryErrorDetail.tsx`,
+ * `src/components/shared/SqlSyntax.tsx`), which this list already covers
+ * wherever it is mounted. Adding a role here is the last resort, not the
+ * first move. `[contenteditable="true"]` is
+ * the CodeMirror editors: `.cm-content` sets no `user-select` of its own, so
+ * without this line the SQL you typed would not be selectable.
+ *
+ * A value that falls outside these surfaces is copied by clicking it
+ * (`CopyableText`), not by dragging across it.
+ *
+ * The `-webkit-` pair is not decoration: unprefixed `user-select` only landed
+ * in Safari 17, and this app ships inside the host WebKit on macOS and Linux.
+ *
+ * Regression guard: `index-css.select-policy.test.ts` +
+ * `DataGridTable.select-policy.test.tsx`. ===== */
+:root {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 input,
 textarea,
-select {
+select,
+[contenteditable="true"],
+[role="gridcell"],
+[role="alert"],
+pre,
+code {
+  -webkit-user-select: text;
   user-select: text;
 }
