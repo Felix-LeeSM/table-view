@@ -248,8 +248,11 @@ export async function executeKvQuery({
     return;
   }
 
-  // Issue #2421 — a data-loss command takes the dialog whatever the Safe Mode
-  // matrix returned. The matrix answers `allow` for `danger` on a
+  // Issue #2421 — a command `kvDataLossReason` names takes the dialog whatever
+  // the Safe Mode matrix returned; today that predicate names `DEL` and nothing
+  // else, so the other backend-destructive verbs named in
+  // `executeKvCommandNow`'s docblock route straight past here. The matrix
+  // answers `allow` for `danger` on a
   // non-production connection under mode `warn` / `off` and that pass-through
   // is deliberate (ADR 0022), but the KV console mounts no preview to catch it,
   // so `DEL k` reached the driver with nothing shown. Routing here rather than
