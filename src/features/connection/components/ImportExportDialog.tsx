@@ -8,7 +8,7 @@ import {
   importConnectionsEncrypted,
 } from "@lib/tauri";
 import { AlertTriangle, Check, Copy, Download, Upload } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useConnectionStore } from "../store";
 import { sanitizeMessage } from "./ConnectionDialog/sanitize";
@@ -31,8 +31,30 @@ const INCORRECT_MASTER_PASSWORD_MESSAGE =
   "Incorrect master password — the file could not be decrypted";
 
 /**
+ * Issue #2438 — both panes are a two-column grid: the left column carries
+ * "what" (the selection tree / the pasted payload), the right column carries
+ * "how" (master password, acknowledgement, actions, results). Below the `md`
+ * breakpoint the tracks collapse to a single column so a narrow window keeps
+ * the old vertical stack instead of squeezing two columns.
+ */
+const PANE_GRID_CLASS =
+  "grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]";
+const PANE_HEADING_CLASS =
+  "text-3xs font-semibold uppercase tracking-wide text-muted-foreground";
+
+/**
+ * The split needs a wider shell than the old `w-dialog-lg`. This is the same
+ * cap `BlobViewerDialog` — the other `TabsDialog` caller — uses, and the
+ * Layer-1 `max-w-[calc(100%-2rem)]` still shrinks it on a narrow window.
+ */
+const DIALOG_WIDTH_CLASS = "bg-secondary sm:max-w-3xl";
+
+/**
  * Sprint 96: migrated to the `TabsDialog` preset. The Export/Import panes
  * keep their bodies; the preset owns the title + tab list + dialog shell.
+ * Issue #2438 kept the preset untouched — its `content` slot already takes an
+ * arbitrary node, so the left/right split lives in the panes below and no
+ * other `TabsDialog` caller is affected.
  *
  * Sprint 140: the Export pane wraps the selection in a master-password
  * envelope (Argon2id + AES-256-GCM) instead of emitting plain JSON; the
@@ -56,7 +78,7 @@ export default function ImportExportDialog({
     <TabsDialog
       title={t("importExport.title")}
       description={t("importExport.description")}
-      className="w-dialog-lg bg-secondary"
+      className={DIALOG_WIDTH_CLASS}
       onClose={onClose}
       value={tab}
       onTabChange={(v) => setTab(v as "export" | "import")}
@@ -105,6 +127,8 @@ function ExportPanel() {
     "password" | "json"
   >();
   const [running, setRunning] = useState(false);
+  const whatId = useId();
+  const howId = useId();
 
   // Wipe the generated mnemonic when the panel unmounts (dialog close).
   // Browser memory hygiene is best-effort — V8 may still hold the string
@@ -143,153 +167,168 @@ function ExportPanel() {
         {t("importExport.exportIntro")}
       </p>
 
-      <SelectionTree
-        connections={connections}
-        groups={groups}
-        selected={selected}
-        onChange={setSelected}
-      />
-
-      {generatedPassword.length === 0 && (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="default"
-            size="sm"
-            onClick={handleGenerate}
-            disabled={generateDisabled}
-          >
-            {running
-              ? t("importExport.generating")
-              : t("importExport.generateExport")}
-          </Button>
-          {selected.size === 0 && (
-            <span role="status" className="text-3xs text-muted-foreground">
-              {t("importExport.selectAtLeastOne")}
-            </span>
-          )}
-        </div>
-      )}
-
-      {error && (
-        <div
-          role="alert"
-          className="rounded bg-destructive/10 px-3 py-2 text-xs text-destructive"
-        >
-          {error}
-        </div>
-      )}
-
-      {generatedPassword.length > 0 && (
-        <div className="space-y-3 rounded border border-warning/40 bg-warning/5 p-3">
-          <div className="flex items-start gap-2">
-            <AlertTriangle
-              size={14}
-              className="mt-0.5 shrink-0 text-warning"
-              aria-hidden="true"
-            />
-            <div className="space-y-1 text-xs text-foreground">
-              <p className="font-medium">
-                {t("importExport.saveRecoveryTitle")}
-              </p>
-              <p className="text-muted-foreground">
-                {t("importExport.saveRecoveryBody")}
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label
-              htmlFor="export-recovery-phrase"
-              className="block text-xs font-medium text-secondary-foreground"
-            >
-              {t("importExport.labelRecoveryPhrase")}
-            </label>
-            <div className="flex items-stretch gap-2">
-              <textarea
-                id="export-recovery-phrase"
-                className="h-16 flex-1 resize-none rounded border border-border bg-background p-2 font-mono text-xs text-foreground outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-ring"
-                value={generatedPassword}
-                readOnly
-                aria-label={t("importExport.ariaRecoveryPhrase")}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleCopy(generatedPassword, "password")}
-                aria-label={t("importExport.copyRecoveryAria")}
-                className="shrink-0"
-              >
-                {copiedTarget === "password" ? (
-                  <>
-                    <Check
-                      size={12}
-                      className="text-success"
-                      aria-hidden="true"
-                    />{" "}
-                    {t("importExport.copied")}
-                  </>
-                ) : (
-                  <>
-                    <Copy size={12} /> {t("importExport.copy")}
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2 text-xs text-foreground">
-            <input
-              type="checkbox"
-              checked={acknowledged}
-              onChange={(e) => setAcknowledged(e.target.checked)}
-              className="size-4"
-            />
-            {t("importExport.acknowledgeLabel")}
-          </label>
-        </div>
-      )}
-
-      {json.length > 0 && (
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-secondary-foreground">
-              {t("importExport.labelEncryptedExport")}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleCopy(json, "json")}
-              disabled={!acknowledged}
-              aria-label={t("importExport.copyJsonAria")}
-            >
-              {copiedTarget === "json" ? (
-                <>
-                  <Check
-                    size={12}
-                    className="text-success"
-                    aria-hidden="true"
-                  />{" "}
-                  {t("importExport.copied")}
-                </>
-              ) : (
-                <>
-                  <Copy size={12} /> {t("importExport.copyJson")}
-                </>
-              )}
-            </Button>
-          </div>
-          <textarea
-            className="h-48 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-            value={acknowledged ? json : ""}
-            placeholder={
-              acknowledged ? undefined : t("importExport.exportJsonPlaceholder")
-            }
-            readOnly
-            disabled={!acknowledged}
-            aria-label={t("importExport.ariaExportJson")}
+      <div className={PANE_GRID_CLASS}>
+        <section aria-labelledby={whatId} className="min-w-0 space-y-2">
+          <h3 id={whatId} className={PANE_HEADING_CLASS}>
+            {t("importExport.paneExportWhat")}
+          </h3>
+          <SelectionTree
+            connections={connections}
+            groups={groups}
+            selected={selected}
+            onChange={setSelected}
           />
-        </div>
-      )}
+        </section>
+
+        <section aria-labelledby={howId} className="min-w-0 space-y-3">
+          <h3 id={howId} className={PANE_HEADING_CLASS}>
+            {t("importExport.paneExportOptions")}
+          </h3>
+
+          {generatedPassword.length === 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleGenerate}
+                disabled={generateDisabled}
+              >
+                {running
+                  ? t("importExport.generating")
+                  : t("importExport.generateExport")}
+              </Button>
+              {selected.size === 0 && (
+                <span role="status" className="text-3xs text-muted-foreground">
+                  {t("importExport.selectAtLeastOne")}
+                </span>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <div
+              role="alert"
+              className="rounded bg-destructive/10 px-3 py-2 text-xs text-destructive"
+            >
+              {error}
+            </div>
+          )}
+
+          {generatedPassword.length > 0 && (
+            <div className="space-y-3 rounded border border-warning/40 bg-warning/5 p-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle
+                  size={14}
+                  className="mt-0.5 shrink-0 text-warning"
+                  aria-hidden="true"
+                />
+                <div className="space-y-1 text-xs text-foreground">
+                  <p className="font-medium">
+                    {t("importExport.saveRecoveryTitle")}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {t("importExport.saveRecoveryBody")}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label
+                  htmlFor="export-recovery-phrase"
+                  className="block text-xs font-medium text-secondary-foreground"
+                >
+                  {t("importExport.labelRecoveryPhrase")}
+                </label>
+                <div className="flex items-stretch gap-2">
+                  <textarea
+                    id="export-recovery-phrase"
+                    className="h-16 flex-1 resize-none rounded border border-border bg-background p-2 font-mono text-xs text-foreground outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-ring"
+                    value={generatedPassword}
+                    readOnly
+                    aria-label={t("importExport.ariaRecoveryPhrase")}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleCopy(generatedPassword, "password")}
+                    aria-label={t("importExport.copyRecoveryAria")}
+                    className="shrink-0"
+                  >
+                    {copiedTarget === "password" ? (
+                      <>
+                        <Check
+                          size={12}
+                          className="text-success"
+                          aria-hidden="true"
+                        />{" "}
+                        {t("importExport.copied")}
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={12} /> {t("importExport.copy")}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  checked={acknowledged}
+                  onChange={(e) => setAcknowledged(e.target.checked)}
+                  className="size-4"
+                />
+                {t("importExport.acknowledgeLabel")}
+              </label>
+            </div>
+          )}
+
+          {json.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-secondary-foreground">
+                  {t("importExport.labelEncryptedExport")}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleCopy(json, "json")}
+                  disabled={!acknowledged}
+                  aria-label={t("importExport.copyJsonAria")}
+                >
+                  {copiedTarget === "json" ? (
+                    <>
+                      <Check
+                        size={12}
+                        className="text-success"
+                        aria-hidden="true"
+                      />{" "}
+                      {t("importExport.copied")}
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={12} /> {t("importExport.copyJson")}
+                    </>
+                  )}
+                </Button>
+              </div>
+              <textarea
+                className="h-48 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                value={acknowledged ? json : ""}
+                placeholder={
+                  acknowledged
+                    ? undefined
+                    : t("importExport.exportJsonPlaceholder")
+                }
+                readOnly
+                disabled={!acknowledged}
+                aria-label={t("importExport.ariaExportJson")}
+              />
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
@@ -327,6 +366,8 @@ function ImportPanel({ onImported }: ImportPanelProps) {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const whatId = useId();
+  const howId = useId();
 
   const isEnvelope = looksLikeEnvelope(text);
   const requiresPassword = isEnvelope && masterPassword.length === 0;
@@ -364,65 +405,88 @@ function ImportPanel({ onImported }: ImportPanelProps) {
         {t("importExport.importIntro")}
       </p>
 
-      <MasterPasswordField
-        value={masterPassword}
-        onChange={setMasterPassword}
-        // 2026-05-05 — export는 BIP39 12-word mnemonic을 자동 생성한다.
-        // 사용자 정의 password는 더 이상 만들 수 없으므로 입력 단계에서
-        // 길이 검사도 무의미. 빈 값 vs 비어있지 않음만 본다.
-        minLength={0}
-        label={t("importExport.mpLabel")}
-        placeholder={t("importExport.mpPlaceholder")}
-        helpText={
-          isEnvelope
-            ? t("importExport.mpHelpEnvelope")
-            : t("importExport.mpHelpPlain")
-        }
-      />
+      <div className={PANE_GRID_CLASS}>
+        <section aria-labelledby={whatId} className="min-w-0 space-y-2">
+          <h3 id={whatId} className={PANE_HEADING_CLASS}>
+            {t("importExport.paneImportWhat")}
+          </h3>
 
-      {/* eslint-disable no-restricted-syntax -- placeholder 는 import JSON 형식 예시(기술 토큰), 번역 대상 아님 (#1074) */}
-      <textarea
-        className="h-40 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-ring"
-        placeholder='{"v":1,"kdf":"argon2id","alg":"aes-256-gcm",...} or {"schema_version":1,"connections":[...],"groups":[...]}'
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        aria-label={t("importExport.ariaImportJson")}
-      />
-      {/* eslint-enable no-restricted-syntax */}
+          {/* eslint-disable no-restricted-syntax -- placeholder 는 import JSON 형식 예시(기술 토큰), 번역 대상 아님 (#1074) */}
+          <textarea
+            className="h-40 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-ring"
+            placeholder='{"v":1,"kdf":"argon2id","alg":"aes-256-gcm",...} or {"schema_version":1,"connections":[...],"groups":[...]}'
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            aria-label={t("importExport.ariaImportJson")}
+          />
+          {/* eslint-enable no-restricted-syntax */}
 
-      <div className="flex items-center gap-2">
-        <Button
-          variant="default"
-          size="sm"
-          onClick={handleImport}
-          disabled={running || !text.trim()}
-        >
-          {running
-            ? t("importExport.importing")
-            : t("importExport.importButton")}
-        </Button>
-        {result && (
-          <Button variant="outline" size="sm" onClick={onImported}>
-            {t("importExport.done")}
-          </Button>
-        )}
-        {isEnvelope && (
-          <span className="text-3xs text-muted-foreground">
-            {t("importExport.envelopeDetected")}
-          </span>
-        )}
+          {/* Import has no list until a payload arrives — the export pane's
+              counterpart is the selection tree. Until then the left column
+              says so instead of standing empty. */}
+          {text.trim().length === 0 && (
+            <p role="status" className="text-3xs text-muted-foreground">
+              {t("importExport.importEmptyState")}
+            </p>
+          )}
+          {isEnvelope && (
+            <p className="text-3xs text-muted-foreground">
+              {t("importExport.envelopeDetected")}
+            </p>
+          )}
+        </section>
+
+        <section aria-labelledby={howId} className="min-w-0 space-y-3">
+          <h3 id={howId} className={PANE_HEADING_CLASS}>
+            {t("importExport.paneImportOptions")}
+          </h3>
+
+          <MasterPasswordField
+            value={masterPassword}
+            onChange={setMasterPassword}
+            // 2026-05-05 — export는 BIP39 12-word mnemonic을 자동 생성한다.
+            // 사용자 정의 password는 더 이상 만들 수 없으므로 입력 단계에서
+            // 길이 검사도 무의미. 빈 값 vs 비어있지 않음만 본다.
+            minLength={0}
+            label={t("importExport.mpLabel")}
+            placeholder={t("importExport.mpPlaceholder")}
+            helpText={
+              isEnvelope
+                ? t("importExport.mpHelpEnvelope")
+                : t("importExport.mpHelpPlain")
+            }
+          />
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleImport}
+              disabled={running || !text.trim()}
+            >
+              {running
+                ? t("importExport.importing")
+                : t("importExport.importButton")}
+            </Button>
+            {result && (
+              <Button variant="outline" size="sm" onClick={onImported}>
+                {t("importExport.done")}
+              </Button>
+            )}
+          </div>
+
+          {error && (
+            <div
+              role="alert"
+              className="rounded bg-destructive/10 px-3 py-2 text-xs text-destructive"
+            >
+              {error}
+            </div>
+          )}
+
+          {result && <ImportResultPanel result={result} />}
+        </section>
       </div>
-
-      {error && (
-        <div
-          role="alert"
-          className="rounded bg-destructive/10 px-3 py-2 text-xs text-destructive"
-        >
-          {error}
-        </div>
-      )}
-
-      {result && <ImportResultPanel result={result} />}
     </div>
   );
 }
