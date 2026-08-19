@@ -1,4 +1,5 @@
 import { $, browser, expect } from "@wdio/globals";
+import { type ClickPointHit, readClickPoint } from "./editor-click-point";
 import { formatGridWaitDiagnostic } from "./grid-wait-diagnostic";
 
 export { editGridCellInRow } from "./grid-edit";
@@ -922,10 +923,61 @@ export async function openNewQueryTab() {
   await editor.waitForDisplayed({ timeout: 10000 });
 }
 
+const SQL_EDITOR_SELECTOR = ".cm-content";
+
+async function probeSqlEditorClickPoint(): Promise<ClickPointHit> {
+  return await browser.execute((selector: string): ClickPointHit => {
+    const target = document.querySelector(selector);
+    // A missing element, or a centre outside the viewport, is not something
+    // this guard can clear — the driver clamps its own click point and its
+    // error says more than anything we could add here.
+    if (!target) return { kind: "clear" };
+    const box = target.getBoundingClientRect();
+    const hit = document.elementFromPoint(
+      box.left + box.width / 2,
+      box.top + box.height / 2,
+    );
+    if (!hit) return { kind: "clear" };
+    if (target.contains(hit)) return { kind: "clear" };
+    // Name the tooltip, not whichever of its rows happens to be on top.
+    const covering = hit.closest(".cm-tooltip") ?? hit;
+    return {
+      kind: "element",
+      tag: covering.tagName.toLowerCase(),
+      className: covering.getAttribute("class") ?? "",
+    };
+  }, SQL_EDITOR_SELECTOR);
+}
+
+/**
+ * `typeQuery` leaves CodeMirror's completion popup open, and the popup hangs
+ * below the caret wide enough to straddle the centre of `.cm-content` — the
+ * exact point WebDriver clicks. The next `typeQuery` then had its click handed
+ * to the popup, and WebKitWebDriver reported a bare `element click intercepted`
+ * naming nothing, so the same commit passed on one run and failed on the next
+ * (#2473). Clear the point before clicking, and name whatever else lands on it
+ * rather than failing blind again.
+ */
+async function clearSqlEditorClickPoint() {
+  const found = readClickPoint(await probeSqlEditorClickPoint());
+  if (found.blockedBy === null) return;
+  if (found.closeWithEscape) await browser.keys("Escape");
+  await browser.waitUntil(
+    async () =>
+      readClickPoint(await probeSqlEditorClickPoint()).blockedBy === null,
+    {
+      timeout: 5000,
+      interval: 100,
+      timeoutMsg: `SQL Query Editor click point was covered by ${found.blockedBy} and never cleared`,
+    },
+  );
+}
+
 export async function typeQuery(sql: string) {
   await switchToWorkspaceWindow();
-  const content = await $(".cm-content");
+  const content = await $(SQL_EDITOR_SELECTOR);
   await content.waitForDisplayed({ timeout: 5000 });
+  await clearSqlEditorClickPoint();
   await content.click();
   const selectAllModifier = await browser.execute(() =>
     navigator.platform.toLowerCase().includes("mac") ? "Meta" : "Control",
