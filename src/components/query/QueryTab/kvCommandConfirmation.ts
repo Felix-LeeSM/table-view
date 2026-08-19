@@ -25,10 +25,15 @@
  * `LREM`, `SREM`, `ZREM`, `XDEL` and `XTRIM` are
  * `RedisCommandEffect::Destructive` on the backend
  * (`src-tauri/table-view-core/src/db/redis/command_parser.rs`) yet are absent
- * below, so they classify as `info`, the Safe Mode matrix returns `allow` for
- * them in every tier, and they reach IPC with no dialog. Registering one here
- * with `losesData: true` is what closes that; the gap predates #2421, which
- * scoped itself to `DEL`, and is tracked separately
+ * below, so a command typed in the console classifies as `info`, the Safe Mode
+ * matrix returns `allow` for that classification in every tier, and it reaches
+ * IPC with no dialog. The console is not the only surface those verbs come
+ * from: removing the same elements in the KV structure editor goes through
+ * `analyzeKvMutationSafety` (`src/components/workspace/kvMutationCommands.ts`),
+ * which marks a destructive removal `danger`, so that surface does open the
+ * confirm dialog. Registering one here with `losesData: true` is what closes
+ * the console side; the gap predates #2421, which scoped itself to `DEL`, and
+ * is tracked in #2513
  * (`docs/product/known-limitations-cross-cutting.md`).
  */
 interface KvConfirmCommand {
@@ -37,7 +42,8 @@ interface KvConfirmCommand {
   /**
    * Whether running the command destroys data. Required (not defaulted) so a
    * command added to this map has to answer the question: `true` puts it behind
-   * the confirm dialog unconditionally and blocks every unconfirmed dispatch,
+   * the confirm dialog unconditionally and makes `executeKvCommandNow` refuse
+   * every unconfirmed dispatch of it,
    * `false` means the backend gates it but nothing is lost (KEYS scans the
    * keyspace, PERSIST drops a TTL) so an unconfirmed dispatch may echo the
    * backend's confirm key itself.
@@ -55,8 +61,11 @@ export const KV_CONFIRM_COMMANDS: Readonly<Record<string, KvConfirmCommand>> = {
 };
 
 /**
- * Issue #2421 — the reason copy when `command` destroys data, `undefined`
- * otherwise. One predicate drives both halves of the gate so they cannot drift:
+ * Issue #2421 — the reason copy when `command`'s verb is registered above with
+ * `losesData: true`, `undefined` otherwise. That is narrower than "destroys
+ * data": today it names `DEL` alone, and the backend-destructive verbs listed
+ * in the map's docblock get `undefined` here even though they lose data.
+ * One predicate drives both halves of the gate so they cannot drift:
  * `executeKvQuery` routes anything it names to the confirm dialog whatever the
  * Safe Mode matrix returned, and `executeKvCommandNow` refuses to dispatch
  * anything it names. Marking a new command `losesData: true` above therefore

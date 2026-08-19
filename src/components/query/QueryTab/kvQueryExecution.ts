@@ -108,8 +108,11 @@ export function analyzeKvCommandSafety(command: string): StatementAnalysis {
  * `RedisCommandEffect::Destructive` on the backend
  * (`src-tauri/table-view-core/src/db/redis/command_parser.rs`) but are absent
  * from `KV_CONFIRM_COMMANDS`, so they classify as `info` and pass through here
- * with no dialog in every Safe Mode tier. That gap predates #2421, which scoped
- * itself to `DEL`, and is tracked separately
+ * with no dialog in every Safe Mode tier. This seam is not the only way those
+ * verbs are sent: the KV structure editor analyzes its removals with
+ * `analyzeKvMutationSafety` (`src/components/workspace/kvMutationCommands.ts`)
+ * instead, gets `danger`, and opens the confirm dialog. That gap predates
+ * #2421, which scoped itself to `DEL`, and is tracked in #2513
  * (`docs/product/known-limitations-cross-cutting.md`).
  *
  * The confirm key is still echoed for the gated-but-not-data-loss commands

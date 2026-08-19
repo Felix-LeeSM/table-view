@@ -164,8 +164,9 @@ describe("kvQueryExecution seam", () => {
   // key against the key the backend parsed out of the same command string, so a
   // frontend that derives the key from the command text satisfies it without a
   // dialog. These two lock the halves of the fix separately: the dispatch seam
-  // refuses an unconfirmed data-loss command at all, and the router sends DEL to
-  // the dialog whatever the Safe Mode matrix returned.
+  // refuses an unconfirmed command `kvDataLossReason` names — today `DEL` and
+  // nothing else — and the router sends DEL to the dialog whatever the Safe Mode
+  // matrix returned.
   it("[kv-confirm-gate] refuses an unconfirmed data-loss dispatch and only runs it with the dialog's confirmation", async () => {
     const actions = createActions();
 

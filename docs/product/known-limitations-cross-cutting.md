@@ -94,11 +94,18 @@ production + `strict` included: `HDEL`, `LREM`, `SREM`, `ZREM`, `XDEL` and
 `XTRIM` are `RedisCommandEffect::Destructive` in
 `src-tauri/table-view-core/src/db/redis/command_parser.rs` but sit outside the
 frontend's `KV_CONFIRM_COMMANDS` map
-(`src/components/query/QueryTab/kvCommandConfirmation.ts`), so they classify as
-`info`, the matrix returns `allow` for them everywhere, and neither the dialog
-routing nor the dispatch refusal engages. That gap predates #2421, which scoped
-itself to `DEL`, and is tracked separately. `KEYS` and `PERSIST` also keep
-dispatching on the first click under `warn` / `off`, but by design: the backend
+(`src/components/query/QueryTab/kvCommandConfirmation.ts`), so a typed command
+classifies as `info`, the matrix returns `allow` for that classification in
+every tier, and neither the dialog routing nor the dispatch refusal engages.
+That is the console's behaviour, not this app's verdict on those verbs:
+removing the same elements from the KV structure editor (`KvKeyDetailPanel` /
+`KvMutationPanel`) analyzes them with `analyzeKvMutationSafety`
+(`src/components/workspace/kvMutationCommands.ts`), which marks a destructive
+removal `danger`, so that surface does open the strict / production confirm
+dialog. The same `HDEL` is judged by where it was raised. That gap predates
+#2421, which scoped itself to `DEL`, and is tracked in #2513. `KEYS` and
+`PERSIST` also keep dispatching on the first click under `warn` / `off`, but by
+design: the backend
 gates them and a keyspace scan and a TTL removal lose no data. The Safe Mode
 decision matrix is unchanged by #2421 as well. Destructive
 classification reuses the native
