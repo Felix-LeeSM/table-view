@@ -76,28 +76,29 @@ describe("check-memory-doc-size", () => {
     expect(run.status).toBe(0);
   });
 
-  it("fails on a file over the 200-line cap", () => {
-    const root = seed({ "workflow/memory.md": "x\n".repeat(201) });
+  it("fails on a file over the 270-line cap", () => {
+    const root = seed({ "workflow/memory.md": "x\n".repeat(271) });
     const run = runGate(root);
-    expect(run.out).toContain("201 lines > 200");
+    expect(run.out).toContain("271 lines > 270");
     expect(run.status).toBe(1);
   });
 
-  it("fails on a file over the 12,000-character cap", () => {
-    const root = seed({ "workflow/memory.md": `${"a".repeat(12_000)}\n` });
+  it("fails on a file over the 14,000-character cap", () => {
+    const root = seed({ "workflow/memory.md": `${"a".repeat(14_000)}\n` });
     const run = runGate(root);
-    expect(run.out).toContain("12001 chars > 12000");
+    expect(run.out).toContain("14001 chars > 14000");
     expect(run.status).toBe(1);
   });
 
-  // 이 트리의 본문은 한글이고 UTF-8 에서 한 글자가 3 byte 다. 아래 파일은 5,001
-  // 문자 / 15,001 byte (5,000×3 + 개행 1) — cap 안이지만 byte 로 재면 12,000 을
+  // 이 트리의 본문은 한글이고 UTF-8 에서 한 글자가 3 byte 다. 아래 파일은 6,001
+  // 문자 / 18,001 byte (6,000×3 + 개행 1) — cap 안이지만 byte 로 재면 14,000 을
   // 한참 넘는다. 게이트가 `wc -c` 로 (또는 LC_ALL=C 아래 `wc -m` 으로) 재도록
   // 회귀하면 여기서만 red 가 된다. 위의 두 초과 케이스는 ASCII 라 어느 단위로
-  // 재든 잡히므로 단위를 증명하지 못한다.
+  // 재든 잡히므로 단위를 증명하지 못한다. 글자 수는 cap 을 올릴 때 같이 올린다 —
+  // byte 환산값이 cap 아래로 내려가면 이 케이스가 조용히 판별력을 잃는다.
   it("counts characters, not bytes", () => {
-    const body = `${"가".repeat(5_000)}\n`;
-    expect(Buffer.byteLength(body, "utf8")).toBe(15_001);
+    const body = `${"가".repeat(6_000)}\n`;
+    expect(Buffer.byteLength(body, "utf8")).toBe(18_001);
     const root = seed({ "workflow/memory.md": body });
     const run = runGate(root);
     expect(run.out).toMatch(/^ok: memory\.md 1 개/);
@@ -105,10 +106,14 @@ describe("check-memory-doc-size", () => {
     expect(run.status).toBe(0);
   });
 
-  // 200 줄 · 12,000 문자 정각. 상한은 "이하" 라서 통과해야 한다 — 비교가 `>=` 로
-  // 미끄러지면 여기가 red 다.
+  // 270 줄 · 14,000 문자 정각. 상한은 "이하" 라서 통과해야 한다 — 비교가 `>=` 로
+  // 미끄러지면 여기가 red 다. 270 이 14,000 을 나누어떨어뜨리지 않아서 마지막 한
+  // 줄에 나머지를 몰아 준다 — 정각인지는 아래 두 단언이 지킨다.
   it("passes at exactly the caps", () => {
-    const body = `${"y".repeat(59)}\n`.repeat(200);
+    const line = `${"y".repeat(50)}\n`; // 51 문자
+    const body = `${line.repeat(269)}${"y".repeat(280)}\n`; // 269×51 + 281
+    expect(body.length).toBe(14_000);
+    expect(body.split("\n").length - 1).toBe(270);
     const root = seed({ "workflow/memory.md": body });
     const run = runGate(root);
     expect(run.out).toMatch(/^ok: memory\.md 1 개/);
@@ -116,12 +121,12 @@ describe("check-memory-doc-size", () => {
     expect(run.status).toBe(0);
   });
 
-  // 개행 200 개 + 개행 없는 마지막 줄 = 201 줄. `wc -l` 은 개행을 세므로 200 을
+  // 개행 270 개 + 개행 없는 마지막 줄 = 271 줄. `wc -l` 은 개행을 세므로 270 을
   // 돌려주고 통과시킨다 — 줄수를 `wc -l` 로 되돌리면 여기가 red 다.
   it("counts a last line that has no trailing newline", () => {
-    const root = seed({ "workflow/memory.md": `${"x\n".repeat(200)}x` });
+    const root = seed({ "workflow/memory.md": `${"x\n".repeat(270)}x` });
     const run = runGate(root);
-    expect(run.out).toContain("201 lines > 200");
+    expect(run.out).toContain("271 lines > 270");
     expect(run.status).toBe(1);
   });
 
@@ -142,7 +147,7 @@ describe("check-memory-doc-size", () => {
   });
 
   // 아래 둘은 "재지 못한 것을 위반 0 으로 통과시키지 않는다" 를 판다. 스크립트에
-  // `set -e` 가 없어서 실패한 명령 치환은 빈 문자열이 되고 `[ "" -gt 200 ]` 은
+  // `set -e` 가 없어서 실패한 명령 치환은 빈 문자열이 되고 `[ "" -gt 270 ]` 은
   // rc 2 로 그냥 지나간다 — 세는 대상이 열거된 파일 수면 이 경로가 `ok:` + exit 0
   // 으로 끝난다.
   it.skipIf(asRoot)("counts an unreadable memory.md as a violation", () => {
@@ -160,7 +165,7 @@ describe("check-memory-doc-size", () => {
   it.skipIf(asRoot)("refuses when find could not walk the whole tree", () => {
     const root = seed({
       "workflow/memory.md": "짧은 방\n",
-      "locked/memory.md": "x\n".repeat(201),
+      "locked/memory.md": "x\n".repeat(271),
     });
     denyRead(join(root, "locked"), 0o755);
     const run = runGate(root);
