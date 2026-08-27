@@ -80,7 +80,33 @@ the first click while `DELETE FROM t WHERE id = 1` got the preview dialog;
 (`SqlPreviewDialog` / `MqlPreviewModal`). The Safe Mode decision matrix is
 unchanged by the widening. The Redis command console mounts no preview at all
 (`src/components/query/QueryTab/kvQueryExecution.ts`), so a destructive command
-the matrix allows there still dispatches on the first click. Destructive
+the matrix allows there still dispatches on the first click. Issue #2421 closed
+that for `DEL` alone, using the confirm dialog rather than a preview: `DEL k`
+now opens `ConfirmDestructiveDialog` whatever the matrix returned, and the
+dispatch seam refuses a `DEL` that did not come from that dialog. Before #2421
+`DEL k` dispatched on the first click *and* passed the backend
+`require_confirm_key` gate, because the frontend derived the confirm key from
+the same command text the backend parses it from — that gate cannot distinguish
+a confirmed request from an unconfirmed one, so the confirm dialog is the
+boundary. The console's other data-loss commands still dispatch on the first
+click, and unlike the SQL/MQL editors they do so in every Safe Mode tier,
+production + `strict` included: `HDEL`, `LREM`, `SREM`, `ZREM`, `XDEL` and
+`XTRIM` are `RedisCommandEffect::Destructive` in
+`src-tauri/table-view-core/src/db/redis/command_parser.rs` but sit outside the
+frontend's `KV_CONFIRM_COMMANDS` map
+(`src/components/query/QueryTab/kvCommandConfirmation.ts`), so a typed command
+classifies as `info`, the matrix returns `allow` for that classification in
+every tier, and neither the dialog routing nor the dispatch refusal engages.
+That is the console's behaviour, not this app's verdict on those verbs: the KV
+structure editor (`KvKeyDetailPanel` / `KvMutationPanel`) classifies the same
+removals differently, with `analyzeKvMutationSafety`
+(`src/components/workspace/kvMutationCommands.ts`). The same `HDEL` is judged by
+where it was raised, and which tiers actually confirm on that path is issue
+#2513. The console gap predates #2421, which scoped itself to `DEL`. `KEYS` and
+`PERSIST` stay on whatever the matrix decided rather than taking the dialog
+unconditionally the way `DEL` now does, by design: the backend gates them and a
+keyspace scan and a TTL removal lose no data. The Safe Mode decision matrix is
+unchanged by #2421 as well. Destructive
 classification reuses the native
 `sql-parser-core` crate (the same parser the frontend compiles to WASM); the one
 intentional divergence is the frontend's dynamic dry-run WARN→danger escalation,
