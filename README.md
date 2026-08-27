@@ -2,9 +2,9 @@
 
 **Table View**는 Tauri 2, React 19, TypeScript, Rust로 만드는 로컬 데스크톱 데이터베이스 클라이언트입니다.
 
-TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 데이터를 바로 확인·편집하는 흐름을 지향합니다. PostgreSQL이 가장 강한 RDBMS lane이고 MongoDB는 whitelisted document workflow가 활성입니다. MySQL, MariaDB, SQLite, DuckDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, Oracle은 SOT에 기록된 bounded runtime slice와 smoke/focused evidence 범위에서 지원합니다.
+TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 데이터를 바로 확인·편집하는 흐름을 지향합니다. PostgreSQL이 가장 강한 RDBMS lane이고 MongoDB는 whitelisted document workflow가 활성입니다. MySQL, MariaDB, SQLite, DuckDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, Oracle에 대해서는 SOT에 기록된 bounded runtime slice와 smoke/focused evidence가 덮는 범위 안에서 지원합니다.
 
-다중 창 워크스페이스, 변경 사항의 Preview/Commit 게이트, 운영 환경의 destructive 작업을 막는 Safe Mode를 통해 로컬 클라이언트의 속도와 데이터 작업의 안전장치를 함께 제공합니다.
+다중 창 워크스페이스와 변경 사항을 검토하는 Preview/Commit 게이트, 운영 환경에서 destructive 작업을 막는 Safe Mode를 갖추었습니다. 그래서 로컬 클라이언트의 속도와 데이터 작업의 안전장치를 함께 제공합니다.
 
 ---
 
@@ -28,7 +28,7 @@ TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 
 ### 2. 다중 창 워크스페이스 & 동기화
 
 - **Launcher & Workspace**: 연결 목록과 접속 설정은 런처 창에서 관리하고, 실제 DB 작업은 연결별 워크스페이스 창에서 수행합니다.
-- **상태 동기화**: 연결/그룹, 테마, 주요 워크스페이스 상태, MRU/히스토리성 데이터가 로컬 저장소와 Tauri 이벤트를 통해 창 사이에서 일관되게 갱신됩니다.
+- **상태 동기화**: 연결/그룹, 테마, 주요 워크스페이스 상태, MRU/히스토리성 데이터가 로컬 저장소와 Tauri 이벤트로 창 사이에서 일관되게 갱신됩니다.
 
 ### 3. 인라인 데이터 편집 & 변경 검토 게이트
 
@@ -72,22 +72,22 @@ TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 
 
 이 프로젝트를 로컬에서 빌드하고 기여하려는 개발자를 위한 안내입니다.
 
-Contributor/agent routing:
+Contributor와 agent는 다음 순서로 문서를 찾아갑니다.
 
-- Agent는 [`AGENTS.md`](./AGENTS.md)를 먼저 읽고 작업 type별 workflow memory와
-  surface rule로 내려갑니다. Claude Code 전용 wrapper는 [`CLAUDE.md`](./CLAUDE.md)
-  입니다.
+- Agent는 [`AGENTS.md`](./AGENTS.md)를 먼저 읽고, 작업 type별 workflow memory와
+  surface rule을 이어서 읽습니다. Claude Code 전용 wrapper는
+  [`CLAUDE.md`](./CLAUDE.md)입니다.
 - Contributor-facing 절차와 검증 기대치는
   [`docs/contributor-guide/README.md`](./docs/contributor-guide/README.md)와
   [`docs/contributor-guide/testing-and-quality.md`](./docs/contributor-guide/testing-and-quality.md)를
-  기준으로 봅니다.
+  기준으로 확인합니다.
 - 현재 제품 상태는 [`docs/product/README.md`](./docs/product/README.md), 지원
   경계는 [`docs/product/known-limitations.md`](./docs/product/known-limitations.md),
   미래 순서는 [`docs/ROADMAP.md`](./docs/ROADMAP.md)가 소유합니다.
 
 ### 1. 준비물
 
-- [mise](https://mise.jdx.dev/) 또는 asdf — `.tool-versions` 기반 런타임 관리
+- [mise](https://mise.jdx.dev/) 또는 asdf: `.tool-versions`를 기준으로 런타임을 관리하는 도구
 - OS별 Tauri 2 시스템 의존성
 
 버전 기준은 [`.tool-versions`](./.tool-versions)입니다. Node.js, pnpm, Rust, direnv 버전이 이 파일에 고정되어 있습니다.
@@ -97,13 +97,13 @@ Contributor/agent routing:
 한 번에 준비해 주는 셋업 스크립트는 없습니다. 아래를 각각 준비하세요.
 
 ```bash
-mise install          # 또는 asdf install — .tool-versions 기준
+mise install          # asdf install로 대신할 수 있고, .tool-versions를 기준으로 삼습니다
 pnpm install
 ```
 
 Rust 보조 도구는 필요할 때 직접 설치합니다 (`cargo install cargo-nextest cargo-llvm-cov cargo-deny`). git hook 은 설치할 것이 없습니다.
 
-JavaScript 의존성만 다시 받으려면:
+JavaScript 의존성만 다시 받으려면 아래 명령을 실행합니다.
 
 ```bash
 pnpm install
@@ -112,8 +112,8 @@ pnpm install
 ### 3. 개발용 데이터베이스 실행
 
 PostgreSQL, MongoDB, MySQL, MariaDB, MSSQL, Oracle, Redis compose 컨테이너를
-띄웁니다. `docker compose up -d`는 health check 통과를 기다리지 않으므로,
-연결 전에 `docker compose ps`로 `healthy`를 확인하세요.
+기동합니다. `docker compose up -d`는 health check 통과를 기다리지 않으므로,
+연결하기 전에 `docker compose ps`로 `healthy` 상태를 확인하세요.
 
 ```bash
 pnpm db:up
@@ -124,10 +124,10 @@ Oracle은 #905 focused catalog/query/cancel/tabular evidence만 갖고, routine
 Runtime Happy Path smoke wiring은 #907 전까지 넓히지 않습니다.
 
 **Fixture seeding CLI(`pnpm db:seed`)는 없습니다.** 남아 있는 `pnpm fixtures:start`
-/ `fixtures:stop`은 컨테이너 기동·정지일 뿐 seed를 넣지 않습니다 —
-`fixtures:stop`은 `docker compose down -v`라 볼륨까지 지웁니다. seed 데이터 자체는
-`e2e/fixtures/<dbms>/` 아래에 남아 있으므로, 컨테이너에 직접 먹이거나
-`e2e/fixtures/seed-smoke.ts`로 smoke seeding을 돌릴 수 있습니다.
+/ `fixtures:stop`은 컨테이너를 기동하고 정지할 뿐 seed를 넣지 않습니다. 게다가
+`fixtures:stop`은 `docker compose down -v`라서 볼륨까지 지웁니다. seed 데이터 자체는
+`e2e/fixtures/<dbms>/` 아래에 남아 있으므로, 컨테이너에 직접 넣거나
+`e2e/fixtures/seed-smoke.ts`로 smoke seeding을 실행할 수 있습니다.
 
 ```bash
 pnpm db:up            # 컨테이너 기동 (docker compose up -d)
@@ -138,9 +138,9 @@ docker compose exec -T mariadb mysql -utestuser -ptestpass table_view_test \
 Oracle은 서비스명 기반 `XEPDB1` 경로가 기준입니다. #905 범위는 catalog metadata,
 SELECT/DML batch, cooperative cancel, tabular table-data query까지입니다.
 SID/TNS alias/wallet/TLS, editRows, structured DDL, raw admin, parser/completion,
-runtime smoke, and full PL/SQL semantics는 후속입니다.
+runtime smoke, full PL/SQL semantics는 후속입니다.
 
-기본 접속 정보:
+기본 접속 정보는 다음과 같습니다.
 
 | DBMS       | Host        | Port    | User       | Password       | Database / service |
 | ---------- | ----------- | ------- | ---------- | -------------- | ------------------ |
@@ -152,7 +152,7 @@ runtime smoke, and full PL/SQL semantics는 후속입니다.
 | Oracle     | `localhost` | `1521`  | `testuser` | `testpass`     | `XEPDB1`           |
 | Redis      | `localhost` | `6379`  |            |                | `0`                |
 
-PostgreSQL connection URL:
+PostgreSQL connection URL은 다음과 같습니다.
 
 ```text
 postgresql://testuser:testpass@localhost:15432/table_view_test
@@ -160,7 +160,7 @@ postgresql://testuser:testpass@localhost:15432/table_view_test
 
 MongoDB는 auth source로 `admin`을 사용합니다.
 
-컨테이너와 compose volume을 함께 정리하려면:
+컨테이너와 compose volume을 함께 정리하려면 아래 명령을 실행합니다.
 
 ```bash
 pnpm db:down
@@ -188,13 +188,13 @@ pnpm tauri dev          # Tauri 데스크톱 dev
 pnpm tauri build        # Tauri 데스크톱 production build
 ```
 
-Parser WASM 산출물은 `src/lib/**/wasm/` 아래에 체크인되어 있어 로컬 `wasm-pack` 없이도 앱을 빌드할 수 있습니다. gzip 상한(SQL parser 120 KiB, Mongo parser 62 KiB)은 CI 의 `WASM Size Budget (non-blocking)` job 이 wasm-pack 으로 새로 빌드해서 잽니다. advisory 라 넘겨도 머지는 막히지 않으니, 산출물이나 Rust parser crate 를 바꾸면 그 job 을 직접 확인하세요. 로컬에서 체크인된 산출물을 재려면:
+Parser WASM 산출물은 `src/lib/**/wasm/` 아래에 체크인되어 있어 로컬 `wasm-pack` 없이도 앱을 빌드할 수 있습니다. gzip 상한(SQL parser 120 KiB, Mongo parser 62 KiB)은 CI의 `WASM Size Budget (non-blocking)` job이 wasm-pack으로 새로 빌드해서 잽니다. 이 job은 advisory라서 상한을 넘겨도 머지가 막히지 않으니, 산출물이나 Rust parser crate를 바꾸면 그 job을 직접 확인하세요. 로컬에서 체크인된 산출물을 재려면 아래 명령을 실행합니다.
 
 ```bash
 bash scripts/check-wasm-size.sh
 ```
 
-새로 빌드한 산출물을 재려면 앞에 `pnpm run build:sql-wasm && pnpm run build:mongosh-wasm` 을 붙입니다. 이 두 명령은 체크인된 산출물과 그 디렉토리의 `.gitignore` 를 덮어쓰므로 작업 트리가 더러워집니다. 예산 근거와 재현 명령은 `scripts/check-wasm-size.sh` 머리말에 있습니다.
+새로 빌드한 산출물을 재려면 앞에 `pnpm run build:sql-wasm && pnpm run build:mongosh-wasm`을 붙입니다. 이 두 명령은 체크인된 산출물과 그 디렉터리의 `.gitignore`를 덮어쓰므로 작업 트리에 커밋하지 않은 변경이 남습니다. 예산 근거와 재현 명령은 `scripts/check-wasm-size.sh` 머리말에 적혀 있습니다.
 
 ---
 
@@ -207,20 +207,20 @@ pnpm test
 pnpm exec vitest run --coverage
 ```
 
-> `pnpm test -- --coverage` 는 쓰지 않는다. pnpm 10 은 `--` 를 그대로 넘겨
-> `vitest run -- --coverage` 가 되고, vitest 는 `--` 뒤 인자를 플래그로 읽지
-> 않는다. 명령은 exit 0 으로 끝나지만 커버리지는 수집되지 않는다.
+> `pnpm test -- --coverage`는 쓰지 않습니다. pnpm 10은 `--`를 그대로 넘겨서
+> `vitest run -- --coverage`가 되고, vitest는 `--` 뒤에 오는 인자를 플래그로 읽지
+> 않습니다. 명령은 exit 0으로 끝나지만 커버리지는 수집되지 않습니다.
 
 ### 2. Rust 백엔드 단위 테스트
 
-Rust crate들은 `src-tauri/`를 root로 하는 Cargo workspace입니다 (#2161). lib
-테스트는 한 줄로 닫힙니다:
+Rust crate는 모두 `src-tauri/`를 root로 하는 Cargo workspace에 속합니다 (#2161).
+lib 테스트는 다음 한 줄로 끝납니다.
 
 ```bash
 cd src-tauri && cargo test --workspace --lib
 ```
 
-> `--workspace`가 member 전부를 잡으므로 crate가 늘어도 이 명령은 그대로입니다.
+> `--workspace`가 member 전부를 포함하므로 crate가 늘어도 이 명령은 그대로입니다.
 > 한 crate만 볼 때는 `cd src-tauri && cargo test -p table-view-core --lib`처럼
 > `-p`로 고르세요.
 > 통합 테스트까지 포함한 릴리스 전 순서는
@@ -229,7 +229,7 @@ cd src-tauri && cargo test --workspace --lib
 
 ### 3. 통합 테스트 (Docker 필요)
 
-`pnpm db:up`으로 DB 컨테이너를 띄운 뒤 실행합니다.
+`pnpm db:up`으로 DB 컨테이너를 기동한 뒤 실행합니다.
 
 ```bash
 cd src-tauri && cargo test --test schema_integration --test query_integration
@@ -244,10 +244,10 @@ runtime evidence만 갖고 routine smoke wiring은 #907 소유입니다.
 
 **CI에서는 변경 영역만큼 실행됩니다.** `.github/workflows/e2e-smoke.yml`의
 `Runtime Happy Path` job이 `e2e/scope-map.mjs`로 PR의 변경 경로를 spec 부분집합에
-매핑해 그것만 돌립니다. e2e와 무관한 PR은 `selected 0 specs`를 찍고 green이고,
-main push · 야간 schedule · `workflow_dispatch`는 전체를 돌립니다. `e2e:full`
-label은 label 이벤트를 안 듣기 때문에, 붙인 뒤 push 해야 전체가 돕니다. 아래처럼 직접
-구동하는 경로도 그대로입니다.
+매핑해 그 부분집합만 실행합니다. e2e와 무관한 PR은 `selected 0 specs`를 출력하고
+green으로 끝나며, main push와 야간 schedule, `workflow_dispatch`는 전체를
+실행합니다. `e2e:full` label은 label 이벤트를 청취하지 않기 때문에, 붙인 뒤에 push
+해야 전체가 실행됩니다. 아래처럼 직접 구동하는 경로도 그대로 남아 있습니다.
 
 ```bash
 pnpm db:up
@@ -263,7 +263,8 @@ TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke \
 `WEBKIT_DISABLE_COMPOSITING_MODE=1`, `LIBGL_ALWAYS_SOFTWARE=1`을 직접 export해야
 합니다 (#1261/#1293).
 
-macOS/Windows 로컬에서는 tauri-driver의 Linux/GTK 의존성 차이가 있습니다.
+macOS와 Windows 로컬 환경에서는 tauri-driver가 요구하는 Linux/GTK 의존성에 차이가
+있습니다.
 
 ---
 
@@ -300,5 +301,5 @@ brew tap Felix-LeeSM/table-view
 brew install --cask table-view
 ```
 
-설치 방법, 자동 갱신이 안 도는 경우, 그때의 수동 절차는
+설치 방법과 자동 갱신이 동작하지 않는 경우, 그때 밟아야 하는 수동 절차는
 [`docs/contributor-guide/release/homebrew-cask.md`](./docs/contributor-guide/release/homebrew-cask.md)를 확인하세요.

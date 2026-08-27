@@ -1,10 +1,11 @@
-# `src-tauri/` — surface pointer
+# `src-tauri/`: surface pointer
 
-이 디렉토리를 만지기 전 `memory/index/by-surface.md` 에서 **만지는 파일 경로에
-걸리는 절**과 거기가 가리키는 convention
-방(`memory/engineering/conventions/backend/memory.md`,
-`memory/engineering/conventions/rust/memory.md` 등)을 읽어라. 절 제목은 경로
-glob 이라 한 파일이 여러 절에 걸린다. 인덱스는 찾아가야 오고, 마크다운 링크는
-자동으로 안 따라간다.
+이 디렉터리를 수정하기 전에 `memory/index/by-surface.md` 에서 **지금 수정하는 파일
+경로에 걸리는 절**을 찾고, 그 절이 가리키는 convention
+문서(`memory/engineering/conventions/backend/memory.md` 와
+`memory/engineering/conventions/rust/memory.md` 등)까지 읽어라. 절 제목이 경로
+glob 이라서 파일 하나가 여러 절에 동시에 걸린다. 이 인덱스는 저절로 전달되지
+않으므로 직접 찾아가서 열어야 하고, 마크다운 링크도 자동으로 따라가지 않는다.
 
-규칙 본문은 `memory/` 가 SOT다 — **여기 본문을 적지 마라.** 적는 순간 drift 한다.
+규칙 본문의 SOT 는 `memory/` 다. **이 파일에는 규칙 본문을 적지 마라.** 여기에
+적는 순간 같은 규칙이 두 곳에 존재하게 되고, 두 사본은 서로 어긋나기 시작한다.
