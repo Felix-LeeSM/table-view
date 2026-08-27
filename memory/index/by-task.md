@@ -26,7 +26,7 @@ generator: none — 손으로 갱신한다
 
 ### agent-hard-rule
 
-- [작업 사본 격리 — clone](../../memory/runbook/worktree/memory.md)
+- [작업 사본 격리: clone](../../memory/runbook/worktree/memory.md)
 
 ### architecture
 
@@ -66,7 +66,7 @@ generator: none — 손으로 갱신한다
 
 ### clone
 
-- [작업 사본 격리 — clone](../../memory/runbook/worktree/memory.md)
+- [작업 사본 격리: clone](../../memory/runbook/worktree/memory.md)
 
 ### code-writing
 
@@ -192,7 +192,7 @@ generator: none — 손으로 갱신한다
 
 ### multi-agent
 
-- [작업 사본 격리 — clone](../../memory/runbook/worktree/memory.md)
+- [작업 사본 격리: clone](../../memory/runbook/worktree/memory.md)
 
 ### needs-user
 
@@ -204,7 +204,7 @@ generator: none — 손으로 갱신한다
 
 ### parallel
 
-- [작업 사본 격리 — clone](../../memory/runbook/worktree/memory.md)
+- [작업 사본 격리: clone](../../memory/runbook/worktree/memory.md)
 
 ### parallel-pr
 
@@ -336,7 +336,7 @@ generator: none — 손으로 갱신한다
 
 ### spawn-verify
 
-- [작업 사본 격리 — clone](../../memory/runbook/worktree/memory.md)
+- [작업 사본 격리: clone](../../memory/runbook/worktree/memory.md)
 
 ### sprint
 
@@ -416,4 +416,4 @@ generator: none — 손으로 갱신한다
 
 ### worktree
 
-- [작업 사본 격리 — clone](../../memory/runbook/worktree/memory.md)
+- [작업 사본 격리: clone](../../memory/runbook/worktree/memory.md)
