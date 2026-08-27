@@ -34,7 +34,7 @@ GitHub 산출물로 남긴 뒤 종료한다. 다음 노드는 그렇게 남은 �
 | commit / PR            | `memory/workflow/delivery/memory.md`                   |
 | PR review              | `memory/workflow/review/memory.md`                     |
 | 병렬 작업 / 이슈 발행  | `memory/workflow/orchestration/memory.md` (spawn·리뷰 큐·사이클 정지·이슈 수용기준) + `memory/workflow/interface/memory.md` §2 (누가 언제 여는가: scorecard non-blocking 스윕) |
-| subagent spawn / 역할 프롬프트 | `.agents/prompts/` 가 orchestrator·issue-implement·pr-review·pr-subreview·pr-finalize 의 고정부를 갖는다. **자동으로 도달하지 않는다**: spawn 할 때 파일을 그대로 첨부하거나 `.claude/agents/<role>.md` 정의가 첫 행동으로 읽어야 한다 |
+| subagent spawn / 역할 프롬프트 | `.agents/prompts/` 가 orchestrator·issue-implement·pr-review·pr-subreview·pr-finalize 의 고정부를 갖는다. **자동으로 도달하지 않는다**: spawn 할 때 파일을 그대로 첨부하거나 `.claude/agents/<role>.md` 정의가 첫 행동으로 읽는다 |
 | 사용자 대화 / 설계 결정 / raw→task 승격 | `memory/workflow/interface/memory.md` (top-level 세션 전용) |
 | 문서화 / PR body       | `memory/workflow/documentation/memory.md`              |
 | 한국어 산문 작성       | `.claude/output-styles/fluent-korean.md` 를 읽는다. 조사와 어미, 의미가 있는 문장 성분을 생략하지 않고 완성된 문장으로 끝맺게 하는 문체 기준이다. `.claude/settings.json` 이 이 파일을 기본 output style 로 지정해 두지만, output style 은 main conversation 에만 실리므로 **spawn 된 노드에는 전달되지 않는다.** 노드가 직접 열어야 지침이 도달한다. |

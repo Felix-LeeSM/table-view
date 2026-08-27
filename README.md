@@ -72,7 +72,7 @@ TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 
 
 이 프로젝트를 로컬에서 빌드하고 기여하려는 개발자를 위한 안내입니다.
 
-Contributor와 agent는 다음 순서로 문서를 찾아갑니다.
+Contributor와 agent가 참고할 문서는 다음과 같습니다.
 
 - Agent는 [`AGENTS.md`](./AGENTS.md)를 먼저 읽고, 작업 type별 workflow memory와
   surface rule을 이어서 읽습니다. Claude Code 전용 wrapper는
