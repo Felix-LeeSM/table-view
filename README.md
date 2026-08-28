@@ -248,9 +248,8 @@ runtime evidence만 갖고 routine smoke wiring은 #907 소유입니다.
 `Runtime Happy Path` job이 `e2e/scope-map.mjs`로 PR의 변경 경로를 spec 부분집합에
 매핑해 그 부분집합만 실행합니다. e2e와 무관한 PR은 `selected 0 specs`를 출력하고
 green으로 끝나며, main push와 야간 schedule, `workflow_dispatch`는 전체를
-실행합니다. `e2e:full` label은 label 이벤트를 청취하지 않기 때문에, 붙인 뒤에
-push하거나 이 workflow를 다시 실행해야 전체가 실행됩니다. 아래처럼 직접 구동하는
-경로도 그대로 남아 있습니다.
+실행합니다. `e2e:full` label은 label 이벤트를 청취하지 않기 때문에, 붙인 뒤에 push
+해야 전체가 실행됩니다. 아래처럼 직접 구동하는 경로도 그대로 남아 있습니다.
 
 ```bash
 pnpm db:up
@@ -266,13 +265,10 @@ TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke \
 `WEBKIT_DISABLE_COMPOSITING_MODE=1`, `LIBGL_ALWAYS_SOFTWARE=1`을 직접 export해야
 합니다 (#1261/#1293).
 
-macOS 로컬 환경에서는 host-native 실행이 platform 차원에서 불가능합니다.
-`tauri-driver`가 필요로 하는 WebDriver 인터페이스를 Apple이 임베디드 WKWebView에
-제공하지 않기 때문이고, 근거는
-[ADR 0020](./docs/decisions/0020-e2e-pre-push-host-docker/memory.md)입니다. 같은
-ADR은 Windows를 별개 사례로 적습니다. `tauri-driver`가 Windows에서는
-`Microsoft Edge WebDriver`를 dispatch 대상으로 둔다고 밝히고, Windows에는 같은
-불가능 판정을 내리지 않습니다. 이 ADR은 `Superseded` 상태이지만, 대체한
+macOS와 Windows 로컬 환경에서는 이 절차를 host-native로 실행할 수 없습니다.
+`tauri-driver`가 Linux 전용이라서 두 플랫폼의 host-native 검증이 실현 불가라고
+[ADR 0020](./docs/decisions/0020-e2e-pre-push-host-docker/memory.md)이 판정했기
+때문입니다. ADR 0020은 `Superseded` 상태입니다. 다만 ADR 0020을 대체한
 [ADR 0044](./docs/decisions/0044-e2e-smoke-remote-required/memory.md)에는 이 platform
 판정을 다시 적은 문장이 없습니다.
 
