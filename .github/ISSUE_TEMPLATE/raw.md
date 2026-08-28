@@ -6,8 +6,7 @@ labels: ["raw"]
 
 <!--
 raw 는 관찰한 내용을 잃어버리지 않으려고 두는 보관함이다. 수용 기준도 파일 범위도
-여기에서는 요구하지 않는다. 그 두 가지를 갖추는 순간 raw 가 아니라 task 이기
-때문이다.
+여기에서는 요구하지 않는다. 그것까지 갖추면 raw 가 아니라 task 이기 때문이다.
 
 raw 를 task 로 승격하는 일은 interface 가 전담한다
 (memory/workflow/interface/memory.md). 구현자는 raw 를 보고 바로 착수하지 않는다.

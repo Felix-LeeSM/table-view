@@ -4,7 +4,7 @@
 
 TablePlus처럼 빠르게 연결하고, 스키마와 컬렉션을 탐색하고, 데이터를 바로 확인·편집하는 흐름을 지향합니다. PostgreSQL이 가장 강한 RDBMS lane이고 MongoDB는 whitelisted document workflow가 활성입니다. MySQL, MariaDB, SQLite, DuckDB, Redis, Valkey, Elasticsearch, OpenSearch, MSSQL, Oracle에 대해서는 SOT에 기록된 bounded runtime slice와 smoke/focused evidence가 덮는 범위 안에서 지원합니다.
 
-다중 창 워크스페이스와 변경 사항을 검토하는 Preview/Commit 게이트, 운영 환경에서 destructive 작업을 막는 Safe Mode를 갖추었습니다. 그래서 로컬 클라이언트의 속도와 데이터 작업의 안전장치를 함께 제공합니다.
+다중 창 워크스페이스, 변경 사항을 검토하는 Preview/Commit 게이트, 운영 환경에서 destructive 작업을 막는 Safe Mode를 갖추었습니다. 그래서 로컬 클라이언트의 속도와 데이터 작업의 안전장치를 함께 제공합니다.
 
 ---
 
@@ -263,7 +263,7 @@ TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke \
 `WEBKIT_DISABLE_COMPOSITING_MODE=1`, `LIBGL_ALWAYS_SOFTWARE=1`을 직접 export해야
 합니다 (#1261/#1293).
 
-macOS와 Windows 로컬 환경에서는 tauri-driver가 요구하는 Linux/GTK 의존성에 차이가
+macOS와 Windows 로컬 환경에서는 tauri-driver의 Linux/GTK 의존성에 차이가
 있습니다.
 
 ---

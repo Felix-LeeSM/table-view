@@ -48,9 +48,9 @@ rule 묶음을 읽는다.
 
 **이 인덱스는 직접 찾아가야 온다.** 편집한 파일의 surface rule 을 컨텍스트로 넣어
 주는 장치는 없으므로 스스로 열어야 한다. 막히면 **에러 문자열을 그대로 `rg`**
-해라. 각 메모리 문서 frontmatter 의 `keywords:` 줄이 정확한 에러 문구와 명령 이름,
-한국어·영어 동의어를 인덱싱해 두었기 때문이다. 메모리 문서를 추가하거나 수정하면
-`keywords:` 줄도 같이 관리한다.
+해라. 각 `memory.md` 의 frontmatter 에 있는 `keywords:` 줄이 정확한 에러 문구와
+명령 이름, 한국어·영어 동의어를 인덱싱해 두었기 때문이다. `memory.md` 를
+추가하거나 수정하면 `keywords:` 줄도 같이 관리한다.
 
 surface 디렉터리(`src/` 등)에 있는 `AGENTS.md` 는 해당 surface rule 로 가는 3~5줄
 포인터만 둔다. 규칙 본문은 `memory/` 에 둔다. 본문을 옮겨 적으면 SOT 가 둘로
@@ -77,16 +77,18 @@ surface 디렉터리(`src/` 등)에 있는 `AGENTS.md` 는 해당 surface rule �
 절반만 CI 가 검사한다(`bash scripts/check-memory-doc-size.sh`, #2128). 나머지는
 어겨도 아무도 막지 않으므로 agent 가 스스로 지킨다.
 
-- `memory/` 트리에는 `memory.md` 만 두고, 270줄과 14,000 chars 를 둘 다 cap 으로
-  지킨다. 크기 상한 두 가지는 CI 가 검사하고, `memory.md` 만 두라는 쪽은 규율로만
-  지킨다.
+- `memory/` 트리에는 `memory.md` 만 두고, 각 `memory.md` 가 270줄과 14,000 chars 를
+  둘 다 cap 으로 지킨다. 크기 상한 두 가지는 CI 가 검사하고, `memory.md` 만 두라는
+  쪽은 규율로만 지킨다.
 - workflow 와 runbook memory 는 행동 계약만 둔다. 긴 절차는 `.agents/skills/` 로
   옮기고 memory 에는 계약과 그 경로만 남긴다. 무엇이 계약이고 무엇이 절차인지는
   `memory/runbook/memory.md` 「계약 / 절차 경계」가 판정한다. skill 은 어떤
   harness 도 자동으로 읽지 않으므로 **위 매트릭스 행과 memory 에 남는 포인터**가
   유일한 도달 경로다. 절차를 옮기면 그 둘을 같은 커밋에서 함께 고친다.
-- ADR 본문은 동결한다. 결정을 뒤집으려면 새 ADR 을 쓰고 기존 ADR 의 status 를
-  `Superseded` 로 바꾼다. 본문은 `docs/decisions/` 아래에 있다.
+- ADR 본문은 동결한다. 결정을 뒤집으려면 새 ADR 을 쓰고 원본을 `Superseded` 로
+  넘기는데, 두 ADR 의 프론트매터에 무엇을 적고 인덱스에서 원본을 어디로
+  옮기는지까지 포함한 절차는 `docs/decisions/memory.md` 「작성 규칙」이 갖는다.
+  ADR 본문은 `docs/decisions/` 아래에 있다.
 - git 과 hook 을 회피하지 않는다. 대표적인 예가 `--no-verify` 와 force-push 다.
   SOT 는 `memory/workflow/git-policy/memory.md` 하나이고, 실제로 차단해 주는 장치는
   없다.
