@@ -106,10 +106,11 @@ Supersede 하는** 절차를 밟아야 한다. 확정된 축을 일반 options g
 **암호화와 저장 (기존 구성을 재사용하고 새 매체는 도입하지 않는다)**
 - at-rest 는 AES-256-GCM 으로 암호화하고, master file-key 는 OS keyring 에 둔다
   (`com.tableview.app.file-key`, `src-tauri/table-view-core/src/storage/crypto.rs:22`).
-  Linux 에서 Secret Service 를 쓸 수 없으면 0600 권한의 disk fallback 으로
-  내려가고 probe 를 50ms 간격으로 3회 재시도한다 (`crypto.rs:84–114`). 이 구성은
-  ADR 0040 의 threat 1 (offline disk-access) 을 방어하고 threat 2 (running
-  malware) 는 범위 밖에 두는데, SSH secret 에도 같은 수용선을 적용한다.
+  Linux 에서는 Secret Service 를 쓸 수 있는지 50ms 간격으로 최대 3회 probe 하고
+  (`crypto.rs:84–114`), 그 시도가 모두 실패해야 0600 권한의 disk fallback 으로
+  내려간다 (`src-tauri/table-view-core/src/storage/key_migration.rs:121–131`).
+  이 구성은 ADR 0040 의 threat 1 (offline disk-access) 을 방어하고 threat 2
+  (running malware) 는 범위 밖에 두는데, SSH secret 에도 같은 수용선을 적용한다.
 - IPC 경계에서 plaintext 는 백엔드 밖으로 나가지 않는다 (ADR 0005).
   `list_connections` 는 password 필드 자체를 포함하지 않으며,
   `src-tauri/src/commands/connection/crud.rs:388–408` 의 회귀 테스트가 이를
