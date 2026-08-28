@@ -99,14 +99,14 @@ jobs:
 
       # A third contract rides here for the same reason the second one does
       # (#2128). AGENTS.md 「강제 룰」 caps every `memory/**/memory.md` at a line
-      # count and a character count, and until now nothing measured it. Both
-      # figures and the rooms that own them are stated by
-      # `scripts/check-memory-doc-size.sh` alone — #2522 re-derived them from a
-      # pilot rewrite, so do not restate them here. It lands
-      # in this job rather than a job of its own because a required context is
-      # registered in the `pr_to_main` ruleset — live GitHub state this PR
-      # cannot change — and a freshly registered context that has never
-      # reported pins every open PR at BLOCKED
+      # count and a character count, and until now nothing measured it. What
+      # counts as a violation is decided by `scripts/check-memory-doc-size.sh`
+      # alone; its header states both figures and the rooms that own them —
+      # #2522 re-derived them from a pilot rewrite, so do not restate them
+      # here. It lands in this job rather than a job of its own because a
+      # required context is registered in the `pr_to_main` ruleset — live
+      # GitHub state this PR cannot change — and a freshly registered context
+      # that has never reported pins every open PR at BLOCKED
       # (memory/runbook/pr-merge-gates/memory.md). Riding a context that is
       # already required makes the cap blocking the day this merges. The script
       # needs no toolchain, so it adds no setup to the cheapest job: 0.17s over
