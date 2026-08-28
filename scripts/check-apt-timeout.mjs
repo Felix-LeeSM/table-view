@@ -39,9 +39,14 @@
 // (`scripts/__tests__/check-coverage-ratchet.test.ts` 와
 // `scripts/__tests__/check-review-size-cap.test.ts` 가 `ci.yml` 을 그것으로 읽는다),
 // 이 검사가 도는 `Frontend Checks` 는 `Install dependencies` 로 그것을 이미 깔아 둔다.
-// `python3` + `PyYAML` 은 이 저장소의 워크플로가 한 번도 안 쓰는 의존이라
-// (`git grep -n 'python3\|pip install\|PyYAML' -- .github/workflows/` 가 0건) 러너에
-// 있다는 보장을 이 저장소가 안 갖는다.
+// `python3` + `PyYAML` 은 이 저장소의 워크플로가 한 번도 실행하지 않는 의존이라 러너에
+// 있다는 보장을 이 저장소가 안 갖는다. 재는 명령은 YAML 주석 줄을 뺀 전수이고 0 건이다:
+//
+//   git grep -n 'python3\|pip install\|PyYAML' -- .github/workflows/ \
+//     | grep -v ':[[:space:]]*#'
+//
+// 필터를 떼면 이 게이트를 설명하려고 `ci.yml` 에 써 둔 YAML 주석 한 줄이 걸린다. 그
+// 줄은 python 을 실행하는 자리가 아니라 이 문장 자신의 설명이라 세면 안 된다.
 //
 // 사용:
 //   node scripts/check-apt-timeout.mjs          # 이 repo
