@@ -1130,12 +1130,24 @@ export async function waitForKvKeyVisible(
   );
 }
 
+/**
+ * Waits for a workspace document that shows every `snippets` string and none of
+ * the `absentSnippets` ones.
+ *
+ * #2520 — the absent list is checked inside the same wait on purpose. A list
+ * that a filter is about to narrow already contains the `snippets` strings
+ * before the filter runs, so waiting for presence first and checking absence
+ * afterwards would settle on the pre-filter render and pass whatever the filter
+ * did. Both halves have to hold on the same body read.
+ */
 export async function waitForWorkspaceTextAll(
   snippets: string[],
   timeout: number,
   timeoutMsg: string,
+  absentSnippets: string[] = [],
 ) {
   const needles = snippets.map((snippet) => snippet.toLowerCase());
+  const forbidden = absentSnippets.map((snippet) => snippet.toLowerCase());
   await browser.waitUntil(
     async () => {
       for (const handle of await browser.getWindowHandles()) {
@@ -1144,7 +1156,12 @@ export async function waitForWorkspaceTextAll(
         const text = await browser.execute(
           () => document.body.textContent?.toLowerCase() ?? "",
         );
-        if (needles.every((needle) => text.includes(needle))) return true;
+        if (
+          needles.every((needle) => text.includes(needle)) &&
+          !forbidden.some((needle) => text.includes(needle))
+        ) {
+          return true;
+        }
       }
       return false;
     },
