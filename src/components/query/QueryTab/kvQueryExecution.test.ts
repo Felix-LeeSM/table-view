@@ -113,11 +113,14 @@ describe("kvQueryExecution seam", () => {
     });
   });
 
-  // Issue #1120 symptom 3 — the frontend classifier now mirrors the backend
-  // `required_confirmation_key` set (KEYS / DEL / PERSIST) so these
-  // confirm-gated KV commands surface the same confirm dialog as SQL
-  // destructive statements, instead of the backend rejecting them with a bare
-  // error after a silent frontend pass. `danger` here is the confirm lever,
+  // Issue #1120 symptom 3 — the frontend classifier answers `danger` for the
+  // commands the backend gates with a confirmation value (KEYS / DEL /
+  // PERSIST), so they surface the same confirm dialog as SQL destructive
+  // statements instead of the backend rejecting them with a bare error after a
+  // silent frontend pass. This case pins DEL and PERSIST; since #2513 the same
+  // `danger` also covers every verb the backend calls
+  // `RedisCommandEffect::Destructive`, asserted per verb in
+  // `kvDestructiveTier.test.ts`. `danger` here is the confirm lever,
   // not a destruction verdict — KEYS (scan) and PERSIST (TTL removal) are not
   // destructive (see memory/product §2 + kvQueryExecution.ts).
   it("[AC-1120-kv] classifies DEL/PERSIST as confirm-requiring danger (backend parity)", () => {
@@ -164,9 +167,10 @@ describe("kvQueryExecution seam", () => {
   // key against the key the backend parsed out of the same command string, so a
   // frontend that derives the key from the command text satisfies it without a
   // dialog. These two lock the halves of the fix separately: the dispatch seam
-  // refuses an unconfirmed command `kvDataLossReason` names — today `DEL` and
-  // nothing else — and the router sends DEL to the dialog whatever the Safe Mode
-  // matrix returned.
+  // refuses an unconfirmed command `kvDataLossReason` names — `DEL` in this
+  // case, and since #2513 every verb the backend calls
+  // `RedisCommandEffect::Destructive` — and the router sends DEL to the dialog
+  // whatever the Safe Mode matrix returned.
   it("[kv-confirm-gate] refuses an unconfirmed data-loss dispatch and only runs it with the dialog's confirmation", async () => {
     const actions = createActions();
 

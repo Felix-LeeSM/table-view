@@ -30,14 +30,16 @@
 // GRANT/REVOKE is warn everywhere (danger stays reserved for irreversible
 // data destruction).
 //
-// KV (Redis/Valkey) confirm-gated commands (KEYS / DEL / PERSIST) are
-// deliberately EXCLUDED from this table. Their `danger` tier is NOT an
-// impact×loss verdict — a single-key DEL is row-targeted (warn on this
-// axis) and KEYS/PERSIST are not destructive at all. It is a mirror of the
-// backend `required_confirmation_key` set, reusing `danger` as the only
-// confirm-dialog lever (the KV path has no warn→confirm surface). That
-// backend-confirm mirroring is locked in kvQueryExecution.test.ts, which is
-// the correct home for it — the axis parity table stays impact×loss-only.
+// The KV (Redis/Valkey) commands registered in `KV_CONFIRM_COMMANDS`
+// (`src/components/query/QueryTab/kvCommandConfirmation.ts`) are deliberately
+// EXCLUDED from this table. Their `danger` tier is NOT an impact×loss verdict —
+// a single-key DEL is row-targeted (warn on this axis) and KEYS/PERSIST are not
+// destructive at all. That tier is the KV path's only confirm-dialog lever (it
+// has no warn→confirm surface), so the map reuses `danger` to reach the dialog
+// for the backend's confirm-gated commands and, since #2513, for every verb the
+// backend calls `RedisCommandEffect::Destructive`. Those two sets are locked in
+// kvQueryExecution.test.ts and kvDestructiveTier.test.ts, which are the correct
+// homes for them — the axis parity table stays impact×loss-only.
 //
 // This table is the lock: adding a paradigm or a new destructive syntax
 // means adding its row here. A drifted classifier fails the matching bucket.

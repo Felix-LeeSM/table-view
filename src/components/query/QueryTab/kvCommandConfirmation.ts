@@ -1,11 +1,18 @@
 /**
- * Redis commands the backend gates with a `required_confirmation_key`
- * (`src-tauri/table-view-core/src/db/redis/command.rs`): KEYS pattern-confirm + the
- * Destructive/Ttl commands DEL / PERSIST. This map mirrors that *set* so the
- * frontend routes these commands to the same confirm dialog SQL destructive
- * statements use, instead of letting the backend reject them with a bare
- * error after a silent frontend pass (issue #1120 symptom 3). The value carries
- * the confirm-dialog reason copy and whether running the command loses data.
+ * Redis commands the frontend routes to the same confirm dialog SQL
+ * destructive statements use. The map is the union of two backend sets, and
+ * `DEL` belongs to both:
+ *   - what the backend gates with a confirmation value
+ *     (`src-tauri/table-view-core/src/db/redis/command.rs`): KEYS
+ *     pattern-confirm plus the Destructive/Ttl commands DEL / PERSIST
+ *     key-confirm. Mirroring that set is what keeps the backend from rejecting
+ *     such a command with a bare error after a silent frontend pass (issue
+ *     #1120 symptom 3).
+ *   - every verb the backend calls `RedisCommandEffect::Destructive`
+ *     (`src-tauri/table-view-core/src/db/redis/command_parser.rs`), added by
+ *     issue #2513 and described in its paragraph below.
+ * The value carries the confirm-dialog reason copy and whether running the
+ * command loses data.
  *
  * Issue #2421 — that backend gate is NOT an independent safety boundary for
  * commands typed in the editor. `require_confirm_key` only checks that the key
@@ -21,19 +28,23 @@
  * still bounds is *which* commands exist at all; it cannot tell a confirmed
  * request from an unconfirmed one.
  *
- * That boundary covers this map, not everything that loses data. `HDEL`,
- * `LREM`, `SREM`, `ZREM`, `XDEL` and `XTRIM` are
- * `RedisCommandEffect::Destructive` on the backend
- * (`src-tauri/table-view-core/src/db/redis/command_parser.rs`) yet are absent
- * below, so a command typed in the console classifies as `info`, the Safe Mode
- * matrix returns `allow` for that classification in every tier, and it reaches
- * IPC with no dialog. Registering one here with `losesData: true` is what
- * closes the console side; that gap predates #2421, which scoped itself to
- * `DEL`. The console is not the only surface those verbs come from — the KV
- * structure editor classifies them differently, with `analyzeKvMutationSafety`
- * (`src/components/workspace/kvMutationCommands.ts`). Which tiers actually
- * confirm there is issue #2513
- * (`docs/product/known-limitations-cross-cutting.md`).
+ * Issue #2513 — that boundary now covers every verb the backend calls
+ * `RedisCommandEffect::Destructive`
+ * (`src-tauri/table-view-core/src/db/redis/command_parser.rs`), not just `DEL`.
+ * `HDEL`, `LREM`, `SREM`, `ZREM`, `XDEL` and `XTRIM` used to be absent below, so
+ * a command typed in the console classified as `info`, the Safe Mode matrix
+ * returned `allow` for that classification in every tier, and it reached IPC
+ * with no dialog — production + `strict` included. Registering them here with
+ * `losesData: true` is what closed the console side; that gap predated #2421,
+ * which scoped itself to `DEL`. The console was never the only surface those
+ * verbs come from — the KV structure editor reaches the same `danger` tier by
+ * its own route, from the mutation's `destructive` flag rather than the typed
+ * verb (`analyzeKvMutationSafety` in
+ * `src/components/workspace/kvMutationCommands.ts`). The two routes are not
+ * merged; what holds them together is
+ * `src/components/query/QueryTab/kvDestructiveTier.test.ts`, which asserts per
+ * verb that both reach `danger` and that both build the same command string.
+ * Adding a data-loss verb to one route without the other fails there.
  */
 interface KvConfirmCommand {
   /** Confirm-dialog reason copy. */
@@ -57,18 +68,42 @@ export const KV_CONFIRM_COMMANDS: Readonly<Record<string, KvConfirmCommand>> = {
     reason: "Redis PERSIST removes the key's expiry",
     losesData: false,
   },
+  // #2513 — element removals. The backend comment on their `Destructive` tier
+  // notes each can drop the key itself once the last element is gone, because
+  // Redis garbage-collects the emptied collection.
+  HDEL: {
+    reason: "Redis HDEL permanently removes the hash fields",
+    losesData: true,
+  },
+  LREM: {
+    reason: "Redis LREM permanently removes the matching list elements",
+    losesData: true,
+  },
+  SREM: {
+    reason: "Redis SREM permanently removes the set members",
+    losesData: true,
+  },
+  ZREM: {
+    reason: "Redis ZREM permanently removes the sorted-set members",
+    losesData: true,
+  },
+  XDEL: {
+    reason: "Redis XDEL permanently removes the stream entries",
+    losesData: true,
+  },
+  XTRIM: {
+    reason: "Redis XTRIM permanently discards stream entries past the bound",
+    losesData: true,
+  },
 };
 
 /**
  * Issue #2421 — the reason copy when `command`'s verb is registered above with
- * `losesData: true`, `undefined` otherwise. That is narrower than "destroys
- * data": today it names `DEL` alone, and the backend-destructive verbs listed
- * in the map's docblock get `undefined` here even though they lose data.
- * One predicate drives both halves of the gate so they cannot drift:
- * `executeKvQuery` routes anything it names to the confirm dialog whatever the
- * Safe Mode matrix returned, and `executeKvCommandNow` refuses to dispatch
- * anything it names. Marking a new command `losesData: true` above therefore
- * gets both at once.
+ * `losesData: true`, `undefined` otherwise. One predicate drives both halves of
+ * the gate so they cannot drift: `executeKvQuery` routes anything it names to
+ * the confirm dialog whatever the Safe Mode matrix returned, and
+ * `executeKvCommandNow` refuses to dispatch anything it names. Marking a new
+ * command `losesData: true` above therefore gets both at once.
  */
 export function kvDataLossReason(command: string): string | undefined {
   const entry = KV_CONFIRM_COMMANDS[kvCommandVerb(command) ?? ""];
@@ -80,6 +115,16 @@ export function kvCommandConfirmationKey(command: string): string | undefined {
   const verb = tokens[0]?.toUpperCase();
   if (verb === undefined || !(verb in KV_CONFIRM_COMMANDS)) return undefined;
   // Confirm key = the single token argument (KEYS pattern / DEL·PERSIST key).
+  // #2513 — the element removals registered above take an operand as well, so
+  // they never match this arity, and the backend would not read the key
+  // anyway: outside its `KEYS` branch `require_command_confirmation` calls
+  // `require_confirm_key` only when `required_confirmation_key()` answers
+  // `Some`, which `DEL` and `PERSIST` do and the element removals do not
+  // (`src-tauri/table-view-core/src/db/redis/command.rs` and
+  // `command_parser.rs`). `KEYS` is the command that guard does not reach:
+  // the earlier branch matches its pattern through `require_confirm_pattern`,
+  // so an unconfirmed `KEYS *` is still rejected and this arity has to keep
+  // serving it.
   return tokens.length === 2 ? tokens[1] : undefined;
 }
 
