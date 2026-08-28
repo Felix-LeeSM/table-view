@@ -10,9 +10,7 @@
  *     #1120 symptom 3).
  *   - every verb the backend calls `RedisCommandEffect::Destructive`
  *     (`src-tauri/table-view-core/src/db/redis/command_parser.rs`), added by
- *     issue #2513 and described in its paragraph below. The ones the first set
- *     does not already hold carry no confirmation key of their own, which is
- *     why `kvCommandConfirmationKey` returns `undefined` for them.
+ *     issue #2513 and described in its paragraph below.
  * The value carries the confirm-dialog reason copy and whether running the
  * command loses data.
  *
