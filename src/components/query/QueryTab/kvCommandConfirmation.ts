@@ -1,11 +1,20 @@
 /**
- * Redis commands the backend gates with a `required_confirmation_key`
- * (`src-tauri/table-view-core/src/db/redis/command.rs`): KEYS pattern-confirm + the
- * Destructive/Ttl commands DEL / PERSIST. This map mirrors that *set* so the
- * frontend routes these commands to the same confirm dialog SQL destructive
- * statements use, instead of letting the backend reject them with a bare
- * error after a silent frontend pass (issue #1120 symptom 3). The value carries
- * the confirm-dialog reason copy and whether running the command loses data.
+ * Redis commands the frontend routes to the same confirm dialog SQL
+ * destructive statements use. The map is the union of two backend sets, and
+ * `DEL` belongs to both:
+ *   - what the backend gates with a confirmation value
+ *     (`src-tauri/table-view-core/src/db/redis/command.rs`): KEYS
+ *     pattern-confirm plus the Destructive/Ttl commands DEL / PERSIST
+ *     key-confirm. Mirroring that set is what keeps the backend from rejecting
+ *     such a command with a bare error after a silent frontend pass (issue
+ *     #1120 symptom 3).
+ *   - every verb the backend calls `RedisCommandEffect::Destructive`
+ *     (`src-tauri/table-view-core/src/db/redis/command_parser.rs`), added by
+ *     issue #2513 and described in its paragraph below. The ones the first set
+ *     does not already hold carry no confirmation key of their own, which is
+ *     why `kvCommandConfirmationKey` returns `undefined` for them.
+ * The value carries the confirm-dialog reason copy and whether running the
+ * command loses data.
  *
  * Issue #2421 — that backend gate is NOT an independent safety boundary for
  * commands typed in the editor. `require_confirm_key` only checks that the key
@@ -109,10 +118,15 @@ export function kvCommandConfirmationKey(command: string): string | undefined {
   if (verb === undefined || !(verb in KV_CONFIRM_COMMANDS)) return undefined;
   // Confirm key = the single token argument (KEYS pattern / DEL·PERSIST key).
   // #2513 — the element removals registered above take an operand as well, so
-  // they never match this arity, and the backend would not read the key anyway:
-  // `require_command_confirmation` skips any command whose
-  // `required_confirmation_key()` is `None`, which is all of them but
-  // DEL / PERSIST (`src-tauri/table-view-core/src/db/redis/command.rs`).
+  // they never match this arity, and the backend would not read the key
+  // anyway: outside its `KEYS` branch `require_command_confirmation` calls
+  // `require_confirm_key` only when `required_confirmation_key()` answers
+  // `Some`, which `DEL` and `PERSIST` do and the element removals do not
+  // (`src-tauri/table-view-core/src/db/redis/command.rs` and
+  // `command_parser.rs`). `KEYS` is the command that guard does not reach:
+  // the earlier branch matches its pattern through `require_confirm_pattern`,
+  // so an unconfirmed `KEYS *` is still rejected and this arity has to keep
+  // serving it.
   return tokens.length === 2 ? tokens[1] : undefined;
 }
 

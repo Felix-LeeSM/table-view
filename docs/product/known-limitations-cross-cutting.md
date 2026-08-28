@@ -80,7 +80,7 @@ the first click while `DELETE FROM t WHERE id = 1` got the preview dialog;
 (`SqlPreviewDialog` / `MqlPreviewModal`). The Safe Mode decision matrix is
 unchanged by the widening. The Redis command console mounts no preview at all
 (`src/components/query/QueryTab/kvQueryExecution.ts`), so a destructive command
-the matrix allows there still dispatches on the first click. Issue #2421 closed
+the matrix allowed there used to dispatch on the first click. Issue #2421 closed
 that for `DEL` alone, using the confirm dialog rather than a preview: `DEL k`
 now opens `ConfirmDestructiveDialog` whatever the matrix returned, and the
 dispatch seam refuses a `DEL` that did not come from that dialog. Before #2421

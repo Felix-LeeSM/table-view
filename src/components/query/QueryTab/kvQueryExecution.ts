@@ -70,9 +70,11 @@ export function analyzeKvCommandSafety(command: string): StatementAnalysis {
     ?.toUpperCase();
   // Issue #1120 — `danger` here is the confirm-dialog lever, NOT an
   // "irreversible destruction" verdict: the KV path has no warn→confirm
-  // surface, so mirroring the backend's `required_confirmation_key` set
-  // (KEYS pattern-confirm + DEL/PERSIST key-confirm) onto `danger` is what
+  // surface, so putting every `KV_CONFIRM_COMMANDS` entry on `danger` is what
   // routes these to the same confirm dialog SQL destructive statements use.
+  // That map holds the commands the backend gates with a confirmation value
+  // (KEYS pattern-confirm + DEL/PERSIST key-confirm) and, since #2513, every
+  // verb the backend calls `RedisCommandEffect::Destructive`.
   // KEYS (scan) and PERSIST (TTL removal) are not destructive; they ride
   // `danger` only for the confirm gate. Everything outside the map is info; the
   // backend command allowlist bounds which commands exist at all.
