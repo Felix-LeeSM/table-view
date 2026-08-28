@@ -1,18 +1,18 @@
 # Phase 32: Query/Workbench Parity Ladder
 
-> **상태: historical strategy snapshot.** 현재 제품 지원 범위는
-> `docs/product/README.md` 와 `docs/product/known-limitations.md`, 검증/quality
-> gap 은 `docs/contributor-guide/testing-and-quality.md`, 미래 lane routing 은
-> `docs/ROADMAP.md` 와 open issue 가 소유한다. 이 문서는 active sprint sequence 나
-> current support claim 의 SOT 가 아니다.
+> **상태: historical strategy snapshot.** 현재 제품의 지원 범위는
+> `docs/product/README.md` 와 `docs/product/known-limitations.md` 가 소유하고,
+> 검증과 quality gap 은 `docs/contributor-guide/testing-and-quality.md` 가, 미래의
+> lane routing 은 `docs/ROADMAP.md` 와 open issue 가 소유한다. 이 문서는 active
+> sprint sequence 나 current support claim 의 SOT 가 아니다.
 
 ## 목표
 
-추가 DBMS runtime 을 승격하기 전에, 현재 지원 DBMS surface 를 하나씩
+추가로 지원할 DBMS runtime 을 승격하기 전에, 지금 지원하는 DBMS surface 를 하나씩
 TablePlus-style query/workbench parity 까지 끌어올린다.
 
-이것은 full admin parity 가 아니다. 다음 항목은 나중에 별도로 선택하지 않는 한
-scope 밖이다: role/user/permission UI, extension management UI, schema
+이 목표는 full admin parity 를 뜻하지 않는다. 아래 항목은 나중에 별도로 선택하지
+않는 한 scope 밖이다: role/user/permission UI, extension management UI, schema
 diff/migration preview, DB-level backup/restore/import/export, deep
 activity/profiler dashboard.
 
@@ -31,7 +31,7 @@ contract 는 `docs/ROADMAP.md` 와 live issue state 에서 active lane 을 실�
 
 ## Lane 별 gate
 
-각 lane 은 다음 gap 을 닫아야 한다:
+각 lane 은 아래의 gap 을 닫아야 한다:
 
 - connect, browse, query, edit, safe commit runtime workflow gap;
 - claim 한 syntax surface 의 parser/Safe Mode gap;
@@ -43,7 +43,7 @@ contract 는 `docs/ROADMAP.md` 와 live issue state 에서 active lane 을 실�
 
 ## Extension Capability Pack
 
-Extension, plugin, module completion 은 detection 기반 opt-in 으로만 켠다:
+Extension 과 plugin, module 의 completion 은 detection 에 기반한 opt-in 으로만 켠다:
 
 1. DBMS 에서 설치된 capability 를 검사한다.
 2. 발견된 known capability 에만 curated completion pack 을 켠다.
@@ -62,19 +62,20 @@ PostgreSQL query/workbench parity 를 먼저 닫는다:
 
 - parser/Safe Mode: common no-FROM select, bare function call, selected PL/pgSQL
   boundary, `DO $$ ... $$` handling policy, `MERGE`, extension operator/type
-  tolerance 지원;
+  tolerance 를 지원한다;
 - completion: server-version/capability-aware candidate, 더 깊은 alias/CTE
   scope, extension pack, catalog-backed function/type/operator;
-- edit: 기존 row-edit safety 를 유지하고 unsupported write 는 명시;
-- EXPLAIN: dry-run 옆에 `EXPLAIN (FORMAT JSON)` path 와 readable plan view 추가;
+- edit: 기존의 row-edit safety 를 유지하고 unsupported write 는 명시한다;
+- EXPLAIN: dry-run 옆에 `EXPLAIN (FORMAT JSON)` path 와 readable plan view 를
+  추가한다;
 - quality: constraint/index live schema graph wiring, visual smoke, e2e smoke,
   result-envelope migration plan.
 
 ## 후속 lane (historical)
 
-아래 목록은 planning context 다. 현재 shipped/deferred 경계는 product docs 와
-`docs/roadmap/h2.md` / `docs/roadmap/h5.md` / `docs/roadmap/h6.md` 의 gate 경계
-기술을 우선한다.
+아래 목록은 planning context 다. 현재의 shipped/deferred 경계는 product docs 와
+`docs/roadmap/h2.md` / `docs/roadmap/h5.md` / `docs/roadmap/h6.md` 가 적어 둔 gate
+경계 서술을 우선한다.
 
 - MySQL/MariaDB: semantic widening, MariaDB engine evidence, dialect delta,
   explain format, routine/trigger read workflow.
