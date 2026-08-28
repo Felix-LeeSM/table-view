@@ -175,7 +175,7 @@ describe("query language support documentation", () => {
     }
 
     expect(productDocs).toContain(
-      "MSSQL/Oracle/Search 는 Pg form reuse claim 을 하지 않는다.",
+      "MSSQL 과 Oracle, Search 는 Pg form 을 재사용한다는 claim 을 하지 않는다.",
     );
     expect(productDocs).toMatch(/line-number references are\s+not stable SOT/);
   });

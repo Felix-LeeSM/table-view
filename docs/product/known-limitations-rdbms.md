@@ -1,4 +1,4 @@
-# Known Limitations — RDBMS Sources
+# Known Limitations: RDBMS Sources
 
 Per-source boundary entries for the relational engines. Index and the
 remaining boundary areas live in
@@ -77,7 +77,7 @@ different SQL and the adapter branches on the connection's engine: `mysql.user`
 is a real table on MySQL with an `account_locked` column (added in MySQL 5.7.6;
 an older build fails loud rather than mislabelling a locked account as
 loginable), whereas MariaDB's `mysql.user` does not carry that column (measured
-absent on 10.3, 10.4 and 11.3) — 10.4 replaced the table with a view over
+absent on 10.3, 10.4 and 11.3): 10.4 replaced the table with a view over
 `mysql.global_priv`, and there the lock flag is read from the `Priv` JSON
 document (`$.account_locked` only; that document also holds
 `authentication_string`, which is never projected), so MariaDB requires 10.4+
@@ -89,7 +89,7 @@ name and are listed as non-loginable; the role test is the `is_role` column, not
 an empty `Host`. `can_create_db` over-reports: it renders `mysql.user.Create_priv`,
 MySQL's global `CREATE` privilege, in the PG `rolcreatedb` ("may create
 databases") wire slot, but global `CREATE` also covers `CREATE TABLE`, so an
-account holding it for table DDL alone still shows as a database creator — and
+account holding it for table DDL alone still shows as a database creator, and
 the flag does not consult `read_only`/`super_read_only`, which blocks
 `CREATE DATABASE` for a non-`SUPER` account regardless of the grant. Read
 it as "holds global `CREATE`". Role membership (`mysql.role_edges`), MySQL 8
@@ -111,7 +111,7 @@ dump restores into a default-`sql_mode` MySQL/MariaDB server, proven by a docker
 round-trip that dumps a table, empties it, restores the emitted SQL, and matches
 the source rows (#1641, #1077 Stage 1). Binary/BLOB columns now dump as an
 unquoted MySQL binary literal (`X'<hex>'`), so a varbinary/BLOB round-trip is
-byte-faithful — proven by the same docker round-trip seeding a varbinary column
+byte-faithful, proven by the same docker round-trip seeding a varbinary column
 with a control-byte value (#1677). Broader procedure-management workbench parity
 and DB-level backup/restore/import/export remain unclaimed.
 
@@ -164,11 +164,11 @@ internal app-state DB rejection.
 The structural changes this app does not make are the boundary: a column's
 type, NOT NULL or DEFAULT, and declaring, adding or
 dropping a standalone constraint. SQLite fixes the column when the table is
-created, so changing one means a 12-step rebuild — a data-loss path this app
+created, so changing one means a 12-step rebuild, a data-loss path this app
 deliberately does not run. The two land differently in the Structure UI. The
 per-row Edit in the Columns tab stays on screen and is disabled, and hovering it
 shows the reason, so the control is never a click that fails. Constraints have
-no tab at all for SQLite — the adapter has no structured constraint listing, so
+no tab at all for SQLite: the adapter has no structured constraint listing, so
 the Constraints tab does not render for this engine and there is no control to
 disable; the boundary is stated here rather than on screen. `ADD COLUMN` and
 `DROP COLUMN` also carry SQLite's own conditions (a NOT NULL column with no
@@ -194,7 +194,7 @@ now exposed on writable connections through the transactional
 `execute_sql_batch` path (ADR 0051 Stage 1, #1070). Native structural DDL is now
 exposed on writable connections (ADR 0051 Stage 2, #1070): the schema-tree
 Create/Rename/Drop table actions and the Structure column/index editors run
-native DuckDB `ALTER TABLE`/`CREATE|DROP TABLE|INDEX` — table
+native DuckDB `ALTER TABLE`/`CREATE|DROP TABLE|INDEX` for table
 create/drop/rename, column add/drop/type, and index create/drop. Column comments
 are emitted as native `COMMENT ON COLUMN` from both table create and column add.
 DuckDB indexes are ART-only and its `CREATE INDEX` has no `USING <method>`
@@ -245,7 +245,7 @@ frontend SQL batch path with primary-key projection. #907 wires representative
 Runtime Happy Path smoke for connect, seeded catalog browse, SELECT/DML,
 destructive Safe Mode confirmation, cancellation, and grid edit. The `mssql`
 profile/dialect identity, SQL Server labels/defaults, URL parsing, and seed/spec
-inventory remain source-specific. `switchDatabase` is enabled since #2094 — the
+inventory remain source-specific. `switchDatabase` is enabled since #2094: the
 wired `MssqlAdapter` overrides `RdbAdapter::switch_database` and re-tests the
 connection config against the target catalog before swapping it, so the toolbar
 switcher is interactive. Bounded structured table/index/constraint DDL is
@@ -267,14 +267,14 @@ scripting remain unsupported; a read-only users/roles listing from
 `password_hash`) is available (#1077 Stage 2). That listing requires `VIEW ANY
 DEFINITION`: `sys.server_principals` is a metadata-visibility-filtered catalog
 view, not a DMV, so an unprivileged login would receive a silently truncated
-principal list — the adapter probes the permission with `HAS_PERMS_BY_NAME` and
+principal list. The adapter probes the permission with `HAS_PERMS_BY_NAME` and
 fails loud as `CapabilityNotEnabled` instead. The probe answers for the SERVER
 scope, so one truncation survives it: a principal that carries `DENY VIEW
 DEFINITION ON LOGIN::<principal>` against the connected login is silently absent
 from the rows even though the probe returned 1 (reproduced on the SQL Server
 2022 image the docker gate spawns,
 `mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04`, `ProductVersion`
-16.0.4135.4 — a login holding `VIEW ANY DEFINITION` plus one such DENY sees the
+16.0.4135.4: a login holding `VIEW ANY DEFINITION` plus one such DENY sees the
 granting probe succeed and the denied principal missing, with no error).
 Detecting it would need per-principal permission reads that are themselves
 metadata-filtered, so the listing is complete only for a login with no
@@ -288,7 +288,7 @@ an enabled principal (`is_disabled = 0`) of a type that can authenticate (SQL
 login, Windows login, Windows group, Microsoft Entra login `'E'`, Entra group
 `'X'`), so a disabled login, a server role, or a certificate-/key-mapped
 principal is listed as non-loginable. Row selection itself applies no
-principal-type filter — an earlier `type IN ('S','U','G','R','C','K')` whitelist
+principal-type filter: an earlier `type IN ('S','U','G','R','C','K')` whitelist
 dropped every Entra principal with no row and no error, so the listing now
 returns every non-`##MS_*` principal whatever its type. Internal `##MS_*`
 principals are filtered out; database-scoped users/permissions, password expiry,
@@ -334,8 +334,8 @@ remain a docker/ADB integration residual (config assembly, guards, and redaction
 are unit-covered). #2154 opens the remaining dial paths onto that same
 `connect_config` boundary. A TNS connect descriptor pasted into the identifier
 field is parsed down to `PROTOCOL`/`HOST`/`PORT` and `SERVICE_NAME` or `SID`,
-and every other clause — DN matching, multi-address failover, proxies, server
-mode — is refused rather than dropped, because a clause the driver cannot
+and every other clause (DN matching, multi-address failover, proxies, server
+mode) is refused rather than dropped, because a clause the driver cannot
 honor would otherwise leave the user believing the descriptor pinned a posture
 the dial never applied; the parsed coordinates still pass the #1065 character
 whitelist, and the descriptor itself never reaches the driver. Wallet-less
@@ -350,10 +350,10 @@ together with `verify-ca` or `verify-full` is rejected, while a wallet beside
 client-config builder never reads the skip-verify flag its API exposes, so the
 Oracle dropdown offers only `disable`/`prefer`/`verify-full`. As on the other
 engines, `verify-ca` is not selectable in the form until the CA file picker
-lands — it renders only for a connection already stored with it, and a pasted
+lands: it renders only for a connection already stored with it, and a pasted
 `oracle://…?sslmode=verify-ca` or `?sslmode=require` is reported as an
 unreflected parameter rather than dropped. Live TCPS/mTLS handshake
-verification stays a docker/ADB integration residual — descriptor parsing,
+verification stays a docker/ADB integration residual, while descriptor parsing,
 clause refusal, protocol/posture agreement, CA-path redaction, and TLS config
 assembly are unit-covered. tnsnames.ora alias resolution (reading the file to
 expand an alias into its descriptor), `cwallet.sso`/`ewallet.p12` wallet
@@ -364,7 +364,7 @@ source-specific promotion issues prove them.
 
 ## Related
 
-- [`docs/product/known-limitations.md`](known-limitations.md) — boundary index
-- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md) — current support snapshot
-- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — open follow-up queue
-- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order
+- [`docs/product/known-limitations.md`](known-limitations.md): boundary index
+- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md): current support snapshot
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md): open follow-up queue
+- [`docs/ROADMAP.md`](../ROADMAP.md): promotion order

@@ -1,21 +1,21 @@
 # Supported Workflow Summary
 
-현재 사용자-visible 지원은 active connection profile, runtime adapter, parser/safety
-경계, fixture/live evidence 가 같이 있는 범위만 의미한다.
+현재 사용자에게 보이는 지원 범위는 active connection profile 과 runtime adapter,
+parser/safety 경계, fixture/live evidence 가 함께 갖추어진 범위만을 의미한다.
 
 - Active connection UI/runtime 대상: PostgreSQL, MySQL, MariaDB, SQLite,
   DuckDB, MSSQL catalog/query runtime, MongoDB, Redis, Valkey, Elasticsearch,
   OpenSearch, and Oracle bounded catalog/query/cancel/tabular/edit-row runtime.
 - RDBMS workbench: catalog/tree browse, tabular result rendering, raw query path,
   bounded DML/row-edit path, source-specific safety confirmation. PostgreSQL 이
-  routine desktop smoke-backed 주 lane 이고 MySQL/MariaDB 는 runtime smoke
-  baseline 이 있다. SQLite 는 deterministic file workflow smoke baseline 이 있다.
+  routine desktop smoke 로 뒷받침되는 주 lane 이고, MySQL/MariaDB 에는 runtime
+  smoke baseline 이 있다. SQLite 에도 deterministic file workflow smoke baseline 이 있다.
   DuckDB 는 `.duckdb` Runtime Happy Path smoke 와 registered local file
   analytics Runtime Happy Path smoke/source-scoped evidence/history/privacy
-  boundary 를 분리해서 좁힌다.
-- SQLite/DuckDB file workflow: local file open/create/browse/query 중심. SQLite
-  는 writable-file DML, key-projected row edit, 그리고 엔진이 네이티브로 실행하는
-  구조 DDL (테이블 생성/삭제/이름 변경, 컬럼 추가/삭제, 인덱스 생성/삭제), DuckDB 는 `.duckdb`
+  boundary 를 서로 분리해서 좁게 규정한다.
+- SQLite/DuckDB file workflow: local file open/create/browse/query 를 중심으로 한다. SQLite
+  는 writable-file DML 과 key-projected row edit, 그리고 엔진이 네이티브로 실행하는
+  구조 DDL (테이블 생성/삭제/이름 변경, 컬럼 추가/삭제, 인덱스 생성/삭제) 을 지원한다. DuckDB 는 `.duckdb`
   catalog/read query 와 registered local CSV/Parquet/JSON/NDJSON preview,
   source-scoped SELECT, global editor SELECT slice 를 지원한다.
 - MongoDB workflow: whitelisted mongosh/MQL document query/edit/admin slices 와
@@ -58,14 +58,14 @@
   parsing, sample documents, cancellation, scoped redacted HTTP error surfacing,
   bounded Search DSL safety validation for query/filter/aggs/sort/source/profile
   request shapes, and mapping-aware Search DSL editor completion 을 지원한다.
-  Elasticsearch/OpenSearch Runtime Happy Path smoke 는 live runtime evidence 이고
+  Elasticsearch/OpenSearch Runtime Happy Path smoke 는 live runtime evidence 이며,
   live service connect/auth/TLS contract, catalog summary, selected metadata,
   bounded render, delete-by-query preview + live execution, and error surface 를
   검증한다. Search fixture files 는 contract evidence 다. Live `_delete_by_query`
-  execution 은 Safe Mode confirm gate 뒤에서 지원되고, actual Search
-  index/settings admin execution 은 deferred 다. Support closure 는
-  Elasticsearch 와 OpenSearch product-specific probe/catalog/completion deltas 를
-  분리해서 기록한다.
+  execution 은 Safe Mode confirm gate 를 통과한 뒤에만 지원하고, actual Search
+  index/settings admin execution 은 아직 deferred 상태다. Support closure 는
+  Elasticsearch 와 OpenSearch 의 product-specific probe/catalog/completion deltas 를
+  서로 분리해서 기록한다.
 - MSSQL: runtime catalog/query/edit-row support is active for issue #903. The SQL Server
   profile exposes source-specific SQL-auth/TDS connection test/connect/ping,
   catalog browse/schema/indexes/constraints/relationships, query,

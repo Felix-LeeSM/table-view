@@ -1,4 +1,4 @@
-# Known Limitations — Non-RDBMS And Search Sources
+# Known Limitations: Non-RDBMS And Search Sources
 
 Per-source boundary entries for key-value, document, and search engines, plus
 the not-yet-modeled source candidates. Index and the remaining boundary areas
@@ -26,8 +26,8 @@ partial/unsupported mutation surfaces, command-name completion for the backend
 allowlist with arity hints/snippets, and current-DB key suggestions filtered by
 command key type with safe empty/error fallback. Runtime smoke proves the
 representative connect/scan/preview/GET/guarded-write/TTL/delete path only.
-Single-value keys whose content is JSON — a `string` holding a JSON
-object/array, or a native `json`/ReJSON value — are additionally node-editable
+Single-value keys whose content is JSON (a `string` holding a JSON
+object/array, or a native `json`/ReJSON value) are additionally node-editable
 inline in the value tree: editing, adding, or deleting a node re-serializes the
 WHOLE value and overwrites the slot with one command (`SET key <json>` for a
 string, `JSON.SET key $ <json>` for ReJSON, the latter newly admitted to the
@@ -50,8 +50,8 @@ concurrent shift of the list between the read snapshot and the write can
 overwrite a different element than intended (last-writer-wins, the same
 positional ceiling as the existing inline `LSET` row edit, not a new risk); the
 command preview surfaces the exact index before it runs, while hash fields are
-keyed and stay stable. Stream keys — being append-only logs with no in-place
-entry-field edit — get a bounded write surface in the stream reader panel
+keyed and stay stable. Stream keys, being append-only logs with no in-place
+entry-field edit, get a bounded write surface in the stream reader panel
 (#1683): `XADD key <id> field value …` appends a new entry (id defaults to
 `*`/server-assigned; `Write` effect, so production still confirms via the Safe
 Mode gate), while `XDEL key <id>` drops a whole entry and `XTRIM key MAXLEN
@@ -81,9 +81,9 @@ paradigm, Valkey backend adapter profile, database/key scan, typed value
 preview, selected-key bounded stream reader, bounded Redis-compatible command
 query dispatch, command completion for proven local-runtime rows with
 current-DB/type-filtered key suggestions, the same bounded KvMutationPanel write
-surface as Redis (#1075) — string SET/EXPIRE/exact-key PERSIST/exact-key DEL
-plus hash/list/set/zset per-element add/edit/delete (HSET/HDEL,
-LPUSH/RPUSH/LSET/LREM, SADD/SREM, ZADD/ZREM) — all routed through the shared
+surface as Redis (#1075), covering string SET/EXPIRE/exact-key PERSIST/exact-key
+DEL plus hash/list/set/zset per-element add/edit/delete (HSET/HDEL,
+LPUSH/RPUSH/LSET/LREM, SADD/SREM, ZADD/ZREM), all routed through the shared
 Safe Mode + ConfirmDestructiveDialog gate, and a wired Runtime Happy Path smoke
 for connect/scan/preview/GET/HGETALL/XRANGE plus bounded SET/EXPIRE DML
 summaries with readback/TTL verification and destructive/unsupported command
@@ -94,7 +94,7 @@ suggest unpromoted command families such as list/set/sorted-set writes or full
 Redis CLI coverage (a separate autocomplete surface from the KvMutationPanel
 write controls). Valkey shares the same single-value JSON tree inline node
 editing as Redis for `string` (JSON) and, where the ReJSON module is present,
-`json` values — a whole-value overwrite via `SET`/`JSON.SET` behind the command
+`json` values: a whole-value overwrite via `SET`/`JSON.SET` behind the command
 preview + Safe Mode gate, last-writer-wins, with the same JSON round-trip
 normalization and dot-path key caveats. It also shares the hash field / list
 element JSON value tree editing (`HSET`/`LSET` whole-value overwrite behind the
@@ -200,7 +200,7 @@ threat-model handoff before cloud credential/provider decisions.
 
 ## Related
 
-- [`docs/product/known-limitations.md`](known-limitations.md) — boundary index
-- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md) — current support snapshot
-- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — open follow-up queue
-- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order
+- [`docs/product/known-limitations.md`](known-limitations.md): boundary index
+- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md): current support snapshot
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md): open follow-up queue
+- [`docs/ROADMAP.md`](../ROADMAP.md): promotion order

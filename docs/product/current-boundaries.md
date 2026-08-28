@@ -2,32 +2,34 @@
 
 - 새 `DatabaseType` 추가는 기존 지원 DBMS 하나가 데스크톱 DB 클라이언트 수준의
   query/workbench parity lane 을 통과할 때까지 시작하지 않는다 (ADR 0060). 이미
-  지원 중인 엔진의 capability 확장은 이 제약 밖이지만, 각 support claim 은 여전히
+  지원 중인 엔진의 capability 를 확장하는 일은 이 제약의 적용 대상이 아니지만, 각
+  support claim 은 여전히
   해당 source 의 runtime/parser/completion/edit/fixture/e2e evidence 를 요구한다.
 - Full admin parity 는 staged promotion 대상이다 (#1077, 2026-07-02 owner
   decision): extension management UI, schema diff/migration preview, deep
-  activity/profiler dashboards 는 여전히 scope 밖. import/export 는 Stage 1,
+  activity/profiler dashboards 는 여전히 scope 밖에 있다. import/export 는 Stage 1 로,
   users/roles UI 는 Stage 2 로 승격됐다. Stage 1 의 첫 슬라이스는 SQL-file
   import 이다: query editor 툴바의 "Open SQL File" 이 사용자가 고른 `.sql`
   파일 (16 MiB cap, app-internal path 거부) 을 에디터로 로드한다. 실행은
-  기존 Run 경로를 그대로 타서 destructive statement 는 Safe Mode confirm
-  게이트를 통과한다 — 즉 자동 실행/자동 import 가 아니다. Stage 2 의 첫
+  기존 Run 경로를 그대로 따르므로 destructive statement 는 Safe Mode confirm
+  게이트를 통과한다. 즉 파일을 자동으로 실행하거나 자동으로 import 하지는 않는다. Stage 2 의 첫
   슬라이스는 read-only users/roles listing 이다: PG 는 `list_database_users`
-  가 `pg_roles` (password-masked catalog view — `pg_authid`/`pg_shadow` 는
-  참조 안 함) 를 읽어 계정/역할 + 소속 role 을 조회 전용으로 노출한다. PG-first
-  parity lane 이라 non-PG RDB 와 non-RDB paradigm 은 backend 에서
-  `Unsupported` 로 게이트된다 (frontend 분기 아님). role 생성/변경/삭제 (CRUD)
-  는 depth step 후속. Stage 1 의 첫 슬라이스들 (SQL-file import, grid export
-  계열, 테이블/쿼리 결과 tabular JSON export #1638 — headers 를 key 로 하는
-  array-of-objects, CSV row-level import PG-first #1639 preview + #1640 commit —
-  컬럼 매핑 후 행마다 single-row INSERT 를 한 트랜잭션의 `execute_query_batch`
-  로 흘려 all-or-nothing 커밋) 은 이미 출하됐고, 잔여 in-scope 슬라이스는
-  다음이다: MySQL restorable dump (#1641), MSSQL 확대 (#1642). 여전히
-  out-of-scope: 16 MiB 초과 `.sql` streaming restore, DuckDB `COPY`
-  import/export, DB-level backup/restore. admin parity 경계를 기록한 ADR 은
+  가 `pg_roles` (password-masked catalog view 이며, `pg_authid` 와 `pg_shadow` 는
+  참조하지 않는다) 를 읽어 계정/역할과 소속 role 을 조회 전용으로 노출한다. PG-first
+  parity lane 이라서 non-PG RDB 와 non-RDB paradigm 은 backend 에서
+  `Unsupported` 로 게이트하며, frontend 에서 분기하지는 않는다. role 생성/변경/삭제 (CRUD)
+  는 depth step 이후로 미룬다. Stage 1 의 첫 슬라이스 묶음, 곧 SQL-file import 와 grid export
+  계열, 테이블/쿼리 결과 tabular JSON export #1638,
+  CSV row-level import PG-first #1639 preview + #1640 commit 은 이미 출하됐다.
+  이 가운데 tabular JSON export 는 headers 를 key 로 삼는 array-of-objects 를 만들고,
+  CSV row-level import 는 컬럼을 매핑한 뒤 행마다 single-row INSERT 를 한 트랜잭션의
+  `execute_query_batch` 로 보내 all-or-nothing 으로 커밋한다. 잔여 in-scope 슬라이스는
+  MySQL restorable dump (#1641) 와 MSSQL 확대 (#1642) 다. 여전히
+  out-of-scope 인 것은 16 MiB 를 초과하는 `.sql` streaming restore 와 DuckDB `COPY`
+  import/export, DB-level backup/restore 다. admin parity 경계를 기록한 ADR 은
   존재하지 않으므로 이 문단이 그 경계의 SOT 다. 각 잔여 슬라이스의
-  known-limitations 행은 해당 sub-issue 가 출하 시 갱신한다. profiler dashboard
-  는 Stage 3 후속.
+  known-limitations 행은 해당 sub-issue 가 출하할 때 갱신한다. profiler dashboard
+  는 Stage 3 이후로 미룬다.
 - DuckDB file analytics paths stay in active-session adapter state and clear on
   connect/refresh/disconnect. Source metadata, preview, source-scoped query,
   and error payloads expose only public source metadata and redact local paths.
@@ -46,7 +48,8 @@
   extension, `COPY`, `ATTACH`/`DETACH`, capability-setting, or raw external-file
   statements.
 - Runtime/parser/completion/edit/fixture/e2e/support-claim gaps 는 lane 단위
-  깊이 우선순위를 따르되, 이는 권고이지 동시 진행 금지가 아니다 (ADR 0060).
+  깊이 우선순위를 따른다. 다만 이것은 권고일 뿐이며 동시 진행을 금지하는 규칙은
+  아니다 (ADR 0060).
   새 `DatabaseType` 추가만 lane 통과를 기다린다.
 - PostgreSQL is the strongest active query/workbench parity lane. Its current routine
   desktop smoke proves the PostgreSQL connect -> browse/edit -> query journey,
@@ -99,9 +102,9 @@
   read-only write rejection, and internal app-state DB rejection. Structured DDL
   is open for what SQLite runs natively on a writable file (`CREATE TABLE`,
   `DROP TABLE`, `ALTER TABLE … RENAME TO`, `ADD COLUMN`, `DROP COLUMN`,
-  `CREATE INDEX`, `DROP INDEX`). Automatic ALTER rebuilds — the path a column
+  `CREATE INDEX`, `DROP INDEX`). Automatic ALTER rebuilds (the path a column
   type / NOT NULL / DEFAULT change or a standalone constraint change would
-  need — plus extension/capability semantics, sqlite-cli command execution, and
+  need), plus extension/capability semantics, sqlite-cli command execution, and
   nested JSON edits remain future promotion gates.
 - Routine runtime smoke currently proves the GitHub Runtime Happy Path for
   PostgreSQL, MySQL, MariaDB, SQLite, DuckDB `.duckdb`, MongoDB, Redis, Valkey,
@@ -118,30 +121,30 @@
   dry-run system.
 - Cassandra/Scylla, DynamoDB, graph, vector, stream 은 workflow value,
   profile target, capability, parser/completion owner, fixture/live evidence,
-  smoke/E2E decision 전 active support 로 승격하지 않는다.
+  smoke/E2E decision 을 확정하기 전에는 active support 로 승격하지 않는다.
 - Cassandra/Scylla candidate contract 는 `wide-column` profile target,
   `cluster` connection kind, CQL future Rust/WASM language-core ownership,
   keyspace/table/partition/clustering catalog, `tabular` result envelope,
   partition-key and expensive-read guardrails 로 제한된다. Future evidence path
   는 Cassandra testcontainer baseline plus Scylla compatibility testcontainer
-  delta 이며, 이것은 active runtime/connection UI/parser/completion/smoke claim
+  delta 이며, 이 경로는 active runtime/connection UI/parser/completion/smoke claim
   이 아니다.
 - Graph candidate contract 는 `graph` profile target, `server` connection kind,
   Cypher-first language route with deferred GQL/Gremlin split,
   labels/relationships/properties/indexes catalog, existing `graph` envelope
   path view plus `tabular` projection 으로 제한된다. Graph-source catalog 는 RDBMS
-  ERD/FK `SchemaGraph` 와 별도이며, 새 top-level path envelope 는 ADR 또는
-  architecture note 전에는 만들지 않는다. Future evidence path 는
+  ERD/FK `SchemaGraph` 와 별도이며, 새 top-level path envelope 는 ADR 이나
+  architecture note 를 작성하기 전에는 만들지 않는다. Future evidence path 는
   Neo4j-compatible fixture graph/testcontainer plus traversal/write guardrails
-  이며, 이것은 active runtime/connection UI/parser/completion/smoke claim 이
+  이며, 이 경로는 active runtime/connection UI/parser/completion/smoke claim 이
   아니다.
 - Vector candidate contract 는 `vector` profile target, `server` connection
-  kind, cloud providers 의 별도 `cloud-api` profile decision, future
+  kind, cloud providers 에 대한 별도 `cloud-api` profile decision, future
   `vector-query` or provider filter DSL, collection/vectorSchema/payloadIndex
   catalog, `vectorNeighbors` result envelope 로 제한된다. Future evidence path 는
   topK/filter/write/delete guardrails plus embedded/mock or container fixture
   strategy 이며, cloud credential/provider decisions require threat-model
-  handoff before implementation. 이것은 active runtime/connection
+  handoff before implementation. 이 경로는 active runtime/connection
   UI/parser/completion/smoke claim 이 아니다.
 - Current user-visible support boundaries and unmeasured UI/a11y/perf areas are
   tracked in [`known-limitations.md`](known-limitations.md).

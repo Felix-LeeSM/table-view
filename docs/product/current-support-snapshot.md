@@ -27,13 +27,13 @@ behavior, and bounded Structure table-plus-index DDL
 preview/execute/history/schema-refresh behavior 를 증명한다. Cancellation claim 은
 query toolbar/API boundary, cancelled history, stale-grid clearing, retry 로
 제한된다. Structure DDL claim 은 table creation plus index creation only 이다. CSV
-row-level import (#1640) 는 PG 에서 지원한다 — 컬럼 매핑 후 행마다 single-row INSERT 를 한 트랜잭션의
-`execute_query_batch` 로 커밋하며 (empty-field NULL/'' tri-state 토글, 커밋 전 확인), 다른 엔진은
-`Unsupported`. roles/users, extension management, DB-level import/export,
-broader admin, and broader structured DDL parity 는 보장하지 않음. server
+row-level import (#1640) 는 PG 에서 지원한다: 컬럼을 매핑한 뒤 행마다 single-row INSERT 를 한 트랜잭션의
+`execute_query_batch` 로 커밋하며 (empty-field NULL/'' tri-state 토글, 커밋 전 확인), 다른 엔진에서는
+`Unsupported` 다. roles/users, extension management, DB-level import/export,
+broader admin, and broader structured DDL parity 는 보장하지 않는다. server
 activity/slow-query (profiler) 패널은 capability-gated auto-polling dashboard
-(세션-로컬 비영속 count trend, 디스크/DB 영속 없음) 로 승격됐지만 full profiler/activity admin
-parity 는 여전히 out-of-scope
+(세션-로컬 비영속 count trend, 디스크/DB 영속 없음) 로 승격됐지만, full profiler/activity admin
+parity 는 여전히 out-of-scope 다
 
 ## MySQL
 
@@ -90,26 +90,26 @@ without MariaDB-specific tests/docs
 **Runtime**: file adapter + read/writable-file DML + the structured DDL SQLite
 runs natively
 
-**현재 판단**: user DBMS adapter 는 internal SQLite state 와 분리됨. 쓰기는 writable file 의
+**현재 판단**: user DBMS adapter 는 internal SQLite state 와 분리되어 있다. 쓰기는 writable file 의
 DML/PK-projected row edit 로 제한된다. GitHub Runtime Happy Path now runs a
 deterministic SQLite desktop smoke for file create/open, table browse, read
 query, writable DML, row edit, structured table creation with schema
 refresh proof, read-only write rejection, and internal app-state DB rejection.
-SQLite structured DDL 은 엔진이 네이티브로 실행하는 범위다 — `CREATE TABLE` /
+SQLite structured DDL 은 엔진이 네이티브로 실행하는 범위다: `CREATE TABLE` /
 `DROP TABLE` / `ALTER TABLE … RENAME TO` / `ADD COLUMN` / `DROP COLUMN` /
-`CREATE INDEX` / `DROP INDEX`. 제공하지 않는 구조 변경은 컬럼의 타입·NOT NULL·DEFAULT 와
-독립 제약 선언·추가·삭제이고,
-Structure UI 에서 둘은 다르게 나타난다. Columns 탭의 per-row Edit 은 화면에 그대로 두되
-disabled 이고 마우스를 올리면 사유가 뜬다. 제약은 SQLite 에 Constraints 탭 자체가 없어
-(어댑터에 구조화된 제약 목록이 없다) 끌 컨트롤도 없고, 그 경계는 화면이 아니라 이 문서가
-적는다. raw SQL DDL, nested JSON
-edit, sqlite-cli execution, extension/capability semantics 는 unsupported
+`CREATE INDEX` / `DROP INDEX` 가 여기에 해당한다. 제공하지 않는 구조 변경은 컬럼의 타입과 NOT NULL, DEFAULT 를
+바꾸는 일과 독립 제약을 선언하거나 추가하고 삭제하는 일이며,
+Structure UI 는 이 두 가지를 서로 다르게 표시한다. Columns 탭의 per-row Edit 은 화면에 그대로 두되
+disabled 상태로 두며, 마우스를 올리면 그 사유를 보여준다. 제약의 경우에는 SQLite 에 Constraints 탭 자체가 없어서
+(어댑터에 구조화된 제약 목록이 없다) 비활성화할 컨트롤조차 없으며, 그 경계는 화면이 아니라 이 문서가
+기록한다. raw SQL DDL, nested JSON
+edit, sqlite-cli execution, extension/capability semantics 는 unsupported 다
 
 ## DuckDB
 
 **Runtime**: RDBMS file adapter + registered local analytics query
 
-**현재 판단**: `rdb` profile + `file` connection kind 로 표현한다. local `.duckdb` file 은
+**현재 판단**: DuckDB 는 `rdb` profile 과 `file` connection kind 로 표현한다. local `.duckdb` file 은
 catalog/table read 와 statement-level raw SQL 실행 경로를 지원한다. GitHub Runtime Happy
 Path now runs separate deterministic DuckDB desktop smokes: `.duckdb`
 open/catalog/table browse/raw SELECT/history/read-only evidence, and registered
@@ -132,9 +132,9 @@ writable connection 에서 노출된다 (ADR 0051 Stage 2, #1070): table create/
 column add/drop/type, index create/drop 가 native DuckDB `ALTER TABLE` /
 `CREATE|DROP TABLE|INDEX` 로 실행된다. constraint add/drop (Stage 2b rebuild-swap),
 identity/auto-increment column, dry-run/multi-statement transaction (Stage 3),
-file analytics automatic import/export parity 는 unsupported/follow-up 이며 해당 컨트롤은
-`ddl.alterConstraint` / `ddl.identityColumn` capability 로 숨겨진다 (click-then-error
-아님)
+file analytics automatic import/export parity 는 unsupported/follow-up 이며, 해당 컨트롤은
+`ddl.alterConstraint` / `ddl.identityColumn` capability 로 숨기고 click-then-error 를
+쓰지 않는다
 
 ## MongoDB
 
@@ -249,7 +249,7 @@ search query tab's Explain button re-runs the request with the bounded
 `profile` flag and renders the response's profile section as a plan tree
 (#2153, on top of the flag #2198 unlocked). Broader Search admin APIs
 (index/settings create/delete), global audit/admin/security dashboards, the
-`_explain` endpoint (per-document score explanation — the bounded validator
+`_explain` endpoint (per-document score explanation: the bounded validator
 still rejects the `explain` key and no adapter method calls it), and
 product-specific live deltas beyond these slices are deferred
 

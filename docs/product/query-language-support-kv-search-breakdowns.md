@@ -90,7 +90,7 @@ Child page of
   query/collector/aggregation/fetch tree, raw payload retained (#2153, on the
   flag #2198 unlocked).
 - Remaining unsupported work: the `_explain` endpoint (per-document score
-  explanation — the bounded validator still rejects the `explain` key and no
+  explanation: the bounded validator still rejects the `explain` key and no
   adapter method calls it), broader admin
   APIs (index/settings create/delete), broader observability workflows, and
   product-specific destructive deltas remain future gates. Search
