@@ -6,11 +6,11 @@ updated: 2026-06-12
 
 # Explorations Archive
 
-`docs/explorations/` 의 HTML 파일들은 과거 결정을 시각화하거나 비교하던
-historical artifacts 다. 현재 source of truth 가 아니다.
+`docs/explorations/` 에 있는 HTML 파일은 과거의 결정을 시각화하거나 여러 안을
+비교하려고 만든 기록물이다. 지금은 어느 것도 source of truth 가 아니다.
 
-새 exploration 이 필요하면 sprint contract 또는 active docs 에 먼저 목적과
-후속 반영 경로를 적고, 완료 뒤 archive 로 라우팅한다.
+새로운 exploration 이 필요하면 sprint contract 나 active docs 에 목적과 후속 반영
+경로를 먼저 적어 두고, 작업을 마친 뒤에는 archive 로 옮긴다.
 
 ## 2026-06-12 Audit
 

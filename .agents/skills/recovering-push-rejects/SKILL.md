@@ -5,36 +5,37 @@ description: push 가 non-fast-forward 로 튕겼을 때의 4-step 회복, race 
 
 # push reject 회복
 
-**계약은 `memory/workflow/git-policy/memory.md` 가 소유한다** — 금지 명령 목록,
-hard block, 책임 주체는 거기가 SOT 다. 이 파일은 그 계약을 지키면서 막힌 push 를
-푸는 **절차**만 둔다. 둘이 어긋나면 memory 가 이긴다.
+**계약은 `memory/workflow/git-policy/memory.md` 가 소유한다.** 금지 명령 목록과
+hard block, 책임 주체는 그 문서가 정한다. 이 파일은 그 계약을 지키면서 막힌 push 를
+푸는 **절차**만 담는다. 이 파일과 그 문서가 어긋나면 memory 를 따른다.
 
 아래 어느 단계에서도 `git reset --hard` 의 remote-upstream target 형과 `git pull`
 모든 변종은 쓰지 않는다. 시퀀스로 쓰든 두 단계로 쪼개 쓰든 같다.
 
 ## 외부 race 가짜 신호 (sprint-402)
 
-push reject / 알 수 없는 remote SHA 를 "외부
-race" (다른 작업자 / 다른 brain 의 동시 push) 로 오인하는 사례 = 거의 100%
-**본인 (agent) 의 fetch + reset 또는 pull 자체가 진범**. 즉, race 가
-_감지되는 시점_ 에는 이미 본인 명령이 원인. 외부 race 가설은 가짜 신호.
+push reject 나 알 수 없는 remote SHA 를 "외부 race"(다른 작업자나 다른 brain 의
+동시 push)로 오인하는 사례는 거의 100% **본인(agent)의 fetch + reset 또는 pull
+자체가 진짜 원인이다**. 즉 race 가 _감지되는 시점_ 에는 이미 본인 명령이 원인을
+만든 상태이므로, 외부 race 가설은 가짜 신호다.
 
-실제 진단: push reject 시 reflog (`git reflog --all`) 의 직전 entry 가 본인
-commit 인지 확인 → 거의 항상 yes. 그렇다면 외부 race 아님, _본인의 fetch +
-reset 으로 ref 가 옮겨진 결과_ 의 push reject.
+실제 진단은 이렇게 한다. push reject 가 나면 reflog(`git reflog --all`)의 직전
+entry 가 본인 commit 인지 확인하는데, 거의 항상 본인 commit 이다. 그렇다면 외부
+race 가 아니라 _본인의 fetch + reset 으로 ref 가 옮겨진 결과_ 로 생긴 push reject
+다.
 
 ## Push reject 응급 처치 (sprint-389, sprint-402 update)
 
-push 가 non-fast-forward 로 튕겼을 때 **절대** `git reset --hard FETCH_HEAD`
-/ `git pull --rebase` 하지 말 것 — 본인 commit wipe 또는 silent rebase.
-금지 대상 — 시퀀스로 쓰든 두 단계로 쪼개 쓰든 같다. race-trace 가 그 2 단계
-분리를 push reject 의 진범으로 확정했다:
+push 가 non-fast-forward 로 거부됐을 때 **절대** `git reset --hard FETCH_HEAD`
+나 `git pull --rebase` 를 쓰지 마라. 본인 commit 이 지워지거나 조용히 rebase 가
+일어난다. 아래가 그 금지 대상이며, 시퀀스로 쓰든 두 단계로 쪼개 쓰든 같다.
+race-trace 가 그 2 단계 분리를 push reject 의 진짜 원인으로 확정했다:
 
 - `git reset --hard FETCH_HEAD` / `ORIG_HEAD` / `@{u}` / `origin/<branch>`
   / `refs/remotes/<...>`
 - `git pull` 모든 변종 (`--rebase`, `origin <branch>` 포함)
 
-막아 주는 장치는 없다. 위 명령이 손에 떠오르면 그 자체가 진단 신호다 —
+막아 주는 장치는 없다. 위 명령이 머릿속에 떠오르면 그 자체가 진단 신호이므로
 아래 4-step 으로 간다.
 
 ### 회복 정답 (4-step)
@@ -51,13 +52,14 @@ push 가 non-fast-forward 로 튕겼을 때 **절대** `git reset --hard FETCH_H
    git reflog                         # 직전 본인 commit SHA 찾기
    ```
 
-3. **ref 만 본인 SHA 로 fix** — working tree / index / commit 보존:
+3. **ref 만 본인 SHA 로 고친다.** working tree 와 index, commit 은 그대로 보존된다:
 
    ```bash
    git update-ref refs/heads/<branch> <local-sha>
    ```
 
-4. **SHA refspec push inline** — race 발생해도 의도한 commit 만 올라감:
+4. **SHA refspec 을 인라인으로 지정해 push 한다.** race 가 발생해도 의도한
+   commit 만 올라간다:
 
    ```bash
    SHA="$(git rev-parse HEAD)"
@@ -84,9 +86,9 @@ git push origin '<literal-sha>':'refs/heads/<branch-name>'  # 2) literal SHA →
 
 - `git push origin HEAD:branch` 는 push 시점 `HEAD` 가 무엇이든 거기를
   올림 → race 발생 가능.
-- literal SHA 를 명시하면 SHA-to-ref mapping 이 결정적 — race 발생해도
-  의도한 commit 만 올라가고, 그 사이 새 commit 이 추가됐다면 push 가
-  자동으로 reject (non-fast-forward) → 사용자가 진단 가능.
+- literal SHA 를 명시하면 SHA-to-ref mapping 이 결정적이 된다. race 가
+  발생해도 의도한 commit 만 올라가고, 그 사이 새 commit 이 추가됐다면 push 가
+  자동으로 reject 되므로(non-fast-forward) 사용자가 진단할 수 있다.
 
 ### zsh `:r` 모디파이어 trap
 
@@ -118,7 +120,8 @@ gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>
 
 ## 관련
 
-- `memory/workflow/git-policy/memory.md` — 이 절차가 지켜야 하는 계약 (금지 명령 ·
-  hard block · 책임 주체). 계약이 SOT 다.
-- `memory/runbook/worktree/memory.md` — 사본 격리 lifecycle, 같은 무집행 상태.
-- `memory/workflow/delivery/memory.md` — push 이후의 PR 생성 · 리뷰 · 머지 계약.
+- `memory/workflow/git-policy/memory.md`: 이 절차가 지켜야 하는 계약(금지 명령 ·
+  hard block · 책임 주체)이 있고, 그 계약이 SOT 다.
+- `memory/runbook/worktree/memory.md`: 사본 격리 lifecycle 이 있으며, 집행 장치가
+  없는 것도 같다.
+- `memory/workflow/delivery/memory.md`: push 이후의 PR 생성과 리뷰, 머지 계약이 있다.

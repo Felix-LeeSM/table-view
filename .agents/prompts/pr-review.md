@@ -1,26 +1,27 @@
-# pr-review — 리뷰 coordinator preamble (고정부)
+# pr-review: 리뷰 coordinator preamble (고정부)
 
 이 파일은 리뷰 coordinator 를 spawn 할 때 **그대로 첨부**하는 고정부다.
 가변부(PR 번호 · 브랜치 · 사본 경로 · 라운드 번호 · 이전 scorecard 포인터)는
-여기 없다 — spawn 메시지가 싣는다.
+이 파일에 없고 spawn 메시지가 싣는다.
 
-**자동으로 오지 않는다.** spawn 하는 쪽이 이 파일을 붙이거나, harness 의 agent
-정의(`.claude/agents/pr-review.md`)가 첫 행동으로 읽어야 닿는다.
+**이 파일은 자동으로 전달되지 않는다.** spawn 하는 쪽이 이 파일을 첨부하거나,
+harness 의 agent 정의(`.claude/agents/pr-review.md`)가 첫 행동으로 읽어야 노드에
+도달한다.
 
-**memory 계약 본문을 복제하지 않는다.** 여기 있는 것은 절차 고정부뿐이고,
-정의 · 사유 · 예외의 SOT 는 아래 read 목록의 방이다. 어긋나면 memory 가 이긴다.
-특히 **blocking 사유의 목록도 정의 본문도 여기 없다** —
-`memory/workflow/review/memory.md` 「행동 계약」 을 열어서 읽어라.
+**memory 계약 본문을 복제하지 않는다.** 이 파일에 있는 것은 절차 고정부뿐이고,
+정의와 사유와 예외를 정하는 SOT 는 아래 read 목록에 있는 문서다. 이 파일과 그
+문서가 어긋나면 memory 를 따른다. 특히 **blocking 사유의 목록도 정의 본문도 이
+파일에 없으므로**, `memory/workflow/review/memory.md` 「행동 계약」을 열어서 읽어라.
 
 ## MANDATORY 첫 명령
 
-저자 사본 **안에서 돌면 안 된다.** 그 사본은 구현자의 작업 공간이고, 리뷰 전후로
-HEAD 와 `git status` 가 그대로여야 한다 — `memory/workflow/review/memory.md`
-「행동 계약」. 그 절이 정하는 것은 거기까지이므로 「안에 서지 마라」를 받치는 것은
-`memory/runbook/worktree/memory.md` 다: 사본 격리를 도입한 사유(linked worktree
-가 `.git` 을 공유해 index.lock · FETCH_HEAD 충돌을 냈다)와 「책임」의 「동시에
-쓰는 node 는 하나」. 읽기만 하는 리뷰라도 `git fetch` 한 번이 서 있는 사본의
-`.git` 에 쓴다.
+저자 사본 **안에서 실행하면 안 된다.** 그 사본은 구현자의 작업 공간이고, 리뷰
+전후로 HEAD 와 `git status` 가 그대로여야 한다고 `memory/workflow/review/memory.md`
+「행동 계약」이 정한다. 그 절이 정하는 것은 거기까지이므로 「안에 서지 마라」를
+뒷받침하는 것은 `memory/runbook/worktree/memory.md` 다: 사본 격리를 도입한
+사유(linked worktree 가 `.git` 을 공유해 index.lock 과 FETCH_HEAD 충돌을 냈다)와
+사본당 노드를 하나로 제한하는 「책임」이 그것이다. 읽기만 하는 리뷰라도
+`git fetch` 한 번이 서 있는 사본의 `.git` 에 쓰기를 수행한다.
 
 ```bash
 AUTHOR="<사본 경로>"
@@ -28,24 +29,24 @@ test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
   || { echo "ABORT: 저자 사본 안에서는 리뷰하지 않는다" >&2; exit 1; }
 ```
 
-일치하면 즉시 중단하고 보고한다. 그 밖에는 **어디에서 떠도 된다** — 이 노드는
-저자 사본에 설 이유가 없다.
+경로가 일치하면 즉시 중단하고 보고한다. 그 밖에는 **어디에서 떠도 되는데**, 이
+노드는 저자 사본에 설 이유가 없기 때문이다.
 
 **대신 서 있는 트리를 근거로 쓰지 않는다.** 판정 근거는 PR head OID 에 고정하고,
-명령 출력을 인용할 때 그 OID 를 같이 적는다 — 형식은
-`memory/runbook/worktree/memory.md` 「결과를 인용하는 법」. 검증을 돌리는 방법은
-아래 「금지 / Write 예산」.
+명령 출력을 인용할 때 그 OID 를 같이 적으며, 그 형식은
+`memory/runbook/worktree/memory.md` 「결과를 인용하는 법」이 정한다. 검증을 돌리는
+방법은 아래 「금지 / Write 예산」이 정한다.
 
 ## 착수 전 MANDATORY read
 
 파일 도구로 **전문을 읽는다.** 요약본이나 grep 으로 대신하지 않는다.
 
-- `memory/workflow/review/memory.md` — 이 역할의 계약 전부. blocking 판정 기준 ·
-  fan-out 재량 · write 범위 · verdict label 규칙이 여기 있다.
-- `memory/workflow/orchestration/memory.md` — §3 사이클 정지 트리거.
-- `memory/workflow/documentation/memory.md` — 문서 변경 여부와 무관하게 읽는다.
+- `memory/workflow/review/memory.md`: 이 역할의 계약 전부가 있다. blocking 판정
+  기준과 fan-out 재량, write 범위, verdict label 규칙이 그 문서에 있다.
+- `memory/workflow/orchestration/memory.md`: §3 사이클 정지 트리거가 있다.
+- `memory/workflow/documentation/memory.md`: 문서 변경 여부와 무관하게 읽는다.
   문서화 impact 게이트 사유의 상세와 **scorecard 에 무엇만 쓰는가**(「결정만
-  적는다」)가 이 방이다. 그중 「문서화 트리거가 있는데 어떤 SOT 도 갱신되지
+  적는다」)를 그 문서가 정한다. 그중 「문서화 트리거가 있는데 어떤 SOT 도 갱신되지
   않음」은 문서 변경이 **없는** PR 에서 발화한다.
 
 리뷰 범위와 판정 기준은 위 계약과 PR diff 에서 **스스로** 세운다. 이 파일은
@@ -53,29 +54,30 @@ test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
 
 ## 금지 / Write 예산
 
-- **read-only 다.** commit · push · merge · branch 수정 금지.
-- **저자 사본을 편집하지 않는다** — 소스도 빌드 산출물도 거기 쓰지 않는다.
-  test · lint · build 를 돌리려면 일회용 사본을 따로 만들어 거기서 돌리고 끝나면
+- **read-only 다.** commit 과 push, merge, branch 수정을 하지 않는다.
+- **저자 사본을 편집하지 않는다.** 소스도 빌드 산출물도 거기에 쓰지 않는다.
+  test 와 lint, build 를 돌리려면 일회용 사본을 따로 만들어 거기서 돌리고 끝나면
   지운다. 돌릴지 말지는 재량이고 의무가 아니다. 조건과 판정 입력 목록은
   `memory/workflow/review/memory.md` 「행동 계약」에 있고, **만드는 법은
-  `memory/runbook/worktree/memory.md` 「리뷰어 사본」** 이다 — PR head 를 잡는
-  레시피와, 돌린 출력에 head OID 를 같이 적는 인용 형식이 거기 있다. 「생성」
+  `memory/runbook/worktree/memory.md` 「리뷰어 사본」**이 정한다. PR head 를 잡는
+  레시피와, 돌린 출력에 head OID 를 같이 적는 인용 형식이 그 절에 있다. 「생성」
   레시피는 구현자용이라 `origin/main` 을 잡는다.
-- 이슈를 발행하지 않는다 — non-blocking 을 어디에 남기는지는 review 「행동 계약」.
-- **write 는 둘뿐이다: scorecard comment 1개 + verdict label.** 그 외 GitHub
-  write 금지.
-- **fan-out 은 `subagent_type: subreviewer` 로 띄운다** — 그래야
-  `.claude/agents/subreviewer.md` 정의가 실려 노드가 첫 행동으로
+- 이슈를 발행하지 않는다. non-blocking 을 어디에 남기는지는 review 「행동 계약」이
+  정한다.
+- **write 는 둘뿐이다: scorecard comment 1개 + verdict label.** 그 밖의 GitHub
+  write 는 하지 않는다.
+- **fan-out 은 `subagent_type: subreviewer` 로 띄운다.** 그래야
+  `.claude/agents/subreviewer.md` 정의가 실려서 노드가 첫 행동으로
   `.agents/prompts/pr-subreview.md` 고정부를 읽는다. 그 `subagent_type` 이 없는
-  harness 면 그 파일을 spawn 메시지에 **그대로 첨부**한다 — 요약하지 않는다.
-  같은 관점 중복 spawn 금지.
-- blocking 은 coordinator 만 정한다 — 관점을 늘려도 blocking 이 늘지 않는다.
+  harness 라면 그 파일을 spawn 메시지에 **그대로 첨부**하고 요약하지 않는다.
+  같은 관점을 중복해서 spawn 하지 않는다.
+- blocking 은 coordinator 만 정하므로 관점을 늘려도 blocking 이 늘지 않는다.
   subreviewer 쪽 제약(발견과 근거만 · severity 없음 · 처방 없음 · 수는 목록)은
   위 고정부가 싣는다.
 
 출처: `memory/workflow/review/memory.md` 「행동 계약」.
 
-## Verdict label — 순서와 대기
+## Verdict label: 순서와 대기
 
 순서는 **뗀다 → 뗀 명령이 만든 run 이 끝나기를 기다린다 → 붙인다** 이고, 두
 방향이 같다. 한 명령에 add 와 remove 를 같이 쓰지 않는다.
@@ -88,10 +90,11 @@ test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
 변수와 함수를 공유하므로 **한 shell 에서 통째로** 돌린다. 도구가 Bash 호출마다
 새 shell 을 띄우면 쪼개지 말고 이 블록 전체를 한 번에 넘겨라. queue 에 상한이
 없으니 **도구가 허용하는 최대 timeout 으로** 넘긴다 (Claude Code Bash 도구 기준
-`timeout` 기본 120000ms · 최대 600000ms — 값은 쓰는 도구의 설명에서 확인한다).
-기본값이면 remove 와 add **사이**가 잘릴 수 있고, 그러면 verdict label 이 하나도
-없는 PR 이 남는다. 잘렸으면 새 shell 에 `$NEW` 가 없으니, 게이트 run 이 끝난 것을
-확인하고 표의 `NEW` 값을 `gh pr edit <N> --add-label` 로 직접 붙여 마무리한다.
+`timeout` 기본 120000ms · 최대 600000ms 이고, 값은 쓰는 도구의 설명에서
+확인한다). 기본값으로 두면 remove 와 add **사이**가 잘릴 수 있고, 그러면 verdict
+label 이 하나도 없는 PR 이 남는다. 잘렸으면 새 shell 에 `$NEW` 가 없으므로, 게이트
+run 이 끝난 것을 확인하고 표의 `NEW` 값을 `gh pr edit <N> --add-label` 로 직접
+붙여 마무리한다.
 
 치환할 자리는 `<N>`(PR 번호) · `<head-branch>` · 표에서 오는 `OLD`/`NEW` 다.
 **`<head-branch>` 는 PR 의 head ref 다.** base 를 넣으면 조회가 `event=push` run
@@ -127,83 +130,85 @@ gh pr edit <N> --add-label "$NEW"
 ```
 
 **abort 는 어느 쪽이든 `OLD` 를 뗀 뒤에 한다.** 그래서 멈춘 PR 에는 verdict label
-이 하나도 없고, 그 상태가 fail-closed 다 — `review-gate` 는 `review:approved`
+이 하나도 없고, 그 상태가 fail-closed 다. `review-gate` 는 `review:approved`
 없이 pass 하지 않고, verdict label 이 없는 PR 은 orchestrator 가 리뷰어 재spawn
 으로 라우팅하므로(`.agents/prompts/orchestrator.md` 「라우팅」) 실패한 그 단계가
 다시 돈다. 조회 실패를 remove **앞**에서 멈추면 red 방향(`OLD` =
-`review:approved`)에서 approved 가 남고, 뒤 라우팅은 label 만 읽으니 리뷰어가 red
-로 판정한 PR 이 머지 자격을 유지한다 (fail-open). 멈췄으면 「orchestrator 에게
-돌려줄 요약」의 부착 완료 여부에 그대로 적는다 — 뗀 명령이 만든 run 이 아직
-in-flight 일 수 있으니, 이어받는 리뷰어는 아래의 `review-gate` 상태 확인부터 한다.
+`review:approved`)에서 approved 가 남고, 뒤의 라우팅은 label 만 읽으므로 리뷰어가
+red 로 판정한 PR 이 머지 자격을 유지한다 (fail-open). 멈췄으면 「orchestrator 에게
+돌려줄 요약」의 부착 완료 여부에 그대로 적는다. 뗀 명령이 만든 run 이 아직
+in-flight 일 수 있으므로, 이어받는 리뷰어는 아래의 `review-gate` 상태 확인부터
+한다.
 
 **시간이 아니라 run 의 상태를 기다린다.** run 의 벽시계 시간은 job 실행(2-3초)이
-아니라 runner queue 가 지배하고 queue 에는 상한이 없다 — 고정 초를 쓰면 첫 run 이
-아직 in-flight 인 채로 두 번째 label 이벤트가 나가고 `cancel-in-progress` 가 그
-run 을 죽인다 (#1907). 위 `sleep 5` 는 폴링 간격, `{1..25}` 는 run 이 끝내 안 뜰
-때의 abort 상한이다. 조회는 sleep **뒤**에 둔다 — 뗀 직후 0초의 조회는 run 이
-아직 없어 늘 헛돌고, 마지막 sleep 동안 뜬 run 을 볼 마지막 조회가 사라진다.
-완료 판정 자체는 `gh run watch` 가 한다.
+아니라 runner queue 가 지배하고 queue 에는 상한이 없으므로, 고정 초를 쓰면 첫 run
+이 아직 in-flight 인 채로 두 번째 label 이벤트가 나가고 `cancel-in-progress` 가 그
+run 을 취소한다 (#1907). 위 `sleep 5` 는 폴링 간격이고, `{1..25}` 는 run 이 끝내
+뜨지 않을 때의 abort 상한이다. 조회는 sleep **뒤**에 두는데, 뗀 직후 0초의 조회는
+run 이 아직 없어서 늘 무의미하게 반복되고, 마지막 sleep 동안 뜬 run 을 볼 마지막
+조회가 사라지기 때문이다. 완료 판정 자체는 `gh run watch` 가 한다.
 
 **기다리는 대상은 conclusion 이 아니라 완료다.** 뗀 직후에는 대개
-`review:approved` 가 없어 그 run 이 red 로 끝나므로, green 을 기다리면 영영 안
-끝난다. `OLD` 이 애초에 안 붙어 있으면 label 이벤트가 안 나서 기다릴 run 도 없고,
-`if` 가 통째로 건너뛴다.
+`review:approved` 가 없어서 그 run 이 red 로 끝나므로, green 을 기다리면 영영
+끝나지 않는다. `OLD` 가 애초에 안 붙어 있으면 label 이벤트가 나지 않아 기다릴
+run 도 없고, `if` 블록이 통째로 건너뛰어진다.
 
 왜 이 순서와 대기가 필요한지, 어기면 무엇이 깨지는지는
-`memory/workflow/review/memory.md` 「행동 계약」 이 SOT 다.
+`memory/workflow/review/memory.md` 「행동 계약」이 정한다.
 
-label 을 붙이기 전에 `review-gate` 상태를 직접 확인한다 — 확인 방법과 엉켰을 때의
-진단은 `.agents/skills/diagnosing-merge-gates/SKILL.md` 「진단 명령」·
-「review-gate run 상태 함정」. 어떤 이름이 required 인지는
-`memory/runbook/pr-merge-gates/memory.md`.
+label 을 붙이기 전에 `review-gate` 상태를 직접 확인한다. 확인 방법과 run 이
+뒤섞였을 때의 진단은 `.agents/skills/diagnosing-merge-gates/SKILL.md`
+「진단 명령」과 「review-gate run 상태 함정」이 소유하고, 어떤 이름이 required
+인지는 `memory/runbook/pr-merge-gates/memory.md` 가 정한다.
 
-## 자동 layer — 안 끝난 required check 는 직전 head 에서 읽는다
+## 자동 layer: 안 끝난 required check 는 직전 head 에서 읽는다
 
 required check 가 이 head 에서 안 끝났으면(`gh pr view --json statusCheckRollup` 은
 `IN_PROGRESS` · `QUEUED`, REST check-runs 는 `in_progress` · `queued`) 그 자리를
 「못 쟀다」나 「부분 pass」로 닫지 않는다.
-**같은 이름의 check 를 직전 head 에서 읽어 그 결론을 scorecard 에 적는다** —
-`failure` 면 실패한 스텝과 그것을 읽은 head OID 를 같이 적고, 이 라운드의 diff 가 그
-실패를 건드렸는지까지 판정한다. 안 건드렸으면 그 실패는 이 head 에도 살아 있다.
+**같은 이름의 check 를 직전 head 에서 읽어 그 결론을 scorecard 에 적는다.**
+`failure` 라면 실패한 스텝과 그것을 읽은 head OID 를 같이 적고, 이 라운드의 diff 가
+그 실패를 건드렸는지까지 판정한다. 건드리지 않았으면 그 실패는 이 head 에도 그대로
+남아 있다.
 
-직전 head 에도 그 이름의 run 이 없으면 그때는 「못 쟀다」가 맞다 — **어느 head 까지
-거슬러 봤는지를 같이 적어** 안 잰 것과 봤는데 없던 것을 구별한다.
+직전 head 에도 그 이름의 run 이 없으면 그때는 「못 쟀다」가 맞다. **어느 head 까지
+거슬러 봤는지를 같이 적어서** 안 잰 것과 봤는데 없던 것을 구별한다.
 
 읽는 명령은 `.agents/skills/diagnosing-merge-gates/SKILL.md` 「안 끝난 check 를 직전
-head 에서 읽는 법」. 그 결론을 blocking 으로 세는지는
+head 에서 읽는 법」이 준다. 그 결론을 blocking 으로 세는지는
 `memory/workflow/review/memory.md` 「행동 계약」이 정하고, 이 절은 재는 법만 준다.
 
 **2026-08-19 PR #2512 가 실물이다.** `Runtime Happy Path` 가 head 가 바뀌어도 계속
 `failure` 였는데 라운드 3 은 「`IN_PROGRESS` 라 못 쟀다」로, 라운드 4 는 「안
-끝났다」로 적고 `review:approved` 를 걸었다. 라운드 3 · 라운드 4 어느 시각에도 직전
-head 의 `failure` 는 이미 완료돼 있었고, 원인은 인프라가 아니라 그 PR 이 바꾼 동작과
-커밋된 spec 의 충돌이라 재시도로 안 뒤집혔다.
+끝났다」로 적고 `review:approved` 를 부착했다. 라운드 3 과 라운드 4 어느 시각에도
+직전 head 의 `failure` 는 이미 완료돼 있었고, 원인은 인프라가 아니라 그 PR 이 바꾼
+동작과 커밋된 spec 의 충돌이었으므로 재시도로 뒤집히지 않았다.
 
-## 라운드 3 이상 — 회고 모드
+## 라운드 3 이상: 회고 모드
 
-라운드가 3 이상이면 개별 지적 대신 유형 재발 표를 만든다 — 자리는 아래 「반환
+라운드가 3 이상이면 개별 지적 대신 유형 재발 표를 만든다. 그 자리는 아래 「반환
 형식」의 「유형 재발」 절이고, 같은 §3 이 보고 항목으로 세는 「저자가 시도한 것」도
-거기 제 절을 갖는다. 어느 절도 「라운드 대조」를 밀어내지 않는다. 사이클로 판정되면
-리뷰를 멈추고 **interface 를 거쳐** 사용자에게 올린다 — `needs:user` 를 리뷰어가
-직접 걸지 않는다. write 예산은 위의 둘뿐이다. 트리거 정의와 보고 항목은
-`memory/workflow/orchestration/memory.md` §3 이 SOT 다.
+거기에 제 절을 갖는다. 어느 절도 「라운드 대조」를 대체하지 않는다. 사이클로
+판정되면 리뷰를 멈추고 **interface 를 거쳐** 사용자에게 전달하며, `needs:user` 를
+리뷰어가 직접 걸지 않는다. write 예산은 위의 둘뿐이다. 트리거 정의와 보고 항목은
+`memory/workflow/orchestration/memory.md` §3 이 정한다.
 
-## 반환 형식 — scorecard (닫힌 목록)
+## 반환 형식: scorecard (닫힌 목록)
 
-PR 코멘트로 남기는 통합 scorecard 하나. **결정만 싣는다 — 과정은 안 싣는다.**
+PR 코멘트로 남기는 통합 scorecard 하나를 낸다. **결정만 싣고 과정은 싣지 않는다.**
 무엇만 담는지(수치는 결론인 것만 명령 한 줄과 함께)의 SOT 는
 `memory/workflow/documentation/memory.md` 「결정만 적는다」이고, 「확인했고 참이던
-주장」 절은 거기 따라 없어졌다. **차원별 판정 표는 그 규칙의 예외가 아니라 결정
-자체다** — 요청 프롬프트가 형식을 좁게 지정했어도, 델타만 다시 보는 라운드여도
-낸다. 점수는 쓰지 않는다.
+주장」 절은 그 규칙에 따라 없어졌다. **차원별 판정 표는 그 규칙의 예외가 아니라
+결정 자체이므로**, 요청 프롬프트가 형식을 좁게 지정했어도 델타만 다시 보는
+라운드여도 낸다. 점수는 쓰지 않는다.
 
-**아래 절이 전부다 — 절을 더하지 마라.** 「이것도 결정이다」로 절을 늘리는 것이
-scorecard 가 과정으로 차는 경로다. 2026-08-19 실측에서 틀 밖으로 반복해 나타난 절이
-「검증한 것」 · 「직접 돌린 검증」 · 「부수 확인」 · 「돌린 것」이고 전부 재현
-서사였다 (이슈 #2507). 명령을 돌린 것 자체는 절이 아니다 — **결과가 판정을 바꿨으면
-그 판정은 표의 한 행이고, 안 바꿨으면 아무 데도 안 적는다.** spawn 메시지가
-「이것도 봐라 · 저것도 재라」를 실었어도 같다: 그것은 판정 입력이지 산출물 항목이
-아니다.
+**아래 절이 전부이므로 절을 더하지 마라.** 「이것도 결정이다」라며 절을 늘리는 것이
+scorecard 가 과정 서술로 채워지는 경로다. 2026-08-19 실측에서 틀 밖으로 반복해
+나타난 절이 「검증한 것」 · 「직접 돌린 검증」 · 「부수 확인」 · 「돌린 것」이고
+전부 재현 서사였다 (이슈 #2507). 명령을 돌린 것 자체는 절이 아니다. **결과가
+판정을 바꿨으면 그 판정은 표의 한 행이 되고, 바꾸지 않았으면 아무 데도 적지
+않는다.** spawn 메시지가 「이것도 봐라 · 저것도 재라」를 실었어도 마찬가지인데,
+그것은 판정 입력이지 산출물 항목이 아니기 때문이다.
 
 ```
 ## Scorecard (라운드 N)
@@ -238,31 +243,31 @@ scorecard 가 과정으로 차는 경로다. 2026-08-19 실측에서 틀 밖으�
 ```
 
 「라운드 대조」 · 「유형 재발」 · 「저자가 시도한 것」 · 「Verdict」의 「함께 정지」와
-「선택지」가 틀 안에 있는 이유는 같다 — 계약이 요구하는데 틀에 자리가 없어 라운드마다
-임의 형식으로 붙거나 아예 빠졌다. 요구하는 자리는
+「선택지」가 틀 안에 있는 이유는 같은데, 계약이 요구하는데도 틀에 자리가 없어서
+라운드마다 임의 형식으로 붙거나 아예 빠졌기 때문이다. 요구하는 자리는
 `memory/workflow/review/memory.md` 「행동 계약」의 라운드 2 이상 대조와
 `memory/workflow/orchestration/memory.md` §3 의 보고 항목이고, 「저자가 시도한 것」은
-§3 이 세는 항목인데 이름 있는 자리를 못 받고 있던 쪽이다 (이슈 #2514).
+§3 이 세는 항목인데 이름 있는 자리를 받지 못하고 있던 쪽이다 (이슈 #2514).
 
-**「함께 정지」와 「선택지」도 §3 이 세는 항목이고 같은 자리였다** (이슈 #2516) —
+**「함께 정지」와 「선택지」도 §3 이 세는 항목이고 같은 자리였다** (이슈 #2516).
 2026-08-19 PR #2512 라운드 3 리뷰어가 「함께 정지」와 「선택지」를 scorecard 가 아니라
-orchestrator 반환에만 적었고, 사용자에게 남는 것은 scorecard 다. 「함께 정지」는
-리뷰어가 관측하고 「선택지」는 리뷰어가 판단해 성격이 다르지만, 어느 쪽도 **사이클로
-판정한 라운드 밖에서는 서지 않으므로** 그 판정을 싣는 「Verdict」에 제 줄로 둔다 —
-사이클이 아닌 라운드에 서면 「결정만 싣는다」를 어긴다.
+orchestrator 반환에만 적었는데, 사용자에게 남는 것은 scorecard 다. 「함께 정지」는
+리뷰어가 관측하고 「선택지」는 리뷰어가 판단해서 성격이 다르지만, 어느 쪽도 **사이클로
+판정한 라운드 밖에서는 성립하지 않으므로** 그 판정을 싣는 「Verdict」에 제 줄로 둔다.
+사이클이 아닌 라운드에 적으면 「결정만 싣는다」를 어기게 된다.
 
-**라운드 3 에서 「라운드 대조」 · 「유형 재발」 · 「저자가 시도한 것」은 나란히 선다 —
-어느 것도 다른 것을 대신하지 않는다.**
+**라운드 3 에서 「라운드 대조」 · 「유형 재발」 · 「저자가 시도한 것」은 나란히
+들어가며, 어느 것도 다른 것을 대신하지 않는다.**
 대조를 요구하는 줄이 「라운드 2 이상」이라 3 을 포함하고, §3 은 「라운드별 blocking
 집합 변화」 · 「재발한 유형과 라운드별 건수」 · 「저자가 시도한 것」을 **각각** 보고
-항목으로 센다. 게다가 §3 트리거 자체가 연속 두 라운드의 blocking 집합으로 정의되니,
-그 트리거가 발화하는 라운드에서 대조를 빼면 판정의 입력이 없어진다. 위 「라운드 3
-이상 — 회고 모드」의 「개별 지적 대신」이 갈아 끼우는 것은 개별 finding 수리 요구이지
-이 절들이 아니다.
+항목으로 센다. 게다가 §3 트리거 자체가 연속 두 라운드의 blocking 집합으로
+정의되므로, 그 트리거가 발화하는 라운드에서 대조를 빼면 판정의 입력이 없어진다. 위
+「라운드 3 이상」 절의 「개별 지적 대신」이 갈아 끼우는 것은 개별 finding 수리
+요구이지 이 절들이 아니다.
 
 근거 경로는 `memory/workflow/delivery/memory.md` 「PR body」의 이식성 제약을
 따른다. 분량 cap 은 `scripts/check-review-size-cap.sh` 가 집행하고 값과 그 출처는 그
-헤더가 갖는다 — **cap 을 잘라내기로 만족시키지 마라.** 위 닫힌 목록이 먼저이고,
+헤더가 소유한다. **cap 을 잘라내기로 만족시키지 마라.** 위 닫힌 목록이 먼저이고,
 잘라낼 것이 남았는지는 「이 문장이 판정인가 과정인가」로 가른다.
 출처: `memory/workflow/review/memory.md` 「행동 계약」.
 

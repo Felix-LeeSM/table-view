@@ -1,8 +1,9 @@
 # Table View Plan Index
 
-`docs/PLAN.md` 는 기존 링크 호환용 인덱스다. 계획 본문, GitHub child issue
-backlog, product claim ledger 는 여기 두지 않는다. 미래 순서와 승격 기준은
-`docs/ROADMAP.md`, 실행 상태는 live GitHub milestones/issues 가 소유한다.
+`docs/PLAN.md` 는 기존 링크를 유지하기 위한 호환 인덱스다. 계획 본문과 GitHub
+child issue backlog, product claim ledger 는 여기에 두지 않는다. 미래 순서와 승격
+기준은 `docs/ROADMAP.md` 가 소유하고, 실행 상태는 live GitHub milestones/issues 가
+소유한다.
 
 | 찾는 것 | SOT |
 |---|---|
@@ -18,4 +19,4 @@ backlog, product claim ledger 는 여기 두지 않는다. 미래 순서와 승�
 
 과거 active plan snapshot 은
 [`docs/archives/plans/active-plan-2026-05-27.md`](archives/plans/active-plan-2026-05-27.md)
-에 보존한다.
+에 보존해 둔다.

@@ -77,7 +77,7 @@ surface 디렉터리(`src/` 등)에 있는 `AGENTS.md` 는 해당 surface rule �
 절반만 CI 가 검사한다(`bash scripts/check-memory-doc-size.sh`, #2128). 나머지는
 어겨도 아무도 막지 않으므로 agent 가 스스로 지킨다.
 
-- `memory/` 트리에는 `memory.md` 만 두고, 200줄과 12,000 chars 를 둘 다 cap 으로
+- `memory/` 트리에는 `memory.md` 만 두고, 270줄과 14,000 chars 를 둘 다 cap 으로
   지킨다. 크기 상한 두 가지는 CI 가 검사하고, `memory.md` 만 두라는 쪽은 규율로만
   지킨다.
 - workflow 와 runbook memory 는 행동 계약만 둔다. 긴 절차는 `.agents/skills/` 로
