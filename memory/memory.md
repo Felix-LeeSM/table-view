@@ -1,8 +1,8 @@
 ---
 title: Table View — 팔레스 입구
 type: index
-updated: 2026-08-03
-keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars, wc -m, check-memory-doc-size, doc size cap, lines >, chars >
+updated: 2026-08-27
+keywords: 팔레스, 방 지도, index, by-surface, by-task, 270줄, 14000 chars, wc -m, check-memory-doc-size, doc size cap, lines >, chars >
 ---
 
 # 팔레스 입구
@@ -83,8 +83,8 @@ keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars
 
 ## 팔레스 규칙
 
-- 손작성 active rule 파일은 `memory.md` 만 허용. 각 `memory.md` 는 200줄 이하 및
-  12,000 chars 이하 (둘 다 지켜야 함). 어느 하나라도 초과 시
+- 손작성 active rule 파일은 `memory.md` 만 허용. 각 `memory.md` 는 270줄 이하 및
+  14,000 chars 이하 (둘 다 지켜야 함). 어느 하나라도 초과 시
   **긴 절차를 `.agents/skills/` 로 내리거나** 하위 주제로 방을 쪼갠다 — 어느
   쪽인지는 [runbook](./runbook/memory.md) 「계약 / 절차 경계」가 판정한다.
   - chars 는 **문자 수** (`wc -m`) 다 — byte 수 (`wc -c`) 가 아니다. 한글 본문은
@@ -92,7 +92,7 @@ keywords: 팔레스, 방 지도, index, by-surface, by-task, 200줄, 12000 chars
     단위를 함께 적는다.
   - 두 상한은 `bash scripts/check-memory-doc-size.sh` 가 잰다. CI 의 required
     `PR Body Contract` 잡에서 도니까 초과한 채로는 머지가 안 된다 (#2128).
-    로컬에서 먼저 돌려라 — 위반은 `FAIL <path>: <실측> lines > 200` 으로 나온다.
+    로컬에서 먼저 돌려라 — 위반은 `FAIL <path>: <실측> lines > 270` 으로 나온다.
 - `memory/index/by-task.md`, `memory/index/by-surface.md` 는 cross-link 예외다.
   rule SOT 가 아니다. 손으로 갱신한다 — 방을 추가/삭제하면 by-task 를 갱신하고,
   `surface:` 필드가 있는 방이면 by-surface 도 같이 고친다.

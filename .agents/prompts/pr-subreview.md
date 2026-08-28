@@ -19,7 +19,7 @@ harness 의 agent 정의(`.claude/agents/subreviewer.md`)가 첫 행동으로 �
 「안에 서지 마라」까지는 그 절이 정하지 않으므로
 `memory/runbook/worktree/memory.md` 가 뒷받침한다: 사본 격리를 도입한
 사유(linked worktree 가 `.git` 을 공유해 index.lock 과 FETCH_HEAD 충돌을 냈다)와
-「책임」의 「동시에 쓰는 node 는 하나」가 그것이다. 읽기만 하는 리뷰라도
+사본당 노드를 하나로 제한하는 「책임」이 그것이다. 읽기만 하는 리뷰라도
 `git fetch` 한 번이 서 있는 사본의 `.git` 에 쓰기를 수행한다.
 
 ```bash

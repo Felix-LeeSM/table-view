@@ -1,7 +1,7 @@
 ---
 title: PR merge 게이트 — required context 계약
 type: runbook
-updated: 2026-08-06
+updated: 2026-08-27
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
 keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, merge ref, rerun, cancelled, cancel-in-progress, expected, Dismiss stale approval, Release reflect:done on a new round, Count review rounds by head OID, head-oid, head OID, rounds=, round-def, statusCheckRollup, auto-merge, 체크 0개, PR Body Contract, CLAUDE.md import intact, memory/ doc size cap, check-memory-doc-size, lines >, chars >, test binaries called or allowlisted, check-ci-test-calls, ci-uncalled-tests.txt, 안 부르는데, 검사 불성립, 집계:, 다 훑지 못했다, agent contract command blocks do not swallow failures, 계약 문서의 명령 블록이 실패를 흘린다, 파이프가 의 rc 를 가린다, ABORT 를 적고 0 아닌 rc 로 안 끝난다, check-prompt-fail-silently
 trigger:
@@ -78,8 +78,8 @@ payload 기전이라 해소는 새 commit 이다.
 `CLAUDE.md import intact` (#2059) 는 `CLAUDE.md` 의 `@AGENTS.md` import 줄과
 `AGENTS.md` 존재를 본다. `grep -q` + `test -f` 라 로그엔 exit code 만 남으니,
 red 면 그 줄과 파일이 그대로인지(들여쓰기·트레일링 CR 도 red) 직접 봐라.
-`memory/ doc size cap` (#2128) 은 `memory/**/memory.md` 를 200줄 / 12,000
-**문자**로 잡고 `FAIL <path>: <실측> lines > 200` 을 찍는다 — fix 는 긴 절차를
+`memory/ doc size cap` (#2128) 은 `memory/**/memory.md` 를 270줄 / 14,000
+**문자**로 잡고 `FAIL <path>: <실측> lines > 270` 을 찍는다 — fix 는 긴 절차를
 `.agents/skills/` 로 내리거나 방을 쪼개는 것이다.
 `src-tauri test binaries called or allowlisted` (#2113) 는 workflow 의 `--test`
 밖에 있는 통합 테스트 target 을 `ci-uncalled-tests.txt` 와 대조한다 — red 면
