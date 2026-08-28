@@ -1,13 +1,14 @@
 # Fixture Coverage Snapshot
 
-Fixture 파일 존재는 support claim 을 넓히지 않는다. 현재 fixture inventory 를
-검증하는 자동 테스트는 없다. runtime smoke 는 별도 CI wiring 이 있을 때만
-product evidence 로 승격된다. Fixture/test topology SOT 는
+Fixture 파일이 존재한다고 해서 support claim 이 넓어지지는 않는다. 현재
+fixture inventory 를 검증하는 자동 테스트는 없다. runtime smoke 는 별도의 CI
+wiring 이 갖추어져 있을 때에만 product evidence 로 승격된다. Fixture/test
+topology SOT 는
 `docs/contributor-guide/fixture-test-topology-inventory.md` 와
 `memory/engineering/conventions/testing-scenarios/fixtures/memory.md` 가 소유한다.
 `docs/archives/audits/refactor-05-support-claims-ledger-2026-06-12.md` 는
-2026-06-12 support-claim audit snapshot 이다. 현재 product support SOT 는 이
-page, `known-limitations.md`, `query-language-support.md`, and testing matrix 다.
+2026-06-12 에 수행한 support-claim audit snapshot 이다. 현재 product support SOT 는 이
+page 와 `known-limitations.md`, `query-language-support.md`, 그리고 testing matrix 다.
 
 | Source | Fixture asset | Current meaning |
 |---|---|---|

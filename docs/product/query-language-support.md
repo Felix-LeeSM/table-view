@@ -115,9 +115,9 @@ fixture/live, or E2E evidence.
 
 Split into child pages:
 
-- [`query-language-support-surface-matrix.md`](query-language-support-surface-matrix.md) — per-source support/boundary matrix
-- [`query-language-support-sql-breakdowns.md`](query-language-support-sql-breakdowns.md) — PostgreSQL, MySQL, MariaDB breakdowns
-- [`query-language-support-kv-search-breakdowns.md`](query-language-support-kv-search-breakdowns.md) — Redis, Valkey, Search DSL breakdowns
+- [`query-language-support-surface-matrix.md`](query-language-support-surface-matrix.md): per-source support/boundary matrix
+- [`query-language-support-sql-breakdowns.md`](query-language-support-sql-breakdowns.md): PostgreSQL, MySQL, MariaDB breakdowns
+- [`query-language-support-kv-search-breakdowns.md`](query-language-support-kv-search-breakdowns.md): Redis, Valkey, Search DSL breakdowns
 
 ## Result Boundary
 
@@ -176,8 +176,8 @@ are:
 - SQLite read queries can run on readable files, while raw SQL writes are
   limited to DML on writable files. Transactional DML batch and dry-run paths
   exist, and the Structure UI runs the DDL SQLite performs natively. Raw DDL,
-  `ALTER TABLE` rebuilds — the path an in-place column change or a
-  standalone constraint change would need — nested JSON edits, virtual-table
+  `ALTER TABLE` rebuilds (the path an in-place column change or a
+  standalone constraint change would need), nested JSON edits, virtual-table
   CRUD, broad extension semantics, and SQLite capability-specific parser/Safe
   Mode validation remain future work.
 - SQLite completion can suggest built-in SQLite vocabulary, cached schema
@@ -274,7 +274,7 @@ are:
 
 ## Related
 
-- [`docs/product/known-limitations.md`](known-limitations.md) — product-visible limitations
-- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — future query-language widening
-- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order
-- [`memory/engineering/architecture/query-language/memory.md`](../../memory/engineering/architecture/query-language/memory.md) — engineering ownership rules
+- [`docs/product/known-limitations.md`](known-limitations.md): product-visible limitations
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md): future query-language widening
+- [`docs/ROADMAP.md`](../ROADMAP.md): promotion order
+- [`memory/engineering/architecture/query-language/memory.md`](../../memory/engineering/architecture/query-language/memory.md): engineering ownership rules

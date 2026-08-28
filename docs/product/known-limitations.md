@@ -8,13 +8,13 @@ in [`docs/archives/risks/active-risk-register-2026-05-27.md`](../archives/risks/
 The MySQL/MariaDB import/export boundary entry in
 [`docs/product/known-limitations-rdbms.md`](known-limitations-rdbms.md) stays at
 its current unshipped wording until #1641 (MySQL restorable dump) ships. #1639/#1640
-(PostgreSQL CSV row-level import) has shipped — PostgreSQL now maps CSV columns
+(PostgreSQL CSV row-level import) has shipped: PostgreSQL now maps CSV columns
 to a target table and commits one single-row INSERT per row through the shared
 `execute_query_batch` command in a single all-or-nothing transaction (empty
 fields map to SQL NULL or `''` via a tri-state toggle; other engines return
 `Unsupported`), so the PostgreSQL entry records it as supported while DB-level
 backup/restore/import/export stays a future gate. #1638 (tabular JSON export)
-has shipped — grid JSON export is engine-agnostic (no capability gate) and now
+has shipped: grid JSON export is engine-agnostic (no capability gate) and now
 serves table/query surfaces as an array of objects keyed by headers, so no
 boundary entry claims it as unsupported. This page is not edited ahead of the
 feature; the forward-looking Stage 1 scope boundary is owned by
@@ -28,11 +28,11 @@ limitation. Layout is per-page: an entry is either a row of the original
 `| Area | Current limitation |` table or the equivalent heading section, because
 #1842 unwraps those tables one page at a time.
 
-- [`docs/product/known-limitations-rdbms.md`](known-limitations-rdbms.md) —
+- [`docs/product/known-limitations-rdbms.md`](known-limitations-rdbms.md):
   PostgreSQL, MySQL/MariaDB, SQLite, DuckDB, MSSQL, Oracle.
-- [`docs/product/known-limitations-non-rdbms.md`](known-limitations-non-rdbms.md) —
+- [`docs/product/known-limitations-non-rdbms.md`](known-limitations-non-rdbms.md):
   Redis, Valkey, MongoDB, Elasticsearch/OpenSearch, wider source candidates.
-- [`docs/product/known-limitations-cross-cutting.md`](known-limitations-cross-cutting.md) —
+- [`docs/product/known-limitations-cross-cutting.md`](known-limitations-cross-cutting.md):
   credential lifecycle, connection import/export privacy, security/admin
   surface, runtime E2E smoke, adapter/workspace boundary, query results,
   ERD/FK, CHECK constraints, grid filter operators.
@@ -49,7 +49,7 @@ smoke or measurement gates:
 - Monochrome themes trade colour-carried emphasis for their look. `supply` and
   `henry` (#2117) spend a handful of tones across the whole palette, so two
   semantic tokens land on the same value. Where that would make one *state* read
-  as another state, it is a defect and is gated —
+  as another state, it is a defect and is gated:
   `src/themes.color-channel.test.ts` holds the query log's succeeded / cancelled
   / failed dots apart in every theme and mode, because those three dots are one
   shape with no label. Where it only costs emphasis, it is accepted, because the
@@ -62,17 +62,17 @@ smoke or measurement gates:
     == `--tv-muted-foreground`, ΔE 0; `henry` dark ΔE 7.5). The elapsed seconds
     tick on screen either way, which is the signal the colour was emphasising.
 - Predates #2117 and still open: `--tv-highlight` sits within ΔE 15 of
-  `--tv-primary` — the same separation floor `src/themes.color-channel.test.ts`
-  applies to the query-log dots — in seven pre-existing blocks, of which one
+  `--tv-primary` (the same separation floor `src/themes.color-channel.test.ts`
+  applies to the query-log dots) in seven pre-existing blocks, of which one
   (`voltagent dark`) is an exact match. Three surfaces signal "this cell has an
   unsaved edit" with colour and nothing beside it:
   `src/components/document/DocumentDataGrid/cellRenderers/DocumentGridRows.tsx`
   (a `bg-highlight/20` cell wash, plus `ring-1 ring-highlight` on the expanded
   row), `src/components/query/EditableQueryResultGrid.tsx` and
   `src/components/document/NestedExpandPopover.tsx` (the wash only). The RDB
-  grid does not have this problem — #1139 gave it an `sr-only` label and a `●`
-  glyph (`src/components/datagrid/DataGridTable/DataRow.tsx`). Porting that second
-  channel to those three surfaces is untaken work.
+  grid does not have this problem because #1139 gave it an `sr-only` label and
+  a `●` glyph (`src/components/datagrid/DataGridTable/DataRow.tsx`). Porting
+  that second channel to those three surfaces is untaken work.
 - SchemaTree 1k/10k table scroll FPS remains ungated. Current evidence is
   deterministic component fixtures plus advisory render p50/p95/env and
   virtualization DOM bounds only. SchemaTree now virtualizes by visible-row
@@ -84,7 +84,7 @@ smoke or measurement gates:
   surfaces remain future work.
 - The inline document tree (`DocumentTreePanel` / `jsonTree`) caps a single
   cell's nested value at `MAX_TREE_DEPTH = 200` levels and `MAX_TREE_NODES =
-  50,000` nodes — a defense against a hostile/malfunctioning DB server
+  50,000` nodes: a defense against a hostile/malfunctioning DB server
   returning pathologically deep nesting (stack overflow) or an oversized
   document (main-thread freeze). Beyond either cap the tree renders a visible
   "…truncated" indicator instead of the full subtree. Above the shared
@@ -105,8 +105,8 @@ smoke or measurement gates:
   with pending edits, Escape inside the panel also opens the discard confirm:
   that gate has no focus-position condition and the panel's Escape deliberately
   does not consume the event, so the collision fires from inside a panel field
-  editor too — those do not stop propagation either. The document grid has no
-  Escape discard gate at all, so it does not have the collision.
+  editor too, because those do not stop propagation either. The document grid
+  has no Escape discard gate at all, so it does not have the collision.
 - Tab cannot always get back to the RDB grid cell the user left. The grid body
   keeps a single tab stop and it is the cell that last held focus:
   `cellTabIndex` (`src/components/datagrid/useGridRoving.ts`) gives
@@ -119,17 +119,17 @@ smoke or measurement gates:
   `src/components/datagrid/DataGridTable/columnUtils.ts` (200, under the
   default page size 300 in `src/lib/gridPolicy.ts`) and no inline jsonb or
   Postgres ARRAY cell is expanded; while it does, the anchor row can sit
-  outside the rendered window. Tab still re-enters the grid container — the
-  header row (`src/components/datagrid/DataGridTable/HeaderRow.tsx`) renders
+  outside the rendered window. Tab still re-enters the grid container because
+  the header row (`src/components/datagrid/DataGridTable/HeaderRow.tsx`) renders
   whether or not the body virtualizes and keeps tab stops of its own, separate
   from the body's: one `columnheader` at `tabIndex=0` plus a `tabIndex={0}`
   resize separator per column. What is out of reach is the anchor cell. `F6` and
-  Escape are unaffected — they route through `useGridRoving.focusAnchorCell`,
+  Escape are unaffected: they route through `useGridRoving.focusAnchorCell`,
   which scrolls the anchor row back in first.
 - Quick Look grows its long-value editors to fit their content with the CSS
   `field-sizing` property, which needs Chromium 123+ or WebKit 26+. On an older
   engine those editors fall back to their fixed `rows` height and scroll, as
-  they did before — no regression, just no improvement. The `<pre>` branch drops
+  they did before: no regression, just no improvement. The `<pre>` branch drops
   its height clamp regardless of engine. Raising this to a measured floor waits
   on a declared minimum supported platform.
 - Quick Open cross-connection results are global (every connected source) and
@@ -141,8 +141,8 @@ smoke or measurement gates:
 - Candidate-source UI accessibility smoke.
 - 1024x600 minimum viewport with max sidebar and dialog overlap. The workspace
   toolbar's Layout cluster collapses the schema sidebar, so a user cramped at
-  that size can reclaim the column by hand. The collapsed state is session-only
-  — reopening the workspace window starts expanded again, and the sidebar width
+  that size can reclaim the column by hand. The collapsed state is session-only:
+  reopening the workspace window starts expanded again, and the sidebar width
   the user dragged is likewise not restored across a restart. The overlap
   itself stays ungated.
 - Tauri production shortcut audit for `Cmd+Shift+I`.
@@ -153,8 +153,8 @@ smoke or measurement gates:
   follow-up issue. Dragged node positions are lost when the ERD tab is
   reopened. Semantic zoom does ship, but elkjs keeps reserving each card's
   full-detail height, so zooming out shrinks the cards without drawing the
-  diagram any tighter. Hand-drawn virtual FKs ship too — stored per connection
-  and database, drawn dashed, named in the legend — but the only edit the
+  diagram any tighter. Hand-drawn virtual FKs ship too (stored per connection
+  and database, drawn dashed, named in the legend), but the only edit the
   canvas offers is a confirmed reset of every link on that diagram: drawing,
   editing, or deleting one link, undo/redo, and cross-window convergence on a
   reset are follow-ups. A schema FK anchors on the column rows it names and
@@ -171,9 +171,9 @@ smoke or measurement gates:
   message starting `ResizeObserver loop`. The user agent raises that on `window`
   when a resize callback resizes something and the remaining observations spill
   into the next frame. Every surface that measures with a `ResizeObserver` and
-  stores the result can raise it — the ERD canvas through React Flow, the
-  virtualized grids (`DataGridTable`, `DocumentDataGrid`), the schema trees —
-  and none of them is broken when it arrives. The match is anchored at the start
+  stores the result can raise it: the ERD canvas through React Flow, the
+  virtualized grids (`DataGridTable`, `DocumentDataGrid`), the schema trees.
+  None of them is broken when it arrives. The match is anchored at the start
   of the message, so a real throw that merely names ResizeObserver still reaches
   the user. What the drop costs is the record: it logs through `logger.warn`,
   which `src/lib/logger.ts` gates behind `import.meta.env.DEV`, so a packaged
@@ -202,7 +202,7 @@ smoke or measurement gates:
 - Raw query results are capped at a configurable row limit (default 10,000
   rows; adjustable 100–1,000,000 via the workspace toolbar row-cap control,
   persisted as the `query_row_cap` setting). The cap is enforced at fetch
-  time across every DBMS — the backend stops pulling rows past the cap rather
+  time across every DBMS: the backend stops pulling rows past the cap rather
   than buffering the full result set, so a no-`LIMIT` JOIN cannot exhaust
   memory. When a result is capped the grid shows a truncation banner and the
   row count reflects the returned (capped) rows, not the true total. Add an
@@ -216,7 +216,7 @@ smoke or measurement gates:
 ## Auto-Update Platform Coverage
 
 In-app auto-update (ADR 0049) reaches only the platforms present in the release
-`latest.json` manifest — currently `darwin-aarch64`, `windows-x86_64`, and
+`latest.json` manifest: currently `darwin-aarch64`, `windows-x86_64`, and
 `linux-x86_64` (see
 [`docs/contributor-guide/release/versioning-and-artifacts.md`](../contributor-guide/release/versioning-and-artifacts.md)).
 Installs outside those keys do not auto-update:
@@ -234,7 +234,7 @@ Installs outside those keys do not auto-update:
 
 ## Related
 
-- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md) — current support snapshot
-- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — open follow-up queue
-- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order
-- [`docs/contributor-guide/testing-and-quality.md`](../contributor-guide/testing-and-quality.md) — developer-facing verification gaps
+- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md): current support snapshot
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md): open follow-up queue
+- [`docs/ROADMAP.md`](../ROADMAP.md): promotion order
+- [`docs/contributor-guide/testing-and-quality.md`](../contributor-guide/testing-and-quality.md): developer-facing verification gaps

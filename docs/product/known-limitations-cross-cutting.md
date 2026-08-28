@@ -1,4 +1,4 @@
-# Known Limitations — Cross-Cutting Data Source Boundaries
+# Known Limitations: Cross-Cutting Data Source Boundaries
 
 Boundary entries that are not owned by a single engine: credentials, security
 and admin safeguards, runtime E2E smoke, adapter/workspace typing, and schema
@@ -36,7 +36,7 @@ launch that finds neither file starts empty and says nothing, because there is
 nothing to put back.
 
 That protection comes with boundaries. Only one generation is kept, so a save
-made after the last backup rotation is not recoverable — the backup is the state
+made after the last backup rotation is not recoverable: the backup is the state
 before the most recent write that had something to replace, not the most recent
 write. The backup lives inside the app data directory, which is the deliberate
 trade-off (owner decision 2026-08-06): anything that removes that directory
@@ -44,7 +44,7 @@ wholesale removes the backup with it, and the app has no copy elsewhere. A
 backup that no longer parses restores nothing; it is moved to
 `connections.json.bak.corrupt-<timestamp>` for manual recovery and the app
 boots empty **without** a toast, so that case is visible only in the log. And
-the corrupt-`connections.json` path does not consult the backup at all — a
+the corrupt-`connections.json` path does not consult the backup at all: a
 store that fails to parse is still quarantined and replaced with an empty one,
 with no notification and no automatic use of the copy sitting next to it.
 
@@ -86,7 +86,7 @@ now opens `ConfirmDestructiveDialog` whatever the matrix returned, and the
 dispatch seam refuses a `DEL` that did not come from that dialog. Before #2421
 `DEL k` dispatched on the first click *and* passed the backend
 `require_confirm_key` gate, because the frontend derived the confirm key from
-the same command text the backend parses it from — that gate cannot distinguish
+the same command text the backend parses it from: that gate cannot distinguish
 a confirmed request from an unconfirmed one, so the confirm dialog is the
 boundary. The console's other data-loss commands still dispatch on the first
 click, and unlike the SQL/MQL editors they do so in every Safe Mode tier,
@@ -114,7 +114,7 @@ a UI-only runtime escalation outside the Safe Mode decision matrix that the
 static backend gate does not reproduce. The RDB SQL classifier
 (`src/lib/sql/sqlSafety.ts`) uses a maximal known-statement roster and, per the
 2026-07-02 decision, treats any statement no branch recognises as `other`/info
-(fail-open, allow) rather than escalating an unknown to a warning — a deliberate
+(fail-open, allow) rather than escalating an unknown to a warning: a deliberate
 trade-off that keeps the classifier from surfacing friction on benign
 unrecognised input while the backend IPC gate remains the final defense. The
 roster explicitly registers benign utility/session statements (transaction
@@ -135,7 +135,7 @@ read-only rejects every write at the same Rust IPC chokepoint
 (`execute_query`/`execute_query_batch` and the structured DDL commands) by
 re-reading the persisted `read_only` flag from the backend's own store,
 independent of Safe Mode and with no confirmation bypass. Write/read
-classification reuses the native `sql-parser-core` parser — a precise AST
+classification reuses the native `sql-parser-core` parser: a precise AST
 verdict where the statement parses
 (`SELECT`/`SHOW`/`SET`/read-`EXPLAIN`/`SELECT`-bodied CTE are reads; every other
 variant is a write) and a fail-open leading-keyword deny-list where it does not,
@@ -157,9 +157,9 @@ roadmap/milestone, not non-RDBMS lazy-loading workbench hardening. Global audit
 logs, role/user/permission UI, credential rotation UI, keyring diagnostics,
 actual live Search index/settings admin execution, and a general security
 dashboard are not implemented. Per ADR 0058 (#1649), every TLS-capable engine
-now stores one uniform posture — `sslMode`, one of
+now stores one uniform posture (`sslMode`, one of
 `disable`/`prefer`/`require`/`verify-ca`/`verify-full`, plus an optional
-`caCertPath` — replacing the ADR 0053 (#1063) `(tls_enabled,
+`caCertPath`), replacing the ADR 0053 (#1063) `(tls_enabled,
 trust_server_certificate)` boolean pair, which `connections.json` reads only to
 migrate stored connections and never writes back. The SQLite snapshot mirror is
 the exception: it keeps both legacy integer columns and projects the posture
@@ -168,8 +168,8 @@ onto them on every save, so `verify-ca` lands in the mirror as `verify-full` and
 default with a hint. Two combinations that the pre-#1649 backend refused to
 connect at all cannot stay refusals, because the enum has no way to express one;
 both fold upward. TLS on with no explicit trust decision folds to `verify-full`.
-Trust the certificate with encryption off — which a pasted
-`sqlserver://…?encrypt=false&trustServerCertificate=true` could store — folds to
+Trust the certificate with encryption off (which a pasted
+`sqlserver://…?encrypt=false&trustServerCertificate=true` could store) folds to
 `require` (encryption forced, certificate verification skipped), so a
 contradictory combination still never becomes a plaintext connection. That
 second fold is the one migration step that can stop a working connection: on the
@@ -181,9 +181,9 @@ posture back to `disable` or `prefer` by hand; on
 PostgreSQL/MySQL/MariaDB/SQL Server/Oracle the pair was already refused at
 connect time, so nothing that previously connected changed there. `verify-ca`
 hands the CA file the user selects to the driver as a trust anchor, with
-hostname verification kept on, on PostgreSQL/MySQL/MariaDB, SQL Server and —
-since #2154 — Oracle. What it does to the rest of that driver's anchor set
-differs — PostgreSQL/MySQL/MariaDB go through sqlx/rustls and add the CA on top
+hostname verification kept on, on PostgreSQL/MySQL/MariaDB, SQL Server and
+(since #2154) Oracle. What it does to the rest of that driver's anchor set
+differs: PostgreSQL/MySQL/MariaDB go through sqlx/rustls and add the CA on top
 of the bundled public root list, SQL Server goes through tiberius/native-tls and
 adds it on top of the OS system trust store, and Oracle goes through oracle-rs,
 which seeds its root store from the CA file *instead of* the bundled roots.
@@ -191,11 +191,11 @@ Oracle is therefore the one engine where naming a CA narrows the anchor set;
 elsewhere it can only widen it. On MongoDB,
 Redis/Valkey, and Elasticsearch/OpenSearch the CA file is ignored and
 `verify-ca` verifies
-against the built-in public roots alone — never weaker than `verify-full`, but a
+against the built-in public roots alone: never weaker than `verify-full`, but a
 private-CA server stays unreachable on those five until their drivers' own CA
 options are wired (#1649 follow-up). A `verify-ca` posture with no CA file is
 rejected at the storage write boundary for every engine, and again at connect
-time on PostgreSQL/MySQL/MariaDB, SQL Server and Oracle — the adapters that
+time on PostgreSQL/MySQL/MariaDB, SQL Server and Oracle, the adapters that
 resolve the full posture. The five on/off TLS engines have only the
 write-boundary rejection, so a row hand-edited into `connections.json` still
 reaches those drivers as plain `verify-full`; the connection *test* action also
@@ -207,7 +207,7 @@ Oracle drops `require` on top of that, because its driver cannot encrypt without
 verifying. `verify-ca` renders only for a
 connection already stored with it, because the CA file picker is the follow-up
 slice. A pasted URL that names a posture the engine's dropdown does not
-offer — `sslmode=verify-ca` anywhere, and `sslmode=require` on Oracle — is
+offer (`sslmode=verify-ca` anywhere, and `sslmode=require` on Oracle) is
 reported as a parameter that could not be reflected rather than dropped
 silently. The on/off TLS engines
 (MongoDB/Redis/Valkey/Elasticsearch/OpenSearch) expose an explicit opt-in "trust
@@ -222,11 +222,11 @@ is re-selected on the importing machine exactly as the password is re-entered.
 Oracle reads that same posture since #2154: `verify-full` and
 `verify-ca` dial TCPS, `require` is rejected at connect, and the #1065 mTLS
 wallet is a separate trust anchor that cannot be combined with a TLS-enabling
-posture — naming both is rejected rather than resolved one way.
+posture, so naming both is rejected rather than resolved one way.
 The CA reference follows the posture that named it: the sslmode
 dropdown, the engine TLS on/off checkboxes (both directions), a dbType switch,
 and a pasted URL that states a posture all clear `caCertPath` whenever they move
-the posture. The skip-verify checkbox is the deliberate exception — it keeps the
+the posture. The skip-verify checkbox is the deliberate exception: it keeps the
 anchor while the posture sits at `require`, so unchecking it restores
 `verify-ca` instead of demoting the connection to `verify-full`. A connection
 saved while that box is checked therefore stores `require` with its CA path
@@ -236,17 +236,17 @@ Rolling back to a pre-#1649 build loses the posture permanently: the storage
 envelope carries no version field and does not reject unknown keys, so an older
 build reads every connection as the legacy `(unset, unset)` pair and the first
 save from that build drops `sslMode` and `caCertPath` for good. A CA path is
-validated for presence only — a path that does not exist, or points at
+validated for presence only: a path that does not exist, or points at
 something that is not a certificate, is stored and only surfaces as the driver's
 raw error at connect time. One unrecognized `sslMode` string quarantines the
 whole connection store: the enum has no catch-all variant, so the parse fails,
 `connections.json` is moved aside as `connections.json.corrupt-<timestamp>`, and
 the app boots with zero connections until that file is repaired by hand. The
 `connections.json.bak` backup described under *Connection store backup and
-recovery* is not consulted on this path — it covers a store that goes missing,
+recovery* is not consulted on this path: it covers a store that goes missing,
 not one that fails to parse. Advanced
-depth — client certificates, TOFU certificate pinning, the in-form CA file
-picker, and private trust anchors on the five on/off TLS engines — remains a
+depth (client certificates, TOFU certificate pinning, the in-form CA file
+picker, and private trust anchors on the five on/off TLS engines) remains a
 follow-up (#1649).
 
 ### Runtime E2E smoke coverage
@@ -305,7 +305,7 @@ metadata, bounded `_search` rendering, delete-by-query safety planning plus live
 `_delete_by_query` execution behind a Safe Mode confirmation, and visible error
 surface; it does not widen actual live admin (index/settings) execution, broader
 Search observability workflows, or product-specific destructive deltas. The
-`_search` `profile` plan is separate and does ship — see
+`_search` `profile` plan is separate and does ship: see
 [known-limitations-non-rdbms.md](known-limitations-non-rdbms.md).
 MySQL catalog metadata has integration evidence for databases/schemas, tables,
 views, columns, indexes, constraints/FKs, and live version-gated column CHECK
@@ -326,7 +326,7 @@ SQL/MongoDB/Redis/Valkey/Search seed contracts, but other specs under
 `e2e/smoke/**`, reset-to-default audits, additional file analytics scenarios
 beyond the wired `duckdb-file-analytics` spec, broader Search scenarios, and
 macOS/Windows runtime smoke are future promotion gates unless a smoke runner
-wires them. The dense ERD scenario is wired — see the ERD / SchemaGraph section
+wires them. The dense ERD scenario is wired: see the ERD / SchemaGraph section
 below.
 
 ### Adapter / workspace boundary
@@ -373,7 +373,7 @@ SQL generation or execution semantics. Cached same-source and cross-source RDBMS
 schema diff is read-only; it does not apply migrations, compare data,
 import/export, expose admin workflows, or include DuckDB registered file
 aliases. That diff also marks the diagram: a card whose table a diff entry names
-carries one badge per change kind — added, removed, changed — and the card's
+carries one badge per change kind (added, removed, changed), and the card's
 outline follows the entry for the table itself, so a newly added table reads
 apart from a surviving one whose columns alone moved. No mark is read from
 colour alone: a badge pairs its hue with an icon shape and the outline pairs the
@@ -394,15 +394,15 @@ per-table sub-tab. The diagram is a `@xyflow/react` canvas with `elkjs`
 `layered` auto-layout: referenced tables rank above the tables that reference
 them, and nodes can be dragged, but positions are not persisted across tab
 reopen. How much of a table a card spells out follows the viewport zoom in three
-steps — the table box alone, then the primary-key and foreign-key columns, then
-every column — and a card that leaves columns out says how many it hid. There is
+steps (the table box alone, then the primary-key and foreign-key columns, then
+every column), and a card that leaves columns out says how many it hid. There is
 no fixed cap on rendered columns. Zoom never re-runs the layout: elkjs is handed
 the full-detail height of every card, so a card only ever shrinks inside the slot
 it was given, and zooming out does not pack the diagram tighter. A catalog
 foreign-key edge attaches to the row of the column it leaves from and the row of
 the column it points at, falling back to the card edge for a column the current
-zoom step leaves out. Each catalog FK edge carries a cardinality mark — 1:1, 1:N
-or N:M — counting how
+zoom step leaves out. Each catalog FK edge carries a cardinality mark (1:1, 1:N
+or N:M) counting how
 many of its two ends have columns that cover a unique index (`IndexInfo.is_unique`)
 or the primary key: both ends covered reads 1:1, exactly one reads 1:N, neither
 reads N:M. The mark does not say which end is the 1. A composite foreign key
@@ -422,7 +422,7 @@ column that decides which target a row points at. They persist per
 closing and reopening the ERD tab. They draw dashed with an open arrow head next
 to the solid, filled-head catalog FKs, and both kinds are named in the canvas
 legend, so the distinction never rests on colour alone. They meet the card edge
-rather than a column row, and they carry no cardinality mark — that mark counts
+rather than a column row, and they carry no cardinality mark: that mark counts
 ends pinned by the schema's own keys and unique indexes, and a hand-drawn link
 declares none. Reconcile against the
 current schema is a projection, not a delete, and it treats the three column
@@ -432,7 +432,7 @@ a discriminator whose column is gone leaves every edge in place and only its
 name out of them. The stored link survives all three, because a graph whose
 metadata has not finished loading is indistinguishable from a dropped column.
 Drawing a link from the canvas, editing or deleting one link, and undo/redo of
-link edits are not included — the legend offers only a confirmed reset that
+link edits are not included: the legend offers only a confirmed reset that
 clears every link on that diagram (ADR 0056 (4) owns undo). A virtual FK is not a constraint: it stays
 out of the selected-table dependency view, out of the cached schema diff, and out
 of join completion, which ADR 0055 lists as explicit non-scope. Two windows open
@@ -460,7 +460,7 @@ connected dialect's `SqlDialectCapabilities`
 does not declare is not offered.
 `ILIKE` is wired that way (#2430) and rides on `capabilities.ilike`, which the
 profile declares for PostgreSQL. An operator a dialect lacks is hidden, not
-emulated — no `LOWER(col) LIKE LOWER(?)` rewrite is generated, because that
+emulated: no `LOWER(col) LIKE LOWER(?)` rewrite is generated, because that
 rewrite loses the column index and warning the user about that is a separate UI
 decision. The backend keeps the same split: spellings shared across adapters
 live in `FilterOperator::comparison_sql`, and a dialect-specific spelling lives
@@ -473,7 +473,7 @@ outside this list.
 
 ## Related
 
-- [`docs/product/known-limitations.md`](known-limitations.md) — boundary index
-- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md) — current support snapshot
-- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md) — open follow-up queue
-- [`docs/ROADMAP.md`](../ROADMAP.md) — promotion order
+- [`docs/product/known-limitations.md`](known-limitations.md): boundary index
+- [`docs/product/current-support-snapshot.md`](current-support-snapshot.md): current support snapshot
+- [`docs/roadmap/follow-up-queue.md`](../roadmap/follow-up-queue.md): open follow-up queue
+- [`docs/ROADMAP.md`](../ROADMAP.md): promotion order

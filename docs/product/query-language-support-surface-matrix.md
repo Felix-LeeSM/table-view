@@ -289,7 +289,7 @@ workflows on Ubuntu.
 
 **Current boundary**: Full language-core parser/completion ownership, broader
 admin APIs (index/settings create/delete), the `_explain` endpoint
-(per-document score explanation — the bounded validator still rejects the
+(per-document score explanation: the bounded validator still rejects the
 `explain` key and no adapter method calls it),
 observability, and full query-language support are deferred. The `_search`
 `profile` plan is not: the search query tab's Explain button re-runs the
