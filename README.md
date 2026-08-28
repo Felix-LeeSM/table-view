@@ -126,8 +126,10 @@ Runtime Happy Path smoke wiring은 #907 전까지 넓히지 않습니다.
 **Fixture seeding CLI(`pnpm db:seed`)는 없습니다.** 남아 있는 `pnpm fixtures:start`
 / `fixtures:stop`은 컨테이너를 기동하고 정지할 뿐 seed를 넣지 않습니다. 게다가
 `fixtures:stop`은 `docker compose down -v`라서 볼륨까지 지웁니다. seed 데이터 자체는
-`e2e/fixtures/<dbms>/` 아래에 남아 있으므로, 컨테이너에 직접 넣거나
-`e2e/fixtures/seed-smoke.ts`로 smoke seeding을 실행할 수 있습니다.
+`e2e/fixtures/`에 그대로 있으므로, 컨테이너에 직접 넣거나
+`e2e/fixtures/seed-smoke.ts`로 smoke seeding을 실행할 수 있습니다. DBMS별 seed는
+`e2e/fixtures/<dbms>/` 디렉터리에 들어 있지만, MSSQL과 Oracle의 seed는 디렉터리가
+아니라 `e2e/fixtures/seed.mssql.sql`과 `e2e/fixtures/seed.oracle.sql` 파일입니다.
 
 ```bash
 pnpm db:up            # 컨테이너 기동 (docker compose up -d)
@@ -137,8 +139,8 @@ docker compose exec -T mariadb mysql -utestuser -ptestpass table_view_test \
 
 Oracle은 서비스명 기반 `XEPDB1` 경로가 기준입니다. #905 범위는 catalog metadata,
 SELECT/DML batch, cooperative cancel, tabular table-data query까지입니다.
-SID/TNS alias/wallet/TLS, editRows, structured DDL, raw admin, parser/completion,
-runtime smoke, full PL/SQL semantics는 후속입니다.
+SID/TNS alias/wallet/TLS, raw admin, parser/completion, runtime smoke,
+full PL/SQL semantics는 후속입니다.
 
 기본 접속 정보는 다음과 같습니다.
 
@@ -246,8 +248,9 @@ runtime evidence만 갖고 routine smoke wiring은 #907 소유입니다.
 `Runtime Happy Path` job이 `e2e/scope-map.mjs`로 PR의 변경 경로를 spec 부분집합에
 매핑해 그 부분집합만 실행합니다. e2e와 무관한 PR은 `selected 0 specs`를 출력하고
 green으로 끝나며, main push와 야간 schedule, `workflow_dispatch`는 전체를
-실행합니다. `e2e:full` label은 label 이벤트를 청취하지 않기 때문에, 붙인 뒤에 push
-해야 전체가 실행됩니다. 아래처럼 직접 구동하는 경로도 그대로 남아 있습니다.
+실행합니다. `e2e:full` label은 label 이벤트를 청취하지 않기 때문에, 붙인 뒤에
+push하거나 이 workflow를 다시 실행해야 전체가 실행됩니다. 아래처럼 직접 구동하는
+경로도 그대로 남아 있습니다.
 
 ```bash
 pnpm db:up
@@ -263,8 +266,15 @@ TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke \
 `WEBKIT_DISABLE_COMPOSITING_MODE=1`, `LIBGL_ALWAYS_SOFTWARE=1`을 직접 export해야
 합니다 (#1261/#1293).
 
-macOS와 Windows 로컬 환경에서는 tauri-driver의 Linux/GTK 의존성에 차이가
-있습니다.
+macOS 로컬 환경에서는 host-native 실행이 platform 차원에서 불가능합니다.
+`tauri-driver`가 필요로 하는 WebDriver 인터페이스를 Apple이 임베디드 WKWebView에
+제공하지 않기 때문이고, 근거는
+[ADR 0020](./docs/decisions/0020-e2e-pre-push-host-docker/memory.md)입니다. 같은
+ADR은 Windows를 별개 사례로 적습니다. `tauri-driver`가 Windows에서는
+`Microsoft Edge WebDriver`를 dispatch 대상으로 둔다고 밝히고, Windows에는 같은
+불가능 판정을 내리지 않습니다. 이 ADR은 `Superseded` 상태이지만, 대체한
+[ADR 0044](./docs/decisions/0044-e2e-smoke-remote-required/memory.md)에는 이 platform
+판정을 다시 적은 문장이 없습니다.
 
 ---
 
