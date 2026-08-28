@@ -74,8 +74,8 @@ export function analyzeKvCommandSafety(command: string): StatementAnalysis {
   // (KEYS pattern-confirm + DEL/PERSIST key-confirm) onto `danger` is what
   // routes these to the same confirm dialog SQL destructive statements use.
   // KEYS (scan) and PERSIST (TTL removal) are not destructive; they ride
-  // `danger` only for the confirm gate. Everything else is info; the backend
-  // command allowlist bounds which commands exist at all.
+  // `danger` only for the confirm gate. Everything outside the map is info; the
+  // backend command allowlist bounds which commands exist at all.
   //
   // Issue #2421 — this severity is *not* what puts DEL behind the dialog. The
   // Safe Mode matrix hands `danger` back as `allow` on a non-production
@@ -92,10 +92,9 @@ export function analyzeKvCommandSafety(command: string): StatementAnalysis {
 /**
  * Issue #2421 — dispatch a command the user was never asked about.
  *
- * A command `kvDataLossReason` names is refused here rather than sent — today
- * that predicate names `DEL` and nothing else. The backend's
- * `require_confirm_key` gate compares the request's key against the key it
- * parsed out of the same command string, so any caller can satisfy it by
+ * A command `kvDataLossReason` names is refused here rather than sent. The
+ * backend's `require_confirm_key` gate compares the request's key against the
+ * key it parsed out of the same command string, so any caller can satisfy it by
  * deriving the key from the command text — which is exactly what this seam used
  * to do on the no-dialog path, leaving `DEL k` to run silently on the shipped
  * default. The guard sits inside the dispatch instead of at each call site so a
@@ -103,17 +102,18 @@ export function analyzeKvCommandSafety(command: string): StatementAnalysis {
  * not a deletion. Getting a command that predicate names through requires
  * `executeConfirmedKvCommand`, which only a cleared dialog reaches.
  *
- * The refusal is bounded by that predicate, not by what actually loses data.
- * `HDEL`, `LREM`, `SREM`, `ZREM`, `XDEL` and `XTRIM` are
- * `RedisCommandEffect::Destructive` on the backend
- * (`src-tauri/table-view-core/src/db/redis/command_parser.rs`) but are absent
- * from `KV_CONFIRM_COMMANDS`, so they classify as `info` and pass through here
- * with no dialog in every Safe Mode tier. That gap predates #2421, which scoped
- * itself to `DEL`. This seam is not the only way those verbs are sent — the KV
- * structure editor classifies them differently, with `analyzeKvMutationSafety`
- * (`src/components/workspace/kvMutationCommands.ts`). Which tiers actually
- * confirm there is issue #2513
- * (`docs/product/known-limitations-cross-cutting.md`).
+ * Issue #2513 — the refusal is bounded by that predicate, and since #2513 the
+ * predicate names every verb the backend calls
+ * `RedisCommandEffect::Destructive`
+ * (`src-tauri/table-view-core/src/db/redis/command_parser.rs`): `HDEL`, `LREM`,
+ * `SREM`, `ZREM`, `XDEL` and `XTRIM` alongside `DEL`. Before that they were
+ * absent from `KV_CONFIRM_COMMANDS`, classified as `info`, and passed through
+ * here with no dialog in every Safe Mode tier. This seam is not the only way
+ * those verbs are sent — the KV structure editor reaches the same `danger` tier
+ * from the mutation's `destructive` flag instead of the typed verb
+ * (`analyzeKvMutationSafety` in
+ * `src/components/workspace/kvMutationCommands.ts`), and
+ * `kvDestructiveTier.test.ts` asserts per verb that the two routes agree.
  *
  * The confirm key is still echoed for the gated-but-not-data-loss commands
  * (KEYS pattern / PERSIST key): the backend rejects those without it and they
@@ -252,10 +252,9 @@ export async function executeKvQuery({
   }
 
   // Issue #2421 — a command `kvDataLossReason` names takes the dialog whatever
-  // the Safe Mode matrix returned; today that predicate names `DEL` and nothing
-  // else, so the other backend-destructive verbs named in
-  // `executeKvCommandNow`'s docblock route straight past here. The matrix
-  // answers `allow` for `danger` on a
+  // the Safe Mode matrix returned; since #2513 that predicate names every
+  // backend-destructive verb listed in `executeKvCommandNow`'s docblock. The
+  // matrix answers `allow` for `danger` on a
   // non-production connection under mode `warn` / `off` and that pass-through
   // is deliberate (ADR 0022), but the KV console mounts no preview to catch it,
   // so `DEL k` reached the driver with nothing shown. Routing here rather than

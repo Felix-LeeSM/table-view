@@ -125,8 +125,11 @@ describe("Valkey smoke", () => {
       // refused. One predicate drives both halves — `kvDataLossReason` in
       // src/components/query/QueryTab/kvCommandConfirmation.ts. Until #2421
       // this step ran DEL with no dialog step at all, so the dialog wait
-      // below is what goes red if the routing is dropped. Which surface
-      // confirms which verbs differs per path — issue #2513 decides that.
+      // below is what goes red if the routing is dropped. Issue #2513 put the
+      // backend's other destructive verbs (HDEL / LREM / SREM / ZREM / XDEL /
+      // XTRIM) behind the same predicate, so the console and the KV structure
+      // editor now reach the danger tier for all of them; the per-verb lock is
+      // src/components/query/QueryTab/kvDestructiveTier.test.ts.
       await setCodeMirrorText("DEL vk:cmd");
       await runQuery();
       await waitForDialogTextAll(

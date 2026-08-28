@@ -88,21 +88,33 @@ dispatch seam refuses a `DEL` that did not come from that dialog. Before #2421
 `require_confirm_key` gate, because the frontend derived the confirm key from
 the same command text the backend parses it from: that gate cannot distinguish
 a confirmed request from an unconfirmed one, so the confirm dialog is the
-boundary. The console's other data-loss commands still dispatch on the first
-click, and unlike the SQL/MQL editors they do so in every Safe Mode tier,
-production + `strict` included: `HDEL`, `LREM`, `SREM`, `ZREM`, `XDEL` and
-`XTRIM` are `RedisCommandEffect::Destructive` in
-`src-tauri/table-view-core/src/db/redis/command_parser.rs` but sit outside the
-frontend's `KV_CONFIRM_COMMANDS` map
+boundary. Issue #2513 did the same for the console's remaining data-loss
+commands. `HDEL`, `LREM`, `SREM`, `ZREM`, `XDEL` and `XTRIM` are
+`RedisCommandEffect::Destructive` in
+`src-tauri/table-view-core/src/db/redis/command_parser.rs`, and they used to sit
+outside the frontend's `KV_CONFIRM_COMMANDS` map
 (`src/components/query/QueryTab/kvCommandConfirmation.ts`), so a typed command
-classifies as `info`, the matrix returns `allow` for that classification in
-every tier, and neither the dialog routing nor the dispatch refusal engages.
-That is the console's behaviour, not this app's verdict on those verbs: the KV
-structure editor (`KvKeyDetailPanel` / `KvMutationPanel`) classifies the same
-removals differently, with `analyzeKvMutationSafety`
-(`src/components/workspace/kvMutationCommands.ts`). The same `HDEL` is judged by
-where it was raised, and which tiers actually confirm on that path is issue
-#2513. The console gap predates #2421, which scoped itself to `DEL`. `KEYS` and
+classified as `info`, the matrix returned `allow` for that classification in
+every tier, and neither the dialog routing nor the dispatch refusal engaged:
+production + `strict` included. Registering them with `losesData: true` puts
+them where `DEL` already stood, so the console now opens the confirm dialog in
+every Safe Mode tier and the dispatch seam refuses a run that did not come from
+that dialog.
+
+A verb still reaches its tier by two routes, which were not merged. The KV
+structure editor (`KvKeyDetailPanel` / `KvMutationPanel`) reads the mutation's
+`destructive` flag rather than a typed verb, through `analyzeKvMutationSafety`
+(`src/components/workspace/kvMutationCommands.ts`), and lands on the same
+`danger` tier. What holds the two together is
+`src/components/query/QueryTab/kvDestructiveTier.test.ts`, which asserts per
+verb that both routes reach `danger` and that both build the same command
+string, so registering a data-loss verb on one route without the other fails
+there. Where the routes still part is the dialog on non-production `warn` /
+`off`: the console takes it regardless, because the data-loss predicate
+overrides the matrix, while the structure editor follows the matrix, gets
+`allow`, and leaves its own preview-then-confirm step as the whole gate. On
+production in every mode, and on non-production `strict`, both confirm.
+The console gap predates #2421, which scoped itself to `DEL`. `KEYS` and
 `PERSIST` stay on whatever the matrix decided rather than taking the dialog
 unconditionally the way `DEL` now does, by design: the backend gates them and a
 keyspace scan and a TTL removal lose no data. The Safe Mode decision matrix is
