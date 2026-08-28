@@ -17,6 +17,11 @@ import {
 
 const CONNECTION_NAME = "E2E Valkey";
 const INITIAL_VALUE = "hello-valkey";
+// Issue #2520: e2e/fixtures/valkey/kv/seed.json seeds three `vk:` keys and
+// three keys outside that namespace. This one is the witness for the filtered
+// scan below — it renders on the unfiltered scan and has to be gone once the
+// `vk:*` pattern is applied.
+const NON_VK_SEED_KEY = "valkey-customer:customer-1";
 
 describe("Valkey smoke", () => {
   it("connects, scans keys, previews values, and runs bounded commands", async () => {
@@ -39,15 +44,37 @@ describe("Valkey smoke", () => {
         30000,
         "Valkey key browser did not render seeded keys after manual scan",
       );
+      // The filtered scan below proves the pattern narrowed the list by
+      // asserting this key disappeared. Pin its presence here as well, so a
+      // seed that stops creating it turns this step red instead of leaving
+      // that assertion true for the wrong reason.
+      await waitForKvKeyVisible(
+        NON_VK_SEED_KEY,
+        30000,
+        `Valkey key browser did not render ${NON_VK_SEED_KEY} on the unfiltered scan`,
+      );
     });
 
     await step("scan and preview a seeded string key", async () => {
       await setField("Valkey key pattern", "vk:*");
       await browser.keys("Enter");
+      // Issue #2520: this used to spell the rendered key count out as a
+      // literal, and that count reported the wrong place when the spec broke.
+      // `SET vk:cmd` in the write/TTL step below adds a fourth `vk:` key and
+      // `DEL vk:cmd` removes it again, and a retry inherits whatever the first
+      // attempt left: .github/workflows/e2e-smoke.yml runs the seeder once per
+      // spec before `wdio run`, while the `specFileRetries` retry configured in
+      // wdio.smoke.conf.ts happens inside that same run. An attempt that died
+      // between those two steps left `vk:cmd` in the database, the retry
+      // counted one key more than the literal named, and it failed here rather
+      // than where it actually broke. Asserting that a seeded key outside the
+      // `vk:` namespace disappeared proves the same narrowing without counting
+      // what is inside it.
       await waitForWorkspaceTextAll(
-        ["3 keys", "vk:string", "vk:hash", "vk:events"],
+        ["vk:string", "vk:hash", "vk:events"],
         15000,
-        "Valkey filtered key scan did not render seeded keys",
+        "Valkey filtered key scan did not narrow the key list to the vk: namespace",
+        [NON_VK_SEED_KEY],
       );
       await clickKvKey("vk:string");
       await waitForWorkspaceTextAll(
