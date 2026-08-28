@@ -1,5 +1,9 @@
 import { $, browser, expect } from "@wdio/globals";
-import { type ClickPointHit, readClickPoint } from "./editor-click-point";
+import {
+  type ClickPointHit,
+  describeStuckClickPoint,
+  readClickPoint,
+} from "./editor-click-point";
 import { formatGridWaitDiagnostic } from "./grid-wait-diagnostic";
 
 export { editGridCellInRow } from "./grid-edit";
@@ -926,27 +930,34 @@ export async function openNewQueryTab() {
 const SQL_EDITOR_SELECTOR = ".cm-content";
 
 async function probeSqlEditorClickPoint(): Promise<ClickPointHit> {
-  return await browser.execute((selector: string): ClickPointHit => {
-    const target = document.querySelector(selector);
-    // A missing element, or a centre outside the viewport, is not something
-    // this guard can clear — the driver clamps its own click point and its
-    // error says more than anything we could add here.
-    if (!target) return { kind: "clear" };
-    const box = target.getBoundingClientRect();
-    const hit = document.elementFromPoint(
-      box.left + box.width / 2,
-      box.top + box.height / 2,
-    );
-    if (!hit) return { kind: "clear" };
-    if (target.contains(hit)) return { kind: "clear" };
-    // Name the tooltip, not whichever of its rows happens to be on top.
-    const covering = hit.closest(".cm-tooltip") ?? hit;
-    return {
-      kind: "element",
-      tag: covering.tagName.toLowerCase(),
-      className: covering.getAttribute("class") ?? "",
-    };
-  }, SQL_EDITOR_SELECTOR);
+  return await browser.execute(
+    (selector: string, dialogSelector: string): ClickPointHit => {
+      const target = document.querySelector(selector);
+      // A missing element, or a centre outside the viewport, is not something
+      // this guard can clear — the driver clamps its own click point and its
+      // error says more than anything we could add here.
+      if (!target) return { kind: "clear" };
+      const box = target.getBoundingClientRect();
+      const hit = document.elementFromPoint(
+        box.left + box.width / 2,
+        box.top + box.height / 2,
+      );
+      if (!hit) return { kind: "clear" };
+      if (target.contains(hit)) return { kind: "clear" };
+      // Name the tooltip, not whichever of its rows happens to be on top.
+      const covering = hit.closest(".cm-tooltip") ?? hit;
+      return {
+        kind: "element",
+        tag: covering.tagName.toLowerCase(),
+        className: covering.getAttribute("class") ?? "",
+        // The grid's own Escape handler stands down on this same selector
+        // (`src/components/rdb/DataGrid/useRdbDataGridShortcuts.ts`).
+        dialogOpen: document.querySelector(dialogSelector) !== null,
+      };
+    },
+    SQL_EDITOR_SELECTOR,
+    DIALOG_SELECTOR,
+  );
 }
 
 /**
@@ -959,16 +970,16 @@ async function probeSqlEditorClickPoint(): Promise<ClickPointHit> {
  * rather than failing blind again.
  */
 async function clearSqlEditorClickPoint() {
-  const found = readClickPoint(await probeSqlEditorClickPoint());
-  if (found.blockedBy === null) return;
-  if (found.closeWithEscape) await browser.keys("Escape");
+  const blocker = await probeSqlEditorClickPoint();
+  if (blocker.kind === "clear") return;
+  if (readClickPoint(blocker).closeWithEscape) await browser.keys("Escape");
   await browser.waitUntil(
     async () =>
       readClickPoint(await probeSqlEditorClickPoint()).blockedBy === null,
     {
       timeout: 5000,
       interval: 100,
-      timeoutMsg: `SQL Query Editor click point was covered by ${found.blockedBy} and never cleared`,
+      timeoutMsg: describeStuckClickPoint(blocker),
     },
   );
 }
