@@ -126,8 +126,10 @@ Runtime Happy Path smoke wiring은 #907 전까지 넓히지 않습니다.
 **Fixture seeding CLI(`pnpm db:seed`)는 없습니다.** 남아 있는 `pnpm fixtures:start`
 / `fixtures:stop`은 컨테이너를 기동하고 정지할 뿐 seed를 넣지 않습니다. 게다가
 `fixtures:stop`은 `docker compose down -v`라서 볼륨까지 지웁니다. seed 데이터 자체는
-`e2e/fixtures/<dbms>/` 아래에 남아 있으므로, 컨테이너에 직접 넣거나
-`e2e/fixtures/seed-smoke.ts`로 smoke seeding을 실행할 수 있습니다.
+`e2e/fixtures/`에 그대로 있으므로, 컨테이너에 직접 넣거나
+`e2e/fixtures/seed-smoke.ts`로 smoke seeding을 실행할 수 있습니다. DBMS별 seed는
+`e2e/fixtures/<dbms>/` 디렉터리에 들어 있지만, MSSQL과 Oracle의 seed는 디렉터리가
+아니라 `e2e/fixtures/seed.mssql.sql`과 `e2e/fixtures/seed.oracle.sql` 파일입니다.
 
 ```bash
 pnpm db:up            # 컨테이너 기동 (docker compose up -d)
@@ -137,8 +139,8 @@ docker compose exec -T mariadb mysql -utestuser -ptestpass table_view_test \
 
 Oracle은 서비스명 기반 `XEPDB1` 경로가 기준입니다. #905 범위는 catalog metadata,
 SELECT/DML batch, cooperative cancel, tabular table-data query까지입니다.
-SID/TNS alias/wallet/TLS, editRows, structured DDL, raw admin, parser/completion,
-runtime smoke, full PL/SQL semantics는 후속입니다.
+SID/TNS alias/wallet/TLS, raw admin, parser/completion, runtime smoke,
+full PL/SQL semantics는 후속입니다.
 
 기본 접속 정보는 다음과 같습니다.
 
@@ -263,8 +265,12 @@ TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke \
 `WEBKIT_DISABLE_COMPOSITING_MODE=1`, `LIBGL_ALWAYS_SOFTWARE=1`을 직접 export해야
 합니다 (#1261/#1293).
 
-macOS와 Windows 로컬 환경에서는 tauri-driver의 Linux/GTK 의존성에 차이가
-있습니다.
+macOS와 Windows 로컬 환경에서는 이 절차를 host-native로 실행할 수 없습니다.
+`tauri-driver`가 Linux 전용이라서 두 플랫폼의 host-native 검증이 실현 불가라고
+[ADR 0020](./docs/decisions/0020-e2e-pre-push-host-docker/memory.md)이 판정했기
+때문입니다. ADR 0020은 `Superseded` 상태입니다. 다만 ADR 0020을 대체한
+[ADR 0044](./docs/decisions/0044-e2e-smoke-remote-required/memory.md)에는 이 platform
+판정을 다시 적은 문장이 없습니다.
 
 ---
 

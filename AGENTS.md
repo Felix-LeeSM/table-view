@@ -34,7 +34,7 @@ GitHub 산출물로 남긴 뒤 종료한다. 다음 노드는 그렇게 남은 �
 | commit / PR            | `memory/workflow/delivery/memory.md`                   |
 | PR review              | `memory/workflow/review/memory.md`                     |
 | 병렬 작업 / 이슈 발행  | `memory/workflow/orchestration/memory.md` (spawn·리뷰 큐·사이클 정지·이슈 수용기준) + `memory/workflow/interface/memory.md` §2 (누가 언제 여는가: scorecard non-blocking 스윕) |
-| subagent spawn / 역할 프롬프트 | `.agents/prompts/` 가 orchestrator·issue-implement·pr-review·pr-subreview·pr-finalize 의 고정부를 갖는다. **자동으로 도달하지 않는다**: spawn 할 때 파일을 그대로 첨부하거나 `.claude/agents/<role>.md` 정의가 첫 행동으로 읽는다 |
+| subagent spawn / 역할 프롬프트 | `.agents/prompts/` 가 orchestrator·issue-implement·pr-review·pr-subreview·pr-finalize 의 고정부를 갖는다. **자동으로 도달하지 않는다**: spawn 할 때 파일을 그대로 첨부하거나 `.claude/agents/` 의 역할 정의가 첫 행동으로 읽는다. 파일 경로가 정의 이름과 다른 자리가 있다: `subreviewer` 의 고정부는 `pr-subreview.md` 라는 이름으로 들어 있다 |
 | 사용자 대화 / 설계 결정 / raw→task 승격 | `memory/workflow/interface/memory.md` (top-level 세션 전용) |
 | 문서화 / PR body       | `memory/workflow/documentation/memory.md`              |
 | 한국어 산문 작성       | `.claude/output-styles/fluent-korean.md` 를 읽는다. 조사와 어미, 의미가 있는 문장 성분을 생략하지 않고 완성된 문장으로 끝맺게 하는 문체 기준이다. `.claude/settings.json` 이 이 파일을 기본 output style 로 지정해 두지만, output style 은 main conversation 에만 실리므로 **spawn 된 노드에는 전달되지 않는다.** 노드가 직접 열어야 지침이 도달한다. |
@@ -77,9 +77,11 @@ surface 디렉터리(`src/` 등)에 있는 `AGENTS.md` 는 해당 surface rule �
 절반만 CI 가 검사한다(`bash scripts/check-memory-doc-size.sh`, #2128). 나머지는
 어겨도 아무도 막지 않으므로 agent 가 스스로 지킨다.
 
-- `memory/` 트리에는 `memory.md` 만 두고, 그 트리의 `memory.md` 는 저마다 270줄과
-  14,000 chars 를 둘 다 cap 으로 지킨다. 크기 상한 두 가지는 CI 가 검사하고,
-  `memory.md` 만 두라는 쪽은 규율로만 지킨다.
+- `memory/` 트리에는 `memory.md` 만 두는데, `memory/index/by-task.md` 와
+  `memory/index/by-surface.md` 는 cross-link 예외다(`memory/memory.md`
+  「팔레스 규칙」). 그 트리의 `memory.md` 는 저마다 270줄과 14,000 chars 를 둘 다
+  cap 으로 지킨다. 크기 상한 두 가지는 CI 가 검사하고, `memory.md` 만 두라는 쪽은
+  규율로만 지킨다.
 - workflow 와 runbook memory 는 행동 계약만 둔다. 긴 절차는 `.agents/skills/` 로
   옮기고 memory 에는 계약과 그 경로만 남긴다. 무엇이 계약이고 무엇이 절차인지는
   `memory/runbook/memory.md` 「계약 / 절차 경계」가 판정한다. skill 은 어떤
