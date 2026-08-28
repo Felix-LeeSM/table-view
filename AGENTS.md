@@ -1,20 +1,20 @@
 # Agent Entry: universal
 
 Claude Code 와 Codex, Cursor 는 모두 이 파일을 한 번 읽는다. 본문은 lazy 하게 두고,
-작업할 때는 아래 매트릭스만 보고 필요한 메모리 문서 한두 개까지 더 읽는다.
+작업할 때는 아래 매트릭스만 보고 필요한 방까지 한두 단계만 더 내려간다.
 
 ## 작업 체계 선언: 이 repo 의 작업은 노드 워크플로를 따라 진행된다
 
 **모든 작업이 이 체계를 거친다.** 노드는 행동 하나만 끝내고 그 결과를 label 과
 GitHub 산출물로 남긴 뒤 종료한다. 다음 노드는 그렇게 남은 상태를 보고 시작한다.
 
-- **interface**: 사용자와 대화하는 top-level 세션이다. 설계를 결정하고 `raw` 를
+- **interface**: 사용자와 대화하는 top-level 세션이다. 설계 결정을 기록하고 `raw` 를
   `task` 로 승격한다. 계약은 `memory/workflow/interface/memory.md` 가 갖는다.
 - **orchestrator**: label 을 보고 다음 노드를 spawn 한다. 저장소에 커밋된 프롬프트
   `.agents/prompts/orchestrator.md` 로 기동한다.
 - **구현자 · 리뷰 coordinator · 종결자(pr-finalize)**: 고정부는
   `.agents/prompts/<role>.md` 이고, 계약은 `memory/workflow/` 아래의
-  implementation · delivery · review 문서가 갖는다.
+  implementation · delivery · review 방이 갖는다.
 
 **역할 preamble 을 받지 못했는데 사용자와 대화하고 있다면 너는 interface 다.**
 먼저 `memory/workflow/interface/memory.md` 를 읽어라.
@@ -48,9 +48,9 @@ rule 묶음을 읽는다.
 
 **이 인덱스는 직접 찾아가야 온다.** 편집한 파일의 surface rule 을 컨텍스트로 넣어
 주는 장치는 없으므로 스스로 열어야 한다. 막히면 **에러 문자열을 그대로 `rg`**
-해라. 각 `memory.md` 의 frontmatter 에 있는 `keywords:` 줄이 정확한 에러 문구와
-명령 이름, 한국어·영어 동의어를 인덱싱해 두었기 때문이다. `memory.md` 를
-추가하거나 수정하면 `keywords:` 줄도 같이 관리한다.
+해라. 각 방의 frontmatter 에 있는 `keywords:` 줄이 정확한 에러 문구와 명령 이름,
+한국어·영어 동의어를 인덱싱해 두었기 때문이다. 방을 추가하거나 수정하면
+`keywords:` 줄도 같이 관리한다.
 
 surface 디렉터리(`src/` 등)에 있는 `AGENTS.md` 는 해당 surface rule 로 가는 3~5줄
 포인터만 둔다. 규칙 본문은 `memory/` 에 둔다. 본문을 옮겨 적으면 SOT 가 둘로
@@ -77,9 +77,9 @@ surface 디렉터리(`src/` 등)에 있는 `AGENTS.md` 는 해당 surface rule �
 절반만 CI 가 검사한다(`bash scripts/check-memory-doc-size.sh`, #2128). 나머지는
 어겨도 아무도 막지 않으므로 agent 가 스스로 지킨다.
 
-- `memory/` 트리에는 `memory.md` 만 두고, 각 `memory.md` 가 270줄과 14,000 chars 를
-  둘 다 cap 으로 지킨다. 크기 상한 두 가지는 CI 가 검사하고, `memory.md` 만 두라는
-  쪽은 규율로만 지킨다.
+- `memory/` 트리에는 `memory.md` 만 두고, 그 트리의 `memory.md` 는 저마다 270줄과
+  14,000 chars 를 둘 다 cap 으로 지킨다. 크기 상한 두 가지는 CI 가 검사하고,
+  `memory.md` 만 두라는 쪽은 규율로만 지킨다.
 - workflow 와 runbook memory 는 행동 계약만 둔다. 긴 절차는 `.agents/skills/` 로
   옮기고 memory 에는 계약과 그 경로만 남긴다. 무엇이 계약이고 무엇이 절차인지는
   `memory/runbook/memory.md` 「계약 / 절차 경계」가 판정한다. skill 은 어떤
@@ -98,6 +98,6 @@ surface 디렉터리(`src/` 등)에 있는 `AGENTS.md` 는 해당 surface rule �
 
 ## 더 깊이
 
-- `memory/memory.md`: 메모리 문서 전체의 입구다.
+- `memory/memory.md`: 팔레스 입구다.
 - `docs/PLAN.md`: roadmap 과 product 의 인덱스다.
 - `docs/ROADMAP.md`: 미래 목표와 다음 후보를 담는다.
