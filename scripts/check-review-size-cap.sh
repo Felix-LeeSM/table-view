@@ -54,7 +54,7 @@
 #
 #   **cap 을 지키는 것이 계약을 지키는 것은 아니다** — cap 은 잘라내기로도
 #   만족되고 잘리는 것은 대개 결론이 아니라 근거다. 무엇만 남기는지는 위
-#   「결정만 적는다」와 .agents/prompts/pr-review.md 「반환 형식 — scorecard」 ·
+#   「결정만 적는다」와 .agents/prompts/pr-review.md 「반환 형식: scorecard」 ·
 #   .agents/prompts/issue-implement.md 「PR body 틀」의 닫힌 목록이 정하고, 이
 #   게이트는 그것이 지켜졌는지 못 본다.
 #
