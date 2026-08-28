@@ -507,6 +507,33 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # #2502 — a hung apt does not fail, it hangs, and the `for i in 1 2 3`
+      # retry wrapper inside those steps cannot break out of that: the loop
+      # never reaches attempt 2 (#2495 measured it on job 95785672544, cancelled
+      # after 3582s). `timeout-minutes` on the step is the only thing that ends
+      # it, and nothing checked that a step calling apt carries one — five sites
+      # accumulated that way, three closed by #2501 and two by this PR. Fixing
+      # the sites without this gate leaves the shape alive for the next step
+      # anyone adds. What counts as a violation is decided by
+      # `scripts/check-apt-timeout.mjs` alone; its header states the rule, why
+      # shell comments inside `run:` count and YAML comments do not, and why the
+      # parser is the `yaml` package rather than PyYAML.
+      #
+      # It rides `Frontend Checks` rather than a job of its own because a
+      # required context is registered in the `pr_to_main` ruleset — live GitHub
+      # state this PR cannot change — and a freshly registered context that has
+      # never reported pins every open PR at BLOCKED
+      # (memory/runbook/pr-merge-gates/memory.md). Riding a context that is
+      # already required makes the gate blocking the day this merges. Of the
+      # required contexts this is the one that already has `node_modules`: the
+      # step above installs it, and the gate's only import is `yaml`, a
+      # devDependency two suites in `scripts/__tests__/` already read `ci.yml`
+      # with. The other checks of this shape ride `PR Body Contract` because
+      # they need no toolchain; this one does, and adding a pnpm install to the
+      # cheapest required job costs every PR more than placing it here.
+      - name: apt steps carry a step timeout
+        run: node scripts/check-apt-timeout.mjs
+
       - name: Lint
         run: pnpm lint
 
@@ -1159,10 +1186,26 @@ jobs:
         uses: actions/checkout@v6
 
       # Just the one library the job comment traces, not the Tauri set.
+      #
+      # #2502 — the step timeout is here for the reason the `Rust Static
+      # Analysis` step above spells out: the retry wrapper below runs *inside*
+      # the step and only ever sees apt fail, so a hung apt never returns and
+      # the loop never reaches attempt 2. Without this cap the job burns its
+      # whole 25m budget and reports `cancelled`.
+      #
+      # The value is bounded on both sides. Above: the slowest *successful* run
+      # of this step across the 95 successful samples in the last 100 `ci.yml`
+      # runs is 170s (2m50s, job 95931979843), median 10s — 10m clears that
+      # maximum by more than 3x, so it cannot turn a passing run red. Below: the
+      # job's own 25m budget, which leaves 15m of it reclaimable when apt hangs.
+      # Re-measure with the collector in this PR's body rather than trusting
+      # this figure after the runner image changes.
+      #
       # Retry wrapper (#1293): transient apt mirror failures fail the whole
       # setup. `Rust Static Analysis` and `Integration Tests (Docker)` run the
       # same loop over their own package list.
       - name: Install libdbus for keyring's Linux backend
+        timeout-minutes: 10
         run: |
           install_deps() {
             sudo apt-get update && sudo apt-get install -y libdbus-1-dev
