@@ -95,18 +95,45 @@ jobs:
       # Linux Tauri bundles depend on webkit2gtk + librsvg + patchelf. macOS &
       # Windows runners come with everything Tauri needs preinstalled (libwebview2
       # on Windows, WKWebView on macOS).
+      #
+      # #2502 — this was the only apt step in the repo with neither a retry
+      # wrapper nor a step timeout, and a release re-run costs more than a PR
+      # check's. Both are added here.
+      #
+      # The timeout is bounded on both sides. Above: across all 15 `release.yml`
+      # runs GitHub still retains, the 14 successful samples of this step run
+      # 23s..53s (max 53s, job 87878240590; median 31.5s), and three full
+      # attempts of the wrapper below plus its 10s+20s backoff bound a retrying
+      # but still-succeeding run at roughly 3m40s — 15m clears that by 4x.
+      # Below: the job's own 60m budget, so 45m of it comes back when apt hangs.
+      # That 14-sample figure is measured WITHOUT the wrapper, and release runs
+      # are rare, so it is a much thinner sample than the ci.yml sites; treat it
+      # as a floor and re-measure rather than tightening it from this comment.
       - name: Install Linux build deps
         if: matrix.platform == 'ubuntu-22.04'
+        timeout-minutes: 15
+        # Retry wrapper (#1293): transient apt mirror failures (e.g.
+        # packages.microsoft.com 403) fail the whole setup. Up to 3 attempts
+        # with linear backoff. The Linux jobs in `.github/workflows/ci.yml` run
+        # the same loop over their own package list.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libssl-dev \
-            build-essential \
-            file
+          install_deps() {
+            sudo apt-get update && sudo apt-get install -y \
+              libwebkit2gtk-4.1-dev \
+              libappindicator3-dev \
+              librsvg2-dev \
+              patchelf \
+              libssl-dev \
+              build-essential \
+              file
+          }
+          for i in 1 2 3; do
+            install_deps && exit 0
+            echo "apt install attempt $i failed; retrying in $((i * 10))s" >&2
+            sleep "$((i * 10))"
+          done
+          echo "apt install failed after 3 attempts" >&2
+          exit 1
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6

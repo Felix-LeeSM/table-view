@@ -3,7 +3,7 @@ title: PR merge 게이트 — required context 계약
 type: runbook
 updated: 2026-08-27
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
-keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, merge ref, rerun, cancelled, cancel-in-progress, expected, Dismiss stale approval, Release reflect:done on a new round, Count review rounds by head OID, head-oid, head OID, rounds=, round-def, statusCheckRollup, auto-merge, 체크 0개, PR Body Contract, CLAUDE.md import intact, memory/ doc size cap, check-memory-doc-size, lines >, chars >, test binaries called or allowlisted, check-ci-test-calls, ci-uncalled-tests.txt, 안 부르는데, 검사 불성립, 집계:, 다 훑지 못했다, agent contract command blocks do not swallow failures, 계약 문서의 명령 블록이 실패를 흘린다, 파이프가 의 rc 를 가린다, ABORT 를 적고 0 아닌 rc 로 안 끝난다, check-prompt-fail-silently
+keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, merge ref, rerun, cancelled, cancel-in-progress, expected, Dismiss stale approval, Release reflect:done on a new round, Count review rounds by head OID, head-oid, head OID, rounds=, round-def, statusCheckRollup, auto-merge, 체크 0개, PR Body Contract, CLAUDE.md import intact, memory/ doc size cap, check-memory-doc-size, lines >, chars >, test binaries called or allowlisted, check-ci-test-calls, ci-uncalled-tests.txt, 안 부르는데, 검사 불성립, 집계:, 다 훑지 못했다, agent contract command blocks do not swallow failures, 계약 문서의 명령 블록이 실패를 흘린다, 파이프가 의 rc 를 가린다, ABORT 를 적고 0 아닌 rc 로 안 끝난다, check-prompt-fail-silently, Frontend Checks, apt steps carry a step timeout, check-apt-timeout, apt 를 부르는데 timeout-minutes 가 없다, timeout 없는 apt 스텝, apt hang, 매달린 apt
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -100,6 +100,16 @@ rc 로 안 끝나는 줄을 본다 — red 면 자리마다 `파이프가 ... �
 `scripts/check-prompt-fail-silently.sh` 헤더가 갖는다.
 이 스텝들은 body 경로 검사 뒤라 그것이 red 면 뒤가 skip 된다 —
 지금 도는 스텝 목록은 `.github/workflows/ci.yml` 의 `pr-body` job 이 SOT 다.
+
+**`Frontend Checks` 도 프론트엔드 밖의 계약 하나를 검사한다.**
+`apt steps carry a step timeout` (#2502) 이 `.github/workflows/` 의 모든 스텝을
+훑어 `run` 이 apt 를 부르는데 `timeout-minutes` 가 없는 자리를 찍는다 — 매달린
+apt 는 스텝 안의 재시도 래퍼가 못 풀고 job budget 을 통째로 태운다. red 면 자리마다
+`… 이 apt 를 부르는데 timeout-minutes 가 없다` 를 찍고 `timeout 없는 apt 스텝 N 개`
+로 닫으며, rc 2(검사 불성립)는 `FAIL 검사 불성립:` 으로 시작한다. 판정 정의와 파서
+선택 사유는 `scripts/check-apt-timeout.mjs` 헤더가 갖는다. `pr-body` 가 아니라 여기
+있는 이유는 그 잡이 `node_modules` 를 안 깔아서다. 이 스텝은 같은 잡의
+`Require test matrix success` 뒤라 shard 가 red 면 skip 된다.
 
 ## 계약 — 어기면 열린 PR 전부가 막힌다
 
