@@ -19,6 +19,26 @@ export const alwaysMatchingCompletion: Extension = autocompletion({
 
 const POPUP_SELECTOR = ".cm-tooltip-autocomplete";
 
+/** 커서를 문서 끝으로 옮기고 자동완성 팝업이 뜬 것까지 확인한다. */
+export async function openCompletionPopup(view: EditorView): Promise<void> {
+  act(() => {
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+    startCompletion(view);
+  });
+  await waitFor(() => {
+    expect(view.dom.querySelectorAll(POPUP_SELECTOR)).toHaveLength(1);
+  });
+}
+
+/** 팝업 element 가 사라진 것을 확인한다. */
+export async function expectCompletionPopupClosed(
+  view: EditorView,
+): Promise<void> {
+  await waitFor(() => {
+    expect(view.dom.querySelectorAll(POPUP_SELECTOR)).toHaveLength(0);
+  });
+}
+
 /**
  * Reason: #2509 — 쿼리를 실행해도 자동완성 팝업이 닫히지 않아서, 사용자가 결과를
  * 보려는 순간 팝업이 결과 그리드를 덮었고 E2E 에서는 `.cm-content` 의 클릭 지점을
@@ -36,13 +56,7 @@ export async function expectExecuteClosesCompletionPopup(
   view: EditorView,
   onExecute: Mock,
 ): Promise<void> {
-  act(() => {
-    view.dispatch({ selection: { anchor: view.state.doc.length } });
-    startCompletion(view);
-  });
-  await waitFor(() => {
-    expect(view.dom.querySelectorAll(POPUP_SELECTOR)).toHaveLength(1);
-  });
+  await openCompletionPopup(view);
 
   // CodeMirror 는 우선순위 순서로 binding 을 돌리다가 true 를 낸 첫 binding 에서
   // 멈춘다. 에디터 넷이 자기 Mod-Enter 를 defaultKeymap 앞에 두는 이유가 그것이고,
@@ -57,7 +71,5 @@ export async function expectExecuteClosesCompletionPopup(
   });
   expect(onExecute).toHaveBeenCalledTimes(1);
 
-  await waitFor(() => {
-    expect(view.dom.querySelectorAll(POPUP_SELECTOR)).toHaveLength(0);
-  });
+  await expectCompletionPopupClosed(view);
 }
