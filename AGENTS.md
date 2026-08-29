@@ -56,14 +56,13 @@ surface 디렉터리(`src/` 등)에 있는 `AGENTS.md` 는 해당 surface rule �
 포인터만 둔다. 규칙 본문은 `memory/` 에 둔다. 본문을 옮겨 적으면 SOT 가 둘로
 갈라지기 때문이다.
 
-**spawn 된 subagent 에 자동으로 도달하는 채널은 `CLAUDE.md` 와
-`.claude/agents/<role>.md` 둘이다.** `CLAUDE.md` 와 그 파일의 `@` import 는
-범용이라서 harness 도 spawn 방식도 가리지 않는다 (이 파일도 그 경로로 전달된다).
-`.claude/agents/<role>.md` 정의 body 는 Claude Code 가 `subagent_type` 을 지정해
-실행한 subagent 의 system prompt 로 실린다. **역할 정의가 `CLAUDE.md` 를 대체하지
-않는다**: 역할을 지정하지 않은 spawn 과 다른 harness 에는 여전히 `CLAUDE.md` 뿐이다.
-**마크다운 링크는 자동으로 따라가지 않으므로** 매트릭스에 적힌 경로는 agent 가
-스스로 읽어야 한다.
+**spawn 된 subagent 에 자동으로 도달하는 채널은 `CLAUDE.md` 와 `.claude/agents/` 의
+역할 정의 둘이다.** `CLAUDE.md` 와 그 파일의 `@` import 는 범용이라서 harness 도
+spawn 방식도 가리지 않는다 (이 파일도 그 경로로 전달된다). 역할 정의의 body 는
+Claude Code 가 `subagent_type` 을 지정해 실행한 subagent 의 system prompt 로 실린다.
+**역할 정의가 `CLAUDE.md` 를 대체하지 않는다**: 역할을 지정하지 않은 spawn 과 다른
+harness 에는 여전히 `CLAUDE.md` 뿐이다. **마크다운 링크는 자동으로 따라가지
+않으므로** 매트릭스에 적힌 경로는 agent 가 스스로 읽어야 한다.
 
 `.agents/skills/` 에는 긴 절차를 담은 skill 이 있고, 매트릭스가 가리키는 것이
 전부다. **어떤 harness 도 이 skill 을 자동으로 읽지 않는다.** Claude Code 가
