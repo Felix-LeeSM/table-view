@@ -224,10 +224,24 @@ export function runSearchRuntimeSmoke(options: SearchRuntimeSmokeOptions) {
           ),
         );
         await runQuery();
+        // Issue #2545: this used to assert the rendered hit count as a literal
+        // and to name the message of `doc-2` — the seeded document whose
+        // `status` is `error`, which the delete-by-query step at the end of
+        // this spec removes.
+        // .github/workflows/e2e-smoke.yml runs the seeder once per spec before
+        // `wdio run`, while the `specFileRetries` retry configured in
+        // wdio.smoke.conf.ts happens inside that same run, so an attempt that
+        // died in or after the delete left the index one document short and the
+        // retry failed here instead of where it actually broke. `fixture log`
+        // is `doc-1`, which no step in this spec deletes, and the absent needle
+        // rules out the empty-hit state (`noHits` in
+        // src/lib/i18n/locales/search.ts:17) so the assertion cannot pass on a
+        // result view that rendered no hits at all.
         await waitForWorkspaceTextAll(
-          ["2 hits", "fixture log", "fixture error", "by_status"],
+          ["fixture log", "by_status"],
           30000,
           `${productLabel} SearchResultView did not render hits and aggregations`,
+          ["No Search hits"],
         );
       });
 

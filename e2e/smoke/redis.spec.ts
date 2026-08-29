@@ -18,6 +18,11 @@ const INITIAL_VALUE = "hello";
 // left KvSidebar into a right-hand KvKeyDetailPanel tab. aria-label comes from
 // `kvKeyDetail.sectionAria` = "{{key}} key detail".
 const DETAIL_PANEL_SELECTOR = '[aria-label="tv:string key detail"]';
+// Issue #2545: e2e/fixtures/redis/kv/seed.json seeds tv: keys plus keys outside
+// that namespace. This one is the witness for the filtered scan below — it
+// renders on the unfiltered scan and has to be gone once the `tv:string`
+// pattern is applied.
+const NON_TV_SEED_KEY = "customer:customer-1";
 
 describe("Redis smoke", () => {
   it("connects, scans keys, opens the detail tab, runs commands, and gates TTL/delete mutations", async () => {
@@ -40,6 +45,15 @@ describe("Redis smoke", () => {
         30000,
         "Redis key browser did not render seeded keys after manual scan",
       );
+      // The filtered scan below proves the pattern narrowed the list by
+      // asserting this key disappeared. Pin its presence here as well, so a
+      // seed that stops creating it turns this step red instead of leaving
+      // that assertion true for the wrong reason.
+      await waitForKvKeyVisible(
+        NON_TV_SEED_KEY,
+        30000,
+        `Redis key browser did not render ${NON_TV_SEED_KEY} on the unfiltered scan`,
+      );
     });
 
     await step(
@@ -47,10 +61,23 @@ describe("Redis smoke", () => {
       async () => {
         await setField("Redis key pattern", "tv:string");
         await browser.keys("Enter");
+        // Issue #2545: this used to spell the rendered key count out as a
+        // literal, and that count is exactly what this spec's own
+        // `Confirm Delete` step removes. .github/workflows/e2e-smoke.yml runs
+        // the seeder once per spec before `wdio run`, while the
+        // `specFileRetries` retry configured in wdio.smoke.conf.ts happens
+        // inside that same run, so a retry inherits the deleted key rather
+        // than a re-seeded database. Asserting that a seeded key outside the
+        // `tv:string` pattern disappeared proves the same narrowing without
+        // counting what is left. The empty-state string is in the absent list
+        // because it embeds the pattern — `No keys match pattern tv:string.`
+        // would otherwise satisfy the `tv:string` needle on an empty list
+        // (src/lib/i18n/locales/workspace.ts:242).
         await waitForWorkspaceTextAll(
-          ["1 key", "tv:string"],
+          ["tv:string"],
           15000,
-          "Redis filtered key scan did not render tv:string",
+          "Redis filtered key scan did not narrow the key list to tv:string",
+          [NON_TV_SEED_KEY, "No keys match pattern"],
         );
         // Selecting a key now opens the right-hand KvKeyDetailPanel tab (the
         // sidebar no longer renders an inline value/mutation surface).
