@@ -90,8 +90,8 @@ ABORT 자리는 각각 다른 실패를 잡는데, 다른 브랜치와 `fetch` �
   - 리뷰 coordinator 는 `.agents/prompts/pr-review.md` 를 받는다.
   - 종결자는 `.agents/prompts/pr-finalize.md` 를 받는다.
 
-  Claude Code 네이티브 spawn(`subagent_type`)으로 띄우면 `.claude/agents/<role>.md`
-  정의가 같은 파일을 첫 행동으로 읽게 하므로 첨부를 생략한다. 그 정의는 경로를
+  Claude Code 네이티브 spawn(`subagent_type`)으로 띄우면 `.claude/agents/` 에 있는
+  역할 정의가 같은 파일을 첫 행동으로 읽게 하므로 첨부를 생략한다. 그 정의는 경로를
   `git show origin/main:` 으로 고정해 읽어서 갱신이 안 된 트리를 스스로 피하지만,
   **손으로 첨부할 때는 그렇지 않다.** 위 「첫 명령」의 갱신이 덮는 자리가 바로
   손 첨부와 옛 세션이다.

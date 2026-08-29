@@ -61,7 +61,7 @@ top-level 세션(사용자와 직접 대화하는 그 세션)이 맡는 역할. 
 - **겸무하는 턴에는 [orchestration](../orchestration/memory.md) 전문을 연다 —
   MANDATORY.** spawn 된 orchestrator 는 그 계약을
   `.agents/prompts/orchestrator.md` 첨부로 받지만 겸무 세션은 그 첨부도
-  `.claude/agents/<role>.md` 정의도 안 받는다. 그 방을 안 열면 §2 동시 slot 상한과
+  `.claude/agents/orchestrator.md` 정의도 안 받는다. 그 방을 안 열면 §2 동시 slot 상한과
   리뷰 큐 직렬화 · §3 사이클 정지 · §7 고정부 첨부 rev · §8 정지 조건을 모르는
   채로 스케줄링한다 — 2026-08-10~11 겸무 세션이 그 방을 규율이 아니라 우연으로
   열었다. **열거 항목에는 § 를 붙여 대조 가능하게 둔다** — 주소 없이 이름만 적힌
