@@ -72,6 +72,19 @@ candidates.
 can make backend RDBMS IPC emit native `tabular` envelopes instead of
 normalizing legacy `QueryResult` at the Tauri wrapper.
 
+2026-08-29 (#2583) 등록: #2583 이 `src-tauri/sql-parser-core/src/lexer.rs` 에서
+문자열과 대괄호 식별자의 비-ASCII 보존을 고치면서, 체크인된 산출물인
+`src/lib/sql/wasm/sql_parser_core_bg.wasm` 은 다시 빌드하지 않았다. 프런트엔드가
+그 산출물을 읽는 자리는 `src/lib/sql/sqlAstParser.ts:112` 의 `parseSqlPreloaded`
+이고, `src/lib/sql/queryAnalyzer.ts:260` 의 `analyzeResultEditability` 는 `:239`
+의 `parseSingleTableAst` 를 거쳐 그 함수에 닿으며, `:306` 의
+`parseSelectInstances` 와 `:333` 의 `analyzeMultiTableEditability` 는 그 함수를
+직접 부른다. 그래서 산출물이 다시 빌드되기 전까지 #2558 이 서술한 해악이 그대로
+남는다. 곧 비-ASCII 테이블·컬럼 이름을 쓰는 스키마에서 편집 가능성 판정과 다중
+테이블 해석이 어긋날 수 있다는 것이다. 그 산출물을 다시 만드는 스크립트는
+`package.json:18` 의 `build:sql-wasm` 이다. 승격 시점은 그 재생성을 실제로 돌릴
+때이고, 그때 비-ASCII 스키마에서 위 세 함수를 다시 잰다.
+
 ### ERD/schema graph
 
 **Follow-up**: 현재 schemaStore cache owner 의 범위는
