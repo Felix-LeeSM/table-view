@@ -1,10 +1,10 @@
 ---
 title: Query Language Architecture
 type: memory
-updated: 2026-06-12
+updated: 2026-08-29
 surface: src/types/queryLanguage.ts, src/lib/sql/**, src/lib/mongo/**, src-tauri/*-parser-core/**
 task: query-language, parser, completion, safe-mode
-keywords: QUERY_LANGUAGE_REGISTRY, queryLanguage.ts, mongosh, redis-command, search-dsl, Rust/WASM language core, Safe Mode, splitSqlStatements, analyzeStatement, completion, CodeMirror, future owner placeholder
+keywords: QUERY_LANGUAGE_REGISTRY, queryLanguage.ts, mongosh, redis-command, search-dsl, Rust/WASM language core, Safe Mode, splitSqlStatements, split_statements, SqlDialect, backslashEscapes, hashComments, 방언, 백슬래시 이스케이프, # 줄 주석, analyzeStatement, completion, CodeMirror, future owner placeholder
 trigger:
   signal: queryLanguage 추가 / parser owner 변경 / completion 변경 / Safe Mode 변경
   layer: index
@@ -55,6 +55,14 @@ claim 하지 않는다.
   뒤 statement 별 `analyzeStatement` 를 돌린다. naive `.split(";")` 금지 —
   literal/comment 내 세미콜론 오분할 (issue #1118). `analyzeStatement` 자체도
   다중 구문 입력을 방어적으로 분할해 worst-severity 를 반환한다.
+- 문장 분리기에는 연결이 쓰는 방언을 반드시 함께 넘겨야 합니다 (issue #2554).
+  MySQL 과 MariaDB 는 문자열 리터럴 안의 백슬래시를 이스케이프로 읽고 `#` 를 줄
+  주석으로 읽기 때문에, 방언을 넘기지 않으면 서버가 데이터로 처리할 내용이
+  클라이언트에서 독립된 문장으로 잘려서 그대로 실행됩니다. TypeScript 쪽
+  `splitSqlStatements` 의 두 번째 인자와 Rust 쪽 `split_statements` 의
+  `SqlDialect` 인자가 같은 규칙을 받으며, 두 구현은 `backslashEscapes` ·
+  `hashComments` · `oracleQuotes` 세 규칙을 `sqlSafetyNormalize.ts` 의
+  `stripComments` 와 똑같은 방식으로 도출합니다.
 
 ## Completion Architecture
 

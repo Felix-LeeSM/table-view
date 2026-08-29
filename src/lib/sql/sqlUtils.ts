@@ -1,21 +1,34 @@
-import { scanDollarQuoteEnd, scanOracleQQuoteEnd } from "./sqlTokenize";
+import type { Dialect } from "./sqlSafetyTypes";
+import { scanDollarQuoteEnd, skipQuotedLiteral } from "./sqlTokenize";
 
 /**
  * Splits a SQL string into individual statements by semicolons,
  * correctly handling semicolons inside string literals, quoted identifiers,
- * line comments (--), block comments (/* *\/), and PostgreSQL dollar-quoted
+ * line comments (-- / #), block comments (/* *\/), and PostgreSQL dollar-quoted
  * strings ($$…$$ / $tag$…$tag$).
  *
- * #1455 P3-4 / B2 — `oracleQuotes` (Oracle dialect only) additionally treats
- * `q'X…X'` / `nq'X…X'` alternate-quote literals as opaque, so a `;` inside one
- * no longer splits the statement (which merged writes and downgraded a trailing
- * WHERE-less UPDATE out of Danger). Off by default; execution callers that
- * cannot resolve the dialect keep the prior behavior.
+ * Issue #2554 — `dialect` gates the three scanning rules that differ per
+ * server, derived exactly as `stripComments` (sqlSafetyNormalize.ts) derives
+ * them so the splitter and the classifier agree on literal/comment boundaries:
+ *
+ *   - `backslashEscapes` (MySQL/MariaDB): `\<any>` inside a `'` / `"` literal
+ *     is an escape sequence, so `'O\'Brien; DROP TABLE users; --'` stays ONE
+ *     literal. Backtick identifiers escape by doubling only.
+ *   - `hashComments` (MySQL/MariaDB): `#` opens a line comment. Elsewhere it is
+ *     an operator (PostgreSQL XOR) or a temp-table prefix (MSSQL `#t`).
+ *   - `oracleQuotes` (Oracle, #1455 P3-4 / B2): `q'X…X'` / `nq'X…X'`
+ *     alternate-quote literals are opaque, so a `;` inside one does not split.
+ *
+ * This splitter feeds the **execution** path (`rdbQueryExecution` /
+ * `useDdlPreviewExecution`), so a fragment invented here is a statement the
+ * driver actually runs: scanning MySQL text under standard-SQL rules cut
+ * literal and comment bodies into standalone `DROP TABLE` statements. An
+ * unresolved dialect keeps the standard-SQL reading.
  */
-export function splitSqlStatements(
-  sql: string,
-  oracleQuotes = false,
-): string[] {
+export function splitSqlStatements(sql: string, dialect?: Dialect): string[] {
+  const backslashEscapes = dialect === "mysql";
+  const hashComments = dialect === "mysql";
+  const oracleQuotes = dialect === "oracle";
   const statements: string[] = [];
   let current = "";
   let i = 0;
@@ -24,76 +37,14 @@ export function splitSqlStatements(
   while (i < len) {
     const ch = sql[i];
 
-    // Oracle alternate quoting — opaque (see doc above).
-    if (oracleQuotes && ch === "'") {
-      const end = scanOracleQQuoteEnd(sql, i);
-      if (end !== null) {
-        current += sql.slice(i, end);
-        i = end;
-        continue;
-      }
-    }
-
-    // Single-quoted string literal
-    if (ch === "'") {
-      current += ch;
-      i++;
-      while (i < len) {
-        const inner = sql[i];
-        current += inner;
-        if (inner === "'") {
-          // Escaped single quote ('') — consume both and continue
-          if (i + 1 < len && sql[i + 1] === "'") {
-            i++;
-            current += sql[i];
-            i++;
-          } else {
-            i++;
-            break;
-          }
-        } else {
-          i++;
-        }
-      }
-      continue;
-    }
-
-    // Double-quoted identifier
-    if (ch === '"') {
-      current += ch;
-      i++;
-      while (i < len) {
-        const inner = sql[i];
-        current += inner;
-        if (inner === '"') {
-          i++;
-          break;
-        }
-        i++;
-      }
-      continue;
-    }
-
-    // MySQL backtick identifier — `` is an escaped backtick (mirrors '' rule).
-    if (ch === "`") {
-      current += ch;
-      i++;
-      while (i < len) {
-        const inner = sql[i];
-        current += inner;
-        if (inner === "`") {
-          if (i + 1 < len && sql[i + 1] === "`") {
-            i++;
-            current += sql[i];
-            i++;
-          } else {
-            i++;
-            break;
-          }
-        } else {
-          i++;
-        }
-      }
+    // Quoted literal / identifier — `'`, `"`, MySQL backticks. Opaque, so an
+    // inner `;` never splits. `skipQuotedLiteral` (sqlTokenize.ts) owns the
+    // doubling, backslash-escape, and Oracle q-quote rules for all three, which
+    // is what keeps this splitter from drifting away from the classifier.
+    if (ch === "'" || ch === '"' || ch === "`") {
+      const end = skipQuotedLiteral(sql, i, ch, backslashEscapes, oracleQuotes);
+      current += sql.slice(i, end);
+      i = end;
       continue;
     }
 
@@ -135,16 +86,14 @@ export function splitSqlStatements(
       }
     }
 
-    // Line comment (--)
-    if (ch === "-" && i + 1 < len && sql[i + 1] === "-") {
-      current += ch;
-      i++;
-      current += sql[i];
-      i++;
-      while (i < len && sql[i] !== "\n") {
-        current += sql[i];
-        i++;
-      }
+    // Line comment — `--` (every dialect) or `#` (MySQL/MariaDB only). The
+    // body runs to the newline, which stays outside the comment so the next
+    // line splits normally.
+    if ((ch === "-" && sql[i + 1] === "-") || (hashComments && ch === "#")) {
+      const start = i;
+      i += ch === "#" ? 1 : 2;
+      while (i < len && sql[i] !== "\n") i++;
+      current += sql.slice(start, i);
       continue;
     }
 

@@ -2,8 +2,10 @@ import i18n from "@lib/i18n";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
 import { syncMismatchedActiveDb } from "@lib/runtime/recovery/syncMismatchedActiveDb";
 import { toast } from "@lib/runtime/toast";
+import { dialectFromDbType } from "@lib/sql/sqlLiteral";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { getDbMismatchInfo, getTauriErrorMessage } from "@lib/tauri/error";
+import { useConnectionStore } from "@stores/connectionStore";
 import { useCallback, useRef, useState } from "react";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
@@ -117,6 +119,14 @@ export function useDdlPreviewExecution({
   const pendingExecuteRef = useRef<(() => Promise<void>) | null>(null);
 
   const safeModeGate = useSafeModeGate(connectionId);
+  // Issue #2554 — the split below feeds the commit dispatch, so it must read
+  // the connection's dialect (MySQL backslash escapes / `#` line comments).
+  // Resolved from the store rather than a new hook option: every caller
+  // already passes `connectionId`, and `useSafeModeGate` above resolves the
+  // same connection the same way.
+  const dialect = useConnectionStore((s) =>
+    dialectFromDbType(s.connections.find((c) => c.id === connectionId)?.dbType),
+  );
 
   // Sprint 271c (2026-05-13) — DbMismatch recovery. DDL dispatches are
   // user-initiated (dialog Apply / editor Execute), so on a mismatch the
@@ -210,7 +220,7 @@ export function useDdlPreviewExecution({
     // loop. A batch with any DROP COLUMN / DROP CONSTRAINT / DROP INDEX trips
     // the gate even when sibling statements are safe ADDs. `splitSqlStatements`
     // already trims and drops empty statements.
-    const statements = splitSqlStatements(previewSql);
+    const statements = splitSqlStatements(previewSql, dialect);
     for (const stmt of statements) {
       const analysis = analyzeStatement(stmt);
       const decision = safeModeGate.decide(analysis);
@@ -224,7 +234,7 @@ export function useDdlPreviewExecution({
       }
     }
     await runCommit();
-  }, [previewSql, runCommit, safeModeGate]);
+  }, [dialect, previewSql, runCommit, safeModeGate]);
 
   const confirmDangerous = useCallback(async () => {
     setPendingConfirm(null);

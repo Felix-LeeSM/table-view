@@ -192,7 +192,10 @@ export function scanDollarQuoteEnd(sql: string, start: number): number | null {
 /**
  * Skip a quoted literal opened at `start` (`q` ∈ `'` `"` `` ` ``), returning the
  * index just past the closing quote. `'` and `` ` `` treat a doubled quote as
- * an escape; `"` does not (mirrors `splitSqlStatements`). Unterminated → EOF.
+ * an escape; `"` does not. Unterminated → EOF. This is the single owner of the
+ * per-dialect quote rules: `splitSqlStatements` (sqlUtils.ts), `stripComments`
+ * / `hasOuterWhere` (sqlSafetyNormalize.ts), and `extractBalanced`
+ * (sqlSafetyClassifier.ts) all scan literals through it (issue #2554).
  *
  * Review #1473 N1 — `backslashEscapes` (MySQL/MariaDB): `\<any>` inside a
  * `'` / `"` literal is an escape sequence, so `'a\' WHERE …'` stays ONE
@@ -270,10 +273,9 @@ function skipOracleQQuote(s: string, start: number): number | null {
  * #1455 P3-4 / B1 — is the `'` at `quoteIdx` an Oracle alternate-quote opener:
  * `q'`/`Q'`, optionally with the national prefix `nq'`/`Nq'`/`nQ'`/`NQ'`? The
  * opener (national prefix included) must sit at a word boundary so a plain
- * identifier ending in `q` (e.g. `seq'x'`) is not misread. Exported so both the
- * literal skip and the statement splitter (`splitSqlStatements`) share it.
+ * identifier ending in `q` (e.g. `seq'x'`) is not misread.
  */
-export function isOracleQQuoteOpener(s: string, quoteIdx: number): boolean {
+function isOracleQQuoteOpener(s: string, quoteIdx: number): boolean {
   if (quoteIdx < 1) return false;
   const prev = s[quoteIdx - 1];
   if (prev !== "q" && prev !== "Q") return false;
@@ -281,18 +283,6 @@ export function isOracleQQuoteOpener(s: string, quoteIdx: number): boolean {
   const hasNational = two === "n" || two === "N";
   const prefixStart = hasNational ? quoteIdx - 2 : quoteIdx - 1;
   return prefixStart === 0 || !/[A-Za-z0-9_]/.test(s[prefixStart - 1] ?? "");
-}
-
-/**
- * #1455 P3-4 / B2 — index just past an Oracle `q'X…X'` / `nq'X…X'` literal that
- * opens at `start` (the `'`), or `null` when `start` is not such an opener.
- * Combines [`isOracleQQuoteOpener`] + [`skipOracleQQuote`] so the statement
- * splitter can treat the literal as opaque. Only meaningful for the Oracle
- * dialect; callers gate on it.
- */
-export function scanOracleQQuoteEnd(s: string, start: number): number | null {
-  if (!isOracleQQuoteOpener(s, start)) return null;
-  return skipOracleQQuote(s, start);
 }
 
 /**
