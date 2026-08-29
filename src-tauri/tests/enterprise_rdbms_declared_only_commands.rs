@@ -41,7 +41,10 @@ async fn test_connection_dispatches_oracle_validation_instead_of_declared_only_r
 
     match result {
         Err(AppError::Validation(msg)) => {
-            assert!(msg.contains("Oracle SID/TNS/advanced auth fields"));
+            // #1065 made SID and wallet mTLS supported, so the rejection no
+            // longer names SID/TNS — only the Mongo-only advanced auth fields
+            // stay rejected (table-view-core/src/db/oracle.rs).
+            assert!(msg.contains("Oracle advanced auth fields are unsupported"));
             assert!(msg.contains("service-name"));
         }
         other => panic!("Expected Oracle validation rejection, got: {other:?}"),

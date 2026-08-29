@@ -214,8 +214,14 @@ async fn dbms_specific_unsupported_delta_paths_return_explicit_app_errors() {
     );
 }
 
+/// #1076 retired the "preview only" milestone policy: `_delete_by_query` runs
+/// live behind the Safe Mode confirm gate, so the plan always requests
+/// confirmation and warns the delete is irreversible. The plan must also carry
+/// the caller's `preview_only` verbatim — a live run mislabelled as a preview
+/// would strip the confirm dialog in the UI. Wildcard fan-out stays rejected
+/// (`validate_search_destructive_request`, models/search.rs).
 #[tokio::test]
-async fn destructive_search_plan_stays_preview_only() {
+async fn destructive_search_plan_requires_confirmation_and_rejects_wildcards() {
     let search = SearchEngineAdapter::fixture_opensearch();
     let preview = search
         .plan_delete_by_query(&preview_delete_by_query_request())
@@ -225,20 +231,22 @@ async fn destructive_search_plan_stays_preview_only() {
     assert_eq!(preview.operation, "deleteByQuery");
     assert_eq!(preview.target, "logs-opensearch-2026.05.24");
     assert!(preview.preview_only);
-    assert!(!preview.requires_confirmation);
+    assert!(preview.requires_confirmation);
     assert!(preview
         .warnings
         .iter()
-        .any(|warning| warning.contains("execution is unsupported")));
+        .any(|warning| warning.contains("cannot be undone")));
 
     let mut execution = preview_delete_by_query_request();
     execution.preview_only = false;
     execution.safety.acknowledged_risk = true;
     execution.safety.expected_target = Some("logs-opensearch-2026.05.24".into());
-    assert_unsupported(
-        search.plan_delete_by_query(&execution).await,
-        &["only preview plans are available"],
-    );
+    let live = search
+        .plan_delete_by_query(&execution)
+        .await
+        .expect("execution is planned live since #1076");
+    assert!(!live.preview_only);
+    assert!(live.requires_confirmation);
 
     let mut wildcard = preview_delete_by_query_request();
     wildcard.index_pattern = "logs-*".into();
