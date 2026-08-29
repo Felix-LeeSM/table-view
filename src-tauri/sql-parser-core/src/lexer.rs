@@ -716,24 +716,22 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
 /// passes a slice starting at the opening `'`.
 fn lex_string(bytes: &[u8], start_offset: usize) -> Result<(String, usize), ParseError> {
     debug_assert_eq!(bytes.first().copied(), Some(b'\''));
-    let mut out = String::new();
+    let mut out: Vec<u8> = Vec::new();
     let mut i = 1usize;
     while i < bytes.len() {
         let c = bytes[i];
         if c == b'\'' {
             // SQL-standard escape: doubled `''` is a literal apostrophe.
             if bytes.get(i + 1).copied() == Some(b'\'') {
-                out.push('\'');
+                out.push(b'\'');
                 i += 2;
                 continue;
             }
             // Closing quote.
-            return Ok((out, i + 1));
+            let value = String::from_utf8(out).map_err(|_| lex_err(start_offset, "utf-8"))?;
+            return Ok((value, i + 1));
         }
-        // Non-quote byte — push verbatim. Multi-byte UTF-8 is OK because
-        // we are only pattern-matching on ASCII bytes (`'`) here; any
-        // continuation byte > 0x7f passes through untouched.
-        out.push(c as char);
+        out.push(c);
         i += 1;
     }
     Err(lex_err(start_offset, "unterminated string literal"))
@@ -744,22 +742,23 @@ fn lex_bracket_identifier(
     start_offset: usize,
 ) -> Result<(String, usize), ParseError> {
     debug_assert_eq!(bytes.first().copied(), Some(b'['));
-    let mut out = String::new();
+    let mut out: Vec<u8> = Vec::new();
     let mut i = 1usize;
     while i < bytes.len() {
         let c = bytes[i];
         if c == b']' {
             if bytes.get(i + 1).copied() == Some(b']') {
-                out.push(']');
+                out.push(b']');
                 i += 2;
                 continue;
             }
             if out.is_empty() {
                 return Err(lex_err(start_offset, "empty bracket identifier"));
             }
-            return Ok((out, i + 1));
+            let value = String::from_utf8(out).map_err(|_| lex_err(start_offset, "utf-8"))?;
+            return Ok((value, i + 1));
         }
-        out.push(c as char);
+        out.push(c);
         i += 1;
     }
     Err(lex_err(start_offset, "unterminated bracket identifier"))

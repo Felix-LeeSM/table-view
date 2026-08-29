@@ -4778,6 +4778,45 @@ fn ac_512_s03_tsql_dml_with_schema_brackets_and_unicode_strings() {
 }
 
 #[test]
+fn ac_2558_s01_non_ascii_string_and_bracket_identifier_are_verbatim() {
+    let accented = ok_update("UPDATE t SET name = 'André' WHERE id = 1");
+    assert!(matches!(
+        &accented.assignments[0].value,
+        InsertValue::Literal {
+            value: SqlLiteral::String { value }
+        } if value == "André"
+    ));
+
+    let hangul = ok_update("UPDATE t SET name = '한글' WHERE id = 1");
+    assert!(matches!(
+        &hangul.assignments[0].value,
+        InsertValue::Literal {
+            value: SqlLiteral::String { value }
+        } if value == "한글"
+    ));
+
+    // The T-SQL `N'…'` prefix routes into the same `lex_string`.
+    let prefixed = ok_update("UPDATE t SET name = N'한글' WHERE id = 1");
+    assert!(matches!(
+        &prefixed.assignments[0].value,
+        InsertValue::Literal {
+            value: SqlLiteral::String { value }
+        } if value == "한글"
+    ));
+
+    let bracket_table = ok_select("SELECT * FROM [주문] WHERE a = 1");
+    assert_eq!(single_table(&bracket_table), "주문");
+
+    let bracket_column = ok_select("SELECT [이름] FROM t");
+    assert_eq!(
+        bracket_column.columns,
+        Columns::Named {
+            names: vec!["이름".to_string()]
+        }
+    );
+}
+
+#[test]
 fn ac_512_s04_tsql_destructive_ddl_with_schema_brackets() {
     let drop = ok_drop("DROP TABLE [dbo].[users]");
     assert_eq!(drop.object_type, DropObjectType::Table);
