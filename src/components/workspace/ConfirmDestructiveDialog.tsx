@@ -38,8 +38,14 @@ const CONFIRM_ARM_DELAY_MS = 150;
  *   - `environment="production"` → title `"PRODUCTION DATABASE"` +
  *     subcaption `"Destructive statement"`.
  *   - `environment="non-production"` → title `"Destructive statement"` +
- *     subcaption `"Safe Mode (strict) — non-production"` (the only
- *     non-prod path that reaches this dialog is the M.1 strict flow).
+ *     subcaption `"Non-production connection"`.
+ *
+ * Issue #2518 — neither subcaption names a Safe Mode tier. This component
+ * takes no tier prop, and callers reach it from outside the policy matrix:
+ * `kvQueryExecution.ts` opens it for a data-loss command even when
+ * `decideSafeModeAction` answered `allow`, and `OperationsPanel.tsx` opens
+ * its kill confirm without consulting Safe Mode at all. `src/lib/safeMode.ts`
+ * still names that tier inside `reason` on the non-production strict path.
  *
  * Sprint 247 (ADR 0022 Phase 3) — the dry-run preview slot now mounts
  * `<DryRunPreview>` (was a static placeholder pre-247). Callers pass
