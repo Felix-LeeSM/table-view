@@ -417,10 +417,11 @@ describe("buildRawEditSql — multi-table (issue #1299)", () => {
 
 // --- MySQL backslash escaping (issue #2555) ----------------------------
 
-// The edited-value path routes through `coerceToSqlLiteral`, so these cases
-// target the two places this module quotes a string on its own: the PK value
-// that builds the WHERE clause, and the lenient fallback that quotes a value
-// the type-aware coercion rejected.
+// Two paths reach a MySQL string literal here. `quoteString` is this module's
+// own quoting, used for the PK value in the WHERE clause and for the lenient
+// fallback when the type-aware coercion rejects the input. An edited value goes
+// the other way, through `coerceToSqlLiteral`, so its case checks that the
+// dialect survives that hop into `escapeSqlString`.
 describe("buildRawEditSql — MySQL reads a backslash as an escape (#2555)", () => {
   const MYSQL_PLAN: RawEditPlan = { ...PLAN, dialect: "mysql" };
 
@@ -430,6 +431,17 @@ describe("buildRawEditSql — MySQL reads a backslash as an escape (#2555)", () 
     const sqls = buildRawEditSql(rows, edits, new Set(), MYSQL_PLAN);
     expect(sqls).toEqual([
       "UPDATE `public`.`users` SET `name` = 'Alicia' WHERE `id` = 'C:\\\\';",
+    ]);
+  });
+
+  // Every backslash, not just the first — a non-global replace leaves the
+  // later ones single and the literal still breaks out at the last one.
+  it("doubles both backslashes in a PK value that carries two", () => {
+    const rows: unknown[][] = [["C:\\dir\\", "Alice", "alice@example.com"]];
+    const edits = new Map([["0-1", "Alicia"]]);
+    const sqls = buildRawEditSql(rows, edits, new Set(), MYSQL_PLAN);
+    expect(sqls).toEqual([
+      "UPDATE `public`.`users` SET `name` = 'Alicia' WHERE `id` = 'C:\\\\dir\\\\';",
     ]);
   });
 
