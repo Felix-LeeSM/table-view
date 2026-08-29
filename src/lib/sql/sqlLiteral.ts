@@ -129,8 +129,29 @@ export type CoerceResult =
   | { kind: "sql"; sql: string }
   | { kind: "error"; message: string };
 
-export function escapeSqlString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
+/**
+ * Wrap a value in a single-quoted SQL string literal (#2555).
+ *
+ * MySQL and MariaDB read `\` inside a string literal as an escape character
+ * under the default sql_mode, so doubling only `'` leaves the literal boundary
+ * open: a trailing `\` swallows the closing quote, and `\'` turns the doubled
+ * `''` into "escaped quote + closing quote" so the rest of the value becomes
+ * live SQL. Doubling both metacharacters mirrors the backend's
+ * `escape_string_literal` (`src-tauri/table-view-core/src/db/mysql/mutations.rs`,
+ * #1109). The two substitutions are order-independent, since neither one emits
+ * the character the other looks for.
+ *
+ * Every other dialect here treats `\` as an ordinary character, so doubling it
+ * would corrupt the stored value, and an absent `dialect` keeps that ANSI
+ * reading. That default is right for the Postgres-only callers that omit it
+ * (`arrayElementToLiteral` below, `jsonbValueLiteral` in `./structuralSqlEdit`)
+ * and wrong for `mysqlJsonValueLiteral` in that same file, which sits behind a
+ * MySQL branch and omits it too — a deferred gap, tracked under *Security / ops
+ * policy* in `docs/roadmap/follow-up-queue.md`.
+ */
+export function escapeSqlString(value: string, dialect?: SqlDialect): string {
+  const escaped = dialect === "mysql" ? value.replace(/\\/g, "\\\\") : value;
+  return `'${escaped.replace(/'/g, "''")}'`;
 }
 
 function quoteDoubleSqlIdentifier(value: string): string {
@@ -298,14 +319,17 @@ export function coerceToSqlLiteral(
     case "date": {
       if (ISO_DATE_RE.test(value)) {
         if (dialect === "oracle") {
-          return { kind: "sql", sql: `DATE ${escapeSqlString(value)}` };
+          return {
+            kind: "sql",
+            sql: `DATE ${escapeSqlString(value, dialect)}`,
+          };
         }
-        return { kind: "sql", sql: escapeSqlString(value) };
+        return { kind: "sql", sql: escapeSqlString(value, dialect) };
       }
       if (dialect === "oracle" && ORACLE_DATE_TIME_RE.test(value)) {
         return {
           kind: "sql",
-          sql: `TO_DATE(${escapeSqlString(oracleDateTimeLiteral(value))}, 'YYYY-MM-DD HH24:MI:SS')`,
+          sql: `TO_DATE(${escapeSqlString(oracleDateTimeLiteral(value), dialect)}, 'YYYY-MM-DD HH24:MI:SS')`,
         };
       }
       return {
@@ -320,7 +344,7 @@ export function coerceToSqlLiteral(
             const normalized = normalizeOracleTimestampTz(value);
             return {
               kind: "sql",
-              sql: `TO_TIMESTAMP_TZ(${escapeSqlString(normalized)}, '${oracleTimestampTzFormat(value)}')`,
+              sql: `TO_TIMESTAMP_TZ(${escapeSqlString(normalized, dialect)}, '${oracleTimestampTzFormat(value)}')`,
             };
           }
           const normalized = value
@@ -328,10 +352,10 @@ export function coerceToSqlLiteral(
             .replace(/\s?(?:Z|[+-]\d{2}:?\d{2})$/, "");
           return {
             kind: "sql",
-            sql: `TIMESTAMP ${escapeSqlString(normalized)}`,
+            sql: `TIMESTAMP ${escapeSqlString(normalized, dialect)}`,
           };
         }
-        return { kind: "sql", sql: escapeSqlString(value) };
+        return { kind: "sql", sql: escapeSqlString(value, dialect) };
       }
       return {
         kind: "error",
@@ -340,7 +364,7 @@ export function coerceToSqlLiteral(
     }
     case "time": {
       if (TIME_RE.test(value)) {
-        return { kind: "sql", sql: escapeSqlString(value) };
+        return { kind: "sql", sql: escapeSqlString(value, dialect) };
       }
       return {
         kind: "error",
@@ -349,14 +373,14 @@ export function coerceToSqlLiteral(
     }
     case "uuid": {
       if (UUID_RE.test(value)) {
-        return { kind: "sql", sql: escapeSqlString(value) };
+        return { kind: "sql", sql: escapeSqlString(value, dialect) };
       }
       return { kind: "error", message: `Expected UUID, got "${value}"` };
     }
     default:
       // Legacy path: single-quote escape. ADR 0009 preserves empty-string
       // textual cells via the `value === ""` branch above.
-      return { kind: "sql", sql: escapeSqlString(value) };
+      return { kind: "sql", sql: escapeSqlString(value, dialect) };
   }
 }
 

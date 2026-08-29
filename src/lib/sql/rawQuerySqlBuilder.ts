@@ -16,9 +16,16 @@ function ident(name: string, dialect: SqlDialect): string {
   return sqlIdentifier(name, dialect, { quotePostgres: true });
 }
 
-/** Escape a single-quoted SQL string literal. */
-function quoteString(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
+/**
+ * Escape a single-quoted SQL string literal. MySQL and MariaDB also read `\`
+ * as an escape character inside the literal, so the backslash is doubled for
+ * that dialect and only that one. The rule and its rationale live on
+ * `escapeSqlString` in `./sqlLiteral` (#2555). Every other dialect here treats
+ * `\` as an ordinary character.
+ */
+function quoteString(value: string, dialect: SqlDialect): string {
+  const escaped = dialect === "mysql" ? value.replace(/\\/g, "\\\\") : value;
+  return `'${escaped.replace(/'/g, "''")}'`;
 }
 
 /**
@@ -30,16 +37,18 @@ function quoteString(value: string): string {
  * pass it through `quoteString` so it round-trips safely even when the
  * column is numeric (`'42'` is implicitly cast).
  */
-function literal(value: unknown): string {
+function literal(value: unknown, dialect: SqlDialect): string {
   if (value == null) return "NULL";
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
   if (typeof value === "number") return String(value);
   // Sprint 306 — cell 값이 nested BigInt / Decimal 일 때 raw JSON.stringify
   // 가 throw 했던 회귀. safeStringifyCell 은 BigInt/Decimal 을 string 으로
   // emit 하므로 raw query edit literal 이 안전하게 round-trip.
-  if (typeof value === "object") return quoteString(safeStringifyCell(value));
+  if (typeof value === "object") {
+    return quoteString(safeStringifyCell(value), dialect);
+  }
   if (typeof value === "bigint") return String(value);
-  return quoteString(String(value));
+  return quoteString(String(value), dialect);
 }
 
 /**
@@ -61,7 +70,7 @@ function editLiteral(
   const coerced = coerceToSqlLiteral(newValue, dataType ?? "", dialect);
   if (coerced.kind === "sql") return coerced.sql;
   // ponytail: raw-edit is lenient — quote the rejected input rather than drop it.
-  return quoteString(newValue);
+  return quoteString(newValue, dialect);
 }
 
 /** A `(pkColumnName, resultRowIndex)` pair used to build a PK WHERE clause. */
@@ -95,7 +104,7 @@ function buildPkWhereByPositions(
     .map((e) =>
       row[e.idx] == null
         ? `${ident(e.name, dialect)} IS NULL`
-        : `${ident(e.name, dialect)} = ${literal(row[e.idx])}`,
+        : `${ident(e.name, dialect)} = ${literal(row[e.idx], dialect)}`,
     )
     .join(" AND ");
 }

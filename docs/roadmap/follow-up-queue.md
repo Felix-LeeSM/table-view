@@ -263,6 +263,13 @@ report actually exercises:
   a parse failure recoverable the same way a missing file now is, but it changes
   what the existing quarantine test asserts and was outside what #2183 asked for.
 
+`src/lib/sql/structuralSqlEdit.ts` 의 `mysqlJsonValueLiteral` 과 `mysqlPathLiteral` 은
+MySQL JSON 컬럼을 구조 편집으로 다룰 때 쓰는 SQL 문자열 리터럴을 만드는데, #2555 가
+넣은 MySQL 백슬래시 이중화가 여기에는 적용되지 않는다. #2555 는 `escapeSqlString` 과
+`quoteString` 을 본체로 잡았고 이 자리는 그 밖이다. 승격 시점은
+`src/components/datagrid/DataGridTable/DataRow.tsx` 의 트리 편집기 진입 조건이 MySQL
+JSON 컬럼을 받도록 열리는 때이고, 그때 함께 고친다.
+
 ### Quality gates
 
 **Follow-up**: Promote a11y, perf, E2E isolation, dependency security CI, and
