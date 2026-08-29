@@ -44,7 +44,6 @@
  * merged; what holds them together is
  * `src/components/query/QueryTab/kvDestructiveTier.test.ts`, which asserts per
  * verb that both reach `danger` and that both build the same command string.
- * Adding a data-loss verb to one route without the other fails there.
  */
 interface KvConfirmCommand {
   /** Confirm-dialog reason copy. */

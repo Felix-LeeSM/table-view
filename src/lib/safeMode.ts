@@ -54,11 +54,11 @@ import type { Severity, StatementAnalysis } from "@/lib/sql/sqlSafety";
  * since #2421 routes the data-loss commands to the confirm dialog on its own
  * instead, again above this matrix rather than inside it. #2513 widened the set
  * that gets that routing from `DEL` alone to every verb the backend calls
- * destructive (`HDEL`, `LREM`, `SREM`, `ZREM`, `XDEL`, `XTRIM`): they used to
- * reach this matrix as `info`, because `analyzeKvCommandSafety` looks the typed
- * verb up in `KV_CONFIRM_COMMANDS` and they were absent, so `allow` came back
- * for them even on production + `strict`. A KV command outside that map still
- * dispatches straight away when this function returns `allow`.
+ * destructive, adding `HDEL`, `LREM`, `SREM`, `ZREM`, `XDEL` and `XTRIM`: they
+ * used to reach this matrix as `info`, because `analyzeKvCommandSafety` looks
+ * the typed verb up in `KV_CONFIRM_COMMANDS` and they were absent, so `allow`
+ * came back for them even on production + `strict`. A KV command outside that
+ * map still dispatches straight away when this function returns `allow`.
  *
  * Which analyzer ran decides, never the verb alone: the KV structure editor
  * (`KvKeyDetailPanel` / `KvMutationPanel`) reaches `danger` for the same
