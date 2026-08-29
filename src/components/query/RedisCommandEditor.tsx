@@ -1,4 +1,8 @@
-import { acceptCompletion, autocompletion } from "@codemirror/autocomplete";
+import {
+  acceptCompletion,
+  autocompletion,
+  closeCompletion,
+} from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import {
   bracketMatching,
@@ -127,7 +131,11 @@ const RedisCommandEditor = forwardRef<
         keymap.of([
           {
             key: "Mod-Enter",
-            run: () => {
+            // #2509 — 실행하면 자동완성 팝업을 닫는다. `closeOnBlur` 는 실행이
+            // blur 를 일으킬 때만 도는데 단축키 실행은 포커스를 에디터에
+            // 남기므로, 남은 팝업이 결과 그리드를 덮었다.
+            run: (view) => {
+              closeCompletion(view);
               onExecuteRef.current();
               return true;
             },

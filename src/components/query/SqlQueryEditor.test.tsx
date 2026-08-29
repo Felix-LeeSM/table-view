@@ -5,6 +5,7 @@ import { EditorView } from "@codemirror/view";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { createRef, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { expectExecuteClosesCompletionPopup } from "./__tests__/editorCompletionHelpers";
 import {
   expectUndoRevertsEdit,
   getKeymapBindings,
@@ -221,6 +222,21 @@ describe("SqlQueryEditor (Sprint 139)", () => {
       if (typeof b.run === "function") b.run(view);
     }
     expect(localOnExecute).toHaveBeenCalled();
+  });
+
+  // #2509 — 실행하면 자동완성 팝업이 닫혀야 한다. 사용자 시퀀스:
+  // 에디터에 타이핑 → 자동완성 팝업이 뜬 채로 남음 → 쿼리 실행 →
+  // **팝업이 사라지고 결과가 가려지지 않는다** ← lock 대상.
+  it("closes the autocomplete popup when the query executes (#2509)", async () => {
+    const localOnExecute = vi.fn();
+    render(
+      <SqlQueryEditor
+        sql="SEL"
+        onSqlChange={onSqlChange}
+        onExecute={localOnExecute}
+      />,
+    );
+    await expectExecuteClosesCompletionPopup(getEditorView(), localOnExecute);
   });
 
   // [AC-248-K1] Sprint 248 (ADR 0022 Phase 4) — Cmd+Shift+Enter routes

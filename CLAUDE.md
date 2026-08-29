@@ -17,8 +17,8 @@ path 로 잇는 매트릭스와 「강제 룰」이 이 컨텍스트에 그대�
 있던 시기에는 그 본문이 spawn 된 subagent 에 전달되지 않았다 (#1865 측정). 이 줄을
 지우면 전달이 끊긴다. **모든 harness 와 모든 spawn 에 도달하는 유일한 범용
 채널이기 때문이다.** Claude Code 가 `subagent_type` 을 지정해 실행한 노드에는
-`.claude/agents/<role>.md` 정의 body 가 두 번째 자동 채널로 더 실리지만, 그 채널은
-역할을 지정한 spawn 에만 전달되므로 이 import 를 대체하지 못한다.
+`.claude/agents/` 에 있는 역할 정의의 body 가 두 번째 자동 채널로 더 실리지만, 그
+채널은 역할을 지정한 spawn 에만 전달되므로 이 import 를 대체하지 못한다.
 
 - [`memory/index/by-surface.md`](memory/index/by-surface.md): 코드나 문서를
   수정하기 전에 해당 surface 의 active rule 묶음을 여기에서 확인한다. import 가

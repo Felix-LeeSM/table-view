@@ -11,6 +11,7 @@ import {
   analyzeRdbStatementForDialect,
   decideOracleOrGenericSafeMode,
 } from "@lib/sql/oracleSafety";
+import { dialectFromDbType } from "@lib/sql/sqlLiteral";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { stripSqlComments } from "@lib/sql/stripSqlComments";
 import { executeQuery, executeQueryDryRun } from "@lib/tauri";
@@ -174,7 +175,14 @@ function prepareRdbStatements(
   sql: string,
   dbType: DatabaseType | null | undefined,
 ): PrepareRdbStatementsResult {
-  const rawStatements = splitSqlStatements(sql);
+  // Issue #2554 — the fragments below are dispatched to the driver one by one,
+  // so the split must read the connection's dialect. Without it a MySQL
+  // backslash escape or `#` comment ended a fragment early and the literal /
+  // commented-out text behind it was executed as its own statement.
+  const rawStatements = splitSqlStatements(
+    sql,
+    dialectFromDbType(dbType ?? undefined),
+  );
   const scriptingViolation = findMysqlScriptingBoundaryViolation(
     rawStatements,
     dbType,

@@ -24,6 +24,9 @@ pub struct ViewContract<'a> {
     pub columns: &'a [&'a str],
 }
 
+/// No `Empty` counterpart: every adapter with a catalog contract here surfaces
+/// its explicit indexes since #1070 wired DuckDB's. Add one back when an
+/// adapter that genuinely reports none needs to record that delta.
 pub enum IndexDelta<'a> {
     Contains {
         name: &'a str,
@@ -31,13 +34,20 @@ pub enum IndexDelta<'a> {
         is_unique: bool,
         is_primary: bool,
     },
-    Empty {
-        reason: &'a str,
-    },
 }
 
 pub enum ConstraintDelta<'a> {
-    Empty { reason: &'a str },
+    /// Keyed on `constraint_type`, not on `name`: DuckDB auto-names constraints
+    /// (`users_id_pkey`), so the generated name is an engine detail while the
+    /// type plus columns is the contract. Mirrors the lib-level check in
+    /// `table-view-core/src/db/duckdb.rs`.
+    Contains {
+        constraint_type: &'a str,
+        columns: &'a [&'a str],
+    },
+    Empty {
+        reason: &'a str,
+    },
 }
 
 pub struct RdbCatalogContract<'a> {
@@ -232,9 +242,6 @@ where
             assert_eq!(index.is_unique, *is_unique);
             assert_eq!(index.is_primary, *is_primary);
         }
-        IndexDelta::Empty { reason } => {
-            assert!(indexes.is_empty(), "{reason}: {indexes:?}");
-        }
     }
 }
 
@@ -247,6 +254,25 @@ where
         .await
         .unwrap();
     match &contract.constraint_delta {
+        ConstraintDelta::Contains {
+            constraint_type,
+            columns,
+        } => {
+            let constraint = constraints
+                .iter()
+                .find(|constraint| constraint.constraint_type == *constraint_type)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{:?}.{}.{} constraint {:?} missing from {:?}",
+                        contract.db_type,
+                        contract.namespace,
+                        contract.table,
+                        constraint_type,
+                        constraints
+                    )
+                });
+            assert_eq!(constraint.columns, columns.to_vec());
+        }
         ConstraintDelta::Empty { reason } => {
             assert!(constraints.is_empty(), "{reason}: {constraints:?}");
         }

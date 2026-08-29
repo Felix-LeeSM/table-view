@@ -127,18 +127,18 @@ blocking 0 인 재리뷰는 어느 쪽도 안 걸려 트리거가 아니다 — 
 ## 7. 도달은 spawn 하는 쪽이 책임진다
 
 노드가 memory 를 스스로 읽으러 오리라 기대하지 않는다 — 안 읽는 것이 실측이다.
-그래서 고정부를 파일로 두고 **spawn 하는 쪽이 그대로 첨부**한다: 역할 preamble
-`.agents/prompts/<role>.md` (Claude Code 네이티브 spawn 은 `.claude/agents/<role>.md`
-정의가 그 파일을 첫 행동으로 읽는다). preamble 은 MANDATORY 첫 명령(사본 경로
-검증)과 착수 전 MANDATORY read 목록을 싣고, **계약 본문은 복제하지 않는다** —
-읽는 것이 노드의 첫 행동이다. spawn 메시지는 가변부만 싣는다. 형식은
-`.agents/prompts/orchestrator.md` 의 "Spawn 규칙".
+그래서 고정부를 파일로 두고 **spawn 하는 쪽이 그대로 첨부**한다. 그 고정부는 역할
+preamble 인 `.agents/prompts/<role>.md` 다. Claude Code 네이티브 spawn 에서는
+`.claude/agents/` 에 있는 역할 정의가 그 파일을 첫 행동으로 읽는다. preamble 은
+MANDATORY 첫 명령(사본 경로 검증)과 착수 전 MANDATORY read 목록을 싣고, **계약
+본문은 복제하지 않는다** — 읽는 것이 노드의 첫 행동이다. spawn 메시지는 가변부만
+싣는다. 형식은 `.agents/prompts/orchestrator.md` 의 "Spawn 규칙".
 
 **첨부할 고정부는 `origin/main` 의 판이어야 한다.** 밀린 트리에서 읽으면 옛 계약이
 그대로 노드에 실린다 — `.agents/prompts/pr-finalize.md` 의 3단계 명령이 통째로 옛
-판이던 것이 실측이다(#2284). Claude Code 네이티브 spawn 은 `.claude/agents/<role>.md`
-정의가 경로를 `git show origin/main:` 으로 고정해 읽어 이 해악을 스스로 피하지만,
-**손으로 첨부하는 쪽에는 그 장치가 없다** — 겸무 세션이 그 자리다. 트리를
+판이던 것이 실측이다(#2284). Claude Code 네이티브 spawn 에서는 `.claude/agents/` 에
+있는 역할 정의가 경로를 `git show origin/main:` 으로 고정해 읽어 이 해악을 스스로
+피하지만, **손으로 첨부하는 쪽에는 그 장치가 없다** — 겸무 세션이 그 자리다. 트리를
 `origin/main` 에 맞춘 뒤 읽거나 `git show origin/main:<path>` 로 읽는다. 갱신 명령과
 그 블록이 재지 **않는** 것은 `.agents/prompts/orchestrator.md` 「첫 명령」이 갖는다.
 

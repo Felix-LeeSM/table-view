@@ -34,7 +34,7 @@
 //! warn-tier permission changes across all dialects, so the shared
 //! classifier's `Warn` is the correct parity verdict.
 
-use crate::safety::{split_statements, strip_comments_collapse};
+use crate::safety::{split_statements, strip_comments_collapse, SqlDialect};
 
 /// True when any statement in `sql` is an Oracle-specific danger the shared
 /// dialect-agnostic classifier misses. The caller (`execute_query` gate)
@@ -47,7 +47,7 @@ use crate::safety::{split_statements, strip_comments_collapse};
 pub fn is_oracle_danger(sql: &str) -> bool {
     // #1455 B2 — Oracle context, so the splitter treats `q'X…X'` / `nq'X…X'` as
     // opaque and won't split inside one (a `;` there is literal text).
-    split_statements(sql, true)
+    split_statements(sql, SqlDialect::Oracle)
         .iter()
         .any(|stmt| statement_is_oracle_danger(stmt))
 }

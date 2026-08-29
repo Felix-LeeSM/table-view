@@ -2,6 +2,7 @@ import { EditorView } from "@codemirror/view";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { expectExecuteClosesCompletionPopup } from "./__tests__/editorCompletionHelpers";
 import {
   expectUndoRevertsEdit,
   getKeymapBindings,
@@ -148,6 +149,21 @@ describe("RedisCommandEditor", () => {
       />,
     );
     expect(ref.current).toBe(getEditorView());
+  });
+
+  // #2509 — 실행하면 자동완성 팝업이 닫혀야 한다. 사용자 시퀀스:
+  // 에디터에 타이핑 → 자동완성 팝업이 뜬 채로 남음 → 명령 실행 →
+  // **팝업이 사라지고 결과가 가려지지 않는다** ← lock 대상.
+  it("closes the autocomplete popup when the command executes (#2509)", async () => {
+    const onExecute = vi.fn();
+    render(
+      <RedisCommandEditor
+        sql="GE"
+        onSqlChange={vi.fn()}
+        onExecute={onExecute}
+      />,
+    );
+    await expectExecuteClosesCompletionPopup(getEditorView(), onExecute);
   });
 
   it("binds Mod-Enter to execute and Cmd-Shift-Enter to unsupported dry-run", () => {

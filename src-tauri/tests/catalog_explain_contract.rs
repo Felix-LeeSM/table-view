@@ -282,11 +282,23 @@ async fn duckdb_catalog_explain_contract_records_schema_rdb_deltas() {
                 definition_contains: "active",
                 columns: &["id", "email"],
             },
-            index_delta: IndexDelta::Empty {
-                reason: "DuckDB RdbAdapter index metadata is not surfaced by the current catalog contract",
+            // #1070 replaced the `Ok(vec![])` index stub with real
+            // `duckdb_indexes()` introspection, so the explicit CREATE INDEX in
+            // the seed surfaces here. DuckDB renders `expressions` with keyword
+            // identifiers quoted, so `name` arrives as `"name"` — recorded as-is
+            // because this contract is a delta record of actual adapter output.
+            index_delta: IndexDelta::Contains {
+                name: "idx_users_name",
+                columns: &["\"name\""],
+                is_unique: false,
+                is_primary: false,
             },
-            constraint_delta: ConstraintDelta::Empty {
-                reason: "DuckDB RdbAdapter constraint metadata is not surfaced by the current catalog contract",
+            // #1070 also replaced the constraint stub, so the seed's
+            // `id INTEGER PRIMARY KEY` surfaces via `duckdb_constraints()`.
+            // NOT NULL stays filtered out as a column property.
+            constraint_delta: ConstraintDelta::Contains {
+                constraint_type: "PRIMARY KEY",
+                columns: &["id"],
             },
         },
     )

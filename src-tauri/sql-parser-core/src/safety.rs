@@ -119,7 +119,7 @@ pub fn classify(sql: &str) -> Severity {
 /// block-comment nesting (PostgreSQL). Callers that cannot resolve a dialect
 /// pass [`SqlDialect::Other`] (fail-closed first-close scanning).
 pub fn classify_with_dialect(sql: &str, dialect: SqlDialect) -> Severity {
-    split_statements(sql, dialect.oracle_quotes())
+    split_statements(sql, dialect)
         .iter()
         .map(|stmt| classify_single(stmt, dialect))
         .max()
@@ -157,7 +157,7 @@ pub fn is_danger_with_dialect(sql: &str, dialect: SqlDialect) -> bool {
 /// write cannot hide behind a leading read) and the comment stripping in the
 /// keyword fallback.
 pub fn is_read_only_safe_with_dialect(sql: &str, dialect: SqlDialect) -> bool {
-    split_statements(sql, dialect.oracle_quotes())
+    split_statements(sql, dialect)
         .iter()
         .all(|stmt| stmt_is_read(stmt, dialect))
 }
@@ -798,7 +798,17 @@ fn strip_comments_collapse_opts(sql: &str, dialect: SqlDialect) -> String {
 /// classified independently and the worst tier wins). `pub(crate)` so the
 /// dialect classifiers (e.g. `oracle`) split on the same literal/comment
 /// boundaries — a trailing admin DDL can't hide behind a leading SELECT.
-pub(crate) fn split_statements(sql: &str, oracle_quotes: bool) -> Vec<String> {
+///
+/// Issue #2554 — takes the whole [`SqlDialect`] rather than the lone Oracle
+/// flag, so the same three rules the rest of this module already gates on apply
+/// to the split: MySQL/MariaDB backslash string escapes and `#` line comments,
+/// plus Oracle alternate quoting. Splitting MySQL text under standard-SQL rules
+/// ended a literal at `\'` and read past a `#`, turning server-side literal and
+/// comment bodies into extra fragments that were classified on their own.
+pub(crate) fn split_statements(sql: &str, dialect: SqlDialect) -> Vec<String> {
+    let oracle_quotes = dialect.oracle_quotes();
+    let backslash_escapes = dialect.backslash_escapes();
+    let hash_comments = dialect.hash_line_comments();
     let s: Vec<char> = sql.chars().collect();
     let len = s.len();
     let mut statements: Vec<String> = Vec::new();
@@ -820,40 +830,51 @@ pub(crate) fn split_statements(sql: &str, oracle_quotes: bool) -> Vec<String> {
                 continue;
             }
         }
-        // Single-quoted string literal (`''` escapes).
+        // Single-quoted string literal (`''` escapes; `\<any>` on MySQL).
         if ch == '\'' {
             current.push(ch);
             i += 1;
             while i < len {
                 let inner = s[i];
                 current.push(inner);
-                if inner == '\'' {
-                    if i + 1 < len && s[i + 1] == '\'' {
-                        i += 1;
+                i += 1;
+                if backslash_escapes && inner == '\\' {
+                    if i < len {
                         current.push(s[i]);
                         i += 1;
-                    } else {
-                        i += 1;
-                        break;
                     }
-                } else {
-                    i += 1;
+                    continue;
+                }
+                if inner == '\'' {
+                    if i < len && s[i] == '\'' {
+                        current.push(s[i]);
+                        i += 1;
+                        continue;
+                    }
+                    break;
                 }
             }
             continue;
         }
-        // Double-quoted identifier.
+        // Double-quoted identifier (a string literal on MySQL, hence the same
+        // backslash rule; no doubling).
         if ch == '"' {
             current.push(ch);
             i += 1;
             while i < len {
                 let inner = s[i];
                 current.push(inner);
+                i += 1;
+                if backslash_escapes && inner == '\\' {
+                    if i < len {
+                        current.push(s[i]);
+                        i += 1;
+                    }
+                    continue;
+                }
                 if inner == '"' {
-                    i += 1;
                     break;
                 }
-                i += 1;
             }
             continue;
         }
@@ -901,16 +922,15 @@ pub(crate) fn split_statements(sql: &str, oracle_quotes: bool) -> Vec<String> {
             }
             continue;
         }
-        // Line comment.
-        if ch == '-' && i + 1 < len && s[i + 1] == '-' {
-            current.push(ch);
-            i += 1;
-            current.push(s[i]);
-            i += 1;
+        // Line comment — `--` (every dialect) or `#` (MySQL/MariaDB only). The
+        // newline stays outside so the next line splits normally.
+        if (ch == '-' && i + 1 < len && s[i + 1] == '-') || (hash_comments && ch == '#') {
+            let start = i;
+            i += if ch == '#' { 1 } else { 2 };
             while i < len && s[i] != '\n' {
-                current.push(s[i]);
                 i += 1;
             }
+            current.extend(&s[start..i]);
             continue;
         }
         // Block comment.
@@ -1395,13 +1415,59 @@ mod tests {
         assert_eq!(
             split_statements(
                 "UPDATE a SET n = q'{it's ok}' WHERE id=1; DELETE FROM a",
-                true
+                SqlDialect::Oracle
             )
             .len(),
             2
         );
         // Non-Oracle split is unchanged (q-quote not recognized).
-        assert_eq!(split_statements("SELECT 1; SELECT 2", false).len(), 2);
+        assert_eq!(
+            split_statements("SELECT 1; SELECT 2", SqlDialect::Other).len(),
+            2
+        );
+    }
+
+    #[test]
+    fn issue_2554_mysql_backslash_and_hash_are_one_statement() {
+        // MySQL reads `\'` as an escaped quote and `#` as a line comment, so
+        // both inputs are ONE statement on the server. A dialect-blind split cut
+        // the literal / comment body into extra fragments and classified them
+        // on their own, so a `DROP TABLE` the server never sees drove the tier.
+        let backslash = r"SELECT * FROM t WHERE note = 'O\'Brien; DROP TABLE users; --';";
+        let hash = "SELECT 1 # note; DROP TABLE users;";
+
+        assert_eq!(
+            split_statements(backslash, SqlDialect::MysqlFamily),
+            vec![r"SELECT * FROM t WHERE note = 'O\'Brien; DROP TABLE users; --'"]
+        );
+        assert_eq!(
+            split_statements(hash, SqlDialect::MysqlFamily),
+            vec!["SELECT 1 # note; DROP TABLE users;"]
+        );
+        assert_eq!(
+            classify_with_dialect(backslash, SqlDialect::MysqlFamily),
+            Severity::Info
+        );
+        assert_eq!(
+            classify_with_dialect(hash, SqlDialect::MysqlFamily),
+            Severity::Info
+        );
+
+        // Dialect gate: under standard-SQL rules the multi-way split is the
+        // correct reading and stays put.
+        assert_eq!(split_statements(backslash, SqlDialect::Other).len(), 3);
+        assert_eq!(split_statements(hash, SqlDialect::Postgres).len(), 2);
+        assert_eq!(
+            classify_with_dialect(backslash, SqlDialect::Other),
+            Severity::Danger
+        );
+
+        // Backticks escape by doubling only — a `\` there is a plain character,
+        // so the identifier still closes at the next backtick.
+        assert_eq!(
+            split_statements(r"SELECT `a\`; SELECT 2", SqlDialect::MysqlFamily),
+            vec![r"SELECT `a\`", "SELECT 2"]
+        );
     }
 
     // ----------------------------------------------------------------------

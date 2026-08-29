@@ -1,3 +1,4 @@
+import { closeCompletion } from "@codemirror/autocomplete";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import { SearchResultView } from "@components/search/SearchResultView";
 import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
@@ -359,10 +360,16 @@ export default function QueryTab({ tab }: QueryTabProps) {
     [editorRef],
   );
 
+  // #2509 — 실행하면 자동완성 팝업을 닫는다. 툴바 Run 버튼은 에디터 keymap 을
+  // 지나지 않으므로 에디터의 `Mod-Enter` 핸들러에 건 `closeCompletion` 이 이
+  // 경로에는 닿지 않는다. E2E 가 쓰는 경로가 그 클릭이다
+  // (`e2e/smoke/_helpers.ts` 의 `runQuery`).
   const handleExecuteAndShowResults = useCallback(() => {
+    const view = editorRef.current;
+    if (view) closeCompletion(view);
     setExplainSql(null);
     handleExecute();
-  }, [handleExecute]);
+  }, [editorRef, handleExecute]);
 
   const handleDryRunAndShowResults = useCallback(() => {
     setExplainSql(null);
