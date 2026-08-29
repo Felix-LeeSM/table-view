@@ -318,11 +318,11 @@ settings 수신부를 함께 봐야 한다. 그만한 값을 치를 만할 때 �
 `93c536ff7` (2026-05-17) 는 `src/stores/mruStore.ts` 와 `src/App.tsx`,
 `src/AppRouter.tsx` 를 하나도 건드리지 않았으므로
 (`git show --stat 93c536ff7 -- src/stores/mruStore.ts src/App.tsx src/AppRouter.tsx`
-가 빈 출력을 낸다) 그 주석은 살아 있는 소유자를 가리키지 못한다. 걷어낼 자리는
-`git grep -n loadPersistedMru` 가 내는 목록이고, 그 안에는 no-op 을 잠그는
-`src/stores/mruStore.test.ts` 의 케이스와 잠그지 않는 사유를 적은
-`src/App.bootstrap.test.tsx` 헤더도 들어 있다. #2576 은 부팅 배선을 렌더링
-경계에서 잠갔지만 이 호출은 잠그지 못했는데, 경계에 닿지도 상태를 바꾸지도 않는
-줄이라 렌더링에서 관측할 수 없기 때문이다. 승격 시점은 MRU 하이드레이션 경로를
+가 빈 출력을 낸다) 그 주석은 살아 있는 소유자를 가리키지 못한다. 걷어낼 때 함께
+봐야 하는 자리는 `git grep -n loadPersistedMru` 가 내는 목록이고, 그 안에는 no-op
+을 잠그는 `src/stores/mruStore.test.ts` 의 케이스와 잠그지 않는 사유를 적은
+`src/App.bootstrap.test.tsx` 헤더, 그리고 이 항목 자신도 들어 있다. #2576 은 부팅
+배선을 렌더링 경계에서 잠갔지만 이 호출은 잠그지 못했는데, 경계에 닿지도 상태를
+바꾸지도 않는 줄이라 렌더링에서 관측할 수 없기 때문이다. 승격 시점은 MRU 하이드레이션 경로를
 다시 손댈 때다.
 
