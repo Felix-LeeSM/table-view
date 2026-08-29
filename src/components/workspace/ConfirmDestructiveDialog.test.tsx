@@ -10,8 +10,8 @@
 // statements upstream, so verbatim typing added friction without a
 // measurable safety bar. The header is environment-aware (production
 // shouts "PRODUCTION DATABASE"; non-production reads as "Destructive
-// statement" with the strict-mode subcaption) so the user instantly
-// sees which axis of the safety matrix triggered the dialog.
+// statement" over a "Non-production connection" subcaption) so the user
+// instantly sees which environment the statement is about to run against.
 //
 // Sprint 247 (ADR 0022 Phase 3) — the placeholder slot is replaced by
 // `<DryRunPreview>` which calls `executeQueryDryRun`. The dialog
@@ -72,7 +72,7 @@ describe("ConfirmDestructiveDialog", () => {
     expect(screen.getByText("Destructive statement")).toBeInTheDocument();
   });
 
-  it("[AC-246-D2] environment=\"non-production\" renders 'Destructive statement' + 'Safe Mode (strict)' subcaption", () => {
+  it("[AC-246-D2][#2518] environment=\"non-production\" renders 'Destructive statement' + 'Non-production connection' subcaption", () => {
     render(
       <ConfirmDestructiveDialog
         open={true}
@@ -87,7 +87,41 @@ describe("ConfirmDestructiveDialog", () => {
       />,
     );
     expect(screen.getByText("Destructive statement")).toBeInTheDocument();
-    expect(screen.getByText(/Safe Mode \(strict\)/)).toBeInTheDocument();
+    expect(screen.getByText("Non-production connection")).toBeInTheDocument();
+  });
+
+  // Issue #2518 — the dialog takes no Safe Mode tier prop, and callers reach
+  // it from outside the policy matrix: `kvQueryExecution.ts` opens it for a
+  // data-loss command even when `decideSafeModeAction` answered `allow`, and
+  // `OperationsPanel.tsx` opens its kill confirm without consulting Safe Mode
+  // at all. So the header must name no tier. The assertion reads the header
+  // alone because `reason` may carry one truthfully — `src/lib/safeMode.ts`
+  // writes "Safe Mode strict" into it on the non-production strict path — and
+  // that line renders outside the header.
+  it("[#2518] non-production header names no Safe Mode tier for a dialog raised outside the matrix", () => {
+    render(
+      <ConfirmDestructiveDialog
+        open={true}
+        // The KV data-loss route takes its reason from the command table in
+        // `kvCommandConfirmation.ts`, not from the Safe Mode matrix.
+        reason="Redis DEL permanently removes the key"
+        sqlPreview="DEL vk:cmd"
+        environment="non-production"
+        connectionId="c"
+        statements={["DEL vk:cmd"]}
+        paradigm="kv"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const header = screen
+      .getByRole("alertdialog")
+      .querySelector(
+        '[data-environment-header="non-production"]',
+      ) as HTMLElement;
+    expect(header).not.toBeNull();
+    expect(header.textContent ?? "").not.toMatch(/safe mode/i);
+    expect(header.textContent ?? "").not.toMatch(/strict/i);
   });
 
   it("[AC-246-D3][#1111] Confirm button is disabled during the 150ms arm window, then enabled", async () => {

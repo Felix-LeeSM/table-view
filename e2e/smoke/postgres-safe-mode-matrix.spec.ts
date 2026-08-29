@@ -113,7 +113,7 @@ describe("PostgreSQL Safe Mode mode-dial matrix", () => {
         await setSafeMode("strict");
         await runSqlInNewTab(dropSql);
         await waitForDialogTextAll(
-          ["Destructive statement", "Safe Mode (strict)", "DROP TABLE"],
+          ["Destructive statement", "Non-production connection", "DROP TABLE"],
           15000,
           "non-production strict confirmation dialog did not appear",
         );
