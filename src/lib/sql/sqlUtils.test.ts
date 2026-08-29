@@ -237,6 +237,57 @@ describe("splitSqlStatements — #1223 comment & literal edge cases", () => {
   });
 });
 
+// Purpose: #2554 — the splitter feeds the execution path, so a fragment it
+// invents is a statement the server actually runs. MySQL/MariaDB read `\'` as
+// an escaped quote and `#` as a line comment; a splitter blind to both cuts
+// server-side literal/comment text into standalone statements. The `postgresql`
+// cases are the same inputs under standard-SQL rules, where the multi-way split
+// is the correct reading — they hold the dialect gate in place.
+describe("splitSqlStatements — #2554 MySQL backslash escapes & # comments", () => {
+  const BACKSLASH_LITERAL =
+    "SELECT * FROM t WHERE note = 'O\\'Brien; DROP TABLE users; --';";
+  const HASH_COMMENT = "SELECT 1 # note; DROP TABLE users;";
+
+  it("keeps a MySQL backslash-escaped quote inside the literal", () => {
+    expect(splitSqlStatements(BACKSLASH_LITERAL, "mysql")).toEqual([
+      "SELECT * FROM t WHERE note = 'O\\'Brien; DROP TABLE users; --'",
+    ]);
+  });
+
+  it("keeps everything after a MySQL `#` on the line as comment text", () => {
+    expect(splitSqlStatements(HASH_COMMENT, "mysql")).toEqual([
+      "SELECT 1 # note; DROP TABLE users;",
+    ]);
+  });
+
+  it("still splits the same inputs under standard-SQL rules", () => {
+    expect(splitSqlStatements(BACKSLASH_LITERAL, "postgresql")).toEqual([
+      "SELECT * FROM t WHERE note = 'O\\'Brien",
+      "DROP TABLE users",
+      "--';",
+    ]);
+    expect(splitSqlStatements(HASH_COMMENT, "postgresql")).toEqual([
+      "SELECT 1 # note",
+      "DROP TABLE users",
+    ]);
+  });
+
+  it("resumes splitting on the line after a MySQL `#` comment", () => {
+    expect(
+      splitSqlStatements("SELECT 1 # note; DROP TABLE a\nSELECT 2;", "mysql"),
+    ).toEqual(["SELECT 1 # note; DROP TABLE a\nSELECT 2"]);
+  });
+
+  it("treats a backslash as a plain character in MySQL backtick identifiers", () => {
+    // MySQL backticks escape by doubling only — a `\` never opens an escape
+    // there, so the identifier still closes at the next backtick.
+    expect(splitSqlStatements("SELECT `a\\`; SELECT 2", "mysql")).toEqual([
+      "SELECT `a\\`",
+      "SELECT 2",
+    ]);
+  });
+});
+
 // -- Sprint 40: SQL Formatting --
 
 describe("formatSql", () => {
