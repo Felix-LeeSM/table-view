@@ -216,10 +216,16 @@ async fn dbms_specific_unsupported_delta_paths_return_explicit_app_errors() {
 
 /// #1076 retired the "preview only" milestone policy: `_delete_by_query` runs
 /// live behind the Safe Mode confirm gate, so the plan always requests
-/// confirmation and warns the delete is irreversible. The plan must also carry
-/// the caller's `preview_only` verbatim — a live run mislabelled as a preview
-/// would strip the confirm dialog in the UI. Wildcard fan-out stays rejected
-/// (`validate_search_destructive_request`, models/search.rs).
+/// confirmation and warns the delete is irreversible. The plan also echoes the
+/// caller's `preview_only` back verbatim (`build_delete_by_query_plan`,
+/// db/search_destructive.rs). Nothing reads that echoed flag — the UI confirm
+/// dialog comes from `safeModeGate` deciding a fixed `severity: "danger"`
+/// analysis (`src/components/search/SearchDeleteByQueryPreviewDialog.tsx`) —
+/// so the echo is pinned by the `SearchDestructiveOperationPlan` IPC shape
+/// (`src/types/search.ts`) plus the live-request assertion below, which the
+/// lib tests do not reach: they plan with `preview_only: true` only. Wildcard
+/// fan-out stays rejected (`validate_search_destructive_request`,
+/// models/search.rs).
 #[tokio::test]
 async fn destructive_search_plan_requires_confirmation_and_rejects_wildcards() {
     let search = SearchEngineAdapter::fixture_opensearch();
