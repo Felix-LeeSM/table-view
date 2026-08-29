@@ -3,7 +3,12 @@
 // (completion / ddl / rawQuery / duckdb) can route through this one helper
 // without changing any call site's output.
 import { describe, expect, it } from "vitest";
-import { qualifiedTableName, sqlIdentifier } from "./sqlLiteral";
+import {
+  coerceToSqlLiteral,
+  escapeSqlString,
+  qualifiedTableName,
+  sqlIdentifier,
+} from "./sqlLiteral";
 
 describe("sqlIdentifier — canonical per-dialect quoting", () => {
   it("mysql wraps in backticks and doubles embedded backticks", () => {
@@ -64,5 +69,99 @@ describe("qualifiedTableName", () => {
 
   it("empty schema drops the qualifier", () => {
     expect(qualifiedTableName("", "t", "sqlite")).toBe('"t"');
+  });
+});
+
+/**
+ * Decode a MySQL single-quoted string literal back into the value it carries,
+ * following the default sql_mode: `\` escapes the next character and `''` is
+ * one embedded quote. Throws when the literal closes before the end of the
+ * input, which is precisely the breakout #2555 describes — everything after
+ * that early close leaves the string and is executed as SQL.
+ */
+function decodeMysqlLiteral(sql: string): string {
+  if (!sql.startsWith("'")) throw new Error(`not a quoted literal: ${sql}`);
+  let out = "";
+  for (let i = 1; i < sql.length; i++) {
+    const ch = sql[i]!;
+    if (ch === "\\") {
+      const escaped = sql[i + 1];
+      if (escaped === undefined) throw new Error(`dangling escape: ${sql}`);
+      out += escaped;
+      i += 1;
+    } else if (ch === "'") {
+      if (sql[i + 1] === "'") {
+        out += "'";
+        i += 1;
+      } else if (i === sql.length - 1) {
+        return out;
+      } else {
+        throw new Error(`literal closed early at index ${i}: ${sql}`);
+      }
+    } else {
+      out += ch;
+    }
+  }
+  throw new Error(`unterminated literal: ${sql}`);
+}
+
+describe("escapeSqlString — MySQL reads a backslash as an escape (#2555)", () => {
+  it("mysql doubles the backslash before doubling the quote", () => {
+    expect(escapeSqlString("C:\\", "mysql")).toBe("'C:\\\\'");
+    expect(escapeSqlString("\\' WHERE 1=1 #", "mysql")).toBe(
+      "'\\\\'' WHERE 1=1 #'",
+    );
+  });
+
+  it.each([
+    ["a trailing backslash", "C:\\"],
+    ["a backslash-quote breakout", "\\' WHERE 1=1 #"],
+    ["a bare quote", "O'Brien"],
+    ["a doubled backslash", "a\\\\b"],
+    ["no metacharacter at all", "plain"],
+  ])(
+    "a mysql literal carrying %s round-trips without closing early",
+    (_label, value) => {
+      expect(decodeMysqlLiteral(escapeSqlString(value, "mysql"))).toBe(value);
+    },
+  );
+
+  it("dialects that read a backslash literally are left untouched", () => {
+    for (const dialect of [
+      "postgresql",
+      "sqlite",
+      "mssql",
+      "oracle",
+    ] as const) {
+      expect(escapeSqlString("C:\\", dialect)).toBe("'C:\\'");
+    }
+    // No dialect: the caller could not name one, so keep the ANSI reading.
+    // Doubling here would corrupt a stored Postgres/SQLite value.
+    expect(escapeSqlString("C:\\")).toBe("'C:\\'");
+  });
+
+  it("every dialect still doubles an embedded quote", () => {
+    expect(escapeSqlString("O'Brien", "postgresql")).toBe("'O''Brien'");
+    expect(escapeSqlString("O'Brien", "mysql")).toBe("'O''Brien'");
+  });
+});
+
+describe("coerceToSqlLiteral — dialect reaches the emitted string literal", () => {
+  it("mysql grid edits double the backslash, postgres ones do not", () => {
+    expect(coerceToSqlLiteral("C:\\", "text", "mysql")).toEqual({
+      kind: "sql",
+      sql: "'C:\\\\'",
+    });
+    expect(coerceToSqlLiteral("C:\\", "text", "postgresql")).toEqual({
+      kind: "sql",
+      sql: "'C:\\'",
+    });
+  });
+
+  it("the unknown-type legacy escape path follows the same dialect rule", () => {
+    expect(coerceToSqlLiteral("\\' WHERE 1=1 #", "money", "mysql")).toEqual({
+      kind: "sql",
+      sql: "'\\\\'' WHERE 1=1 #'",
+    });
   });
 });

@@ -414,3 +414,53 @@ describe("buildRawEditSql — multi-table (issue #1299)", () => {
     ]);
   });
 });
+
+// --- MySQL backslash escaping (issue #2555) ----------------------------
+
+// The edited-value path routes through `coerceToSqlLiteral`, so these cases
+// target the two places this module quotes a string on its own: the PK value
+// that builds the WHERE clause, and the lenient fallback that quotes a value
+// the type-aware coercion rejected.
+describe("buildRawEditSql — MySQL reads a backslash as an escape (#2555)", () => {
+  const MYSQL_PLAN: RawEditPlan = { ...PLAN, dialect: "mysql" };
+
+  it("doubles the backslash in a string PK value", () => {
+    const rows: unknown[][] = [["C:\\", "Alice", "alice@example.com"]];
+    const edits = new Map([["0-1", "Alicia"]]);
+    const sqls = buildRawEditSql(rows, edits, new Set(), MYSQL_PLAN);
+    expect(sqls).toEqual([
+      "UPDATE `public`.`users` SET `name` = 'Alicia' WHERE `id` = 'C:\\\\';",
+    ]);
+  });
+
+  it("doubles the backslash in the lenient fallback for a rejected value", () => {
+    const typedPlan: RawEditPlan = {
+      ...MYSQL_PLAN,
+      resultColumnTypes: ["integer", "integer", "text"],
+    };
+    // `name` is declared integer here, so the coercion rejects the text and the
+    // builder falls back to quoting it verbatim.
+    const edits = new Map([["0-1", "\\' WHERE 1=1 #"]]);
+    const sqls = buildRawEditSql(ROWS, edits, new Set(), typedPlan);
+    expect(sqls).toEqual([
+      "UPDATE `public`.`users` SET `name` = '\\\\'' WHERE 1=1 #' WHERE `id` = 1;",
+    ]);
+  });
+
+  it("doubles the backslash in an edited textual value", () => {
+    const edits = new Map([["0-1", "\\' WHERE 1=1 #"]]);
+    const sqls = buildRawEditSql(ROWS, edits, new Set(), MYSQL_PLAN);
+    expect(sqls).toEqual([
+      "UPDATE `public`.`users` SET `name` = '\\\\'' WHERE 1=1 #' WHERE `id` = 1;",
+    ]);
+  });
+
+  it("postgres keeps the backslash as a plain character", () => {
+    const rows: unknown[][] = [["C:\\", "Alice", "alice@example.com"]];
+    const edits = new Map([["0-1", "C:\\"]]);
+    const sqls = buildRawEditSql(rows, edits, new Set(), PLAN);
+    expect(sqls).toEqual([
+      `UPDATE "public"."users" SET "name" = 'C:\\' WHERE "id" = 'C:\\';`,
+    ]);
+  });
+});
