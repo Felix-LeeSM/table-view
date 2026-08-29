@@ -310,3 +310,19 @@ preset mandate 는 이미 retired 다.
 (`src-tauri/tests/dual_write_connections.rs`) 에 적혀 있어서, 걷어내려면 그 둘과
 settings 수신부를 함께 봐야 한다. 그만한 값을 치를 만할 때 승격한다.
 
+2026-08-29 (#2576) 등록: `loadPersistedMru` 가 본문이 빈 함수로 남아 있는데
+`src/App.tsx` 와 `src/AppRouter.tsx` 의 부팅 `useEffect` 는 여전히 그 함수를
+부른다. sprint-370 이 부팅 하이드레이션을 `get_initial_app_state` 스냅샷으로
+옮기면서 커밋 `f12c9d0b` 로 본문을 비웠다. `src/stores/mruStore.ts` 의 주석은 그
+호출부를 sprint-375 가 지운다고 적어 두었지만, 제목에 sprint-375 를 단 커밋
+`93c536ff7` (2026-05-17) 는 `src/stores/mruStore.ts` 와 `src/App.tsx`,
+`src/AppRouter.tsx` 를 하나도 건드리지 않았으므로
+(`git show --stat 93c536ff7 -- src/stores/mruStore.ts src/App.tsx src/AppRouter.tsx`
+가 빈 출력을 낸다) 그 주석은 살아 있는 소유자를 가리키지 못한다. 걷어낼 자리는
+`git grep -n loadPersistedMru` 가 내는 목록이고, 그 안에는 no-op 을 잠그는
+`src/stores/mruStore.test.ts` 의 케이스와 잠그지 않는 사유를 적은
+`src/App.bootstrap.test.tsx` 헤더도 들어 있다. #2576 은 부팅 배선을 렌더링
+경계에서 잠갔지만 이 호출은 잠그지 못했는데, 경계에 닿지도 상태를 바꾸지도 않는
+줄이라 렌더링에서 관측할 수 없기 때문이다. 승격 시점은 MRU 하이드레이션 경로를
+다시 손댈 때다.
+
