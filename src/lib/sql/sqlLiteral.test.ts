@@ -106,7 +106,7 @@ function decodeMysqlLiteral(sql: string): string {
 }
 
 describe("escapeSqlString — MySQL reads a backslash as an escape (#2555)", () => {
-  it("mysql doubles the backslash before doubling the quote", () => {
+  it("mysql doubles both metacharacters in the emitted literal", () => {
     expect(escapeSqlString("C:\\", "mysql")).toBe("'C:\\\\'");
     expect(escapeSqlString("\\' WHERE 1=1 #", "mysql")).toBe(
       "'\\\\'' WHERE 1=1 #'",

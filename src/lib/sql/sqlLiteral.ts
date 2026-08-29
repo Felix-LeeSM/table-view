@@ -142,8 +142,12 @@ export type CoerceResult =
  * the character the other looks for.
  *
  * Every other dialect here treats `\` as an ordinary character, so doubling it
- * would corrupt the stored value. An absent `dialect` keeps that ANSI reading,
- * because the callers that omit it (Postgres arrays, jsonb) are not MySQL.
+ * would corrupt the stored value, and an absent `dialect` keeps that ANSI
+ * reading. That default is right for the Postgres-only callers that omit it
+ * (`arrayElementToLiteral` below, `jsonbValueLiteral` in `./structuralSqlEdit`)
+ * and wrong for `mysqlJsonValueLiteral` in that same file, which sits behind a
+ * MySQL branch and omits it too — a deferred gap, tracked under *Security / ops
+ * policy* in `docs/roadmap/follow-up-queue.md`.
  */
 export function escapeSqlString(value: string, dialect?: SqlDialect): string {
   const escaped = dialect === "mysql" ? value.replace(/\\/g, "\\\\") : value;
