@@ -108,8 +108,7 @@ structure editor (`KvKeyDetailPanel` / `KvMutationPanel`) reads the mutation's
 `danger` tier. What holds the two together is
 `src/components/query/QueryTab/kvDestructiveTier.test.ts`, which asserts per
 verb that both routes reach `danger` and that both build the same command
-string, so registering a data-loss verb on one route without the other fails
-there. Where the routes still part is the dialog on non-production `warn` /
+string. Where the routes still part is the dialog on non-production `warn` /
 `off`: the console takes it regardless, because the data-loss predicate
 overrides the matrix, while the structure editor follows the matrix, gets
 `allow`, and leaves its own preview-then-confirm step as the whole gate. On

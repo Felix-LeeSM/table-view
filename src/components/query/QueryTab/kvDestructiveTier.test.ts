@@ -23,8 +23,7 @@ import {
 // `info`, so `decideSafeModeAction` answered `allow` in every tier and the
 // command reached IPC with no dialog — production + `strict` included.
 //
-// One case per verb, on purpose: the defect is a per-verb omission from a map,
-// so a single case covering all six would still pass with five of them missing.
+// One case per verb, on purpose: the defect is a per-verb omission from a map.
 // Each case measures BOTH paths for its verb and asserts the two build the same
 // command string, so "the console and the structure editor disagree about this
 // command" is what fails rather than a tier constant somewhere.
@@ -74,10 +73,6 @@ const envelope = (
   value: KvValueEnvelope["value"],
 ): KvValueEnvelope => ({ key, metadata: meta(key, keyType), value });
 
-// `entryDeletePending` only reads the envelope to add hazard notes to the
-// summary, so these carry two entries each — enough that neither the
-// last-entry-GC nor the duplicate-LREM note fires and the summary stays the
-// bare preview line.
 const hashValue = envelope("user:1", "hash", {
   type: "hash",
   fields: [
