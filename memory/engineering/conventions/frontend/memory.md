@@ -81,6 +81,13 @@ backend contract 를 통해서만 다룬다.
   Cancel/Esc 는 항상 즉시. 실행 중엔 loading/disabled+aria-busy 로 이중 실행을
   막는다. `ConnectionItem` 삭제 / `DbLifecycleDialog` DROP 은 role/focus 통일만
   (arm 미적용). (#1111 결정 / #1141 안전)
+- `ConfirmDestructiveDialog` 헤더는 Safe Mode tier 를 적지 않는다. 이 창은 tier 를
+  프롭으로 받지 않고, 매트릭스를 지나지 않는 호출자가 있기 때문이다:
+  `src/components/query/QueryTab/kvQueryExecution.ts` 는 데이터 손실 명령이면
+  매트릭스가 `allow` 를 내도 열고, `src/components/workspace/OperationsPanel.tsx`
+  은 Safe Mode 를 아예 참조하지 않고 kill 확인창을 연다. 헤더는 연결 환경만
+  말하고, tier 는 `src/lib/safeMode.ts` 가 비-production strict 경로에서 `reason`
+  에 적는다 (#2518).
 
 ## Contract 경계
 
