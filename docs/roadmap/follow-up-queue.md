@@ -263,30 +263,12 @@ report actually exercises:
   a parse failure recoverable the same way a missing file now is, but it changes
   what the existing quarantine test asserts and was outside what #2183 asked for.
 
-MySQL JSON 컬럼을 구조 편집으로 다룰 때 만들어지는 SQL 문자열 리터럴은 백슬래시를
-이중화하지 않는데, 두 함수가 서로 다른 이유로 그 상태에 있다.
-`src/lib/sql/structuralSqlEdit.ts` 의 `mysqlJsonValueLiteral` 은 값을
-`escapeSqlString` 으로 감쌀 때 방언을 넘기지 않아서 어느 층에서도 이중화하지 않는다.
-같은 파일의 `mysqlPathLiteral` 은 JSON 경로 문법 층에서 백슬래시를 이중화하지만, 그
-결과를 감싸는 SQL 리터럴 층은 홑따옴표만 이중화한다. MySQL 의 문자열 리터럴 파서가
-그 이중화를 도로 한 개로 읽으므로, JSON 경로 문법에 닿는 값은 백슬래시가 한 개인
-원래 상태로 돌아간다. 경로 `we\ird` 를 넘기면 `'$."we\\ird"'` 가 만들어진다.
-`src/components/datagrid/sqlGenerator.ts` 의 MySQL 분기가 두 함수에 모두 도달한다.
-
-그리드 셀 편집과 raw 쿼리 편집에 있던 같은 결함은 #2555 가 닫았다. 그 이슈가 해악을
-평가해서 본체 밖에 둔 자리는 JSON 경로뿐이고, JSON 값 자리는 그 이슈에 없다. 이슈의
-자리 열거를 `git grep -nF "replace(/'/g, \"''\")"` 로 만드는 바람에 `escapeSqlString`
-을 부르는 자리가 통째로 빠졌고, 그 자리는 #2573 이 새로 찾았다
-(`gh issue view 2555 --json body -q .body | grep -nE 'mysqlJsonValueLiteral|JSON 값'`
-가 0건이다). 그러므로 승격을 검토할 때 JSON 값 자리의 해악은 평가된 적이 없는 것으로
-보고 새로 재야 한다.
-
-그리드의 트리 편집기는 MySQL JSON 컬럼에 열리지 않는다.
-`src/components/datagrid/DataGridTable/DataRow.tsx` 의 진입 조건이 `isJsonbColumn`
-을 쓰는데, 그 함수는 `jsonb` 정확 일치만 받고 MySQL JSON 컬럼의 `data_type` 은
-`json` 이기 때문이다. 반면 생성기 쪽인 `src/components/datagrid/sqlGenerator.ts` 는
-`isStructuralJsonColumn` 으로 MySQL 의 `json` 을 이미 받는다. 그래서 저 진입 조건이
-MySQL JSON 을 받도록 열리는 시점이 곧 승격 시점이고, 그때 위 두 함수를 함께 고친다.
+`src/lib/sql/structuralSqlEdit.ts` 의 `mysqlJsonValueLiteral` 과 `mysqlPathLiteral` 은
+MySQL JSON 컬럼을 구조 편집으로 다룰 때 쓰는 SQL 문자열 리터럴을 만드는데, #2555 가
+넣은 MySQL 백슬래시 이중화가 여기에는 적용되지 않는다. #2555 는 `escapeSqlString` 과
+`quoteString` 을 본체로 잡았고 이 자리는 그 밖이다. 승격 시점은
+`src/components/datagrid/DataGridTable/DataRow.tsx` 의 트리 편집기 진입 조건이 MySQL
+JSON 컬럼을 받도록 열리는 때이고, 그때 함께 고친다.
 
 ### Quality gates
 
