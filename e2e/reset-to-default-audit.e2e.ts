@@ -1,18 +1,38 @@
 // Sprint 376 (2026-05-17, Phase 6 Q21) — Reset-to-default audit e2e.
 //
-// 작성 이유: Q21 9 affordance 의 user-visible entry point 가 모두
-// 실제 빌드 한 사용자 워크플로우 안에서 동작하는지 lock. RTL 은 컴포넌트
-// 단위 contract — IPC 호출 인자만 검사. 본 spec 은 두 윈도우 (launcher +
-// workspace) 가 살아있는 cold boot 환경에서 9 시나리오를 차례로 fire.
+// 상태 (#2474, 2026-09-05): 이 파일을 어느 러너도 실행하지 않는다 — 그래서
+// 회귀 고정장치가 아니다. wdio 는 `e2e/smoke/**/*.spec.ts` 만 집고
+// (wdio.smoke.conf.ts `specs`), vitest 는 `e2e/**` 를 제외한다
+// (vite.config.ts `exclude`). tauri-driver 는 macOS 를 지원하지 않아 개발
+// 머신(macOS)에서 smoke 스위트를 돌릴 수도 없다 — 이 스위트가 CI 에서 도는
+// 자리는 Linux (xvfb + WebKitGTK) 뿐이고, 거기서도 이 파일은 글롭 밖이라
+// e2e-smoke 가 도는 PR 에서조차 실행되지 않는다.
+//
+// 남겨 두는 이유: 아래 9 시나리오 목록이 Q21 reset affordance 의 사용자-가시
+// 진입점과 그 이동 기록(sprint-377 / #2440 / #2433)을 한 자리에 모은 시나리오
+// 인벤토리이자, 손으로 검증할 때의 체크리스트라는 것.
+// docs/contributor-guide/smoke-matrix/h7-ops-security-reliability.md 도 이
+// 파일을 "invoked by nothing ... scenario inventory" 로 분류한다. 실행으로
+// 잡는 회귀 가드는 RTL 이 담당한다 — HomePage · ConnectionGroup ·
+// HeaderRow · Sidebar · FavoritesPanel 의 `*reset-affordance*.test.tsx` 와
+// Sidebar.collapse-toggle.test.tsx, RecentConnections.test.tsx.
+//
+// 본문의 selector 는 2026-05-17 작성 시점 기준이고 지금과 어긋난 것이
+// 확인됐다 — 시나리오 7 이 기다리는 "Collapse all" 은 Sprint 379 부터 객체
+// 이름이 붙는 `Collapse all {{objectPlural}}` 이다
+// (src/lib/i18n/locales/layout.ts `sidebar.collapseAll`). smoke 스위트에
+// 편입하려면 갈래 1 — `e2e/smoke/` 로의 이동 + `.spec.ts` 개명 +
+// e2e/scope-map.mjs 와 e2e/fixtures/seed-smoke.ts 등록 — 이 필요하다.
 //
 // 8 원칙 적용:
 //   1. 다중 컴포넌트 + 두 윈도우 + IPC 결합 — vitest 로 잡을 수 없는 path.
 //   2. 사용자 의도: "한 번 reset 메뉴 9개 다 클릭해서 default 가 들어오는지
 //      확인" — 단일 직선적 it.
-//   3. CUJ 회귀: 머지 후 reset 메뉴 노출이 빠지면 본 spec 이 fail —
-//      사용자 보고가 늦지 않는다.
+//   3. 머지 후 reset 메뉴 노출이 빠져도 본 spec 은 fail 하지 않는다 —
+//      러너가 돌리지 않기 때문이다 (위 「상태」 절).
 //   4. 매트릭스 단순화: PG 단일 (DBMS 자체 contract 무관, UI 만 검증).
-//   5. 회귀 고정: ADR sprint-376 의 핵심 lego invariant.
+//   5. (구 "회귀 고정") sprint-376 의 lego invariant 를 기록하는
+//      인벤토리일 뿐, 실행되는 고정장치가 아니다.
 //   6. skip 없음.
 //   7. tauri-driver 한계: 본 spec 은 sidebar / launcher / workspace 의
 //      visible affordance 만 검증 — 강등 경로 불필요.
