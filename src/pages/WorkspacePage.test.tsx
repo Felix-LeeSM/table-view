@@ -5,7 +5,7 @@ import { useThemeFavoritesStore } from "@stores/themeFavoritesStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { act, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import WorkspacePage from "./WorkspacePage";
 
 // Wrap the runtime implementation in a spy so the workspace's mount + focus
@@ -31,9 +31,25 @@ vi.mock("@components/layout/Sidebar", () => ({
   ),
 }));
 
-vi.mock("@components/layout/MainArea", () => ({
-  default: () => <div data-testid="main-area-mock" />,
-}));
+// #2461 — `vi.mock` is file-scoped, and most cases here assert the page shell
+// against the stub. The `[collapsed-rail-wired]` case below needs the real
+// assembled tree (the stub is exactly what hides a "toolbar disappeared"
+// regression), so the mock dispatches on this flag instead of being removed.
+const mainAreaWired = vi.hoisted(() => ({ real: false }));
+
+vi.mock("@components/layout/MainArea", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@components/layout/MainArea")>();
+  const RealMainArea = actual.default;
+  return {
+    default: () =>
+      mainAreaWired.real ? (
+        <RealMainArea />
+      ) : (
+        <div data-testid="main-area-mock" />
+      ),
+  };
+});
 
 // Sprint 161 — isolate from the full ThemePicker rendering (72 cards + radix
 // portals) so we can assert the trigger contract without visual noise.
@@ -78,6 +94,12 @@ function resetStores() {
 }
 
 describe("WorkspacePage", () => {
+  // A test that flips `mainAreaWired.real` and then throws must not hand the
+  // real tree to the shell-asserting cases below (they query `main-area-mock`).
+  afterEach(() => {
+    mainAreaWired.real = false;
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     resetStores();
@@ -109,10 +131,12 @@ describe("WorkspacePage", () => {
   // alive as a narrow rail, because that strip owned the only route back to
   // the launcher and the only theme / language control (#1738).
   //
-  // #2431 moved both controls into `WorkspaceToolbar` (mocked away with
-  // `MainArea` in this file — their collapsed reachability is asserted in
-  // `src/components/workspace/WorkspaceToolbar.collapsed-rail.test.tsx`), so
-  // the collapse now takes the column whole and no rail is left behind.
+  // #2431 moved both controls into `WorkspaceToolbar`. Their collapsed
+  // reachability is asserted at both axes: the toolbar itself in
+  // `src/components/workspace/WorkspaceToolbar.collapsed-rail.test.tsx`, and
+  // — below, as `[collapsed-rail-wired]` (#2461) — in the assembled
+  // WorkspacePage tree with `MainArea` un-stubbed, which is the only view
+  // that can see MainArea stop mounting the toolbar when collapsed.
   describe("collapsed left panel (#1734, rail removed by #2431)", () => {
     it("[collapsed-rail] hides the sidebar and leaves no rail behind", () => {
       useLayoutStore.setState({ sidebarCollapsed: true });
@@ -128,6 +152,28 @@ describe("WorkspacePage", () => {
       // mounts — is untouched by the collapse. This is what makes the two
       // controls reachable at all in the collapsed state.
       expect(screen.getByTestId("main-area-mock")).toBeInTheDocument();
+    });
+
+    // #2461 — the assembled-tree counterpart of the case above. Every other
+    // collapsed guard sees one axis: the shell cases look at a stubbed
+    // `MainArea` (the toolbar never renders), and
+    // `WorkspaceToolbar.collapsed-rail.test.tsx` mounts the toolbar directly
+    // (whoever mounts it stays out of view). Gating that mount on
+    // `!sidebarCollapsed` therefore survives all of them, while collapsing
+    // would throw away the launcher route and the only theme / language
+    // controls — the exact premise `WorkspaceToolbar.tsx` states for parking
+    // them there. This case un-stubs `MainArea` for one collapsed render.
+    it("[collapsed-rail-wired] keeps the toolbar's launcher and theme controls reachable in the assembled collapsed tree", () => {
+      useLayoutStore.setState({ sidebarCollapsed: true });
+      mainAreaWired.real = true;
+      render(<WorkspacePage />);
+
+      expect(
+        screen.getByRole("button", { name: /^back to connections$/i }),
+      ).toBeVisible();
+      expect(
+        screen.getByRole("button", { name: /workspace theme/i }),
+      ).toBeVisible();
     });
 
     // The column is gone, so its landmark goes with it. An empty <nav> would
