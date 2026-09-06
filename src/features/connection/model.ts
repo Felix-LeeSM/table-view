@@ -287,6 +287,39 @@ export const isSearchFamily = (dbType: DatabaseType): boolean =>
   paradigmOf(dbType) === "search";
 
 /**
+ * Issue #2448 — the ceiling each backend driver applies to
+ * `connectionTimeout` before it dials. Mirror of the per-driver consts under
+ * `src-tauri/table-view-core/src/db/`: `MssqlAdapter::MAX_CONNECTION_TIMEOUT_SECS`,
+ * `MONGO_CONNECT_TIMEOUT_MAX_SECS` and `SEARCH_HTTP_TIMEOUT_MAX_SECS` read
+ * 300, while `PG_POOL_ACQUIRE_TIMEOUT_MAX_SECS`,
+ * `MYSQL_POOL_ACQUIRE_TIMEOUT_MAX_SECS`, `ORACLE_CONNECT_TIMEOUT_MAX_SECS`,
+ * `REDIS_CONNECT_TIMEOUT_MAX_SECS` and the SQLite pool's
+ * `SQLITE_POOL_ACQUIRE_TIMEOUT_MAX_SECS` read 30; duckdb reads no timeout at
+ * all. The backend stays the enforcer — `ConnectionConfig::connect_timeout`
+ * clamps again at dial time — so a ceiling that drifts here can only
+ * mis-display the bound, never widen the wait.
+ */
+export function connectTimeoutMaxSecs(dbType: DatabaseType): number {
+  return dbType === "mssql" || dbType === "mongodb" || isSearchFamily(dbType)
+    ? 300
+    : 30;
+}
+
+/**
+ * Issue #2448 — keep the draft's timeout inside the adapter's ceiling so the
+ * value on screen is the value a dial gets. An unset timeout stays unset: the
+ * shared default lives in the input's `?? 10` display and the backend's
+ * `CONNECT_TIMEOUT_DEFAULT_SECS`.
+ */
+export function clampConnectionTimeout(
+  dbType: DatabaseType,
+  seconds: number | undefined,
+): number | undefined {
+  if (seconds === undefined) return undefined;
+  return Math.min(connectTimeoutMaxSecs(dbType), seconds);
+}
+
+/**
  * Membership gate for carrying the TLS posture across a `dbType` switch
  * (`applyDbTypeChange`). Members: `mssql`, `mongodb`, `redis`, `valkey`,
  * `elasticsearch`, `opensearch` — the engines whose form renders a plain
@@ -570,7 +603,12 @@ export function draftFromConnection(conn: ConnectionConfig): ConnectionDraft {
     readOnly: conn.readOnly ?? false,
     groupId: conn.groupId,
     color: conn.color,
-    connectionTimeout: conn.connectionTimeout,
+    // #2448 — show what the adapter will actually wait, not a stored value it
+    // would silently cut.
+    connectionTimeout: clampConnectionTimeout(
+      conn.dbType,
+      conn.connectionTimeout,
+    ),
     keepAliveInterval: conn.keepAliveInterval,
     environment: conn.environment,
     paradigm: conn.paradigm,

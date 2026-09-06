@@ -20,6 +20,8 @@ import {
 } from "@/types/dataSource";
 import type { ConnectionDraft, DatabaseType } from "../../model";
 import {
+  clampConnectionTimeout,
+  connectTimeoutMaxSecs,
   DATABASE_TYPE_LABELS,
   ENVIRONMENT_META,
   ENVIRONMENT_OPTIONS,
@@ -614,20 +616,25 @@ export default function ConnectionDialogBody({
                 </label>
                 {/* #2429 — 10 mirrors `CONNECT_TIMEOUT_DEFAULT_SECS` in
                     src-tauri/table-view-core/src/models/connection.rs, which
-                    is what an unset field actually gets. The old 300 named a
-                    per-adapter fallback that every adapter then clamped
-                    away. */}
+                    is what an unset field actually gets. #2448 — the ceiling
+                    is a per-driver property (`connectTimeoutMaxSecs` in
+                    ../../model.ts names the backend consts), so the input
+                    mirrors the draft's adapter ceiling and clamps what it
+                    stores. The old 600 advertised more than any dial waited. */}
                 <input
                   id="conn-timeout"
                   className={inputClass}
                   type="number"
                   min={5}
-                  max={600}
+                  max={connectTimeoutMaxSecs(form.dbType)}
                   value={form.connectionTimeout ?? 10}
                   onChange={(e) =>
                     setForm((f) => ({
                       ...f,
-                      connectionTimeout: parseInt(e.target.value, 10) || 10,
+                      connectionTimeout: clampConnectionTimeout(
+                        form.dbType,
+                        parseInt(e.target.value, 10) || 10,
+                      ),
                     }))
                   }
                   placeholder="10"
