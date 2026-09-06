@@ -11,7 +11,7 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getTestWorkspace,
@@ -128,10 +128,15 @@ vi.mock("@hooks/useSqlAutocomplete", () => ({
 
 // Issue #2375 — a batch carrying a destructive statement now mounts the
 // SqlPreviewDialog before dispatch, the same way a WHERE-bounded write
-// already did. The dialog is modal, so the mock editor's own Execute button
-// is aria-hidden while it is open and this lookup is unambiguous.
+// already did. Issue #2445 — the dialog is modal, so the mock editor's own
+// Execute button is aria-hidden while it is open and a screen-wide name
+// lookup happens to be unambiguous, but only while the window is up: with
+// the preview mount gone the same lookup hands the click to the editor
+// button. Resolving the dialog first makes a missing preview mount fail
+// here instead of clicking whatever else answers to "Execute".
 async function confirmSqlPreview() {
-  const confirmBtn = await screen.findByRole("button", { name: /execute/i });
+  const dialog = await screen.findByRole("dialog");
+  const confirmBtn = within(dialog).getByRole("button", { name: /execute/i });
   await act(async () => {
     confirmBtn.click();
   });

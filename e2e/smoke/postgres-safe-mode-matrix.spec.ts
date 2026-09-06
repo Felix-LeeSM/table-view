@@ -13,6 +13,7 @@ import {
   typeQuery,
   waitForDialogTextAll,
   waitForLauncher,
+  waitForWorkspaceTextAll,
 } from "./_helpers";
 
 /**
@@ -104,6 +105,17 @@ describe("PostgreSQL Safe Mode mode-dial matrix", () => {
         // modal overlay over the toolbar and the next step's mode-dial
         // click would fail as "element not interactable".
         await executeSqlPreview();
+        // Issue #2445 — the window closing is not proof the statement ran:
+        // `confirmRdbWarn` clears the pending preview BEFORE it dispatches
+        // (`src/components/query/QueryTab/useQueryExecution.ts`), so waiting
+        // for the close alone would stay green even if the DROP failed at
+        // the driver. A DDL completion is what renders the success line in
+        // the result panel, so pin the run itself.
+        await waitForWorkspaceTextAll(
+          ["Query executed successfully"],
+          15000,
+          "class A DROP statement did not reach a successful result",
+        );
       },
     );
 

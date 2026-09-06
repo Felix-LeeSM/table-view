@@ -161,7 +161,8 @@ export function decideSafeModeAction(
  *
  * `src/lib/safeMode.previewGate.test.ts` reads the dispatch sources and fails
  * if any file that mounts the preview compares a value against the `warn`
- * string literal.
+ * string literal, or if a file's preview mounts outnumber its
+ * `requiresPreviewDialog` consults (issue #2445).
  */
 export function requiresPreviewDialog(severity: Severity): boolean {
   return severity !== "info";
