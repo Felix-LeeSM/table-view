@@ -14,43 +14,48 @@
 //
 //   A. no preview-mounting file compares a value against the `warn` string
 //      literal,
-//   B. every preview-mounting file routes through `requiresPreviewDialog`,
+//   B. the preview mounts in a file never outnumber its
+//      `requiresPreviewDialog(` consults,
 //   C. every mongosh dispatch branch that consults the Safe Mode matrix also
 //      consults the preview gate.
 //
 // A file mounts the preview when it calls a `setPending*Warn` setter with a
 // payload. A dispatch branch is an `if (parsed.method === "…")` arm of one of
 // those files. A is what fails when someone writes a new gate the old way; B
-// is what fails when someone writes a new gate in a new file without the
-// predicate; C is what fails when someone adds a branch to a file that
-// already passes A and B — the form that shipped `dropIndex` with no dialog
-// at all, since a file-granular check cannot see a single branch missing.
+// is what fails when a mount lands without its own consult — a new file, a
+// second mount in a file whose single consult used to satisfy a file-level
+// text search, or a mount the branch-granular check cannot see: the last
+// arm's body runs to EOF, and C drops the head of the split entirely
+// (issue #2445 — both positions now fail on the mount count instead). C is
+// what fails when someone adds a branch to a file that already passes A and
+// B — the form that shipped `dropIndex` with no dialog at all, since a
+// file-granular check cannot see a single branch missing.
 //
 // KNOWN CEILINGS — forms this file does NOT catch, verified by writing each
 // one into the source and watching the suite stay green:
-//   - a tier test that never names the literal, e.g. comparing the numeric
-//     output of a rank helper (`severityRank(analysis.severity) === 1`);
-//   - a membership test, e.g. `["warn"].includes(analysis.severity)`, which
-//     carries the literal but no comparison operator next to it;
-//   - a new gate in an already-covered branch that mounts the preview for the
-//     DANGER tier only and so still skips WARN — it passes A, B and C while
-//     gating the wrong half;
-//   - a decision site outside an `if (parsed.method === "…")` arm, since C's
-//     population is those arms. `rdbQueryExecution.ts` has no arms at all and
-//     holds B only because it has exactly one `requiresPreviewDialog(` call —
-//     that is arity, not structure: adding a second, ungated
-//     `setPendingRdbWarn` mount to that file leaves the whole suite green
-//     (measured — the file-level `text.includes` in B still sees the first
-//     call). And `executeMongoRunCommandIfPresent` in
-//     `mongoQueryExecution.ts` sits ahead of the first arm, so its decision
-//     site is in the dropped head of the split; it carries no
-//     `requiresPreviewDialog(` today and the suite is green, which is the
-//     same measurement. What covers that one is its own stricter gate — it
-//     routes a non-INFO command to the confirm dialog, not to this preview —
-//     so do not "fix" it by routing it through the preview predicate.
+//   - a tier test that never names the literal, e.g. adding a rank-helper
+//     conjunct (`requiresPreviewDialog(analysis.severity) &&
+//     severityRank(analysis.severity) !== 1`) next to a consult, which
+//     carries no comparison against the literal and still skips WARN;
+//   - a membership test as that same conjunct, e.g.
+//     `!["warn"].includes(analysis.severity)`, which carries the literal but
+//     no comparison operator next to it;
+//   - a consult fed something other than the analyzed severity: B pairs a
+//     consult with a mount but does not read what the consult is handed, so
+//     `requiresPreviewDialog(analysis.kind === "deleteMany" ? "warn" :
+//     "info")` gates the wrong half and still passes A, B and C;
+//   - a consult whose result never reaches the mount: B counts text, so
+//     computing `needsPreview` in `rdbQueryExecution.ts` and then ignoring
+//     it leaves the whole suite green.
 // The behavioural tests in `src/components/query/QueryTab.warn-dialog.test.tsx`
 // and `src/components/query/QueryTab/useQueryExecution.writeDispatch.test.tsx`
 // are what cover those; this file covers the shape.
+//
+// `executeMongoRunCommandIfPresent` in `mongoQueryExecution.ts` consults the
+// Safe Mode matrix ahead of the first arm and routes a non-INFO command to
+// the confirm dialog, not to this preview — it mounts nothing, so B's
+// population never grows around it. Do not "fix" it by routing it through
+// the preview predicate.
 //
 // A consequence of A worth knowing before editing a dispatch file: the check
 // reads raw text, so writing the forbidden comparison inside a *comment* in
@@ -69,6 +74,16 @@ const SRC_ROOT = resolve(process.cwd(), "src");
 // The negative lookahead drops the dismissal calls (`setPendingRdbWarn(null)`)
 // in the state owner, which decide nothing.
 const PREVIEW_MOUNT = /setPending\w*Warn\s*\(\s*(?!null\b)/;
+
+// Counting form of the mount population for check B. `String.match` with the
+// `g` flag ignores and resets `lastIndex`, so reusing one module-level regex
+// carries no state between files.
+const PREVIEW_MOUNT_GLOBAL = new RegExp(PREVIEW_MOUNT.source, "g");
+
+// Check B counts consults in the same notation the sources write them —
+// `requiresPreviewDialog(` with the call paren, so the import statement does
+// not count.
+const GATE_CONSULT_GLOBAL = /requiresPreviewDialog\(/g;
 
 // Any direct comparison against the `warn` literal: both operand orders and
 // the `switch` form. Test files are excluded from the population below, so
@@ -150,11 +165,18 @@ describe("preview-dialog gate — shape guard (issue #2375)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("every preview-mounting file routes through requiresPreviewDialog", () => {
-    const missing = previewMountFiles
-      .filter(({ text }) => !text.includes("requiresPreviewDialog("))
-      .map(({ path }) => relative(path));
-    expect(missing).toEqual([]);
+  it("never lets preview mounts outnumber requiresPreviewDialog consults in a file", () => {
+    const offenders: string[] = [];
+    for (const { path, text } of previewMountFiles) {
+      const mounts = text.match(PREVIEW_MOUNT_GLOBAL)?.length ?? 0;
+      const consults = text.match(GATE_CONSULT_GLOBAL)?.length ?? 0;
+      if (mounts > consults) {
+        offenders.push(
+          `${relative(path)} — ${mounts} preview mount(s) against ${consults} requiresPreviewDialog consult(s)`,
+        );
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   it("finds the mongosh dispatch branches, so an empty split cannot pass vacuously", () => {
