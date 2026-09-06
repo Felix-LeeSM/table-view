@@ -30,6 +30,9 @@ test "$(git rev-parse --show-toplevel)" != "$CLONE" \
   기본값, 중단 조건이 있다.
 - `memory/workflow/pr-artifacts/memory.md`: PR body 재검사가 따르는 제약과 squash
   표면 교정의 계약이 있다. 2단계와 3단계가 그 근거를 쓴다.
+- `memory/workflow/documentation/memory.md`: 3단계가 쓰는 교정 제목·교정본이 따르는
+  산문 제약이 있다 — 「개수 서술」이 종결자의 squash body 를 걸고, 교정본에 무엇을
+  남길지는 「결정만 적는다」가 정한다.
 - `memory/workflow/review/memory.md` 「Merge 전 요구」: 머지가 성립하는 조건이 있다.
 - `memory/runbook/pr-merge-gates/memory.md`: required 게이트가 분산된 위치와
   각 required 가 검사하는 것이 있다.
