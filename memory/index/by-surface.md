@@ -16,6 +16,7 @@ generator: none — 손으로 갱신한다
 ### `**/*.rs`
 
 - [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
+- [코드 주석 원칙](../../memory/engineering/conventions/comments/memory.md)
 
 ### `**/*.test.ts`
 
@@ -28,14 +29,17 @@ generator: none — 손으로 갱신한다
 ### `**/*.ts`
 
 - [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
+- [코드 주석 원칙](../../memory/engineering/conventions/comments/memory.md)
 
 ### `**/*.tsx`
 
 - [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
+- [코드 주석 원칙](../../memory/engineering/conventions/comments/memory.md)
 
 ### `e2e/**`
 
 - [E2E 시나리오 설계 원칙](../../memory/engineering/conventions/e2e-scenarios/memory.md)
+- [코드 주석 원칙](../../memory/engineering/conventions/comments/memory.md)
 
 ### `e2e/fixtures`
 
