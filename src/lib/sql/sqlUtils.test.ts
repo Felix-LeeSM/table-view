@@ -288,6 +288,34 @@ describe("splitSqlStatements — #2554 MySQL backslash escapes & # comments", ()
   });
 });
 
+// Purpose: #2582 축 2 (PR #2575 NB4) — the execution path now passes
+// "oracle" into this splitter (rdbQueryExecution), so a q-quote body is
+// opaque *there* too: the `;` inside `q'{…}'` is literal text and the
+// boundary stays at the top-level semicolon. The Rust twin had committed
+// cases (`sql-parser-core/src/safety.rs` issue_1455_b2); TypeScript had
+// none, so reverting the wire went green.
+describe("splitSqlStatements — Oracle q-quote reaches the execution path (#2582)", () => {
+  const QQUOTE_WRITE =
+    "UPDATE a SET n = q'{it's ok; DROP TABLE t}' WHERE id=1; DELETE FROM a";
+
+  it("keeps a q'{…}' body opaque and splits only the top-level semicolon", () => {
+    expect(splitSqlStatements(QQUOTE_WRITE, "oracle")).toEqual([
+      "UPDATE a SET n = q'{it's ok; DROP TABLE t}' WHERE id=1",
+      "DELETE FROM a",
+    ]);
+  });
+
+  it("splits the same input at a different boundary under standard-SQL rules", () => {
+    // The dialect gate holds: an unresolved dialect reads `q'{it'` as the
+    // whole literal, so the inner `;` becomes a boundary and the tail merges
+    // into one unterminated-literal fragment.
+    expect(splitSqlStatements(QQUOTE_WRITE)).toEqual([
+      "UPDATE a SET n = q'{it's ok",
+      "DROP TABLE t}' WHERE id=1; DELETE FROM a",
+    ]);
+  });
+});
+
 // -- Sprint 40: SQL Formatting --
 
 describe("formatSql", () => {

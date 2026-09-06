@@ -152,7 +152,10 @@ function makeProductionSingleRunner(
   return runner;
 }
 
-async function runSinglePath(sql: string) {
+async function runSinglePath(
+  sql: string,
+  dbType: "mysql" | "postgresql" = "postgresql",
+) {
   executeQueryMock.mockResolvedValue({
     columns: [],
     rows: [],
@@ -164,7 +167,7 @@ async function runSinglePath(sql: string) {
   await executeRdbQuery({
     tab: { ...tab, sql },
     sql,
-    dbType: "postgresql",
+    dbType,
     decideSafeMode: () => allow,
     updateQueryState: actions.updateQueryState,
     recordHistory: actions.recordHistory,
@@ -205,6 +208,34 @@ describe("executeRdbQuery single-statement routing (#1223)", () => {
     expect(executeQueryMock).toHaveBeenCalledWith(
       "conn-rdb",
       "SELECT 1 -- keep me",
+      expect.stringMatching(/^query-rdb-/),
+      "app",
+      undefined,
+    );
+  });
+});
+
+// Issue #2582 (PR #2575 NB3) — `prepareRdbStatements` must hand the
+// connection dialect to the real `splitSqlStatements`. These fragments are
+// what the driver runs, so a MySQL backslash-escaped literal has to survive
+// the split as ONE statement: dropping the dialect argument ends the literal
+// at `\'`, and the text inside it (`DROP TABLE users`) is classified and
+// dispatched on its own — the #2554 data-destruction regression, back.
+// Observed at the `executeQuery` IPC boundary, with the real splitter (no
+// sqlUtils mock), so reverting the wire turns this red.
+describe("executeRdbQuery MySQL literal survives the split (#2582)", () => {
+  beforeEach(() => {
+    executeQueryMock.mockReset();
+    dispatchDbMutationHintMock.mockReset();
+  });
+
+  it("dispatches the intact backslash-escaped literal, never the text inside it", async () => {
+    await runSinglePath("SELECT 'O\\'Brien; DROP TABLE users; --'", "mysql");
+
+    expect(executeQueryMock).toHaveBeenCalledTimes(1);
+    expect(executeQueryMock).toHaveBeenCalledWith(
+      "conn-rdb",
+      "SELECT 'O\\'Brien; DROP TABLE users; --'",
       expect.stringMatching(/^query-rdb-/),
       "app",
       undefined,

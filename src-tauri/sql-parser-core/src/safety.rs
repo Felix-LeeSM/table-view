@@ -1517,6 +1517,33 @@ mod tests {
         );
     }
 
+    #[test]
+    fn issue_2582_hash_at_line_end_still_splits_next_line() {
+        // `#` directly followed by the newline: the comment must advance by
+        // exactly one char so the newline stays outside the comment and the
+        // next line still splits. Advancing by two swallows the `\n`, the
+        // comment body runs to EOF, and the `;` behind it never separates —
+        // the server receives an invisible second statement (#2554 shape).
+        assert_eq!(
+            split_statements(
+                "SELECT 1 #\nDROP TABLE t; SELECT 2",
+                SqlDialect::MysqlFamily
+            ),
+            vec!["SELECT 1 #\nDROP TABLE t", "SELECT 2"]
+        );
+    }
+
+    #[test]
+    fn issue_2582_mysql_double_quote_backslash_escape_is_opaque() {
+        // MySQL reads a double-quoted literal with the same backslash rule, so
+        // `\"` cannot close it: the `;` behind it stays literal text and the
+        // whole input is ONE statement. Every committed `split_statements`
+        // input held no `"` at all, so deleting the backslash branch went
+        // green (issue #2582).
+        let sql = r#"SELECT * FROM t WHERE name = "a\"; DROP TABLE x""#;
+        assert_eq!(split_statements(sql, SqlDialect::MysqlFamily), vec![sql]);
+    }
+
     // ----------------------------------------------------------------------
     // Parity mirror (issue #1352) — the FE<->BE parity cases used to live here
     // as a hand-copied block ("Parity mirror", ported verbatim from
