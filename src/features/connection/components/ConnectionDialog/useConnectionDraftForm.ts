@@ -6,6 +6,7 @@ import type {
   SslMode,
 } from "../../model";
 import {
+  clampConnectionTimeout,
   createEmptyDraft,
   DATABASE_DEFAULT_FIELDS,
   DATABASE_DEFAULTS,
@@ -171,6 +172,10 @@ export function useConnectionDraftForm(
         port: defaults.port,
         user: defaults.user,
         database: defaults.database,
+        // #2448 — a timeout legal for the old engine can sit above the new
+        // engine's ceiling; re-clamp here so the switch door cannot hand the
+        // next save a value the dial will silently cut.
+        connectionTimeout: clampConnectionTimeout(dbType, f.connectionTimeout),
         readOnly: false,
         ...tlsFieldsForDbType(dbType, f.sslMode),
         paradigm: paradigmOf(dbType),
