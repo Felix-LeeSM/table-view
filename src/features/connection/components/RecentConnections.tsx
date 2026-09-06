@@ -13,6 +13,7 @@ import { useRecentConnections } from "@lib/runtime/connection/useRecentConnectio
 import { Clock, Database, Eraser, X } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { activateConnection } from "./ConnectionList";
 
 /**
  * Sprint 167 — format a `Date.now()` epoch ms timestamp as a short relative
@@ -51,7 +52,11 @@ interface RecentConnectionsProps {
  * independent copy of that bound and is what holds when a caller seeds the
  * store past the cap.
  *
- * Activation: double-click or Enter triggers `onActivate`.
+ * Activation: double-click or Enter activates the row — the same
+ * `activateConnection` wrap the All/group views' `ConnectionList` rows use,
+ * which opens/focuses the per-conn workspace window and then hands the id to
+ * `onActivate` for the store-side update (#2457: the Recent route used to skip
+ * the window-open half).
  */
 export default function RecentConnections({
   onActivate,
@@ -86,9 +91,10 @@ export default function RecentConnections({
             })}
             tabIndex={0}
             onClick={() => {}} // single click: nothing special
-            onDoubleClick={() => onActivate?.(connectionId)}
+            onDoubleClick={() => activateConnection(connectionId, onActivate)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") onActivate?.(connectionId);
+              if (e.key === "Enter")
+                activateConnection(connectionId, onActivate);
             }}
           >
             <Database size={12} className="shrink-0 text-muted-foreground" />

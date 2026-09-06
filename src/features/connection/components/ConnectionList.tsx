@@ -30,6 +30,35 @@ interface ConnectionListProps {
   onActivate?: (id: string) => void;
 }
 
+// Sprint 363 (Phase 3, Q13) — connection activation opens/focuses the
+// per-conn workspace window. A second activation of the same conn is handled
+// idempotently by the backend (`open_workspace_window_inner`), which only
+// focuses the existing `workspace-{conn_id}` window (sprint-361 잠금).
+// IPC failure logs a `logger.warn` instead of a toast — the `onActivate`
+// callback still runs so store/UI state lands regardless.
+//
+// #2457 — shared by the launcher activation routes: `ConnectionList` rows
+// (All / group views) and `RecentConnections` rows (Recent view). The
+// Recent view used to bypass this and fire only the parent `onActivate`, so
+// double-click/Enter there changed the focused conn but never opened the
+// workspace window.
+export function activateConnection(
+  id: string,
+  onActivate?: (id: string) => void,
+) {
+  // Fire-and-forget: window open IPC. The parent's `onActivate` is
+  // invoked synchronously so store-side state (focused conn, stale
+  // tab cleanup) lands without waiting for the OS-level window
+  // creation.
+  void openWorkspaceWindow(id).catch((e) => {
+    logger.warn(
+      `[connection-list] openWorkspaceWindow(${id}) failed:`,
+      e instanceof Error ? e.message : e,
+    );
+  });
+  onActivate?.(id);
+}
+
 export default function ConnectionList({
   environmentFilter = null,
   groupFilter = null,
@@ -53,25 +82,11 @@ export default function ConnectionList({
   const [dropZone, setDropZone] = useState<DropZone | null>(null);
   const overRoot = dropZone?.kind === "root";
 
-  // Sprint 363 (Phase 3, Q13) — connection double-click 시 per-conn
-  // workspace window 를 open/focus 한다. 같은 conn 두 번째 클릭은
-  // backend (`open_workspace_window_inner`) 가 idempotent 하게 처리해서
-  // 기존 `workspace-{conn_id}` 윈도우만 focus 한다 (sprint-361 잠금).
-  // IPC 실패 시 toast 가 아닌 console.warn — 상위 onActivate 가 별도로
-  // store/UI 처리를 수행한다.
+  // Sprint 363 (Phase 3, Q13) — see `activateConnection` above for the
+  // window-open semantics shared with the Recent view.
   const handleActivate = useCallback(
     (id: string) => {
-      // Fire-and-forget: window open IPC. The parent's `onActivate` is
-      // invoked synchronously so store-side state (focused conn, stale
-      // tab cleanup) lands without waiting for the OS-level window
-      // creation.
-      void openWorkspaceWindow(id).catch((e) => {
-        logger.warn(
-          `[connection-list] openWorkspaceWindow(${id}) failed:`,
-          e instanceof Error ? e.message : e,
-        );
-      });
-      onActivate?.(id);
+      activateConnection(id, onActivate);
     },
     [onActivate],
   );
