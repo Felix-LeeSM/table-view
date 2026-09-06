@@ -211,3 +211,65 @@ describe("useDdlPreviewExecution — PostgreSQL structure DDL plan", () => {
     expect(screen.getByLabelText("preview error")).toHaveTextContent("");
   });
 });
+
+// Issue #2581 — the hook already hands the connection dialect to the
+// splitter, but `analyzeStatement` in the gate loop dropped it. On MySQL a
+// `#` line comment hides the rest of the line from the server, so
+// `DELETE FROM t # WHERE id=1` is a WHERE-less DELETE (danger → confirm).
+// Without the dialect the commented-out WHERE kept the grade at warn →
+// allow → the commit ran with no dialog at all.
+describe("useDdlPreviewExecution — MySQL dialect reaches the classifier (#2581)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-1",
+          name: "prod-mysql",
+          dbType: "mysql",
+          host: "localhost",
+          port: 3306,
+          database: "app",
+          username: "u",
+          password: null,
+          environment: "production",
+        } as any,
+      ],
+    });
+    useSafeModeStore.setState({ mode: "strict" });
+    useHistorySettingsStore.setState({ queryHistoryEnabled: true });
+    useQueryHistoryStore.setState({ recentVisible: [] });
+  });
+
+  // Reason: PR #2575 NB1/NB2 — asserts the Safe Mode tier the production
+  // wiring produces, not that a dialect argument was passed. The confirm
+  // reason is the analyzer's bare danger copy, so its presence pins the
+  // grade to danger. (2026-09-06)
+  it("gates a #-commented DELETE behind Safe Mode confirmation instead of committing", async () => {
+    const onCommit = vi.fn().mockResolvedValue(undefined);
+    const onRefresh = vi.fn().mockResolvedValue(undefined);
+    render(
+      <Harness
+        sql="DELETE FROM t # WHERE id=1"
+        onCommit={onCommit}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load plan" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("preview sql")).toHaveTextContent(
+        "DELETE FROM t",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Execute" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("pending confirm")).toHaveTextContent(
+        "DELETE without WHERE",
+      );
+    });
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+});
