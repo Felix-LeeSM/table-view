@@ -530,9 +530,14 @@ export async function executeRdbQuery({
     kind: "dml-update" | "dml-delete" | "dml-merge";
   }[] = [];
   for (const stmt of statements) {
-    const dialect =
-      dbType === "mssql" || dbType === "oracle" ? dbType : undefined;
-    const analysis = analyzeRdbStatementForDialect(stmt, dialect);
+    // Issue #2581 — the classifier must read the same connection dialect the
+    // splitter in `prepareRdbStatements` got. The old ternary closed on
+    // mssql/oracle, so on MySQL a `#` line comment hid the real statement
+    // shape and a WHERE-less DELETE graded warn instead of danger.
+    const analysis = analyzeRdbStatementForDialect(
+      stmt,
+      dialectFromDbType(dbType ?? undefined),
+    );
     const decision = decideOracleOrGenericSafeMode(analysis, decideSafeMode);
     if (decision.action === "block") {
       worstAction = "block";

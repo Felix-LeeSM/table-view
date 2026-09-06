@@ -19,11 +19,12 @@ import { scanDollarQuoteEnd, skipQuotedLiteral } from "./sqlTokenize";
  *   - `oracleQuotes` (Oracle, #1455 P3-4 / B2): `q'X…X'` / `nq'X…X'`
  *     alternate-quote literals are opaque, so a `;` inside one does not split.
  *
- * This splitter feeds the **execution** path (`rdbQueryExecution` /
- * `useDdlPreviewExecution`), so a fragment invented here is a statement the
- * driver actually runs: scanning MySQL text under standard-SQL rules cut
- * literal and comment bodies into standalone `DROP TABLE` statements. An
- * unresolved dialect keeps the standard-SQL reading.
+ * This splitter feeds `rdbQueryExecution`, whose fragments go to the driver,
+ * and `useDdlPreviewExecution`, which classifies each fragment for Safe Mode
+ * before its editor-registered commit runs: scanning MySQL text under
+ * standard-SQL rules cut literal and comment bodies into standalone
+ * `DROP TABLE` statements. An unresolved dialect keeps the standard-SQL
+ * reading.
  */
 export function splitSqlStatements(sql: string, dialect?: Dialect): string[] {
   const backslashEscapes = dialect === "mysql";

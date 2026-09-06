@@ -119,8 +119,10 @@ export function useDdlPreviewExecution({
   const pendingExecuteRef = useRef<(() => Promise<void>) | null>(null);
 
   const safeModeGate = useSafeModeGate(connectionId);
-  // Issue #2554 — the split below feeds the commit dispatch, so it must read
-  // the connection's dialect (MySQL backslash escapes / `#` line comments).
+  // Issue #2554 / #2581 — the split below feeds the Safe Mode classification
+  // loop, so it must read the connection's dialect (MySQL backslash escapes /
+  // `#` line comments). The commit itself is the editor-registered request in
+  // `pendingExecuteRef`; these fragments reach the gate, not the driver.
   // Resolved from the store rather than a new hook option: every caller
   // already passes `connectionId`, and `useSafeModeGate` above resolves the
   // same connection the same way.
@@ -222,7 +224,10 @@ export function useDdlPreviewExecution({
     // already trims and drops empty statements.
     const statements = splitSqlStatements(previewSql, dialect);
     for (const stmt of statements) {
-      const analysis = analyzeStatement(stmt);
+      // Issue #2581 — the classifier gets the same connection dialect the
+      // splitter above received, so both read identical literal/comment
+      // boundaries.
+      const analysis = analyzeStatement(stmt, { dialect });
       const decision = safeModeGate.decide(analysis);
       if (decision.action === "block") {
         setPreviewError(decision.reason);

@@ -370,6 +370,61 @@ describe("executeRdbQuery warn-escalation reason (#1110)", () => {
   });
 });
 
+// Issue #2581 — the classifier on this path must read the connection dialect
+// exactly like the splitter it consumes (`prepareRdbStatements`). On MySQL a
+// `#` line comment hides the rest of the line from the server, so
+// `DELETE FROM t # WHERE id=1` reaches the driver as a WHERE-less DELETE.
+// The old per-statement ternary only passed mssql/oracle on, so the
+// classifier read the commented-out WHERE and graded warn — the one-click
+// warn preview — and a full-table delete shipped without a confirm dialog.
+describe("executeRdbQuery MySQL # comment grade (#2581)", () => {
+  beforeEach(() => {
+    executeQueryMock.mockReset();
+    executeQueryDryRunMock.mockReset();
+    dispatchDbMutationHintMock.mockReset();
+  });
+
+  // Reason: PR #2575 NB1/NB2 — splitter got the dialect, classifier did not.
+  // The gate decision maps danger→confirm / warn→allow, so the confirm firing
+  // is the grade assertion (no dialect-argument spy). The dry-run probe is
+  // pinned to a small count so the impact escalation can never be the path
+  // that opens the confirm dialog. (2026-09-06)
+  it("routes a MySQL #-commented DELETE behind the confirm gate, not the warn preview", async () => {
+    executeQueryDryRunMock.mockResolvedValue([
+      {
+        columns: [],
+        rows: [],
+        totalCount: 3,
+        executionTimeMs: 0,
+        queryType: { dml: { rows_affected: 3 } },
+      },
+    ]);
+    const actions = createSingleActions();
+    const setPendingRdbConfirm = vi.fn();
+    const setPendingRdbWarn = vi.fn();
+    const sql = "DELETE FROM t # WHERE id=1";
+
+    await executeRdbQuery({
+      tab: { ...tab, sql },
+      sql,
+      dbType: "mysql",
+      decideSafeMode: (analysis) =>
+        analysis.severity === "danger"
+          ? { action: "confirm", reason: "danger-tier" }
+          : allow,
+      updateQueryState: actions.updateQueryState,
+      recordHistory: actions.recordHistory,
+      setPendingRdbConfirm,
+      setPendingRdbWarn,
+      runRdbSingle: makeProductionSingleRunner(actions),
+      runRdbBatch: vi.fn(),
+    });
+
+    expect(setPendingRdbConfirm).toHaveBeenCalledTimes(1);
+    expect(setPendingRdbWarn).not.toHaveBeenCalled();
+  });
+});
+
 // Issue #1089 — stop-on-error is the default for editor multi-statement runs:
 // once statement K fails, statements K+1..N must NOT reach the driver, and they
 // surface as `skipped` in the per-statement breakdown so the partial-apply
