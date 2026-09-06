@@ -279,6 +279,68 @@ jobs:
           fi
           echo "::notice::scorecard ${checked} 장 검사 — 분량 cap 초과 0 장"
 
+      # scorecard 가 non-SUCCESS required context 의 이름을 싣는지 대조한다 (#2443).
+      # PR #2415 의 리뷰 라운드 셋이 red 인 `Runtime Happy Path` 를 「전부 pass」로
+      # 적었다 — required 를 이름으로 열거하는 슬롯이 형식 틀에 없어서다. 판정 정의는
+      # scripts/check-scorecard-required-contexts.sh 헤더가 갖고, 슬롯 형식은
+      # .agents/prompts/pr-review.md 「반환 형식」이 갖는다. required 목록은 memory 방의
+      # `ci-gates:required-contexts` 블록에서 읽는다 — 여기 복제하지 않는다. 목록이
+      # 두 벌이 되는 날 대조 집합이 갈라진다.
+      #
+      # **자리 — `Scorecard size cap` 뒤, `Require review:approved` 앞.** 위 cap 스텝
+      # 주석의 「자리」 절이 말하는 같은 함정이다: 바로 앞 `Stop at review round 3` 은
+      # 의도적으로 exit 1 하므로 `always()` 가 없으면 그 구간에서 이 검사가 통째로
+      # skip 되고, 뒤로 내리면 `review:approved` label 부재의 changes-requested
+      # 라운드에서 암묵 `success()` 가 skip 시킨다 — 정작 red required 의 이름을 안
+      # 적기 쉬운 것은 그 라운드다. `test -f` 가드도 같은 절을 따른다: checkout 이
+      # 실패해도 `always()` 때문에 이 스텝은 돌고, 가드 없으면 bash 의 rc=127 을
+      # 스크립트의 판정으로 오독한다.
+      #
+      # 입력은 전부 API 로 읽는다 — 위 cap 스텝과 같다. 그래서 red 면 scorecard
+      # 코멘트를 고치고 이 job 을 re-run 하면 새 commit 없이 풀린다 (아래 스크립트의
+      # `::error::` 가 그 처방을 낸다). rollup 은 `.statusCheckRollup` 을 **떼서**
+      # 넘긴다 — 통째 오브젝트는 스크립트가 검사 불성립으로 끊는다.
+      - name: Scorecard names non-success required contexts
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -o pipefail
+          test -f scripts/check-scorecard-required-contexts.sh || {
+            echo "::error::scripts/check-scorecard-required-contexts.sh 이 없다 — 대조 불성립이다 (위 Checkout 이 실패했거나 skip 됐다). 통과로 강등하지 않는다"
+            exit 1
+          }
+          test -f memory/runbook/pr-merge-gates/memory.md || {
+            echo "::error::memory/runbook/pr-merge-gates/memory.md 이 없다 — required 목록의 SOT 를 못 읽어 대조 불성립이다. 통과로 강등하지 않는다"
+            exit 1
+          }
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          if ! rollup="$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json statusCheckRollup -q '.statusCheckRollup')"; then
+            echo "::error::PR statusCheckRollup 을 못 읽었다 — 대조 불성립. 통과로 강등하지 않는다"
+            exit 1
+          fi
+          printf '%s' "$rollup" >"$tmp/rollup.json"
+          if ! ids="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+            --jq '.[] | select(.body | startswith("## Scorecard")) | .id')"; then
+            echo "::error::scorecard 코멘트 목록을 못 읽었다 — 대조 불성립. 통과로 강등하지 않는다"
+            exit 1
+          fi
+          args=()
+          for id in $ids; do
+            if ! body="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" --jq .body)"; then
+              echo "::error::scorecard ${id} 를 못 읽었다 — 대조 불성립"
+              exit 1
+            fi
+            printf '%s' "$body" >"$tmp/scorecard-${id}.md"
+            args+=("$tmp/scorecard-${id}.md")
+          done
+          bash scripts/check-scorecard-required-contexts.sh \
+            memory/runbook/pr-merge-gates/memory.md \
+            "$tmp/rollup.json" \
+            "${args[@]}"
+
       - name: Require review:approved label
         if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'review:approved')
         run: |
