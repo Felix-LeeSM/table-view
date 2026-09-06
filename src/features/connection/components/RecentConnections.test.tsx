@@ -6,6 +6,21 @@ import type { ConnectionConfig } from "@/types/connection";
 import RecentConnections, { relativeTime } from "./RecentConnections";
 
 // ---------------------------------------------------------------------------
+// #2457 — `@lib/tauri/window` is the Tauri boundary this file has to stub.
+// What a unit test can lock is the user-facing IPC step: activation fires
+// `openWorkspaceWindow(connId)` (the real window build/focus is backend
+// work, the same lock the AC-363-FE-* cases use for the ConnectionList path).
+// ---------------------------------------------------------------------------
+const openWorkspaceWindowMock = vi.fn((connId: string) => {
+  void connId;
+  return Promise.resolve();
+});
+
+vi.mock("@lib/tauri/window", () => ({
+  openWorkspaceWindow: (connId: string) => openWorkspaceWindowMock(connId),
+}));
+
+// ---------------------------------------------------------------------------
 // Store mocks
 // ---------------------------------------------------------------------------
 
@@ -433,6 +448,51 @@ describe("RecentConnections", () => {
       });
       fireEvent.click(btn);
       expect(onActivate).not.toHaveBeenCalled();
+    });
+  });
+
+  // 작성 이유 (2026-09-05, #2457): `최근` 이 footer 에서 rail view 로 옮겨진
+  // 뒤에도 행 activate 는 `onActivate`(store side) 만 태우고 workspace 창을
+  // 열지 않았다. `전체`·그룹 뷰는 ConnectionList 의 activate wrap 이
+  // openWorkspaceWindow 를 태우니 같은 조작이 창을 열었다. 사용자가 본 증상
+  // 그대로를 최근 행 둘레에서 lock 한다 — 더블클릭과 Enter 각각, IPC 는
+  // 1회(이중 발화 회귀도 같이 잠근다)와 store side 콜백까지.
+  describe("#2457 — 최근 행 activate 가 workspace 창을 연다", () => {
+    beforeEach(() => {
+      openWorkspaceWindowMock.mockClear();
+      openWorkspaceWindowMock.mockResolvedValue(undefined);
+    });
+
+    function renderOne() {
+      mockMruState.recentConnections = [{ connectionId: "c1", lastUsed: now }];
+      mockConnState.connections = [makeConnection({ id: "c1", name: "W DB" })];
+      const onActivate = vi.fn();
+      render(<RecentConnections onActivate={onActivate} />);
+      return onActivate;
+    }
+
+    it("[recent-activate] 더블클릭이 openWorkspaceWindow(c1) 1회와 onActivate(c1) 를 둘 다 태운다", async () => {
+      const onActivate = renderOne();
+
+      await act(async () => {
+        fireEvent.doubleClick(screen.getByRole("listitem"));
+      });
+
+      expect(openWorkspaceWindowMock).toHaveBeenCalledTimes(1);
+      expect(openWorkspaceWindowMock).toHaveBeenCalledWith("c1");
+      expect(onActivate).toHaveBeenCalledWith("c1");
+    });
+
+    it("[recent-activate] Enter 가 openWorkspaceWindow(c1) 1회와 onActivate(c1) 를 둘 다 태운다", async () => {
+      const onActivate = renderOne();
+
+      await act(async () => {
+        fireEvent.keyDown(screen.getByRole("listitem"), { key: "Enter" });
+      });
+
+      expect(openWorkspaceWindowMock).toHaveBeenCalledTimes(1);
+      expect(openWorkspaceWindowMock).toHaveBeenCalledWith("c1");
+      expect(onActivate).toHaveBeenCalledWith("c1");
     });
   });
 });
