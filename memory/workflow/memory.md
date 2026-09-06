@@ -1,7 +1,7 @@
 ---
 title: Workflow
 type: index
-updated: 2026-08-01
+updated: 2026-09-06
 keywords: 행동 계약, phase, 방 지도, workflow
 ---
 
@@ -27,6 +27,7 @@ keywords: 행동 계약, phase, 방 지도, workflow
 - [tdd](./tdd/memory.md) — code-profile sprint 의 RED evidence 판정
 - [delivery](./delivery/memory.md) — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 계약 (구현자는 PR 생성에서 끝난다)
 - [review](./review/memory.md) — PR 생성 후 독립 read-only review pack을 붙이는 행동 계약
+- [pr-artifacts](./pr-artifacts/memory.md) — PR 산출물(PR body · squash 커밋 메시지 · scorecard)의 작성 규칙
 - [orchestration](./orchestration/memory.md) — 병렬 작업 spawn · 리뷰 큐 직렬화 · 사이클 정지 · 이슈 수용기준
 - [interface](./interface/memory.md) — 사용자 대화 전담 · grill · 결정 기록 · raw→task 승격 · orchestrator 운용 (top-level 세션)
 - [documentation](./documentation/memory.md) — 문서화 필요 여부 판단 + 기존 SOT 라우팅 + PR evidence portability

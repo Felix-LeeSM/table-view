@@ -84,6 +84,7 @@ generator: none — 손으로 갱신한다
 
 - [Delivery — 행동 계약](../../memory/workflow/delivery/memory.md)
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
+- [PR Artifacts — PR 산출물 작성 규칙](../../memory/workflow/pr-artifacts/memory.md)
 
 ### completion
 
@@ -231,6 +232,7 @@ generator: none — 손으로 갱신한다
 - [PR merge 게이트 — required context 계약](../../memory/runbook/pr-merge-gates/memory.md)
 - [Delivery — 행동 계약](../../memory/workflow/delivery/memory.md)
 - [Documentation Impact Gate](../../memory/workflow/documentation/memory.md)
+- [PR Artifacts — PR 산출물 작성 규칙](../../memory/workflow/pr-artifacts/memory.md)
 - [PR Review Behavior](../../memory/workflow/review/memory.md)
 
 ### pr-close
@@ -326,6 +328,10 @@ generator: none — 손으로 갱신한다
 
 - [E2E 시나리오 설계 원칙](../../memory/engineering/conventions/e2e-scenarios/memory.md)
 
+### scorecard
+
+- [PR Artifacts — PR 산출물 작성 규칙](../../memory/workflow/pr-artifacts/memory.md)
+
 ### signing
 
 - [Git 정책](../../memory/workflow/git-policy/memory.md)
@@ -345,6 +351,10 @@ generator: none — 손으로 갱신한다
 ### sqlite
 
 - [State Management Architecture](../../memory/engineering/architecture/state-management/memory.md)
+
+### squash
+
+- [PR Artifacts — PR 산출물 작성 규칙](../../memory/workflow/pr-artifacts/memory.md)
 
 ### state-management
 

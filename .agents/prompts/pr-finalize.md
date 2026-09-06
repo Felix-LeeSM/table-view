@@ -28,6 +28,8 @@ test "$(git rev-parse --show-toplevel)" != "$CLONE" \
 
 - `memory/workflow/delivery/memory.md`: 노드 표와 머지 자율 조건, 머지 방식
   기본값, 중단 조건이 있다.
+- `memory/workflow/pr-artifacts/memory.md`: PR body 재검사가 따르는 제약과 squash
+  표면 교정의 계약이 있다. 2단계와 3단계가 그 근거를 쓴다.
 - `memory/workflow/review/memory.md` 「Merge 전 요구」: 머지가 성립하는 조건이 있다.
 - `memory/runbook/pr-merge-gates/memory.md`: required 게이트가 분산된 위치와
   각 required 가 검사하는 것이 있다.
@@ -101,7 +103,7 @@ gh pr checks <N>
 3. **PR body 를 저장된 값으로 1회 재검사한다.** `PR Body Contract` 는 push 시점
    payload 의 body 로만 돌고 body 편집으로는 다시 돌지 않는다 (기전 SOT:
    `memory/runbook/pr-merge-gates/memory.md`, 계약 SOT:
-   `memory/workflow/delivery/memory.md` 「PR body」). check 가 green 이어도 그
+   `memory/workflow/pr-artifacts/memory.md` 「PR body」). check 가 green 이어도 그
    뒤에 달라진 body 는 검사된 적이 없고, PR body 는 리뷰어와 다음 세션이 읽는
    영구 기록이다.
 
@@ -125,7 +127,7 @@ gh pr checks <N>
 되는데, 저자는 force-push 가 금지라 고치지 못하고 머지 뒤에는 아무도 고치지 못한다.
 **표면 하나만 보고 머지하면 나머지 하나로 거짓이 나간다.** 무엇이 오는지, 누가
 고칠 수 있는지, 무엇이 교정 대상인지를 정하는 SOT 는
-`memory/workflow/delivery/memory.md` 「squash 커밋 교정」이고, 이 절은 표면마다
+`memory/workflow/pr-artifacts/memory.md` 「squash 커밋 교정」이고, 이 절은 표면마다
 **어느 명령이 닿는지**만 담는다.
 
 | 표면 | 읽는 명령 | 교정 지점 |
@@ -137,7 +139,7 @@ gh pr checks <N>
 설정 이름은 위 문서의 표가 소유하고, 여기서 쓰는 것은 그 수를 읽는
 `.commits|length` 다. **`gh pr view --json commits` 는 개수에만 쓴다.** 제목
 문자열을 거기 `messageHeadline` 에서 읽으면 69자에서 잘린 값을 교정 대상으로 삼게
-된다 (기전은 `memory/workflow/review/memory.md` 「행동 계약」이 소유한다).
+된다 (기전은 `memory/workflow/pr-artifacts/memory.md` 「squash 커밋 교정」이 소유한다).
 
 **커밋이 하나면 라운드 1 scorecard 만 대조하며, 대조를 건너뛰지는 않는다.**
 라운드 1 의 finding 이 그 하나뿐인 커밋 메시지를 지목할 수 있기 때문이다. 커밋이
@@ -168,7 +170,7 @@ printf '%s\n' "$TITLE"
 
 # scorecard 가 지목한 문구 하나가 커밋 메시지에 있는지. tr 이 하드랩을 이어 붙인다.
 # LC_ALL=C 를 빼면 한국어 문구가 통째로 0 이 된다 — 기전과 표적 음절은
-# memory/workflow/review/memory.md 「행동 계약」이 갖는다
+# memory/workflow/pr-artifacts/memory.md 「squash 커밋 교정」이 갖는다
 # 조각에도 같은 정규화를 건다 — 안 걸면 하드랩된 커밋 메시지의 탭·개행·연속 공백에 뚫린다
 NEEDLE="$(printf '%s' '<문구>' | LC_ALL=C tr -s '[:space:]' ' ')"
 # 메시지를 먼저 받고 rc 를 가드한다 — `tr` 에 바로 물리면 조회 실패가 맨 오른쪽
@@ -181,7 +183,8 @@ printf '%s\n' "$MSGS" | LC_ALL=C tr -s '[:space:]' ' ' \
 ```
 
 **`gh pr view` 의 `commits` 필드로 되돌리지 마라.** 그 형태가 거짓 0 을 내는 기전
-셋과 왜 이 형태여야 하는지는 `memory/workflow/review/memory.md` 「행동 계약」이
+셋과 왜 이 형태여야 하는지는 `memory/workflow/pr-artifacts/memory.md` 「squash 커밋
+교정」이
 정하며, 리뷰어가 교정 자리를 넘길 때 쓰는 것도 같은 형태다. 그 옛 명령을 여기 그대로
 붙이지 않는 이유는 금지 문구를 인용하는 것만으로 다음 노드가 복사해 갈 수 있기
 때문이다.
@@ -210,7 +213,7 @@ hit 수와 구분이 되지 않으므로 값만 보고는 잡지 못한다. **�
 2026-08-16 #2354 라운드 2 의 scorecard 는 `6f35ac44` 만 적었는데 같은 문구가
 `adac4cc6` 에도 있었다. **`grep -c` 로 바꾸지 마라.** 앞의 `tr` 이 개행을 없애기
 때문에 그 형태는 0 아니면 1 밖에 내지 못한다. 기전은
-`memory/workflow/review/memory.md` 「행동 계약」이 소유한다.
+`memory/workflow/pr-artifacts/memory.md` 「squash 커밋 교정」이 소유한다.
 
 각 라운드 scorecard 의 blocking 목록과 non-blocking 목록을 **표면마다** 대조한다.
 커밋 메시지에는 위 `NEEDLE` 대조를 걸고, `$TITLE` 은 눈으로 읽어 대조한다.

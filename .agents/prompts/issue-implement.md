@@ -30,7 +30,9 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 - `memory/workflow/implementation/memory.md`: §5 착수 전 체크리스트가 있다. 이
   역할의 필수 read 다.
 - `memory/workflow/delivery/memory.md`: 커밋부터 PR 까지의 구간에 걸리는 행동
-  계약과 중단 조건, 그리고 PR body 제약이 있다.
+  계약과 중단 조건이 있다.
+- `memory/workflow/pr-artifacts/memory.md`: PR 산출물(PR body · squash 커밋
+  메시지 · scorecard)의 작성 제약이 있다. 이 노드가 PR body 를 쓰므로 읽는다.
 - `memory/workflow/documentation/memory.md`: 문서화가 필요한 트리거와 기존 SOT
   라우팅, evidence portability, 그리고 **PR body 에 무엇만 쓰는가**를 정한다
   (「결정만 적는다」 절). 「Reviewer 판정」이 문서화 impact 게이트 사유를 상세히
@@ -83,7 +85,7 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
    「PR body 틀」의 닫힌 목록으로 쓰고, 쓰기 전에 read 목록의 제약을 그대로
    적용한다:
    정량 주장은 implementation §5 표가 정하고, 그 밖은
-   `memory/workflow/delivery/memory.md` 「PR body」 절 전체가 정한다. 제약 본문은
+   `memory/workflow/pr-artifacts/memory.md` 「PR body」 절 전체가 정한다. 제약 본문은
    그 문서들에 있으므로 여기 옮겨 적지 않으며, 그 절이 늘어나도 이 줄은 고치지
    않는다. body 와 squash 커밋 메시지는 다음 노드가 읽는 입력이므로, 거짓이거나
    낡아진 주장은 미래 노드의 거짓 전제가 된다 (같은 절).
@@ -92,11 +94,11 @@ test "$(git rev-parse --show-toplevel)" = "<사본 경로>" \
 
 수정 라운드도 같은 사본, 같은 브랜치에서 이 절차를 다시 밟는다. 이번 라운드의
 변경으로 PR body 의 기존 주장이 낡았을 때 무엇을 해야 하는지는 그 문서가 정하므로
-여기 옮겨 적지 않는다. 출처: `memory/workflow/delivery/memory.md` 「PR body」.
+여기 옮겨 적지 않는다. 출처: `memory/workflow/pr-artifacts/memory.md` 「PR body」.
 
 ## PR body 틀: 닫힌 목록
 
-**형식 틀의 SOT 는 이 파일이다.** `memory/workflow/delivery/memory.md` 「PR body」
+**형식 틀의 SOT 는 이 파일이다.** `memory/workflow/pr-artifacts/memory.md` 「PR body」
 와 `memory/workflow/documentation/memory.md` 는 이식성과 전칭 서술, 분량, 정량
 주장에 관한 제약만 소유하고 틀은 이 파일로 넘긴다. 그렇게 넘기는 줄은 이슈 #2514
 가 추가했고, 그전에는 틀이 비어 있어서 노드가 PR 마다 자기 절을 만들었으며 그 절이
@@ -137,7 +139,7 @@ Closes #<이슈>
 
 수치마다 그것을 만든 명령을 붙인다. 제약 본문은
 `memory/workflow/implementation/memory.md` §5 와
-`memory/workflow/delivery/memory.md` 「PR body」에 있다.
+`memory/workflow/pr-artifacts/memory.md` 「PR body」에 있다.
 
 **push 전에 body 를 직접 재라.** 분량 cap 의 값과 출처는
 `scripts/check-review-size-cap.sh` 헤더가 소유하고, PR body 쪽 red 는 body 를

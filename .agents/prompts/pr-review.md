@@ -43,6 +43,8 @@ test "$(git rev-parse --show-toplevel)" != "$AUTHOR" \
 
 - `memory/workflow/review/memory.md`: 이 역할의 계약 전부가 있다. blocking 판정
   기준과 fan-out 재량, write 범위, verdict label 규칙이 그 문서에 있다.
+- `memory/workflow/pr-artifacts/memory.md`: scorecard 분량 cap 과, 넘었을 때
+  코멘트를 줄이고 job 을 re-run 하는 해소 경로가 있다.
 - `memory/workflow/orchestration/memory.md`: §3 사이클 정지 트리거가 있다.
 - `memory/workflow/documentation/memory.md`: 문서 변경 여부와 무관하게 읽는다.
   문서화 impact 게이트 사유의 상세와 **scorecard 에 무엇만 쓰는가**(「결정만
@@ -265,7 +267,7 @@ orchestrator 반환에만 적었는데, 사용자에게 남는 것은 scorecard 
 「라운드 3 이상」 절의 「개별 지적 대신」이 갈아 끼우는 것은 개별 finding 수리
 요구이지 이 절들이 아니다.
 
-근거 경로는 `memory/workflow/delivery/memory.md` 「PR body」의 이식성 제약을
+근거 경로는 `memory/workflow/pr-artifacts/memory.md` 「PR body」의 이식성 제약을
 따른다. 분량 cap 은 `scripts/check-review-size-cap.sh` 가 집행하고 값과 그 출처는 그
 헤더가 소유한다. **cap 을 잘라내기로 만족시키지 마라.** 위 닫힌 목록이 먼저이고,
 잘라낼 것이 남았는지는 「이 문장이 판정인가 과정인가」로 가른다.
