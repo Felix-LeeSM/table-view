@@ -106,6 +106,9 @@ ABORT 자리는 각각 다른 실패를 잡는데, 다른 브랜치와 `fetch` �
   같이 싣는다.** 두 역할 preamble 의 닫힌 목록 틀
   (`.agents/prompts/pr-review.md` 「반환 형식」 ·
   `.agents/prompts/issue-implement.md` 「PR body 틀」)이 받는 쪽의 가드다.
+  **그 구분과 가변부가 이전 scorecard 에서 옮겨 적는 포인터·라운드 번호의 계약
+  SOT 는 `memory/workflow/documentation/memory.md` 「결정만 적는다」와 「가변
+  상태」이므로**, 위 「행동 계약의 SOT」가 지시한 대로 첫 spawn 전에 읽는다.
 - 사본 생성과 회수는 `memory/runbook/worktree/memory.md` 의 절차를 따른다.
 - 점유를 기록할 때는 spawn 시점에 해당 이슈에 `착수: <branch>` 코멘트를 남긴다.
   사본 경로는 규약(`../table-view-clones/<branch-sanitized>`)에서 파생되므로 로컬
