@@ -133,8 +133,9 @@ ruleset 7종은 별도 계층이고 docs 만 바꾼 PR 에도 전부 요구된�
 
 ## 안 끝난 check 를 직전 head 에서 읽는 법
 
-`IN_PROGRESS` 인 required check 는 「아직 모른다」를 뜻하지 않는다. **같은 이름의
-run 이 직전 head 에서 이미 결론을 냈기 때문이다.** force-push 가 hard block 이라
+`IN_PROGRESS` 인 required check 를 「아직 모른다」로 닫기 전에 직전 head 를 본다.
+**같은 이름의 run 이 직전 head 에서 이미 결론을 냈을 수 있기 때문이다.**
+force-push 가 hard block 이라
 (`memory/workflow/git-policy/memory.md`) 브랜치 커밋 목록이 곧 지나간 head 목록이고,
 head 마다 같은 이름을 읽으면 그 결론이 head 를 넘어 반복되는지가 보인다. 반복되면
 `gh run rerun` 으로 뒤집힐 실패로 보지 않으며, 확정은 실패한 스텝을 읽어서 한다.
@@ -152,7 +153,8 @@ done
 출력은 오래된 head 부터 나오므로, 마지막 줄이 `completed` 가 아니면 위로 올라가
 가장 최근 결론을 읽는다. **그 head 에 그 이름의 run 이 아예 없으면
 `null null null` 이 나온다** (rc=0). 이것은 조회 실패가 아니라 「없다」는 뜻이고,
-거슬러 올라가도 계속 그러면 그때가 「못 쟀다」에 해당한다. `--jq` 나 `-q` 에
+거슬러 올라가도 계속 그러면 그때가 「못 쟀다」에 해당한다. 커밋이 하나인 PR 은
+거슬러 올릴 head 가 없으므로 바로 이 경우다. `--jq` 나 `-q` 에
 `--arg` 를 붙이면 `accepts at most 1 arg(s)` 로 죽으므로 이름은 필터 안에 직접
 적는다.
 
