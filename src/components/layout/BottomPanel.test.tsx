@@ -3,12 +3,14 @@
 // workspace toolbar, plus a grid-owned Quick Look panel); they are one
 // bordered region behind a tab strip now.
 //
-// `OperationsPanel` is stubbed: this file pins the dock's *routing* and the
-// panel has its own suite (`src/components/workspace/OperationsPanel.test.tsx`).
 // `GlobalQueryLogPanel` is NOT stubbed — the e2e smoke specs open the query
 // log by dispatching `toggle-global-query-log` and then wait for
 // `[data-testid="global-query-log-panel"]`, so the real testid has to come out
-// of the real routing.
+// of the real routing. `OperationsPanel` is real too (#2450): the dock owns
+// the sub-tab's lifetime, so the persistence test has to run the panel's own
+// state through real tab switches — its capability/tabs logic is re-asserted
+// in `src/components/workspace/OperationsPanel.test.tsx`, and only the data
+// APIs are stubbed at the boundary.
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { useLayoutStore } from "@stores/layoutStore";
@@ -20,13 +22,17 @@ import type { ConnectionId } from "@/types/branded";
 import type { ConnectionConfig } from "@/types/connection";
 
 const invokeMock = vi.hoisted(() => vi.fn());
+const listServerActivityMock = vi.hoisted(() => vi.fn());
+const listDatabaseUsersMock = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
-
-vi.mock("@components/workspace/OperationsPanel", () => ({
-  default: ({ visible }: { visible: boolean }) =>
-    visible ? <div data-testid="stub-operations-panel" /> : null,
+vi.mock("@/lib/api/serverActivity", () => ({
+  listServerActivity: (...args: unknown[]) => listServerActivityMock(...args),
+  killServerActivity: (...args: unknown[]) => listServerActivityMock(...args),
+}));
+vi.mock("@/lib/api/databaseUsers", () => ({
+  listDatabaseUsers: (...args: unknown[]) => listDatabaseUsersMock(...args),
 }));
 
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
@@ -63,6 +69,10 @@ describe("BottomPanel — workspace bottom dock (#2426)", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     invokeMock.mockResolvedValue({ rows: [] });
+    listServerActivityMock.mockReset();
+    listServerActivityMock.mockResolvedValue([]);
+    listDatabaseUsersMock.mockReset();
+    listDatabaseUsersMock.mockResolvedValue([]);
     useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({
       connections: [],
@@ -121,7 +131,7 @@ describe("BottomPanel — workspace bottom dock (#2426)", () => {
 
     await user.click(tab(/operations/i));
 
-    expect(screen.getByTestId("stub-operations-panel")).toBeInTheDocument();
+    expect(await screen.findByTestId("operations-panel")).toBeInTheDocument();
     expect(
       screen.queryByTestId("global-query-log-panel"),
     ).not.toBeInTheDocument();
@@ -226,7 +236,7 @@ describe("BottomPanel — workspace bottom dock (#2426)", () => {
     });
     const { rerender } = renderDock();
     await user.click(tab(/operations/i));
-    expect(screen.getByTestId("stub-operations-panel")).toBeInTheDocument();
+    expect(await screen.findByTestId("operations-panel")).toBeInTheDocument();
 
     // Swapping to an engine without `operations.*` must not leave the dock
     // pointing at a tab that no longer exists.
@@ -243,6 +253,46 @@ describe("BottomPanel — workspace bottom dock (#2426)", () => {
     expect(await screen.findByTestId("global-query-log-panel")).toBeVisible();
     // The pick itself survives, so swapping back restores Operations.
     expect(useLayoutStore.getState().bottomPanelTab).toBe("operations");
+  });
+
+  it("[bottom-panel] keeps the Operations sub-tab picked across dock tab switches", async () => {
+    const user = userEvent.setup();
+    act(() => {
+      seedConnectedPostgres();
+    });
+    renderDock();
+
+    await user.click(tab(/operations/i));
+    await screen.findByTestId("operations-panel");
+    await user.click(screen.getByTestId("operations-tab-users"));
+    await user.click(tab(/history/i));
+    await user.click(tab(/operations/i));
+
+    // #2450 — the sub-tab the user picked inside Operations must survive
+    // leaving and re-entering the dock tab (it used to reset to Activity).
+    expect(screen.getByTestId("operations-tab-users")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("[bottom-panel] gives all three tabpanels one shared dock height", async () => {
+    const user = userEvent.setup();
+    act(() => {
+      seedConnectedPostgres();
+    });
+    renderDock();
+
+    await user.click(tab(/history/i));
+
+    // #2450 — the dock, not each view, owns the height, so switching tabs
+    // must not grow and shrink the dock. jsdom cannot measure layout, so the
+    // shared height token across the three tabpanels is the lock.
+    for (const name of ["history", "operations", "details"]) {
+      expect(
+        document.getElementById(`bottom-panel-tabpanel-${name}`),
+      ).toHaveClass("h-scroll-lg");
+    }
   });
 
   it("[bottom-panel] arrow keys move across the strip", async () => {

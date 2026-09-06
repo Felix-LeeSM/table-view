@@ -960,9 +960,10 @@ describe("QuickLookPanel", () => {
       expect(handle).toHaveAttribute("tabindex", "0");
       expect(handle).toHaveAttribute("aria-orientation", "horizontal");
       expect(handle).toHaveAttribute("aria-valuemin", "120");
-      expect(handle).toHaveAttribute("aria-valuemax", "600");
-      // Default height is 280.
-      expect(handle).toHaveAttribute("aria-valuenow", "280");
+      expect(handle).toHaveAttribute("aria-valuemax", "300");
+      // Default height is 300 — the dock's fixed Details tabpanel height
+      // (#2450), which the resize range cannot leave.
+      expect(handle).toHaveAttribute("aria-valuenow", "300");
       expect(handle).not.toHaveAttribute("aria-hidden");
     });
   });
@@ -970,9 +971,9 @@ describe("QuickLookPanel", () => {
   // ── Sprint 105 #QL-1: keyboard-accessible resizer (RDB mode) ───────
   describe("keyboard resizer (sprint-105 #QL-1)", () => {
     const MIN_HEIGHT = 120;
-    const MAX_HEIGHT = 600;
+    const MAX_HEIGHT = 300;
     const STEP = 8;
-    const DEFAULT_HEIGHT = 280;
+    const DEFAULT_HEIGHT = 300;
 
     it("renders the resize handle with role=separator, tabIndex=0 and ARIA attributes", () => {
       render(<QuickLookPanel {...defaultProps} />);
@@ -995,11 +996,16 @@ describe("QuickLookPanel", () => {
       const handle = screen.getByRole("separator", {
         name: "Resize Quick Look panel",
       });
+      // The default already sits at MAX_HEIGHT (300 — #2450), so step down
+      // twice to leave the clamp before proving ArrowUp still adds exactly
+      // one STEP.
+      fireEvent.keyDown(handle, { key: "ArrowDown", shiftKey: true });
+      fireEvent.keyDown(handle, { key: "ArrowDown", shiftKey: true });
       fireEvent.keyDown(handle, { key: "ArrowUp", shiftKey: true });
 
       expect(handle).toHaveAttribute(
         "aria-valuenow",
-        String(DEFAULT_HEIGHT + STEP),
+        String(DEFAULT_HEIGHT - STEP),
       );
     });
 
@@ -1017,14 +1023,15 @@ describe("QuickLookPanel", () => {
       );
     });
 
-    it("Shift+ArrowUp clamps to MAX_HEIGHT (600)", () => {
+    it("Shift+ArrowUp clamps to MAX_HEIGHT (300)", () => {
       render(<QuickLookPanel {...defaultProps} />);
 
       const handle = screen.getByRole("separator", {
         name: "Resize Quick Look panel",
       });
-      // Default height is 280; need (600-280)/8 = 40 steps to reach max.
-      // Press 50 times to confirm the clamp holds beyond the upper bound.
+      // The default already equals MAX_HEIGHT (300, the dock's fixed Details
+      // tabpanel height — #2450). Press 50 times to confirm the clamp holds
+      // beyond the upper bound.
       for (let i = 0; i < 50; i++) {
         fireEvent.keyDown(handle, { key: "ArrowUp", shiftKey: true });
       }
@@ -1038,7 +1045,7 @@ describe("QuickLookPanel", () => {
       const handle = screen.getByRole("separator", {
         name: "Resize Quick Look panel",
       });
-      // Default height is 280; need (280-120)/8 = 20 steps to reach min.
+      // Default height is 300; need (300-120)/8 = 22.5 steps to reach min.
       // Press 30 times to confirm the clamp holds below the lower bound.
       for (let i = 0; i < 30; i++) {
         fireEvent.keyDown(handle, { key: "ArrowDown", shiftKey: true });
@@ -1092,24 +1099,25 @@ describe("QuickLookPanel", () => {
     it("Esc during a drag reverts the panel height to the drag-start value and tears down", () => {
       render(<QuickLookPanel {...defaultProps} />);
       const handle = getHandle();
-      expect(handle).toHaveAttribute("aria-valuenow", "280");
+      expect(handle).toHaveAttribute("aria-valuenow", "300");
 
-      // Drag up (smaller clientY) → taller panel.
+      // Drag down (larger clientY) → shorter panel. #2450 starts the panel at
+      // the dock's fixed 300px, so shrinking is the direction with room left.
       fireEvent.mouseDown(handle, { clientY: 300 });
-      fireEvent.mouseMove(document, { clientY: 200 });
-      expect(handle).toHaveAttribute("aria-valuenow", "380");
+      fireEvent.mouseMove(document, { clientY: 400 });
+      expect(handle).toHaveAttribute("aria-valuenow", "200");
 
       fireEvent.keyDown(document, { key: "Escape" });
 
       // Reverted to the drag-start height; body styles reset.
-      expect(handle).toHaveAttribute("aria-valuenow", "280");
+      expect(handle).toHaveAttribute("aria-valuenow", "300");
       expect(document.body.style.cursor).toBe("");
       expect(document.body.style.userSelect).toBe("");
 
       // Listeners torn down: a trailing mouseup / mousemove is a no-op.
       fireEvent.mouseUp(document);
-      fireEvent.mouseMove(document, { clientY: 100 });
-      expect(handle).toHaveAttribute("aria-valuenow", "280");
+      fireEvent.mouseMove(document, { clientY: 500 });
+      expect(handle).toHaveAttribute("aria-valuenow", "300");
     });
 
     it("keeps the dragged height on a normal mouseup (no Esc regression)", () => {
@@ -1117,15 +1125,15 @@ describe("QuickLookPanel", () => {
       const handle = getHandle();
 
       fireEvent.mouseDown(handle, { clientY: 300 });
-      fireEvent.mouseMove(document, { clientY: 250 }); // delta 50 → 330
-      expect(handle).toHaveAttribute("aria-valuenow", "330");
+      fireEvent.mouseMove(document, { clientY: 350 }); // delta -50 → 250
+      expect(handle).toHaveAttribute("aria-valuenow", "250");
 
       fireEvent.mouseUp(document);
-      expect(handle).toHaveAttribute("aria-valuenow", "330");
+      expect(handle).toHaveAttribute("aria-valuenow", "250");
 
       // Listeners removed after mouseup: further mousemove no-op.
-      fireEvent.mouseMove(document, { clientY: 100 });
-      expect(handle).toHaveAttribute("aria-valuenow", "330");
+      fireEvent.mouseMove(document, { clientY: 450 });
+      expect(handle).toHaveAttribute("aria-valuenow", "250");
     });
   });
 });
