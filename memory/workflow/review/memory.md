@@ -1,9 +1,9 @@
 ---
 title: PR Review Behavior
 type: workflow-rule
-updated: 2026-08-17
+updated: 2026-09-06
 task: review, pr, delivery
-keywords: scorecard, verdict, blocking, non-blocking, 결정만 싣는다, 증거 열거, 재현 서사, 확인했고 참이던 주장, 사본이 필요한가, 설치가 필요한가, 판정 입력, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, squash body, COMMIT_MESSAGES, 커밋 메시지 대조, messageHeadline, 종결자 교정 대상, LC_ALL, LC_ALL=C, 0xA0, GNU tr, BSD tr, 로케일, gnubin, coreutils, 한글 음절, 하드랩, 거짓 0, grep -c, grep -o, wc -l, 자리 수, 개수를 1 로 뭉갠다
+keywords: scorecard, verdict, blocking, non-blocking, 결정만 싣는다, 증거 열거, 재현 서사, 확인했고 참이던 주장, 사본이 필요한가, 설치가 필요한가, 판정 입력, 문서화 impact 게이트, review:approved, review:changes-requested, reflect:done, Stop at review round 3, head OID, head-oid, fan-out, subreviewer, 재리뷰, label 순서, 회고 모드, 라운드 3, 유형 재발 표, 저자 사본 편집 금지, 일회용 사본, 재실행, test lint build, pr-artifacts
 trigger:
   signal: PR 생성 / 사용자가 "리뷰해" / 수정 push 후 재리뷰
   layer: index
@@ -71,47 +71,10 @@ trigger:
 - Blocking 판정은 coordinator 단독 권한이다. subreviewer는 발견과 근거만 내고
   severity를 붙이지 않는다. 관점을 늘려도 blocking이 늘지 않는다.
 - **PR body 는 squash body 로 안 넘어간다** — 기본 squash body 는 브랜치 커밋
-  메시지를 이어붙인 것이다. 그래서 교정 자리를 종결자에게 넘길 때는 그 문구가
-  커밋 메시지에 있는지 먼저 대조한다:
-
-  ```bash
-  # 조각에도 같은 정규화를 건다 — 안 걸면 하드랩된 커밋 메시지의 탭·개행·연속 공백에 뚫린다
-  NEEDLE="$(printf '%s' '<문구>' | LC_ALL=C tr -s '[:space:]' ' ')"
-  MSGS="$(gh api --paginate repos/Felix-LeeSM/table-view/pulls/<N>/commits \
-            --jq '.[].commit.message')" || { echo "ABORT: 커밋 메시지 조회 실패" >&2; exit 1; }
-  printf '%s\n' "$MSGS" | LC_ALL=C tr -s '[:space:]' ' ' \
-    | grep -o -F -- "$NEEDLE" | wc -l
-  ```
-
-  **`grep -c` 로 바꾸지 마라 — 앞의 `tr` 이 스트림을 개행 없는 한 줄로 만들어 그
-  형태는 0 아니면 1 밖에 못 낸다** (`grep -c` 는 매치 횟수가 아니라 매치된 줄 수를
-  센다). 위 값은 이어붙인 스트림에서 문구가 난 **자리 수**이지 커밋 수가 아니다 — 한
-  커밋에 두 번 있으면 커밋 하나에도 2 가 난다 (#2339: `a1194121` 하나에 값 2). 빠뜨린
-  자리는 main 히스토리로 가니 N 곳을 다 넘긴다 (#2354: `adac4cc6` · `6f35ac44`).
-
-  **`LC_ALL=C` 는 이 명령이 한국어 문구에 대해 성립하는 조건이다.** GNU `tr` 은
-  UTF-8 로케일에서 바이트 `0xA0` 을 공백으로 접는다. UTF-8 한글은 3바이트이고 뒤
-  두 바이트가 `0x80–0xBF` 라, `0xA0` 을 품은 음절(`절` = `EC A0 88` · `고` · `전`
-  · `정` · `제` …)이 든 문구는 접힌 쪽이 원문과 안 맞아 **0 이 된다.** BSD `tr` 은
-  안 접으니 `/usr/bin/tr` 이 잡히는 머신에서 통과해도 증명이 아니다 — PATH 앞에
-  coreutils 의 `gnubin` 이 서면 `tr` 자체가 GNU 다. `0xA0` 이 없는 문구로 시험하면
-  `LC_ALL=C` 없이도 통과해 거짓 안심을 준다. 종결자도 같은 대조를 돌리지만
-  (`.agents/prompts/pr-finalize.md` 「3단계」) 기전은 이 방이 갖는다.
-
-  hit 이면 저자가 못 고치는 자리라(force-push 가 hard block) 종결자 몫이다.
-  **hit 0 은 「PR body 에만 있다」의 증명이 아니다** — 위 `ABORT` 가 조회 실패를 걷어낸
-  뒤에도 `--jq` 필드명 오타와 문구 쪽 오타는 0 이다. **줄여서 다시 재지 마라** — 짧은
-  조각은 무관한 PR 에 걸린다. 0 이면 저자 쪽으로 적되 scorecard 에서 지우지는 않는다.
-  종결자가 그 목록을 다시 훑기 때문이고(`.agents/prompts/pr-finalize.md` 「3단계」),
-  오판 값이 한쪽으로만 크기 때문이다 — hit 을 잘못 믿으면 종결자가 한 번 더 볼 뿐이지만
-  0 을 잘못 믿으면 못 고치는 자리가 못 고치는 노드에게 간다.
-  **`gh pr view --json commits` 로 되돌리지 마라** — 거기 `messageHeadline` 은
-  69자에서 낱말 한가운데를 `…` 로 자르고, `commits(first: 100)` 이라 101번째부터
-  조용히 빠진다. `tr` 은 하드랩된 산문이 줄 단위 `grep` 을 빠져나가는 것을 막는다.
-  무엇이 교정 대상이고 왜 종결자만 고칠 수 있는지는
-  [delivery](../delivery/memory.md) 「squash 커밋 교정」이 SOT 다 — 교정 대상 표면은
-  body 말고 제목도 있고, 위 덤프는 커밋이 하나일 때의 제목까지 같이 덮는다
-  (그 제목이 곧 덤프의 첫 줄이다).
+  메시지를 이어붙인 것이고 저자는 못 고친다. 그래서 교정 자리를 종결자에게 넘길
+  때는 그 문구가 커밋 메시지에 있는지 먼저 대조하는데, 그 대조 명령과 기전
+  (LC_ALL=C 조건 · 자리 수 · hit 0 의 함정)의 SOT 는
+  [pr-artifacts](../pr-artifacts/memory.md) 「squash 커밋 교정」이다.
 - **라운드 2 이상은 직전 라운드와의 blocking 대조를 scorecard 에 싣는다** — 직전
   라운드의 blocking 집합 · 이번 라운드의 것 · 둘 다에 있는 것. 사이클 판정은 안 한다.
 - **라운드 3 이상은 회고 모드다.** 그 라운드에서 개별 finding 수리를 계속하는 것
@@ -124,13 +87,9 @@ trigger:
   결정 자체이므로 **어떤 경우에도 생략 금지** — 요청자가 반환 형식을 verdict 한
   줄로 좁게 지정해도, delta 재검증이어도 낸다 (2026-07-04 회귀: 요청 프롬프트의
   형식 지정이 표를 밀어냈다).
-- **scorecard 한 장은 8,000 문자 이하다** (#2321 · #2507). `review-gate` 가 `## Scorecard`
-  로 여는 코멘트를 장마다 재고, 판정 정의 · 그 수의 출처 · 합이 아니라 장 단위인
-  이유는 `scripts/check-review-size-cap.sh` 헤더가 갖는다. 넘으면 그 코멘트를
-  줄이고 job 을 re-run 한다 — 코멘트를 API 로 다시 읽어서 새 commit 없이 풀린다
-  (같은 cap 이 걸린 PR body 쪽은 반대다: [delivery](../delivery/memory.md)
-  「PR body」). **cap 을 지키는 것이 이 계약을 지키는 것은 아니다** — cap 은
-  잘라내기로도 만족되고 잘리는 것은 대개 결론이 아니라 근거다.
+- **scorecard 한 장의 분량 cap 은 [pr-artifacts](../pr-artifacts/memory.md) 「scorecard
+  분량 cap」이 소유한다** — 값과, 넘을 때 코멘트를 줄이고 job 을 re-run 하는 해소
+  경로가 거기 있다.
 - Verdict는 label로 공표한다 — green 이면 `review:approved`, red 면
   `review:changes-requested`. 순서는 **기존 verdict 를 뗀다 → 뗀 명령이 만든
   `review-gate` run 이 끝나기를 기다린다 → 새 verdict 를 붙인다** 이고 두 방향이
@@ -192,5 +151,6 @@ trigger:
 ## 관련
 
 - [delivery](../delivery/memory.md) — 커밋 → 푸시 → PR → 리뷰 → 머지 구간의 node 별 계약
+- [pr-artifacts](../pr-artifacts/memory.md) — squash body 대조 기전과 scorecard 분량 cap
 - [documentation](../documentation/memory.md) — PR body와 documentation impact gate
 - [interface](../interface/memory.md) §2 — scorecard 에 남긴 non-blocking 을 이슈로 올리는 소유자 (리뷰어는 못 연다)

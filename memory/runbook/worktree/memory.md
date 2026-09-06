@@ -128,7 +128,7 @@ rm -rf "$TARGET"
   디렉토리를 쓰지 않는다.
 - **`refs/remotes/origin/main` 을 함께 가져온다.** 가져오지 않으면 이 저장소가 PR
   body 의 수치에 처방하는 `"$(git merge-base origin/main HEAD)"` 가 사본에서
-  rc=128 로 실패한다([delivery](../../workflow/delivery/memory.md) 「PR body」).
+  rc=128 로 실패한다([pr-artifacts](../../workflow/pr-artifacts/memory.md) 「PR body」).
 - **역사의 깊이를 줄이지 않는다.** 그 이유는 위 「생성」이 얕은 사본을 금지하는
   이유와 같다.
 

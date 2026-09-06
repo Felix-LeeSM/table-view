@@ -17,7 +17,7 @@ trigger:
 ## Documentation impact 판단
 
 아래 질문에 스스로 답한다. PR body 에서 그 답이 앉는 자리는 「문서화 impact」
-절이고, 그 틀의 소유자는 [delivery](../delivery/memory.md) 「PR body」가 가리킨다.
+절이고, 그 틀의 소유자는 [pr-artifacts](../pr-artifacts/memory.md) 「PR body」가 가리킨다.
 
 - 문서화가 필요한가 (아래 트리거 목록).
 - 필요하면 기존 SOT 중 어디를 갱신했나 (repo-relative path).
@@ -145,7 +145,7 @@ scorecard 의 수는 다음 라운드 저자의 입력이라, 리뷰어가 잘�
 
 - rev 를 박은 조회 — `git show <rev>:<path>` · `git grep <rev>`
 - 브랜치가 갈린 지점 `"$(git merge-base origin/main HEAD)"` — diff 계열의 **처방**이
-  거기 있다 ([delivery](../delivery/memory.md) 「PR body」). 같은 diff 를
+  거기 있다 ([pr-artifacts](../pr-artifacts/memory.md) 「PR body」). 같은 diff 를
   `origin/main` 에 대고 재면 앵커가 없어 위 목록 2번째로 걸린다
 - **머지된** PR 의 필드 — `mergeCommit` · `base.sha`. 그 PR 은 더 안 움직인다
   (`gh api repos/<owner>/<repo>/pulls/<N> --jq '.merged, .base.sha'`)

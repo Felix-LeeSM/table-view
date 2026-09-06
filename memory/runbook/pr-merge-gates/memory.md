@@ -62,7 +62,7 @@ trigger:
 
 `PR Body Contract` 도 2026-07-31 부터 실검사다. PR body 에 `/Users/` · `/tmp/` ·
 `file://` · `worktrees/` · `clones/` 가 있으면 그 줄을 찍고 fail 한다 (빈 body
-는 pass). 계약 SOT 는 [delivery](../../workflow/delivery/memory.md) 「PR body」.
+는 pass). 계약 SOT 는 [pr-artifacts](../../workflow/pr-artifacts/memory.md) 「PR body」.
 **`ci.yml` 은 `edited` 를 안 듣는다** — body 만 고치고 `gh run rerun` 해도 원래
 payload 의 옛 body 를 다시 읽어 같은 자리에서 fail 한다.
 **해소는 새 commit 뿐이다.**
