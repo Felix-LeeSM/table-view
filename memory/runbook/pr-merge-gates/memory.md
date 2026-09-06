@@ -1,9 +1,9 @@
 ---
 title: PR merge 게이트 — required context 계약
 type: runbook
-updated: 2026-08-27
+updated: 2026-09-07
 task: merge, pr, review-gate, ci, blocked, ruleset, e2e, synchronize-rerun, cancelled-rollup, round-gate
-keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, merge ref, rerun, cancelled, cancel-in-progress, expected, Dismiss stale approval, Release reflect:done on a new round, Count review rounds by head OID, head-oid, head OID, rounds=, round-def, statusCheckRollup, auto-merge, 체크 0개, PR Body Contract, CLAUDE.md import intact, memory/ doc size cap, check-memory-doc-size, lines >, chars >, test binaries called or allowlisted, check-ci-test-calls, ci-uncalled-tests.txt, 안 부르는데, 검사 불성립, 집계:, 다 훑지 못했다, agent contract command blocks do not swallow failures, 계약 문서의 명령 블록이 실패를 흘린다, 파이프가 의 rc 를 가린다, ABORT 를 적고 0 아닌 rc 로 안 끝난다, check-prompt-fail-silently, Frontend Checks, apt steps carry a step timeout, check-apt-timeout, apt 를 부르는데 timeout-minutes 가 없다, timeout 없는 apt 스텝, apt hang, 매달린 apt
+keywords: BLOCKED, base branch policy prohibits, mergeStateStatus, UNSTABLE, CLEAN, DIRTY, review-gate, reflect:done, required check, check-runs, check suite, merge ref, rerun, cancelled, cancel-in-progress, expected, Dismiss stale approval, Release reflect:done on a new round, Count review rounds by head OID, head-oid, head OID, rounds=, round-def, statusCheckRollup, auto-merge, 체크 0개, PR Body Contract, CLAUDE.md import intact, memory/ doc size cap, check-memory-doc-size, lines >, chars >, test binaries called or allowlisted, check-ci-test-calls, ci-uncalled-tests.txt, 안 부르는데, 검사 불성립, 집계:, 다 훑지 못했다, agent contract command blocks do not swallow failures, 계약 문서의 명령 블록이 실패를 흘린다, 파이프가 의 rc 를 가린다, ABORT 를 적고 0 아닌 rc 로 안 끝난다, check-prompt-fail-silently, Frontend Checks, apt steps carry a step timeout, check-apt-timeout, apt 를 부르는데 timeout-minutes 가 없다, timeout 없는 apt 스텝, apt hang, 매달린 apt, check-scorecard-required-contexts, scorecard 가 이름을 안 적었다, 이름이 scorecard 에 없다, required context 이름 대조
 trigger:
   signal: PR 이 mergeable 인데 mergeState=BLOCKED / merge 가 base branch policy 로 거부
   layer: none — 자동 로드 없음, 직접 열어야 함
@@ -33,9 +33,24 @@ trigger:
 
 **이 블록이 repo 유일의 required context 목록이다.** 다른 문서는 열거하지 말고
 여기를 가리킨다. 이름이 실제 workflow job context 와 어긋나도 CI 는 조용하므로,
-워크플로를 고칠 때 여기를 같이 고쳐라.
+워크플로를 고칠 때 여기를 같이 고쳐라. **기계도 이 블록을 읽는다** — review-gate 의
+scorecard 이름 대조(`scripts/check-scorecard-required-contexts.sh`)가 아래 블록에서
+required 를 세므로, 이름을 바꾸거나 뺄 때 그 스크립트의 대조 집합도 같이 움직인다.
 
 <!-- ci-gates:required-contexts -->
+
+<!-- 기계가 읽는 목록: 이 마커 쌍 안에서 「`- ` + backtick 이름 하나 + backtick」
+     으로만 이뤄진 줄이 현재 required context 다. 한 줄에 이름 하나. 아래 이력
+     서술 줄은 그 형태가 아니라서 같이 읽히지 않는다 — 제거된 이름이 대조 집합에
+     섞이지 않는 것이 이 형태를 둔 이유다. -->
+
+- `Frontend Checks`
+- `Rust Unit And Storage Tests`
+- `Integration Tests (Docker)`
+- `Runtime Happy Path`
+- `Dependency Security`
+- `Rust Static Analysis`
+- `PR Body Contract`
 
 - 2026-07-05 1차: `Frontend Checks` · `Rust Unit And Storage Tests` ·
   `Integration Tests (Docker)` · `Runtime Happy Path` · `Dependency Security`

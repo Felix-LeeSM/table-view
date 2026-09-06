@@ -175,8 +175,16 @@ required check 가 이 head 에서 안 끝났으면(`gh pr view --json statusChe
 
 직전 head 에도 그 이름의 run 이 없으면 그때는 「못 쟀다」가 맞다. **어느 head 까지
 거슬러 봤는지를 같이 적어서** 안 잰 것과 봤는데 없던 것을 구별한다. **이 값들이 앉는
-자리는 아래 「반환 형식」 표의 근거 열이다** — 결론 · 실패한 스텝 · 그것을 읽은 head
-OID · 거슬러 본 경계가 한 셀에 같이 간다.
+자리는 아래 「반환 형식」의 「자동 layer: required context 대조」 표다** — 결론 ·
+실패한 스텝 · 그것을 읽은 head OID · 거슬러 본 경계가 한 셀에 같이 간다.
+
+이 대조는 기계가 다시 한다. review-gate 의
+`scripts/check-scorecard-required-contexts.sh` 가 rollup 에 non-SUCCESS 인 required
+context 가 있는데 그 이름이 scorecard 어디에도 없으면 red 로 막는다 (#2443). 판정
+정의는 그 스크립트 헤더가 갖는다. `review-gate` 자신은 required 집합 밖이다 —
+required 목록의 SOT 가 ruleset 의 `ci-gates:required-contexts` 블록이라 legacy
+branch protection 쪽인 그 이름은 애초에 집합에 없고, verdict label 부재의
+non-SUCCESS 가 이 대조를 걸지 않는다.
 
 읽는 명령은 `.agents/skills/diagnosing-merge-gates/SKILL.md` 「안 끝난 check 를 직전
 head 에서 읽는 법」이 준다. 그 결론을 blocking 으로 세는지는
@@ -217,6 +225,11 @@ scorecard 가 과정 서술로 채워지는 경로다. 2026-08-19 실측에서 �
 ```
 ## Scorecard (라운드 N)
 | 차원 | 판정 | 근거 (repo-relative path:line · check 결론은 head OID 와 함께) |
+|---|---|---|
+| ... | ... | ... |
+
+### 자동 layer: required context 대조   ← 매 라운드. required 전부를 한 줄씩. 이름은 memory 방의 ci-gates 블록에서 읽는다
+| required context | 이 head 의 결론 | 근거 (직전 head OID · 실패한 스텝과 함께) |
 |---|---|---|
 | ... | ... | ... |
 
@@ -264,6 +277,16 @@ orchestrator 반환에만 적었는데, 사용자에게 남는 것은 scorecard 
 값은 `path:line` 이 아니어서 열에 앉을 자리가 없었고, 자리가 없는 채 요구만 있으니
 PR #2517 을 판정한 리뷰어가 그 열에 그대로 밀어 넣어 썼다. 그 열은 이제 check 결론을
 head OID 와 함께 받는다.
+
+**「자동 layer: required context 대조」 절이 틀에 있는 이유도 같다** (이슈 #2443).
+2026-08 PR #2415 의 리뷰 라운드 셋이 red 인 `Runtime Happy Path` 를 「전부 pass」로
+적었다 — required 를 이름으로 열거하는 자리가 없어서 「전부」라는 전칭이 그 집합을
+아무도 열거하지 않은 채 통과했다. 세 리뷰어가 독립적으로 같은 자리에서 틀렸으므로
+개인 실수가 아니라 형식 틀의 빈자리고, 그 빈자리는 기계가 다시 대조한다:
+review-gate 의 `scripts/check-scorecard-required-contexts.sh` 가 non-SUCCESS required
+의 이름이 scorecard 어디에도 없으면 red 로 막는다. 이름을 이 프롬프트에 복제하지
+않는 이유는 required 목록의 SOT 가 memory 방의 블록 하나이기 때문이다 — 복제하면
+목록이 바뀔 때 이 사본과 그 블록이 갈라진다.
 
 **라운드 3 에서 「라운드 대조」 · 「유형 재발」 · 「저자가 시도한 것」은 나란히
 들어가며, 어느 것도 다른 것을 대신하지 않는다.**
