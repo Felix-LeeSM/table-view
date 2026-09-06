@@ -786,8 +786,21 @@ fn strip_comments_collapse_opts(sql: &str, dialect: SqlDialect) -> String {
             out.push(' ');
             continue;
         }
-        out.push(c as char);
-        i += 1;
+        // ASCII byte — copy as-is (`u8 as char` is exact for ASCII).
+        if c.is_ascii() {
+            out.push(c as char);
+            i += 1;
+            continue;
+        }
+        // Non-ASCII lead byte — copy the whole character verbatim. A byte-wise
+        // cast is the Latin-1 mapping: U+3000's three UTF-8 bytes became three
+        // unrelated Latin-1 characters, so the separator after a keyword
+        // stopped being a boundary and the word-boundary tests below saw one
+        // unknown word instead of the verb (issue #2587).
+        let rest = &sql[i..];
+        let ch = rest.chars().next().unwrap_or(char::REPLACEMENT_CHARACTER);
+        out.push(ch);
+        i += ch.len_utf8();
     }
     out
 }
@@ -1075,6 +1088,40 @@ mod tests {
             classify("UPDATE users SET active = false WHERE id = 1"),
             Severity::Warn
         );
+    }
+
+    #[test]
+    fn unicode_whitespace_separator_keeps_the_delete_keyword_boundary() {
+        // Issue #2587 — `strip_comments_collapse_opts` pushed bytes one by one
+        // through `u8 as char`, the Latin-1 mapping: a Unicode separator after
+        // a keyword became three unrelated Latin-1 characters, the
+        // word-boundary test saw one unknown word instead of the verb, and
+        // both gates graded `DELETE<sep>FROM t` Info / read-only. The measured
+        // servers reject the shape as a syntax error, so no measured server
+        // executes it — but a separator does not join the verb, and the
+        // keyword fallback must grade the statement as written.
+        for sep in ["\u{3000}", "\u{00a0}", "\u{2009}", "\u{3001}", "\u{2013}"] {
+            let sql = format!("DELETE{sep}FROM t");
+            assert_eq!(
+                classify_with_dialect(&sql, SqlDialect::Other),
+                Severity::Danger,
+                "expected Danger (unbounded DELETE): {sql:?}"
+            );
+            assert!(
+                !is_read_only_safe_with_dialect(&sql, SqlDialect::Other),
+                "expected NOT read-only-safe: {sql:?}"
+            );
+        }
+        // ASCII control — the same statement with a plain space was already
+        // Danger / blocked before the fix.
+        assert_eq!(
+            classify_with_dialect("DELETE FROM t", SqlDialect::Other),
+            Severity::Danger
+        );
+        assert!(!is_read_only_safe_with_dialect(
+            "DELETE FROM t",
+            SqlDialect::Other
+        ));
     }
 
     #[test]
