@@ -70,7 +70,7 @@ export default function GlobalQueryLogPanel({
   return (
     <div
       data-testid="global-query-log-panel"
-      className="flex flex-col border-t border-border bg-secondary"
+      className="flex h-full flex-col border-t border-border bg-secondary"
     >
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
@@ -119,8 +119,10 @@ export default function GlobalQueryLogPanel({
         </Button>
       </div>
 
-      {/* Entries */}
-      <div className="max-h-scroll-lg overflow-auto">
+      {/* Entries — the dock (#2450) hands this panel a fixed 300px tabpanel,
+          so the height clamp lives on the dock and the list scrolls inside
+          the space left under the header. */}
+      <div className="min-h-0 flex-1 overflow-auto">
         {filtered.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
             {rows.length === 0

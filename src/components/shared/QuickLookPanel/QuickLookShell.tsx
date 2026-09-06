@@ -7,8 +7,8 @@
 //     visible `--color-ring` outline, so `F6` can hand focus to the panel and
 //     the user can see that it landed there,
 //   * keyboard-accessible resize handle (`role="separator"`, `tabIndex=0`,
-//     `aria-orientation="horizontal"`, `aria-valuemin={120}` /
-//     `aria-valuemax={600}` / `aria-valuenow={height}`,
+//     `aria-orientation="horizontal"`, `aria-valuemin={MIN_HEIGHT}` /
+//     `aria-valuemax={MAX_HEIGHT}` / `aria-valuenow={height}`,
 //     `aria-label="Resize Quick Look panel"`, `GripHorizontal` icon,
 //     `cursor-row-resize`, `hover:bg-muted`,
 //     `focus-visible:outline-1 focus-visible:outline-ring`),

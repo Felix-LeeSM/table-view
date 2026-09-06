@@ -88,6 +88,12 @@ backend contract 를 통해서만 다룬다.
   은 Safe Mode 를 아예 참조하지 않고 kill 확인창을 연다. 헤더는 연결 환경만
   말하고, tier 는 `src/lib/safeMode.ts` 가 비-production strict 경로에서 `reason`
   에 적는다 (#2518).
+- 하단 dock 높이 규약 (#2450): dock 이 높이를 소유한다 — 각 tabpanel 이 하나의
+  고정 높이(`h-scroll-lg`)를 갖고 패널은 그 안에서 스크롤하며, 패널별 clamp 를
+  되살리지 않는다. `QuickLookPanel` 의 resize clamp(`QuickLookPanel/helpers.ts`)
+  도 dock 콘텐츠 높이 안에 둔다. `OperationsPanel` 서브탭 선택은 dock 탭을
+  떠나도 유지된다 — 항상 마운트 + `hidden` (Details 와 같은 방식). 어느 탭을
+  어떻게 마운트하는지는 `src/components/layout/BottomPanel.tsx` 주석이 갖는다.
 
 ## Contract 경계
 

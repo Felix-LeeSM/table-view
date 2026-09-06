@@ -113,7 +113,7 @@ export default function OperationsPanel({
   return (
     <div
       data-testid="operations-panel"
-      className="flex flex-col border-t border-border bg-secondary"
+      className="flex h-full flex-col border-t border-border bg-secondary"
     >
       <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
         <span className="text-xs font-medium text-foreground">
@@ -148,7 +148,10 @@ export default function OperationsPanel({
           </Button>
         </div>
       </div>
-      <div className="max-h-72 overflow-auto">
+      {/* #2450 — the dock hands this panel a fixed 300px tabpanel, so the
+          height clamp lives on the dock and the body scrolls in the space
+          left under the header row. */}
+      <div className="min-h-0 flex-1 overflow-auto">
         {active === "activity" && drv.ops.activity ? (
           <ServerActivityPanel
             connectionId={drv.connectionId}

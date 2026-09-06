@@ -9,10 +9,13 @@ import Decimal from "decimal.js";
 import type { ColumnInfo } from "@/types/schema";
 
 // ── Resize constants ─────────────────────────────────────────────────
+// The dock's Details tabpanel is the only place a QuickLook mounts, and it
+// is a fixed 300px tall (`h-scroll-lg` on every tabpanel, #2450) — so the
+// resize range lives inside that dock height and the default fills it.
 
 export const MIN_HEIGHT = 120;
-export const MAX_HEIGHT = 600;
-export const DEFAULT_HEIGHT = 280;
+export const MAX_HEIGHT = 300;
+export const DEFAULT_HEIGHT = 300;
 export const KEYBOARD_RESIZE_STEP = 8;
 
 export function clampHeight(value: number): number {

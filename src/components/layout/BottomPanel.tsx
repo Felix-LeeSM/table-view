@@ -34,6 +34,11 @@ interface BottomPanelProps {
  * The Operations tab is capability-gated the same way its old toolbar button
  * was: a connection without `operations.*` gets no tab at all rather than a
  * dead one (ui-parity §4, static unsupported = hidden).
+ *
+ * The dock owns the height (#2450): every tabpanel is one fixed `h-scroll-lg`
+ * (300px) and the view inside it scrolls, so switching tabs can no longer
+ * grow and shrink the dock. `QuickLookPanel`'s resize clamp is capped at the
+ * same 300px so its Details body can never overflow the fixed dock.
  */
 export default function BottomPanel({ onDetailsSlotChange }: BottomPanelProps) {
   const { t } = useTranslation("layout");
@@ -128,20 +133,30 @@ export default function BottomPanel({ onDetailsSlotChange }: BottomPanelProps) {
           id="bottom-panel-tabpanel-history"
           aria-labelledby="bottom-panel-tab-history"
           tabIndex={0}
+          className="h-scroll-lg"
         >
           <GlobalQueryLogPanel visible onClose={() => setCollapsed(true)} />
         </div>
       )}
-      {!collapsed && activeTab === "operations" && (
-        <div
-          role="tabpanel"
-          id="bottom-panel-tabpanel-operations"
-          aria-labelledby="bottom-panel-tab-operations"
-          tabIndex={0}
-        >
-          <OperationsPanel visible onClose={() => setCollapsed(true)} />
-        </div>
-      )}
+      {/* #2450 — Operations stays mounted like Details: its local sub-tab pick
+          used to be thrown away every time another dock tab showed. `hidden`
+          keeps the instance (and the pick) while another tab owns the dock;
+          the panel renders `null` on `visible={false}`, so nothing else
+          survives the hidden stretch. History keeps its mount-on-show cycle —
+          it already clears its own search/detail state there (#2450). */}
+      <div
+        role="tabpanel"
+        id="bottom-panel-tabpanel-operations"
+        aria-labelledby="bottom-panel-tab-operations"
+        tabIndex={0}
+        hidden={collapsed || activeTab !== "operations"}
+        className="h-scroll-lg"
+      >
+        <OperationsPanel
+          visible={!collapsed && activeTab === "operations"}
+          onClose={() => setCollapsed(true)}
+        />
+      </div>
       {/* Details stays mounted even when another tab owns the dock. The grid
           portals its `QuickLookPanel` in here, and a target that appears only
           on the render *after* the tab is picked would flash the panel inside
@@ -153,6 +168,7 @@ export default function BottomPanel({ onDetailsSlotChange }: BottomPanelProps) {
         aria-labelledby="bottom-panel-tab-details"
         tabIndex={0}
         hidden={collapsed || activeTab !== "details"}
+        className="h-scroll-lg"
       >
         <div ref={onDetailsSlotChange} />
         {!collapsed && activeTab === "details" && !detailsAvailable && (
