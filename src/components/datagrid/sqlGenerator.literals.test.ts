@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { coerceToSqlLiteral } from "./sqlGenerator";
+import { coerceToSqlLiteral, generateSql } from "./sqlGenerator";
+import { BASE_DATA } from "./sqlGenerator.fixtures";
 
 // ---------------------------------------------------------------------------
 // Sprint 75 — coerceToSqlLiteral: pure-function type coercion per column type.
@@ -488,5 +489,29 @@ describe("coerceToSqlLiteral — textual family (escape path preserved)", () => 
       kind: "sql",
       sql: "'anything'",
     });
+  });
+});
+
+// #2590 — the grid generator layer needs its own backslash guard: the mysql
+// branch in `escapeSqlString` could be deleted and every test here still
+// passed, because none of them fed a `\` through a mysql edit. A trailing
+// `\` would swallow the closing quote and everything after it becomes live
+// SQL (PR #2573, #2555).
+describe("generateSql — mysql string literals double the backslash (#2590)", () => {
+  it("a mysql cell edit carrying a trailing backslash keeps the literal closed", () => {
+    const edits = new Map<string, string | null>([["0-1", "C:\\"]]);
+    const statements = generateSql(
+      BASE_DATA,
+      "app",
+      "users",
+      edits,
+      new Set(),
+      [],
+      { dialect: "mysql" },
+    );
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toBe(
+      "UPDATE `app`.`users` SET `name` = 'C:\\\\' WHERE `id` = 1;",
+    );
   });
 });

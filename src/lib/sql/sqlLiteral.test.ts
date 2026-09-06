@@ -140,10 +140,14 @@ describe("escapeSqlString — MySQL reads a backslash as an escape (#2555)", () 
     expect(escapeSqlString("C:\\")).toBe("'C:\\'");
   });
 
-  it("every dialect still doubles an embedded quote", () => {
-    expect(escapeSqlString("O'Brien", "postgresql")).toBe("'O''Brien'");
-    expect(escapeSqlString("O'Brien", "mysql")).toBe("'O''Brien'");
-  });
+  // #2590 — the name claims every dialect, so every dialect asserts. The
+  // `'` doubling is dialect-independent (only `\` is mysql-only).
+  it.each(["postgresql", "mysql", "sqlite", "mssql", "oracle"] as const)(
+    "every dialect still doubles an embedded quote (%s)",
+    (dialect) => {
+      expect(escapeSqlString("O'Brien", dialect)).toBe("'O''Brien'");
+    },
+  );
 });
 
 describe("coerceToSqlLiteral — dialect reaches the emitted string literal", () => {
