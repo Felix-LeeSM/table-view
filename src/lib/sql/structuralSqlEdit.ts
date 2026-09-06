@@ -38,9 +38,14 @@ function jsonbPathLiteral(path: string): string {
       else if (m[2] !== undefined) segments.push(m[2]);
     }
   }
-  // Quote each segment, escape `"` and `\`.
+  // Quote each segment, escape `"` and `\` (JSON grammar) and double `'` — the
+  // path literal is a single-quoted SQL string, so an undoubled `'` closes it
+  // early (#2591).
   const quoted = segments
-    .map((s) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
+    .map(
+      (s) =>
+        `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/'/g, "''")}"`,
+    )
     .join(",");
   return `'{${quoted}}'`;
 }
