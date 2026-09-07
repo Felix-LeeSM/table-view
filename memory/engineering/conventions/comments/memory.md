@@ -20,12 +20,13 @@ keywords: 주석, comment, 한줄 주석, 간결, 재진술, restate, TSDoc, doc
    서술, 서사.
 2. **내용은 코드가 말하지 않는 것** — why(왜 이 구현인가, 왜 다른 방법이 아닌가),
    외부 제약(DBMS 방언, 드라이버 동작, OS 차이), 계약·불변식(호출자 의무, 보장의
-   강도), 경고(어기면 무엇이 깨지는가까지). 예: `table-view-core/src/db/traits.rs`
-   의 `cancel_query` 계약, `src/stores/dataGridEditStore.ts` 의 NEVER + 이유.
+   강도), 경고(어기면 무엇이 깨지는가까지). 예:
+   `src-tauri/table-view-core/src/db/traits.rs` 의 `cancel_query` 계약,
+   `src/stores/dataGridEditStore.ts` 의 NEVER + 이유.
 3. **외부 사실엔 검증 가능한 포인터** — `#NNNN`(이슈/PR), `ADR NNNN`, `file:line`
    (의존성 소스는 lock 에 고정된 버전과 함께), 설계 문서 절. 포인터 없는 외부 주장은
-   회귀 때 출처가 0 이 된다. 예: `table-view-core/src/db/tls.rs` 의 sqlx/rustls
-   소스 인용.
+   회귀 때 출처가 0 이 된다. 예: `src-tauri/table-view-core/src/db/tls.rs` 의
+   sqlx/rustls 소스 인용.
 4. **메타·서사 금지** — sprint 번호 서사, 리뷰 라운드 서사, caller count 숫자, 라인 수는
    새로 쓰지 않고, 기존 것은 저장소 전체 스윕으로 정리한다. 메타 부분만 떼고
    load-bearing 본문은 보존한다. 이슈/PR 번호는 회귀 앵커라 남긴다. 분류와
@@ -40,8 +41,8 @@ keywords: 주석, comment, 한줄 주석, 간결, 재진술, restate, TSDoc, doc
    `src-tauri/src/diagnostics.rs` 의 WorkerGuard 계약.
 7. **반복 금지** — 같은 지식은 가장 가까운 공통 자리 한 곳에 길게 쓰고, 나머지는 짧게
    쓰고 참조한다. 반복 사본은 drift 한다. 실측 자리: `src/lib/tauri/ddl.ts` 의 동일
-   TSDoc 블록, `useDataGridEditPendingState.ts` 의 동일 문장,
-   `table-view-core/src/db/oracle.rs` 계열의 Debug 비밀 노출 경고.
+   TSDoc 블록, `src/components/datagrid/useDataGridEditPendingState.ts` 의 동일
+   문장, `src-tauri/table-view-core/src/db/oracle.rs` 계열의 Debug 비밀 노출 경고.
 8. **언어** — 주석은 영어로 통일한다(2026-09-07 사용자 확정 — 코드를 읽는 독자는
    agent 다). 기존 한국어·혼용 주석도 다듬기 스윕에서 영어로 옮긴다. 같은 내용을
    두 언어로 이중으로 쓰지 않는다.
