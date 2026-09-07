@@ -272,4 +272,37 @@ describe("useDdlPreviewExecution — MySQL dialect reaches the classifier (#2581
     });
     expect(onCommit).not.toHaveBeenCalled();
   });
+
+  // Reason: #2582 (PR #2575 NB3) — the splitter wire, not the classifier one:
+  // `attemptExecute` passes the connection dialect to `splitSqlStatements`.
+  // With it, the MySQL-escaped literal stays ONE CREATE statement and commits;
+  // without it the literal ends at `\'` and `DROP TABLE users` becomes its own
+  // fragment behind the confirm gate. Asserting on the commit (not on the
+  // dialect argument) is what makes a reverted wire red. (2026-09-06)
+  it("commits a CREATE whose dangerous-looking text lives inside a MySQL literal", async () => {
+    const onCommit = vi.fn().mockResolvedValue(undefined);
+    const onRefresh = vi.fn().mockResolvedValue(undefined);
+    render(
+      <Harness
+        sql={
+          "CREATE TABLE t (note text DEFAULT 'O\\'Brien; DROP TABLE users; --')"
+        }
+        onCommit={onCommit}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load plan" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("preview sql")).toHaveTextContent(
+        "CREATE TABLE",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Execute" }));
+
+    await waitFor(() => expect(onCommit).toHaveBeenCalledTimes(1));
+    expect(screen.getByLabelText("pending confirm")).toHaveTextContent("");
+    expect(screen.getByLabelText("preview error")).toHaveTextContent("");
+  });
 });

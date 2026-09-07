@@ -5,10 +5,32 @@
 import { describe, expect, it } from "vitest";
 import {
   coerceToSqlLiteral,
+  dialectFromDbType,
   escapeSqlString,
   qualifiedTableName,
   sqlIdentifier,
 } from "./sqlLiteral";
+
+// Purpose: #2582 축 1 (PR #2575 NB3) — every execution seat derives its
+// dialect through this mapper, so its dbType → dialect table is the wire the
+// splitter/classifier tests downstream depend on. `mariadb` must fold into
+// the MySQL scanning rules (`\'` escapes, `#` comments) or a MariaDB
+// connection falls back to the standard-SQL reading of its own literals.
+describe("dialectFromDbType — connection dbType to SQL dialect", () => {
+  it("maps each supported SQL dbType and folds mariadb into mysql", () => {
+    expect(dialectFromDbType("postgresql")).toBe("postgresql");
+    expect(dialectFromDbType("mysql")).toBe("mysql");
+    expect(dialectFromDbType("mariadb")).toBe("mysql");
+    expect(dialectFromDbType("sqlite")).toBe("sqlite");
+    expect(dialectFromDbType("mssql")).toBe("mssql");
+    expect(dialectFromDbType("oracle")).toBe("oracle");
+  });
+
+  it("falls through to undefined for non-SQL or absent types", () => {
+    expect(dialectFromDbType("redis")).toBeUndefined();
+    expect(dialectFromDbType(undefined)).toBeUndefined();
+  });
+});
 
 describe("sqlIdentifier — canonical per-dialect quoting", () => {
   it("mysql wraps in backticks and doubles embedded backticks", () => {
