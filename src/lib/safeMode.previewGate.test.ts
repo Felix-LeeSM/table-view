@@ -46,16 +46,30 @@
 //     "info")` gates the wrong half and still passes A, B and C;
 //   - a consult whose result never reaches the mount: B counts text, so
 //     computing `needsPreview` in `rdbQueryExecution.ts` and then ignoring
-//     it leaves the whole suite green.
+//     it leaves the whole suite green;
+//   - a Safe Mode decision site outside an `if (parsed.method === "…")`
+//     arm: C's population is those arms and the head of the split is
+//     dropped, so a consult placed there that mounts nothing grows neither
+//     population. `executeMongoRunCommandIfPresent` in
+//     `mongoQueryExecution.ts` sits ahead of the first arm and carries no
+//     `requiresPreviewDialog(`, and an extra `decideSafeMode(` consult in
+//     that head position leaves the whole suite green (measured); B does
+//     not reach it either, since its population is mount-bearing files.
+//     What covers `executeMongoRunCommandIfPresent` is its own stricter
+//     gate — it routes a non-INFO command to the confirm dialog, not to
+//     this preview — so do not "fix" it by routing it through the preview
+//     predicate. `rdbQueryExecution.ts` has no arms at all, so C never sees
+//     the file; B's file-level mount count is what watches it;
+//   - B counts consults in raw text, so a mention inside a *comment* is
+//     counted as one — the false-pass side of the raw-text rule (A's is the
+//     false-red side, noted at the end of this header). A mount that lands
+//     with no real consult satisfies B as soon as a comment in the same
+//     file names `requiresPreviewDialog(`: an extra mount plus a comment
+//     mention in `mongoQueryExecution.ts` leaves the whole suite green
+//     (measured).
 // The behavioural tests in `src/components/query/QueryTab.warn-dialog.test.tsx`
 // and `src/components/query/QueryTab/useQueryExecution.writeDispatch.test.tsx`
 // are what cover those; this file covers the shape.
-//
-// `executeMongoRunCommandIfPresent` in `mongoQueryExecution.ts` consults the
-// Safe Mode matrix ahead of the first arm and routes a non-INFO command to
-// the confirm dialog, not to this preview — it mounts nothing, so B's
-// population never grows around it. Do not "fix" it by routing it through
-// the preview predicate.
 //
 // A consequence of A worth knowing before editing a dispatch file: the check
 // reads raw text, so writing the forbidden comparison inside a *comment* in
