@@ -1,4 +1,4 @@
-//! Sprint 359 (Phase 2 Q5.3 / Q5.5) — paradigm-native cancel IPC.
+//! Paradigm-native cancel IPC (Q5.3 / Q5.5).
 //!
 //! The pre-existing `cancel_query(query_id)` command (in
 //! `commands::rdb::query::cancel_query`) cancels a tokio `CancellationToken`
@@ -34,7 +34,7 @@ use crate::commands::not_connected;
 use crate::error::AppError;
 pub use crate::error::CancelError;
 
-/// Sprint 359 — wire-shape error returned from `cancel_query_native`.
+/// Wire-shape error returned from `cancel_query_native`.
 ///
 /// Frontend uses the `type` discriminator to decide:
 ///   * `AlreadyCompleted` → silent (the user clicked Cancel after the

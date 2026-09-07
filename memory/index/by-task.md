@@ -79,6 +79,11 @@ generator: none — 손으로 갱신한다
 ### comment-cleanup
 
 - [God file 시퀀스](../../memory/engineering/conventions/refactoring/god-file/memory.md)
+- [코드 주석 원칙](../../memory/engineering/conventions/comments/memory.md)
+
+### comments
+
+- [코드 주석 원칙](../../memory/engineering/conventions/comments/memory.md)
 
 ### commit
 

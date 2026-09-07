@@ -37,7 +37,7 @@ import {
 let trackedTextFilesCache: readonly { path: string; text: string }[] | null =
   null;
 
-// Memoized: five call sites below, and each miss re-reads every tracked file.
+// Memoized: each miss re-reads every tracked file.
 function trackedTextFiles(): readonly { path: string; text: string }[] {
   if (trackedTextFilesCache) return trackedTextFilesCache;
   trackedTextFilesCache = readTrackedTextFiles();
