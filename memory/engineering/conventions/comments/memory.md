@@ -56,6 +56,17 @@ keywords: 주석, comment, 한줄 주석, 간결, 재진술, restate, TSDoc, doc
   모으기).
 - 비범위: 한 줄 주석 삭제(1번), 기존 한국어 주석 번역(8번).
 
+## 변환 예시
+
+4번(메타 제거)을 기존 주석에 적용하는 형태다. 전체 diff 는 PR #2624 가 앵커다.
+
+- 접두사 제거·본문 보존: `/// Sprint 359 — wire-shape error returned from …` →
+  `/// Wire-shape error returned from …`
+- 인용 안의 sprint 제거: `(Sprint 235 invariant on …)` → `(invariant on …)`
+- caller count 제거: `// Memoized: five call sites below, and each miss …` →
+  `// Memoized: each miss …`
+- 참조로 치환(7번): `Sprint 271c — see \`dropTable\`.` → `See \`dropTable\`.`
+
 ## 관련
 
 - [god-file](../refactoring/god-file/memory.md) — 주석 제거/보존 분류 SOT

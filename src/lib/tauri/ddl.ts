@@ -30,7 +30,7 @@ import type {
 // `previewOnly: false` and discard the returned `sql` (only the new
 // modals need it).
 //
-// Sprint 271c (2026-05-13) — every wrapper threads the Request object's
+// Every wrapper threads the Request object's
 // `expectedDatabase?: string` field straight to the backend (Tauri's
 // camelCase↔snake_case auto-conversion handles the rename to
 // `expected_database`). Existing call sites that omit the field stay
@@ -42,7 +42,7 @@ import type {
  * Sprint 235 — request-shaped DROP TABLE wrapper. Returns the SQL the
  * backend ran (or, when `previewOnly: true`, the SQL it WOULD run).
  *
- * Sprint 271c — `request.expectedDatabase` triggers the backend
+ * `request.expectedDatabase` triggers the backend
  * DbMismatch guard.
  */
 // Issue #1112 — `safetyConfirmed` is the Safe Mode confirmation proof. The
@@ -64,7 +64,7 @@ export async function dropTableRequest(
  * Sprint 235 — request-shaped RENAME TABLE wrapper. Same semantics as
  * `dropTableRequest`.
  *
- * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ * `request.expectedDatabase` opt-in DbMismatch guard.
  */
 export async function renameTableRequest(
   request: RenameTableRequest,
@@ -74,10 +74,10 @@ export async function renameTableRequest(
 
 /**
  * Compat wrapper — `schemaStore.dropTable` action body remains byte-
- * equivalent (Sprint 235 invariant on `src/stores/schemaStore.ts`).
+ * equivalent (invariant on `src/stores/schemaStore.ts`).
  * Builds the request object internally + discards the SQL string.
  *
- * Sprint 271c — optional `expectedDatabase` last-positional propagates
+ * Optional `expectedDatabase` last-positional propagates
  * to the underlying request struct so a swapped backend pool rejects
  * with `AppError::DbMismatch` before the table is dropped.
  *
@@ -109,7 +109,7 @@ export async function dropTable(
 /**
  * Compat wrapper — same shape as `dropTable`.
  *
- * Sprint 271c — see `dropTable`.
+ * See `dropTable`.
  */
 export async function renameTable(
   connectionId: string,
@@ -129,7 +129,7 @@ export async function renameTable(
 }
 
 /**
- * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ * `request.expectedDatabase` opt-in DbMismatch guard.
  */
 // Issue #1112 — `alterTable` is destructive only when a change drops a column;
 // the backend gates that case. Commit callers (`previewOnly: false`) pass
@@ -157,7 +157,7 @@ export async function alterTable(
  * src/` returns 0 hits in production code, so the request-shaped
  * function is the sole public API surface.
  *
- * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ * `request.expectedDatabase` opt-in DbMismatch guard.
  */
 export async function addColumnRequest(
   request: AddColumnRequest,
@@ -170,7 +170,7 @@ export async function addColumnRequest(
  * `addColumnRequest`. No positional compat wrapper (see Sprint 236
  * Open Question §1).
  *
- * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ * `request.expectedDatabase` opt-in DbMismatch guard.
  */
 // Issue #1112 — commit callers pass `safetyConfirmed: true`. See
 // `dropTableRequest`.
@@ -185,7 +185,7 @@ export async function dropColumnRequest(
 }
 
 /**
- * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ * `request.expectedDatabase` opt-in DbMismatch guard.
  */
 export async function createTable(
   request: CreateTableRequest,
@@ -200,7 +200,7 @@ export async function createTable(
  * (statements separated by `;\n`); the dialog renders it verbatim in
  * the preview pane.
  *
- * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ * `request.expectedDatabase` opt-in DbMismatch guard.
  */
 export async function createTablePlan(
   request: CreateTablePlanRequest,
@@ -209,7 +209,7 @@ export async function createTablePlan(
 }
 
 /**
- * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ * `request.expectedDatabase` opt-in DbMismatch guard.
  */
 export async function createIndex(
   request: CreateIndexRequest,
@@ -218,7 +218,7 @@ export async function createIndex(
 }
 
 /**
- * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ * `request.expectedDatabase` opt-in DbMismatch guard.
  */
 // Issue #1112 — commit callers pass `safetyConfirmed: true`. See
 // `dropTableRequest`.
@@ -233,7 +233,7 @@ export async function dropIndex(
 }
 
 /**
- * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ * `request.expectedDatabase` opt-in DbMismatch guard.
  */
 export async function addConstraint(
   request: AddConstraintRequest,
@@ -242,7 +242,7 @@ export async function addConstraint(
 }
 
 /**
- * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ * `request.expectedDatabase` opt-in DbMismatch guard.
  */
 // Issue #1112 — commit callers pass `safetyConfirmed: true`. See
 // `dropTableRequest`.
@@ -265,7 +265,7 @@ export async function dropConstraint(
  * and (when `previewOnly === false`) wraps the statement in
  * `BEGIN/COMMIT`. Non-PG RDB adapters surface `AppError::Unsupported`.
  *
- * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ * `request.expectedDatabase` opt-in DbMismatch guard.
  */
 export async function createTrigger(
   request: CreateTriggerRequest,
@@ -283,7 +283,7 @@ export async function createTrigger(
  * statement in `sqlx::Transaction::begin/commit`. Non-PG RDB adapters
  * surface `AppError::Unsupported`.
  *
- * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ * `request.expectedDatabase` opt-in DbMismatch guard.
  */
 // Issue #1112 — commit callers pass `safetyConfirmed: true`. See
 // `dropTableRequest`.
@@ -312,7 +312,7 @@ export async function dropTrigger(
  * trait default — the frontend swallows probe errors silently so this
  * is invisible to the user.
  *
- * Sprint 271c — optional `expectedDatabase` opt-in DbMismatch guard.
+ * Optional `expectedDatabase` opt-in DbMismatch guard.
  * Omitting the parameter is byte-equivalent to no probe.
  */
 export async function countNullRows(
