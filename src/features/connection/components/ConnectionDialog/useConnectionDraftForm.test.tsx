@@ -179,3 +179,88 @@ describe("useConnectionDraftForm — skip-verify never carries across dbType swi
     expect(result.current.form.sslMode).toBe("require");
   });
 });
+
+// Issue #2610 — `applyParsedConnection` is the fourth door a timeout can enter
+// the draft through, and the only one that spread `parsed` raw. The other
+// three (typing in ConnectionDialogBody, the dbType switch in
+// `applyDbTypeChange`, and a stored load in `draftFromConnection`) clamp the
+// value to the adapter ceiling, so the number on screen is the number a dial
+// gets. `parseConnectionUrl` emits no `connectionTimeout` today, which is why
+// this door is dormant — the parsed fixture below hands the field directly,
+// the way the day the parser grows it (or any other caller of the merge)
+// would.
+describe("useConnectionDraftForm — the parsed-connection door clamps the timeout (#2610)", () => {
+  it.each(["url", "paste"] as const)(
+    "[conn-timeout-ui] clamps a parsed timeout above the target adapter's ceiling (%s mode)",
+    (mode) => {
+      const { result } = renderHook(() => useConnectionDraftForm());
+
+      act(() =>
+        result.current.applyParsedConnection(
+          {
+            dbType: "postgresql",
+            host: "h",
+            port: 5432,
+            user: "u",
+            database: "db",
+            connectionTimeout: 600,
+            paradigm: "rdb",
+          },
+          mode,
+        ),
+      );
+
+      expect(result.current.form.connectionTimeout).toBe(30);
+    },
+  );
+
+  it("[conn-timeout-ui] keeps a parsed timeout at or under the ceiling unchanged", () => {
+    const { result } = renderHook(() => useConnectionDraftForm());
+
+    act(() =>
+      result.current.applyParsedConnection(
+        {
+          dbType: "mssql",
+          host: "h",
+          port: 1433,
+          user: "u",
+          database: "db",
+          connectionTimeout: 300,
+          paradigm: "rdb",
+        },
+        "url",
+      ),
+    );
+
+    expect(result.current.form.connectionTimeout).toBe(300);
+  });
+
+  it("[conn-timeout-ui] re-clamps the carried draft timeout when a parsed connection switches to a stricter adapter", () => {
+    // 300 is legal for MongoDB; the pasted URL moves the connection to
+    // PostgreSQL, whose ceiling is 30.
+    const conn = storedConnection({
+      dbType: "mongodb",
+      paradigm: "document",
+      connectionTimeout: 300,
+    });
+    const { result } = renderHook(() => useConnectionDraftForm(conn));
+    expect(result.current.form.connectionTimeout).toBe(300);
+
+    act(() =>
+      result.current.applyParsedConnection(
+        {
+          dbType: "postgresql",
+          host: "h",
+          port: 5432,
+          user: "u",
+          database: "db",
+          paradigm: "rdb",
+        },
+        "paste",
+      ),
+    );
+
+    expect(result.current.form.dbType).toBe("postgresql");
+    expect(result.current.form.connectionTimeout).toBe(30);
+  });
+});

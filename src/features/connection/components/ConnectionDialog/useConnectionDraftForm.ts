@@ -277,6 +277,15 @@ export function useConnectionDraftForm(
         ...f,
         ...tlsSanitize,
         ...rest,
+        // #2610 — the fourth door. `rest` above is spread raw, so a parsed
+        // `connectionTimeout` would land unclamped, and a URL that switches
+        // engines would carry the old engine's value past the new engine's
+        // ceiling. Clamp the effective engine's timeout — the same clamp
+        // `applyDbTypeChange` and `draftFromConnection` already apply.
+        connectionTimeout: clampConnectionTimeout(
+          rest.dbType ?? f.dbType,
+          rest.connectionTimeout ?? f.connectionTimeout,
+        ),
         name:
           mode === "url"
             ? f.name || parsed.database || ""
