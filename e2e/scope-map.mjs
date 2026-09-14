@@ -124,6 +124,13 @@ const RULES = [
   // Documentation too: no code reads it, and docker compose loads `.env`.
   [/^\.env\.example$/, NONE],
 
+  // The one exception to the fail-closed fallback: vitest-only files are
+  // unreachable from the `src/main.tsx` import graph, so a change here cannot
+  // ship in the `pnpm tauri build` bundle and no smoke spec can observe it
+  // (#2585). Above the `src/components/*` rules on purpose — a `.test.`
+  // file inside a mapped dir must still map to nothing.
+  [/^src\/.*\.test\.tsx?$/, NONE],
+
   [/^src-tauri\/(sql|mongosh)-parser-core\//, PARSER_REPS],
   [/^src\/lib\/(sql|mongo)\/wasm\//, PARSER_REPS],
 
@@ -213,6 +220,11 @@ const CASES = [
   // Components.
   [["src/components/datagrid/DataGridTable.tsx"], GRID],
   [["src/components/document/DocumentDataGrid.tsx"], DOCUMENT],
+  // Vitest-only files (#2585): shipped in no bundle, so no spec can observe
+  // them. The third case sits inside a mapped dir and pins rule precedence.
+  [["src/App.bootstrap.test.tsx"], NONE],
+  [["src/lib/api/databaseUsers.test.ts"], NONE],
+  [["src/components/datagrid/DataGridSkeleton.test.tsx"], NONE],
   // Shared core and anything unnamed: full suite.
   [["src/lib/tauri/commands.ts"], ALL],
   [["src/stores/connectionStore.ts"], ALL],
