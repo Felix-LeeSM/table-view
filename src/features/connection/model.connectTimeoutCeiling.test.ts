@@ -77,36 +77,105 @@ const UNMIRRORED_DATABASE_TYPES: readonly DatabaseType[] = ["duckdb"];
 const REPO_ROOT = process.cwd();
 const DB_ROOT = resolve(REPO_ROOT, "src-tauri/table-view-core/src/db");
 
-/** `const NAME: uN = 300;` — the declaration form. Doc-comment mentions of a
- * const name carry no `: uN = literal;` tail, so they never match. */
+/** Evaluates the integer-literal arithmetic the repo's ceiling consts are
+ * written as (`60 * 5`, `100 * 1024 * 1024`, …) and returns null for
+ * anything else, so an initializer this evaluator cannot read fails loudly
+ * instead of silently dropping the const from the guarded set. */
+function evalConstIntExpr(expr: string): number | null {
+  // 토큰화 뒤에 글자가 남으면 숫자 산술이 아닌 형태다 (식별자·캐스트·접미사…).
+  if (expr.replace(/\d[\d_]*|[()+\-*/%]|\s+/g, "") !== "") return null;
+  const tokens = expr.match(/\d[\d_]*|[()+\-*/%]/g);
+  if (tokens === null) return null;
+  let pos = 0;
+  const peek = (): string | undefined => tokens[pos];
+
+  const primary = (): number | null => {
+    const token = peek();
+    if (token === undefined) return null;
+    pos += 1;
+    if (token !== "(") {
+      return /^\d/.test(token) ? Number(token.replaceAll("_", "")) : null;
+    }
+    const value = additive();
+    if (value === null || peek() !== ")") return null;
+    pos += 1;
+    return value;
+  };
+
+  const multiplicative = (): number | null => {
+    let left = primary();
+    for (;;) {
+      const op = peek();
+      if (op !== "*" && op !== "/" && op !== "%") return left;
+      pos += 1;
+      const right = primary();
+      if (left === null || right === null) return null;
+      if (op === "*") {
+        left *= right;
+      } else if (right === 0) {
+        return null;
+      } else {
+        left = op === "/" ? Math.trunc(left / right) : left % right;
+      }
+    }
+  };
+
+  const additive = (): number | null => {
+    let left = multiplicative();
+    for (;;) {
+      const op = peek();
+      if (op !== "+" && op !== "-") return left;
+      pos += 1;
+      const right = multiplicative();
+      if (left === null || right === null) return null;
+      left = op === "+" ? left + right : left - right;
+    }
+  };
+
+  const value = additive();
+  return pos === tokens.length ? value : null;
+}
+
+/** `const NAME: uN = <initializer>;` — the declaration form, with the whole
+ * initializer captured so a computed ceiling (`= 60 * 5;`) reads the same as
+ * a literal one. Doc-comment mentions of a const name carry no `: uN = …;`
+ * tail, so they never match. */
 function ceilingDeclaration(constName: string): RegExp {
-  return new RegExp(`\\bconst ${constName}\\s*:\\s*u\\d+\\s*=\\s*(\\d+)\\s*;`);
+  return new RegExp(`\\bconst ${constName}\\s*:\\s*u\\d+\\s*=\\s*([^;]+);`);
 }
 
 function backendCeiling(path: string, constName: string): number {
   const source = readFileSync(resolve(REPO_ROOT, path), "utf8");
   const match = ceilingDeclaration(constName).exec(source);
-  if (!match) {
+  if (match === null || match[1] === undefined) {
     throw new Error(
       `no \`const ${constName}: uN = <secs>;\` declaration found in ${path} — ` +
         "the const was renamed or moved; update CEILING_SOURCES",
     );
   }
-  return Number(match[1]);
+  const secs = evalConstIntExpr(match[1]);
+  if (secs === null) {
+    throw new Error(
+      `\`const ${constName}\` in ${path} initializes to \`${match[1].trim()}\`, ` +
+        "which is not integer-literal arithmetic this test evaluates — write " +
+        "the ceiling as integer arithmetic of literals or extend " +
+        "evalConstIntExpr",
+    );
+  }
+  return secs;
 }
 
-/** Every `const ...TIMEOUT...MAX...SECS: uN = <literal>;` declaration in
- * `db/`, mirrored or not. Defaults (`*_DEFAULT_SECS`, the shared
- * `CONNECT_TIMEOUT_DEFAULT_SECS`) and the Oracle test-probe timeout carry no
- * `MAX`, so they stay out of this population on their own. */
+/** Every `const ...TIMEOUT...MAX...SECS: uN = <initializer>;` declaration in
+ * `db/`, mirrored or not — literal or computed. Defaults (`*_DEFAULT_SECS`,
+ * the shared `CONNECT_TIMEOUT_DEFAULT_SECS`) and the Oracle test-probe
+ * timeout carry no `MAX`, so they stay out of this population on their own. */
 function backendCeilingDeclarations(): readonly {
   path: string;
   constName: string;
-  secs: number;
 }[] {
-  const hits: { path: string; constName: string; secs: number }[] = [];
+  const hits: { path: string; constName: string }[] = [];
   const declaration =
-    /\bconst ([A-Z0-9_]*TIMEOUT[A-Z0-9_]*)\s*:\s*u\d+\s*=\s*(\d+)\s*;/g;
+    /\bconst ([A-Z0-9_]*TIMEOUT[A-Z0-9_]*)\s*:\s*u\d+\s*=\s*([^;]+);/g;
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
       const path = join(dir, name);
@@ -115,16 +184,10 @@ function backendCeilingDeclarations(): readonly {
       } else if (path.endsWith(".rs")) {
         for (const match of readFileSync(path, "utf8").matchAll(declaration)) {
           const constName = match[1];
-          const secs = match[2];
-          if (
-            constName !== undefined &&
-            secs !== undefined &&
-            constName.includes("MAX")
-          ) {
+          if (constName !== undefined && constName.includes("MAX")) {
             hits.push({
               path: path.slice(REPO_ROOT.length + 1),
               constName,
-              secs: Number(secs),
             });
           }
         }
