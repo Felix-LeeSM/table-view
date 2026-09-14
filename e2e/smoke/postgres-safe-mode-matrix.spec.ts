@@ -11,6 +11,7 @@ import {
   setSafeMode,
   step,
   typeQuery,
+  waitForDialogHeaderTextAll,
   waitForDialogTextAll,
   waitForLauncher,
   waitForWorkspaceTextAll,
@@ -124,8 +125,24 @@ describe("PostgreSQL Safe Mode mode-dial matrix", () => {
       async () => {
         await setSafeMode("strict");
         await runSqlInNewTab(dropSql);
+        // #2597 — the copy needles are header-locked, not scanned dialog-wide:
+        // the strict-mode reason (`src/lib/safeMode.ts`, "… destructive
+        // statement in non-production") contains "Destructive statement" as a
+        // case-insensitive substring, so a dialog-wide `snippets.every`
+        // passes on the reason alone and the header title stays unlocked.
+        // Needle sources:
+        //   "Destructive statement"        → confirmDestructive.titleNonProd
+        //   "Non-production connection"    → confirmDestructive.subcaptionNonProd
+        //   (both in `src/lib/i18n/locales/workspace.ts`)
+        await waitForDialogHeaderTextAll(
+          ["Destructive statement", "Non-production connection"],
+          15000,
+          "non-production strict confirmation dialog did not appear",
+        );
+        // "DROP TABLE" comes from the statement preview `<pre>`, outside the
+        // header, so it is asserted against the whole dialog subtree.
         await waitForDialogTextAll(
-          ["Destructive statement", "Non-production connection", "DROP TABLE"],
+          ["DROP TABLE"],
           15000,
           "non-production strict confirmation dialog did not appear",
         );
