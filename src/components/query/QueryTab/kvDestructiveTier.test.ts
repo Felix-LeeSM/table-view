@@ -4,6 +4,7 @@ import {
   buildStreamDeleteMutation,
   buildStreamTrimMutation,
   entryDeletePending,
+  type KvEntryPayload,
   type PendingMutation,
 } from "@/components/workspace/kvMutationCommands";
 import type { EnvironmentTag } from "@/features/connection/model";
@@ -112,7 +113,7 @@ const zSetValue = envelope("user:1", "zSet", {
   total: 2,
 });
 
-/** Passthrough translator — the notes it would produce are not asserted here. */
+/** Passthrough translator — the last-entry GC note arrives as its raw i18n key. */
 const tr = (key: string): string => key;
 
 interface TierCase {
@@ -261,6 +262,100 @@ describe("KV destructive verbs — console tier matches the structure editor", (
           expected,
         );
       }
+    },
+  );
+});
+
+// #2594 — last-entry GC keys off the envelope `total`, and the `total: 2` in
+// the envelopes above exists to stay clear of it. This pair is that value's
+// basis: at `total: 1` the GC note joins the summary, at `total: 2` it stays
+// out.
+const hashLastEntry = envelope("user:1", "hash", {
+  type: "hash",
+  fields: [{ field: "name", value: "Ada" }],
+  cursor: "0",
+  nextCursor: "0",
+  done: true,
+  total: 1,
+});
+
+const listLastEntry = envelope("user:1", "list", {
+  type: "list",
+  entries: [{ index: 0, value: "ready" }],
+  total: 1,
+});
+
+const setLastEntry = envelope("user:1", "set", {
+  type: "set",
+  members: ["alpha"],
+  cursor: "0",
+  nextCursor: "0",
+  done: true,
+  total: 1,
+});
+
+const zSetLastEntry = envelope("user:1", "zSet", {
+  type: "zSet",
+  entries: [{ member: "alpha", score: 1 }],
+  total: 1,
+});
+
+interface GcCase {
+  verb: string;
+  payload: KvEntryPayload;
+  /** One entry left — the collection Redis deletes outright. */
+  lastEntry: KvValueEnvelope;
+  /** The envelope the tier cases use, past the GC threshold. */
+  pastThreshold: KvValueEnvelope;
+  /** The `Preview: ...` summary before any hazard note joins it. */
+  preview: string;
+}
+
+const GC_CASES: GcCase[] = [
+  {
+    verb: "HDEL",
+    payload: { kind: "hash", field: "name", value: "Ada" },
+    lastEntry: hashLastEntry,
+    pastThreshold: hashValue,
+    preview: "Preview: HDEL user:1 name",
+  },
+  {
+    verb: "LREM",
+    payload: { kind: "list", index: 0, value: "ready" },
+    lastEntry: listLastEntry,
+    pastThreshold: listValue,
+    preview: "Preview: LREM user:1 1 ready",
+  },
+  {
+    verb: "SREM",
+    payload: { kind: "set", member: "alpha" },
+    lastEntry: setLastEntry,
+    pastThreshold: setValue,
+    preview: "Preview: SREM user:1 alpha",
+  },
+  {
+    verb: "ZREM",
+    payload: { kind: "zSet", member: "alpha", score: 1 },
+    lastEntry: zSetLastEntry,
+    pastThreshold: zSetValue,
+    preview: "Preview: ZREM user:1 alpha",
+  },
+];
+
+describe("KV entry delete — the envelope total decides the last-entry GC note", () => {
+  it.each(GC_CASES)(
+    "[kv-entry-gc] $verb joins the key-GC note into the summary at total 1 and not at total 2",
+    ({ payload, lastEntry, pastThreshold, preview }) => {
+      // Last entry: Redis deletes the key, so the hazard note rides in the
+      // summary the confirm dialog shows.
+      expect(entryDeletePending(payload, lastEntry, tr).summary).toBe(
+        `${preview} kvMutation.note.lastEntryGc`,
+      );
+      // Past the threshold: the note must stay out — the direction the
+      // envelopes above depend on.
+      expect(entryDeletePending(payload, pastThreshold, tr).summary).toBe(
+        preview,
+      );
     },
   );
 });
