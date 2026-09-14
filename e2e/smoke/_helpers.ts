@@ -1207,6 +1207,37 @@ export async function waitForDialogTextAll(
   return dialog;
 }
 
+/**
+ * Same scan as `waitForDialogTextAll`, but the snippets must appear inside
+ * the dialog's environment header (`[data-environment-header]`) — title and
+ * subcaption only. The dialog-wide scan lets the Safe Mode strict `reason`
+ * (`src/lib/safeMode.ts`) satisfy copy needles such as "Destructive
+ * statement", so strings owned by the header must be asserted here (#2597).
+ */
+export async function waitForDialogHeaderTextAll(
+  snippets: string[],
+  timeout = 10000,
+  timeoutMsg = "dialog header text did not appear",
+) {
+  await switchToWorkspaceWindow();
+  const dialog = await $(DIALOG_SELECTOR);
+  await dialog.waitForDisplayed({ timeout });
+  await browser.waitUntil(
+    async () => {
+      const headers = await dialog.$$("[data-environment-header]");
+      if (headers.length === 0) return false;
+      const text = (
+        ((await headers[0].getProperty("textContent")) as string) ?? ""
+      ).toLowerCase();
+      return snippets.every((snippet) => text.includes(snippet.toLowerCase()));
+    },
+    {
+      timeout,
+      timeoutMsg,
+    },
+  );
+}
+
 export async function expectNoVisibleDialogText(text: string, timeout = 750) {
   await switchToWorkspaceWindow();
   await browser.pause(timeout);

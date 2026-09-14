@@ -94,35 +94,39 @@ describe("ConfirmDestructiveDialog", () => {
   // it from outside the policy matrix: `kvQueryExecution.ts` opens it for a
   // data-loss command even when `decideSafeModeAction` answered `allow`, and
   // `OperationsPanel.tsx` opens its kill confirm without consulting Safe Mode
-  // at all. So the header must name no tier. The assertion reads the header
-  // alone because `reason` may carry one truthfully — `src/lib/safeMode.ts`
-  // writes "Safe Mode strict" into it on the non-production strict path — and
+  // at all. So the header must name no tier — both environment headers,
+  // production included. The assertion reads the header alone because
+  // `reason` may carry one truthfully — `src/lib/safeMode.ts` writes
+  // "Safe Mode strict" into it on the non-production strict path — and
   // that line renders outside the header.
-  it("[#2518] non-production header names no Safe Mode tier for a dialog raised outside the matrix", () => {
-    render(
-      <ConfirmDestructiveDialog
-        open={true}
-        // The KV data-loss route takes its reason from the command table in
-        // `kvCommandConfirmation.ts`, not from the Safe Mode matrix.
-        reason="Redis DEL permanently removes the key"
-        sqlPreview="DEL vk:cmd"
-        environment="non-production"
-        connectionId="c"
-        statements={["DEL vk:cmd"]}
-        paradigm="kv"
-        onConfirm={vi.fn()}
-        onCancel={vi.fn()}
-      />,
-    );
-    const header = screen
-      .getByRole("alertdialog")
-      .querySelector(
-        '[data-environment-header="non-production"]',
-      ) as HTMLElement;
-    expect(header).not.toBeNull();
-    expect(header.textContent ?? "").not.toMatch(/safe mode/i);
-    expect(header.textContent ?? "").not.toMatch(/strict/i);
-  });
+  it.each(["production", "non-production"] as const)(
+    "[#2518] %s header names no Safe Mode tier for a dialog raised outside the matrix",
+    (environment) => {
+      render(
+        <ConfirmDestructiveDialog
+          open={true}
+          // The KV data-loss route takes its reason from the command table in
+          // `kvCommandConfirmation.ts`, not from the Safe Mode matrix.
+          reason="Redis DEL permanently removes the key"
+          sqlPreview="DEL vk:cmd"
+          environment={environment}
+          connectionId="c"
+          statements={["DEL vk:cmd"]}
+          paradigm="kv"
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      const header = screen
+        .getByRole("alertdialog")
+        .querySelector(
+          `[data-environment-header="${environment}"]`,
+        ) as HTMLElement;
+      expect(header).not.toBeNull();
+      expect(header.textContent ?? "").not.toMatch(/safe mode/i);
+      expect(header.textContent ?? "").not.toMatch(/strict/i);
+    },
+  );
 
   it("[AC-246-D3][#1111] Confirm button is disabled during the 150ms arm window, then enabled", async () => {
     render(
