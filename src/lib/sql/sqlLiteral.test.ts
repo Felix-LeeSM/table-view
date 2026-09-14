@@ -172,6 +172,51 @@ describe("escapeSqlString — MySQL reads a backslash as an escape (#2555)", () 
   );
 });
 
+/**
+ * Decode a MySQL single-quoted literal the way a server running
+ * `NO_BACKSLASH_ESCAPES` stores it: `\` has no escape meaning there, so the
+ * body is read verbatim. `''` still collapses to one embedded quote — quote
+ * doubling is sql_mode-independent. Mirrors `decodeMysqlLiteral` above, which
+ * implements the default-mode reading (#2612).
+ */
+function decodeMysqlLiteralNoBackslashEscapes(sql: string): string {
+  if (!sql.startsWith("'")) throw new Error(`not a quoted literal: ${sql}`);
+  let out = "";
+  for (let i = 1; i < sql.length; i++) {
+    const ch = sql[i]!;
+    if (ch === "'") {
+      if (sql[i + 1] === "'") {
+        out += "'";
+        i += 1;
+      } else if (i === sql.length - 1) {
+        return out;
+      } else {
+        throw new Error(`literal closed early at index ${i}: ${sql}`);
+      }
+    } else {
+      out += ch;
+    }
+  }
+  throw new Error(`unterminated literal: ${sql}`);
+}
+
+describe("escapeSqlString — a NO_BACKSLASH_ESCAPES server stores the doubled backslash (#2612)", () => {
+  // Contract, not an oversight: emission has no sql_mode input, so the
+  // default-mode doubling reaches that server untouched and `C:\` comes back
+  // as `C:\\`. Measured against MySQL 8.0 — see #2612 for the repro.
+  it("a value with a backslash round-trips doubled under NO_BACKSLASH_ESCAPES", () => {
+    expect(
+      decodeMysqlLiteralNoBackslashEscapes(escapeSqlString("C:\\", "mysql")),
+    ).toBe("C:\\\\");
+  });
+
+  it("a value with only a quote still round-trips unchanged — the harm stops at the backslash", () => {
+    expect(
+      decodeMysqlLiteralNoBackslashEscapes(escapeSqlString("O'Brien", "mysql")),
+    ).toBe("O'Brien");
+  });
+});
+
 describe("coerceToSqlLiteral — dialect reaches the emitted string literal", () => {
   it("mysql grid edits double the backslash, postgres ones do not", () => {
     expect(coerceToSqlLiteral("C:\\", "text", "mysql")).toEqual({

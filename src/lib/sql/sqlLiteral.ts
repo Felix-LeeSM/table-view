@@ -148,6 +148,12 @@ export type CoerceResult =
  * and wrong for `mysqlJsonValueLiteral` in that same file, which sits behind a
  * MySQL branch and omits it too — a deferred gap, tracked under *Security / ops
  * policy* in `docs/roadmap/follow-up-queue.md`.
+ *
+ * The doubling is unconditional: no input carries the session `sql_mode`
+ * (`MysqlPoolState` probes the server version only), so a server running
+ * `NO_BACKSLASH_ESCAPES` stores the doubled form (`C:\` reads back as
+ * `C:\\`). That trade is the accepted contract, not an oversight — user-facing
+ * statement in `docs/product/known-limitations-rdbms.md` (#2612).
  */
 export function escapeSqlString(value: string, dialect?: SqlDialect): string {
   const escaped = dialect === "mysql" ? value.replace(/\\/g, "\\\\") : value;

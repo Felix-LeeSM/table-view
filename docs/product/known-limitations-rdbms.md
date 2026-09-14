@@ -97,6 +97,18 @@ dynamic privileges such as `SYSTEM_USER`/`ROLE_ADMIN` (a holder is reported as
 non-superuser because only `Super_priv` is read), password expiry, per-schema
 grants, and user/role write management (create/alter/drop) remain unsupported.
 
+MySQL string-literal emission assumes the default `sql_mode`, where `\` reads
+as an escape character: `escapeSqlString` (`src/lib/sql/sqlLiteral.ts`) doubles
+`\` unconditionally, and the adapter never reads the session `sql_mode` (the
+MySQL pool state probes the server version only,
+`src-tauri/table-view-core/src/db/mysql/connection.rs`). On a server running
+`NO_BACKSLASH_ESCAPES` the emitted literal therefore stores the value doubled —
+a cell saved as `C:\` re-reads as `C:\\` (measured against MySQL 8.0 with the
+emitted literal, #2612). The `'` doubling is sql_mode-independent and still
+closes the literal under that mode, which is why the doubling is kept rather
+than dropped. The same default-mode assumption covers structured-DDL COMMENT
+strings and schema-dump string escaping.
+
 ### MySQL / MariaDB export and DDL parity
 
 MySQL and MariaDB support bounded structured table/index/constraint DDL and
