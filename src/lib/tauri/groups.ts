@@ -1,8 +1,9 @@
 /**
- * Sprint 369 (Phase 4, Q20.3) — `set_group_collapsed` IPC frontend wrapper.
+ * `set_group_collapsed` IPC frontend wrapper (Q20.3).
  *
- * 기존 `table-view-group-collapsed` localStorage 영속 → SQLite
- * `connection_groups.collapsed` 컬럼. cross-window 일관성 확보.
+ * Replaces the `table-view-group-collapsed` localStorage persistence with
+ * the SQLite `connection_groups.collapsed` column, so collapsed state is
+ * consistent across windows.
  */
 
 import { invoke } from "@tauri-apps/api/core";

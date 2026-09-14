@@ -1,14 +1,17 @@
-// 작성 2026-05-17 (Phase 5 sprint-371) — `addHistoryEntry` / `listHistory` /
-// `getHistoryDetail` / `clearHistory` wrapper 의 wire shape 검증.
+// Wire-shape verification for the `addHistoryEntry` / `listHistory` /
+// `getHistoryDetail` / `clearHistory` wrappers.
 //
-// 본 테스트의 invariant 는 backend cargo integration test 와 동일 wire
-// shape (lego): backend 의 `tests/history_*.rs` 가 받는 request payload 와
-// 본 파일의 mocked `invoke("...", { req: {...} })` args 가 byte-equivalent
-// 여야 한다. 한 쪽이 변경되면 다른 쪽도 같이 깨져 회귀를 즉시 잡는다.
+// The invariant of this suite is the same wire shape (lego) as the backend
+// cargo integration test: the request payload the backend's
+// `tests/history_*.rs` receives and the mocked
+// `invoke("...", { req: {...} })` args in this file must be
+// byte-equivalent. When one side changes, the other breaks with it, so
+// the regression is caught immediately.
 //
-// Vitest only — backend logic (SQL redact, drift, VACUUM 등) 는 Rust 통합
-// 테스트 책임. 본 파일은 (a) invoke 호출 args 의 정확성, (b) 응답 shape
-// 의 deserialize, (c) backend 에러의 reject propagation 만 잠근다.
+// Vitest only — backend logic (SQL redact, drift, VACUUM, etc.) is the
+// Rust integration tests' responsibility. This file pins (a) the accuracy
+// of the invoke call args, (b) the deserialization of the response shape,
+// and (c) reject propagation of backend errors.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

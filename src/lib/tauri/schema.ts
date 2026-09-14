@@ -15,13 +15,13 @@ import type {
 } from "@/types/schema";
 
 /**
- * Sprint 271a (2026-05-13) — every wrapper accepts an optional
+ * Every wrapper accepts an optional
  * `expectedDatabase`. When provided, the backend probes the adapter's
  * active db inside the same `active_connections.lock()` acquisition that
  * wraps the dispatch and rejects with typed `AppError::DbMismatch` BEFORE
  * invoking the underlying trait. Pre-existing call sites that omit the
- * argument hit the byte-equivalent pre-Sprint-271 path. Mirrors the
- * Sprint 266 `executeQuery` wrapper shape (`expectedDatabase ?? null`).
+ * argument hit the byte-equivalent no-guard path. Mirrors the
+ * `executeQuery` wrapper shape (`expectedDatabase ?? null`).
  */
 
 // Schema exploration
@@ -175,9 +175,9 @@ export async function getFunctionSource(
 }
 
 /**
- * Sprint 272 — list triggers attached to `(schema, table)`. PG-only;
+ * List triggers attached to `(schema, table)`. PG-only;
  * non-PG RDB adapters return an empty array. Pass `expectedDatabase` to
- * opt into the Sprint 271c DbMismatch guard.
+ * opt into the DbMismatch guard.
  */
 export async function listTriggers(
   connectionId: string,
@@ -194,7 +194,7 @@ export async function listTriggers(
 }
 
 /**
- * Sprint 272 — `pg_get_triggerdef(t.oid)` for one trigger. Returns the
+ * `pg_get_triggerdef(t.oid)` for one trigger. Returns the
  * canonical CREATE TRIGGER source. Non-PG RDB adapters reject with
  * `AppError::Unsupported` — there is no sane empty-string default.
  */
@@ -214,10 +214,10 @@ export async function getTriggerSource(
   });
 }
 
-// ── Sprint 230 — dynamic Postgres type list ────────────────────────────
+// ── Dynamic Postgres type list ──────────────────────────────────────────
 
 /**
- * Sprint 230 — list every Postgres-style data type visible to the
+ * List every Postgres-style data type visible to the
  * connection (built-ins from `pg_catalog`, extension types like
  * PostGIS `geometry`, user-defined enums / domains / ranges /
  * composites). Read-only catalog query — same paradigm as
@@ -229,7 +229,7 @@ export async function getTriggerSource(
  * the live list with the canonical `POSTGRES_COMMON_TYPES` so the
  * combobox stays usable when the call fails or resolves slowly).
  *
- * Sprint 271a — opt-in `expectedDatabase` mismatch guard. See module doc.
+ * Opt-in `expectedDatabase` mismatch guard. See module doc.
  */
 export async function listPostgresTypes(
   connectionId: string,

@@ -1,4 +1,4 @@
-// Sprint 359 (Phase 2 Q5.3 / Q5.5) — paradigm-native cancel wrappers.
+// Paradigm-native cancel wrappers (Q5.3 / Q5.5).
 //
 // Frontend currently fires `cancelQuery(queryId)` (legacy cooperative
 // CancellationToken). That stops the in-process executor but does NOT

@@ -46,7 +46,7 @@ export async function listMongoCollections(
 }
 
 /**
- * Sprint 332 (Slice J live wire) — list every index on `collection`. Returns
+ * List every index on `collection`. Returns
  * the same `IndexInfo` shape as the RDB `getTableIndexes` so the index grid
  * is paradigm-agnostic.
  */
@@ -62,7 +62,7 @@ export async function listMongoIndexes(
   });
 }
 
-// ── Sprint 351 (2026-05-15) — Mongo index CRUD ──────────────────────────
+// ── Mongo index CRUD ─────────────────────────────────────────────────────
 //
 // Direction is a string enum on the wire so payloads are self-documenting;
 // the Rust side maps `asc` / `desc` → `1` / `-1` when assembling the BSON
@@ -98,7 +98,7 @@ export interface CreateMongoIndexResult {
 }
 
 /**
- * Sprint 351 — create a Mongo collection index with the full option set.
+ * Create a Mongo collection index with the full option set.
  * On success returns the canonical server-assigned name (so the toast can
  * carry e.g. `Index "email_1" created`).
  */
@@ -117,7 +117,7 @@ export async function createMongoIndex(
 }
 
 /**
- * Sprint 351 — drop a Mongo collection index by canonical name. Dropping
+ * Drop a Mongo collection index by canonical name. Dropping
  * `_id_` is rejected at the Tauri layer with `AppError::Validation`.
  */
 export async function dropMongoIndex(
@@ -137,7 +137,7 @@ export async function dropMongoIndex(
 }
 
 /**
- * Sprint 352 — whitelisted MongoDB `validationLevel` values. `off`
+ * Whitelisted MongoDB `validationLevel` values. `off`
  * disables validation, `strict` rejects every operation that violates
  * the rule, `moderate` only rejects operations on documents that
  * already matched the rule (migration pattern).
@@ -145,18 +145,18 @@ export async function dropMongoIndex(
 export type MongoValidationLevel = "off" | "strict" | "moderate";
 
 /**
- * Sprint 352 — whitelisted MongoDB `validationAction` values. `error`
+ * Whitelisted MongoDB `validationAction` values. `error`
  * rejects offending writes, `warn` accepts them and logs.
  */
 export type MongoValidationAction = "error" | "warn";
 
 /**
- * Sprint 352 — round-trip shape for {@link getMongoValidator}. The
+ * Round-trip shape for {@link getMongoValidator}. The
  * three fields are independent: any field is `null` when MongoDB has
  * not persisted a custom value (the UI then falls back to the
  * MongoDB defaults `strict` / `error`).
  *
- * Backward compat note: a pre-Sprint-352 backend or test stub may
+ * Backward compat note: an older backend or test stub may
  * still return the legacy shape `{ validator } | null` — callers that
  * destructure should normalise via the `?? null` pattern so missing
  * `validationLevel` / `validationAction` cleanly fall through to the
@@ -169,7 +169,7 @@ export interface MongoValidatorRead {
 }
 
 /**
- * Sprint 333/352 (Slice K live wire) — read the validator stored on
+ * Read the validator stored on
  * `collection` (Mongo `listCollections.options.validator`) together
  * with the persisted `validationLevel` / `validationAction`. Each
  * field is `null` when MongoDB has not stored a value; the UI then
@@ -188,9 +188,9 @@ export async function getMongoValidator(
 }
 
 /**
- * Sprint 333/352 (Slice K live wire) — apply (`validator !== null`)
- * or clear (`validator === null`) the collection validator. Sprint
- * 352 adds optional `validationLevel` / `validationAction` positional
+ * Apply (`validator !== null`)
+ * or clear (`validator === null`) the collection validator. Optional
+ * `validationLevel` / `validationAction` positional
  * args; legacy callers that pass only `(connectionId, database,
  * collection, validator)` keep working, since both optional fields
  * default to `null` and the backend then omits them from the
@@ -215,7 +215,7 @@ export async function setMongoValidator(
 }
 
 /**
- * Sprint 334 (Slice L live wire) — create a Mongo collection. `options`
+ * Create a Mongo collection. `options`
  * (capped, timeseries, validator, …) passes through to `runCommand
  * create` unchanged.
  */
@@ -234,7 +234,7 @@ export async function createCollection(
 }
 
 /**
- * Sprint 334 (Slice L live wire) — rename a Mongo collection in-place
+ * Rename a Mongo collection in-place
  * (same database). Cross-DB rename is deferred — backend rejects.
  */
 export async function renameCollection(
@@ -252,7 +252,7 @@ export async function renameCollection(
 }
 
 /**
- * Sprint 335 (Slice M live wire) — drop the entire Mongo database. The
+ * Drop the entire Mongo database. The
  * driver is idempotent (dropping a non-existent DB succeeds).
  */
 export async function dropMongoDatabase(
@@ -293,7 +293,7 @@ export async function findDocuments(
   body?: FindBody,
   // Issue #1269 (P1) — optional per-load cancel-token id. The backend
   // `find_documents` command registers a `CancellationToken` under this id
-  // (Sprint 180 AC-180-04), so the grid Cancel button can abort the browse
+  // (AC-180-04), so the grid Cancel button can abort the browse
   // via `cancelQuery` / `cancelQueryNative`. Omitting it keeps the fast-path.
   queryId?: string,
 ): Promise<DocumentQueryResult> {
@@ -466,11 +466,11 @@ export async function dropCollection(
   });
 }
 
-// ── Sprint 308 (2026-05-14) — mongosh dispatch wrappers ───────────────────
+// ── mongosh dispatch wrappers ──────────────────────────────────────────────
 //
-// 작성 이유: A1 mongosh 파서가 dispatch 할 6 신규 IPC. 각 함수는 단순
-// `invoke<T>(...)` passthrough — Safe Mode / Run dispatch gate 는 A5/A6 가
-// 호출 측에서 처리한다 (이 layer 는 thin wire layer).
+// IPC wrappers the A1 mongosh parser dispatches to. Each function is a
+// plain `invoke<T>(...)` passthrough — the Safe Mode / Run dispatch gates
+// are enforced at the call sites (A5/A6); this layer is a thin wire layer.
 
 /**
  * Execute `db.coll.findOne(<filter>)` and return a single
@@ -604,18 +604,19 @@ export async function bulkWriteDocuments(
 }
 
 /**
- * Sprint 381 (2026-05-17) — generic `db.runCommand({...})` /
- * `db.adminCommand({...})` gateway. mongosh 의 모든 admin/diagnostic
- * helper 가 본질적으로 runCommand wrapper 이므로 single IPC 로 묶었다.
+ * Generic `db.runCommand({...})` /
+ * `db.adminCommand({...})` gateway. Every mongosh admin/diagnostic
+ * helper is essentially a runCommand wrapper, so they share one IPC.
  *
  * `database`:
- *   - `null` ⇒ backend 가 driver 의 `admin` DB context 에서 실행
+ *   - `null` ⇒ the backend runs in the driver's `admin` DB context
  *     (`adminCommand` / global commands).
- *   - 그 외 ⇒ 해당 db (`dbStats`, `collStats` 등 db-scoped).
+ *   - otherwise ⇒ that db (db-scoped commands such as `dbStats` /
+ *     `collStats`).
  *
- * 결과는 driver 의 raw response 를 canonical EJSON 으로 직렬화한
- * `unknown` (JSON-compatible). 호출자가 paradigm-neutral JSON viewer 로
- * 렌더한다.
+ * The result is the driver's raw response serialized to canonical EJSON
+ * as `unknown` (JSON-compatible). The caller renders it in a
+ * paradigm-neutral JSON viewer.
  */
 export async function runMongoCommand(
   connectionId: string,

@@ -1,7 +1,7 @@
-// 작성 2026-05-16 (Phase 1 sprint-357) — `getInitialAppState` wrapper 단위
-// 검증. backend IPC 호출 contract (command 이름, return shape, error
-// propagation) 만 확인 — 실제 SQLite read 와 atomic guarantee 는 Rust 통합
-// 테스트 책임.
+// `getInitialAppState` wrapper unit tests. Verifies only the backend IPC
+// call contract (command name, return shape, error propagation) — actual
+// SQLite reads and atomicity guarantees are the Rust integration tests'
+// responsibility.
 //
 // F.2 wire shape (line 911–998):
 //   { schemaVersion: 1, snapshotVersion: number, generatedAt: number,

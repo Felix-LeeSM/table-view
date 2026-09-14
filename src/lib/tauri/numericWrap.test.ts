@@ -1,6 +1,6 @@
-// Sprint 261 (ADR 0026) — wrapNumericCells unit tests.
-// 작성: 2026-05-11. wrapper 가 column.dataType 만 보고 분기하는지, 안전
-// 범위 number 컬럼은 손대지 않는지, 멱등성을 갖는지 검증.
+// wrapNumericCells unit tests (ADR 0026). Verifies that the wrapper
+// branches only on column.dataType, leaves in-scope number columns
+// untouched, and is idempotent.
 
 import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
@@ -8,8 +8,8 @@ import type { QueryColumn } from "@/types/query";
 import { wrapNumericCells } from "./numericWrap";
 
 function col(name: string, dataType: string): QueryColumn {
-  // category 는 wrap 결정과 무관 (dataType 만 single source of truth) —
-  // 테스트 fixture 단순화를 위해 "int" 고정.
+  // category is irrelevant to the wrap decision (dataType is the single
+  // source of truth) — pinned to "int" to keep the fixture simple.
   return { name, dataType: dataType, category: "int" };
 }
 
@@ -121,8 +121,9 @@ describe("wrapNumericCells (Sprint 261 / ADR 0026)", () => {
   });
 
   it("leaves malformed precision-sensitive tokens as the raw string", () => {
-    // BigInt 생성자가 throw 하는 malformed token (소수점, 비숫자) 은
-    // 전체 응답을 깨뜨리지 않도록 raw string 으로 폴백.
+    // Malformed tokens that make the BigInt constructor throw (decimals,
+    // non-numeric) fall back to the raw string so the whole response
+    // does not break.
     const result = {
       columns: [col("id", "bigint")],
       rows: [["not-a-number"], ["1.5"]],
@@ -133,10 +134,11 @@ describe("wrapNumericCells (Sprint 261 / ADR 0026)", () => {
   });
 
   it("wraps SQLite integer-family declared types as BigInt (issue #1082)", () => {
-    // SQLite 는 INTEGER affinity 컬럼을 선언 타입과 무관하게 i64 로 저장하므로
-    // 백엔드가 정수 셀을 wire string 으로 보낸다. free-form 쿼리는 storage class
-    // "INTEGER" 로, table preview 는 PRAGMA 선언 타입 (BIGINT/SMALLINT/TINYINT/INT)
-    // 으로 data_type 을 보고한다 — 양쪽 모두 BigInt 로 승격되어야 한다.
+    // SQLite stores INTEGER affinity columns as i64 regardless of the
+    // declared type, so the backend sends integer cells as wire strings.
+    // Free-form queries report data_type as the storage class "INTEGER",
+    // table preview reports the PRAGMA declared type
+    // (BIGINT/SMALLINT/TINYINT/INT) — both must promote to BigInt.
     const result = {
       columns: [
         col("a", "INTEGER"),
@@ -164,8 +166,9 @@ describe("wrapNumericCells (Sprint 261 / ADR 0026)", () => {
   });
 
   it("wraps MySQL uppercase BIGINT declared type as BigInt (issue #1082)", () => {
-    // MySQL execute_query 는 컬럼 data_type 을 sqlx type_info().name() (대문자
-    // "BIGINT") 으로 보고한다. wrapperFor 는 대소문자 무관하게 승격해야 한다.
+    // MySQL execute_query reports the column data_type via
+    // sqlx type_info().name() (uppercase "BIGINT"). wrapperFor must
+    // promote case-insensitively.
     const result = {
       columns: [col("id", "BIGINT")],
       rows: [["9223372036854775807"]],
@@ -202,9 +205,10 @@ describe("wrapNumericCells (Sprint 261 / ADR 0026)", () => {
   });
 
   it("leaves small-integer number cells untouched on int-family columns (issue #1082)", () => {
-    // MySQL/PG INT·SMALLINT 등은 ≤32bit 라 백엔드가 raw Number 로 보낸다.
-    // wrapperFor 가 int-family 를 bigint 후보로 분류하더라도 실제 승격은 string
-    // 셀에만 일어나므로 Number 셀은 그대로 유지된다 (정렬/필터/편집 회귀 방지).
+    // MySQL/PG INT, SMALLINT and friends fit in ≤32bit, so the backend
+    // sends them as raw Numbers. Even though wrapperFor classifies the
+    // int-family as bigint candidates, promotion only happens on string
+    // cells — Number cells stay as-is (prevents sort/filter/edit regressions).
     const result = {
       columns: [col("a", "int"), col("b", "smallint")],
       rows: [[42, 7]],
