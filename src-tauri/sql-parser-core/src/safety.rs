@@ -1361,6 +1361,27 @@ mod tests {
     }
 
     #[test]
+    fn issue_2626_hash_directly_before_newline_reaches_keyword_fallback() {
+        // A bare `#` comment line: the comment branch must advance exactly one
+        // char so the newline stays outside the comment and the write verb
+        // behind it reaches the keyword fallback. Advancing by two swallows
+        // the `\n`, the comment body runs to the next line end, and the write
+        // degrades to Info / read — the flip issue #2626 measured as green. A
+        // non-newline byte right after `#` is skipped by the newline scan
+        // either way, so only this input form pins the advance width.
+        assert_eq!(
+            classify_with_dialect("#\nDROP TABLE users", SqlDialect::MysqlFamily),
+            Severity::Danger
+        );
+        // Same form on the read-only gate — `leading_keyword_is_write` is the
+        // other direct caller of the same branch.
+        assert!(!is_read_only_safe_with_dialect(
+            "#\nDELETE FROM users",
+            SqlDialect::MysqlFamily
+        ));
+    }
+
+    #[test]
     fn issue_1450_where_inside_literal_is_not_a_bounding_clause() {
         // The `WHERE` lives inside a string literal, so the UPDATE is unbounded.
         assert_eq!(
