@@ -924,6 +924,16 @@ jobs:
     # GHA service 와 testcontainers 가 자연스럽게 swap-in/out 된다.
     # Redis는 별도 GHA service 없이 `redis_integration` testcontainer 가
     # 자체 lifecycle 을 소유한다.
+    #
+    # #2569 (2026-09-14) — Oracle 도 PG/Mongo 처럼 service container 로 올린다.
+    # oracle_integration 의 docker-gated 테스트는 nextest process 마다
+    # testcontainer 를 따로 띄우고(tests/common/mod.rs 의 process-local
+    # OnceCell), Oracle 기동 비용이 각 테스트의 소요 시간 안에서 나간다.
+    # 2026-08-28 run 33179385397 의 로그에서 세 oracle 테스트는 전부 >120s
+    # 진행 표시를 찍었고(60s/120s 표지는 있고 180s 표지는 없음), 같은 PR 의
+    # 느린 run 에서는 240s 천장(`terminate-after` 4 × 60s) 에 걸려 required 가
+    # 막혔다. service 로 올리면 기동이 테스트 시간계 밖으로 나가고 docker-gated
+    # oracle 테스트가 하나의 인스턴스를 공유한다.
     services:
       postgres:
         image: postgres:16-alpine
@@ -949,6 +959,24 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
+      oracle:
+        # env 셋은 tests/common/mod.rs 의 testcontainer 기본값
+        # (testcontainers-modules oracle::free: ORACLE_PASSWORD=testsys,
+        # APP_USER=test, APP_USER_PASSWORD=test) 과 같은 값이다. health cmd 는
+        # 이미지 저자가 GHA service 용으로 처방한 healthcheck.sh 조합이고
+        # retries 만 10 → 30 으로 늘려 느린 러너의 기동 예산을 넓혔다.
+        image: gvenzl/oracle-free:23-slim-faststart
+        env:
+          ORACLE_PASSWORD: testsys
+          APP_USER: test
+          APP_USER_PASSWORD: test
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
 
     steps:
       - name: Checkout
@@ -1003,8 +1031,9 @@ jobs:
       # Do not add SDK deletions or `docker system prune -af` here (measured
       # 2026-07-25): they cost 135s, the runner already reports 86G free of 145G,
       # the prune reclaimed 1.765GB, and it evicts preloaded base images the
-      # MySQL/MSSQL/Redis/Oracle testcontainers then re-pull. `apt-get clean` is
-      # sub-second. `Show disk usage` above is the signal if pressure returns.
+      # MySQL/MSSQL/Redis testcontainers and the Oracle service container then
+      # re-pull. `apt-get clean` is sub-second. `Show disk usage` above is the
+      # signal if pressure returns.
       - name: Free disk headroom before integration build
         run: |
           sudo apt-get clean
@@ -1040,6 +1069,13 @@ jobs:
           PGDATABASE: table_view_test
           MONGO_HOST: localhost
           MONGO_PORT: 27017
+          # #2569 — tests/common/mod.rs 의 oracle_endpoint 가 ORACLE_HOST 가
+          # 있으면 testcontainers 를 띄우지 않고 이 service 를 그대로 쓴다.
+          ORACLE_HOST: localhost
+          ORACLE_PORT: 1521
+          ORACLE_USER: test
+          ORACLE_PASSWORD: test
+          ORACLE_SERVICE: FREEPDB1
         run: |
           cargo llvm-cov nextest --profile push --lib \
             --test storage_integration \

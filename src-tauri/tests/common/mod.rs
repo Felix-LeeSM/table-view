@@ -1049,7 +1049,9 @@ struct OracleEndpoint {
 /// Oracle Database Free has no ARM image, so on aarch64 the testcontainers
 /// module is `#[cfg]`-gated off and this silent-skips (`None`) — mirroring the
 /// MSSQL amd64-only skip. Point at an external instance with
-/// `ORACLE_HOST=... ORACLE_PORT=... cargo oracle-test`.
+/// `ORACLE_HOST=... ORACLE_PORT=... cargo oracle-test`. CI sets `ORACLE_HOST`
+/// to the job's `oracle` service container so the boot cost stays off the
+/// per-test timeout clock (#2569).
 #[allow(dead_code)]
 async fn oracle_endpoint() -> Option<OracleEndpoint> {
     if std::env::var("ORACLE_DISABLE")
@@ -1095,7 +1097,7 @@ async fn oracle_endpoint() -> Option<OracleEndpoint> {
 async fn oracle_container_endpoint() -> Option<OracleEndpoint> {
     ensure_sweep_once().await;
     let pid = current_pid_label();
-    let cell = ORACLE_CONTAINER
+    let cell = match ORACLE_CONTAINER
         .get_or_init(|| async {
             match OracleImage::default()
                 .with_startup_timeout(Duration::from_secs(300))
@@ -1120,12 +1122,20 @@ async fn oracle_container_endpoint() -> Option<OracleEndpoint> {
             }
         })
         .await
-        .as_ref()?;
+        .as_ref()
+    {
+        Some(c) => c,
+        None => {
+            fail_loud_under_ci("Oracle", "ORACLE_DISABLE", "container failed to start");
+            return None;
+        }
+    };
 
     let port = match cell.get_host_port_ipv4(1521).await {
         Ok(p) => p,
         Err(e) => {
             println!("SKIP: Oracle container 포트 매핑 실패 ({})", e);
+            fail_loud_under_ci("Oracle", "ORACLE_DISABLE", &format!("port mapping: {e}"));
             return None;
         }
     };
@@ -1180,6 +1190,11 @@ pub async fn setup_oracle_adapter() -> Option<OracleAdapter> {
             }
             Err(e) => {
                 println!("SKIP: Oracle connect failed after retries ({})", e);
+                // CI 는 oracle service container 를 `ORACLE_HOST` 로 노출한다
+                // (#2569) — 그 자리에서 connect 가 죽으면 조용한 skip 이 아니라
+                // 실패여야 한다 (#1077 fail-loud rule, MSSQL 의 같은 가드와
+                // 같은 형태).
+                fail_loud_under_ci("Oracle", "ORACLE_DISABLE", &format!("connect failed: {e}"));
                 return None;
             }
         }
