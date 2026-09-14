@@ -1,5 +1,5 @@
 /**
- * Sprint 371 (Phase 5 F.5) — `query_history` IPC frontend wrappers.
+ * `query_history` IPC frontend wrappers (F.5).
  *
  * 4 wrapper functions mirroring backend IPC:
  *   - `addHistoryEntry`   — `add_history_entry` (records execution).
@@ -16,8 +16,8 @@
  *     with domain `history`, op `clear`.
  *
  * Frontend store wiring (`queryHistoryStore.recordExecution` →
- * `addHistoryEntry`, etc.) is sprint-372 — these wrappers expose the
- * surface but the call sites land in the next sprint.
+ * `addHistoryEntry`, etc.) is not wired yet — these wrappers expose the
+ * surface but the call sites land later.
  */
 
 import { invoke } from "@tauri-apps/api/core";

@@ -1,13 +1,15 @@
 /**
- * Sprint 369 (Phase 4) — `meta` table sentinel IPC wrapper.
+ * `meta` table sentinel IPC wrapper.
  *
- * `meta` 는 boot-state (`legacy_imported` / `last_legacy_import_at`) 외에도
- * "한 번만 처리하는" frontend migration 의 dismiss sentinel 을 보관한다.
- * settings 의 known key 와는 별도 — Q21 reset audit 대상 0.
+ * Besides the boot-state keys (`legacy_imported` /
+ * `last_legacy_import_at`), `meta` also holds dismiss sentinels for
+ * "process once" frontend migrations. Separate from the settings known
+ * keys — none of them are Q21 reset-audit targets.
  *
- * 사용 사이트 (sprint-369):
- *   - `legacy_column_prefs_drop_dismissed` — `column-widths:*` /
- *     `hidden-columns:*` LS key drop 의 1회 toast 표시 후 set.
+ * Call sites:
+ *   - `legacy_column_prefs_drop_dismissed` — set after showing the
+ *     one-time toast for the `column-widths:*` / `hidden-columns:*` LS
+ *     key drop.
  */
 
 import { invoke } from "@tauri-apps/api/core";

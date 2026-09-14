@@ -1,9 +1,10 @@
-// 작성 2026-05-16 (Phase 2 sprint-359) — AC-359-08:
-// `cancel.ts` wrapper 의 wire-shape 단언 + frontend 가 backend
-// `CancelError` 의 3-bucket 분류를 정확히 파싱한다.
+// AC-359-08: wire-shape assertions for the `cancel.ts` wrapper + verifying
+// the frontend parses the backend `CancelError` 3-bucket classification
+// correctly.
 //
-// 추가로 `releaseTabConnection` 이 IPC `release_tab_connection` 을
-// 정확한 payload 로 호출한다 (tab unmount cleanup 의 토대).
+// Also verifies `releaseTabConnection` calls the IPC
+// `release_tab_connection` with the exact payload (the foundation of the
+// tab unmount cleanup).
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -69,8 +70,8 @@ describe("parseCancelError", () => {
   });
 
   it("falls back to NetworkError on non-JSON error string", () => {
-    // Plain-text 에러 path — 사용자에게 toast 로 보이도록 보수적
-    // NetworkError 분류.
+    // Plain-text error path — conservatively classified as NetworkError
+    // so it surfaces to the user as a toast.
     expect(parseCancelError("plain string error")).toEqual({
       type: "NetworkError",
       message: "plain string error",
@@ -97,7 +98,7 @@ describe("parseCancelError", () => {
   });
 
   it("handles non-string input by stringifying", () => {
-    // 회귀 가드 — invoke 가 객체를 throw 하는 path 가 있어도 안전.
+    // Regression guard — stays safe even if invoke throws a non-string object.
     expect(parseCancelError({ toString: () => "obj-err" })).toEqual({
       type: "NetworkError",
       message: "obj-err",
@@ -125,7 +126,7 @@ describe("cancelQueryNative", () => {
       type: "Cancel",
       payload: { type: "AlreadyCompleted" },
     });
-    // expect.rejects matcher 는 thrown value 자체를 검증한다.
+    // The rejects matcher verifies the thrown value itself.
     await expect(cancelQueryNative("c", 1)).rejects.toEqual({
       type: "AlreadyCompleted",
     });
@@ -160,8 +161,8 @@ describe("releaseTabConnection", () => {
   });
 
   it("invokes release_tab_connection with camelCase payload and returns the boolean", async () => {
-    // backend 가 entry 가 존재했으면 true 반환. tab unmount cleanup 의
-    // 멱등성 — 두 번째 호출은 false 로 silent no-op.
+    // Backend returns true when the entry existed. Idempotency of the tab
+    // unmount cleanup — a second call is a silent no-op returning false.
     invokeMock.mockResolvedValueOnce(true);
     const removed = await releaseTabConnection("conn-1", "tab-7");
     expect(removed).toBe(true);
@@ -178,8 +179,8 @@ describe("releaseTabConnection", () => {
   });
 
   it("forwards backend errors unchanged (validation, etc.)", async () => {
-    // empty tab id 같은 validation 실패는 backend Result::Err 로 그대로
-    // surface — wrapper 가 swallow 하면 안 됨.
+    // Validation failures such as an empty tab id surface as-is as a
+    // backend Result::Err — the wrapper must not swallow them.
     invokeMock.mockRejectedValueOnce(
       "Validation error: Tab ID cannot be empty",
     );

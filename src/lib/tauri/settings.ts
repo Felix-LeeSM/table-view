@@ -1,21 +1,21 @@
 /**
- * Sprint 369 (Phase 4) — settings IPC frontend wrapper.
- * Sprint 376 (Phase 6 Q21) — `resetSetting` 추가. Q21 9 affordance 가
- * 모두 본 wrapper 를 경유. Strategy doc line 1389 — `setting.reset` 은
- * receiver refetch 없이 frontend `SETTING_DEFAULTS[entityId]` 적용.
+ * Settings IPC frontend wrapper. `resetSetting` (Q21) — every Q21
+ * affordance routes through it. Strategy doc line 1389 — `setting.reset`
+ * applies the frontend `SETTING_DEFAULTS[entityId]` without a receiver
+ * refetch.
  *
- * `persist_setting` 은 sprint-358 (Phase 1 W1) 에서 backend dual-write 가
- * 도착했으나 frontend 호출 사이트는 아직 없다. 본 sprint 가 처음으로
- * `home_recent_collapsed` / `sidebar_width` 사이트를 LS → SQLite 로 옮기며
- * 사용. value 는 backend `value_json: String` 으로 그대로 흘러간다 (어떤
- * JSON-encodable 도 OK — frontend 가 serialize).
+ * `persist_setting` has backend dual-write but no frontend call site yet.
+ * This wrapper introduces the first call sites, moving
+ * `home_recent_collapsed` / `sidebar_width` from LS → SQLite. The value
+ * flows through as the backend's `value_json: String` (any
+ * JSON-encodable value works — the frontend serializes).
  */
 
 import { invoke } from "@tauri-apps/api/core";
 
 export interface PersistSettingRequest {
   key: string;
-  /** Already-serialized JSON. boolean / number / object 모두 OK. */
+  /** Already-serialized JSON. boolean / number / object all work. */
   valueJson: string;
 }
 
@@ -33,7 +33,7 @@ export async function persistSettingValue(
 }
 
 /**
- * Sprint 376 (Phase 6 Q21) — single-key reset to default. Backend
+ * Single-key reset to default (Q21). Backend
  * deletes the SQLite `settings` row and emits `state-changed
  * { domain:"setting", op:"reset", entityId: key }`. Strategy doc line
  * 1389 — receivers do NOT refetch; they apply the frontend
