@@ -1,5 +1,5 @@
-//! Hand-written character-level lexer for the sprint-401 mongosh grammar
-//! slice. Mirrors `src/lib/mongo/mongoshAst/lexer.ts` (sprint-384) one-for-
+//! Hand-written character-level lexer for the mongosh grammar
+//! slice. Mirrors `src/lib/mongo/mongoshAst/lexer.ts` one-for-
 //! one — same tokens, same comment / template / string rules, same head-
 //! keyword sniff. Behavior parity is verified by `mongoshAst.test.ts` on
 //! the frontend side.
@@ -84,7 +84,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, LexError> {
             continue;
         }
 
-        // Arrow function `=>` — explicit reject (sprint-382 invariant).
+        // Arrow function `=>` — explicit reject (invariant).
         if ch == '=' && chars.get(i + 1) == Some(&'>') {
             return Err(lex_err(
                 "arrow functions (`=>`) are not supported \

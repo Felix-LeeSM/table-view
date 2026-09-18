@@ -1,4 +1,4 @@
-//! AST types for the sprint-401 mongosh-parser-core crate.
+//! AST types for the mongosh-parser-core crate.
 //!
 //! Mirrors the TS `MongoshStatementResult` discriminated union one-for-one.
 //! Field names use camelCase via `#[serde(rename = "...")]` so the WASM-

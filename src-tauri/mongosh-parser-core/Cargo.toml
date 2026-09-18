@@ -7,10 +7,10 @@ publish = false
 description = "Pure-Rust mongosh statement parser core for table-view. Compiles to native (rlib) and wasm32-unknown-unknown (frontend via wasm-pack). sprint-401."
 
 # `rlib` so the native Tauri backend *could* consume the crate as a Rust path
-# dependency (sprint-402+ if a `parse_mongosh_backend` Tauri command is needed),
+# dependency (if a `parse_mongosh_backend` Tauri command is ever needed),
 # `cdylib` so `wasm-pack build --target web` produces the WASM artifact for the
-# frontend. sprint-401 only ships the WASM build path; native consumption is
-# wired up in a later sprint.
+# frontend. Only the WASM build path is shipped: no Rust crate depends on
+# `mongosh_parser_core`.
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -25,7 +25,7 @@ wasm = ["dep:wasm-bindgen", "dep:serde-wasm-bindgen"]
 serde = { version = "1", features = ["derive"] }
 # Used for the polymorphic `body` / `args` payload — same `serde_json::Value`
 # shape the TS side returns. Backend `extjson_to_bson_document` already
-# accepts this shape (sprint-384).
+# accepts this shape.
 serde_json = "1"
 # Optional — only pulled in for the `wasm` feature (WASM build path). The
 # native rlib path does NOT compile these in, keeping any future backend
@@ -33,11 +33,11 @@ serde_json = "1"
 wasm-bindgen = { version = "0.2", optional = true }
 serde-wasm-bindgen = { version = "0.6", optional = true }
 
-# Sprint 401 — same release WASM profile as sprint-385's sql-parser-core, and
-# it moved to the same place: the workspace root's
-# `[profile.release.package.mongosh-parser-core]` (#2161). A non-root member's
-# `[profile.*]` is ignored with a warning. `lto` / `panic` have no per-package
-# form; see the sibling crate's note for why neither changes this artifact.
+# Same release WASM profile as sql-parser-core, and it sits in the same place:
+# the workspace root's `[profile.release.package.mongosh-parser-core]`
+# (#2161). A non-root member's `[profile.*]` is ignored with a warning. `lto`
+# / `panic` have no per-package form; see the sibling crate's note for why
+# neither changes this artifact.
 
 # wasm-pack metadata. `--enable-bulk-memory` so newer rustc-emitted
 # bulk-memory opcodes don't fail the bundled `wasm-opt` validator;

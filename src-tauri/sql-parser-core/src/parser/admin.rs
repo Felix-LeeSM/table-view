@@ -220,8 +220,8 @@ impl Parser<'_> {
 
     /// Comma-separated grantee / revokee list. `PUBLIC`, `CURRENT_USER`,
     /// `SESSION_USER` are matched as case-insensitive identifiers (per
-    /// sprint-395 lexer design — these stay `Token::Ident` to avoid
-    /// breaking sprint-385/394 tests that use `public` as a schema
+    /// the lexer design these stay `Token::Ident` to avoid
+    /// breaking tests that use `public` as a schema
     /// name).
     fn parse_role_list(&mut self) -> Result<Vec<RoleRef>, ParseError> {
         let mut out: Vec<RoleRef> = Vec::new();
@@ -271,7 +271,7 @@ impl Parser<'_> {
             self.expect_token(Token::RParen, "expected ')'")?;
         } else {
             // Bare ANALYZE / VERBOSE flags (matched case-insensitively as
-            // identifiers per sprint-395 lexer design). The spec allows
+            // identifiers per the lexer design). The spec allows
             // them in either order.
             loop {
                 if !analyze && self.peek_ident_kw("analyze") {
@@ -372,7 +372,7 @@ impl Parser<'_> {
     pub(super) fn parse_show(&mut self) -> Result<ShowStatement, ParseError> {
         // `TABLES`, `DATABASES`, `SCHEMAS` are matched case-insensitively
         // against the leading identifier so the lexer can keep them as
-        // `Token::Ident` (preserving back-compat with prior-sprint tests).
+        // `Token::Ident` (preserving back-compat with earlier tests).
         if self.consume_ident_kw("tables") {
             let schema = if matches!(self.peek().map(|t| &t.token), Some(Token::In)) {
                 self.advance();
@@ -414,7 +414,7 @@ impl Parser<'_> {
     /// has been consumed.
     pub(super) fn parse_set_stmt(&mut self) -> Result<SetStatement, ParseError> {
         // Optional scope keyword (matched case-insensitively as
-        // `Token::Ident` per sprint-395 lexer design).
+        // `Token::Ident` per the lexer design).
         let scope = if self.consume_ident_kw("session") {
             SetScope::Session
         } else if self.consume_ident_kw("local") {

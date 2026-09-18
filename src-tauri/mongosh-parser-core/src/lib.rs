@@ -1,17 +1,17 @@
-//! mongosh-parser-core — pure-Rust mongosh statement parser (sprint-401).
+//! mongosh-parser-core — pure-Rust mongosh statement parser.
 //!
 //! This crate compiles to two targets from one source tree:
 //!
-//! 1. **Native rlib** (sprint-402+ may consume — sprint-401 does not register
-//!    a Tauri command; backend already accepts the extended-JSON shape via
-//!    `extjson_to_bson_document` from sprint-384).
+//! 1. **Native rlib** — no crate depends on it and it registers no Tauri
+//!    command; the backend already accepts the extended-JSON shape via
+//!    `extjson_to_bson_document`.
 //! 2. **`wasm32-unknown-unknown` cdylib** built by `wasm-pack` and eager-
 //!    loaded from `src/main.tsx` after React mounts (`src/lib/mongo/
 //!    mongoshAst/index.ts`).
 //!
-//! Sprint 401 ships **grammar parity** with the TS implementation it replaces.
+//! This port ships **grammar parity** with the TS implementation it replaces.
 //! Grammar widening (regex literals, multi-statement, variable refs, ...) is
-//! sprint-402+.
+//! not implemented.
 //!
 //! No Tauri / tokio / std::io / regex deps — load-bearing invariant that lets
 //! the same code reach the browser via WASM.
@@ -37,7 +37,7 @@ pub fn parse_mongosh(input: &str) -> MongoshStatement {
 /// not pull `wasm-bindgen` into its dep graph. `wasm-pack build` passes
 /// `--features wasm` (the pnpm script does this).
 ///
-/// Like sprint-385's `parse_sql`, this returns a `JsValue` representing the
+/// Like `parse_sql`, this returns a `JsValue` representing the
 /// tagged union directly — errors are an `Error` variant, not a thrown
 /// exception, so the TS facade narrows without try/catch.
 #[cfg(feature = "wasm")]
@@ -48,11 +48,11 @@ mod wasm_bridge {
     #[wasm_bindgen]
     pub fn parse_mongosh(input: &str) -> JsValue {
         let result = super::parse_mongosh(input);
-        // `serde_wasm_bindgen`의 default Serializer 는 `serde_json::Map`을
-        // JS `Map` 으로 변환한다 — TS-side 의 `Record<string, unknown>`
-        // 기대와 어긋남. `.serialize_maps_as_objects(true)` 로 plain
-        // object 를 emit 하게 강제 (sprint-384 의 backend 도 동일 plain-
-        // object shape 만 받음).
+        // The `serde_wasm_bindgen` default serializer turns `serde_json::Map`
+        // into a JS `Map` — which conflicts with the TS-side expectation of a
+        // `Record<string, unknown>`. `.serialize_maps_as_objects(true)` forces
+        // it to emit plain objects (the backend likewise accepts only the
+        // plain-object shape).
         // `json_compatible()` enables both `serialize_maps_as_objects` (so
         // `serde_json::Map` becomes a JS plain object instead of `Map`) and
         // `serialize_missing_as_null` (so `serde_json::Value::Null` lands

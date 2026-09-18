@@ -2,7 +2,7 @@ use super::*;
 
 impl Parser<'_> {
     // ---------------------------------------------------------------
-    // Sprint 392 — DML write triad sub-parsers (INSERT / UPDATE / DELETE).
+    // DML write triad sub-parsers (INSERT / UPDATE / DELETE).
     // ---------------------------------------------------------------
 
     /// `INSERT INTO <table> [(cols)] (VALUES … | DEFAULT VALUES | SELECT …)
@@ -141,8 +141,8 @@ impl Parser<'_> {
     }
 
     /// PostgreSQL `MERGE INTO <target> [AS alias] USING <source> [AS alias]
-    /// ON <predicate> WHEN ... THEN ...`. This first slice accepts only table
-    /// sources and UPDATE / INSERT / DO NOTHING actions.
+    /// ON <predicate> WHEN ... THEN ...`. Only table sources and
+    /// UPDATE / INSERT / DO NOTHING actions are accepted.
     pub(super) fn parse_merge(&mut self) -> Result<MergeStatement, ParseError> {
         self.expect_keyword(Token::Into, "expected INTO")?;
         let (target, target_alias) = self.parse_merge_relation()?;
@@ -583,8 +583,8 @@ impl Parser<'_> {
 
     /// Optional WHERE expression. Returns None when the keyword is absent.
     ///
-    /// Sprint-393b — DML WHERE migrates to the unified `SelectExpr` shape
-    /// (was sprint-392's narrow `WhereExpr`). DML now accepts every WHERE
+    /// DML WHERE migrates to the unified `SelectExpr` shape
+    /// (was the narrow `WhereExpr`). DML now accepts every WHERE
     /// form SELECT does: BETWEEN / LIKE / column-column / qualified column
     /// refs / IN-list / IN-subquery / EXISTS / CASE.
     fn parse_optional_where_expr(&mut self) -> Result<Option<SelectExpr>, ParseError> {
