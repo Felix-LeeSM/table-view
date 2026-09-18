@@ -1188,10 +1188,10 @@ pub async fn setup_oracle_adapter() -> Option<OracleAdapter> {
             }
             Err(e) => {
                 println!("SKIP: Oracle connect failed after retries ({})", e);
-                // CI 는 oracle service container 를 `ORACLE_HOST` 로 노출한다
-                // (#2569) — 그 자리에서 connect 가 죽으면 조용한 skip 이 아니라
-                // 실패여야 한다 (#1077 fail-loud rule, MSSQL 의 같은 가드와
-                // 같은 형태).
+                // Connect exhausted its retries — `fail_loud_under_ci` covers
+                // this path as well as an unresolved endpoint (#1077). Under CI
+                // `ORACLE_HOST` points at the job's `oracle` service container
+                // (#2569), so a dead connect here is a real failure.
                 fail_loud_under_ci("Oracle", "ORACLE_DISABLE", &format!("connect failed: {e}"));
                 return None;
             }
