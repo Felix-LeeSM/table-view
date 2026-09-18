@@ -1,6 +1,6 @@
-// 작성 2026-05-16 (Phase 1 sprint-355) — `importLegacyLocalStorage` wrapper
-// 단위 검증. backend IPC 호출 contract (command 이름, payload shape, error
-// propagation) 만 확인 — 실제 SQLite write 는 Rust 통합 테스트 책임.
+// `importLegacyLocalStorage` wrapper unit tests. Verifies only the backend
+// IPC call contract (command name, payload shape, error propagation) —
+// actual SQLite writes are the Rust integration tests' responsibility.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

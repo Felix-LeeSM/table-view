@@ -1,18 +1,19 @@
 /**
- * Sprint 369 (Phase 4) — `datagrid_column_prefs` IPC frontend wrapper.
+ * `datagrid_column_prefs` IPC frontend wrapper.
  *
- * Strategy doc Q20.4 + Q20.5 + codex 7차 #1 (field-scoped reset). Three
- * commands:
+ * Strategy doc Q20.4 + Q20.5 (field-scoped reset). Three commands:
  *
- *   - {@link setDatagridPrefs} — partial patch. `widths` or `hiddenColumns`
- *     중 하나 이상 필수. 빈 patch → backend 400 (`AppError::Validation`).
- *   - {@link getDatagridPrefs} — mount 시 1회 또는 event 수신 시 refetch.
- *     row 없으면 `{ widths: {}, hiddenColumns: [], updatedAt: null }`.
- *   - {@link resetDatagridPrefs} — field 별 분기 (`widths` / `hiddenColumns` /
- *     `all`). 두 affordance 가 서로 독립 — widths reset 이 hidden 풀거나 그 반대 0.
+ *   - {@link setDatagridPrefs} — partial patch. At least one of `widths`
+ *     or `hiddenColumns` is required. Empty patch → backend 400
+ *     (`AppError::Validation`).
+ *   - {@link getDatagridPrefs} — once on mount, or refetch on event.
+ *     With no row: `{ widths: {}, hiddenColumns: [], updatedAt: null }`.
+ *   - {@link resetDatagridPrefs} — per-field branching (`widths` /
+ *     `hiddenColumns` / `all`). The two affordances are independent —
+ *     resetting widths never unhides columns, nor the reverse.
  *
- * 모든 wrapper 는 camelCase wire. Backend `serde rename_all = "camelCase"` 가
- * snake_case 로 매핑.
+ * All wrappers use the camelCase wire. The backend's
+ * `serde rename_all = "camelCase"` maps to snake_case.
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -27,11 +28,13 @@ export interface ColumnPrefsPk {
 }
 
 /**
- * Partial-patch payload. `widths` 또는 `hiddenColumns` 중 하나 이상 필수.
- * 미포함 필드는 SQLite row 의 기존 값 유지. 빈 patch (`widths` / `hiddenColumns`
- * 둘 다 `undefined`) 는 backend 가 `AppError::Validation` 으로 reject (codex 8차 #5).
+ * Partial-patch payload. At least one of `widths` / `hiddenColumns` is
+ * required. Omitted fields keep the SQLite row's existing values. An
+ * empty patch (both `widths` and `hiddenColumns` `undefined`) is
+ * rejected by the backend with `AppError::Validation`.
  *
- * 호출자는 widths 또는 hiddenColumns 변경 없으면 IPC 자체를 skip 해야 한다.
+ * Callers must skip this IPC entirely when neither widths nor
+ * hiddenColumns changed.
  */
 export type SetDatagridPrefsRequest = ColumnPrefsPk & {
   widths?: Record<string, number>;

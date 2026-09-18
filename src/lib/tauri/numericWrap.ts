@@ -1,4 +1,4 @@
-// Sprint 261 (ADR 0026) — type-aware post-processing for IPC responses.
+// Type-aware post-processing for IPC responses (ADR 0026).
 //
 // PostgreSQL `bigint` / `numeric` and MongoDB `Int64` / `Decimal128` are
 // emitted by the Rust backend as JSON string tokens to preserve digit-for-
