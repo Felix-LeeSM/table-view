@@ -1,11 +1,13 @@
-//! 작성 2026-05-16 (Phase 4 sprint-369) — `get_datagrid_prefs` row 부재 시 응답.
+//! Written 2026-05-16 — what `get_datagrid_prefs` answers when the row is
+//! absent.
 //!
 //! Contract Q20.4: row 0 → `{ widths: {}, hiddenColumns: [], updatedAt: null }`.
-//! UI 코드는 "exists" check 불필요 — 빈 default 가 정상 첫 사용 표현.
+//! UI code needs no "exists" check — the empty default is how a normal first
+//! use looks.
 //!
 //! AC mapping:
-//!   - AC-369-04 row 없음 → 빈 응답
-//!   - row 존재 시 모든 필드가 round-trip
+//!   - AC-369-04 no row → empty response
+//!   - when the row exists, every field round-trips
 
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -41,7 +43,7 @@ fn pk(table: &str) -> ColumnPrefsPk {
 }
 
 // ---------------------------------------------------------------------------
-// AC-369-04 — row 없음 → { widths:{}, hiddenColumns:[], updatedAt: null }.
+// AC-369-04 — no row → { widths:{}, hiddenColumns:[], updatedAt: null }.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -58,7 +60,7 @@ async fn ac_369_04_get_missing_row_returns_empty_defaults_and_null_updated_at() 
 }
 
 // ---------------------------------------------------------------------------
-// row 존재 시 widths / hidden / updatedAt 모두 round-trip.
+// When the row exists, widths / hidden / updatedAt all round-trip.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -94,8 +96,8 @@ async fn get_existing_row_returns_widths_hidden_and_updated_at() {
 }
 
 // ---------------------------------------------------------------------------
-// PK 5-tuple 격리 — 다른 paradigm / db_name / namespace 의 같은 table_name 은
-// 서로 다른 row.
+// PK 5-tuple isolation — the same table_name under a different paradigm /
+// db_name / namespace is a different row.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

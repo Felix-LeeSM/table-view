@@ -1,13 +1,14 @@
-//! 작성 2026-05-17 (Phase 5 sprint-371, AC-371-05) — `list_history` 응답
-//! 의 **어떤 row 에도 `sql` 필드 부재**.
+//! Written 2026-05-17 (AC-371-05) — **no row of the `list_history` response
+//! carries an `sql` field**.
 //!
-//! Privacy invariant (strategy doc F.5 line 540) — 원본 SQL 은 detail IPC
-//! 에서만 노출. list 응답이 우연히라도 `sql` key 를 carry 하면 toast / UI
-//! 가 무의식적으로 노출할 수 있어 row-level 검증으로 잠근다.
+//! Privacy invariant (strategy doc F.5 line 540) — the raw SQL is exposed only
+//! through the detail IPC. If the list response carried an `sql` key even by
+//! accident, a toast or the UI could expose it unintentionally, so a row-level
+//! check locks it down.
 //!
-//! 검증 전략: backend 의 `ListHistoryResponse` 를 `serde_json::Value` 로
-//! serialize 한 뒤 `rows[i]` 의 key set 에 `"sql"` 이 부재한지 확인.
-//! `sqlRedacted` 는 반드시 있어야 한다 (redacted 표시용).
+//! Verification strategy: serialize the backend's `ListHistoryResponse` into a
+//! `serde_json::Value`, then check that the key set of `rows[i]` has no `"sql"`.
+//! `sqlRedacted` must be present (the UI shows it as the redacted form).
 
 use serde_json::{json, Value};
 use serial_test::serial;
@@ -93,7 +94,7 @@ async fn ac_371_05_list_response_omits_sql_field_for_every_row() {
             "row {} missing `sqlRedacted`",
             i
         );
-        // 어떤 row 의 value 에도 secret 원문이 등장하면 안 됨.
+        // No value of any row may contain the raw secret.
         let serialized_row = serde_json::to_string(row).unwrap();
         for needle in [
             "leak1@example.com",

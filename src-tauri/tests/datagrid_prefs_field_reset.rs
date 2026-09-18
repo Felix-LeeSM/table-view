@@ -1,8 +1,8 @@
-//! 작성 2026-05-16 (Phase 4 sprint-369) — `reset_datagrid_prefs` field-scoped.
+//! Written 2026-05-16 — field-scoped `reset_datagrid_prefs`.
 //!
-//! Contract Q20.4 + codex 7차 #1: 3 field 분기.
-//!   - `widths` → widths_json = '{}', hidden 유지.
-//!   - `hiddenColumns` → hidden_columns_json = '[]', widths 유지.
+//! Contract Q20.4: three field branches.
+//!   - `widths` → widths_json = '{}', hidden kept.
+//!   - `hiddenColumns` → hidden_columns_json = '[]', widths kept.
 //!   - `all` → row DELETE.
 //!
 //! AC mapping:
@@ -10,7 +10,8 @@
 //!   - AC-369-06 reset hidden only
 //!   - AC-369-07 reset all → row DELETE
 //!
-//! 두 affordance 가 서로 독립 — widths reset 이 hidden 풀거나 그 반대 0 (codex 7차 #1).
+//! The two affordances are independent — a widths reset never unhides a column,
+//! and a hidden reset never touches the widths.
 
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -60,7 +61,7 @@ async fn seed(pool: &SqlitePool, table: &str) {
 }
 
 // ---------------------------------------------------------------------------
-// AC-369-05 — field="widths" → widths_json = '{}', hidden 유지.
+// AC-369-05 — field="widths" → widths_json = '{}', hidden kept.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -100,7 +101,7 @@ async fn ac_369_05_reset_widths_field_only_clears_widths_and_preserves_hidden() 
 }
 
 // ---------------------------------------------------------------------------
-// AC-369-06 — field="hiddenColumns" → hidden_columns_json = '[]', widths 유지.
+// AC-369-06 — field="hiddenColumns" → hidden_columns_json = '[]', widths kept.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -174,8 +175,8 @@ async fn ac_369_07_reset_all_deletes_row() {
 }
 
 // ---------------------------------------------------------------------------
-// row 가 없을 때 reset — 모든 field 가 정상 no-op (UI 가 race 로 두 번 보낼 수
-// 있으니 idempotent).
+// Reset with no row present — every field is a clean no-op (the UI can send it
+// twice through a race, so it has to be idempotent).
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

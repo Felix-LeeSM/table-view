@@ -1,20 +1,22 @@
 //! Issue #1077 Stage 2 (2026-08-02) — MariaDB users-listing gate.
 //!
-//! 작성 이유: MariaDB 는 `MysqlAdapter` 를 공유하므로 대부분의 surface 는 MySQL
-//! 컨테이너가 대표한다. `mysql.user` 만 예외다 — users listing 은 두 벤더가 서로
-//! 다른 SQL 을 보내는 유일한 경로다. 이 게이트가 더하는 것은 그 SQL 을 진짜
-//! MariaDB 서버에 실행해 디코드하는 부분이고, 어느 arm 을 고르는지와 행 매핑은
-//! `db/mysql/schema.rs` 의 순수 유닛 테스트가 이미 덮는다.
+//! Reason: MariaDB shares `MysqlAdapter`, so the MySQL container stands in for
+//! most of the surface. `mysql.user` is the one exception — users listing is the
+//! only path where the two vendors send different SQL. What this gate adds is
+//! running that SQL against a real MariaDB server and decoding it; which arm is
+//! chosen and how the rows map are already covered by the pure unit tests in
+//! `db/mysql/schema.rs`.
 //!
-//! 이 파일이 없던 동안 무슨 일이 있었나: 공유 상수 하나가
-//! `CONVERT(account_locked USING utf8mb4)` 를 골랐고, 그 컬럼이 없는 MariaDB 에서
-//! Users 탭이 `1054 (42S22): Unknown column 'account_locked' in 'field list'` 로
-//! 죽었다 (10.3 · 10.4 · 11.3 에서 실측). MySQL 전용 `mysql_integration.rs` 도,
-//! offline 인 `mariadb_ddl_preview.rs` 도 그 경로를 지나지 않아 CI 가 green 이었다.
+//! What happened while this file did not exist: one shared constant picked
+//! `CONVERT(account_locked USING utf8mb4)`, and on MariaDB, which has no such
+//! column, the Users tab died with
+//! `1054 (42S22): Unknown column 'account_locked' in 'field list'` (measured on
+//! 10.3 · 10.4 · 11.3). Neither the MySQL-only `mysql_integration.rs` nor the
+//! offline `mariadb_ddl_preview.rs` goes through that path, so CI was green.
 //!
-//! 실행:
+//! Run:
 //!   cd src-tauri && cargo test --test mariadb_integration
-//!   MARIADB_HOST=localhost MARIADB_PORT=23306 cargo test ... (외부 재사용)
+//!   MARIADB_HOST=localhost MARIADB_PORT=23306 cargo test ... (reuse an external server)
 
 mod common;
 

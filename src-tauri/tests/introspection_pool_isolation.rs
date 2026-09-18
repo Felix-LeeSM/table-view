@@ -1,16 +1,16 @@
-//! 작성 2026-05-16 (Phase 2 sprint-359) — AC-359-02b:
-//! introspection_pool 격리 + round-robin 호출 spy.
+//! AC-359-02b: introspection_pool isolation + a round-robin call spy.
 //!
-//! Strategy doc lines 478–480: sidebar / autocomplete / prefetch 가
-//! tab pool 과 별도로 idle round-robin 한다. 본 sprint 의 격리 surface
-//! 는 `AppState.introspection_pools: HashMap<conn_id, IntrospectionPool>`
-//! 이고, 각 `IntrospectionPool::acquire_slot()` 가 cap=5 modulo 의
-//! round-robin index 를 반환한다. 본 테스트는:
+//! Strategy doc lines 478–480: sidebar / autocomplete / prefetch run an idle
+//! round-robin separate from the tab pool. The isolation surface is
+//! `AppState.introspection_pools: HashMap<conn_id, IntrospectionPool>`, and
+//! each `IntrospectionPool::acquire_slot()` returns a round-robin index
+//! modulo cap=5. This test asserts:
 //!
-//! 1. boot 직후 `AppState.introspection_pools` 가 비어 있다 (lazy).
-//! 2. connection 별로 별도 pool — 한 connection 의 acquire 가 다른
-//!    connection 의 counter 를 건드리지 않는다 (key isolation).
-//! 3. 12 회 acquire 시 슬롯 sequence 가 0..4 반복 — `cap=5` round-robin.
+//! 1. `AppState.introspection_pools` is empty right after boot (lazy).
+//! 2. A separate pool per connection — one connection's acquire does not
+//!    touch another connection's counter (key isolation).
+//! 3. 12 acquires yield a slot sequence repeating 0..4 — `cap=5`
+//!    round-robin.
 
 use table_view_lib::commands::connection::AppState;
 use table_view_lib::state::introspection_pool::IntrospectionPool;
@@ -24,8 +24,8 @@ async fn boot_state_has_empty_introspection_pools() {
 
 #[tokio::test]
 async fn lazy_insert_per_connection_uses_default_capacity() {
-    // 새 connection 의 첫 acquire 가 IntrospectionPool::new() 를 lazy 로
-    // 만들고 그 인스턴스가 max_size=5 임을 단언.
+    // The first acquire for a new connection lazily builds an
+    // IntrospectionPool::new(); assert that instance has max_size=5.
     let state = AppState::new();
 
     {
@@ -54,7 +54,7 @@ async fn round_robin_yields_0_to_4_then_wraps() {
 
 #[tokio::test]
 async fn pools_are_isolated_across_connections() {
-    // conn-A 와 conn-B 의 round-robin counter 가 분리되어 있다.
+    // conn-A and conn-B keep separate round-robin counters.
     let state = AppState::new();
     let mut map = state.introspection_pools.lock().await;
     let a = map
@@ -66,10 +66,10 @@ async fn pools_are_isolated_across_connections() {
     let b = map
         .entry("conn-B".into())
         .or_insert_with(IntrospectionPool::new);
-    // B 는 처음 — 0 부터 시작.
+    // B is fresh — starts at 0.
     assert_eq!(b.acquire_slot(), 0);
 
     let a2 = map.get("conn-A").unwrap();
-    // A 는 2 부터 이어진다 (B 의 acquire 가 A counter 를 건드리면 안 됨).
+    // A continues from 2 (B's acquire must not touch A's counter).
     assert_eq!(a2.acquire_slot(), 2);
 }

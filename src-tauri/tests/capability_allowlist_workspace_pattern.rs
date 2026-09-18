@@ -1,23 +1,25 @@
-//! 작성 2026-05-17 (Wave 9.5 회귀 7 진짜 fix) — Tauri 2 capability JSON 의
-//! `windows` allowlist 가 sprint-361 의 per-conn workspace 라벨 패턴
-//! (`workspace-{conn_id}`) 을 포함하는지 lock.
+//! Written 2026-05-17 — locks that the `windows` allowlist of the Tauri 2
+//! capability JSON covers the per-conn workspace label pattern
+//! (`workspace-{conn_id}`).
 //!
-//! 사용자 보고: "친구 테마가 창 단위로 적용된다", "여전히 창들 사이에서
-//! 동기화가 안돼". root cause — sprint-361 (Phase 3, Q13) 이 workspace
-//! 라벨을 `workspace-{conn_id}` 로 변경했지만 capability 의 windows
-//! allowlist 는 옛 `"workspace"` 만 포함. Tauri 2 는 capability 매칭 안 되는
-//! window 에서 `event:listen` / `event:emit` 호출을 silent 하게 deny —
-//! frontend bridge (`theme-sync` channel) / backend `state-changed` 두 path
-//! 모두 차단되어 cross-window sync silent fail.
+//! User reports: "a friend's theme applies per window", "the windows still do
+//! not sync with each other". Root cause — the workspace label changed to
+//! `workspace-{conn_id}` (Q13) while the capability's windows allowlist still
+//! held only the old `"workspace"`. Tauri 2 silently denies `event:listen` /
+//! `event:emit` calls from a window that matches no capability, so both paths —
+//! the frontend bridge (`theme-sync` channel) and the backend `state-changed` —
+//! were blocked and cross-window sync failed silently.
 //!
-//! 본 test 는 두 invariant 를 lock:
-//!   1. allowlist 가 legacy `"workspace"` (호환) + `"launcher"` 포함.
-//!   2. allowlist 가 sprint-361 의 새 라벨 패턴 (`workspace-` 접두사) 을 매칭하는 항목 포함.
+//! This test locks two invariants:
+//!   1. The allowlist contains `"launcher"`, next to the legacy `"workspace"`
+//!      kept for compatibility.
+//!   2. The allowlist contains an entry matching the `workspace-` prefix label
+//!      pattern.
 //!
-//! 회귀 시: 새 sprint 가 라벨 패턴을 또 바꿨거나 (예: `db-{conn_id}`),
-//! 누가 allowlist 항목을 실수로 지웠을 때 cross-window broadcast 가
-//! production 에서만 깨지고 cargo test / vitest 는 모두 GREEN 으로 떨어진다.
-//! 본 test 는 그 silent failure 를 빌드 시점에 잡는다.
+//! On regression: if the label pattern changes again (say to `db-{conn_id}`), or
+//! somebody deletes an allowlist entry by accident, cross-window broadcast
+//! breaks in production only, while cargo test / vitest both come out GREEN.
+//! This test catches that silent failure at build time.
 
 use std::fs;
 
@@ -51,10 +53,10 @@ fn capability_includes_workspace_per_connection_pattern() {
         .expect("`windows` must be a JSON array");
     let labels: Vec<&str> = windows.iter().filter_map(|v| v.as_str()).collect();
 
-    // sprint-361 (Phase 3, Q13) 이후 workspace 창은 `workspace-{conn_id}` 형식.
-    // capability glob 으로 매칭하는 항목 중 하나라도 있어야 함 — 가장 흔한
-    // 패턴은 `workspace-*` 또는 `workspace*`. 회귀 lock: allowlist 가
-    // sprint-361 라벨을 cover 하는 항목을 포함하는지 확인.
+    // Since Q13 a workspace window carries a `workspace-{conn_id}` label.
+    // At least one entry must match it through a capability glob — the common
+    // patterns are `workspace-*` or `workspace*`. Regression lock: check that
+    // the allowlist holds an entry covering that label.
     let has_workspace_glob = labels
         .iter()
         .any(|l| *l == "workspace-*" || *l == "workspace*");

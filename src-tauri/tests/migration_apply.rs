@@ -1,9 +1,11 @@
-//! 작성 2026-05-16 (Phase 1 sprint-355) — Migration 적용 후 9 table 존재 +
-//! PK / 인덱스 / `meta` table 검증.
+//! Written 2026-05-16 — which tables exist once the migrations have applied,
+//! plus PK / index / `meta` table checks.
 //!
-//! AC-355-02 / AC-355-03 의 source-of-truth. Strategy 문서 line 534 의 9 table
-//! 목록 (8 도메인 + meta) 과 line 626 의 `workspaces` PK `(connection_id,
-//! db_name)`, line 556-557 의 `query_history` index 가 모두 적용됐는지 검증.
+//! Source of truth for AC-355-02 / AC-355-03. The expected shapes come from the
+//! strategy doc: the table list in line 534 (8 domains + meta), the `workspaces`
+//! PK `(connection_id, db_name)` in line 626, and the `query_history` indexes in
+//! line 556-557. `test_migration_creates_eleven_tables` carries the current
+//! count.
 
 use serial_test::serial;
 use sqlx::Row;

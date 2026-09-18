@@ -1,21 +1,22 @@
-//! 작성 2026-05-16 (Phase 3 sprint-363) — `open_workspace_window` IPC 의
-//! focus event emit + idempotency 강화 검증.
+//! Written 2026-05-16 — verifies the focus event emit + idempotency of the
+//! `open_workspace_window` IPC.
 //!
-//! sprint-363 (Q13 후속): sprint-361 이 per-conn 라벨 idempotent 분기를 잠근
-//! 뒤, 본 sprint 는 그 위에 **focus event emit** 을 추가한다. 같은 conn 두
-//! 번째 호출 (idempotent focus 경로) 도, 새 conn 첫 호출 (build 경로) 도
-//! `workspace:focused` 이벤트를 한 번 emit 해서 frontend 가 toast / log /
-//! analytics 를 매달 수 있게 한다.
+//! Q13: on top of the per-conn label idempotent branch, `open_workspace_window`
+//! emits a **focus event**. Both the second call for the same conn (the
+//! idempotent focus path) and the first call for a new conn (the build path)
+//! emit `workspace:focused` once, so the frontend can hang a toast / log /
+//! analytics off it.
 //!
-//! 검증 매트릭스:
-//!   - AC-363-01 같은 conn 두 번 호출 → window count 1 + focus event 2회
-//!     (1회: build 후 emit, 2회: idempotent re-focus 후 emit). payload 의
-//!     `is_new` 플래그가 true → false 로 전이.
-//!   - AC-363-02 idempotent re-focus 경로 (window already exists) 에서도
-//!     `workspace:focused` event 가 emit 된다 — frontend 가 "기존 window
-//!     focus" 시그널을 받을 수 있어야 toast / mru 갱신을 트리거 가능.
-//!   - Invariant: 새 conn (다른 라벨) 호출은 별 window 를 만들고 event 도
-//!     conn 별로 분리된다 (payload.connection_id 가 호출 인자와 일치).
+//! Verification matrix:
+//!   - AC-363-01 two calls for the same conn → window count 1 + 2 focus events
+//!     (first: emit after the build, second: emit after the idempotent
+//!     re-focus). The payload's `is_new` flag goes true → false.
+//!   - AC-363-02 the idempotent re-focus path (window already exists) emits
+//!     `workspace:focused` as well — the frontend needs that "an existing
+//!     window was focused" signal to trigger a toast / mru refresh.
+//!   - Invariant: a call for a new conn (a different label) builds its own
+//!     window and the events stay split per conn (payload.connection_id matches
+//!     the call argument).
 
 use serde::Deserialize;
 use std::sync::{Arc, Mutex};
@@ -148,10 +149,10 @@ async fn focus_events_partition_by_connection_id_for_distinct_conns() {
     assert!(events[1].is_new);
 }
 
-/// Reason (2026-05-16, sprint-363): empty connection_id is rejected upstream
-/// by the validation guard inherited from sprint-361. No event must be
-/// emitted because validation runs before the focus/build branch — a
-/// frontend listener should never receive an empty connection_id payload.
+/// Reason (2026-05-16): an empty connection_id is rejected upstream by the
+/// validation guard. No event must be emitted because validation runs before
+/// the focus/build branch — a frontend listener should never receive an empty
+/// connection_id payload.
 #[tokio::test]
 async fn empty_connection_id_emits_no_focus_event() {
     let app = make_app();

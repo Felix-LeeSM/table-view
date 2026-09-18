@@ -1,4 +1,4 @@
-//! 작성 2026-05-16 (Phase 2 sprint-359) — AC-359-05: Mongo native cancel
+//! Written 2026-05-16 — AC-359-05: Mongo native cancel
 //! via `adminCommand({killOp: 1, op: <opid>})`.
 //!
 //! Driving a guaranteed-long Mongo query is awkward in a test container:
@@ -13,8 +13,8 @@
 //!    opid, but the side trip exercises the auth + admin path).
 //!
 //! AC-359-05's "terminate within 0.5s" budget for the actual op is
-//! validated by the sprint-336 currentOp/killOp integration test
-//! (`mongo_integration.rs`); this sprint focuses on the IPC surface +
+//! validated by the currentOp/killOp integration test
+//! (`mongo_integration.rs`); this test focuses on the IPC surface +
 //! the cancel error classification.
 
 mod common;
@@ -34,9 +34,9 @@ async fn mongo_cancel_query_round_trips_through_killop() {
     };
 
     let start = Instant::now();
-    // killOp 는 unknown opid 에 대해 server 가 OK 응답한다 (no-op). 따라서
-    // round-trip 의 latency + auth + admin-db dispatch 가 살아있는지를
-    // 검증하는 것이 본 테스트의 정수.
+    // The server answers killOp with OK for an unknown opid (a no-op), so
+    // what this test really checks is that the round-trip latency + auth +
+    // admin-db dispatch are all alive.
     adapter
         .cancel_query(99999)
         .await

@@ -1,14 +1,16 @@
-//! 작성 2026-05-16 (Phase 4 sprint-369) — `set_datagrid_prefs` partial patch.
+//! Written 2026-05-16 — `set_datagrid_prefs` partial patch.
 //!
-//! Contract Q20.4 + Q20.5 + codex 7차 #1 / 8차 #5.
-//!   - widths 만 patch → widths_json 만 갱신, hidden_columns_json 기존 값 유지.
-//!   - hiddenColumns 만 patch → hidden_columns_json 만 갱신, widths_json 유지.
-//!   - 빈 patch (둘 다 None) → `AppError::Validation` 400.
+//! Contract Q20.4 + Q20.5.
+//!   - widths-only patch → updates widths_json only, keeps the existing
+//!     hidden_columns_json.
+//!   - hiddenColumns-only patch → updates hidden_columns_json only, keeps
+//!     widths_json.
+//!   - empty patch (both None) → `AppError::Validation` 400.
 //!
 //! AC mapping:
-//!   - AC-369-01 widths 만 patch (hidden 보존)
-//!   - AC-369-02 hiddenColumns 만 patch (widths 보존)
-//!   - AC-369-03 빈 patch → 400 Validation
+//!   - AC-369-01 widths-only patch (hidden preserved)
+//!   - AC-369-02 hiddenColumns-only patch (widths preserved)
+//!   - AC-369-03 empty patch → 400 Validation
 
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -24,7 +26,8 @@ async fn setup() -> (TempDir, SqlitePool) {
     let dir = TempDir::new().unwrap();
     std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
     let pool = local::open_pool().await.unwrap();
-    // guard_legacy_import_done 통과 보장 — datagrid_prefs 의 set 역시 mutate IPC.
+    // Make sure guard_legacy_import_done passes — the datagrid_prefs set is a
+    // mutate IPC too.
     set_legacy_import_state(&pool, LegacyImportState::Done)
         .await
         .unwrap();
@@ -46,7 +49,7 @@ fn pk(table: &str) -> ColumnPrefsPk {
 }
 
 // ---------------------------------------------------------------------------
-// AC-369-01 — widths 만 patch 시 hidden_columns_json 유지
+// AC-369-01 — a widths-only patch keeps hidden_columns_json
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -54,7 +57,7 @@ fn pk(table: &str) -> ColumnPrefsPk {
 async fn ac_369_01_widths_only_patch_preserves_hidden_columns() {
     let (_dir, pool) = setup().await;
 
-    // seed: 둘 다 채워진 row.
+    // seed: a row with both columns filled in.
     set_datagrid_prefs_inner(
         &pool,
         SetDatagridPrefsRequest {
@@ -66,7 +69,7 @@ async fn ac_369_01_widths_only_patch_preserves_hidden_columns() {
     .await
     .unwrap();
 
-    // patch: widths 만.
+    // patch: widths only.
     set_datagrid_prefs_inner(
         &pool,
         SetDatagridPrefsRequest {
@@ -103,7 +106,7 @@ async fn ac_369_01_widths_only_patch_preserves_hidden_columns() {
 }
 
 // ---------------------------------------------------------------------------
-// AC-369-02 — hiddenColumns 만 patch 시 widths_json 유지
+// AC-369-02 — a hiddenColumns-only patch keeps widths_json
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -154,7 +157,7 @@ async fn ac_369_02_hidden_only_patch_preserves_widths() {
 }
 
 // ---------------------------------------------------------------------------
-// AC-369-03 — 빈 patch (둘 다 None) → AppError::Validation 400.
+// AC-369-03 — empty patch (both None) → AppError::Validation 400.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -183,7 +186,7 @@ async fn ac_369_03_empty_patch_rejected_with_validation_400() {
         other => panic!("expected Validation, got: {other:?}"),
     }
 
-    // row 가 생성되지 않았어야 함.
+    // No row must have been created.
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM datagrid_column_prefs")
         .fetch_one(&pool)
         .await
@@ -193,8 +196,8 @@ async fn ac_369_03_empty_patch_rejected_with_validation_400() {
 }
 
 // ---------------------------------------------------------------------------
-// 초기 INSERT — row 가 없는 상태에서 widths 만 patch → 그 column 만 채우고
-// hidden 은 default `[]` 유지.
+// First INSERT — a widths-only patch with no existing row fills that column
+// only and leaves hidden at the default `[]`.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]

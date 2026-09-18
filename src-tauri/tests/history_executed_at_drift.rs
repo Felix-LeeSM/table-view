@@ -1,16 +1,17 @@
-//! 작성 2026-05-17 (Phase 5 sprint-371, AC-371-09) — `add_history_entry`
-//! 의 clock drift 안전망.
+//! Written 2026-05-17 (AC-371-09) — the clock drift safety net of
+//! `add_history_entry`.
 //!
 //! Invariant:
-//!   - `|now - executedAt| > 5min` → backend now 로 override.
-//!   - drift 가 5min 이하면 frontend 값 그대로 저장.
+//!   - `|now - executedAt| > 5min` → override with backend now.
+//!   - a drift of 5min or less stores the frontend value unchanged.
 //!
-//! Wire shape: 같은 `AddHistoryEntryRequest` payload 의 `executedAt` 필드
-//! 한 값만 다른 두 케이스 — 한 번은 1h 전 (drift), 한 번은 30s 전 (OK).
+//! Wire shape: cases that differ only in the `executedAt` field of the same
+//! `AddHistoryEntryRequest` payload — past drift, within-threshold, and future
+//! drift.
 //!
-//! drift override 가 일어났음을 확인하기 위해 backend 가 호출 시점의
-//! `now_ms()` 와 row 의 `executed_at` 컬럼이 일치 (대략 +/- 1s 이내) 하는지
-//! 검증.
+//! To confirm the drift override happened, the test checks that the row's
+//! `executed_at` column matches the backend's `now_ms()` at call time (within
+//! roughly +/- 1s).
 
 use serde_json::json;
 use serial_test::serial;
@@ -44,8 +45,8 @@ fn now_ms() -> i64 {
 const TEN_MIN_MS: i64 = 10 * 60 * 1000;
 const ONE_MIN_MS: i64 = 60 * 1000;
 
-// AC-371-09 case A — frontend executedAt = now - 10min → drift 트리거 →
-// backend now 로 override.
+// AC-371-09 case A — frontend executedAt = now - 10min → triggers drift →
+// override with backend now.
 #[tokio::test]
 #[serial]
 async fn ac_371_09_executed_at_10min_drift_is_overridden_with_backend_now() {
@@ -69,7 +70,7 @@ async fn ac_371_09_executed_at_10min_drift_is_overridden_with_backend_now() {
 
     let call_end = now_ms();
 
-    // backend override → resp.executed_at 는 [call_start, call_end] 범위.
+    // backend override → resp.executed_at falls in [call_start, call_end].
     assert!(
         resp.executed_at >= call_start - 100 && resp.executed_at <= call_end + 100,
         "executed_at should be backend now ({}..={}), got {}",
@@ -77,14 +78,14 @@ async fn ac_371_09_executed_at_10min_drift_is_overridden_with_backend_now() {
         call_end,
         resp.executed_at
     );
-    // 그리고 frontend 가 보낸 stale 값은 분명히 아님.
+    // And it is clearly not the stale value the frontend sent.
     assert!(
         resp.executed_at - frontend_ea > 9 * 60 * 1000,
         "drift was {} ms — must be > 9min if override took effect",
         resp.executed_at - frontend_ea
     );
 
-    // DB row 확인.
+    // Check the DB row.
     let row_ea: i64 = sqlx::query_scalar("SELECT executed_at FROM query_history WHERE id = ?")
         .bind(resp.id)
         .fetch_one(&pool)
@@ -95,7 +96,7 @@ async fn ac_371_09_executed_at_10min_drift_is_overridden_with_backend_now() {
 }
 
 // AC-371-09 case B — frontend executedAt = now - 1min → drift 1min < 5min →
-// frontend 값 그대로 유지.
+// the frontend value is kept as-is.
 #[tokio::test]
 #[serial]
 async fn ac_371_09_executed_at_within_threshold_passes_through() {
@@ -122,8 +123,8 @@ async fn ac_371_09_executed_at_within_threshold_passes_through() {
     cleanup();
 }
 
-// AC-371-09 case C — 시계가 미래로 점프 (frontend executedAt > now + 10min)
-// 한 케이스도 backend now 로 override.
+// AC-371-09 case C — a clock that jumped into the future (frontend executedAt
+// > now + 10min) is also overridden with backend now.
 #[tokio::test]
 #[serial]
 async fn ac_371_09_executed_at_future_drift_is_overridden() {

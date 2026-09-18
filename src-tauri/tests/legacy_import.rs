@@ -1,11 +1,11 @@
-//! 작성 2026-05-16 (Phase 1 sprint-355) — `import_legacy_localstorage` IPC
-//! 와 `guard_legacy_import_done` helper 의 시나리오 검증.
+//! Written 2026-05-16 — scenario checks for the `import_legacy_localstorage`
+//! IPC and the `guard_legacy_import_done` helper.
 //!
-//! AC-355-05: 첫 호출 → pending → importing → done transition + SQLite row
-//! insert. 둘째 호출 (done) → no-op (idempotent).
+//! AC-355-05: first call → pending → importing → done transition + SQLite row
+//! insert. Second call (done) → no-op (idempotent).
 //!
-//! AC-355-06: guard 4-state — `pending` / `importing` 시 reject (LegacyImportInProgress),
-//! `done` 시 정상 진행, `failed` 도 reject.
+//! AC-355-06: guard 4-state — reject on `pending` / `importing`
+//! (LegacyImportInProgress), proceed on `done`, reject on `failed` too.
 
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -62,20 +62,20 @@ async fn test_import_first_call_transitions_to_done_and_inserts_rows() {
         .await
         .unwrap();
 
-    // State 전이 완료 → done.
+    // State transition complete → done.
     assert_eq!(
         get_legacy_import_state(&pool).await.unwrap(),
         LegacyImportState::Done
     );
 
-    // Favorites row 1개 inserted.
+    // 1 favorites row inserted.
     let fav_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM favorites")
         .fetch_one(&pool)
         .await
         .unwrap();
     assert_eq!(fav_count, 1);
 
-    // MRU row 1개 inserted.
+    // 1 MRU row inserted.
     let mru_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mru")
         .fetch_one(&pool)
         .await

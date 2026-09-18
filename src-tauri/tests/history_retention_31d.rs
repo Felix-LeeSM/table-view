@@ -1,19 +1,20 @@
-//! 작성 2026-05-17 (Phase 5 sprint-373, AC-373-05) — boot 후 retention
-//! vacuum 이 30일 + 1초 row 를 삭제하고 29일 row 를 유지하는지 검증.
+//! Written 2026-05-17 (AC-373-05) — verifies that the retention vacuum after
+//! boot deletes a 30-day + 1-second row and keeps a 29-day row.
 //!
-//! 사유 (test scenarios 8 원칙 적용):
-//!   - user journey end-to-end: 사용자 app 을 boot — `lib.rs::setup` 의
-//!     detached task 가 `boot_history_retention_vacuum()` 호출 → 31일 row
-//!     0건, 29일 row 유지.
-//!   - lego 맞물림: `settings.query_history_retention_days` row read +
-//!     sprint-371 의 vacuum function + sprint-373 의 boot wiring 세 piece
-//!     가 함께 동작해야 통과.
-//!   - sentinel row (29일) 가 keep / 31일 row 가 drop 인 양 쪽 단언으로
-//!     "vacuum 이 너무 광범위" / "vacuum 이 너무 보수적" 회귀 모두 잡힘.
+//! Reason (applying the 8 test-scenario principles):
+//!   - User journey end-to-end: the user boots the app — the detached task in
+//!     `lib.rs::setup` calls `boot_history_retention_vacuum()` → 0 rows at
+//!     31 days, the 29-day row kept.
+//!   - Lego interlock: reading the `settings.query_history_retention_days`
+//!     row, the vacuum function, and the boot wiring — all three pieces must
+//!     work together for this to pass.
+//!   - Asserting both sides, the sentinel row (29 days) kept and the 31-day
+//!     row dropped, catches both the "vacuum too broad" and the "vacuum too
+//!     conservative" regressions.
 //!
-//! 본 테스트는 `boot_history_retention_vacuum()` 을 직접 호출 — 실제
-//! tauri 부팅을 spawn 하지 않고 같은 entrypoint 를 시뮬레이션 (lib.rs 의
-//! `tauri::async_runtime::spawn` 안에서 호출되는 함수와 동일).
+//! This test calls `boot_history_retention_vacuum()` directly — it simulates
+//! the same entrypoint without spawning a real tauri boot (the same function
+//! that is called inside `tauri::async_runtime::spawn` in lib.rs).
 
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -63,11 +64,12 @@ async fn insert_row_at(pool: &SqlitePool, executed_at: i64, label: &str) -> i64 
 
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
-/// AC-373-05 — 30일 + 1초 전 row 는 vacuum 후 0건, 29일 row 는 유지.
+/// AC-373-05 — a row 30 days + 1 second old is gone after the vacuum, a
+/// 29-day row is kept.
 ///
-/// 사용자 journey: app 을 30일 retention 으로 설정 후 launch → boot 직후
-/// detached task 가 vacuum 실행 → 사용자가 history panel 을 열어보면
-/// "29일 row 만 남음".
+/// User journey: the user sets retention to 30 days and launches the app →
+/// right after boot the detached task runs the vacuum → opening the history
+/// panel shows "only the 29-day row remains".
 #[tokio::test]
 #[serial]
 async fn ac_373_05_boot_vacuum_drops_31day_row_keeps_29day() {
@@ -86,22 +88,23 @@ async fn ac_373_05_boot_vacuum_drops_31day_row_keeps_29day() {
 
     let now = now_ms();
 
-    // 30일 + 1초 전 row — vacuum 대상.
+    // Row 30 days + 1 second old — the vacuum target.
     let old_id = insert_row_at(&pool, now - 30 * DAY_MS - 1_000, "31day").await;
-    // 29일 전 row — 보존 대상 (sentinel).
+    // Row 29 days old — must be kept (sentinel).
     let recent_id = insert_row_at(&pool, now - 29 * DAY_MS, "29day").await;
 
-    // Pre-vacuum sanity: 2 row 가 있어야 vacuum 결과 단언이 의미 있다.
+    // Pre-vacuum sanity: the post-vacuum assertions only mean something when
+    // 2 rows are seeded.
     let pre_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM query_history")
         .fetch_one(&pool)
         .await
         .unwrap();
     assert_eq!(pre_count, 2, "pre-vacuum 시점 2 row 가 시드되어 있어야 함");
 
-    // boot wiring 직접 호출 — `lib.rs::setup` 의 spawn 안에서 부르는 것과 동일.
+    // Call the boot wiring directly — same as the spawn in `lib.rs::setup`.
     boot_history_retention_vacuum_inner(&pool).await;
 
-    // 31일 row → 0건. 29일 row → 유지.
+    // 31-day row → gone. 29-day row → kept.
     let remaining_ids: Vec<i64> =
         sqlx::query_scalar("SELECT id FROM query_history ORDER BY id ASC")
             .fetch_all(&pool)
@@ -124,14 +127,14 @@ async fn ac_373_05_boot_vacuum_drops_31day_row_keeps_29day() {
     cleanup();
 }
 
-/// AC-373-07 — settings row 가 부재하면 30d default 가 적용 (신규 사용자
-/// 의 first boot 시 backend 가 silent default 로 vacuum). 위 테스트가
-/// settings 를 명시 persist 한 것과 대비.
+/// AC-373-07 — when the settings row is absent the 30d default applies (on a
+/// new user's first boot the backend vacuums with the silent default). This
+/// contrasts with the test above, which persists the setting explicitly.
 #[tokio::test]
 #[serial]
 async fn ac_373_07_default_30d_when_setting_absent() {
     let (_dir, pool) = setup().await;
-    // settings.query_history_retention_days row 가 없는 상태 (신규 boot).
+    // No settings.query_history_retention_days row (a new boot).
 
     let now = now_ms();
     let old_id = insert_row_at(&pool, now - 31 * DAY_MS, "31day-default").await;
@@ -153,8 +156,8 @@ async fn ac_373_07_default_30d_when_setting_absent() {
     cleanup();
 }
 
-/// 0 = "Forever" — vacuum no-op. 사용자가 "기록 보관 무제한" 으로 설정한
-/// 경우 boot vacuum 이 row 를 한 건도 안 건드림.
+/// 0 = "Forever" — the vacuum is a no-op. When the user sets history keeping
+/// to unlimited, the boot vacuum does not touch a single row.
 #[tokio::test]
 #[serial]
 async fn forever_retention_zero_keeps_all_rows() {
@@ -171,7 +174,7 @@ async fn forever_retention_zero_keeps_all_rows() {
     .unwrap();
 
     let now = now_ms();
-    // 1년 전 row — retention=0 이면 절대 안 사라짐.
+    // Row 1 year old — with retention=0 it never disappears.
     let ancient_id = insert_row_at(&pool, now - 365 * DAY_MS, "1year-ancient").await;
 
     boot_history_retention_vacuum_inner(&pool).await;

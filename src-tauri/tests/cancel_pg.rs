@@ -1,4 +1,4 @@
-//! 작성 2026-05-16 (Phase 2 sprint-359) — AC-359-03: PG native cancel.
+//! AC-359-03: PG native cancel.
 //!
 //! Drives `SELECT pg_sleep(60)` against a live testcontainers PG and
 //! issues `cancel_query_native(connection_id, server_pid)` mid-flight.

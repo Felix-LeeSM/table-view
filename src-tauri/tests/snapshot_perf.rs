@@ -1,16 +1,17 @@
-//! 작성 2026-05-16 (Phase 1 sprint-357) — `get_initial_app_state_inner` 의
-//! Q9 boot perf (AC-357-05).
+//! Q9 boot perf of `get_initial_app_state_inner` (AC-357-05).
 //!
-//! 시드: 10 connection × 5 group × 50 workspace tab × 500 history row.
+//! Seed: 10 connections × 5 groups × 50 workspace tabs × 500 history rows.
 //! Strategy F.2 line 968 — p95 < 50ms.
 //!
-//! 측정: 100 회 반복, sorted samples 의 95-percentile. `--release` 권장
-//! (debug 빌드는 sqlite SELECT 자체가 2-3x slower).
+//! Measurement: 100 iterations, the 95th percentile of the sorted samples.
+//! `--release` is recommended (in a debug build the sqlite SELECT alone is
+//! 2-3x slower).
 //!
-//! Test 는 항상 release 모드로 측정해야 의미가 있음. cargo test --release 로
-//! 실행하면 `RELEASE_BUILD` define 이 켜져 더 엄격한 budget 을 강제. debug
-//! 모드에서는 budget 을 2x 로 늘려 noise 흡수 — debug 실패도 회귀 신호이긴
-//! 하지만 false positive 가 많아 hard fail 시키지 않음.
+//! Only a release-mode measurement is meaningful. `cargo test --release`
+//! turns off `debug_assertions`, so the `#[cfg(not(debug_assertions))]`
+//! branch below enforces the stricter budget. In debug mode the budget is
+//! doubled to absorb noise — a debug failure is still a regression signal,
+//! but it carries too many false positives to hard-fail on.
 
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -163,9 +164,10 @@ async fn seed(pool: &SqlitePool) {
     }
 }
 
-// AC-357-05 — Q9 budget p95 < 50ms. Debug 모드에서는 noise 가 커서 budget 을
-// 2x (100ms) 로 완화 — 실제 검증은 `cargo test --release` 가 강제. p95/p99
-// 모두 출력해 회귀 시 어느 percentile 부터 어긋났는지 추적 가능.
+// AC-357-05 — Q9 budget p95 < 50ms. Debug mode is noisy, so the budget is
+// relaxed 2x (100ms) there — `cargo test --release` enforces the real check.
+// Both p95 and p99 are printed so a regression shows which percentile
+// slipped first.
 #[tokio::test]
 #[serial]
 async fn test_snapshot_p95_under_50ms() {
@@ -213,9 +215,9 @@ async fn test_snapshot_p95_under_50ms() {
     cleanup();
 }
 
-// Workspace scope (1 connection × 5 db sub-workspaces) 는 launcher 보다
-// workspaces SELECT 부담이 더 크다. 같은 budget 적용 — workspace window 의
-// boot 도 launcher 와 동일하게 50ms 안.
+// Workspace scope (1 connection × 5 db sub-workspaces) puts a heavier
+// workspaces SELECT load on the query than launcher scope. The same budget
+// applies — a workspace window must boot within 50ms just like launcher.
 #[tokio::test]
 #[serial]
 async fn test_snapshot_workspace_scope_p95_under_50ms() {

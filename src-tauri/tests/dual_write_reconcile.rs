@@ -1,23 +1,26 @@
-//! 작성 2026-05-16 (Phase 1 sprint-358) — AC-358-07 reconcile path.
-//! 갱신 2026-05-16 (Phase 4 sprint-370) — favorites/mru/settings 의 file
-//! 분기 retire 후의 reconcile 의미 변화 반영.
-//! 갱신 2026-07-02 (#1092) — SQLite-only 도메인의 write 실패 전파 반영.
+//! Written 2026-05-16 — AC-358-07 reconcile path.
+//! Updated 2026-05-16 — reflects how reconcile semantics changed once the file
+//! branch of favorites/mru/settings was retired.
+//! Updated 2026-07-02 (#1092) — reflects write-failure propagation for
+//! SQLite-only domains.
 //!
-//! Sprint 358 (Phase 1 W1): Dual-write 는 file/LS write 가 성공 path. SQLite
-//! write 실패는 silent + mismatch counter 증가. 다음 boot 직후
-//! `reconcile_pending_domains` 가 file/LS SOT 를 SQLite 로 재투영.
+//! Originally: dual-write treated the file/LS write as the success path, a
+//! SQLite write failure was silent and only bumped the mismatch counter, and on
+//! the next boot `reconcile_pending_domains` re-projected the file/LS SOT into
+//! SQLite.
 //!
-//! Sprint 370 (Phase 4 W3): favorites / mru / settings 의 file write 가
-//! 제거되어 reconcile-from-file path 도 의미를 잃는다 (file 이 empty).
-//! `connections` 도메인은 여전히 file SOT (storage::save_connection — sprint-375
-//! 의 W4 cleanup 까지 유지) 라 reconcile 가능.
+//! After W3: the file write for favorites / mru / settings is gone, so the
+//! reconcile-from-file path lost its meaning for them as well (the file is
+//! empty). The `connections` domain is still file SOT
+//! (`storage::save_connection`), so it can still be reconciled.
 //!
-//! #1092 (2026-07-02): W3 이후 대체 원본이 없는 favorites/mru/settings 는
-//! 실패를 삼키면 무음 소실이므로, 그 커맨드들은 이제 SQLite write 실패를
-//! IPC 경계로 **전파**한다 (counter-only silent 삼킴 폐기). counter/reconcile
-//! 메커니즘은 file SOT 가 살아있는 도메인 (connections) + 함수 직접 호출
-//! 테스트에만 남는다. 본 테스트는 전파 invariant 와 reconcile 함수 자체의
-//! give-up 동작을 함께 잠근다.
+//! #1092 (2026-07-02): after W3, favorites/mru/settings have no fallback source,
+//! so swallowing a failure means silent data loss; those commands now
+//! **propagate** a SQLite write failure to the IPC boundary (the counter-only
+//! silent swallow is retired). The counter/reconcile mechanism survives only for
+//! domains that still have a file SOT (`connections`) and for tests that call the
+//! function directly. This test locks both the propagation invariant and the
+//! give-up behaviour of the reconcile function itself.
 
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -46,23 +49,24 @@ fn cleanup() {
     mismatch_counter::reset();
 }
 
-// #1092 (2026-07-02) — SQLite write 실패는 IPC 경계로 전파된다.
+// #1092 (2026-07-02) — a SQLite write failure propagates to the IPC boundary.
 //
-// 이전(sprint-358 AC-358-07)에는 SQLite 실패를 삼키고 counter 만 +1 한 뒤
-// Ok 를 반환했다. W3 cut 이후 favorites/mru/settings 는 file/LS 대체 원본이
-// 없고 boot reconcile 이 배선되지 않아 그 삼킴이 무음 데이터 소실이었다.
-// 본 테스트는 새 invariant 를 잠근다: SQLite write 실패 → `Err` 전파 + SQLite
-// row 0 (부분 write 없음). counter 증가/삼킴에 더는 의존하지 않는다.
+// Previously (AC-358-07) a SQLite failure was swallowed: the counter went up by
+// one and `Ok` came back. After the W3 cut, favorites/mru/settings have no
+// file/LS fallback source and boot reconcile is not wired for them, so that
+// swallow was silent data loss. This test locks the invariant: a SQLite write
+// failure → `Err` propagates + 0 SQLite rows (no partial write). It no longer
+// depends on the counter bump or on the swallow.
 #[tokio::test]
 #[serial]
 async fn issue_1092_sqlite_failure_propagates_instead_of_silent_swallow() {
-    cleanup(); // 다른 테스트 누적분 reset
+    cleanup(); // reset whatever other tests left behind
     let (_dir, pool) = setup().await;
 
     // Force SQLite failure path for mru persist.
     set_force_failure_for_tests(true);
 
-    // mru persist: SQLite write 실패 simulated → 이제 Err 전파 (삼킴 폐기).
+    // mru persist: simulated SQLite write failure → `Err` propagates (no swallow).
     let result = persist_mru_inner(
         &pool,
         vec![PersistMruRequest {
@@ -76,7 +80,7 @@ async fn issue_1092_sqlite_failure_propagates_instead_of_silent_swallow() {
         "SQLite write failure must propagate to the IPC boundary, not be swallowed as Ok"
     );
 
-    // SQLite row 0 (실패 path 였으므로).
+    // 0 SQLite rows, because this was the failure path.
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mru")
         .fetch_one(&pool)
         .await
@@ -85,43 +89,45 @@ async fn issue_1092_sqlite_failure_propagates_instead_of_silent_swallow() {
     cleanup();
 }
 
-// 3회 retry 후 stop — failure 가 영속이면 reconcile 가 retry 카운터로 3회
-// 시도 후 포기.
+// Stop after 3 retries — when the failure is persistent, reconcile tries 3 times
+// on its retry counter and then gives up.
 #[tokio::test]
 #[serial]
 async fn ac_358_07_reconcile_gives_up_after_three_persistent_failures() {
     cleanup();
     let (_dir, pool) = setup().await;
 
-    // file SOT 에 mru entry 를 seed — reconcile 가 실제로 재투영을 시도해야
-    // force-failure 의 give-up 이 발동한다. W3(sprint-370) 이후 persist_* 는
-    // SQLite-only 라 mru 파일이 비면 reconcile 은 아무 일도 안 하고 Ok 로 끝나,
-    // issue #1559 fix (전 도메인 Ok 일 때만 reset) 아래에서는 counter 가 정상
-    // reset 된다 — 이 give-up 시나리오를 성립시키려면 파일 SOT 데이터가 필요.
+    // Seed an mru entry into the file SOT — reconcile has to actually attempt the
+    // re-projection before the force-failure give-up can fire. After W3 the
+    // persist_* path is SQLite-only, so an empty mru file makes reconcile do
+    // nothing and return Ok, and under the issue #1559 fix (reset only when every
+    // domain is Ok) the counter then resets normally — this give-up scenario needs
+    // file SOT data to hold.
     save_mru_file(&[MruRecord {
         connection_id: "conn-X".into(),
         last_used: 42,
     }])
     .unwrap();
 
-    // boot 시 file SOT vs SQLite mirror diff 발견을 simulate.
+    // Simulate boot finding a file SOT vs SQLite mirror diff.
     mismatch_counter::increment();
 
-    // 영속 실패 모드 — reconcile 의 3회 시도가 모두 실패.
+    // Persistent failure mode — all 3 reconcile attempts fail.
     set_force_failure_for_tests(true);
 
-    // reconcile 호출은 Ok — 3회 retry 후 stop 하고 dev console error 만.
+    // The reconcile call returns Ok — it stops after 3 retries and only logs a
+    // dev console error.
     reconcile_pending_domains(&pool).await.unwrap();
 
-    // SQLite row 0 (실패 지속 — forced failure 가 write 를 막음).
+    // 0 SQLite rows — the failure persists, forced failure blocks the write.
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mru")
         .fetch_one(&pool)
         .await
         .unwrap();
     assert_eq!(count, 0);
 
-    // counter 는 reset 되지 않음 — mru 도메인이 give-up 하면 all_ok=false 라
-    // 다음 boot 가 재시도한다 (issue #1559).
+    // The counter is not reset — when the mru domain gives up, all_ok=false, so
+    // the next boot retries (issue #1559).
     assert!(mismatch_counter::current() >= 1);
 
     cleanup();
