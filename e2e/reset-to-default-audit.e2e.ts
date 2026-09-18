@@ -1,69 +1,78 @@
-// Sprint 376 (2026-05-17, Phase 6 Q21) — Reset-to-default audit e2e.
+// Reset-to-default audit e2e (Q21).
 //
-// 상태 (#2474, 2026-09-05): 이 파일을 어느 러너도 실행하지 않는다 — 그래서
-// 회귀 고정장치가 아니다. wdio 는 `e2e/smoke/**/*.spec.ts` 만 집고
-// (wdio.smoke.conf.ts `specs`), vitest 는 `e2e/**` 를 제외한다
-// (vite.config.ts `exclude`). tauri-driver 는 macOS 를 지원하지 않아 개발
-// 머신(macOS)에서 smoke 스위트를 돌릴 수도 없다 — 이 스위트가 CI 에서 도는
-// 자리는 Linux (xvfb + WebKitGTK) 뿐이고, 거기서도 이 파일은 글롭 밖이라
-// e2e-smoke 가 도는 PR 에서조차 실행되지 않는다.
+// Status (#2474, 2026-09-05): no runner executes this file — it is not a
+// regression pin. wdio only picks up `e2e/smoke/**/*.spec.ts`
+// (wdio.smoke.conf.ts `specs`) and vitest excludes `e2e/**`
+// (vite.config.ts `exclude`). tauri-driver does not support macOS, so the
+// smoke suite cannot even run on a dev machine (macOS) — the only place
+// this suite runs in CI is Linux (xvfb + WebKitGTK), and even there this
+// file sits outside the glob, so it does not run on a PR where e2e-smoke
+// runs.
 //
-// 남겨 두는 이유: 아래 9 시나리오 목록이 Q21 reset affordance 의 사용자-가시
-// 진입점과 그 이동 기록(sprint-377 / #2440 / #2433)을 한 자리에 모은 시나리오
-// 인벤토리이자, 손으로 검증할 때의 체크리스트라는 것.
-// docs/contributor-guide/smoke-matrix/h7-ops-security-reliability.md 도 이
-// 파일을 "invoked by nothing ... scenario inventory" 로 분류한다. 실행으로
-// 잡는 회귀 가드는 RTL 이 담당한다 — HomePage · ConnectionGroup ·
-// HeaderRow · Sidebar · FavoritesPanel 의 `*reset-affordance*.test.tsx` 와
-// Sidebar.collapse-toggle.test.tsx, RecentConnections.test.tsx.
+// Kept because: the 9-scenario list below is a scenario inventory that
+// gathers the user-visible entry points of the Q21 reset affordances and
+// their movement history (#2440 / #2433) in one place, and doubles as a
+// manual verification checklist.
+// docs/contributor-guide/smoke-matrix/h7-ops-security-reliability.md also
+// classifies this file as "invoked by nothing ... scenario inventory". The
+// regression guards that actually execute are RTL's —
+// `*reset-affordance*.test.tsx` of HomePage · ConnectionGroup · HeaderRow ·
+// Sidebar · FavoritesPanel, plus Sidebar.collapse-toggle.test.tsx and
+// RecentConnections.test.tsx.
 //
-// 본문의 selector 는 2026-05-17 작성 시점 기준이고 지금과 어긋난 것이
-// 확인됐다 — 시나리오 7 이 기다리는 "Collapse all" 은 Sprint 379 부터 객체
-// 이름이 붙는 `Collapse all {{objectPlural}}` 이다
-// (src/lib/i18n/locales/layout.ts `sidebar.collapseAll`). smoke 스위트에
-// 편입하려면 갈래 1 — `e2e/smoke/` 로의 이동 + `.spec.ts` 개명 +
-// e2e/scope-map.mjs 와 e2e/fixtures/seed-smoke.ts 등록 — 이 필요하다.
+// The selectors in the body date from 2026-05-17 and are confirmed to have
+// drifted — the "Collapse all" that scenario 7 waits for is the
+// object-named `Collapse all {{objectPlural}}`
+// (src/lib/i18n/locales/layout.ts `sidebar.collapseAll`). Option 1 for
+// folding this into the smoke suite: move to `e2e/smoke/` + rename to
+// `.spec.ts` + register in e2e/scope-map.mjs and e2e/fixtures/seed-smoke.ts.
 //
-// 8 원칙 적용:
-//   1. 다중 컴포넌트 + 두 윈도우 + IPC 결합 — vitest 로 잡을 수 없는 path.
-//   2. 사용자 의도: "한 번 reset 메뉴 9개 다 클릭해서 default 가 들어오는지
-//      확인" — 단일 직선적 it.
-//   3. 머지 후 reset 메뉴 노출이 빠져도 본 spec 은 fail 하지 않는다 —
-//      러너가 돌리지 않기 때문이다 (위 「상태」 절).
-//   4. 매트릭스 단순화: PG 단일 (DBMS 자체 contract 무관, UI 만 검증).
-//   5. (구 "회귀 고정") sprint-376 의 lego invariant 를 기록하는
-//      인벤토리일 뿐, 실행되는 고정장치가 아니다.
-//   6. skip 없음.
-//   7. tauri-driver 한계: 본 spec 은 sidebar / launcher / workspace 의
-//      visible affordance 만 검증 — 강등 경로 불필요.
-//   8. 진단성: 각 step 라벨 + screenshot 가능.
+// Eight-principle mapping:
+//   1. Multiple components + two windows + IPC combined — a path vitest
+//      cannot cover.
+//   2. User intent: "click all nine reset menus once and confirm defaults
+//      land" — a single straight-line it.
+//   3. If the reset menu exposure regresses after merge, this spec does not
+//      fail — no runner executes it (see the Status section above).
+//   4. Matrix simplification: PG only (no DBMS-specific contract; UI only).
+//   5. (formerly "regression pin") an inventory recording the lego
+//      invariant, not an executing pin.
+//   6. No skip.
+//   7. tauri-driver limits: this spec verifies only visible affordances of
+//      sidebar / launcher / workspace — no downgrade path needed.
+//   8. Diagnosability: per-step labels + screenshots possible.
 //
-// 본 spec 은 host docker daemon 이
-// PG 컨테이너를 띄우고 있어야 함 (다른 e2e 와 동일 전제).
+// This spec requires the host docker daemon to be running the PG container
+// (same precondition as the other e2e specs).
 //
-// 9 시나리오 (sprint-377 / 2026-05-17 갱신: settings panel entry 두 개 제거):
-//   1. (sprint-377 제거) Settings panel "Reset settings" — 사용자 직접 요청
-//      으로 settings panel UI 자체 unmount. IPC `reset_setting` 는 유지.
-//      현재 e2e step 0 — audit-checklist item #1 의 \"e2e 시나리오 1 은
-//      sprint-377 follow-up 에서 갱신\" 충족.
-//   2. (#2440 제거) Home Recent "Reset" 버튼 — Recent 가 group rail 의
-//      view 가 되며 접히는 footer 가 사라졌다.
-//   3. (sprint-377 부분 제거) Sidebar handle context-menu 만 — settings
-//      panel entry (#3a) 는 sprint-377 에서 제거. sidebar handle (#3b)
-//      만 fire 해 `sidebar_width` 초기화.
-//   4. Group 우클릭 "Reset collapse states" — 모든 group expanded.
-//   5. DataGrid header 우클릭 "Reset column widths" — widths 만 default.
-//   6. DataGrid header 우클릭 "Show all columns" — hidden 만 default.
-//   7. Sidebar 헤더 "Collapse all" — sidebar.expanded 빈 array.
-//   8. (#2433 이동) Recent rail 끝의 "Clear all" — 확인 창을 거쳐 mru empty.
-//      옛 자리는 Home action bar 의 Eraser 였다. 목록을 겨냥한 파괴적
-//      동작이라 목록 끝으로 내려갔고, 되돌릴 수 없어 확인 창이 붙었다.
-//      아래 시나리오 순서도 그래서 바뀐다 — 목록이 비어 있으면 버튼 자체가
-//      렌더되지 않으므로 workspace 를 한 번 연 뒤에 fire 한다.
-//   9. Favorites entry remove — 해당 entry 사라짐.
+// 9 scenarios (updated: the two settings panel entries removed):
+//   1. (removed) Settings panel "Reset settings" — the user's direct
+//      request unmounted the settings panel UI itself. IPC `reset_setting`
+//      is kept. Currently e2e step 0 — satisfies audit-checklist item #1,
+//      which asked for e2e scenario 1 to be updated in the follow-up.
+//   2. (removed by #2440) Home Recent "Reset" button — Recent became a view
+//      of the group rail and the collapsible footer is gone.
+//   3. (partially removed) Sidebar handle context-menu only — the settings
+//      panel entry (#3a) was removed. Only the sidebar handle (#3b) fires
+//      and resets `sidebar_width`.
+//   4. Group right-click "Reset collapse states" — every group expanded.
+//   5. DataGrid header right-click "Reset column widths" — widths to
+//      default only.
+//   6. DataGrid header right-click "Show all columns" — hidden ones to
+//      default only.
+//   7. Sidebar header "Collapse all" — sidebar.expanded becomes an empty
+//      array.
+//   8. (moved by #2433) "Clear all" at the end of the Recent rail — goes
+//      through a confirm dialog, leaving mru empty. It used to be the
+//      Eraser in the Home action bar. A destructive action aimed at the
+//      list, it moved to the end of the list and gained a confirm because
+//      it cannot be undone. That is also why the scenario order below
+//      changed — when the list is empty the button itself does not render,
+//      so it fires after the workspace has been opened once.
+//   9. Favorites entry remove — the entry disappears.
 //
-// #2433 주의: 아래 "confirm dialog 0건" 단언은 시나리오 8 을 제외한다.
-// 나머지 여덟은 여전히 직접 IPC 다.
+// #2433 caution: the "zero confirm dialogs" assertion below excludes
+// scenario 8. The other eight still go through direct IPC.
 
 import { $, browser, expect } from "@wdio/globals";
 import {
@@ -76,11 +85,12 @@ import {
 
 const PG_CONNECTION = "E2E Reset Audit PG";
 
-// wdio mocha reporter 출력. 진단성 (8 원칙 #8).
+// Printed by the wdio mocha reporter. Diagnosability (eight-principle #8).
 function step(label: string) {
-  // wdio mocha reporter 가 본 console.log 라인을 그대로 출력. e2e 환경에서는
-  // 진단성 (시나리오 8 원칙 #8) 을 위해 의도적으로 console 사용. e2e/ 디렉토리는
-  // eslint 의 no-console rule 의 적용 대상에서 제외 (test/script/e2e 예외).
+  // The wdio mocha reporter prints this console.log line as is. console use
+  // is intentional in the e2e environment for diagnosability
+  // (eight-principle #8). The e2e/ directory is exempt from eslint's
+  // no-console rule (test/script/e2e exception).
   console.log(`[e2e reset-to-default-audit] step: ${label}`);
 }
 
@@ -96,33 +106,37 @@ describe("Sprint 376 — Reset-to-default audit (Q21 9 affordance)", () => {
     await waitForLauncher();
     await createPostgresConnection(PG_CONNECTION);
 
-    // ----- 시나리오 1: (sprint-377 제거) Settings panel "Reset settings" -----
-    // sprint-377 (2026-05-17) 에서 사용자 직접 요청으로 settings panel UI
-    // 제거. e2e step 도 동반 제거 — 회귀 가드는 RTL
-    // (`src/pages/HomePage.reset-affordance.test.tsx` AC-377-01) 가 담당.
+    // ----- Scenario 1: (removed) Settings panel "Reset settings" -----
+    // The settings panel UI was removed at the user's direct request. The
+    // e2e step was removed with it — the regression guard is RTL's
+    // (`src/pages/HomePage.reset-affordance.test.tsx` AC-377-01).
     await switchToLauncherWindow();
 
-    // ----- 시나리오 2: (#2440 제거) Home Recent "Reset" 버튼 -----
-    // #2440 에서 Recent 가 footer 에서 group rail 의 view 로 옮겨져 접을
-    // footer 자체가 없어졌다. 접힘 상태가 없으니 초기화할 것도 없다.
+    // ----- Scenario 2: (removed by #2440) Home Recent "Reset" button -----
+    // #2440 moved Recent from the footer to a view of the group rail, so the
+    // collapsible footer itself is gone. No collapsed state, nothing to
+    // reset.
 
-    // ----- 시나리오 3 (a): (sprint-377 제거) Settings panel "Reset sidebar width" -----
-    // sprint-377 에서 settings panel 의 두 번째 entry point 제거.
-    // sidebar handle 우클릭 entry (#3b) 는 workspace 윈도우에서 fire (아래).
+    // ----- Scenario 3 (a): (removed) Settings panel "Reset sidebar width" -----
+    // The settings panel's second entry point was removed.
+    // The sidebar handle right-click entry (#3b) fires in the workspace
+    // window (below).
 
-    // ----- 시나리오 8 은 아래로 내려갔다 (#2433) -----
-    // Recent 목록 끝의 "Clear all" 은 목록이 비면 렌더되지 않는다. 이 지점
-    // 에서는 아직 connection 을 연 적이 없어 mru 가 비어 있으므로,
-    // workspace 를 연 뒤 launcher 로 돌아와 fire 한다.
+    // ----- Scenario 8 moved below (#2433) -----
+    // The "Clear all" at the end of the Recent list does not render when the
+    // list is empty. No connection has been opened at this point, so mru is
+    // empty — it fires after the workspace is opened and we return to the
+    // launcher.
 
-    // ----- 시나리오 4: Group 우클릭 "Reset collapse states" -----
-    // Group 있는 경우만 fire — 사용자가 group 0 인 환경에선 자동 skip.
+    // ----- Scenario 4: Group right-click "Reset collapse states" -----
+    // Fires only when a group exists — auto-skips in a zero-group
+    // environment.
     step("#4 Group 우클릭 menu 'Reset collapse states' (group 있을 때만)");
     const groupHeader = await $('[data-testid="connection-group-wrapper"]');
     const groupExists = await groupHeader.isExisting();
     if (groupExists) {
       const headerBtn = await groupHeader.$('[role="button"]');
-      // wdio context-menu 시뮬레이션 — 우클릭.
+      // Simulates a wdio context menu — right click.
       await browser.execute((el: HTMLElement) => {
         el.dispatchEvent(
           new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
@@ -135,7 +149,7 @@ describe("Sprint 376 — Reset-to-default audit (Q21 9 affordance)", () => {
       }
     }
 
-    // ----- 시나리오 3 (b) + 7 + 5 + 6 — workspace 에서 발사 -----
+    // ----- Scenarios 3 (b) + 7 + 5 + 6 — fired in the workspace -----
     step("workspace 윈도우 열기 (시나리오 3b, 5, 6, 7 용)");
     await openConnection(PG_CONNECTION);
     await switchToWorkspaceWindow();
@@ -146,9 +160,9 @@ describe("Sprint 376 — Reset-to-default audit (Q21 9 affordance)", () => {
     step("#3b Sidebar 'Reset sidebar width' 클릭");
     await clickByAriaLabel("Reset sidebar width");
 
-    // ----- 시나리오 5 + 6: DataGrid column header 우클릭 -----
-    // 테이블 클릭해서 DataGrid mount 후 우클릭. table 이 없으면 skip
-    // (사용자 환경 종속).
+    // ----- Scenarios 5 + 6: DataGrid column header right-click -----
+    // Click the table to mount the DataGrid, then right-click. Skips when no
+    // table exists (depends on the user's environment).
     step("#5/#6 DataGrid column header 우클릭 — 컬럼이 있을 때만");
     const colHeader = await $('[role="columnheader"]');
     const hasGrid = await colHeader.isExisting();
@@ -170,17 +184,17 @@ describe("Sprint 376 — Reset-to-default audit (Q21 9 affordance)", () => {
       if (await showAll.isExisting()) await showAll.click();
     }
 
-    // ----- 시나리오 9: Favorites entry remove — favorites 있을 때만 -----
+    // ----- Scenario 9: Favorites entry remove — only when favorites exist -----
     step("#9 Favorites entry remove (existing affordance audit)");
     const favRemove = await $('[aria-label^="Delete favorite:"]');
     if (await favRemove.isExisting()) {
       await favRemove.click();
     }
 
-    // ----- 시나리오 8: Recent rail 끝의 "Clear all" (#2433) -----
-    // launcher 로 돌아와 Recent view 를 고르고 목록 끝의 버튼을 누른다.
-    // 목록이 비어 있으면 버튼이 없다 — 위 시나리오 4/5/6/9 와 같은
-    // isExisting 가드를 쓴다.
+    // ----- Scenario 8: "Clear all" at the end of the Recent rail (#2433) -----
+    // Return to the launcher, pick the Recent view, and press the button at
+    // the end of the list. No button when the list is empty — uses the same
+    // isExisting guard as scenarios 4/5/6/9 above.
     step("#8 Recent rail 끝 'Clear all' + 확인 창 (recent 항목이 있을 때만)");
     await switchToLauncherWindow();
     const railRecent = await $('[data-testid="rail-recent"]');
@@ -195,9 +209,10 @@ describe("Sprint 376 — Reset-to-default audit (Q21 9 affordance)", () => {
     }
 
     step("종료 — 열린 채로 남은 confirm dialog 가 없음을 단언");
-    // #2433 이전에는 "confirm 이 한 번도 안 떴다" 였다. 시나리오 8 이 이제
-    // 일부러 하나를 띄우므로, 단언은 "확인 뒤 닫혔다" 로 좁아진다. 나머지
-    // 여덟 affordance 는 여전히 직접 IPC 라 dialog 를 안 띄운다.
+    // Before #2433 this was "no confirm ever appeared". Scenario 8 now raises
+    // one on purpose, so the assertion narrows to "closed after confirming".
+    // The other eight affordances still go through direct IPC and raise no
+    // dialog.
     const dialog = await $('[role="alertdialog"]');
     await dialog.waitForExist({ reverse: true, timeout: 10000 });
     expect(await dialog.isExisting()).toBe(false);

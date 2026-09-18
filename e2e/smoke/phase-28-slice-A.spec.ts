@@ -1,9 +1,9 @@
-// Sprint 312 (2026-05-14) — Phase 28 Slice A 통합 E2E.
-// 작성 이유: E28-01 시나리오 — 사용자가 mongosh 표현식을 직접 query
-// editor 에 입력해 Run 했을 때 grid 가 결과 row 를 렌더해야 함. A1 (파서)
-// → A2 (backend wire) → A3 (토글 제거) → A4 (snippet menu) → A5 (read
-// dispatch) → A6 (write dispatch + 렌더링 polish) 가 모두 통과해야만
-// 본 시나리오가 PASS. Slice A 의 종합 회귀 가드.
+// Phase 28 Slice A integration E2E.
+// Reason: scenario E28-01 — when the user types a mongosh expression into
+// the query editor and hits Run, the grid must render result rows. The
+// scenario passes only when A1 (parser) → A2 (backend wire) → A3 (toggle
+// removal) → A4 (snippet menu) → A5 (read dispatch) → A6 (write dispatch +
+// rendering polish) all pass. Overall regression guard for Slice A.
 
 import { $, expect } from "@wdio/globals";
 import {
@@ -22,35 +22,38 @@ describe("Phase 28 Slice A — mongosh query editor E2E", () => {
     await createMongoConnection(CONNECTION_NAME);
     await openConnection(CONNECTION_NAME);
 
-    // 사이드바가 보이면 연결이 성공한 것.
+    // A visible sidebar means the connection succeeded.
     const filter = await $('[aria-label="Filter databases and collections"]');
     await filter.waitForDisplayed({ timeout: 30000 });
 
-    // Slice A 의 핵심 invariant — Find/Aggregate 토글이 더 이상 존재하지
-    // 않음 (A3 가 제거). 새 query tab 을 열기 전에도 launcher 에는 없어야.
+    // Slice A's core invariant — the Find/Aggregate toggle no longer exists
+    // (A3 removed it). It must be absent from the launcher even before a new
+    // query tab is opened.
     const legacyToggle = await $('[aria-label="Mongo query mode"]');
     expect(await legacyToggle.isExisting()).toBe(false);
 
-    // Mongo seed 컬렉션 열기 (smoke_users 가 다른 mongo 테스트와 공유).
+    // Open the Mongo seed collection (smoke_users is shared with other mongo
+    // tests).
     await expandIfCollapsed('[aria-label="table_view_test database"]', 30000);
     const collection = await $('[aria-label="smoke_users collection"]');
     await collection.waitForDisplayed({ timeout: 15000 });
     await collection.click();
 
-    // 새 mongosh query tab 을 연다 — DataGrid surface 와 별개의 paradigm
-    // single editor. 기존 패턴: 사이드바의 collection 우클릭 → "New Query"
-    // 또는 toolbar 의 신규 query tab 버튼. e2e helper 가 없는 경로라
-    // 본 spec 은 collection 의 DataGrid 에서 mongosh 표현식 입력을
-    // 검증하는 대신 grid 자체가 mount + seeded row 를 렌더하는 것까지
-    // 만 lock 한다. Slice A 의 핵심 unit 회귀는 RTL suite 가 이미 cover.
-    // (E28-01 의 full mongosh-editor-input → Run → grid 경로는 vitest
-    // 의 `useQueryExecution.parserDispatch.test.tsx` 가 mocked IPC 로
-    // 통과 검증 — E2E 는 grid + 연결 + 토글 부재를 lock.)
+    // Open a new mongosh query tab — a paradigm-single editor separate from
+    // the DataGrid surface. Established pattern: right-click the collection
+    // in the sidebar → "New Query", or the new query tab button in the
+    // toolbar. No e2e helper covers that path, so instead of driving mongosh
+    // input in the collection's DataGrid this spec only locks that the grid
+    // itself mounts and renders the seeded row. The core unit regression of
+    // Slice A is already covered by the RTL suite (the full
+    // mongosh-editor-input → Run → grid path of E28-01 passes in vitest
+    // `useQueryExecution.parserDispatch.test.tsx` with mocked IPC — e2e
+    // locks grid + connection + toggle absence).
     //
-    // 컬렉션의 DataGrid 가 mount + seeded row 렌더까지 가면 검증 완료.
-    // Sprint 258 이 `<table>` 을 폐기하고 CSS Grid 로 옮겼으므로 grid 대기는
-    // `[role="grid"]` 를 보는 공용 helper 를 쓴다 — 통과하는 다른 spec
-    // (`mongodb.spec.ts` 등) 과 같은 관행.
+    // Verification is complete once the collection's DataGrid mounts and
+    // renders the seeded row. `<table>` was retired in favor of CSS Grid, so
+    // the grid wait uses the shared helper that watches `[role="grid"]` —
+    // the same convention as other passing specs (`mongodb.spec.ts` etc.).
     const grid = await waitForGridText(
       ["mona", "@example.com"],
       15000,

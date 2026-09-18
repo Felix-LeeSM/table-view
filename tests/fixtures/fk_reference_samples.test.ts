@@ -1,11 +1,12 @@
 /**
- * Sprint-88 AC-01: TS-side proof that `tests/fixtures/fk_reference_samples.json`
+ * AC-01: TS-side proof that `tests/fixtures/fk_reference_samples.json`
  * is loadable from vitest. The companion Rust integration test
  * (`src-tauri/tests/fixture_loading.rs`) proves the same file is also loadable
  * from `cargo test` via `include_str!`.
  *
- * sprint-89 (#FK-1) will reuse the same fixture to drive the parser/serializer
- * round-trip without duplicating sample data on either side.
+ * The parser/serializer round-trip (#FK-1) reuses the same fixture instead
+ * of duplicating sample data on either side
+ * (`src/components/datagrid/DataGridTable.parseFkReference.test.ts`).
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
