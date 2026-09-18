@@ -121,9 +121,9 @@ async function exportGridRowsChunked(
 }
 
 /**
- * UTF-8 text content 한 덩어리를 그대로 파일로 저장. migration DDL export
- * 처럼 "string 한 장 → 파일" 시나리오를 위한 minimal handler.
- * row-streaming / cancellation 미지원.
+ * Saves one blob of UTF-8 text content to a file as-is. Minimal handler
+ * for "one string → one file" scenarios such as migration DDL export.
+ * No row-streaming / cancellation support.
  */
 export async function writeTextFileExport(
   targetPath: string,
@@ -136,17 +136,18 @@ export async function writeTextFileExport(
 }
 
 /**
- * 통합 schema/database dump. DDL header + DML INSERT 본체를 한 .sql 파일로
- * streaming. INSERT 직렬화는 `options.dialect` 로 방언화 (#1641/#1642/#1674):
- * `mysql`/`mariadb` 는 backtick identifier + MySQL string escape, `mssql` 는
- * `[bracket]` identifier + T-SQL escape (bool → 1/0), `oracle` 는 ANSI 더블쿼트
- * identifier + Oracle value escape (bool → 1/0, binary → `hextoraw('…')`), 그 외
- * (`postgresql`/`sqlite`) 는 ANSI 더블쿼트. RDB 가 아닌 adapter 는 backend 가
- * `Unsupported` 로 reject.
+ * Unified schema/database dump. Streams a DDL header + DML INSERT body
+ * into one .sql file. INSERT serialization is dialect-specific via
+ * `options.dialect` (#1641/#1642/#1674): `mysql`/`mariadb` use backtick
+ * identifiers + MySQL string escape, `mssql` uses `[bracket]` identifiers
+ * + T-SQL escape (bool → 1/0), `oracle` uses ANSI double-quoted
+ * identifiers + Oracle value escape (bool → 1/0, binary →
+ * `hextoraw('…')`), and the rest (`postgresql`/`sqlite`) use ANSI double
+ * quotes. Non-RDB adapters are rejected by the backend with `Unsupported`.
  *
- * `tables[].columnNames` 는 source order 로 호출자가 결정 — backend 의
- * `serde_json::Map` lookup 이 이 순서로 row 를 직렬화한다. `ddlHeader` 가
- * 빈 문자열이면 DDL 부분은 skip (DML-only mode).
+ * `tables[].columnNames` is decided by the caller in source order — the
+ * backend's `serde_json::Map` lookup serializes rows in that order. When
+ * `ddlHeader` is an empty string the DDL part is skipped (DML-only mode).
  */
 export type SchemaDumpInclude = "ddl" | "dml" | "both";
 
