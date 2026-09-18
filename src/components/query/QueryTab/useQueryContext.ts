@@ -44,17 +44,20 @@ export function supportsNativeCancel(
 }
 
 /**
- * `useQueryContext` — `useQueryExecution` 의 "context substrate" 추출
- * (docs/roadmap/h1.md 후속 `useQueryExecution decomposition`). connection/db
- * 식별자에 바인딩된 store-action 래퍼 7개, capability 파생, history-record
- * 팩토리, Safe Mode 게이트를 한 곳에 모은다.
+ * `useQueryContext` — the "context substrate" pulled out of
+ * `useQueryExecution` (the `useQueryExecution decomposition` follow-up in
+ * docs/roadmap/h1.md). It gathers in one place the store-action wrappers
+ * bound to the connection/db identifiers, the capability derivation, the
+ * history-record factory, and the Safe Mode gate.
  *
- * paradigm dispatch runner / confirmation state 는 호출자(`useQueryExecution`)가
- * 계속 소유한다 — 본 hook 은 부수효과 없는 substrate 만 제공한다.
+ * The paradigm dispatch runner / confirmation state stay owned by the
+ * caller (`useQueryExecution`) — this hook provides only a side-effect
+ * free substrate.
  *
- * 동작 보존: 추출한 모든 `useMemo`/`useCallback`/store-subscription 의 deps 와
- * 호출 순서는 inline 버전과 byte-for-byte 동일하다. hook 호출 순서가 보존되도록
- * `useQueryExecution` 본체의 첫 hook 호출로 사용해야 한다.
+ * Behaviour preservation: the deps and call order of every extracted
+ * `useMemo`/`useCallback`/store-subscription are byte-for-byte identical
+ * to the inline version. Use it as the first hook call in the body of
+ * `useQueryExecution` so hook call order is preserved.
  */
 export function useQueryContext(tab: QueryTab) {
   const workspaceDb = useMemo(
@@ -221,7 +224,7 @@ export function useQueryContext(tab: QueryTab) {
           paradigm: "document",
           queryMode:
             payload.queryMode ??
-            // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
+            // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt
             (tab.queryMode === "aggregate" ? "aggregate" : "find"),
         });
         return;
@@ -233,7 +236,7 @@ export function useQueryContext(tab: QueryTab) {
     [
       tab.connectionId,
       tab.paradigm,
-      // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt
       tab.queryMode,
       tab.database,
       tab.collection,

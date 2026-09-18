@@ -91,8 +91,8 @@ function buildWhereClause(
   // the PK path above) instead of a bespoke `String()`/`.toString()` helper.
   // The old helper emitted a `Date` as an unquoted locale string
   // (`ts = Wed Jul 16 2026 …`) that fails to parse or matches the wrong row;
-  // coercion emits a quoted, type-correct literal and preserves the Decimal/
-  // BigInt digit fidelity the old Sprint 305 guard cared about.
+  // coercion emits a quoted, type-correct literal and preserves Decimal /
+  // BigInt digit fidelity.
   const clauses: string[] = [];
   for (let i = 0; i < columns.length; i++) {
     const c = columns[i]!;
@@ -166,8 +166,8 @@ function normalizeNewRowCell(value: unknown): string | null {
   // Primitives (number / boolean / bigint / symbol) stringify deterministically.
   // Objects are JSON-encoded so an array/object accidentally routed through a
   // new-row cell still lands in a recoverable shape rather than `[object …]`.
-  // Sprint 305 — safe stringify so nested BigInt / Decimal 든 object 도
-  // round-trip 가능 (raw JSON.stringify 가 BigInt 만나면 throw).
+  // Safe stringify so an object holding nested BigInt / Decimal still
+  // round-trips (raw JSON.stringify throws when it meets a BigInt).
   if (typeof value === "object") return safeStringifyCell(value);
   return String(value);
 }
@@ -211,11 +211,11 @@ export interface GenerateSqlOptions {
    */
   onArrayWholeReassign?: () => void;
   /**
-   * Sprint 347 — DBMS dialect tag. Postgres remains the default for
-   * back-compat with callers that haven't been plumbed yet (the legacy
-   * jsonb-only flow). MySQL routes nested edits through
-   * `JSON_SET` / `JSON_REMOVE`. SQLite rejects nested edits with a clear
-   * message (`json1` extension dispatch is a follow-up sprint).
+   * DBMS dialect tag. Postgres remains the default for back-compat with
+   * callers that haven't been plumbed yet (the legacy jsonb-only flow). MySQL
+   * routes nested edits through `JSON_SET` / `JSON_REMOVE`. SQLite rejects
+   * nested edits with a clear message (`json1` extension dispatch is still to
+   * come).
    */
   dialect?: SqlDialect;
   allowRowWrites?: boolean;
@@ -238,8 +238,8 @@ export interface GenerateSqlOptions {
 }
 
 /**
- * Sprint 343 (2026-05-15) — parse a pendingEdit key that may optionally
- * carry a `:dot.path` suffix from the inline JSON tree panel.
+ * Parse a pendingEdit key that may optionally carry a `:dot.path` suffix
+ * from the inline JSON tree panel.
  *
  * Shapes:
  * - `"0-1"`             → `{ rowIdx: 0, colIdx: 1, path: null }` — plain cell edit.
@@ -355,10 +355,9 @@ export function generateSqlWithKeys(
     return [];
   }
 
-  // Sprint 343 (2026-05-15) — UPDATE path now supports inline-tree
-  // nested edits (`"rowIdx-colIdx:dot.path"`) alongside the flat
-  // `"rowIdx-colIdx"` cell edits. Group all entries per (row, col),
-  // then dispatch by column type:
+  // The UPDATE path supports inline-tree nested edits
+  // (`"rowIdx-colIdx:dot.path"`) alongside the flat `"rowIdx-colIdx"` cell
+  // edits. Group all entries per (row, col), then dispatch by column type:
   //  - plain scalar column → existing one-edit-per-cell behavior.
   //  - JSONB column → chained `jsonb_set(... #- ...)` over all
   //    pending nested edits for that cell.
@@ -493,9 +492,9 @@ export function generateSqlWithKeys(
       });
       return;
     }
-    // Sprint 347 — Postgres jsonb / MySQL json are handled above.
-    // SQLite: no JSON column type to detect; nested edits must go through
-    // the `json1` extension which is a follow-up sprint.
+    // Postgres jsonb / MySQL json are handled above. SQLite: no JSON column
+    // type to detect; nested edits must go through the `json1` extension,
+    // which is not wired yet.
     if (dialect === "sqlite" && col.data_type.toLowerCase().trim() === "json") {
       options.onCoerceError?.({
         key: nested[0]!.key,

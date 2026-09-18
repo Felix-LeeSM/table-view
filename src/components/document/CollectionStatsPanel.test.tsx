@@ -1,5 +1,5 @@
-// Sprint 338 (2026-05-15) — U3 live wire. Verifies CollectionStatsPanel
-// dispatches collection_stats_rdb / collection_stats_mongo through
+// U3 live wire. Verifies CollectionStatsPanel dispatches
+// collection_stats_rdb / collection_stats_mongo through
 // `@/lib/api/collectionStats` wrappers and renders the result grid.
 
 import { render, screen, waitFor } from "@testing-library/react";

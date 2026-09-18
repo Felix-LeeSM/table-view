@@ -1,16 +1,14 @@
-// Sprint 226 → Sprint 227 — `CreateTableDialog` test suite.
-//
-// Date: 2026-05-06.
+// `CreateTableDialog` test suite.
 //
 // Why this file exists:
-// - Sprint 226 carry-over (form behaviour + IPC sequence + history
-//   source + Safe Mode warn-cancel) — assertion text strings preserved
-//   verbatim per AC-227-08; only query selectors migrated to tab-aware
-//   (`getByLabelText("Column name")` is now scoped to the Columns tab
-//   panel via `within(columnsTabPanel)`).
-// - Sprint 227 additions:
-//   - AC-227-01: 4-tab layout (Columns / Keys / Indexes / Foreign Keys)
-//     with placeholder strings for the Sprint 228 / 229 tabs.
+// - Form behaviour + IPC sequence + history source + Safe Mode
+//   warn-cancel — assertion text strings preserved verbatim per
+//   AC-227-08; query selectors are tab-aware
+//   (`getByLabelText("Column name")` is scoped to the Columns tab panel
+//   via `within(columnsTabPanel)`).
+// - AC-227 additions:
+//   - AC-227-01: 4-tab layout (Columns / Keys / Indexes / Constraints).
+//     The placeholder bodies are superseded by AC-228-01 / AC-229-01.
 //   - AC-227-02: Target schema dropdown — defaults to right-clicked
 //     schema, lists ≥ 2 entries, change updates payload `schema` field
 //     and invalidates the cached preview.
@@ -30,12 +28,12 @@
 //     reflection of column-row name list across tab switches.
 //   - AC-227-07: Footer renders only Cancel + Execute (no
 //     "Preview SQL" button); IPC sequence + history source preserved.
-//   - AC-227-08: Sprint 226 carry-over cases pass with mechanical
-//     selector adaptation only (no assertion text changes).
+//   - AC-227-08: the carried-over cases pass with mechanical selector
+//     adaptation only (no assertion text changes).
 //
 // Mock pattern: `vi.hoisted` + factory mock for `@lib/tauri` so
 // `tauri.createTable` is re-bindable inside test bodies. Pattern source:
-// Sprint 219/223/224 (`useConnectionMutations.test.ts`).
+// `useConnectionMutations.test.ts`.
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
@@ -70,7 +68,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     useQueryHistoryStore.setState({ recentVisible: [] });
   });
 
-  // ── AC-226-03 form behaviour (Sprint 226 carry-over, tab-aware) ────
+  // ── AC-226-03 form behaviour (tab-aware) ───────────────────────────
 
   it("opens with exactly one empty column row", () => {
     renderDialog();
@@ -165,9 +163,10 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     renderDialog();
     await fillSimpleForm();
 
-    // Sprint 227 — Show DDL drives the preview fetch (no separate
-    // "Preview SQL" button in the footer).
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Show DDL drives the preview fetch (no separate "Preview SQL"
+    // button in the footer).
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => {
       expect(mockCreateTable).toHaveBeenCalledTimes(1);
     });
@@ -207,7 +206,8 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
       renderDialog();
       await fillSimpleForm();
 
-      // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+      // Preview pane defaults open; auto-debounced fetch settles via
+      // waitFor below.
       await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
       fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -237,7 +237,8 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
       renderDialog();
       await fillSimpleForm();
 
-      // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+      // Preview pane defaults open; auto-debounced fetch settles via
+      // waitFor below.
       await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
       act(() => {
@@ -255,8 +256,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
         cancelBtn?.click();
       });
 
-      // Byte-equivalent canonical message (Sprint 226 carry-over,
-      // verbatim per AC-227-08).
+      // Byte-equivalent canonical message (verbatim per AC-227-08).
       await screen.findByText(
         "Safe Mode (warn): confirmation cancelled — no changes committed",
       );
@@ -271,8 +271,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
   );
 
   it("opens confirm dialog (does not commit) when Safe Mode is strict and statement is dangerous", async () => {
-    // Sprint 245 (ADR 0022 Phase 1) — was "blocks commit closure
-    // entirely". The destructive-only policy raises the confirm dialog
+    // ADR 0022 — the destructive-only policy raises the confirm dialog
     // instead of blocking; commit closure (preview_only=false) still
     // must NOT run until the user confirms.
     setProductionConnection();
@@ -284,7 +283,8 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     renderDialog();
     await fillSimpleForm();
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -312,7 +312,8 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     renderDialog({ onRefresh, onClose });
     await fillSimpleForm();
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -348,7 +349,8 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     activateTab("Keys");
     fireEvent.click(within(getKeysPanel()).getByLabelText("Primary key: id"));
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     const previewCall = mockCreateTable.mock.calls[0]![0] as {
@@ -366,9 +368,8 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     };
     expect(previewCall.schema).toBe("public");
     expect(previewCall.name).toBe("events");
-    // Sprint 227 — `comment` field is omitted when blank (per the
-    // dialog's `buildRequest`); the canonical Sprint 226 shape is
-    // preserved byte-equivalent.
+    // `comment` field is omitted when blank (per the dialog's
+    // `buildRequest`); the canonical shape is preserved byte-equivalent.
     expect(previewCall.columns).toEqual([
       {
         name: "id",
@@ -385,10 +386,10 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
 
   it("renders exactly four tabs labelled Columns / Keys / Indexes / Constraints (AC-227-01)", () => {
     renderDialog();
-    // Sprint 241 split FK / CHECK / UNIQUE into a nested tablist inside
-    // the Constraints panel, so the document now has multiple
-    // `tablist`s. Scope the count check to the OUTER (first) tablist —
-    // the four main tabs — so the sub-tabs don't inflate the count.
+    // FK / CHECK / UNIQUE live in a nested tablist inside the
+    // Constraints panel, so the document has multiple `tablist`s. Scope
+    // the count check to the OUTER (first) tablist — the four main tabs
+    // — so the sub-tabs don't inflate the count.
     const mainTablist = screen.getAllByRole("tablist")[0]!;
     const tabs = within(mainTablist).getAllByRole("tab");
     expect(tabs).toHaveLength(4);
@@ -399,13 +400,11 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
   });
 
   it("Indexes tab no longer renders the Sprint 227 placeholder (AC-227-01 superseded by AC-228-01)", () => {
-    // Sprint 228 — the AC-227-01 placeholder body
-    // stale Sprint 228 placeholder was removed in favour of the
+    // The AC-227-01 placeholder body was removed in favour of the
     // interactive editor (AC-228-01). Assertion intentionally flipped:
     // the editor's `+ Index` button must surface, and the placeholder
-    // string must be gone from the panel. The Foreign Keys tab keeps
-    // its own stale Sprint 229 placeholder — guarded by
-    // its sibling test below.
+    // string must be gone from the panel. The Constraints tab's own
+    // placeholder is gone too — guarded by its sibling test below.
     renderDialog();
     activateTab("Indexes");
     const panel = document.querySelector(
@@ -418,11 +417,10 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
   });
 
   it("Foreign Keys tab no longer renders the Sprint 228 placeholder (AC-227-01 superseded by AC-229-01)", async () => {
-    // Sprint 229 — the AC-227-01 Foreign Keys placeholder body
-    // stale Sprint 229 placeholder was removed in favour of the
-    // interactive editor (AC-229-01). Sprint 241 — split into 3
-    // sub-tabs (FK / CHECK / UNIQUE), so each family's `+ Add` button
-    // is reachable only after activating its sub-tab.
+    // The AC-227-01 Foreign Keys placeholder body was removed in
+    // favour of the interactive editor (AC-229-01). The panel splits
+    // into 3 sub-tabs (FK / CHECK / UNIQUE), so each family's `+ Add`
+    // button is reachable only after activating its sub-tab.
     renderDialog();
     activateTab("Constraints");
     const panel = document.querySelector(
@@ -480,7 +478,8 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     });
     fireEvent.click(analyticsOption);
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() =>
       expect(mockCreateTable).toHaveBeenCalledWith(
         expect.objectContaining({ preview_only: true, schema: "analytics" }),
@@ -540,7 +539,8 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     fireEvent.change(typeInput, { target: { value: "numeric(10,4)" } });
     fireEvent.blur(typeInput);
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     const call = mockCreateTable.mock.calls[0]![0] as {
       columns: Array<{ data_type: string }>;
@@ -579,7 +579,8 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
       target: { value: "primary key" },
     });
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     const call = mockCreateTable.mock.calls[0]![0] as {
       columns: Array<{ comment?: string }>;
@@ -602,7 +603,8 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
       target: { value: "pk" },
     });
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     expect(
       (mockCreateTable.mock.calls[0]![0] as { preview_only: boolean })
@@ -619,8 +621,8 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
   });
 
   it("editing a field after preview auto-refetches preview (AC-227-05 / Sprint 238)", async () => {
-    // Sprint 238: 자동 refresh — table name 수정만으로 preview 가
-    // debounce 후 재발행되며, "Show DDL" 재클릭이 필요 없다.
+    // Auto refresh — editing the table name alone re-issues the
+    // preview after the debounce; no "Show DDL" re-click needed.
     setDevConnection();
     useSafeModeStore.setState({ mode: "off" });
     mockCreateTable.mockResolvedValue({

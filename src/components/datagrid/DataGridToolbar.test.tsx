@@ -145,16 +145,16 @@ describe("DataGridToolbar — Duplicate Row button", () => {
   });
 });
 
-// Sprint 98 — Cmd+S immediate visual feedback. The Commit button must
-// advertise an aria-busy/data-committing state and swap its icon for a
-// spinner when the flashing flag is on.
+// Cmd+S immediate visual feedback. The Commit button must advertise an
+// aria-busy/data-committing state and swap its icon for a spinner when the
+// flashing flag is on.
 describe("DataGridToolbar — Sprint 98 commit flashing", () => {
   it("shows the Commit button in non-busy state when isCommitFlashing is false", () => {
     renderToolbar({ hasPendingChanges: true, isCommitFlashing: false });
     const btn = screen.getByRole("button", { name: "Commit changes" });
     // Without the flash, no aria-busy / data-committing markers — the
-    // baseline rendering matches sprint-79 / sprint-93 callers that have
-    // never opted into the new prop.
+    // baseline rendering matches callers that have never opted into the
+    // prop.
     expect(btn).not.toHaveAttribute("aria-busy", "true");
     expect(btn).not.toHaveAttribute("data-committing", "true");
   });
@@ -175,10 +175,9 @@ describe("DataGridToolbar — Sprint 98 commit flashing", () => {
   });
 });
 
-// Sprint 249 (ADR 0022 Phase 5) — Toolbar Undo button. Maps to
-// AC-249-T1..T3 from Sprint 249 contract. The button
-// is a discoverability surface for users who don't know the Cmd+Z
-// binding wired in DataGrid. Date 2026-05-09.
+// ADR 0022 — Toolbar Undo button, mapped to AC-249-T1..T3. The button is a
+// discoverability surface for users who don't know the Cmd+Z binding wired
+// in DataGrid.
 describe("DataGridToolbar — Sprint 249 Undo button (AC-249-T1..T3)", () => {
   it("[AC-249-T1] canUndo=true → Undo button is enabled", () => {
     const onUndo = vi.fn();
@@ -225,14 +224,14 @@ describe("DataGridToolbar — Sprint 249 Undo button (AC-249-T1..T3)", () => {
   });
 });
 
-// Reason: Sprint 179 (AC-179-03b) regression guard — DataGridToolbar's
-// label-prop default is now sourced from the RDB paradigm dictionary
-// entry (lower-cased) instead of inline literals. The DocumentDataGrid
-// caller still spreads DOCUMENT_LABELS, which is itself derived from the
-// same dictionary's `document` entry. These tests anchor (a) RDB defaults
-// produce "rows" / "Add row" etc., and (b) spreading DOCUMENT_LABELS
-// produces "documents" / "Add document" etc. — guarding against any
-// silent drift in the derivation. Date: 2026-04-30.
+// Reason: AC-179-03b regression guard — DataGridToolbar's label-prop
+// default is sourced from the RDB paradigm dictionary entry (lower-cased)
+// instead of inline literals. The DocumentDataGrid caller still spreads
+// DOCUMENT_LABELS, which is itself derived from the same dictionary's
+// `document` entry. These tests anchor (a) RDB defaults produce "rows" /
+// "Add row" etc., and (b) spreading DOCUMENT_LABELS produces "documents" /
+// "Add document" etc. — guarding against any silent drift in the
+// derivation.
 describe("DataGridToolbar — Sprint 179 paradigm-aware labels (AC-179-03)", () => {
   it("[AC-179-03b] default RDB labels render legacy 'rows' / 'Add row' vocabulary", () => {
     renderToolbar();
@@ -241,7 +240,7 @@ describe("DataGridToolbar — Sprint 179 paradigm-aware labels (AC-179-03)", () 
     // contains "2 rows" ("1–2 of 2 rows"); the bare total stays its own node.
     expect(screen.getByText(/^2 rows$/)).toBeInTheDocument();
     // Action button accessible names — these are what the existing
-    // RDB-default Sprint 79/93/98 tests assert.
+    // RDB-default tests assert.
     expect(screen.getByRole("button", { name: "Add row" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Delete row" }),
@@ -272,18 +271,20 @@ describe("DataGridToolbar — Sprint 179 paradigm-aware labels (AC-179-03)", () 
     ).toBeInTheDocument();
   });
 
-  // #1733 (2026-07-24) — 중복이던 "Reset column widths" 툴바 버튼(Columns3)을
-  // 제거했다. 열 너비 초기화의 사용자 가시 계약은 이제 헤더 컨텍스트 메뉴 +
-  // 리사이즈 grip 더블클릭(+ hover title 힌트)으로만 존재하며, 이는 더 낮은
-  // 레이어인 `DataGridTable/HeaderRow.reset-affordance.test.tsx` 가 검증한다
-  // (P1: lowest layer). 여기서는 그 버튼을 단언하던 3개 테스트를 삭제했다 —
-  // 툴바는 더 이상 열 너비 초기화 관심사를 갖지 않는다.
+  // #1733 (2026-07-24) — the duplicate "Reset column widths" toolbar button
+  // (Columns3) was removed. The user-visible column-width reset contract now
+  // exists only as the header context menu + the resize grip double-click
+  // (plus the hover title hint), and the lower layer
+  // `DataGridTable/HeaderRow.reset-affordance.test.tsx` verifies it (P1:
+  // lowest layer). The tests that asserted that button were deleted here —
+  // the toolbar no longer owns the column-width reset concern.
 
-  // 작성 이유 (2026-05-13, Sprint 289): 종전 page input 의 onChange 핸들러가
-  // 매 키스트로크마다 `onSetPage` 를 호출 → 매번 fetch 가 폭발. 사용자가
-  // "더 나은 인터페이스" 를 요구해 draft state + Enter/blur commit 으로 분리.
-  // 본 회귀 가드는 (a) 타이핑 중 onSetPage 안 부름 (b) Enter 시 commit
-  // (c) Escape 시 revert (d) blur 시 commit (e) invalid 입력 reset.
+  // Reason: the page input's old onChange handler called `onSetPage` on
+  // every keystroke → every keystroke exploded into a fetch. The user asked
+  // for "a better interface", so it was split into draft state + Enter/blur
+  // commit. This regression guard covers (a) no onSetPage while typing,
+  // (b) commit on Enter, (c) revert on Escape, (d) commit on blur,
+  // (e) reset on invalid input.
   describe("PageJumpInput (Sprint 289)", () => {
     it("타이핑만으로는 onSetPage 를 호출하지 않는다 (draft only)", () => {
       const onSetPage = vi.fn();
@@ -344,7 +345,7 @@ describe("DataGridToolbar — Sprint 179 paradigm-aware labels (AC-179-03)", () 
   it("[AC-179-03b] DOCUMENT_LABELS literal output is unchanged byte-for-byte", () => {
     // Anchors the derived constant's literal strings so DocumentDataGrid
     // (the existing consumer at DocumentDataGrid.tsx:273-276) sees no
-    // shape drift after Sprint 179's derivation refactor.
+    // shape drift after the derivation refactor.
     expect(DOCUMENT_LABELS).toEqual({
       rowCountLabel: "documents",
       addRowLabel: "Add document",
@@ -452,10 +453,11 @@ describe("DataGridToolbar — Issue #6 Discard confirmation", () => {
   });
 });
 
-// Issue #1061 — 툴바가 page 번호 + "/ totalPages" 만 표시하던 것을
-// "X–Y of Z rows" 행 절대 범위로 확장. page×pageSize 산술 없이 현재 보는 행의
-// 절대 위치를 알 수 있어야 한다. range 상한은 data.rows.length 기반 → 마지막
-// 페이지가 일부분만 있어도 정확.
+// Issue #1061 — the toolbar showed only the page number + "/ totalPages";
+// it now shows the absolute row range "X–Y of Z rows". The user must be able
+// to read the absolute position of the visible rows without doing
+// page×pageSize arithmetic. The range's upper bound comes from
+// data.rows.length, so it stays correct on a partially filled last page.
 describe("DataGridToolbar — Issue #1061 row range summary", () => {
   it("renders '1–2 of 2 rows' on the first (and only) page", () => {
     renderToolbar();

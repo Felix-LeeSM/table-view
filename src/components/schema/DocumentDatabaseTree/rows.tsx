@@ -33,9 +33,8 @@ export interface DatabaseRowProps {
   isLoading: boolean;
   isSelected: boolean;
   onToggle: () => void;
-  // Sprint 330 (Slice DB-Scope.3) — sidebar 우클릭 entry-point. TabDbChip
-  // popover (Sprint 329) 가 가리키는 그 액션. 클릭한 row 의 database 로
-  // prefilled mongosh query tab 을 생성한다.
+  // Sidebar right-click entry-point. Creates a mongosh query tab
+  // prefilled with the clicked row's database.
   onNewQueryHere: () => void;
   // WAI-ARIA tree roving (#1129) — the container manages a single tab stop.
   treeKey: string;
@@ -59,8 +58,9 @@ export function DatabaseRow({
   setSize,
 }: DatabaseRowProps) {
   const { t } = useTranslation("schema");
-  // Sprint 346 — admin/config/local 은 사용자가 평소 안 건드림. italic +
-  // muted opacity 로 시각 구분 (선택/펼침 동작은 동일).
+  // admin/config/local are not what the user normally touches. Set them
+  // apart with italic + muted opacity (select / expand behaviour is
+  // unchanged).
   const isSystem = isMongoSystemDatabase(db.name);
   return (
     <ContextMenu>

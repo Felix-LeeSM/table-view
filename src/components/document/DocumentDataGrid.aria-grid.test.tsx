@@ -1,13 +1,13 @@
-// Sprint 260 (2026-05-11) — AC-260-03: DocumentDataGrid 의 ARIA grid roles
-// integrity 가드. RDB DataGridTable.aria-grid.test.tsx 와 같은 형태.
+// AC-260-03: integrity guard for DocumentDataGrid's ARIA grid roles. Same
+// shape as the RDB DataGridTable.aria-grid.test.tsx.
 //
-// 검증 항목:
-// - outer `<div role="grid">` 의 aria-rowcount / aria-colcount
-// - header row 의 aria-rowindex={1}
-// - body row 의 aria-rowindex 가 2 부터 연속
-// - 각 cell `<div role="gridcell">` 의 aria-colindex 가 visual order 와 일치
+// Checks:
+// - aria-rowcount / aria-colcount on the outer `<div role="grid">`
+// - aria-rowindex={1} on the header row
+// - body-row aria-rowindex runs consecutively from 2
+// - aria-colindex on each cell `<div role="gridcell">` matches visual order
 //
-// Document grid 는 column reorder 없음 → visual order == data order.
+// The Document grid has no column reorder → visual order == data order.
 
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -116,9 +116,9 @@ describe("DocumentDataGrid ARIA grid roles (Sprint 260 AC-260-03)", () => {
     expect(cells[2]).toHaveAttribute("aria-colindex", "3");
   });
 
-  // Sprint 261 (2026-05-11) — bug fix: horizontal overflow 시 row 박스가
-  // parent width 에서 끊겨 hover:bg-muted / border-b 가 잘리던 문제. 모든
-  // row 가 min-width: max-content 으로 grid tracks 합만큼 늘어나야 한다.
+  // Bug fix: on horizontal overflow the row box was cut off at the parent
+  // width, clipping hover:bg-muted / border-b. Every row must stretch to
+  // the sum of the grid tracks through min-width: max-content.
   it("모든 row 가 min-width: max-content (horizontal overflow bg 회귀 가드)", async () => {
     await renderAndAwait();
     const rows = screen.getAllByRole("row");

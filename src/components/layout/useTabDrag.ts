@@ -221,7 +221,8 @@ export function useTabDrag(): UseTabDragResult {
       // following `pointerup` here and the close button's synthesized
       // `click` would fire on the tab div instead of the button —
       // making the X visually un-clickable. The user-visible symptom
-      // before this guard: "탭이 X 버튼을 아무리 눌러도 안 닫힘".
+      // before this guard: "the tab never closes no matter how many times
+      // you press the X".
       if ((e.target as Element | null)?.closest("button")) return;
       const el = e.currentTarget;
       try {

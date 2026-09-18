@@ -1,12 +1,12 @@
-// Sprint 267 (2026-05-12) — DbMismatch auto-sync. Sprint 266 의
-// expected_database 가드가 backend 에서 mismatch 를 차단한 후 frontend 가
-// 즉시 verifyActiveDb 로 backend 의 actual db 를 받아 connectionStore +
-// schemaStore 를 sync. 다음 user click 이 올바른 expectedDatabase 로
-// 재시도되도록 함.
+// DbMismatch auto-sync. After the expected_database guard blocks a mismatch
+// in the backend, the frontend immediately takes the backend's actual db via
+// verifyActiveDb and syncs connectionStore + schemaStore, so the next user
+// click retries with the correct expectedDatabase.
 //
-// 작성 위치 분리: execution.test.tsx 와 같은 module 에 두니 toast.warning
-// + connectionStore 변경의 async chain 이 직전 테스트(uglify) 의 SQL 변경
-// 이벤트 처리와 race. 본 sprint 의 신규 case 들만 격리해 격동 차단.
+// Kept in its own file: in the same module as execution.test.tsx, the async
+// chain of toast.warning + the connectionStore change raced the SQL change
+// event handling of the preceding test (uglify). Isolating these cases blocks
+// the interference.
 
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
@@ -231,20 +231,19 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
       }
     });
     expect(mockVerifyActiveDb).not.toHaveBeenCalled();
-    // Sprint 269 (2026-05-13) — AC-269-04 specificity gate. Non-mismatch
-    // errors must NOT push an action-bearing toast. Positive assertion that
-    // no toast in the queue carries an `action` field — preserves the
-    // Sprint 267 specificity invariant in the post-Retry world.
+    // AC-269-04 specificity gate. Non-mismatch errors must NOT push an
+    // action-bearing toast. Positive assertion that no toast in the queue
+    // carries an `action` field — preserves the specificity invariant in the
+    // post-Retry world.
     const queueAfter = useToastStore.getState().toasts;
     expect(queueAfter.every((t) => t.action === undefined)).toBe(true);
   });
 
   // ---------------------------------------------------------------------------
-  // Sprint 269 (2026-05-13) — DbMismatch toast Retry button.
-  // Reason: the passive `toast.warning(...)` Sprint 267 surfaced left the user
-  // with no affordance to re-run the same query against the now-synced active
-  // db. These cases pin the Retry action shape + re-dispatch semantics +
-  // closure guards.
+  // DbMismatch toast Retry button.
+  // Reason: the passive `toast.warning(...)` left the user with no affordance
+  // to re-run the same query against the now-synced active db. These cases
+  // pin the Retry action shape + re-dispatch semantics + closure guards.
   // ---------------------------------------------------------------------------
 
   it("AC-269-01: mismatch error surfaces a toast with an accessible Retry button", async () => {
@@ -471,7 +470,7 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
     mockExecuteQuery.mockRejectedValueOnce(
       new Error("Database mismatch: expected 'db1', but found 'db_actual'"),
     );
-    // Sprint 267 best-effort invariant: verify rejection ⇒ silent path.
+    // Best-effort invariant: verify rejection ⇒ silent path.
     mockVerifyActiveDb.mockRejectedValueOnce(new Error("verify failed"));
 
     const tab = makeQueryTab();

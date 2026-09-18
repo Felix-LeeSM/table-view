@@ -92,10 +92,11 @@ export interface QueryExecution {
 export function useQueryExecution({
   tab,
 }: UseQueryExecutionArgs): QueryExecution {
-  // Sprint follow-up (docs/roadmap/h1.md) — connection/db 식별자에 바인딩된
-  // store-action 래퍼, capability 파생, history-record 팩토리, Safe Mode 게이트는
-  // `useQueryContext` substrate 로 추출됐다. 본 hook 은 paradigm dispatch runner +
-  // confirmation state 만 소유한다. 추출 코드는 deps/호출순서 byte-for-byte 보존.
+  // Store-action wrappers bound to connection/db ids, capability derivation,
+  // the history-record factory and the Safe Mode gate live in the
+  // `useQueryContext` substrate (docs/roadmap/h1.md); this hook owns only the
+  // paradigm dispatch runner and confirmation state. The extraction preserved
+  // deps and call order byte-for-byte.
   const {
     workspaceDb,
     dbType,
@@ -172,13 +173,11 @@ export function useQueryExecution({
   // the inline find branch (running-set → dispatch → adapt → complete →
   // history) but for the document aggregate seam.
   //
-  // Sprint 311 (Phase 28 Slice A5, 2026-05-14) — accepts an optional
-  // `collectionOverride` so free-form document tabs (without bound
-  // `tab.collection`) can re-enter the confirm flow with the
+  // Accepts an optional `collectionOverride` so free-form document tabs
+  // (without bound `tab.collection`) can re-enter the confirm flow with the
   // parser-extracted collection name. History records the parsed method
-  // (`"aggregate"`) explicitly so backward-compat consumers keep seeing
-  // the same value the legacy `tab.queryMode === "aggregate"` branch
-  // emitted.
+  // (`"aggregate"`) explicitly so backward-compat consumers keep seeing the
+  // same value the legacy `tab.queryMode === "aggregate"` branch emitted.
   const runMongoAggregateNow = useCallback(
     async (
       pipeline: Record<string, unknown>[],
@@ -209,9 +208,9 @@ export function useQueryExecution({
     const pending = pendingMongoConfirm;
     if (!pending) return;
     setPendingMongoConfirm(null);
-    // Sprint 312 — when the STOP came from a write op the parser stashed
-    // an op-specific runner closure; aggregate STOP falls through to the
-    // pipeline re-runner. Either path runs the parsed payload verbatim.
+    // When the STOP came from a write op the parser stashed an op-specific
+    // runner closure; aggregate STOP falls through to the pipeline re-runner.
+    // Either path runs the parsed payload verbatim.
     const writeRunner = pendingWriteRunnerRef.current;
     pendingWriteRunnerRef.current = null;
     if (writeRunner) {
@@ -226,16 +225,16 @@ export function useQueryExecution({
     pendingWriteRunnerRef.current = null;
   }, []);
 
-  // Sprint 269 — refs the Retry closure dereferences when invoked. The
-  // closure captured at catch time would otherwise hold a stale function
-  // identity (each `useCallback` re-creates `runRdbSingleNow` /
-  // `runRdbBatchNow` on tab-mutation re-render), so the user clicking
-  // Retry after a re-render would dispatch through the *previous* render's
-  // function. Refs decouple closure identity from `useCallback` deps.
+  // Refs the Retry closure dereferences when invoked. The closure captured
+  // at catch time would otherwise hold a stale function identity (each
+  // `useCallback` re-creates `runRdbSingleNow` / `runRdbBatchNow` on
+  // tab-mutation re-render), so the user clicking Retry after a re-render
+  // would dispatch through the *previous* render's function. Refs decouple
+  // closure identity from `useCallback` deps.
   const runRdbSingleRef = useRef<RdbSingleRunner | null>(null);
   const runRdbBatchRef = useRef<RdbBatchRunner | null>(null);
 
-  // Sprint 269 — Retry closure helper. Looks up the live tab via
+  // Retry closure helper. Looks up the live tab via
   // `useWorkspaceStore.getState()` (tabs live nested at
   // `workspaces[connId][db].tabs`) and returns it only when (a) it still
   // exists and (b) is NOT currently `running`. `null` ⇒ Retry no-ops.
@@ -257,7 +256,7 @@ export function useQueryExecution({
     [],
   );
 
-  // Sprint 231 — single-statement RDB dispatch + book-keeping. Mirrors
+  // Single-statement RDB dispatch + book-keeping. Mirrors
   // `runMongoAggregateNow`: extracted so the warn-tier confirm path can
   // re-enter the same try/catch + recordHistory + DB-mutation hint flow
   // without inline duplication.
@@ -299,10 +298,10 @@ export function useQueryExecution({
   // closure (captured at catch time) routes to the current render's helper.
   runRdbSingleRef.current = runRdbSingleNow;
 
-  // Sprint 231 — multi-statement RDB dispatch + per-statement breakdown.
-  // Mirrors the original inline loop in `handleExecute` but takes the
-  // pre-split `statements` (post-comment-strip) so the warn-tier confirm
-  // path executes the exact same batch the user typed.
+  // Multi-statement RDB dispatch + per-statement breakdown. Mirrors the
+  // original inline loop in `handleExecute` but takes the pre-split
+  // `statements` (post-comment-strip) so the warn-tier confirm path executes
+  // the exact same batch the user typed.
   const runRdbBatchNow = useCallback(
     async (
       statements: string[],
@@ -335,13 +334,13 @@ export function useQueryExecution({
       clearSchemaForConnection,
     ],
   );
-  // Sprint 269 — see `runRdbSingleRef` rationale above. Mirror for batch.
+  // See `runRdbSingleRef` rationale above. Mirror for batch.
   runRdbBatchRef.current = runRdbBatchNow;
 
-  // Sprint 231 — warn-tier confirm callback. Re-enters the same single /
-  // multi helper without the gate, so the user's input is dispatched
-  // verbatim. Multi-statement reuses `joinedSql` for history bookkeeping
-  // (matches the pre-fix recordHistory shape).
+  // Warn-tier confirm callback. Re-enters the same single / multi helper
+  // without the gate, so the user's input is dispatched verbatim.
+  // Multi-statement reuses `joinedSql` for history bookkeeping (matches the
+  // pre-fix recordHistory shape).
   const confirmRdbDangerous = useCallback(async () => {
     const pending = pendingRdbConfirm;
     if (!pending) return;
@@ -363,10 +362,10 @@ export function useQueryExecution({
     setPendingRdbConfirm(null);
   }, []);
 
-  // Sprint 255 — WARN-tier confirm callback (RDB). Re-enters the same
-  // single / multi helper used by `confirmRdbDangerous`, so the user's
-  // input is dispatched verbatim after they review the SqlPreviewDialog.
-  // Multi-statement reuses `joinedSql` for history bookkeeping.
+  // WARN-tier confirm callback (RDB). Re-enters the same single / multi
+  // helper used by `confirmRdbDangerous`, so the user's input is dispatched
+  // verbatim after they review the SqlPreviewDialog. Multi-statement reuses
+  // `joinedSql` for history bookkeeping.
   const confirmRdbWarn = useCallback(async () => {
     const pending = pendingRdbWarn;
     if (!pending) return;
@@ -382,14 +381,14 @@ export function useQueryExecution({
     setPendingRdbWarn(null);
   }, []);
 
-  // Sprint 255 — WARN-tier confirm callback (Mongo aggregate). Mirrors
-  // `confirmMongoDangerous` but reuses the WARN pending pipeline. Mongo
-  // find path never triggers WARN (always INFO).
+  // WARN-tier confirm callback (Mongo aggregate). Mirrors
+  // `confirmMongoDangerous` but reuses the WARN pending pipeline. Mongo find
+  // path never triggers WARN (always INFO).
   const confirmMongoWarn = useCallback(async () => {
     const pending = pendingMongoWarn;
     if (!pending) return;
     setPendingMongoWarn(null);
-    // Sprint 312 — same write-runner pattern as confirmMongoDangerous.
+    // Same write-runner pattern as confirmMongoDangerous.
     const writeRunner = pendingWriteRunnerRef.current;
     pendingWriteRunnerRef.current = null;
     if (writeRunner) {
@@ -583,11 +582,11 @@ export function useQueryExecution({
     });
     // Store-action deps are excluded because keyboard execution keeps a stable ref.
     //
-    // Sprint 311 (Phase 28 Slice A5) — `tab.queryMode` is intentionally
-    // ABSENT from the deps. The document branch no longer reads it
-    // (parser decides dispatch); the RDB branch always treats the tab
-    // as `"sql"`. The field remains on the QueryTab type only for
-    // backward-compat with persisted legacy tabs + history filter UI.
+    // `tab.queryMode` is intentionally ABSENT from the deps. The document
+    // branch no longer reads it (parser decides dispatch); the RDB branch
+    // always treats the tab as `"sql"`. The field remains on the QueryTab
+    // type only for backward-compat with persisted legacy tabs + history
+    // filter UI.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     tab.id,

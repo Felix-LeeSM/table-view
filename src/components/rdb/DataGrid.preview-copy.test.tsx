@@ -1,21 +1,19 @@
-// Sprint 252 (2026-05-09) — DataGrid 인라인 SQL Preview polish.
+// DataGrid inline SQL Preview polish.
 //
-// Why: DataGrid 의 인라인 `<Dialog>` SQL Preview 는 plain `<pre>` 였고
-// Copy affordance 가 없었다. 본 sprint 에서:
-//   1. 각 `<pre>` body 를 `<SqlSyntax>` 로 wrap → AC-252-05 (keyword
-//      span 마커 출현).
-//   2. Header 에 Copy 버튼 추가 (`data-testid="preview-dialog-copy"` 통일,
-//      PreviewDialog 와 동일 testid).
-//   3. environment stripe / X 버튼 / autoFocus Execute / commitError 배너
-//      load-bearing markup 보존.
-//
-// /tdd 흐름: 본 파일은 구현보다 먼저 작성됨. 구현 후 통과 예상.
+// Why: the DataGrid inline `<Dialog>` SQL Preview was a plain `<pre>`
+// with no Copy affordance. The change:
+//   1. Wrap each `<pre>` body in `<SqlSyntax>` → AC-252-05 (keyword
+//      span markers appear).
+//   2. Add a Copy button to the header (`data-testid="preview-dialog-copy"`,
+//      the same testid as PreviewDialog).
+//   3. Preserve the load-bearing markup: environment stripe / X button /
+//      autoFocus Execute / commitError banner.
 //
 // Maps:
-// - AC-252-05 → "DataGrid 인라인 preview body 가 .text-syntax-keyword
-//   span 포함" (SqlSyntax wrap)
-// - AC-252-02 / AC-252-08 → "Copy 버튼 동작 + DataGrid commit-path 회귀
-//   없음"
+// - AC-252-05 → "the DataGrid inline preview body contains a
+//   .text-syntax-keyword span" (SqlSyntax wrap)
+// - AC-252-02 / AC-252-08 → "Copy button works + no regression on the
+//   DataGrid commit path"
 
 import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

@@ -124,8 +124,8 @@ describe("RedisCommandEditor", () => {
     );
   });
 
-  // Reason: #1225 — 전 쿼리 에디터 history() 미장착으로 Cmd+Z undo 불가
-  // 사용자 보고 (2026-07-03).
+  // Reason: #1225 — user report that Cmd+Z undo does not work, because no
+  // query editor installs history().
   it("reverts an edit via undo (history extension installed) (#1225)", () => {
     render(
       <RedisCommandEditor
@@ -151,9 +151,10 @@ describe("RedisCommandEditor", () => {
     expect(ref.current).toBe(getEditorView());
   });
 
-  // #2509 — 실행하면 자동완성 팝업이 닫혀야 한다. 사용자 시퀀스:
-  // 에디터에 타이핑 → 자동완성 팝업이 뜬 채로 남음 → 명령 실행 →
-  // **팝업이 사라지고 결과가 가려지지 않는다** ← lock 대상.
+  // #2509 — executing must close the autocomplete popup. User sequence:
+  // type in the editor → the autocomplete popup stays open → run the command
+  // → **the popup disappears and does not hide the result** ← what is
+  // locked here.
   it("closes the autocomplete popup when the command executes (#2509)", async () => {
     const onExecute = vi.fn();
     render(

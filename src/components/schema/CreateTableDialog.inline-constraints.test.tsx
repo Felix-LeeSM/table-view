@@ -12,14 +12,12 @@ import {
   setDevConnection,
 } from "./__tests__/createTableDialogTestHelpers";
 
-// ── Sprint 241 — inline FK + CHECK on column row ──────────────────────
-//
-// Date: 2026-05-08.
+// ── Inline FK + CHECK on column row ───────────────────────────────────
 //
 // Why these tests exist:
 //
-// Sprint 241 moves single-column FK + CHECK out of the Constraints tab
-// and onto the column row itself (TablePlus parity). The column-row
+// Single-column FK + CHECK sit on the column row itself rather than the
+// Constraints tab (TablePlus parity). The column-row
 // `+ FK` cell opens a popover for ref schema/table/column + ON
 // DELETE/UPDATE; the inline `check expression (optional, …)` text
 // input takes free-text expressions. Both feed the same constraint
@@ -133,10 +131,10 @@ describe("Sprint 241 — inline FK + CHECK on column row", () => {
   });
 
   it("Constraints tab surfaces the multi-column scope reminder", () => {
-    // Sprint 241 — each sub-tab carries its own tailored scope
-    // reminder (FK / CHECK / UNIQUE) rather than a single combined
-    // message. The FK sub-tab is active by default; its reminder is
-    // visible immediately after opening the parent Constraints tab.
+    // Each sub-tab carries its own tailored scope reminder
+    // (FK / CHECK / UNIQUE) rather than a single combined message. The
+    // FK sub-tab is active by default; its reminder is visible
+    // immediately after opening the parent Constraints tab.
     renderDialog();
     activateTab("Constraints");
     expect(

@@ -10,18 +10,20 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 /**
- * Sprint 325 — Slice H: server-side field projection dialog.
+ * Server-side field projection dialog.
  *
- * include vs exclude 모드 + per-column checkbox. Apply 는 Mongo find body
- * 의 `projection` shape (`{ field: 1 | 0 }`) 를 생성. Clear 는 projection
- * 비움 (= 전체 field 반환).
+ * Include vs exclude mode plus a per-column checkbox. Apply builds the
+ * Mongo find body's `projection` shape (`{ field: 1 | 0 }`); Clear empties
+ * the projection (= return every field).
  *
  * Invariants:
- * - `initial` 이 `null` 이면 default include mode + 모든 checkbox 해제.
- * - `initial` 이 `{ name: 1 }` 류면 include mode + 해당 field 체크 (값 모두 1).
- * - `initial` 이 `{ name: 0 }` 류면 exclude mode + 해당 field 체크.
- * - mixed (`{ name: 1, age: 0 }`) 는 비-canonical — backend 가 reject 하므로
- *   v0 dialog 는 hydration 시 mode 를 첫 entry 의 value 로 결정 (관용).
+ * - `initial` of `null` → default include mode, every checkbox cleared.
+ * - `initial` like `{ name: 1 }` → include mode, that field checked (all
+ *   values 1).
+ * - `initial` like `{ name: 0 }` → exclude mode, that field checked.
+ * - Mixed (`{ name: 1, age: 0 }`) is non-canonical — the backend rejects
+ *   it, so on hydration the v0 dialog leniently takes the mode from the
+ *   first entry's value.
  */
 interface ProjectionDialogProps {
   open: boolean;

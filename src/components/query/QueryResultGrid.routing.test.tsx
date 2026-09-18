@@ -1,5 +1,4 @@
-// Sprint 312 (Phase 28 Slice A6, 2026-05-14) — `QueryResultGrid` routing
-// by `resultKind`.
+// `QueryResultGrid` routing by `resultKind`.
 //
 // Test axes (4 cases):
 //   1. undefined / "grid" → existing DataGrid (legacy invariant)

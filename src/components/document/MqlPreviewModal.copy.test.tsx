@@ -1,16 +1,14 @@
-// Sprint 252 (2026-05-09) — MqlPreviewModal Copy 버튼 + plain fallback.
+// MqlPreviewModal Copy button + plain fallback.
 //
-// Why: PreviewDialog 의 `copyText` prop 을 통해 MQL 미리보기에도 Copy 버튼
-// 자동 등장. 동시에 SQL syntax highlighter (SqlSyntax) 는 적용하지 않고
-// plain `<pre>` fallback 유지 — Mongo dialect 강조기 부재 때문.
-// AC-252-07 의 "MQL-적합 강조 (또는 plain) 로 fall back 함" 의 plain
-// 경로 채택 — 사용자에게 잘못된 SQL keyword 색이 표시되지 않도록.
-//
-// /tdd 흐름: 본 파일은 구현보다 먼저 작성됨. PreviewDialog Copy 구현이
-// 끝나면 1줄 `copyText={previewLines.join("\n")}` 추가 만으로 통과.
+// Why: PreviewDialog's `copyText` prop brings the Copy button to the MQL
+// preview too. The SQL syntax highlighter (SqlSyntax) is deliberately not
+// applied; the plain `<pre>` fallback stays because no Mongo dialect
+// highlighter exists. This takes the plain path of AC-252-07's "falls back
+// to MQL-appropriate highlighting (or plain)" so the user is never shown
+// wrong SQL keyword colors.
 //
 // Maps:
-// - AC-252-02 / AC-252-07 → "Copy carrier 호출 + plain fallback"
+// - AC-252-02 / AC-252-07 → "Copy carrier call + plain fallback"
 
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import { act, fireEvent, render, screen } from "@testing-library/react";

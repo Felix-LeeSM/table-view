@@ -22,7 +22,7 @@ import type { FindBody } from "@/types/document";
  *     `SET search_path`; on a hit it optimistically flips the active DB
  *     and round-trips `verify_active_db`. Fire-and-forget — never throws,
  *     so a verify failure cannot tear down the query result panel
- *     ("verify 실패 ≠ query 실패").
+ *     ("verify failure ≠ query failure").
  */
 
 export interface DocumentQueryContext {
@@ -381,11 +381,11 @@ export function parseReplaceOneOptions(
 }
 
 /**
- * Sprint 312 — extract the `$set` clause out of an update document.
+ * Extract the `$set` clause out of an update document.
  * Returns `null` when the patch is malformed (not an object) or when
- * `$set` itself isn't a plain object. A6's dispatch table refuses
- * non-`$set` updates here (rather than at A2) so the editor surface
- * stays consistent with the existing `useMongoBulkOps` reject path.
+ * `$set` itself isn't a plain object. The dispatch table refuses
+ * non-`$set` updates here so the editor surface stays consistent with
+ * the existing `useMongoBulkOps` reject path.
  */
 export function extractDollarSet(
   update: Record<string, unknown>,
@@ -441,7 +441,7 @@ export async function applyDbMutationHint(
         }
       } catch {
         // Verify is best-effort — a network blip must not tear down the
-        // query result. "verify 실패 ≠ query 실패."
+        // query result. "verify failure ≠ query failure."
       }
     } else if (hint.kind === "switch_schema") {
       // Schema-level change — there's no cheap PG accessor to verify, so

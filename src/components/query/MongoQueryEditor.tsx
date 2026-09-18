@@ -33,12 +33,12 @@ import { syncEditorDocument } from "./editorDocumentSync";
  * extensions — never the SQL language extension or `useSqlAutocomplete`,
  * so cross-paradigm contamination is structurally impossible.
  *
- * Sprint 309 — Find/Aggregate prop removed; the editor is a single
- * mongosh surface. The wrapper `<div>` no longer carries the mode
- * data-attribute, and the aria-label is the single string
- * `"MongoDB Query Editor"`. Mode routing moved from "user toggle →
- * dispatch" to "parser reads editor text → dispatch" (A5 owns the
- * dispatch swap; A3 just simplifies the editor surface).
+ * The Find/Aggregate prop is removed; the editor is a single mongosh
+ * surface. The wrapper `<div>` no longer carries the mode data-attribute,
+ * and the aria-label is the single string `"MongoDB Query Editor"`. Mode
+ * routing moved from "user toggle → dispatch" to "parser reads editor text →
+ * dispatch" (A5 owns the dispatch swap; A3 just simplifies the editor
+ * surface).
  */
 
 export interface MongoQueryEditorProps {
@@ -46,7 +46,7 @@ export interface MongoQueryEditorProps {
   onSqlChange: (sql: string) => void;
   onExecute: () => void;
   /**
-   * Sprint 248 (ADR 0022 Phase 4) — `Cmd+Shift+Enter` dry-run handler.
+   * ADR 0022 — `Cmd+Shift+Enter` dry-run handler.
    * MongoDB dry-run IPC is unsupported; the binding still calls this handler
    * so the tab can surface the same explicit info/unsupported action instead
    * of making the shortcut feel broken.
@@ -69,8 +69,8 @@ const buildJsonLang = (mongoExtensions: readonly Extension[]): Extension => [
 
 const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
   function MongoQueryEditor(
-    // Sprint 309 — paradigm-mode prop dropped from the interface; the
-    // editor surface is a single mongosh-flavoured CodeMirror instance.
+    // The paradigm-mode prop is dropped from the interface; the editor
+    // surface is a single mongosh-flavoured CodeMirror instance.
     { sql, onSqlChange, onExecute, onDryRun, mongoExtensions },
     ref,
   ) {
@@ -128,9 +128,10 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
             // priority — defaultKeymap also binds Mod-Enter.
             {
               key: "Mod-Enter",
-              // #2509 — 실행하면 자동완성 팝업을 닫는다. `closeOnBlur` 는
-              // 실행이 blur 를 일으킬 때만 도는데 단축키 실행은 포커스를
-              // 에디터에 남기므로, 남은 팝업이 결과 그리드를 덮었다.
+              // #2509 — executing closes the autocomplete popup.
+              // `closeOnBlur` only runs when execution causes a blur, but a
+              // shortcut execution leaves focus in the editor, so the popup
+              // that stayed open covered the result grid.
               run: (view) => {
                 closeCompletion(view);
                 onExecuteRef.current();

@@ -5,9 +5,10 @@ import type { DatabaseType } from "@/types/connection";
 import type { ColumnInfo, FilterCondition } from "@/types/schema";
 import FilterBar from "./FilterBar";
 
-// #2430 — 필터 연산자 목록이 연결된 DBMS 의 방언을 따라가는지 잰다.
-// 한 방언만 재면 base 의 고정 목록도 통과하므로, 같은 파일에서 PostgreSQL
-// (ILIKE 있음) 과 MySQL·SQLite (없음) 을 같이 단언한다.
+// #2430 — measures whether the filter operator list follows the
+// connected DBMS dialect. Measuring one dialect alone would also pass
+// against the base's fixed list, so the same file asserts PostgreSQL
+// (has ILIKE) together with MySQL and SQLite (no ILIKE).
 
 const COLUMNS: ColumnInfo[] = [
   {
@@ -29,7 +30,8 @@ const FILTER: FilterCondition = {
   id: "test-uuid-1",
 };
 
-// PostgreSQL 에서 걸고 그 연결의 DBMS 종류를 바꾸면 남는 조건이 이 모양이다.
+// The shape a condition keeps after it is set on PostgreSQL and the
+// connection's DBMS type is then changed.
 const ILIKE_FILTER: FilterCondition = {
   column: "name",
   operator: "Ilike",
@@ -86,7 +88,7 @@ describe("FilterBar operator list follows the connected dialect (#2430)", () => 
     await openOperatorMenu();
 
     expect(screen.queryByRole("option", { name: "ILIKE" })).toBeNull();
-    // 방언 무관 연산자는 그대로 남는다 — 목록이 통째로 비는 것이 아니다.
+    // Dialect-independent operators stay — the list is not emptied.
     expect(screen.getByRole("option", { name: "LIKE" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "IS NULL" })).toBeInTheDocument();
   });
@@ -107,10 +109,12 @@ describe("FilterBar operator list follows the connected dialect (#2430)", () => 
     expect(screen.getByRole("option", { name: "LIKE" })).toBeInTheDocument();
   });
 
-  // #2430 실측: `dbType` 이 바뀌어 지금 걸린 연산자가 목록에서 빠지면
-  // 트리거가 빈칸이 됐다. 트리거를 그리는 것은 `<SelectValue />` 이고 그것은
-  // 마운트된 `SelectItem` 에서 텍스트를 읽으므로, 목록 밖 항목을 하나 더
-  // 그려야 표기가 남는다 (`ConnectionDialogBody.tsx:463-468` 과 같은 처방).
+  // #2430 measured: when `dbType` changes and the currently set
+  // operator drops out of the list, the trigger went blank.
+  // `<SelectValue />` draws the trigger and reads its text from a
+  // mounted `SelectItem`, so one extra item outside the list has to be
+  // drawn for the label to survive (the same prescription as
+  // `ConnectionDialogBody.tsx:463-468`).
 
   it("keeps the selected operator readable after the dialect drops it", () => {
     renderFilterBar("sqlite", ILIKE_FILTER);
@@ -122,8 +126,9 @@ describe("FilterBar operator list follows the connected dialect (#2430)", () => 
     renderFilterBar("sqlite", ILIKE_FILTER);
     await openOperatorMenu();
 
-    // 목록 밖 항목을 하나 더 그리는 처방이 드롭다운을 도로 넓히면 안 된다 —
-    // 그 항목은 지금 걸린 연산자 하나이고, 고를 수 있는 나머지는 방언 목록이다.
+    // Drawing one extra item outside the list must not widen the
+    // dropdown again — that item is the single currently set operator,
+    // and the rest that can be chosen is the dialect list.
     expect(screen.getAllByRole("option", { name: "ILIKE" })).toHaveLength(1);
     expect(screen.getByRole("option", { name: "LIKE" })).toBeInTheDocument();
   });
@@ -134,8 +139,9 @@ describe("FilterBar operator list follows the connected dialect (#2430)", () => 
     expect(screen.getByLabelText("Filter value for name")).toBeInTheDocument();
   });
 
-  // 목록 밖 항목을 그리는 갈래가 조건 없이 돌면 방언이 이미 주는 연산자가 두
-  // 번 뜬다. 이 단언이 그 갈래의 조건을 잠근다.
+  // If the branch that draws the out-of-list item runs unconditionally,
+  // an operator the dialect already offers shows up twice. This
+  // assertion locks that branch's condition.
   it("does not duplicate an operator the dialect already offers", async () => {
     renderFilterBar("postgresql", ILIKE_FILTER);
     await openOperatorMenu();
@@ -143,9 +149,10 @@ describe("FilterBar operator list follows the connected dialect (#2430)", () => 
     expect(screen.getAllByRole("option", { name: "ILIKE" })).toHaveLength(1);
   });
 
-  // 라벨이 아니라 백엔드 enum 으로 나가는 값을 잰다. `FilterOperator::Ilike`
-  // 는 serde 기본 표기라 wire 값이 "Ilike" 다 — 이 문자열이 어긋나면
-  // PostgreSQL 어댑터가 조건을 통째로 버린다.
+  // Measures the value that goes out as the backend enum, not the
+  // label. `FilterOperator::Ilike` uses serde's default representation,
+  // so the wire value is "Ilike" — if this string diverges, the
+  // PostgreSQL adapter drops the whole condition.
   it("emits the Ilike wire value the backend enum expects", async () => {
     const { onFiltersChange } = renderFilterBar("postgresql");
     const user = await openOperatorMenu();

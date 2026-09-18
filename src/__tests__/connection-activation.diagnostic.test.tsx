@@ -1,12 +1,13 @@
-// Purpose: Connection activation lifecycle 진단 — Phase 13 Sprint 156 (2026-04-28)
+// Purpose: Connection activation lifecycle diagnostics
 //
-// 사용자 보고 버그:
-//   Bug 1: Connection 더블클릭해도 workspace 미열림
-//   Bug 2: PG sidebar table click 시 preview tab이 swap되지 않고 누적됨
+// User-reported bugs:
+//   Bug 1: Double-clicking a Connection did not open the workspace
+//   Bug 2: Clicking a PG sidebar table stacked preview tabs instead of swapping
 //
-// 이 파일은 handleActivate의 세부 동작을 진단하기 위해 작성되었다.
-// HomePage.test.tsx와 window-transitions.test.tsx가 기본 동작을 이미 커버하므로,
-// 여기서는 중복을 피하고 edge case + error recovery + race condition에 집중한다.
+// This file was written to diagnose handleActivate's detailed behavior.
+// HomePage.test.tsx and window-transitions.test.tsx already cover the basic
+// behavior, so this file avoids duplication and focuses on edge cases +
+// error recovery + race conditions.
 //
 // AC IDs:
 //   AC-156-01  Double-click ordering (showWindow → focusWindow → hideWindow)
@@ -178,12 +179,12 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("AC-156-*: Connection activation diagnostic", () => {
-  // Reason (revised 2026-05-16, Wave 9.5 회귀 1): sprint-361 이후 workspace
-  // 윈도우는 per-conn label `workspace-{conn_id}` 이며 ConnectionList 의
-  // `openWorkspaceWindow(id)` 가 build/focus 책임. HomePage 의 handleActivate
-  // 는 `hideWindow("launcher")` 만. 이전 contract 의 showWindow/focusWindow
-  // 검증은 sprint-175 의 옛 single-workspace 모델 기준 — 두 윈도우 공존
-  // 회귀의 원천이었다.
+  // Reason: workspace windows carry a per-conn label `workspace-{conn_id}`
+  // and ConnectionList's `openWorkspaceWindow(id)` owns build/focus.
+  // HomePage's handleActivate touches the store side only. The old
+  // contract's showWindow/focusWindow assertions came from the
+  // single-workspace model — the source of the two-windows-coexisting
+  // regression.
   it("AC-156-01 (revised): double-click hides launcher and does NOT call showWindow/focusWindow('workspace')", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
@@ -201,8 +202,8 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(hideWindowMock).not.toHaveBeenCalled();
   });
 
-  // Reason (revised 2026-05-16): rapid double-click 가드는 여전히 유효.
-  // hideWindow("launcher") 가 중복 호출되지 않음을 잠근다.
+  // Reason: the rapid double-click guard still holds — no window seam call,
+  // and the store side keeps the activated connection focused.
   it("AC-156-02 (revised): rapid double-click — window seam 호출 0, store side 1회만 갱신", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
@@ -216,16 +217,16 @@ describe("AC-156-*: Connection activation diagnostic", () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
-    // launcher 는 항상 visible — hide 호출 0.
+    // The launcher is always visible — zero hide calls.
     expect(hideWindowMock).not.toHaveBeenCalled();
     expect(showWindowMock).not.toHaveBeenCalled();
     expect(focusWindowMock).not.toHaveBeenCalled();
-    // store side 는 갱신.
+    // The store side is updated.
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // Reason (revised 2026-05-16): disconnect 후 재활성화 path. 새 invariant
-  // 는 hideWindow("launcher") 만 잠금.
+  // Reason: re-activation after a disconnect. The invariant is that the
+  // store refocuses the connection and no window seam is called.
   it("AC-156-03 (revised): after disconnecting, re-activating the same connection still hides launcher", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
@@ -250,10 +251,10 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // Reason (revised 2026-05-16): 이전 contract 의 "showWindow rejects →
-  // launcher stays visible" recovery 는 sprint-361 이후 의미가 없어졌다
-  // (HomePage 는 showWindow 호출 안 함). 대신 `hideWindow("launcher")` 가
-  // reject 해도 store side 가 일관됨을 잠근다.
+  // Reason: the old contract's "showWindow rejects → launcher stays visible"
+  // recovery lost its meaning once HomePage stopped calling showWindow.
+  // What this locks now is that handleActivate calls no window seam at all
+  // and the store side still updates.
   it("AC-156-04 (revised): launcher 는 항상 visible — handleActivate 가 어떤 window seam 도 호출하지 않는다", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
@@ -272,9 +273,10 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // Reason: 단일 클릭(select)은 window swap을 트리거하지 않아야 함.
-  //         double-click(= onActivate)만 swap 트리거. 기존 테스트와 중복 방지를 위해
-  //         명시적으로 seam 호출 0건을 검증 (2026-04-28)
+  // Reason: a single click (select) must not trigger a window swap.
+  //         Only double-click (= onActivate) triggers a swap. To avoid
+  //         duplicating the existing tests, this asserts the zero seam calls
+  //         explicitly.
   it("AC-156-05: single-click (onSelect) does NOT trigger any window swap", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
@@ -294,10 +296,10 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(focusWindowMock).not.toHaveBeenCalled();
   });
 
-  // Reason (revised 2026-05-16, Wave 9.5 회귀 1): sequential activation 의
-  // store side (focusedConn 갱신 + stale tab cleanup) + launcher hide 만 잠금.
-  // 이전의 showWindow/focusWindow 호출 검증은 sprint-361 의 per-conn
-  // 윈도우 시스템과 충돌 (이중 윈도우 회귀의 원천).
+  // Reason: locks only the store side of sequential activation (focusedConn
+  // update + stale tab cleanup). The old showWindow/focusWindow call
+  // assertions conflicted with the per-conn window system — the source of
+  // the double-window regression.
   it("AC-156-06 (revised): activating connection A then B → B becomes focused, A's stale tabs are cleared", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1"), makeConn("c2")],
@@ -352,8 +354,8 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     // B must become focused.
     expect(useConnectionStore.getState().focusedConnId).toBe("c2");
 
-    // 회귀 1 (Wave 9.5): launcher 항상 visible. handleActivate 는 store
-    // side (focusedConn + stale tabs) 만 책임 — window seam 호출 0.
+    // The launcher stays visible. handleActivate owns the store side only
+    // (focusedConn + stale tabs) — zero window seam calls.
     expect(showWindowMock).not.toHaveBeenCalled();
     expect(focusWindowMock).not.toHaveBeenCalled();
     expect(hideWindowMock).not.toHaveBeenCalled();
@@ -364,9 +366,9 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(c1Tabs).toHaveLength(0);
   });
 
-  // Reason: handleActivate의 focusedConnId 업데이트가 window swap 전에 동기적으로
-  //         실행되는지 확인. 비동기 처리 순서가 꼬이면 focusedConnId가 아직
-  //         업데이트되지 않은 상태에서 workspace가 렌더링될 수 있음 (2026-04-28)
+  // Reason: checks that handleActivate updates focusedConnId synchronously.
+  //         If the async ordering slips, the workspace can render while
+  //         focusedConnId is not updated yet.
   it("AC-156-01 (extended): setFocusedConn runs synchronously before the async window swap", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
@@ -386,10 +388,10 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // Reason (revised 2026-05-16, Wave 9.5): HomePage 는 더 이상 showWindow /
-  // focusWindow("workspace") 를 호출하지 않으므로 본 케이스의 원본 시나리오는
-  // 의미가 사라졌다. 대신 focusWindow 가 mock 으로 reject 되어 있어도
-  // HomePage flow 는 영향을 받지 않음을 잠근다 (focusWindow 가 호출되지 않으므로).
+  // Reason: HomePage no longer calls showWindow / focusWindow("workspace"),
+  // so this case's original scenario is moot. It now locks that a rejecting
+  // focusWindow mock leaves the HomePage flow untouched, because focusWindow
+  // is never called.
   it("AC-156-04b (revised): focusWindow mock rejects — HomePage flow 가 호출하지 않으므로 영향 없음", async () => {
     focusWindowMock.mockImplementation(async () => {
       throw new Error("focusWindow failed (simulated)");

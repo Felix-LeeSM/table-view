@@ -1,12 +1,11 @@
-// Sprint 350 (2026-05-15) — Tracer: MongoIndexesPanel read-only.
-// Sprint 351 (2026-05-15) — CRUD extension: `+ Index` button + per-row
-// drop trash + `_id_` disabled tooltip + driver-error surfaces.
+// MongoIndexesPanel: the read-only view plus CRUD — `+ Index` button,
+// per-row drop trash, `_id_` disabled tooltip, driver-error surfaces.
 //
-// 작성 이유: 본 sprint 가 Mongo collection tab 의 Structure pane 의 indexes
-// 패널에 (a) `+ Index` 토글이 CreateMongoIndexDialog 를 띄우고, (b) 비-`_id_`
-// 행은 trash 버튼이 활성, (c) `_id_` 행은 aria-disabled="true" tooltip 으로
-// 차단, (d) drop 성공 시 list refresh 가 일어남을 검증한다. Sprint 350 의 5
-// RO 시나리오는 그대로 유지하면서 추가.
+// Reason: guards the indexes panel in the Mongo collection tab's Structure
+// pane — (a) the `+ Index` toggle opens CreateMongoIndexDialog, (b) a
+// non-`_id_` row has an active trash button, (c) an `_id_` row is blocked
+// with an aria-disabled="true" tooltip, (d) a successful drop refreshes the
+// list.
 
 import {
   act,

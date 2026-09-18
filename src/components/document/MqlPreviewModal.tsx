@@ -25,10 +25,9 @@ export interface MqlPreviewModalProps {
   loading?: boolean;
   commitError?: PreviewDialogCommitError | null;
   /**
-   * Sprint 256 (ADR 0023, AC-256-05) — environment + connection label
-   * for the env-aware footer ExecuteButton. Optional; legacy callers
-   * (mongo write paths that haven't been plumbed yet) keep the plain
-   * "Execute" affordance.
+   * ADR 0023, AC-256-05 — environment + connection label for the env-aware
+   * footer ExecuteButton. Optional; legacy callers (mongo write paths that
+   * haven't been plumbed yet) keep the plain "Execute" affordance.
    */
   environment?: string | null;
   connectionLabel?: string | null;
@@ -58,10 +57,10 @@ export default function MqlPreviewModal({
       confirmDisabled={executeDisabled}
       confirmAriaLabel={t("mqlPreview.executeAriaLabel")}
       commitError={commitError}
-      // Sprint 252: Plain-text join — Mongo dialect highlighter absent so
-      // SqlSyntax is intentionally NOT wrapped here (AC-252-07 plain
-      // fallback). Empty previewLines → joined string is "" → button
-      // self-suppresses (AC-252-04).
+      // Plain-text join — Mongo dialect highlighter absent so SqlSyntax is
+      // intentionally NOT wrapped here (AC-252-07 plain fallback). Empty
+      // previewLines → joined string is "" → button self-suppresses
+      // (AC-252-04).
       copyText={previewLines.join("\n")}
       copyAriaLabel={t("mqlPreview.copyAriaLabel")}
       confirmButton={

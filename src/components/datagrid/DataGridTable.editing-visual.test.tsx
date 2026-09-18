@@ -209,8 +209,8 @@ describe("DataGridTable — NULL vs empty string distinction", () => {
   });
 
   it("printable key in NULL mode on a text column seeds the character", () => {
-    // Sprint 74: text-column NULL → text input flip must still seed with the
-    // literal keystroke (regression guard on the text-family branch of
+    // A text-column NULL → text input flip must still seed with the literal
+    // keystroke (regression guard on the text-family branch of
     // deriveEditorSeed). Other types are covered in the type-aware block below.
     const onSetEditValue = vi.fn();
     render(
@@ -368,9 +368,9 @@ describe("DataGridTable — NULL vs empty string distinction", () => {
   });
 });
 
-// Sprint 74 — Type-aware NULL re-entry. Fixtures below exercise column-type
-// variations so the NULL-chip → typed-editor flip routes through
-// deriveEditorSeed and renders the correct `<input type>`.
+// Type-aware NULL re-entry. Fixtures below exercise column-type variations
+// so the NULL-chip → typed-editor flip routes through deriveEditorSeed and
+// renders the correct `<input type>`.
 const DATE_DATA: TableData = {
   columns: [
     {
@@ -661,8 +661,8 @@ describe("DataGridTable — Sprint 74: type-aware NULL → typed editor flip", (
   it("integer editor renders as <input type='text'> (native number filter deferred to Sprint 75)", () => {
     // Integer columns still render with type="text" because native
     // <input type="number"> behaviour conflicts with our string-based
-    // editValue pipeline; Sprint 74 only gates the NULL-chip flip, SQL-side
-    // coercion is Sprint 75.
+    // editValue pipeline; only the NULL-chip flip is gated here, SQL-side
+    // coercion comes later.
     render(
       <DataGridTable
         {...makeProps({

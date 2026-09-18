@@ -1,14 +1,11 @@
-// Sprint 229 — `ForeignKeysTabBody` presentation tests.
-//
-// Date: 2026-05-07.
+// `ForeignKeysTabBody` presentation tests.
 //
 // Why this file exists:
 //
 // `ForeignKeysTabBody.tsx` is a pure presentational mapper extracted
-// from `CreateTableDialog.tsx` (parent already at 793 LOC after Sprint
-// 228; +280 from inline Sprint 229 implementation would push past
-// 1000). The parent still owns state + handlers + chain wiring; this
-// component just renders props → DOM and forwards events.
+// from `CreateTableDialog.tsx` to keep the parent under the project's
+// LOC ceiling. The parent still owns state + handlers + chain wiring;
+// this component just renders props → DOM and forwards events.
 //
 // These tests cover the sub-component's render shape, aria labels,
 // add/remove row callback wiring, and three-section layout. Per AC-229
@@ -78,19 +75,19 @@ function defaultProps() {
     onRemoveUnique: vi.fn(),
     onUpdateUnique: vi.fn(),
     onToggleUniqueColumn: vi.fn(),
-    // Sprint 234 — reorder callbacks; default to no-op spies so the
-    // pre-Sprint-234 cases keep working without referencing the new
-    // family handlers.
+    // Reorder callbacks; default to no-op spies so the cases that
+    // predate them keep working without referencing the family
+    // handlers.
     onMoveFk: vi.fn(),
     onMoveCheck: vi.fn(),
     onMoveUnique: vi.fn(),
   };
 }
 
-// Sprint 241 — sub-tabs split FK / CHECK / UNIQUE into three separate
-// panels. Activate the named sub-tab so the family's controls are
-// visible to RTL queries (inactive panels are hidden via CSS, which
-// hides them from `getByLabelText` / `getByRole` by default).
+// Sub-tabs split FK / CHECK / UNIQUE into three separate panels.
+// Activate the named sub-tab so the family's controls are visible to
+// RTL queries (inactive panels are hidden via CSS, which hides them
+// from `getByLabelText` / `getByRole` by default).
 async function activateSubTab(name: "Foreign Keys" | "CHECK" | "UNIQUE") {
   // Radix Tabs in jsdom doesn't react to bare `fireEvent.click`; the
   // pointer-event sequence that `userEvent` synthesises (pointerdown →
@@ -206,8 +203,8 @@ describe("ForeignKeysTabBody", () => {
     }
   });
 
-  // Sprint 239 — the multi-checkbox column picker was replaced by an
-  // ordered chip picker. Clicking an available `+ name` chip calls
+  // The multi-checkbox column picker was replaced by an ordered chip
+  // picker. Clicking an available `+ name` chip calls
   // `onUpdateFk(trackingId, { columns: [...prev, name] })`. The legacy
   // single-toggle handlers stay on the prop interface as no-op stubs.
   it("Clicking an available FK local column chip appends it via onUpdateFk", () => {

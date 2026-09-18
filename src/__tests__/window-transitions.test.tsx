@@ -1,16 +1,16 @@
 /**
- * Sprint 154 — AC-154-* (Window Lifecycle Wiring) regression tests.
+ * AC-154-* (Window Lifecycle Wiring) regression tests.
  *
  * **TDD-FIRST**: this file was authored before the production page wirings
  * (`LauncherPage` activation, `WorkspacePage` Back / close, launcher close
- * → app_exit). Against pre-Sprint-154 code, every assertion fails because
+ * → app_exit). Against the pre-wiring code, every assertion fails because
  * the pages still mutated the legacy app-shell store field instead of the
  * `@lib/window-controls` seam. After the wiring lands, the same file goes
  * green.
  *
  * Each `it(...)` name embeds the AC label (AC-154-N) for grep-ability.
  *
- * The 5 user-facing transitions under test:
+ * The user-facing transitions under test:
  *
  *   AC-154-01  Activate    workspace.show() → setFocus() → launcher.hide()
  *   AC-154-02  Back        workspace.hide() → launcher.show(); NO disconnect
@@ -193,22 +193,22 @@ afterEach(() => {
 
 describe("AC-154-*: Window lifecycle wiring", () => {
   // ---------------------------------------------------------------------------
-  // AC-154-01 (revised for sprint-361/363 + Wave 9.5 회귀 1, 2026-05-16)
+  // AC-154-01
   //
-  // 이전 contract: `showWindow("workspace")` → `focusWindow("workspace")` →
-  // `hideWindow("launcher")`. 이는 sprint-175 single-workspace 모델
-  // (label `"workspace"` 의 1 윈도우) 기준이었다.
+  // Old contract: `showWindow("workspace")` → `focusWindow("workspace")` →
+  // `hideWindow("launcher")`, on the single-workspace model (one window
+  // under the `"workspace"` label).
   //
-  // sprint-361 이후 workspace 윈도우는 `workspace-{conn_id}` per-conn label.
-  // ConnectionList 의 `openWorkspaceWindow(id)` 가 backend
-  // `open_workspace_window` 를 호출해 per-conn 윈도우를 build (`visible:
-  // true`) 또는 focus. HomePage 의 handleActivate 가 추가로
-  // `showWindow("workspace")` 를 호출하면 label `"workspace"` 의 별도 윈도우가
-  // 생성되어 사용자가 본 회귀 — launcher + per-conn workspace + bare workspace
-  // 세 윈도우 동시 가시 — 가 발생한다.
+  // Workspace windows now carry a per-conn `workspace-{conn_id}` label.
+  // ConnectionList's `openWorkspaceWindow(id)` calls the backend
+  // `open_workspace_window` to build (`visible: true`) or focus the per-conn
+  // window. If HomePage's handleActivate also called
+  // `showWindow("workspace")`, a separate window under the `"workspace"`
+  // label would appear — the regression the user saw, with the launcher, the
+  // per-conn workspace and the bare workspace all visible at once.
   //
-  // 새 contract: HomePage 의 handleActivate 책임은 store side (focusedConn,
-  // stale tab cleanup) + `hideWindow("launcher")` 뿐. window-side 호출 0.
+  // New contract: HomePage's handleActivate owns the store side only
+  // (focusedConn, stale tab cleanup). Zero window-side calls.
   // ---------------------------------------------------------------------------
   it("AC-154-01 (revised): activating a connection does NOT hide launcher and does NOT call showWindow/focusWindow — launcher 는 항상 visible (사용자 desired UX)", async () => {
     useConnectionStore.setState({
@@ -222,14 +222,14 @@ describe("AC-154-*: Window lifecycle wiring", () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
-    // 회귀 1 잠금: launcher 가 close 도 hide 도 되지 않는다.
+    // Locks the regression: the launcher is neither closed nor hidden.
     expect(hideWindowMock).not.toHaveBeenCalled();
-    // 사용자 desired UX: launcher 항상 visible. workspace 윈도우 build/focus
-    // 는 ConnectionList 의 `openWorkspaceWindow(id)` 책임.
+    // Desired UX: the launcher stays visible. ConnectionList's
+    // `openWorkspaceWindow(id)` owns the workspace window build/focus.
     expect(showWindowMock).not.toHaveBeenCalled();
     expect(focusWindowMock).not.toHaveBeenCalled();
 
-    // store side 는 정상 갱신.
+    // The store side updates normally.
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
@@ -253,14 +253,14 @@ describe("AC-154-*: Window lifecycle wiring", () => {
       );
     });
 
-    // Wave 9.5 (2026-05-16) — 사용자 desired UX: "< Connections 누르면 connection
-    // 창이 닫히고 connections 창에 focus 가 가야해". launcher 는 항상 visible
-    // 이므로 hide/show 가 아닌 focus + close 패턴.
+    // Desired UX: "pressing < Connections should close the connection window
+    // and move focus to the connections window". The launcher is always
+    // visible, so the pattern is focus + close, not hide/show.
     expect(focusWindowMock).toHaveBeenCalledWith("launcher");
     expect(destroyCurrentWindowMock).toHaveBeenCalled();
 
-    // Strict ordering: launcher focus BEFORE workspace close 이어야 close 후
-    // process 가 destroy 되었을 때 focus IPC 가 race 하지 않는다.
+    // Strict ordering: launcher focus BEFORE workspace close, so the focus
+    // IPC does not race the process destroyed by the close.
     const focusOrder = focusWindowMock.mock.invocationCallOrder[0]!;
     const closeOrder = destroyCurrentWindowMock.mock.invocationCallOrder[0]!;
     expect(focusOrder).toBeLessThan(closeOrder);
@@ -301,24 +301,24 @@ describe("AC-154-*: Window lifecycle wiring", () => {
     });
 
     // Pool eviction must NOT cascade into a window hide. That's the
-    // Sprint 141 / Sprint 154 distinction the contract pins.
+    // distinction the contract pins.
     expect(hideWindowMock).not.toHaveBeenCalled();
     expect(showWindowMock).not.toHaveBeenCalled();
   });
 
   // ---------------------------------------------------------------------------
-  // AC-154-04 (sprint-363 update): Launcher close → hide (NOT exit)
+  // AC-154-04: Launcher close → hide (NOT exit)
   //
-  // Sprint 363 (Phase 3, Q13 / strategy line 773) changed launcher close
-  // semantics: the X button hides the launcher without exiting the app so
-  // open `workspace-{conn_id}` windows stay alive (multi-conn TablePlus
-  // pattern). The backend's `on_window_event` matcher in `src-tauri/src/lib.rs`
-  // calls `api.prevent_close()` + `handle_launcher_close_request` (which hides
-  // the launcher). The JS handler echoes with `hideWindow('launcher')` so
-  // jsdom unit tests see the same lifecycle hook.
+  // Q13 changed launcher close semantics: the X button hides the launcher
+  // without exiting the app so open `workspace-{conn_id}` windows stay alive
+  // (multi-conn TablePlus pattern). The backend's `on_window_event` matcher
+  // in `src-tauri/src/lib.rs` calls `api.prevent_close()` +
+  // `handle_launcher_close_request` (which hides the launcher). The JS
+  // handler echoes with `hideWindow('launcher')` so jsdom unit tests see the
+  // same lifecycle hook.
   //
-  // Pre-sprint-363 this test asserted `exitAppMock` was called. That path
-  // is retired — the launcher is no longer the single-window dock-killer.
+  // This test used to assert `exitAppMock` was called. That path is retired
+  // — the launcher is no longer the single-window dock-killer.
   // ---------------------------------------------------------------------------
   it("AC-154-04 (sprint-363): closing the launcher window (tauri://close-requested) hides launcher, does NOT exit the app", async () => {
     // Capture the close-requested handler the LauncherShell registers via
@@ -348,7 +348,7 @@ describe("AC-154-*: Window lifecycle wiring", () => {
       await capturedHandler!();
     });
 
-    // Sprint 363: the launcher is hidden, not exited.
+    // The launcher is hidden, not exited.
     expect(hideWindowMock).toHaveBeenCalledWith("launcher");
     expect(exitAppMock).not.toHaveBeenCalled();
 
@@ -359,16 +359,15 @@ describe("AC-154-*: Window lifecycle wiring", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // AC-154-05 (Wave 9.5 회귀 4, 2026-05-16): workspace 는 close-requested
-  // listener 를 등록하지 않는다.
+  // AC-154-05: the workspace registers no close-requested listener.
   //
-  // 이전 contract — sprint-154 의 launcher-hidden 시대에는 OS-level close 가
-  // process 가 죽은 듯 보였기에 close-requested 를 가로채야 했다. Wave 9.5
-  // 의 "launcher 항상 visible" UX 에서 listener 는 dead code 가 됐고, 게다가
-  // 이전 `closeCurrentWindow()` (= `win.close()`) 가 close-requested 를 발사 → 같은 listener
-  // 가 preventDefault + 본 핸들러 재호출 → **무한 루프 + 창 안 닫힘** 회귀의
-  // 근본 원인이었다. 본 테스트는 listener 미등록을 lock — 다시 추가하면 같은
-  // trap 부활.
+  // Old contract — in the launcher-hidden era an OS-level close made the
+  // process look dead, so close-requested had to be intercepted. Under the
+  // "launcher always visible" UX that listener became dead code, and worse,
+  // the old `closeCurrentWindow()` (= `win.close()`) fired close-requested →
+  // the same listener ran preventDefault and re-invoked this handler → the
+  // root cause of the **infinite loop with a window that would not close**.
+  // This test locks the listener's absence — adding it back revives the trap.
   // ---------------------------------------------------------------------------
   it("AC-154-05 (Wave 9.5 회귀 4): WorkspacePage does NOT register a close-requested listener — listener was the infinite loop trap", async () => {
     useConnectionStore.setState({
@@ -387,12 +386,11 @@ describe("AC-154-*: Window lifecycle wiring", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Error path: launcher hide rejects on activation. Wave 9.5 revision —
-  // 이전 contract 의 "workspace.show() rejects → launcher remains" recovery
-  // 는 sprint-361 의 per-conn 윈도우 모델에서 의미가 사라졌다 (HomePage 는
-  // 더 이상 workspace.show 를 호출하지 않는다). 대신 launcher hide 자체가
-  // best-effort 임을 잠근다 — `hideWindow` 가 reject 해도 store side 는
-  // 정상 갱신 + activatingRef 가 풀려 사용자가 재시도 가능.
+  // Error path: the old contract's "workspace.show() rejects → launcher
+  // remains" recovery lost its meaning under the per-conn window model
+  // (HomePage no longer calls workspace.show). What is left to lock is that
+  // activation reaches no window seam at all and the store side still
+  // updates.
   // ---------------------------------------------------------------------------
   it("AC-154-01 error path (revised): window seam 호출 0 + store side 정상 — launcher 가 항상 visible 이므로 hideWindow 도 호출 안 함", async () => {
     useConnectionStore.setState({
@@ -406,7 +404,7 @@ describe("AC-154-*: Window lifecycle wiring", () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
-    // launcher 는 항상 visible — hide 도 호출 안 됨.
+    // The launcher stays visible — hide is not called either.
     expect(hideWindowMock).not.toHaveBeenCalled();
     expect(showWindowMock).not.toHaveBeenCalled();
     expect(focusWindowMock).not.toHaveBeenCalled();

@@ -3,12 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
 import { useDataGridEdit } from "./useDataGridEdit";
 
-// Sprint 77 — cover the promotion-trigger gaps that existed before.
-// The sort/filter/page promotion lives in the DataGrid effect, but
-// starting an edit, adding a row, or deleting a row never re-fetch and
-// therefore never fired that effect. This suite pins the hook itself as
-// the responsible caller by mocking `promoteTab` and asserting it's
-// invoked at the earliest point of each interaction.
+// Cover the promotion-trigger gaps. The sort/filter/page promotion lives
+// in the DataGrid effect, but starting an edit, adding a row, or deleting
+// a row never re-fetch and therefore never fired that effect. This suite
+// pins the hook itself as the responsible caller by mocking `promoteTab`
+// and asserting it's invoked at the earliest point of each interaction.
 
 const mockExecuteQuery = vi.fn(() =>
   Promise.resolve({
@@ -109,11 +108,11 @@ describe("useDataGridEdit — preview tab promotion (Sprint 77)", () => {
     expect(mockPromoteTab).toHaveBeenCalledTimes(1);
   });
 
-  // Sprint 86 — the document paradigm's no-op guard was removed because the
-  // hook now routes document edits through the MQL generator + Tauri mutate
-  // wrappers (see `useDataGridEdit.document.test.ts`). Starting an edit for
-  // a Mongo cell therefore promotes the active tab just like an RDB grid —
-  // the user's edit is a legitimate "I want to keep this tab" signal.
+  // The document paradigm's no-op guard was removed because the hook now
+  // routes document edits through the MQL generator + Tauri mutate wrappers
+  // (see `useDataGridEdit.document.test.ts`). Starting an edit for a Mongo
+  // cell therefore promotes the active tab just like an RDB grid — the
+  // user's edit is a legitimate "I want to keep this tab" signal.
   it("handleStartEdit promotes the active tab for document paradigm (Sprint 86)", () => {
     const { result } = renderEditHook("document");
 

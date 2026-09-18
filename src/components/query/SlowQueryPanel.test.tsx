@@ -1,6 +1,6 @@
-// Sprint 340 (2026-05-15) — U5 live wire. Verifies SlowQueryPanel
-// dispatches the paradigm-neutral `slow_queries` IPC through
-// `@/lib/api/slowQueries` and renders the top-N table.
+// U5 live wire. Verifies SlowQueryPanel dispatches the paradigm-neutral
+// `slow_queries` IPC through `@/lib/api/slowQueries` and renders the top-N
+// table.
 
 import {
   act,

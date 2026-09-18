@@ -60,7 +60,7 @@ export default function DocumentDataGrid({
   database,
   collection,
 }: DocumentDataGridProps) {
-  // sprint-373 — `recordHistoryEntry` 가 disable gate + wire shape normalise.
+  // `recordHistoryEntry` handles the disable gate + wire shape normalise.
   const fieldsCacheEntry = useDocumentCatalogStore(
     (s) => s.fieldsCache[connectionId]?.[database]?.[collection],
   );
@@ -80,35 +80,33 @@ export default function DocumentDataGrid({
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  // Sprint 341 (Option D) — inline tree panel coordinate. Only one
-  // cell may be expanded at a time per grid; toggling another cell
-  // collapses the previous one. `null` = none expanded.
+  // Option D — inline tree panel coordinate. Only one cell may be expanded
+  // at a time per grid; toggling another cell collapses the previous one.
+  // `null` = none expanded.
   //
-  // Sprint 342 V2 feedback (2026-05-15) — `rowIdSnapshot` captures the
-  // `_id` of the expanded row at expand-time. When the page rows
-  // change (sort / filter / refetch / page move), an effect compares
-  // the current `_id` at `rowIdx` against this snapshot and auto-
-  // closes the panel if they differ. Without it, the panel either
-  // (a) dangles where the row used to be after a filter, or
-  // (b) silently re-attaches to the WRONG doc when a sort puts a
-  // different row at the same index.
+  // `rowIdSnapshot` captures the `_id` of the expanded row at expand-time.
+  // When the page rows change (sort / filter / refetch / page move), an
+  // effect compares the current `_id` at `rowIdx` against this snapshot and
+  // auto-closes the panel if they differ. Without it, the panel either
+  // (a) dangles where the row used to be after a filter, or (b) silently
+  // re-attaches to the WRONG doc when a sort puts a different row at the
+  // same index.
   const [expandedNested, setExpandedNested] =
     useState<ExpandedNestedCell | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [activeFilter, setActiveFilter] = useState<Record<string, unknown>>({});
-  // Sprint 315 — Slice C.1: multi-column sort. Local state mirrors the
-  // RDB DataGrid's `handleSort` mechanic (click = primary ASC↔DESC↔clear,
-  // shift+click = add/cycle/remove secondary keys). D-29: kept local
-  // instead of routed through workspaceStore to limit Slice C.1 blast
-  // radius. Cross-session persist is a Slice C.2 (Sprint 316) decision.
+  // Multi-column sort. Local state mirrors the RDB DataGrid's `handleSort`
+  // mechanic (click = primary ASC↔DESC↔clear, shift+click = add/cycle/remove
+  // secondary keys). D-29: kept local instead of routed through workspaceStore
+  // to limit the blast radius. Cross-session persist is a separate decision.
   const [sorts, setSorts] = useState<SortInfo[]>([]);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
-  // Sprint 325 — Slice H: server-side field projection. `null` → no
-  // projection (backend returns all fields). Non-empty → wire-up via
-  // useDocumentGridData → find_documents body.
+  // Server-side field projection. `null` → no projection (backend returns
+  // all fields). Non-empty → wire-up via useDocumentGridData →
+  // find_documents body.
   const [projection, setProjection] = useState<Record<string, 0 | 1> | null>(
     null,
   );
@@ -143,11 +141,10 @@ export default function DocumentDataGrid({
     projection: projection ?? undefined,
   });
 
-  // Sprint 320 — Slice E.2: client-side schema accumulator. Mongo
-  // collection 은 schemaless — fetch 마다 backend 가 보내는
-  // `queryResult.columns` 가 다를 수 있다. accumulator 가 페이지 간
-  // 누적해 grid header / row 가 흔들리지 않게 한다. triple 변경시
-  // hook 내부에서 auto-reset (sprint 319 D-43).
+  // Client-side schema accumulator. A Mongo collection is schemaless — the
+  // `queryResult.columns` the backend sends can differ on every fetch. The
+  // accumulator accumulates across pages so the grid header / rows do not
+  // shift. Auto-reset inside the hook when the triple changes (D-43).
   const schemaAccumulator = useDocumentSchemaAccumulator({
     connId: connectionId,
     db: database,
@@ -157,19 +154,18 @@ export default function DocumentDataGrid({
     if (queryResult) {
       schemaAccumulator.merge(queryResult.columns);
     }
-    // accumulator.merge 는 hook 내부에서 ref 기반 stable identity.
-    // queryResult.columns 만 deps 로 충분.
+    // accumulator.merge is a ref-based stable identity inside the hook;
+    // queryResult.columns alone is a sufficient deps list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryResult?.columns]);
 
-  // Sprint 342 V2 feedback (2026-05-15) — auto-close the inline tree
-  // panel when the row it points to disappears or gets replaced. We
-  // compare the `_id` captured at expand-time against whatever doc is
-  // currently sitting at `rowIdx`. JSON.stringify is fine for ids
-  // because `_id` shapes are either scalars or shallow EJSON wrappers
-  // (`{ $oid: "..." }`, `{ $date: "..." }`). Without this, sort /
-  // filter / refetch silently re-attaches the panel to a different
-  // doc, or leaves the panel dangling under an empty slot.
+  // Auto-close the inline tree panel when the row it points to disappears or
+  // gets replaced. We compare the `_id` captured at expand-time against
+  // whatever doc is currently sitting at `rowIdx`. JSON.stringify is fine for
+  // ids because `_id` shapes are either scalars or shallow EJSON wrappers
+  // (`{ $oid: "..." }`, `{ $date: "..." }`). Without this, sort / filter /
+  // refetch silently re-attaches the panel to a different doc, or leaves the
+  // panel dangling under an empty slot.
   useEffect(() => {
     if (!expandedNested) return;
     const currentDoc = queryResult?.rawDocuments[expandedNested.rowIdx];
@@ -182,17 +178,17 @@ export default function DocumentDataGrid({
     }
   }, [queryResult, expandedNested]);
 
-  // Sprint 342 V2 feedback — measure the scroll container's visible
+  // Measure the scroll container's visible
   // width so the inline tree panel can fill the viewport horizontally
   // (instead of `w-fit` which only covered the tree's intrinsic
   // width). The panel sits inside a `sticky left-0` wrapper so this
   // width is exactly the user-visible portion of the grid.
   const [scrollContainerWidth, setScrollContainerWidth] = useState(0);
 
-  // accumulator 가 backend columns 와 다를 수 있어 (a) 누적된 column 만
-  // surface 하고 (b) cell lookup 시 backend rows 의 인덱스를 찾는다.
-  // accumulator 가 빈 상태 (첫 fetch 전) 면 backend columns fallback
-  // 으로 flicker 방지 (D-48).
+  // The accumulator can differ from the backend columns, so (a) surface only
+  // the accumulated columns and (b) look up backend rows' indexes for cell
+  // values. While the accumulator is empty (before the first fetch), fall
+  // back to the backend columns to avoid flicker (D-48).
   const data = useMemo(() => {
     if (!backendData) return null;
     if (schemaAccumulator.columns.length === 0) return backendData;
@@ -287,10 +283,10 @@ export default function DocumentDataGrid({
     [page],
   );
 
-  // Sprint 258 — column widths via shared hook + `--cols` CSS variable.
-  // Sprint 260 (AC-260-02) — drag-resize 활성.
-  // Sprint 369 (Phase 4) — `datagrid_column_prefs` SQLite SOT 로 전환.
-  // PK 의 `namespace` 는 Mongo 의 경우 db_name 과 동일 (codex 7차 #2 동의어 통일).
+  // Column widths via the shared hook + the `--cols` CSS variable.
+  // AC-260-02 — drag-resize enabled.
+  // Backed by the `datagrid_column_prefs` SQLite SOT.
+  // The PK's `namespace` equals db_name for Mongo.
   const widthColumns = useMemo(
     () =>
       (data?.columns ?? []).map((c) => ({
@@ -315,14 +311,14 @@ export default function DocumentDataGrid({
     reset: resetColumnWidths,
   } = useColumnWidths(widthColumns, columnPrefsPk);
 
-  // Sprint 317 — Slice D.1: per-collection hide column.
-  // Sprint 369 — 같은 PK 5-tuple 사용. backend partial patch 가 widths /
-  // hiddenColumns 의 독립성 보장 (codex 7차 #1).
+  // Per-collection hide column.
+  // Same PK 5-tuple as the widths; the backend's partial patch keeps
+  // widths / hiddenColumns independent.
   const hiddenColumns = useHiddenColumns(columnPrefsPk);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Sprint 342 V2 feedback — keep `scrollContainerWidth` in sync with
+  // Keep `scrollContainerWidth` in sync with
   // the scroll container's `clientWidth` so the sticky inline-tree
   // panel can fill the viewport horizontally. Reading once on mount
   // isn't enough — window resize, sidebar collapse, and devtools
@@ -343,10 +339,9 @@ export default function DocumentDataGrid({
     return () => obs.disconnect();
   }, [data]);
 
-  // Sprint 317 D.1 — visible column subset. Hidden columns drop out of
-  // the header row, the `--cols` template, and the per-row cell map.
-  // Tuples carry the original idx so cell lookups (`row[origIdx]`) stay
-  // correct after filtering.
+  // Visible column subset. Hidden columns drop out of the header row, the
+  // `--cols` template, and the per-row cell map. Tuples carry the original
+  // idx so cell lookups (`row[origIdx]`) stay correct after filtering.
   const visibleEntries = useMemo<
     ReadonlyArray<readonly [ColumnInfo, number]>
   >(() => {
@@ -396,7 +391,7 @@ export default function DocumentDataGrid({
   // when pending edits exist.
   useRefreshEvent("refresh-data", () => void fetchData());
 
-  // Sprint 316 — explicit sort helpers driven by the column header
+  // Explicit sort helpers driven by the column header
   // context menu. `append` mirrors shift+click semantics. The plain
   // `handleSort` (cycle on click) below stays as-is.
   const handleSortColumn = useCallback(
@@ -429,9 +424,9 @@ export default function DocumentDataGrid({
     setPage(1);
   }, []);
 
-  // Sprint 315 — RDB DataGrid handleSort 패턴 1:1 복제. shift+click =
+  // Mirrors the RDB DataGrid handleSort pattern 1:1. shift+click =
   // multi-key (ASC→DESC→remove cycle per column), plain click = single
-  // key reset (ASC→DESC→clear). page=1 로 리셋해 sort 가 reflect.
+  // key reset (ASC→DESC→clear). Reset to page=1 so the sort is reflected.
   const handleSort = useCallback(
     (columnName: string, shiftKey: boolean = false) => {
       if (shiftKey) {
@@ -589,9 +584,9 @@ export default function DocumentDataGrid({
     [mqlPreview],
   );
 
-  // WAI-ARIA grid roving tabindex + 방향키 2D nav (data cell 만). container 는
-  // scrollContainerRef 의 role="grid" div. onFocus=state-only / keyboard=focus
-  // split 은 hook 내부 문서 참고.
+  // WAI-ARIA grid roving tabindex + arrow-key 2D nav (data cells only). The
+  // container is scrollContainerRef's role="grid" div. For the
+  // onFocus=state-only / keyboard=focus split see the hook's own docs.
   const roving = useGridRoving(
     data?.rows.length ?? 0,
     visibleEntries.length,
@@ -661,9 +656,9 @@ export default function DocumentDataGrid({
             onCancel={handleCancelRefetch}
           />
 
-          {/* Sprint 315 — paradigm-shared HeaderRow. order=identity
-              (column reorder 미지원). RDB DataGrid 와 동일한 sort
-              indicator (rank + ▲/▼) 가 column 별로 표시된다. */}
+          {/* Paradigm-shared HeaderRow. order=identity
+              (column reorder unsupported). The same sort
+              indicator (rank + ▲/▼) as the RDB DataGrid shows per column. */}
           <HeaderRow
             data={data}
             order={visibleEntries.map(([, i]) => i)}
@@ -677,8 +672,8 @@ export default function DocumentDataGrid({
             onClearColumnSort={handleClearColumnSort}
             onClearAllSorts={handleClearAllSorts}
             onHideColumn={hiddenColumns.hide}
-            // Sprint 376 (Phase 6 Q21 #5 + #6) — header context menu
-            // reset affordances. Same wire as the RDB grid.
+            // Q21 #5 + #6 — header context menu reset
+            // affordances. Same wire as the RDB grid.
             onResetColumnWidths={resetColumnWidths}
             onShowAllColumns={hiddenColumns.clear}
             anyColumnHidden={hiddenColumns.hidden.size > 0}

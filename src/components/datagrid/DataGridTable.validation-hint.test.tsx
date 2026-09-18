@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
 import DataGridTable from "./DataGridTable";
 
-// Sprint 75 — inline validation hint tests. When the active editing cell has
-// an entry in `pendingEditErrors`, DataGridTable renders a `text-destructive`
-// message under the editor. When the user modifies the cell (setEditValue /
+// Inline validation hint tests. When the active editing cell has an entry in
+// `pendingEditErrors`, DataGridTable renders a `text-destructive` message
+// under the editor. When the user modifies the cell (setEditValue /
 // setEditNull) the hint clears — but the rendering side only *reads* the
 // map, so the "clears on input" assertion here is simulated by the parent
 // handing down an empty map on the next render.

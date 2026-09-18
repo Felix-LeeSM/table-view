@@ -1,15 +1,11 @@
 /// <reference types="vite/client" />
 /**
- * Sprint-89 (#FK-1) — parser contract test.
+ * #FK-1 — parser contract test.
  *
- * Sprint-88 set this file up as a regression-first test that pinned the
- * "current broken behavior" of `parseFkReference` (inline regex copy +
- * `toBeNull` assertions). Sprint-89 has now (a) exported `parseFkReference`
- * from `DataGridTable.tsx` and (b) aligned the backend so that the wire
- * format is `"<schema>.<table>(<column>)"`. The assertions below were
- * therefore flipped from "returns null" to "returns the parsed object" and
- * the inline regex copy was removed in favour of importing the real
- * production symbol.
+ * `parseFkReference` is exported from `DataGridTable.tsx` and the backend
+ * wire format is `"<schema>.<table>(<column>)"`. This file imports the real
+ * production symbol instead of copying its regex, so the assertions below
+ * expect the parsed object.
  *
  * The fixture-driven block proves both halves of the contract:
  *
@@ -84,7 +80,7 @@ describe("DataGridTable.parseFkReference (contract test, sprint-89)", () => {
   });
 
   it('returns null on the bare "<table>.<column>" form (no parens)', () => {
-    // Pre-sprint-89 backends emitted `"users.id"`; the new contract requires
+    // Older backends emitted `"users.id"`; the current contract requires
     // the parenthesised column suffix, so this input must be rejected.
     expect(parseFkReference("users.id")).toBeNull();
   });

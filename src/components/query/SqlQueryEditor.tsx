@@ -49,7 +49,7 @@ export interface SqlQueryEditorProps {
   onSqlChange: (sql: string) => void;
   onExecute: () => void;
   /**
-   * Sprint 248 (ADR 0022 Phase 4) — `Cmd+Shift+Enter` dry-run handler.
+   * ADR 0022 — `Cmd+Shift+Enter` dry-run handler.
    * Optional so non-tab callers (DDL editor previews, story-book) can
    * keep mounting `SqlQueryEditor` without supplying it; when omitted
    * the keymap binding routes to a no-op so `Cmd+Shift+Enter` falls
@@ -118,9 +118,8 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
     onSqlChangeRef.current = onSqlChange;
     const onExecuteRef = useRef(onExecute);
     onExecuteRef.current = onExecute;
-    // Sprint 248 — `onDryRun` ref so the keymap closure picks up the
-    // latest handler without recreating the editor on every parent
-    // re-render.
+    // `onDryRun` ref so the keymap closure picks up the latest handler
+    // without recreating the editor on every parent re-render.
     const onDryRunRef = useRef(onDryRun);
     onDryRunRef.current = onDryRun;
 
@@ -169,16 +168,17 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
             // priority — defaultKeymap also binds Mod-Enter.
             {
               key: "Mod-Enter",
-              // #2509 — 실행하면 자동완성 팝업을 닫는다. `closeOnBlur` 는
-              // 실행이 blur 를 일으킬 때만 도는데 단축키 실행은 포커스를
-              // 에디터에 남기므로, 남은 팝업이 결과 그리드를 덮었다.
+              // #2509 — executing closes the autocomplete popup.
+              // `closeOnBlur` only runs when execution causes a blur, but a
+              // shortcut execution leaves focus in the editor, so the popup
+              // that stayed open covered the result grid.
               run: (view) => {
                 closeCompletion(view);
                 onExecuteRef.current();
                 return true;
               },
             },
-            // Sprint 248 (ADR 0022 Phase 4) — explicit dry-run shortcut.
+            // ADR 0022 — explicit dry-run shortcut.
             // Bound BEFORE defaultKeymap so the editor keystroke wins
             // over any default `Cmd-Shift-Enter` mapping. When `onDryRun`
             // is omitted, return `false` so the binding falls through
@@ -260,10 +260,9 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
       // the layout-phase handle would snapshot null before this effect (#1248).
       setForwardedRef(ref, view);
 
-      // Wave 9.5 회귀 5 (2026-05-16) — 새 raw query tab 이 열리면 텍스트를
-      // 바로 입력할 수 있도록 contenteditable surface (`.cm-content`) 에
-      // 자동 focus. user journey: Cmd+N → tab 새로 mount → editor focus
-      // → 타이핑 즉시 가능.
+      // Auto-focus the contenteditable surface (`.cm-content`) so a newly
+      // opened raw query tab takes text right away. User journey: Cmd+N →
+      // tab mounts → editor focus → typing works immediately.
       view.focus();
 
       return () => {

@@ -1,9 +1,9 @@
 /**
- * Sprint 152 — TDD-FIRST cross-window connection-store sync tests.
+ * TDD-FIRST cross-window connection-store sync tests.
  *
  * Authored BEFORE `connectionStore.ts` is opted into `attachZustandIpcBridge`.
- * Against pre-Sprint-152 code, these cases fail because the store does not
- * yet broadcast on `connection-sync` and does not apply inbound payloads.
+ * Without that opt-in these cases fail because the store does not broadcast
+ * on `connection-sync` and does not apply inbound payloads.
  *
  * Contract surface verified (AC-152-02):
  *  - (a) workspace mutation of `activeStatuses["c1"]` propagates to the
@@ -17,8 +17,7 @@
  *    the broader contract that loading/error/UI flags stay window-local.
  *  - (d) AC-141-3 invariant: a workspace-side "Back to connections" signal
  *    (modeled as the workspace silently re-asserting `activeStatuses` /
- *    `focusedConnId` for the same connection — what Sprint 154 will tie to
- *    the real `WebviewWindow.show()/hide()`) leaves the launcher's view of
+ *    `focusedConnId` for the same connection) leaves the launcher's view of
  *    `activeStatuses["c1"].type === "connected"` AND does NOT call
  *    `disconnectFromDatabase` on either side.
  *  - (e) error path: a malformed inbound payload (missing `state`, wrong
@@ -117,9 +116,9 @@ beforeEach(() => {
 // the exported mock if needed. The default returns `"launcher"` so the
 // store's bridge attach uses that as its origin id at module-load time.
 vi.mock("@lib/window-label", async () => {
-  // sprint-366 (2026-05-16) — preserve the real parseWorkspaceLabel /
-  // formatWorkspaceLabel exports (pure string ops) for transitive
-  // imports of `useCurrentWindowConnectionId`.
+  // Preserve the real parseWorkspaceLabel / formatWorkspaceLabel exports
+  // (pure string ops) for transitive imports of
+  // `useCurrentWindowConnectionId`.
   const actual =
     await vi.importActual<typeof import("@lib/window-label")>(
       "@lib/window-label",
@@ -161,8 +160,8 @@ function makeConn(id: string, name = `${id} DB`): ConnectionConfig {
 
 /**
  * Simulate a remote window emitting the given allowlisted slice on the
- * `connection-sync` channel. Mirrors what Sprint 151's bridge ships on the
- * wire: `{ origin, state }` envelope.
+ * `connection-sync` channel. Mirrors what the bridge ships on the wire:
+ * `{ origin, state }` envelope.
  */
 function simulateRemoteEmit(
   origin: string,
@@ -324,8 +323,7 @@ describe("cross-window connection-store sync (Sprint 152)", () => {
 
     // Workspace fires its "Back to connections" signal — modeled here as the
     // workspace re-broadcasting its current view of the connection (still
-    // connected). Sprint 154 will tie this to the real lifecycle; the
-    // invariant is that NO disconnect occurs on either side.
+    // connected). The invariant is that NO disconnect occurs on either side.
     simulateRemoteEmit("workspace", {
       activeStatuses: { c1: { type: "connected" } satisfies ConnectionStatus },
       focusedConnId: "c1",

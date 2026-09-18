@@ -168,7 +168,7 @@ describe("AddDocumentModal", () => {
     expectUndoRevertsEdit(getEditorView());
   });
 
-  // Sprint 121 — CodeMirror migration
+  // CodeMirror migration
 
   it("renders a CodeMirror editor (no <textarea>) with role=textbox", () => {
     renderModal();
@@ -207,7 +207,7 @@ describe("AddDocumentModal", () => {
   });
 
   it("surfaces fieldsCache field names when connection scope is provided", () => {
-    // Sprint 265 — nested `(connId, db, collection)` cache shape.
+    // Nested `(connId, db, collection)` cache shape.
     useDocumentStore.setState({
       fieldsCache: {
         c1: {

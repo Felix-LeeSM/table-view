@@ -1,12 +1,12 @@
-// Sprint 273 (2026-05-13) — CreateTriggerDialog component test suite.
+// CreateTriggerDialog component test suite.
 //
-// 작성 이유: trigger CREATE 다이얼로그가 처음 도입된 surface 이므로 다음을
-// 고정한다 — (1) form mount + Apply 비활성 초기 상태, (2) INSTEAD OF 선택
-// 시 STATEMENT radio 가 disable 되어 backend rejection 을 UI 가 미리 방지,
-// (3) 250 ms 디바운스 preview fetch + expectedDatabase 페이로드 전파,
-// (4) commit 성공 시 onRefresh + onClose 가 정확히 1 회 호출, (5)
-// DbMismatch (Sprint 271c wire format) 에 대해 syncMismatchedActiveDb +
-// Sprint 269 passive Retry toast 가 emit 된다.
+// Reason: lock the trigger CREATE dialog's contract — (1) form mount +
+// Apply disabled in the initial state, (2) picking INSTEAD OF disables
+// the STATEMENT radio so the UI blocks the backend rejection up front,
+// (3) 250 ms debounced preview fetch + `expectedDatabase` payload
+// propagation, (4) onRefresh + onClose called exactly once on a
+// successful commit, (5) a `DbMismatch` wire error emits
+// `syncMismatchedActiveDb` + a passive Retry toast.
 
 import {
   act,
@@ -168,7 +168,7 @@ describe("CreateTriggerDialog — Sprint 273", () => {
     expect(firstCall?.triggerName).toBe("tg_audit");
     expect(firstCall?.events).toEqual(["INSERT"]);
     expect(firstCall?.previewOnly).toBe(true);
-    // Sprint 271c — opt-in DbMismatch guard.
+    // Opt-in DbMismatch guard.
     expect(firstCall?.expectedDatabase).toBe("db-1");
   });
 

@@ -1,13 +1,12 @@
-// Sprint 271c (2026-05-13) — CreateTableDialog end-to-end DbMismatch
-// recovery test.
+// CreateTableDialog end-to-end DbMismatch recovery test.
 //
-// 작성 이유: backend Sprint 266 가드가 `tauri.createTablePlan` 을
-// `AppError::DbMismatch` 로 reject 할 때, dialog 의 ddl preview catch
-// path 가 Sprint 266 wire format 을 인식하고 sync 헬퍼 + Retry toast
-// 를 발사하는지 확인. CreateTableDialog 는 다른 DDL dialog 들과 달리
-// `createTablePlan` 단일 IPC 로 N+1 fan-out 을 대체했기 때문에 그
-// 단일 surface 의 mismatch 경로를 박제 — DDL 11 commands 중 가장
-// 두꺼운 wrapper.
+// Reason: checks that when the backend guard rejects
+// `tauri.createTablePlan` with `AppError::DbMismatch`, the dialog's ddl
+// preview catch path recognises that wire format and fires the sync
+// helper + Retry toast. Unlike the other DDL dialogs, CreateTableDialog
+// replaced the N+1 fan-out with the single `createTablePlan` IPC, so
+// this pins the mismatch path of that one surface — the thickest of the
+// DDL wrappers.
 
 import {
   act,
@@ -142,7 +141,7 @@ describe("CreateTableDialog — DbMismatch (Sprint 271c)", () => {
       expect(verifyActiveDbMock).toHaveBeenCalledWith("conn-1");
     });
 
-    // User-initiated → Sprint 269 passive Retry toast.
+    // User-initiated → passive Retry toast.
     await waitFor(() => {
       expect(toastWarningMock).toHaveBeenCalledWith(
         expect.stringContaining("db-2"),

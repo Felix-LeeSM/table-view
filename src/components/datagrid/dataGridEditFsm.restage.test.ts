@@ -1,8 +1,8 @@
-// Phase 1 of #1126 (ADR 0048) — `buildRestageSnapshot` transforms the
-// just-committed pending edits into a single reversal snapshot so a
-// post-commit Cmd+Z re-stages the pre-commit values as a NEW pending edit.
-// The reversal never touches the DB — it only rebuilds Maps/Sets, so a
-// commit-span undo is pure local-state manipulation (ADR 0048 core).
+// #1126 (ADR 0048) — `buildRestageSnapshot` transforms the just-committed
+// pending edits into a single reversal snapshot so a post-commit Cmd+Z
+// re-stages the pre-commit values as a NEW pending edit. The reversal never
+// touches the DB — it only rebuilds Maps/Sets, so a commit-span undo is pure
+// local-state manipulation (ADR 0048 core).
 import { describe, expect, it } from "vitest";
 import { buildRestageSnapshot } from "./dataGridEditFsm";
 import { generateSqlWithKeys } from "./sqlGenerator";
@@ -101,7 +101,7 @@ describe("buildRestageSnapshot (#1126 Phase 1)", () => {
     expect(buildRestageSnapshot(src)).toBeNull();
   });
 
-  // ---- Phase 2 (#1126): INSERT / DELETE commit-span re-staging ----
+  // ---- #1126: INSERT / DELETE commit-span re-staging ----
 
   it("committed DELETE with a row snapshot → reverse re-INSERT", () => {
     const src = emptySource();
@@ -117,9 +117,10 @@ describe("buildRestageSnapshot (#1126 Phase 1)", () => {
     expect(snap!.pendingDeletedRowKeys.size).toBe(0);
   });
 
-  // Reason: #1433 리뷰 B1 — 삭제 undo 재-INSERT snapshot 의 실 NULL 은
-  // verbatim 보존되어야 한다. sqlGenerator 가 이 null 을 명시 NULL 로 emit
-  // 하는 계약과 짝 — 미입력(undefined)과 달리 생략 대상이 아니다 (2026-07-10)
+  // Reason: #1433 B1 review finding — a real NULL in the delete-undo
+  // re-INSERT snapshot must be preserved verbatim. Paired with the
+  // `sqlGenerator` contract that emits this null as an explicit NULL — unlike
+  // an unfilled cell (undefined), it is not a candidate for omission.
   it("committed DELETE reversal preserves real NULL cells verbatim", () => {
     const src = emptySource();
     src.pendingDeletedRowKeys.add("row-1-0");

@@ -1,15 +1,15 @@
 /**
- * 작성 2026-05-17 (Phase 6 sprint-376 Q21 affordance #3-a + #7).
+ * Q21 affordance #3-a + #7.
  *
- * 사유: Q21 9 affordance 중
- *   (3-a) Sidebar resize handle 우클릭 "Reset width" →
- *         reset_setting("sidebar_width") 1회.
- *   (7)   Sidebar 헤더 우클릭 "Collapse all" → workspace store 의
- *         sidebar.expanded 가 빈 array. cross-window 는 frontend
- *         optimistic + workspace persist 가 sprint-360 의 SQLite write
- *         로 흘러가 다른 창에 도달.
+ * Reason: of the 9 Q21 affordances,
+ *   (3-a) right-click the Sidebar resize handle → "Reset width" →
+ *         reset_setting("sidebar_width") once.
+ *   (7)   right-click the Sidebar header → "Collapse all" → the workspace
+ *         store's sidebar.expanded becomes an empty array. Cross-window, the
+ *         frontend optimistic update + workspace persist flow into the
+ *         SQLite write and reach the other windows.
  *
- * Confirm dialog 없음 — Q21 contract.
+ * No confirm dialog — Q21 contract.
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -149,11 +149,11 @@ describe("Sidebar reset affordances (Q21 #3-a + #7)", () => {
     expect(ws?.sidebar.expanded).toEqual([]);
   });
 
-  // 작성 2026-05-17 (sprint-378). 사유: 사용자가 width drag 후 기본값
-  // 복귀를 위해 컨텍스트/설정 패널을 거치지 않고 호버 시 노출되는 보라색
-  // drag handle 을 더블클릭으로 즉시 reset 할 수 있어야 한다 (이미지 #7).
-  // handle 의 단일 mousedown (drag-start) 은 reset IPC 0 — 더블클릭만이
-  // reset 을 트리거.
+  // Reason: after dragging the width, the user must be able to reset to the
+  // default immediately by double-clicking the purple drag handle exposed on
+  // hover, without going through the context menu or the settings panel
+  // (image #7). A single mousedown on the handle (drag-start) sends no reset
+  // IPC — only a double-click triggers the reset.
   it("AC-378-01: resize handle 더블클릭 → reset_setting('sidebar_width') 1회", () => {
     render(<Sidebar />);
     const handle = document.querySelector(
@@ -177,7 +177,7 @@ describe("Sidebar reset affordances (Q21 #3-a + #7)", () => {
     expect(handle).toBeTruthy();
 
     fireEvent.mouseDown(handle!, { clientX: 100 });
-    // mousedown 만으로는 drag 가 시작되더라도 reset 은 일어나지 않아야 한다.
+    // A mousedown alone must not reset, even if it starts the drag.
     fireEvent.mouseUp(handle!, { clientX: 100 });
 
     const calls = invokeMock.mock.calls.filter(

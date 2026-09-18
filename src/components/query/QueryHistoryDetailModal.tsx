@@ -1,17 +1,19 @@
 /**
- * 작성 2026-05-17 (Phase 5 sprint-372 / AC-372-03 / AC-372-08).
+ * AC-372-03 / AC-372-08.
  *
- * 단일 history row 의 원문 sql 을 보여주는 modal. List 응답에는 원문이
- * 없으므로 modal mount 시 `get_history_detail(id)` IPC 를 발사해야만
- * 원문이 표시된다 (redact-only display invariant — strategy F.5 line 537).
+ * Modal that shows the original sql of a single history row. The list
+ * response carries no original, so it appears only after mount fires the
+ * `get_history_detail(id)` IPC (redact-only display invariant — strategy F.5
+ * line 537).
  *
- * 책임:
- *   - mount 시 `getHistoryDetail({ id })` 1회 호출 + loading state.
- *   - 응답 sql 을 `<pre>` 안에 표시. file-analytics 는 redacted variant 만 표시.
- *   - close 시 modal 사라짐.
+ * Responsibilities:
+ *   - One `getHistoryDetail({ id })` call on mount + loading state.
+ *   - Show the response sql inside `<pre>`. file-analytics shows the redacted
+ *     variant only.
+ *   - Modal disappears on close.
  *
  * Test:
- *   - `QueryHistoryDetailModal.test.tsx` — IPC 호출 1회, sql display, close.
+ *   - `QueryHistoryDetailModal.test.tsx` — one IPC call, sql display, close.
  */
 
 import { Button } from "@components/ui/button";

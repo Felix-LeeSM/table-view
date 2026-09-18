@@ -88,9 +88,8 @@ export default function DocumentDatabaseTree({
     [addTab, markConnectionUsed, connectionId],
   );
 
-  // Sprint 330 (Slice DB-Scope.3) — sidebar 의 database row 우클릭으로
-  // 클릭한 row 의 database 에 prefilled mongosh tab 을 spawn. TabDbChip
-  // popover (Sprint 329) 가 가리키는 명시적 entry-point.
+  // Right-clicking a database row in the sidebar spawns a mongosh tab
+  // prefilled for that row's database.
   const handleNewQueryHere = useCallback(
     (dbName: string) => {
       addQueryTab(connectionId, dbName, {

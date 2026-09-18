@@ -1,8 +1,8 @@
 // Issue #1527 (ADR 0050) — pending-edit redo stack on `useDataGridEdit`,
-// the symmetric counterpart of the Sprint 249 undo stack. Redo re-applies
-// what an undo reverted; any NEW edit clears the redo stack (standard
-// undo/redo semantics). Scope: pending-edit symmetry only — commit-span
-// redo survival (ADR 0050 point 1) stays deferred to #1126.
+// the symmetric counterpart of the undo stack. Redo re-applies what an
+// undo reverted; any NEW edit clears the redo stack (standard undo/redo
+// semantics). Scope: pending-edit symmetry only — commit-span redo
+// survival (ADR 0050 point 1) stays deferred to #1126.
 //
 // The harness focus is the *pending-state* boundary: undo populates the
 // redo stack, redo restores from it, and a fresh edit invalidates it.

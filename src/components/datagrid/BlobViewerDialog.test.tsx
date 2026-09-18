@@ -80,7 +80,7 @@ describe("BlobViewerDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  // Sprint 306 (2026-05-14) — BigInt freeze 회귀 가드.
+  // Regression guard for the BigInt freeze.
   it("[Sprint 306] BigInt 셀이 와도 throw 없이 렌더링", () => {
     expect(() =>
       render(

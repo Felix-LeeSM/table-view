@@ -1,10 +1,10 @@
 /**
- * 작성 2026-05-17 (Phase 5 sprint-372 / AC-372-03 + AC-372-08).
+ * AC-372-03 + AC-372-08.
  *
- * 사유: detail modal 은 redact-only display invariant 의 유일한 escape
- * hatch — modal mount 시점에 `get_history_detail(id)` IPC 가 호출되고,
- * 응답 `sql` 이 화면에 들어와야 한다. 본 테스트는 user flow path 의
- * 마지막 outcome (sql 텍스트가 보이는가) 까지 따라가서 lock.
+ * Reason: the detail modal is the only escape hatch from the redact-only
+ * display invariant — mounting it calls the `get_history_detail(id)` IPC and
+ * the response `sql` must land on screen. This test follows the user flow
+ * path to its last outcome (is the sql text visible) and locks it.
  */
 
 import { render, screen, waitFor } from "@testing-library/react";
@@ -22,9 +22,10 @@ describe("QueryHistoryDetailModal (sprint-372)", () => {
     invokeMock.mockReset();
   });
 
-  // AC-372-03 — modal mount → get_history_detail(id) 1회 + sql display.
-  // 작성 2026-05-17. 사유: list 응답에는 sql 이 없어 detail click 만이
-  // 원문 노출 경로. invoke args + 응답 sql 의 DOM 도달을 모두 잠근다.
+  // AC-372-03 — modal mount → get_history_detail(id) once + sql display.
+  // Reason: the list response has no sql, so a detail click is the only path
+  // that exposes the original. Locks both the invoke args and the response
+  // sql reaching the DOM.
   it("[AC-372-03] mount calls get_history_detail and shows original sql", async () => {
     invokeMock.mockResolvedValueOnce({
       id: 7,
@@ -46,15 +47,15 @@ describe("QueryHistoryDetailModal (sprint-372)", () => {
       req: { id: 7 },
     });
 
-    // redacted 도 함께 표시.
+    // The redacted form is shown alongside.
     expect(
       screen.getByTestId("query-history-detail-sql-redacted"),
     ).toHaveTextContent("?");
   });
 
-  // 로딩 indicator → fetch 응답 도착 시 사라짐.
-  // 작성 2026-05-17. 사유: 사용자가 "Loading…" 텍스트가 일시 보이고
-  // 곧 sql 로 대체되는 UX 시퀀스를 보장.
+  // Loading indicator → gone once the fetch response arrives.
+  // Reason: guarantees the UX sequence where the user briefly sees the
+  // "Loading…" text and the sql soon replaces it.
   it("shows loading then swaps to detail on resolve", async () => {
     let resolveFn: (v: unknown) => void = () => {};
     invokeMock.mockReturnValueOnce(
@@ -86,9 +87,10 @@ describe("QueryHistoryDetailModal (sprint-372)", () => {
     );
   });
 
-  // backend NotFound → error path. modal 은 alert role 로 메시지 표시.
-  // 작성 2026-05-17. 사유: detail row 가 race-deleted 되었을 때 user 가
-  // 빈 화면이 아닌 진단 메시지를 본다.
+  // backend NotFound → error path. The modal shows the message in an alert
+  // role.
+  // Reason: when the detail row is race-deleted the user sees a diagnostic
+  // message instead of a blank screen.
   it("surfaces backend reject in an alert", async () => {
     invokeMock.mockRejectedValueOnce(new Error("Not found: history 999"));
 
@@ -99,8 +101,8 @@ describe("QueryHistoryDetailModal (sprint-372)", () => {
     });
   });
 
-  // close 버튼 → onClose 콜. parent 가 modal 을 unmount 하는 패턴.
-  // 작성 2026-05-17. 사유: modal escape path 가 일관되게 동작.
+  // Close button → onClose call. The parent un-mounts the modal.
+  // Reason: the modal escape path behaves consistently.
   it("invokes onClose when Close button is clicked", async () => {
     invokeMock.mockResolvedValueOnce({
       id: 1,
