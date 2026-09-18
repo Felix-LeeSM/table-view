@@ -16,14 +16,14 @@ import type {
   SchemaChangeResult,
 } from "@/types/schema";
 
-// Table management — Sprint 235 dual export.
+// Table management — dual export.
 //
 // `dropTableRequest` / `renameTableRequest` take the new request object
 // shape and return `SchemaChangeResult { sql }` so the new
 // RenameTableDialog / DropTableDialog can drive the preview/execute
 // lifecycle through `useDdlPreviewExecution`.
 //
-// `dropTable` / `renameTable` retain their pre-Sprint 235 positional
+// `dropTable` / `renameTable` retain their legacy positional
 // signatures — `schemaStore.dropTable` / `.renameTable` actions still
 // call them and the diff = 0 invariant on `src/stores/schemaStore.ts`
 // holds. These wrappers build the request object internally with
@@ -39,7 +39,7 @@ import type {
 // `AppError::DbMismatch` envelope with stable legacy message text.
 
 /**
- * Sprint 235 — request-shaped DROP TABLE wrapper. Returns the SQL the
+ * Request-shaped DROP TABLE wrapper. Returns the SQL the
  * backend ran (or, when `previewOnly: true`, the SQL it WOULD run).
  *
  * `request.expectedDatabase` triggers the backend
@@ -61,7 +61,7 @@ export async function dropTableRequest(
 }
 
 /**
- * Sprint 235 — request-shaped RENAME TABLE wrapper. Same semantics as
+ * Request-shaped RENAME TABLE wrapper. Same semantics as
  * `dropTableRequest`.
  *
  * `request.expectedDatabase` opt-in DbMismatch guard.
@@ -145,14 +145,14 @@ export async function alterTable(
 }
 
 /**
- * Sprint 236 — request-shaped ADD COLUMN wrapper. Returns the SQL the
+ * Request-shaped ADD COLUMN wrapper. Returns the SQL the
  * backend ran (or, when `previewOnly: true`, the SQL it WOULD run).
- * The Sprint 236 `AddColumnDialog` calls this twice: first with
+ * The `AddColumnDialog` calls this twice: first with
  * `previewOnly: true` for the Show DDL preview pane, then with
- * `previewOnly: false` for the commit (mirrors Sprint 226 `createTable`
- * + Sprint 235 `dropTableRequest`).
+ * `previewOnly: false` for the commit (mirrors `createTable`
+ * + `dropTableRequest`).
  *
- * Note: per Sprint 236 contract Open Question §1, no positional
+ * Note: by design, no positional
  * `addColumn` compat wrapper is exported — `grep -rn 'tauri\.addColumn\b'
  * src/` returns 0 hits in production code, so the request-shaped
  * function is the sole public API surface.
@@ -166,9 +166,9 @@ export async function addColumnRequest(
 }
 
 /**
- * Sprint 236 — request-shaped DROP COLUMN wrapper. Same shape as
- * `addColumnRequest`. No positional compat wrapper (see Sprint 236
- * Open Question §1).
+ * Request-shaped DROP COLUMN wrapper. Same shape as
+ * `addColumnRequest`. No positional compat wrapper (see the
+ * note on `addColumnRequest`).
  *
  * `request.expectedDatabase` opt-in DbMismatch guard.
  */
@@ -194,7 +194,7 @@ export async function createTable(
 }
 
 /**
- * Sprint 240 — unified `CREATE TABLE + indexes + constraints` wrapper.
+ * Unified `CREATE TABLE + indexes + constraints` wrapper.
  * Single round-trip preview / execute for the multi-tab
  * `CreateTableDialog`. Returns the joined SQL plan as a single string
  * (statements separated by `;\n`); the dialog renders it verbatim in
@@ -257,7 +257,7 @@ export async function dropConstraint(
 }
 
 /**
- * Sprint 273 — `CREATE TRIGGER` wrapper. The `CreateTriggerDialog`
+ * `CREATE TRIGGER` wrapper. The `CreateTriggerDialog`
  * calls this twice: first with `previewOnly: true` for the inline DDL
  * preview pane, then with `previewOnly: false` for the commit. Backend
  * validates identifiers / whitelists, rejects `INSTEAD OF + STATEMENT`
@@ -274,7 +274,7 @@ export async function createTrigger(
 }
 
 /**
- * Sprint 274 — `DROP TRIGGER` wrapper. The `DropTriggerDialog` calls
+ * `DROP TRIGGER` wrapper. The `DropTriggerDialog` calls
  * this twice: first with `previewOnly: true` for the inline DDL preview
  * pane, then with `previewOnly: false` for the commit. Backend
  * validates `trigger_name` / `schema` / `table` identifiers, emits
@@ -298,7 +298,7 @@ export async function dropTrigger(
 }
 
 /**
- * Sprint 237 — count rows where `<column>` is `NULL` on
+ * Count rows where `<column>` is `NULL` on
  * `"<schema>"."<table>"`. Backs the pre-execution warning that the
  * MODIFY editor surfaces when the user toggles a nullable column to
  * NOT NULL — a non-zero result means the eventual `ALTER COLUMN …
@@ -332,7 +332,7 @@ export async function countNullRows(
 }
 
 /**
- * Sprint 335 (Slice M live wire) — `CREATE DATABASE "<name>"`. PG only
+ * `CREATE DATABASE "<name>"`. PG only
  * for now; other RDB adapters surface `AppError::Unsupported`.
  */
 export async function createRdbDatabase(
@@ -343,7 +343,7 @@ export async function createRdbDatabase(
 }
 
 /**
- * Sprint 335 (Slice M live wire) — `DROP DATABASE "<name>"`. PG only;
+ * `DROP DATABASE "<name>"`. PG only;
  * caller is responsible for evicting active sessions on the target.
  */
 export async function dropRdbDatabase(

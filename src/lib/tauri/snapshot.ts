@@ -1,20 +1,24 @@
 /**
- * Sprint 357 (Phase 1) — `get_initial_app_state` IPC frontend wrapper.
+ * `get_initial_app_state` IPC frontend wrapper.
  *
- * Boot 시 atomic single-shot read 로 5 boot-critical store + runtime
- * activeStatuses 를 hydration. Strategy F.2 (line 911–998) 의 wire shape
- * 과 byte-equivalent. 호출은 launcher 또는 workspace window 어디서나 가능 —
- * window scope 분기는 backend 가 `window.label()` 로 자동 처리.
+ * Atomic single-shot boot read that hydrates the 5 boot-critical stores
+ * plus runtime `activeStatuses`. Wire shape is byte-equivalent to
+ * Strategy F.2 (line 911–998). Callable from either the launcher or a
+ * workspace window — the backend derives the window scope from
+ * `window.label()` automatically.
  *
- * Out of Scope (sprint-365 / sprint-367):
- *   - Snapshot 의 frontend hydrate 적용 (store mirror, listener 등록 순서).
- *   - Schema version mismatch handling (safe mode 진입).
+ * Out of scope:
+ *   - Applying the snapshot on the frontend (store mirrors, listener
+ *     registration order).
+ *   - Schema version mismatch handling (safe mode entry).
  *
- * Lazy stores (favorites / queryHistory / schemaCache / datagrid_prefs) 는
- * 본 snapshot 에 포함되지 않음. Mount 시 도메인별 IPC 로 fetch.
+ * Lazy stores (favorites / queryHistory / schemaCache / datagrid_prefs)
+ * are not part of this snapshot. They are fetched through their domain
+ * IPC on mount.
  *
- * Partial fallback: `partial=true` 면 dev mode banner + 해당 store 만 default
- * 초기화. Boot 자체는 진행 (F.2 line 1125).
+ * Partial fallback: with `partial=true` the caller shows the dev-mode
+ * banner and re-initializes only the failed stores to their defaults.
+ * Boot itself proceeds (F.2 line 1125).
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -29,17 +33,18 @@ import type {
 export type StoreSlot<T> = T | { error: string };
 
 export interface ConnectionsStore {
-  /** `ConnectionConfig` 는 frontend 명. Rust 측 `ConnectionConfigPublic` 의 wire
-   * 형태 — `hasPassword` boolean 만 노출, plaintext / ciphertext 없음. */
+  /** `ConnectionConfig` is the frontend name; wire form of the Rust
+   * `ConnectionConfigPublic` — exposes only the `hasPassword` boolean,
+   * no plaintext / ciphertext. */
   items: ConnectionConfig[];
   groups: ConnectionGroup[];
 }
 
 /**
- * Q13 PK (connection_id, db_name). Launcher window → 빈 map; workspace window
- * → 그 conn 만. Per-cell shape 은 `PersistedWorkspaceState` (sprint-353
- * dehydrate output) — sprint-367 의 hydration 책임이므로 본 wrapper 는
- * `unknown` 으로만 노출.
+ * Q13 PK (connection_id, db_name). Launcher window → empty map;
+ * workspace window → only that conn's entries. Per-cell shape is the
+ * `PersistedWorkspaceState` dehydrate output — the hydration layer owns
+ * rehydration, so this wrapper exposes only `unknown`.
  */
 export interface WorkspacesStore {
   byConnectionId: Record<string, Record<string, unknown>>;
@@ -52,33 +57,35 @@ export interface MruStore {
 
 export interface ThemeStore {
   themeId: string;
-  /** `"system" | "light" | "dark"` (실제 ThemeMode union 은 sprint-367 에서 mirror). */
+  /** `"system" | "light" | "dark"` (the frontend `ThemeMode` union mirrors this). */
   mode: string;
 }
 
 export interface SafeModeStore {
-  /** `"off" | "on"` (실제 SafeMode union 은 sprint-367 에서 mirror). */
+  /** `"off" | "on"` (the frontend `SafeMode` union mirrors this). */
   mode: string;
 }
 
 export interface InitialAppState {
-  /** breaking shape change 마다 ++. 현재 1. */
+  /** Incremented on every breaking shape change. */
   schemaVersion: 1;
   /** monotonic per boot — frontend event dedup baseline. */
   snapshotVersion: number;
-  /** unix ms — backend 가 SystemTime::now() 으로 측정. */
+  /** Unix ms — measured by the backend via `SystemTime::now()`. */
   generatedAt: number;
-  /** 한 store 라도 hydrate 실패면 true. 다른 store 는 정상 진행. */
+  /** True when at least one store failed to hydrate; the others proceed normally. */
   partial: boolean;
-  /** v0.3.1: boot 자동 복구(quarantine + fresh)가 발생했으면 true. runtime meta 이라 schemaVersion 은 1 유지. */
+  /** v0.3.1: true when boot auto-recovery (quarantine + fresh) ran. Runtime meta only — schemaVersion stays 1. */
   recovered: boolean;
   /**
-   * #2183: `connections.json` 이 없어서 옆의 백업으로 되살렸고 그 백업에 연결이나
-   * 그룹이 들어 있었으면 true. 빈 문서를 되살린 경우는 돌려놓은 것이 없어서 false 다.
-   * `recovered` 와 다른 키다 — `recovered` 는 앱 상태를 초기화했다는 뜻이고
-   * 이쪽은 아무것도 초기화하지 않고 저장해 둔 연결과 그룹이 돌아왔다는 뜻이라,
-   * 사용자에게 할 말과 가리킬 파일이 서로 다르다. 둘 중 한쪽만 돌아와도 true 다.
-   * 역시 runtime meta 라 schemaVersion 은 1 유지.
+   * #2183: true when `connections.json` was missing, the adjacent backup was
+   * used to restore, and that backup contained connections or groups.
+   * Restoring an empty document is false — there was nothing to bring back.
+   * A different key from `recovered`: `recovered` means the app state was
+   * reset, while this means nothing was reset and the saved connections and
+   * groups came back, so the user-facing message and the file to point at
+   * differ. True even when only one of the two came back. Also runtime
+   * meta, so schemaVersion stays 1.
    */
   connectionsRestoredFromBackup: boolean;
   stores: {
@@ -89,21 +96,21 @@ export interface InitialAppState {
     safeMode: StoreSlot<SafeModeStore>;
   };
   runtime: {
-    /** Q14 — backend M2 truth 의 process state mirror. */
+    /** Q14 — process-state mirror of the backend M2 truth. */
     activeStatuses: Record<string, ConnectionStatus>;
   };
 }
 
 /**
- * Atomic boot snapshot 을 backend 에서 fetch. Window scope (launcher /
- * workspace) 는 backend 가 `tauri::Window` 의 `label()` 로 자동 분기 —
- * frontend 는 인자 전달 안 함.
+ * Fetch the atomic boot snapshot from the backend. The window scope
+ * (launcher / workspace) is resolved by the backend from `tauri::Window`'s
+ * `label()` — the frontend passes no argument.
  *
- * 실패 케이스:
- *   - SQLite corrupt / 락 timeout → `Error("Storage error: ...")` reject.
- *     호출자는 fatal toast + safe mode 진입 권장.
- *   - 일부 store 실패 → `partial: true` 반환 + 그 슬롯에 `{ error }`.
- *     호출자는 dev banner + default 초기화로 계속 진행.
+ * Failure cases:
+ *   - SQLite corrupt / lock timeout → rejects with `Error("Storage error: ...")`.
+ *     The caller should show a fatal toast and recommend entering safe mode.
+ *   - Some stores fail → returns `partial: true` + `{ error }` in those slots.
+ *     The caller proceeds with the dev banner + default initialization.
  */
 export async function getInitialAppState(): Promise<InitialAppState> {
   return invoke<InitialAppState>("get_initial_app_state");

@@ -2,11 +2,13 @@
 //! vendor-restorable schema-dump round-trip. Mirrors the #1642 SQL Server
 //! round-trip (`tests/mssql_integration.rs`) and the #1654 MySQL sibling.
 //!
-//! Docker-gated: `common::setup_oracle_adapter()` silent-skips (`None`) when no
-//! Oracle endpoint is reachable — Docker down, or the amd64-only
-//! `gvenzl/oracle-free` image unavailable on ARM (Oracle Database Free has no
-//! ARM build). Point at an external server with
-//! `ORACLE_HOST=... ORACLE_PORT=... cargo oracle-test`.
+//! Docker-gated: `common::setup_oracle_adapter()` returns `None` when no Oracle
+//! endpoint is reachable. Locally that is a silent skip; under CI it fails loud
+//! (`common::fail_loud_under_ci`) — CI points `ORACLE_HOST` at the job's
+//! `oracle` service container (#2569), and a local run can point at an external
+//! server with `ORACLE_HOST=... ORACLE_PORT=... cargo oracle-test`. On
+//! arm/aarch64 the testcontainer path is compiled out, so a container-less
+//! local run skips there.
 //!
 //! The `stream_table_rows unsupported for duckdb` boundary test is NOT
 //! docker-gated — it asserts the trait-default `Unsupported` contract for the
