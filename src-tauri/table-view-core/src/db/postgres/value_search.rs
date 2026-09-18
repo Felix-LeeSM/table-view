@@ -227,9 +227,10 @@ mod tests {
     use super::*;
 
     // ── escape_ilike_term — ILIKE metacharacter escaping ─────────────────
-    // 작성 이유 (#1525): 검색어가 bind 로만 전달되어도 `%`/`_`/`\` 가
-    // escape 안 되면 유저 입력이 wildcard 로 오작동해 "무방비 스캔"/오탐을
-    // 유발. 보안·정확성 경계라 negative case (metachar) 를 반드시 동결.
+    // Reason (#1525): even when the search term is passed only through a bind,
+    // leaving `%`/`_`/`\` unescaped makes user input act as a wildcard, causing
+    // an "unguarded scan" or a false match. This is a security and correctness
+    // boundary, so the negative case (metacharacters) must be frozen.
 
     #[test]
     fn escape_plain_term_unchanged() {

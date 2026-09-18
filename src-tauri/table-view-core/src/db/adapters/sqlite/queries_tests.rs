@@ -246,8 +246,8 @@ async fn execute_query_select_returns_columns_and_rows() {
         vec!["id", "email"]
     );
     assert_eq!(result.total_count, 3);
-    // id 는 INTEGER 컬럼 — ADR 0026 (issue #1082) 에 따라 정밀도-보존 string
-    // token 으로 wire 되고 프론트가 BigInt 로 승격한다.
+    // `id` is an INTEGER column — per ADR 0026 (issue #1082) it is wired as a
+    // precision-preserving string token that the frontend promotes to BigInt.
     assert_eq!(result.rows[0][0], serde_json::json!("1"));
     assert_eq!(result.rows[0][1], serde_json::json!("ada@example.test"));
 }
@@ -371,10 +371,10 @@ async fn query_table_data_filters_sorts_and_paginates() {
     assert!(data.executed_query.contains("LIMIT 1 OFFSET 0"));
 }
 
-// #2430 — SQLite 에는 `ILIKE` 철자가 없다. 이 갈래는 손으로 복제한 토큰 표가
-// `_ => unreachable!()` 로 닫혀 있던 자리라, 이 방언에 없는 연산자가 들어오면
-// 컴파일은 지나가고 런타임에 패닉했다. 지금은 이식 가능 토큰 표를 거쳐 조건을
-// 버리고, 쿼리에는 `ILIKE` 가 실리지 않는다.
+// #2430 — SQLite cannot spell `ILIKE`. A hand-copied token table closed this
+// branch with `_ => unreachable!()`, so an operator this dialect lacks passed
+// compilation and panicked at runtime. The condition now goes through the
+// portable token table and is dropped, and no `ILIKE` rides on the query.
 #[tokio::test]
 async fn query_table_data_drops_ilike_filter_sqlite_cannot_spell() {
     let (_dir, adapter) = connected_adapter().await;

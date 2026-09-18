@@ -1,13 +1,12 @@
-//! PostgreSQL adapter — Sprint 202 split (4-way module reorg).
+//! PostgreSQL adapter — 4-way module split.
 //!
-//! Pre-split the entire adapter lived in a 3803-line `db/postgres.rs`.
-//! Sprint 202 carved that into four topic files mirroring the Sprint 197
-//! `db/mongodb.rs` pattern:
+//! Pre-split the entire adapter lived in a single `db/postgres.rs`. It was
+//! carved into four topic files mirroring the `db/mongodb.rs` pattern:
 //!
 //! * [`connection`] — `PostgresAdapter` struct + `PgPoolState` + connection
 //!   lifecycle (`new` / `test` / `connect_pool` / `disconnect_pool` /
 //!   `switch_active_db` / `current_database` / `ping`) + LRU sub-pool
-//!   eviction (Sprint 130) + `is_pg_database_permission_denied` helper.
+//!   eviction + `is_pg_database_permission_denied` helper.
 //! * [`schema`] — schema introspection (`list_schemas` / `list_tables` /
 //!   `get_table_columns` / `list_schema_columns` / `get_table_indexes` /
 //!   `get_table_constraints` / `list_views` / `list_functions` /
@@ -28,7 +27,7 @@
 //! Sub-files define inherent methods on `PostgresAdapter` directly (preserved
 //! `pub async fn` visibility — `commands/connection.rs` calls
 //! `PostgresAdapter::test` / `::new` directly so we cannot rename to
-//! `_impl` like Sprint 197 did for Mongo). This entry holds the single
+//! `_impl` the way the Mongo adapter did). This entry holds the single
 //! `impl DbAdapter` / `impl RdbAdapter` blocks which wrap each inherent
 //! method in `Pin<Box<dyn Future>>` + `tokio::select!` (cancel-token
 //! cooperation, ADR-0018) and delegate. Behavior is identical to the
@@ -42,7 +41,7 @@ mod schema;
 mod value_search;
 
 pub use connection::PostgresAdapter;
-// Sprint 237 — `validate_identifier` is the shared SQL-identifier guard
+// `validate_identifier` is the shared SQL-identifier guard
 // (NAMEDATALEN-63 byte limit + `[a-zA-Z_][a-zA-Z0-9_]*`). The
 // `count_null_rows` Tauri command in `commands/rdb/query.rs` reuses
 // the same body to defang injection on its raw-SQL interpolation path.
@@ -117,9 +116,9 @@ impl RdbAdapter for PostgresAdapter {
         })
     }
 
-    /// Sprint 130 — delegates to the inherent `switch_active_db` so the
-    /// trait dispatcher can drive PG sub-pool swaps from the unified
-    /// `switch_active_db` Tauri command.
+    /// Delegates to the inherent `switch_active_db` so the trait dispatcher can
+    /// drive PG sub-pool swaps from the unified `switch_active_db` Tauri
+    /// command.
     fn switch_database<'a>(
         &'a self,
         db_name: &'a str,
@@ -141,7 +140,7 @@ impl RdbAdapter for PostgresAdapter {
         cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<ColumnInfo>, AppError>> + Send + 'a>> {
         // Concrete signature is `(table, schema)`; trait passes `(namespace, table)`.
-        // Sprint 180 (AC-180-04): cooperate with cancellation. The pattern
+        // AC-180-04: cooperate with cancellation. The pattern
         // mirrors `execute_query` — race the inherent future against the
         // token's `cancelled()` future and propagate the same
         // `AppError::Database("Operation cancelled")` shape used at
@@ -196,7 +195,7 @@ impl RdbAdapter for PostgresAdapter {
         statements: &'a [String],
         cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<RdbQueryResult>, AppError>> + Send + 'a>> {
-        // Sprint 247 — delegate to the inherent `dry_run_query_batch`
+        // Delegate to the inherent `dry_run_query_batch`
         // (BEGIN → execute statements → ROLLBACK).
         Box::pin(async move { self.dry_run_query_batch(statements, cancel).await })
     }
@@ -250,8 +249,8 @@ impl RdbAdapter for PostgresAdapter {
         &'a self,
         req: &'a DropTableRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        // Sprint 235 — request-shaped delegate. Concrete inherent
-        // method already takes `&DropTableRequest`.
+        // Request-shaped delegate. The concrete inherent method already takes
+        // `&DropTableRequest`.
         Box::pin(async move { self.drop_table(req).await })
     }
 
@@ -259,7 +258,7 @@ impl RdbAdapter for PostgresAdapter {
         &'a self,
         req: &'a RenameTableRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        // Sprint 235 — request-shaped delegate.
+        // Request-shaped delegate.
         Box::pin(async move { self.rename_table(req).await })
     }
 
@@ -274,7 +273,7 @@ impl RdbAdapter for PostgresAdapter {
         &'a self,
         req: &'a AddColumnRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        // Sprint 236 — request-shaped delegate.
+        // Request-shaped delegate.
         Box::pin(async move { self.add_column(req).await })
     }
 
@@ -282,7 +281,7 @@ impl RdbAdapter for PostgresAdapter {
         &'a self,
         req: &'a DropColumnRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        // Sprint 236 — request-shaped delegate.
+        // Request-shaped delegate.
         Box::pin(async move { self.drop_column(req).await })
     }
 
@@ -325,9 +324,9 @@ impl RdbAdapter for PostgresAdapter {
         &'a self,
         req: &'a CreateTriggerRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        // Sprint 273 — request-shaped delegate. Concrete inherent method
-        // already takes `&CreateTriggerRequest` and branches on
-        // `preview_only` for preview-vs-execute.
+        // Request-shaped delegate. The concrete inherent method already takes
+        // `&CreateTriggerRequest` and branches on `preview_only` for
+        // preview-vs-execute.
         Box::pin(async move { self.create_trigger(req).await })
     }
 
@@ -335,9 +334,9 @@ impl RdbAdapter for PostgresAdapter {
         &'a self,
         req: &'a DropTriggerRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
-        // Sprint 274 — request-shaped delegate. Concrete inherent method
-        // already takes `&DropTriggerRequest` and branches on
-        // `preview_only` for preview-vs-execute.
+        // Request-shaped delegate. The concrete inherent method already takes
+        // `&DropTriggerRequest` and branches on `preview_only` for
+        // preview-vs-execute.
         Box::pin(async move { self.drop_trigger(req).await })
     }
 
@@ -348,7 +347,7 @@ impl RdbAdapter for PostgresAdapter {
         cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<IndexInfo>, AppError>> + Send + 'a>> {
         // Concrete signature is `(table, schema)`.
-        // Sprint 180 (AC-180-04): cancel-token cooperation.
+        // AC-180-04: cancel-token cooperation.
         Box::pin(async move {
             let work = self.get_table_indexes(table, namespace);
             match cancel {
@@ -368,7 +367,7 @@ impl RdbAdapter for PostgresAdapter {
         cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<ConstraintInfo>, AppError>> + Send + 'a>> {
         // Concrete signature is `(table, schema)`.
-        // Sprint 180 (AC-180-04): cancel-token cooperation.
+        // AC-180-04: cancel-token cooperation.
         Box::pin(async move {
             let work = self.get_table_constraints(table, namespace);
             match cancel {
@@ -396,10 +395,9 @@ impl RdbAdapter for PostgresAdapter {
         })
     }
 
-    /// Sprint 237 — delegate to the inherent `count_null_rows` so the
-    /// command handler can dispatch through the trait. Identifiers are
-    /// validated inside the inherent method; the trait surface stays
-    /// dialect-agnostic.
+    /// Delegate to the inherent `count_null_rows` so the command handler can
+    /// dispatch through the trait. Identifiers are validated inside the inherent
+    /// method; the trait surface stays dialect-agnostic.
     fn count_null_rows<'a>(
         &'a self,
         namespace: &'a str,
@@ -472,9 +470,9 @@ impl RdbAdapter for PostgresAdapter {
         Box::pin(async move { self.get_function_source(namespace, function).await })
     }
 
-    /// Sprint 272 — delegate to the inherent `list_triggers` so the
-    /// trait dispatcher can drive the new `list_triggers` Tauri command
-    /// without the command site having to downcast to `PostgresAdapter`.
+    /// Delegate to the inherent `list_triggers` so the trait dispatcher can
+    /// drive the `list_triggers` Tauri command without the command site having
+    /// to downcast to `PostgresAdapter`.
     fn list_triggers<'a>(
         &'a self,
         namespace: &'a str,
@@ -483,8 +481,8 @@ impl RdbAdapter for PostgresAdapter {
         Box::pin(async move { self.list_triggers(namespace, table).await })
     }
 
-    /// Sprint 272 — delegate to the inherent `get_trigger_source` so the
-    /// `get_trigger_source` Tauri command can dispatch through the trait.
+    /// Delegate to the inherent `get_trigger_source` so the `get_trigger_source`
+    /// Tauri command can dispatch through the trait.
     fn get_trigger_source<'a>(
         &'a self,
         namespace: &'a str,
@@ -497,9 +495,9 @@ impl RdbAdapter for PostgresAdapter {
         })
     }
 
-    /// Sprint 230 — delegate to the inherent `list_types` so the trait
-    /// dispatcher can drive the new `list_postgres_types` Tauri command
-    /// without the command site having to downcast to `PostgresAdapter`.
+    /// Delegate to the inherent `list_types` so the trait dispatcher can drive
+    /// the `list_postgres_types` Tauri command without the command site having
+    /// to downcast to `PostgresAdapter`.
     fn list_types<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<PostgresTypeInfo>, AppError>> + Send + 'a>> {
@@ -589,12 +587,12 @@ impl RdbAdapter for PostgresAdapter {
 
 #[cfg(test)]
 mod tests {
-    //! 작성 이유 (2026-05-08, Sprint 237 P5): trait dispatcher 본 파일은
-    //! 30+ 메서드가 모두 PG pool 호출에 의존하므로 실 PG 없이는 거의
-    //! 회수 불가. 그러나 paradigm tag (`kind`, `namespace_label`) 은
-    //! sync 라 pool 없이 즉시 검증 가능 — 회수는 작지만 trait wiring
-    //! 회귀(예: namespace_label 을 Database 로 잘못 바꾸는 PR)에 대한
-    //! tripwire.
+    //! Reason (2026-05-08): every method of this trait dispatcher depends on a
+    //! PG pool call, so almost none of it can be covered without a real PG. The
+    //! paradigm tags (`kind`, `namespace_label`) are sync, though, so they can
+    //! be checked at once without a pool — little coverage, but a tripwire for
+    //! trait-wiring regressions such as a PR that flips `namespace_label` to
+    //! Database.
     use super::*;
     use crate::db::postgres::PostgresAdapter;
 
@@ -610,12 +608,12 @@ mod tests {
         assert!(matches!(a.namespace_label(), NamespaceLabel::Schema));
     }
 
-    // 작성 이유 (2026-05-15, Sprint 339): RdbAdapter trait wrapper async
-    // blocks for Sprint 337/338/339 (`explain_query`, `collection_stats`,
-    // `server_info`) — exercised via UFCS so the wrapper body itself is
-    // counted by the coverage instrumentation, not just the inherent
-    // method. PostgresAdapter::new() has no pool so each wrapper bottoms
-    // out in `active_pool()` → `Connection("Not connected")`.
+    // Reason (2026-05-15): the RdbAdapter trait wrapper async blocks
+    // (`explain_query`, `collection_stats`, `server_info`) — exercised via
+    // UFCS so the wrapper body itself is counted by the coverage
+    // instrumentation, not just the inherent method. PostgresAdapter::new()
+    // has no pool so each wrapper bottoms out in `active_pool()` →
+    // `Connection("Not connected")`.
     #[tokio::test]
     async fn trait_explain_query_without_connection_fails() {
         let a = PostgresAdapter::new();
@@ -651,18 +649,20 @@ mod tests {
         assert!(matches!(r, Err(AppError::Connection(_))));
     }
 
-    // 작성 이유 (2026-07-24, 이슈 #1625): 아래 24개 `..._without_connection_fails`
-    // 는 `is_err()` 만 봐서 wrapper 가 *어떤* 에러로 실패했는지 무관 —
-    // change-detector 라 wrapper 가 `Connection` 이 아닌 다른 에러로 퇴행해도
-    // 통과했다. pool 없는 `PostgresAdapter` 의 모든 RdbAdapter wrapper 를 하나의
-    // 테스트로 몰아 회수(wrapper future 는 UFCS 로 각각 별개 region → coverage
-    // 동일)하되, 단언을 실 계약 `Connection("Not connected")` 로 강화한다.
-    // `list_database_users` wrapper 는 이전에 테스트 부재였으나 여기서 함께
-    // 회수해 production region coverage 를 넓힌다.
+    // Reason (2026-07-24, issue #1625): the `..._without_connection_fails`
+    // tests only looked at `is_err()`, so they did not care *which* error the
+    // wrapper failed with — a change detector that passed even when a wrapper
+    // regressed to an error other than `Connection`. Every RdbAdapter wrapper
+    // of a pool-less `PostgresAdapter` is gathered into one test (each wrapper
+    // future is its own region under UFCS, so coverage is unchanged), and the
+    // assertion is tightened to the real contract, `Connection("Not
+    // connected")`. The `list_database_users` wrapper had no test before and is
+    // picked up here, widening production region coverage.
 
-    /// pool 없는 wrapper future 가 공유 `Connection("Not connected")` 로
-    /// short-circuit 하는지 단언. 예전 `is_err()` probe 를 typed variant +
-    /// 메시지로 승격 — wrapper 가 다른 에러 kind (또는 `Ok`) 로 퇴행하면 fail.
+    /// Asserts that a pool-less wrapper future short-circuits to the shared
+    /// `Connection("Not connected")`. Promotes the old `is_err()` probe to a
+    /// typed variant + message — a wrapper that regresses to a different error
+    /// kind (or to `Ok`) fails.
     macro_rules! assert_not_connected {
         ($label:literal, $call:expr) => {
             match $call.await {
@@ -785,7 +785,7 @@ mod tests {
         );
     }
 
-    // Sprint 340 (U5 live wire) — slow_queries trait wrapper.
+    // slow_queries trait wrapper.
     #[tokio::test]
     async fn trait_slow_queries_without_connection_fails() {
         let a = PostgresAdapter::new();

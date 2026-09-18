@@ -434,7 +434,7 @@ impl OracleAdapter {
         Ok(source)
     }
 
-    // #1072 (2차) — trigger list for one table, sourced from `all_triggers` like
+    // #1072 (pass 2) — trigger list for one table, sourced from `all_triggers` like
     // the sibling `list_views` / `list_functions` catalog reads.
     pub async fn list_triggers(
         &self,

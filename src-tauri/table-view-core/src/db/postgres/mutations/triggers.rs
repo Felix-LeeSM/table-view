@@ -3,22 +3,22 @@ use crate::models::{CreateTriggerRequest, DropTriggerRequest};
 
 use super::{qualified_table, quote_identifier, validate_identifier};
 
-/// Sprint 273 — PG canonical timing whitelist for `CREATE TRIGGER`.
+/// PG canonical timing whitelist for `CREATE TRIGGER`.
 /// Case-sensitive uppercase; caller (frontend dialog) sends canonical
 /// strings — mismatches are rejected via `AppError::Validation`.
 const TRIGGER_TIMINGS: &[&str] = &["BEFORE", "AFTER", "INSTEAD OF"];
 
-/// Sprint 273 — PG canonical orientation whitelist.
+/// PG canonical orientation whitelist.
 const TRIGGER_ORIENTATIONS: &[&str] = &["ROW", "STATEMENT"];
 
-/// Sprint 273 — canonical event order. The SQL emitter sorts the
+/// Canonical event order. The SQL emitter sorts the
 /// caller's `events` input against this order before joining with ` OR `
 /// so the emitted SQL is deterministic regardless of payload order.
 /// TRUNCATE is intentionally absent — master spec § 7 hides TRUNCATE
 /// from the CREATE dialog and rejects it as an invalid event here.
 const TRIGGER_EVENT_CANONICAL_ORDER: &[&str] = &["INSERT", "UPDATE", "DELETE"];
 
-/// Sprint 273 — `CREATE TRIGGER` SQL emitter (pure helper, no pool
+/// `CREATE TRIGGER` SQL emitter (pure helper, no pool
 /// access so it is unit-testable from `#[cfg(test)]` fixtures without a
 /// running PG).
 ///
@@ -41,13 +41,12 @@ const TRIGGER_EVENT_CANONICAL_ORDER: &[&str] = &["INSERT", "UPDATE", "DELETE"];
 ///      pre-dispatch so the dialog can render it inline).
 ///
 /// `function_arguments`: every `'` in the free-text input is doubled
-/// (`'` → `''`) before being interpolated into `(args)`. Closes Sprint
-/// 272 findings § P3 — without this, an argument literal `O'Brien`
-/// would unbalance the quoting and either fail PG parse or, in the
-/// worst case, allow injection through trailing fragments. Identifier
-/// validation rejects embedded `"` / NUL / whitespace upstream, so
-/// `function_arguments` is the only free-text input we have to
-/// re-escape.
+/// (`'` → `''`) before being interpolated into `(args)`. Closes finding
+/// § P3 — without this, an argument literal `O'Brien` would unbalance
+/// the quoting and either fail PG parse or, in the worst case, allow
+/// injection through trailing fragments. Identifier validation rejects
+/// embedded `"` / NUL / whitespace upstream, so `function_arguments` is
+/// the only free-text input we have to re-escape.
 ///
 /// `when_expression`: parenthesised verbatim (`WHEN (<expr>)`); empty /
 /// whitespace-only string is treated as "no clause" and omitted. PG
@@ -123,10 +122,10 @@ pub(super) fn build_create_trigger_sql(req: &CreateTriggerRequest) -> Result<Str
     }
     let events_clause = ordered_events.join(" OR ");
 
-    // Sprint 272 findings § P3 — single-quote re-escape on
-    // `function_arguments`. Identifier validation already rejected
-    // embedded `"` / NUL for the schema/name pair, so the only free-text
-    // tail that could unbalance the quoting is the argument list.
+    // Finding § P3 — single-quote re-escape on `function_arguments`.
+    // Identifier validation already rejected embedded `"` / NUL for the
+    // schema/name pair, so the only free-text tail that could unbalance
+    // the quoting is the argument list.
     let args_clause = match req.function_arguments.as_deref() {
         None => String::new(),
         Some(s) => s.replace('\'', "''"),
@@ -169,7 +168,7 @@ pub(super) fn build_create_trigger_sql(req: &CreateTriggerRequest) -> Result<Str
     Ok(sql)
 }
 
-/// Sprint 274 — `DROP TRIGGER` SQL emitter (pure helper, no pool access
+/// `DROP TRIGGER` SQL emitter (pure helper, no pool access
 /// so it is unit-testable from `#[cfg(test)]` fixtures without a running
 /// PG).
 ///
@@ -184,8 +183,8 @@ pub(super) fn build_create_trigger_sql(req: &CreateTriggerRequest) -> Result<Str
 ///   3. `table` passes `validate_identifier`.
 ///
 /// No `IF EXISTS` keyword — let PG surface its native `trigger "X" for
-/// relation "Y" does not exist` error verbatim (mirrors Sprint 235
-/// `drop_table` policy).
+/// relation "Y" does not exist` error verbatim (mirrors the `drop_table`
+/// policy).
 pub(super) fn build_drop_trigger_sql(req: &DropTriggerRequest) -> Result<String, AppError> {
     validate_identifier(&req.trigger_name, "Trigger name")?;
     validate_identifier(&req.schema, "Schema name")?;

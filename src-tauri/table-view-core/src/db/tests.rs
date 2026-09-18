@@ -1,10 +1,10 @@
 //! Unit tests for `db/mod.rs` — moved out of the inline `mod tests` block
-//! (Sprint P5 step 1, commit a60074d) so production code in mod.rs is no
-//! longer ~60% buried under test scaffolding. Sprint 213 (P5 step 2) then
-//! split mod.rs into `types`/`traits`/`active`, so this file now imports
-//! the external (non-`crate::db::*`) types it needs explicitly — they
-//! were previously brought in by mod.rs's own `use` aliases via
-//! `super::*`, which is no longer the right shape.
+//! (commit a60074d) so production code in mod.rs is no longer ~60% buried
+//! under test scaffolding. mod.rs was then split into
+//! `types`/`traits`/`active`, so this file imports the external
+//! (non-`crate::db::*`) types it needs explicitly — they were previously
+//! brought in by mod.rs's own `use` aliases via `super::*`, which is no
+//! longer the right shape.
 
 use super::*;
 use crate::error::AppError;
@@ -16,10 +16,10 @@ use crate::models::{
 };
 use tokio_util::sync::CancellationToken;
 
-// Reason (2026-07-24, 이슈 #1625): normal/empty/unicode 3개는 입력만 다른
-// subset (testing-scenarios P9) — `From<SchemaInfo>` 가 `name` 을 그대로
-// 옮기는 계약을 table-driven 한 테스트로 회수. 빈 문자열/유니코드 경계값
-// 보존.
+// Reason (2026-07-24, issue #1625): normal / empty / unicode are three subsets
+// that differ only in input (testing-scenarios P9) — one table-driven test
+// recovers the contract that `From<SchemaInfo>` carries `name` across
+// unchanged. The empty-string and unicode boundary values are preserved.
 #[test]
 fn namespace_info_from_schema_info_preserves_name() {
     for name in ["public", "", "스키마_名前"] {
@@ -31,9 +31,9 @@ fn namespace_info_from_schema_info_preserves_name() {
     }
 }
 
-// ── Sprint 180 (AC-180-04): cancel-token cooperation tests ───────────
+// ── AC-180-04: cancel-token cooperation tests ────────────────────────
 //
-// Reason for these tests (2026-04-30): the Sprint 180 contract requires
+// Reason for these tests (2026-04-30): the AC-180-04 contract requires
 // every cancellable trait method (4 RDB + 4 Document) to wire
 // `Option<&CancellationToken>` so the existing `cancel_query` registry
 // can abort the in-flight call cooperatively. We exercise that contract
@@ -156,14 +156,14 @@ impl RdbAdapter for FakeCancellableRdb {
         &'a self,
         _req: &'a DropTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        // Sprint 235 — request-shaped trait stub.
+        // Request-shaped trait stub.
         Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn rename_table<'a>(
         &'a self,
         _req: &'a RenameTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        // Sprint 235 — request-shaped trait stub.
+        // Request-shaped trait stub.
         Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn alter_table<'a>(
@@ -176,14 +176,14 @@ impl RdbAdapter for FakeCancellableRdb {
         &'a self,
         _req: &'a AddColumnRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        // Sprint 236 — request-shaped trait stub.
+        // Request-shaped trait stub.
         Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn drop_column<'a>(
         &'a self,
         _req: &'a DropColumnRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        // Sprint 236 — request-shaped trait stub.
+        // Request-shaped trait stub.
         Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn create_table<'a>(
@@ -454,7 +454,7 @@ impl DocumentAdapter for FakeCancellableDocument {
     ) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async { Ok(()) })
     }
-    // Sprint 308 (2026-05-14) — cancel-token honouring stubs for the 4
+    // 2026-05-14 — cancel-token honouring stubs for the 4
     // read methods + simple `Ok(default)` stubs for the 2 writes. Mirrors
     // the `find` / `aggregate` `tokio::select!` shape so future cancel
     // tests for the new methods can opt-in without a re-write.
@@ -674,7 +674,7 @@ impl DocumentAdapter for FakeCancellableDocument {
     ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>> {
         Box::pin(async { Ok(Vec::new()) })
     }
-    // Sprint 381 (2026-05-17) — runCommand gateway stub.
+    // 2026-05-17 — runCommand gateway stub.
     fn run_command<'a>(
         &'a self,
         _database: Option<&'a str>,
@@ -698,13 +698,14 @@ fn assert_cancelled<T: std::fmt::Debug>(res: Result<T, AppError>) {
 
 // ── RDB ──────────────────────────────────────────────────────────────
 
-// Reason (2026-07-24, 이슈 #1625): 4 RDB + 4 Document cancel 테스트는 각각
-// pre-cancel 토큰 → 메서드 호출 → `assert_cancelled` 로 동일 shape 반복
-// (입력만 다른 subset, testing-scenarios P9). 레이어당 한 테스트로
-// 파라메터화 — fake 의 `tokio::select!` cooperative-abort arm 을 모두
-// 회수하면서 boilerplate 를 제거한다. 실 `PostgresAdapter` cancel wrapper 는
-// pool 없이는 `active_pool()` 에서 "Not connected" 로 먼저 빠져 select! arm
-// 에 닿지 못하므로 fake 로 Sprint 180 AC-180-04 계약을 고정한다.
+// Reason (2026-07-24, issue #1625): the 4 RDB and 4 Document cancel tests each
+// repeated the same shape — pre-cancelled token → method call →
+// `assert_cancelled` (subsets that differ only in input, testing-scenarios P9).
+// One parameterised test per layer recovers every cooperative-abort arm of the
+// fake's `tokio::select!` while dropping the boilerplate. Without a pool the
+// real `PostgresAdapter` cancel wrapper bails out of `active_pool()` with
+// "Not connected" before it reaches the select! arm, so the fake is what pins
+// the AC-180-04 contract.
 fn pre_cancelled() -> CancellationToken {
     let t = CancellationToken::new();
     t.cancel();
@@ -747,9 +748,10 @@ async fn test_rdb_cancellable_methods_honor_pre_cancelled_token() {
 
 // ── Document ─────────────────────────────────────────────────────────
 
-// Reason (2026-07-24, 이슈 #1625): RDB counterpart 와 동일 — Mongo bundled
-// driver 는 killOperations 미노출이라 future-drop 이 abort 계약(ADR-0018);
-// 각 메서드의 `tokio::select!` cancelled arm 을 회수한다.
+// Reason (2026-07-24, issue #1625): same as the RDB counterpart — the bundled
+// Mongo driver does not expose killOperations, so dropping the future is the
+// abort contract (ADR-0018); this recovers the `tokio::select!` cancelled arm
+// of each method.
 #[tokio::test]
 async fn test_document_cancellable_methods_honor_pre_cancelled_token() {
     let adapter = FakeCancellableDocument;
@@ -773,8 +775,8 @@ async fn test_document_cancellable_methods_honor_pre_cancelled_token() {
 
 // ── Sanity checks: passing `None` does NOT short-circuit ─────────────
 //
-// Reason (2026-04-30): Sprint 180 contract requires the non-cancelled
-// path to behave identically to the pre-180 inherent call. We can't
+// Reason (2026-04-30): the AC-180-04 contract requires the non-cancelled
+// path to behave identically to the earlier inherent call. We can't
 // wait 60s in unit tests, so we assert the negative shape: with
 // `cancel = None` and a fast-returning override the call resolves
 // normally. We use a separate fake that returns immediately to
@@ -859,14 +861,14 @@ impl RdbAdapter for FastFakeRdb {
         &'a self,
         _req: &'a DropTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        // Sprint 235 — request-shaped trait stub.
+        // Request-shaped trait stub.
         Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn rename_table<'a>(
         &'a self,
         _req: &'a RenameTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        // Sprint 235 — request-shaped trait stub.
+        // Request-shaped trait stub.
         Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn alter_table<'a>(
@@ -879,14 +881,14 @@ impl RdbAdapter for FastFakeRdb {
         &'a self,
         _req: &'a AddColumnRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        // Sprint 236 — request-shaped trait stub.
+        // Request-shaped trait stub.
         Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn drop_column<'a>(
         &'a self,
         _req: &'a DropColumnRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        // Sprint 236 — request-shaped trait stub.
+        // Request-shaped trait stub.
         Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn create_table<'a>(
@@ -966,8 +968,8 @@ impl RdbAdapter for FastFakeRdb {
 
 #[tokio::test]
 async fn test_rdb_query_table_data_with_none_token_resolves_normally() {
-    // Reason (2026-04-30): Sprint 180 invariant — pre-180 callers
-    // pass `None` and must observe identical behaviour to the
+    // Reason (2026-04-30): AC-180-04 invariant — callers that predate
+    // the token pass `None` and must observe identical behaviour to the
     // inherent path; this guards against an accidental regression
     // where a future change always wraps the call in
     // `tokio::select!` even when `cancel == None`.
@@ -980,13 +982,13 @@ async fn test_rdb_query_table_data_with_none_token_resolves_normally() {
 
 // ── Default trait impl coverage (RdbAdapter / DocumentAdapter) ───────
 //
-// 작성 이유 (2026-05-08): `db/traits.rs` 의 default method body 가 0%
-// coverage 였다. `FastFakeRdb` 와 `FakeCancellableDocument` 둘 다
-// 의도적으로 default 가 있는 method 를 override 하지 않으므로
-// 그 인스턴스에 trait 호출을 보내면 default impl 이 실행된다.
-// `current_database` default 는 execute_sql 결과 형태에 따라 4-갈래
-// 분기 (no rows / no cols / non-string / string val + propagated err)
-// 가 있어 별도 stub `CurrentDbStub` 를 closure 로 변형해 검증한다.
+// Reason (2026-05-08): the default method bodies in `db/traits.rs` had 0%
+// coverage. Neither `FastFakeRdb` nor `FakeCancellableDocument` overrides a
+// method that has a default — deliberately — so a trait call on either instance
+// runs the default impl. The `current_database` default branches four ways on
+// the shape of the execute_sql result (no rows / no cols / non-string / string
+// val + propagated err), so a separate `CurrentDbStub` is reshaped through a
+// closure to check each one.
 
 #[tokio::test]
 async fn test_rdb_default_list_databases_returns_empty_vec() {
@@ -1028,9 +1030,9 @@ async fn test_rdb_default_execute_sql_batch_returns_unsupported() {
 
 // [AC-247-B7] — RdbAdapter::dry_run_sql_batch default impl returns
 // `AppError::Unsupported("This adapter does not support dry-run")`.
-// FastFakeRdb 는 의도적으로 이 method 를 override 하지 않으므로 trait
-// dispatch 가 default body 로 떨어진다. PG 만 override (postgres.rs); MySQL/
-// SQLite 는 default 를 그대로 inherit 해 frontend 에 Unsupported 를 surface.
+// FastFakeRdb deliberately does not override this method, so trait dispatch
+// falls to the default body. Only PG overrides it (postgres.rs); MySQL and
+// SQLite inherit the default and surface Unsupported to the frontend.
 // Date 2026-05-09.
 #[tokio::test]
 async fn test_rdb_default_dry_run_sql_batch_returns_unsupported() {
@@ -1087,8 +1089,8 @@ async fn test_rdb_default_list_types_returns_unsupported() {
 
 #[tokio::test]
 async fn test_rdb_default_current_database_no_rows_returns_database_err() {
-    // FastFakeRdb.execute_sql 은 rows=[] 를 반환하므로
-    // `result.rows.first()` 가 None → "returned no rows" 분기.
+    // FastFakeRdb.execute_sql returns rows=[], so `result.rows.first()` is
+    // None → the "returned no rows" branch.
     let adapter = FastFakeRdb;
     match adapter.current_database().await {
         Err(AppError::Database(msg)) => {
@@ -1278,8 +1280,8 @@ impl RdbAdapter for CurrentDbStub {
 
 #[tokio::test]
 async fn test_rdb_default_current_database_empty_first_row_returns_no_columns_err() {
-    // rows=[[]] — `rows.first()` 는 Some(빈 row), `row.first()` 가 None
-    // → "returned no columns" 분기.
+    // rows=[[]] — `rows.first()` is Some(empty row) and `row.first()` is None
+    // → the "returned no columns" branch.
     let stub = CurrentDbStub {
         response: Box::new(|| {
             Ok(RdbQueryResult {
@@ -1321,8 +1323,8 @@ async fn test_rdb_default_current_database_string_val_returns_some() {
 
 #[tokio::test]
 async fn test_rdb_default_current_database_non_string_val_returns_none() {
-    // rows=[[42]] → `val.as_str()` None → Ok(None). PG 환경에서는 일어
-    // 나지 않지만 default 분기 robustness 단언.
+    // rows=[[42]] → `val.as_str()` None → Ok(None). This does not happen
+    // against PG, but it asserts the robustness of the default branch.
     let stub = CurrentDbStub {
         response: Box::new(|| {
             Ok(RdbQueryResult {
@@ -1341,7 +1343,7 @@ async fn test_rdb_default_current_database_non_string_val_returns_none() {
 
 #[tokio::test]
 async fn test_rdb_default_current_database_propagates_execute_sql_err() {
-    // execute_sql 이 Err 를 반환하면 `?` 로 그대로 전파.
+    // When execute_sql returns Err, `?` propagates it unchanged.
     let stub = CurrentDbStub {
         response: Box::new(|| Err(AppError::Database("boom".into()))),
     };
@@ -1371,13 +1373,13 @@ async fn test_document_default_current_database_returns_none() {
     assert_eq!(res, None);
 }
 
-// ── Sprint 335/336 — RdbAdapter default impl coverage ───────────────
+// ── RdbAdapter default impl coverage ────────────────────────────────
 //
-// 작성 이유 (2026-05-15): `db/traits.rs` 의 새 default body (Sprint 335
-// `create_database` / `drop_database`; Sprint 336 `list_server_activity`
-// / `kill_session`) 는 PG 만 override 하고 FastFakeRdb 는 default 분기
-// 그대로 inherit. 그 default 가 `AppError::Unsupported` 를 반환하는지
-// 단언한다 (regions/functions coverage 보강).
+// Reason (2026-05-15): the newer default bodies in `db/traits.rs`
+// (`create_database` / `drop_database`, `list_server_activity` /
+// `kill_session`) are overridden only by PG, and FastFakeRdb inherits the
+// default branch as-is. These assert that the default returns
+// `AppError::Unsupported` (topping up regions/functions coverage).
 
 #[tokio::test]
 async fn test_rdb_default_create_database_returns_unsupported() {
@@ -1423,10 +1425,9 @@ async fn test_rdb_default_kill_session_returns_unsupported() {
     }
 }
 
-// 작성 이유 (2026-05-15, Sprint 336 coverage backfill): traits.rs 의
-// pre-Sprint-336 default body 들도 FastFakeRdb 가 override 하지 않아
-// region 0% 인 채로 남아 있었다. 동일한 Unsupported / empty Vec 단언
-// 패턴으로 추가 cover.
+// Reason (2026-05-15, coverage backfill): the older default bodies in traits.rs
+// were also left at 0% region coverage because FastFakeRdb does not override
+// them. The same Unsupported / empty Vec assertion pattern covers them too.
 
 #[tokio::test]
 async fn test_rdb_default_count_null_rows_returns_unsupported() {
@@ -1506,12 +1507,12 @@ async fn test_rdb_default_get_trigger_source_returns_unsupported() {
     }
 }
 
-// 작성 이유 (2026-05-15, Sprint 336 coverage backfill): traits.rs 의
-// `create_table_plan` default body 는 sub-chain (create_table →
-// create_index* → add_constraint*) 을 합성하는 가장 큰 default block
-// 인데 PG 만 override 하고 FastFakeRdb 는 default 분기를 그대로 inherit.
-// FastFakeRdb 의 child trait 들은 다 Ok 를 반환하므로 빈 plan + 1 index
-// + 1 constraint 3-pillar 단언으로 default body 의 region 을 cover 한다.
+// Reason (2026-05-15, coverage backfill): the `create_table_plan` default body
+// in traits.rs is the largest default block — it composes the sub-chain
+// (create_table → create_index* → add_constraint*) — yet only PG overrides it
+// and FastFakeRdb inherits the default branch as-is. Every child trait of
+// FastFakeRdb returns Ok, so a three-pillar assertion (empty plan + 1 index +
+// 1 constraint) covers the regions of the default body.
 
 #[tokio::test]
 async fn test_rdb_default_create_table_plan_empty_plan_returns_parent_sql_only() {
@@ -1556,13 +1557,14 @@ async fn test_rdb_default_create_table_plan_with_one_index_chains_create_index()
         preview_only: true,
         expected_database: None,
     };
-    // FastFakeRdb.create_index 도 Ok 라서 chain 통과. join 결과는 ";\n".
+    // FastFakeRdb.create_index is Ok too, so the chain passes. The join
+    // result is ";\n".
     assert!(adapter.create_table_plan(&req).await.is_ok());
 }
 
-// 작성 이유 (2026-05-15, Sprint 337): RdbAdapter::explain_query 의
-// default body 가 Unsupported 를 반환하는지 단언 — FastFakeRdb 가
-// override 하지 않으므로 default 분기로 떨어진다.
+// Reason (2026-05-15): assert that the `RdbAdapter::explain_query` default
+// body returns Unsupported — FastFakeRdb does not override it, so the call
+// falls to the default branch.
 #[tokio::test]
 async fn test_rdb_default_explain_query_returns_unsupported() {
     let adapter = FastFakeRdb;
@@ -1574,8 +1576,8 @@ async fn test_rdb_default_explain_query_returns_unsupported() {
     }
 }
 
-// 작성 이유 (2026-05-15, Sprint 338): RdbAdapter::collection_stats default
-// body Unsupported 단언.
+// Reason (2026-05-15): assert that the `RdbAdapter::collection_stats` default
+// body returns Unsupported.
 #[tokio::test]
 async fn test_rdb_default_collection_stats_returns_unsupported() {
     let adapter = FastFakeRdb;
@@ -1587,9 +1589,10 @@ async fn test_rdb_default_collection_stats_returns_unsupported() {
     }
 }
 
-// 작성 이유 (2026-05-15, Sprint 339): RdbAdapter::server_info default
-// body Unsupported 단언. PG 만 override, 다른 RDB 어댑터는 trait default
-// 분기에서 Unsupported 를 반환해야 함을 회귀 가드한다.
+// Reason (2026-05-15): assert that the `RdbAdapter::server_info` default body
+// returns Unsupported. Only PG overrides it; this guards against the regression
+// where another RDB adapter stops returning Unsupported from the trait default
+// branch.
 #[tokio::test]
 async fn test_rdb_default_server_info_returns_unsupported() {
     let adapter = FastFakeRdb;
@@ -1601,9 +1604,9 @@ async fn test_rdb_default_server_info_returns_unsupported() {
     }
 }
 
-// 작성 이유 (2026-05-15, Sprint 340): RdbAdapter::slow_queries default
-// body Unsupported 단언. PG 만 override (pg_stat_statements), 다른 RDB
-// 어댑터는 trait default 에서 Unsupported.
+// Reason (2026-05-15): assert that the `RdbAdapter::slow_queries` default body
+// returns Unsupported. Only PG overrides it (pg_stat_statements); the other RDB
+// adapters get Unsupported from the trait default.
 #[tokio::test]
 async fn test_rdb_default_slow_queries_returns_unsupported() {
     let adapter = FastFakeRdb;

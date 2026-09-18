@@ -1,16 +1,18 @@
 //! MySQL schema introspection — databases (= schemas), tables, columns,
 //! indexes, constraints, and views.
 //!
-//! PG (`db/postgres/schema.rs`) 의 분류를 답습하되 dialect 차이:
-//! - MySQL 은 database 가 곧 namespace ('schema' 와 동의어). `SHOW
-//!   DATABASES` / `information_schema.schemata` 둘 다 같은 리스트.
-//! - 시스템 schema (`information_schema`, `mysql`, `performance_schema`,
-//!   `sys`) 는 사용자 surface 에서 필터.
-//! - `information_schema.columns.column_type` 은 PG `format_type` 와 동등
-//!   (`varchar(200)`, `int(11)`, `decimal(10,2)` 형식). 별도 정규화 불필요.
-//! - CHECK constraint 는 server-version gate 가 열린 경우에만
-//!   `information_schema.check_constraints` 에서 읽고 참조 컬럼별
-//!   `check_clauses` 로 투영.
+//! Mirrors the PG (`db/postgres/schema.rs`) classification, with dialect
+//! differences:
+//! - In MySQL, a database is the namespace (a synonym for 'schema'). `SHOW
+//!   DATABASES` / `information_schema.schemata` return the same list.
+//! - System schemas (`information_schema`, `mysql`, `performance_schema`,
+//!   `sys`) are filtered out of the user-facing surface.
+//! - `information_schema.columns.column_type` is equivalent to PG
+//!   `format_type` (`varchar(200)`, `int(11)`, `decimal(10,2)` form). No
+//!   separate normalization needed.
+//! - CHECK constraints are read from `information_schema.check_constraints`
+//!   only when the server-version gate is open, projected per referenced
+//!   column as `check_clauses`.
 
 use sqlx::MySqlPool;
 use std::future::Future;
@@ -168,12 +170,13 @@ async fn mysql_check_rows_or_empty<T>(
     }
 }
 
-/// MySQL data type → DataGrid category 매핑. PG 의 `map_pg_data_type` 와
-/// 동일 정책 (Sprint 238 AC-238-02): raw `data_type` (소문자 keyword,
-/// length/precision 제거된 형태) 만 보고 분기.
+/// MySQL data type → DataGrid category mapping. Same policy as PG's
+/// `map_pg_data_type` (AC-238-02): branch on the raw `data_type` only —
+/// the lowercase keyword with length/precision stripped.
 pub(super) fn map_mysql_data_type(data_type: &str) -> ColumnCategory {
     let lower = data_type.trim().to_ascii_lowercase();
-    // `int unsigned` 등 modifier 가 붙는 경우 base keyword 만 추출.
+    // For `int unsigned` and other modifier-carrying forms, extract only the
+    // base keyword.
     let base = match lower.split_whitespace().next() {
         Some(b) => b,
         None => return ColumnCategory::Unknown,
@@ -197,21 +200,22 @@ pub(super) fn map_mysql_data_type(data_type: &str) -> ColumnCategory {
     }
 }
 
-/// PG schema.rs 의 `format_fk_reference` 와 동일 형식
-/// (`<schema>.<table>(<column>)`) — frontend `parseFkReference` 가 PG /
-/// MySQL 공통으로 같은 wire format 을 기대.
+/// Same format as PG schema.rs's `format_fk_reference`
+/// (`<schema>.<table>(<column>)`) — the frontend `parseFkReference` expects
+/// this same wire format across PG and MySQL.
 pub(super) fn format_fk_reference(schema: &str, table: &str, column: &str) -> String {
     format!("{schema}.{table}({column})")
 }
 
 impl MysqlAdapter {
-    /// 시스템 schema 제외한 user-visible database 리스트.
+    /// User-visible database list, excluding system schemas.
     ///
-    /// MySQL 8.0+ 의 `information_schema` 는 일부 식별자 컬럼을 utf8mb3
-    /// `_bin` collation 또는 VARBINARY 로 노출 — sqlx 가 String 으로 decode
-    /// 시도하면 `mismatched types … is not compatible with SQL type VARBINARY`
-    /// 가 surface 된다. 모든 식별자 select 를 `CONVERT(... USING utf8mb4)`
-    /// 로 wrap 해 결정성 있는 utf8 text 로 받는다.
+    /// On MySQL 8.0+, `information_schema` exposes some identifier columns as
+    /// utf8mb3 `_bin` collation or VARBINARY — when sqlx tries to decode them
+    /// as String, `mismatched types … is not compatible with SQL type
+    /// VARBINARY` surfaces. Every identifier select is wrapped in
+    /// `CONVERT(... USING utf8mb4)` so it comes back as deterministic utf8
+    /// text.
     pub async fn list_schemas(&self) -> Result<Vec<SchemaInfo>, AppError> {
         let pool = self.active_pool().await?;
         let rows: Vec<(String,)> = sqlx::query_as(
@@ -229,8 +233,8 @@ impl MysqlAdapter {
             .collect())
     }
 
-    /// `BASE TABLE` 만. `table_rows` 는 InnoDB 의 approximate row estimate —
-    /// PG 의 `pg_stat_user_tables.n_live_tup` 와 동등한 위상.
+    /// `BASE TABLE` only. `table_rows` is InnoDB's approximate row estimate —
+    /// the counterpart of PG's `pg_stat_user_tables.n_live_tup`.
     pub async fn list_tables(&self, schema: &str) -> Result<Vec<TableInfo>, AppError> {
         let pool = self.active_pool().await?;
         let rows: Vec<(String, Option<i64>)> = sqlx::query_as(
@@ -262,26 +266,28 @@ impl MysqlAdapter {
         self.get_table_columns_inner(&pool, table, schema).await
     }
 
-    /// PG 의 `get_table_columns_inner` 와 동일 책무. CHECK metadata 는
-    /// server-version gate 가 열린 경우에만 추가 조회한다.
-    /// 4 round-trip:
-    /// (1) columns, (2) PK, (3) FK, (4) CHECK — MySQL 은 column comment 가
-    /// `information_schema.columns.column_comment` 에 inline 으로 들어
-    /// 있어 PG 처럼 별도 `col_description` round-trip 불필요.
+    /// Same responsibility as PG's `get_table_columns_inner`. CHECK metadata
+    /// is queried only when the server-version gate is open.
+    /// 4 round-trips:
+    /// (1) columns, (2) PK, (3) FK, (4) CHECK — in MySQL the column comment
+    /// is inline in `information_schema.columns.column_comment`, so no
+    /// separate `col_description` round-trip is needed as in PG.
     pub(super) async fn get_table_columns_inner(
         &self,
         pool: &MySqlPool,
         table: &str,
         schema: &str,
     ) -> Result<Vec<ColumnInfo>, AppError> {
-        // column_type: `varchar(200)`, `int(11)`, `decimal(10,2)` — PG 의
-        // `format_type` 등가. data_type: `varchar` / `int` / `decimal`
-        // (length/precision 없이) — category 매핑용.
-        // 모든 식별자 컬럼을 `CONVERT(... USING utf8mb4)` 로 wrap — MySQL 8.0
-        // 의 information_schema 가 VARBINARY 로 노출하는 경우 회피.
-        // #1433 — extra: `auto_increment` 컬럼은 column_default 가 NULL 이라
-        // default 만으로는 식별 불가. frontend INSERT generator 가 미입력
-        // auto-increment 셀을 생략하려면 is_identity flag 가 필요하다.
+        // column_type: `varchar(200)`, `int(11)`, `decimal(10,2)` —
+        // equivalent to PG's `format_type`. data_type: `varchar` / `int` /
+        // `decimal` (without length/precision) — used for category mapping.
+        // Every identifier column is wrapped in `CONVERT(... USING utf8mb4)`
+        // to avoid the case where MySQL 8.0's information_schema exposes it
+        // as VARBINARY.
+        // #1433 — extra: an `auto_increment` column has a NULL column_default,
+        // so the default alone cannot identify it. The frontend INSERT
+        // generator needs the is_identity flag to omit unfilled
+        // auto-increment cells.
         #[allow(clippy::type_complexity)]
         let rows: Vec<(
             String,
@@ -328,7 +334,7 @@ impl MysqlAdapter {
         let pk_columns: std::collections::HashSet<String> =
             pk_rows.into_iter().map(|(c,)| c).collect();
 
-        // FK — `referenced_table_name` non-null 인 row 만 추출.
+        // FK — take only the rows whose `referenced_table_name` is non-null.
         let fk_rows: Vec<(String, String, String, String)> = sqlx::query_as(
             "SELECT CONVERT(column_name USING utf8mb4), \
                     CONVERT(referenced_table_schema USING utf8mb4), \
@@ -417,29 +423,29 @@ impl MysqlAdapter {
             .collect())
     }
 
-    /// Sprint 287 (Slice G) — 사용자 surface 의 모든 database (= schema)
-    /// 리스트. PG `list_databases` 의 MySQL 짝꿍. `SHOW DATABASES` 와 동등
-    /// 하지만 information_schema 경로로 통일해 `LIKE` filter 가 backslash
-    /// 이스케이프를 어떻게 처리하는지에 영향받지 않게.
+    /// Every database (= schema) on the user-facing surface. The MySQL
+    /// counterpart of PG `list_databases`. Equivalent to `SHOW DATABASES`,
+    /// but routed through information_schema so the result does not depend
+    /// on how the `LIKE` filter handles backslash escaping.
     pub async fn list_databases(&self) -> Result<Vec<SchemaInfo>, AppError> {
-        // MySQL 은 schema == database — `list_schemas` 와 동일 결과지만
-        // 의도 분기를 유지 (PG paradigm 과 align).
+        // In MySQL schema == database — the same result as `list_schemas`,
+        // but the intent branch is kept (aligned with the PG paradigm).
         self.list_schemas().await
     }
 
-    /// Sprint 287 (Slice G) — 한 schema 의 모든 table 컬럼을 1 round-trip
-    /// 으로 fetch. PG `list_schema_columns` 와 동등 — frontend Schema 개요
-    /// 가 호출.
+    /// Fetches every table column of one schema in a single round-trip.
+    /// Equivalent to PG `list_schema_columns` — called by the frontend
+    /// Schema overview.
     pub async fn list_schema_columns(
         &self,
         schema: &str,
     ) -> Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError> {
         let pool = self.active_pool().await?;
 
-        // 7-column SELECT — sqlx query_as 의 tuple 크기 한계 (대부분 16)
-        // 안이지만 column_default 만 Optional 이라 named accessor (`try_get`)
-        // 로 풀어 쓴다. PG 측의 5-tuple 패턴보다 surface 가 약간 길지만
-        // round-trip 1회 보장.
+        // 7-column SELECT — within sqlx query_as's tuple size limit (16 in
+        // most cases), but only column_default is Optional, so it is spelled
+        // out with the named accessor (`try_get`). Slightly more surface than
+        // the PG side's 5-tuple pattern, yet it guarantees one round-trip.
         let rows = sqlx::query(
             "SELECT CONVERT(table_name USING utf8mb4) AS table_name, \
                     CONVERT(column_name USING utf8mb4) AS column_name, \
@@ -457,7 +463,7 @@ impl MysqlAdapter {
         .await
         .map_err(|e| AppError::Connection(e.to_string()))?;
 
-        // PK 전체 schema — (table, column) tuple set.
+        // PKs across the whole schema — a set of (table, column) tuples.
         let pk_rows: Vec<(String, String)> = sqlx::query_as(
             "SELECT CONVERT(kcu.table_name USING utf8mb4), CONVERT(kcu.column_name USING utf8mb4) \
              FROM information_schema.table_constraints tc \
@@ -473,7 +479,7 @@ impl MysqlAdapter {
         .map_err(|e| AppError::Connection(e.to_string()))?;
         let pk_set: std::collections::HashSet<(String, String)> = pk_rows.into_iter().collect();
 
-        // FK 전체 schema.
+        // FKs across the whole schema.
         let fk_rows: Vec<(String, String, String, String, String)> = sqlx::query_as(
             "SELECT CONVERT(table_name USING utf8mb4), \
                     CONVERT(column_name USING utf8mb4), \
@@ -571,8 +577,9 @@ impl MysqlAdapter {
                 data_type: column_type,
                 nullable: is_nullable.eq_ignore_ascii_case("YES"),
                 default_value,
-                // ponytail: schema-overview 경로 — INSERT generator 는
-                // get_table_columns_inner 결과만 소비. 필요 시 extra 조인.
+                // ponytail: schema-overview path — the INSERT generator
+                // consumes only the get_table_columns_inner result. Join
+                // extra in if that changes.
                 is_identity: false,
                 is_primary_key: is_pk,
                 is_foreign_key: is_fk,
@@ -586,19 +593,19 @@ impl MysqlAdapter {
         Ok(result)
     }
 
-    /// Sprint 285 (Slice E) — `(schema, table)` 의 인덱스 메타. PG
-    /// `get_table_indexes` 의 MySQL 짝꿍. `information_schema.statistics` 는
-    /// 인덱스 컬럼별로 한 행을 반환하므로 (index_name, seq_in_index) 로
-    /// 정렬 후 column 순서 보존.
+    /// Index metadata for `(schema, table)`. The MySQL counterpart of PG
+    /// `get_table_indexes`. `information_schema.statistics` returns one row
+    /// per index column, so the rows are ordered by (index_name,
+    /// seq_in_index) to preserve column order.
     pub async fn get_table_indexes(
         &self,
         table: &str,
         schema: &str,
     ) -> Result<Vec<IndexInfo>, AppError> {
         let pool = self.active_pool().await?;
-        // index_type: BTREE / HASH / FULLTEXT / SPATIAL — sqlx 가 String 으로 decode.
-        // non_unique: 0 = unique, 1 = non-unique (MySQL 의 inverse 의미).
-        // index_name 이 'PRIMARY' 면 PK.
+        // index_type: BTREE / HASH / FULLTEXT / SPATIAL — sqlx decodes it as String.
+        // non_unique: 0 = unique, 1 = non-unique (MySQL's inverted sense).
+        // An index_name of 'PRIMARY' means the PK.
         let rows: Vec<(String, String, i64, String)> = sqlx::query_as(
             "SELECT CONVERT(index_name USING utf8mb4), \
                     CONVERT(column_name USING utf8mb4), \
@@ -641,9 +648,9 @@ impl MysqlAdapter {
             .collect())
     }
 
-    /// Table-level constraint metadata. PK / FK / UNIQUE 는 항상 조회하고,
-    /// CHECK 은 server-version gate 가 열린 MySQL 8.0.16+ / MariaDB
-    /// 10.2.1+ 에서만 포함한다.
+    /// Table-level constraint metadata. PK / FK / UNIQUE are always queried;
+    /// CHECK is included only on MySQL 8.0.16+ / MariaDB 10.2.1+, where the
+    /// server-version gate is open.
     #[allow(clippy::type_complexity)]
     pub async fn get_table_constraints(
         &self,
@@ -682,8 +689,8 @@ impl MysqlAdapter {
              ORDER BY tc.constraint_name, kcu.ordinal_position"
         };
 
-        // (name, type, column, ref_table, ref_column) — FK 의 ref columns 는
-        // key_column_usage 에 들어가 있다. CHECK 은 column null.
+        // (name, type, column, ref_table, ref_column) — an FK's ref columns
+        // live in key_column_usage. For CHECK the column is null.
         let rows: Vec<(
             String,
             String,
@@ -734,7 +741,7 @@ impl MysqlAdapter {
             .collect())
     }
 
-    /// Sprint 286 (Slice F) — schema 안의 view 리스트.
+    /// The list of views inside a schema.
     pub async fn list_views(&self, schema: &str) -> Result<Vec<ViewInfo>, AppError> {
         let pool = self.active_pool().await?;
         let rows: Vec<(String, Option<String>)> = sqlx::query_as(
@@ -758,9 +765,9 @@ impl MysqlAdapter {
             .collect())
     }
 
-    /// Sprint 286 (Slice F) — view 의 columns. table 의 컬럼 introspection
-    /// 과 동일 path (MySQL 은 view 의 column 도 information_schema.columns
-    /// 에 들어간다). PK / FK 는 view 에 없으므로 항상 false.
+    /// A view's columns. Same path as table column introspection (in MySQL a
+    /// view's columns also land in information_schema.columns). Views have no
+    /// PK / FK, so both are always false.
     pub async fn get_view_columns(
         &self,
         schema: &str,
@@ -812,9 +819,9 @@ impl MysqlAdapter {
             .collect())
     }
 
-    /// Sprint 286 (Slice F) — view definition body. `information_schema.views`
-    /// 의 view_definition 컬럼은 sql_mode 에 따라 view query 의 normalized
-    /// form 을 반환.
+    /// View definition body. The view_definition column of
+    /// `information_schema.views` returns the normalized form of the view
+    /// query, depending on sql_mode.
     pub async fn get_view_definition(&self, schema: &str, view: &str) -> Result<String, AppError> {
         let pool = self.active_pool().await?;
         let row: Option<(Option<String>,)> = sqlx::query_as(
@@ -836,10 +843,10 @@ impl MysqlAdapter {
         }
     }
 
-    /// Sprint 286 (Slice F) — function / procedure 목록.
-    /// `information_schema.routines` 의 routine_type 으로 'FUNCTION' /
-    /// 'PROCEDURE' 분기. MySQL 은 PG 처럼 aggregate/window 가 사용자 정의
-    /// 가 없으므로 (built-in 만), routine_type 이 곧 kind.
+    /// The function / procedure list. Branches on the routine_type of
+    /// `information_schema.routines` between 'FUNCTION' and 'PROCEDURE'.
+    /// MySQL has no user-defined aggregate/window as PG does (built-ins
+    /// only), so routine_type is itself the kind.
     #[allow(clippy::type_complexity)]
     pub async fn list_functions(&self, schema: &str) -> Result<Vec<FunctionInfo>, AppError> {
         let pool = self.active_pool().await?;
@@ -865,9 +872,9 @@ impl MysqlAdapter {
         .await
         .map_err(|e| AppError::Connection(e.to_string()))?;
 
-        // arguments — parameters 테이블로 별도 round-trip. PG 의
-        // `pg_get_function_arguments` 와 등가.
-        // parameter_name 은 nullable (RETURNS row 의 경우 NULL) — Optional.
+        // arguments — a separate round-trip against the parameters table.
+        // Equivalent to PG's `pg_get_function_arguments`.
+        // parameter_name is nullable (NULL for the RETURNS row) — Optional.
         let param_rows: Vec<(String, Option<String>, Option<String>, Option<String>, i64)> =
             sqlx::query_as(
                 "SELECT CONVERT(specific_name USING utf8mb4), \
@@ -918,16 +925,16 @@ impl MysqlAdapter {
             .collect())
     }
 
-    /// Sprint 286 (Slice F) — function/procedure 의 body. PG
-    /// `get_function_source` 의 짝꿍. `SHOW CREATE FUNCTION` /
-    /// `SHOW CREATE PROCEDURE` 를 우선 시도하고 실패 시 routine_definition
-    /// fallback (DEFINER 권한 없는 user 의 경우).
+    /// The body of a function/procedure. The counterpart of PG
+    /// `get_function_source`. Reads `routine_definition` from
+    /// `information_schema.routines`; a user without DEFINER privilege sees
+    /// it as NULL, which surfaces as an empty body rather than an error.
     pub async fn get_function_source(
         &self,
         schema: &str,
         function: &str,
     ) -> Result<String, AppError> {
-        // 어떤 종류인지 먼저 확인.
+        // Resolve the routine kind first.
         let pool = self.active_pool().await?;
         let row: Option<(String, Option<String>)> = sqlx::query_as(
             "SELECT CONVERT(routine_type USING utf8mb4), \
@@ -949,10 +956,10 @@ impl MysqlAdapter {
         }
     }
 
-    /// Sprint 286 (Slice F) — `(schema, table)` 의 사용자 trigger.
+    /// The user triggers of `(schema, table)`.
     /// `information_schema.triggers` — action_timing / event_manipulation /
-    /// action_orientation / action_statement 가 모두 노출된다. PG 의 분리
-    /// 필드 형식과 1:1 매핑.
+    /// action_orientation / action_statement are all exposed, mapping 1:1
+    /// onto PG's separated-field form.
     pub async fn list_triggers(
         &self,
         schema: &str,
@@ -977,10 +984,10 @@ impl MysqlAdapter {
         .await
         .map_err(|e| AppError::Connection(e.to_string()))?;
 
-        // 동일 trigger 가 multi-event 인 경우 MySQL 은 row 를 1개로 합치지
-        // 않고 별도 보관하기보다는 보통 한 trigger = 한 event. 그러나 향후
-        // server 가 multi-event 합쳐 노출하더라도 같은 trigger_name 이면
-        // events 만 누적되도록 BTreeMap 으로 fold.
+        // In MySQL one trigger is normally one event. Folding through a
+        // BTreeMap keyed by trigger_name means that a server exposing a
+        // multi-event trigger accumulates only the events instead of
+        // producing duplicate entries.
         let mut map: std::collections::BTreeMap<String, (String, Vec<String>, String, String)> =
             std::collections::BTreeMap::new();
         for (name, timing, event, orientation, statement) in rows {
@@ -1002,8 +1009,9 @@ impl MysqlAdapter {
                     timing,
                     events,
                     orientation,
-                    // MySQL trigger 는 inline body — function 분리 개념 없음.
-                    // function_schema/function_name 은 schema/table 로 placeholder.
+                    // A MySQL trigger has an inline body — no notion of a
+                    // separate function. function_schema/function_name are
+                    // placeholders: the schema, and an empty name.
                     function_schema: schema.to_string(),
                     function_name: String::new(),
                     arguments: None,
@@ -1014,7 +1022,7 @@ impl MysqlAdapter {
             .collect())
     }
 
-    /// Sprint 286 (Slice F) — 한 trigger 의 action_statement.
+    /// The action_statement of one trigger.
     pub async fn get_trigger_source(
         &self,
         schema: &str,
@@ -1042,11 +1050,12 @@ impl MysqlAdapter {
 
     /// Refs #1067 — `CREATE DATABASE \`<name>\``.
     ///
-    /// MySQL 은 CREATE/DROP DATABASE 를 명시적 transaction block 안에서
-    /// 허용하지 않으므로 active pool 에 single statement 로 보낸다 (sqlx 가
-    /// transaction 으로 감싸지 않은 단문을 auto-commit). PG
-    /// `create_database` 와 동일 contract — identifier 를 ASCII sub-set 으로
-    /// 검증한 뒤 backtick 으로 quote 해 injection 을 막는다.
+    /// MySQL does not allow CREATE/DROP DATABASE inside an explicit
+    /// transaction block, so this goes to the active pool as a single
+    /// statement (sqlx auto-commits a lone statement it did not wrap in a
+    /// transaction). Same contract as PG `create_database` — the identifier
+    /// is validated against an ASCII sub-set and then backtick-quoted to
+    /// block injection.
     pub async fn create_database(&self, name: &str) -> Result<(), AppError> {
         use super::mutations::{quote_ident, validate_identifier};
         validate_identifier(name, "Database name")?;
@@ -1059,9 +1068,9 @@ impl MysqlAdapter {
         Ok(())
     }
 
-    /// Refs #1067 — `DROP DATABASE \`<name>\``. `create_database` 와 대칭.
-    /// 대상 DB 에 붙어있는 session 이 없어야 한다 — 남아있으면 server 가
-    /// 에러를 그대로 surface 한다.
+    /// Refs #1067 — `DROP DATABASE \`<name>\``. Symmetric with
+    /// `create_database`. No session may be attached to the target DB — if
+    /// one remains, the server error is surfaced as-is.
     pub async fn drop_database(&self, name: &str) -> Result<(), AppError> {
         use super::mutations::{quote_ident, validate_identifier};
         validate_identifier(name, "Database name")?;
@@ -1076,12 +1085,13 @@ impl MysqlAdapter {
 
     /// Refs #1067 — `EXPLAIN FORMAT=JSON <sql>`.
     ///
-    /// MySQL 은 plan tree 를 single-row / single-column 의 JSON **문자열**
-    /// (column `EXPLAIN`, LONGTEXT) 로 반환한다 — PG 의 native `JSON` 타입과
-    /// 달라 String 으로 decode 한 뒤 `serde_json` 으로 파싱한다. `ANALYZE` 는
-    /// 쓰지 않는다: Explain UI 는 plan inspection 이지 실행 profiler 가 아니다
-    /// (PG override 와 동일 정책). ExplainViewer 는 PG 가 아닌 payload 를 raw
-    /// JSON 뷰로 fall-through 하므로 dialect 별 tree 파서 없이도 렌더된다.
+    /// MySQL returns the plan tree as a single-row / single-column JSON
+    /// **string** (column `EXPLAIN`, LONGTEXT) — unlike PG's native `JSON`
+    /// type, so it is decoded as String and then parsed with `serde_json`.
+    /// `ANALYZE` is not used: the Explain UI is plan inspection, not an
+    /// execution profiler (same policy as the PG override). ExplainViewer
+    /// falls through to a raw JSON view for non-PG payloads, so it renders
+    /// without a per-dialect tree parser.
     pub async fn explain_query(&self, sql: &str) -> Result<serde_json::Value, AppError> {
         let trimmed = sql.trim();
         if trimmed.is_empty() {
@@ -1371,10 +1381,10 @@ fn classify_performance_schema_error(msg: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    //! 작성 이유 (2026-05-13, Sprint 281): map_mysql_data_type 의 카테고리
-    //! 분기는 사용자에게 보이는 DataGrid 폭/정렬을 좌우. pure fn 이라 실
-    //! DB 없이도 회귀 가드 가능 — 타입 추가 시 fall-through 가 silent 하게
-    //! Unknown 으로 떨어지는 회귀를 빠르게 잡는다.
+    //! Reason (2026-05-13): the category branch of map_mysql_data_type
+    //! drives the DataGrid width/alignment the user sees. It is a pure fn, so
+    //! it can be regression-guarded without a live DB — this catches quickly
+    //! the regression where an added type silently falls through to Unknown.
     use super::*;
 
     #[test]
@@ -1398,8 +1408,8 @@ mod tests {
 
     #[test]
     fn format_fk_reference_round_trips_pg_format() {
-        // PG / MySQL 공통 wire format — frontend `parseFkReference` 가
-        // 한 정규식으로 양쪽 dialect 결과를 파싱한다.
+        // Wire format shared by PG / MySQL — the frontend `parseFkReference`
+        // parses both dialects' results with one regex.
         assert_eq!(
             format_fk_reference("public", "users", "id"),
             "public.users(id)"
@@ -1410,9 +1420,10 @@ mod tests {
         );
     }
 
-    // Refs #1067 — DB lifecycle + EXPLAIN parity. PG (`postgres/schema.rs`)
-    // 의 동명 유닛 케이스와 1:1. identifier / empty-SQL guard 는 pool 없이
-    // 검증 가능한 branch 라 실 MySQL 없이 회귀 가드한다.
+    // Refs #1067 — DB lifecycle + EXPLAIN parity. 1:1 with the same-named
+    // unit cases in PG (`postgres/schema.rs`). The identifier / empty-SQL
+    // guards are branches verifiable without a pool, so they are
+    // regression-guarded without a live MySQL.
     #[tokio::test]
     async fn create_database_rejects_empty_name() {
         let adapter = MysqlAdapter::new();

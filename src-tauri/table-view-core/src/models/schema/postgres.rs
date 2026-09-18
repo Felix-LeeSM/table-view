@@ -18,7 +18,7 @@ pub struct FunctionInfo {
     pub kind: String, // "function", "procedure", "package", "aggregate", "window", "sequence", "synonym"
 }
 
-/// Sprint 273 — request payload for `tauri.create_trigger`.
+/// Request payload for `tauri.create_trigger`.
 ///
 /// Carries the canonical trigger fields required by PG `CREATE TRIGGER`:
 ///   - `trigger_name`, `schema`, `table`, `function_schema`, `function_name`
@@ -37,11 +37,11 @@ pub struct FunctionInfo {
 ///     for the `EXECUTE FUNCTION "schema"."name"(args)` clause. The
 ///     emitter doubles single quotes (`'` → `''`) before embedding so
 ///     SQL injection through unbalanced quotes is impossible
-///     (closes Sprint 272 findings § P3).
+///     (closes findings § P3).
 ///
 /// `preview_only: bool` toggles SQL emission vs. `BEGIN/COMMIT`
 /// execution. `expected_database: Option<String>` opt-in DbMismatch
-/// guard mirroring the rest of the Phase 24-26 DDL family.
+/// guard mirroring the rest of the DDL family.
 ///
 /// Wire shape: `#[serde(rename_all = "camelCase")]` so the TS mirror in
 /// `src/types/schema.ts` consumes payloads with `connectionId`,
@@ -72,27 +72,27 @@ pub struct CreateTriggerRequest {
     /// Optional comma-separated argument list for the
     /// `EXECUTE FUNCTION "schema"."name"(args)` clause. The emitter
     /// doubles single quotes inside this string before embedding
-    /// (Sprint 272 findings § P3 fix).
+    /// (findings § P3 fix).
     #[serde(default)]
     pub function_arguments: Option<String>,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    /// Opt-in DbMismatch guard. See `AlterTableRequest`.
     #[serde(default)]
     pub expected_database: Option<String>,
 }
 
-/// Sprint 274 — request payload for `DROP TRIGGER`. PG emitter validates
+/// Request payload for `DROP TRIGGER`. PG emitter validates
 /// `trigger_name`, `schema`, and `table` via the shared
 /// `validate_identifier` helper, then builds
 /// `DROP TRIGGER "<name>" ON "<schema>"."<table>"` (+ trailing ` CASCADE`
 /// when `cascade == true`).
 ///
 /// `cascade` is opt-in (default `false` → PG's implicit RESTRICT, byte-
-/// equivalent SQL emission omits the `RESTRICT` keyword; mirrors Sprint
-/// 235 `DropTableRequest` convention). `preview_only` toggles SQL
+/// equivalent SQL emission omits the `RESTRICT` keyword; mirrors the
+/// `DropTableRequest` convention). `preview_only` toggles SQL
 /// emission vs. `sqlx::Transaction::begin/commit` execution.
-/// `expected_database` opt-in DbMismatch guard (Sprint 271c).
+/// `expected_database` opt-in DbMismatch guard.
 ///
 /// Wire shape: `#[serde(rename_all = "camelCase")]` so the TS mirror in
 /// `src/types/schema.ts` consumes payloads with `connectionId`,
@@ -108,12 +108,12 @@ pub struct DropTriggerRequest {
     pub cascade: bool,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    /// Opt-in DbMismatch guard. See `AlterTableRequest`.
     #[serde(default)]
     pub expected_database: Option<String>,
 }
 
-/// Sprint 272 — single trigger entry returned by
+/// Single trigger entry returned by
 /// `list_triggers(connection_id, schema, table, expected_database?)`.
 ///
 /// Sourced from `pg_catalog.pg_trigger ⨝ pg_proc ⨝ pg_namespace ⨝ pg_class`
@@ -121,8 +121,8 @@ pub struct DropTriggerRequest {
 /// explicit fields below by [`crate::db::postgres::schema::decode_tgtype`]:
 ///   - `0x40` → `INSTEAD OF` (else `0x02` → BEFORE, otherwise AFTER)
 ///   - events from `0x04` (INSERT) / `0x08` (DELETE) / `0x10` (UPDATE);
-///     `0x20` TRUNCATE is dropped from the event list (Sprint 272 hides
-///     TRUNCATE from the user-visible trigger UI per master spec § 6).
+///     `0x20` TRUNCATE is dropped from the event list (TRUNCATE is hidden
+///     from the user-visible trigger UI per master spec § 6).
 ///   - `0x01` → ROW (else STATEMENT).
 ///
 /// `arguments` carries the raw `tgargs` blob decoded as PG's `\0`-delimited
@@ -132,7 +132,7 @@ pub struct DropTriggerRequest {
 /// string so the read-only Structure tab can render canonical SQL.
 ///
 /// Wire shape: `#[serde(rename_all = "camelCase")]` so the TS mirror in
-/// `src/types/schema.ts` (Sprint 272) consumes payloads with
+/// `src/types/schema.ts` consumes payloads with
 /// `name`, `schema`, `table`, `timing`, `events`, `orientation`,
 /// `functionSchema`, `functionName`, `arguments`, `whenExpression`,
 /// `definition`. Older callers that omit `arguments` / `whenExpression`
@@ -159,7 +159,7 @@ pub struct TriggerInfo {
     pub definition: String,
 }
 
-/// Sprint 230 — single Postgres type entry returned by
+/// Single Postgres type entry returned by
 /// `list_postgres_types(connection_id)`. Sourced from
 /// `pg_catalog.pg_type` joined with `pg_catalog.pg_namespace`.
 ///
@@ -178,7 +178,7 @@ pub struct PostgresTypeInfo {
     pub type_kind: String,
 }
 
-/// Sprint 487 — installed PostgreSQL extension entry returned by
+/// Installed PostgreSQL extension entry returned by
 /// `list_postgres_extensions(connection_id)`. Sourced from
 /// `pg_catalog.pg_extension` joined with `pg_catalog.pg_namespace`.
 #[derive(Debug, Clone, Serialize, Deserialize)]

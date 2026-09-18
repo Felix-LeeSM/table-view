@@ -1,27 +1,27 @@
 #![allow(dead_code)]
 #![allow(clippy::type_complexity)]
-//! 작성 이유 (2026-05-08): commands/rdb/{ddl,schema,query} 와 commands/meta
-//! 의 dispatch 테스트가 각자 RdbAdapter / DocumentAdapter stub 을 inline 으로
-//! 정의해 ~30 trait method × 3 파일 = ~90 dead method 가 coverage 분모에
-//! 잡혔다 (functions/regions 비율 희석). 본 모듈은 그 stub 을 한 곳으로
-//! 통합한다.
+//! Reason (2026-05-08): the dispatch tests in commands/rdb/{ddl,schema,query}
+//! and commands/meta each defined their own inline RdbAdapter /
+//! DocumentAdapter stub, so ~30 trait methods × 3 files = ~90 dead methods
+//! counted toward the coverage denominator (diluting the functions/regions
+//! ratio). This module consolidates those stubs in one place.
 //!
-//! 사용 패턴:
+//! Usage:
 //!   let mut stub = StubRdbAdapter::default();
-//!   // override 가 필요한 method 만 closure 지정
+//!   // give a closure only to the methods that need an override
 //!   stub.drop_table_fn = Some(Box::new(|_| Err(AppError::Database("…"))));
 //!   let active = ActiveAdapter::Rdb(Box::new(stub));
 //!
-//! Default 동작:
+//! Defaults:
 //!   - read-only (`list_*`, `get_*`): `Ok(Vec::new())` / `Ok(HashMap::new())`
 //!     / `Ok(String::new())` / `Ok(None)`
 //!   - DDL (`drop_table`, `add_column`, …): `Ok(SchemaChangeResult { sql:
-//!     "<method-name>".into() })` — wiring 테스트가 default 만으로 동작.
+//!     "<method-name>".into() })` — wiring tests work off the default alone.
 //!
-//! `cfg(any(test, feature = "testing"))` 게이트 (이 모듈 자체는 production 에
-//! 컴파일되지 않음). `table-view` 는 `[dev-dependencies]` 에서만 `testing`
-//! feature 를 켠다 — #1769 의 crate 분리로 `pub(crate)` 로는 앱 테스트가 못
-//! 닿게 됐다.
+//! Gated on `cfg(any(test, feature = "testing"))` (this module itself is not
+//! compiled into production). `table-view` turns the `testing` feature on only
+//! in `[dev-dependencies]` — after the crate split in #1769, `pub(crate)` no
+//! longer reaches the app's tests.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -84,11 +84,11 @@ pub struct StubRdbAdapter {
     pub list_types_fn: Option<FnZero<Vec<PostgresTypeInfo>>>,
     pub list_extensions_fn: Option<FnZero<Vec<PostgresExtensionInfo>>>,
     pub sqlite_capabilities_fn: Option<FnZero<SqliteCapabilityInventory>>,
-    /// Sprint 272 — override for `list_triggers(namespace, table)`. `None`
+    /// Override for `list_triggers(namespace, table)`. `None`
     /// falls back to the trait default (`Ok(Vec::new())`) so wiring tests
     /// that don't care about triggers still type-check.
     pub list_triggers_fn: Option<FnTwo<str, str, Vec<TriggerInfo>>>,
-    /// Sprint 272 — override for `get_trigger_source(namespace, table,
+    /// Override for `get_trigger_source(namespace, table,
     /// trigger_name)`. `None` falls back to a sentinel `Ok("")` (the trait
     /// default `Unsupported` would force every dispatch test to set the
     /// override). The mismatch panic-closure pattern uses this slot.
@@ -106,7 +106,7 @@ pub struct StubRdbAdapter {
     pub execute_sql_gate: Option<(Arc<Notify>, Arc<Notify>)>,
     pub execute_sql_batch_fn:
         Option<Box<dyn Fn(&[String]) -> Result<Vec<RdbQueryResult>, AppError> + Send + Sync>>,
-    /// Sprint 247 — `dry_run_sql_batch` override. `None` falls back to the
+    /// `dry_run_sql_batch` override. `None` falls back to the
     /// trait default (`Unsupported`) so wiring tests that don't care about
     /// dry-run still type-check.
     pub dry_run_sql_batch_fn:
@@ -132,19 +132,19 @@ pub struct StubRdbAdapter {
     pub drop_index_fn: Option<FnOne<DropIndexRequest, SchemaChangeResult>>,
     pub add_constraint_fn: Option<FnOne<AddConstraintRequest, SchemaChangeResult>>,
     pub drop_constraint_fn: Option<FnOne<DropConstraintRequest, SchemaChangeResult>>,
-    /// Sprint 273 — override for `create_trigger(req)`. `None` falls back
+    /// Override for `create_trigger(req)`. `None` falls back
     /// to the DDL default `Ok(SchemaChangeResult { sql: "create_trigger" })`
     /// so wiring tests can assert on the sentinel SQL; the mismatch
     /// panic-closure pattern uses `Some(Box::new(|_| panic!(...)))` to
     /// assert the trait body is never reached when DbMismatch fires.
     pub create_trigger_fn: Option<FnOne<CreateTriggerRequest, SchemaChangeResult>>,
-    /// Sprint 274 — override for `drop_trigger(req)`. `None` falls back
+    /// Override for `drop_trigger(req)`. `None` falls back
     /// to the DDL default `Ok(SchemaChangeResult { sql: "drop_trigger" })`
     /// so wiring tests can assert on the sentinel SQL; the mismatch
     /// panic-closure pattern uses `Some(Box::new(|_| panic!(...)))` to
     /// assert the trait body is never reached when DbMismatch fires.
     pub drop_trigger_fn: Option<FnOne<DropTriggerRequest, SchemaChangeResult>>,
-    /// Sprint 237 — override for `count_null_rows(namespace, table,
+    /// Override for `count_null_rows(namespace, table,
     /// column)`. `None` falls back to a sentinel `Ok(0)` so wiring tests
     /// that do not care about the probe still type-check. The mismatch
     /// panic-closure pattern uses `Some(Box::new(|_,_,_| panic!(...)))`
@@ -152,11 +152,11 @@ pub struct StubRdbAdapter {
     pub count_null_rows_fn:
         Option<Box<dyn Fn(&str, &str, &str) -> Result<i64, AppError> + Send + Sync>>,
 
-    // Sprint 336 — override slots for the RDB server-activity pair.
+    // Override slots for the RDB server-activity pair.
     pub list_server_activity_fn: Option<FnZero<Vec<crate::models::ServerActivityRow>>>,
     pub kill_session_fn: Option<FnOne<i64, ()>>,
 
-    // Sprint 337 — override slot for RDB explain.
+    // Override slot for RDB explain.
     pub explain_query_fn:
         Option<Box<dyn Fn(&str) -> Result<serde_json::Value, AppError> + Send + Sync>>,
 
@@ -165,13 +165,13 @@ pub struct StubRdbAdapter {
     // Mirrors `execute_sql_gate`.
     pub explain_query_gate: Option<(Arc<Notify>, Arc<Notify>)>,
 
-    // Sprint 338 — override slot for RDB collection_stats.
+    // Override slot for RDB collection_stats.
     pub collection_stats_fn: Option<FnTwo<str, str, crate::models::CollectionStatsRow>>,
 
-    // Sprint 339 — override slot for RDB server_info.
+    // Override slot for RDB server_info.
     pub server_info_fn: Option<FnZero<crate::models::ServerInfoRow>>,
 
-    // Sprint 340 — override slot for RDB slow_queries.
+    // Override slot for RDB slow_queries.
     pub slow_queries_fn: Option<FnOne<i64, Vec<crate::models::SlowQueryRow>>>,
 
     // Issue #1077 Stage 2 — override slot for RDB list_database_users. When
@@ -515,7 +515,7 @@ impl RdbAdapter for StubRdbAdapter {
         &'a self,
         req: &'a CreateTriggerRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        // Sprint 273 — DDL default sentinel `Ok(... sql: "create_trigger")`
+        // DDL default sentinel `Ok(... sql: "create_trigger")`
         // so wiring tests can assert that the handler reached the trait
         // body without configuring a closure. Override slot accepts the
         // mismatch panic-closure pattern used in `ddl.rs`.
@@ -529,7 +529,7 @@ impl RdbAdapter for StubRdbAdapter {
         &'a self,
         req: &'a DropTriggerRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
-        // Sprint 274 — DDL default sentinel `Ok(... sql: "drop_trigger")`
+        // DDL default sentinel `Ok(... sql: "drop_trigger")`
         // so wiring tests can assert that the handler reached the trait
         // body without configuring a closure. Override slot accepts the
         // mismatch panic-closure pattern used in `ddl.rs`.
@@ -680,7 +680,7 @@ impl RdbAdapter for StubRdbAdapter {
         Box::pin(async move { r })
     }
 
-    /// Sprint 237 — `count_null_rows(namespace, table, column)`. `None`
+    /// `count_null_rows(namespace, table, column)`. `None`
     /// closure falls back to `Ok(0)` (the natural "no NULL rows" default
     /// for wiring tests). Override slot uses
     /// `Some(Box::new(|_,_,_| panic!(...)))` for the mismatch
@@ -698,7 +698,7 @@ impl RdbAdapter for StubRdbAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 336 — list_server_activity / kill_session stubs.
+    // list_server_activity / kill_session stubs.
     fn list_server_activity<'a>(
         &'a self,
     ) -> BoxFuture<'a, Result<Vec<crate::models::ServerActivityRow>, AppError>> {
@@ -717,7 +717,7 @@ impl RdbAdapter for StubRdbAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 337 — explain_query stub.
+    // explain_query stub.
     fn explain_query<'a>(
         &'a self,
         sql: &'a str,
@@ -736,7 +736,7 @@ impl RdbAdapter for StubRdbAdapter {
         })
     }
 
-    // Sprint 338 — collection_stats stub.
+    // collection_stats stub.
     fn collection_stats<'a>(
         &'a self,
         namespace: &'a str,
@@ -761,7 +761,7 @@ impl RdbAdapter for StubRdbAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 339 — server_info stub.
+    // server_info stub.
     fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
         let r = self.server_info_fn.as_ref().map_or_else(
             || {
@@ -778,7 +778,7 @@ impl RdbAdapter for StubRdbAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 340 — slow_queries stub.
+    // slow_queries stub.
     fn slow_queries<'a>(
         &'a self,
         limit: i64,
@@ -826,8 +826,10 @@ pub struct StubDocumentAdapter {
 
     pub drop_collection_fn: Option<FnTwo<str, str, ()>>,
 
-    // Sprint 308 (2026-05-14) — override slots for the six new methods.
-    // 작성 이유: command-level dispatch tests can swap in failure /
+    // Override slots for the `find_one` / `count_documents` /
+    // `estimated_document_count` / `distinct` / `insert_many` / `bulk_write`
+    // group.
+    // Reason: command-level dispatch tests can swap in failure /
     // happy-path closures without touching production code. Default
     // closures return the natural "empty / zero / None" so wiring tests
     // (NotFound / Unsupported route gating) compile with no override.
@@ -840,12 +842,12 @@ pub struct StubDocumentAdapter {
     pub insert_many_fn: Option<FnTwo<str, str, Vec<DocumentId>>>,
     pub bulk_write_fn: Option<FnTwo<str, str, BulkWriteResult>>,
 
-    // Sprint 332 — override slot for list_collection_indexes. Default
+    // Override slot for list_collection_indexes. Default
     // returns an empty Vec so wiring tests for unrelated commands compile
     // with no override.
     pub list_collection_indexes_fn: Option<FnTwo<str, str, Vec<crate::models::IndexInfo>>>,
 
-    // Sprint 351 — override slots for the create / drop index pair.
+    // Override slots for the create / drop index pair.
     #[allow(clippy::type_complexity)]
     pub create_collection_index_fn: Option<
         Box<
@@ -857,11 +859,10 @@ pub struct StubDocumentAdapter {
     pub drop_collection_index_fn:
         Option<Box<dyn Fn(&str, &str, &str) -> Result<(), AppError> + Send + Sync>>,
 
-    // Sprint 333/352 — override slots for the validator pair. Default
-    // returns the natural `CollectionValidatorRead::default()` /
-    // `Ok(())` so wiring tests for unrelated commands compile without a
-    // hand-rolled override. Sprint 352 widened `set` to capture the new
-    // level/action arguments alongside the validator payload.
+    // Override slots for the validator pair. Default returns the natural
+    // `CollectionValidatorRead::default()` / `Ok(())` so wiring tests for
+    // unrelated commands compile without a hand-rolled override. `set`
+    // captures the level/action arguments alongside the validator payload.
     pub get_collection_validator_fn: Option<FnTwo<str, str, CollectionValidatorRead>>,
     #[allow(clippy::type_complexity)]
     pub set_collection_validator_fn: Option<
@@ -878,22 +879,22 @@ pub struct StubDocumentAdapter {
         >,
     >,
 
-    // Sprint 334 — override slots for the create / rename collection pair.
+    // Override slots for the create / rename collection pair.
     pub create_collection_fn: Option<
         Box<dyn Fn(&str, &str, Option<serde_json::Value>) -> Result<(), AppError> + Send + Sync>,
     >,
     pub rename_collection_fn:
         Option<Box<dyn Fn(&str, &str, &str) -> Result<(), AppError> + Send + Sync>>,
 
-    // Sprint 335 — override slot for drop_database (document side).
+    // Override slot for drop_database (document side).
     pub drop_database_fn: Option<FnOne<str, ()>>,
 
-    // Sprint 336 — override slots for the Mongo activity pair.
+    // Override slots for the Mongo activity pair.
     pub current_op_fn: Option<FnZero<Vec<crate::models::ServerActivityRow>>>,
     pub kill_op_fn: Option<Box<dyn Fn(i64) -> Result<(), AppError> + Send + Sync>>,
 
-    // Sprint 337 — override slot for Mongo explain (find). Issue #1210 — the
-    // closure now receives the full `FindBody` so tests can assert
+    // Override slot for Mongo explain (find). Issue #1210 — the closure
+    // receives the full `FindBody` so tests can assert
     // sort/projection/skip/limit are threaded into the plan.
     #[allow(clippy::type_complexity)]
     pub explain_query_fn: Option<
@@ -902,16 +903,16 @@ pub struct StubDocumentAdapter {
         >,
     >,
 
-    // Sprint 338 — override slot for Mongo collection_stats.
+    // Override slot for Mongo collection_stats.
     pub collection_stats_fn: Option<FnTwo<str, str, crate::models::CollectionStatsRow>>,
 
-    // Sprint 339 — override slot for Mongo server_info.
+    // Override slot for Mongo server_info.
     pub server_info_fn: Option<FnZero<crate::models::ServerInfoRow>>,
 
-    // Sprint 340 — override slot for Mongo slow_queries.
+    // Override slot for Mongo slow_queries.
     pub slow_queries_fn: Option<FnOne<i64, Vec<crate::models::SlowQueryRow>>>,
 
-    // Sprint 381 — override slot for Mongo `run_command` (admin/diagnostic
+    // Override slot for Mongo `run_command` (admin/diagnostic
     // command gateway). Closure receives `database` (None ⇒ admin DB) and
     // the raw command BSON; returns a `serde_json::Value` response.
     #[allow(clippy::type_complexity)]
@@ -1128,7 +1129,8 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 308 (2026-05-14) — 6 새 trait method 의 stub impl.
+    // Stub impls for `find_one` / `count_documents` /
+    // `estimated_document_count` / `distinct` / `insert_many` / `bulk_write`.
     fn find_one<'a>(
         &'a self,
         db: &'a str,
@@ -1208,7 +1210,7 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 332 — list_collection_indexes stub.
+    // list_collection_indexes stub.
     fn list_collection_indexes<'a>(
         &'a self,
         db: &'a str,
@@ -1221,7 +1223,7 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 351 — create / drop collection index stubs.
+    // create / drop collection index stubs.
     fn create_collection_index<'a>(
         &'a self,
         db: &'a str,
@@ -1252,7 +1254,7 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 333/352 — validator pair stubs.
+    // validator pair stubs.
     fn get_collection_validator<'a>(
         &'a self,
         db: &'a str,
@@ -1280,7 +1282,7 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 334 — create / rename collection stubs.
+    // create / rename collection stubs.
     fn create_collection<'a>(
         &'a self,
         db: &'a str,
@@ -1307,7 +1309,7 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 335 — drop_database stub.
+    // drop_database stub.
     fn drop_database<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
         let r = self
             .drop_database_fn
@@ -1316,7 +1318,7 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 336 — currentOp / killOp stubs.
+    // currentOp / killOp stubs.
     fn current_op<'a>(
         &'a self,
     ) -> BoxFuture<'a, Result<Vec<crate::models::ServerActivityRow>, AppError>> {
@@ -1332,7 +1334,7 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 337 — explain_query (find) stub.
+    // explain_query (find) stub.
     fn explain_query<'a>(
         &'a self,
         db: &'a str,
@@ -1347,7 +1349,7 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 338 — collection_stats stub.
+    // collection_stats stub.
     fn collection_stats<'a>(
         &'a self,
         db: &'a str,
@@ -1372,7 +1374,7 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 339 — server_info stub.
+    // server_info stub.
     fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
         let r = self.server_info_fn.as_ref().map_or_else(
             || {
@@ -1389,7 +1391,7 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 340 — slow_queries stub.
+    // slow_queries stub.
     fn slow_queries<'a>(
         &'a self,
         limit: i64,
@@ -1401,7 +1403,7 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 381 — `run_command` stub. Default (`None`) responds with
+    // `run_command` stub. Default (`None`) responds with
     // `{ "ok": 1 }` — the canonical "successful no-op" the driver returns
     // for trivial commands like `{ping: 1}`. Tests that need to assert
     // routing args (database = None vs Some, command body) install the

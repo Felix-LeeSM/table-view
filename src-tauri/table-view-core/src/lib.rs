@@ -1,16 +1,16 @@
-//! table-view 의 headless core.
+//! Headless core of table-view.
 //!
-//! DB adapter (`db`), wire model (`models`), 로컬 저장소 (`storage`), 그리고
-//! 그 셋이 공유하는 에러 타입 (`error`) 을 담는다. **Tauri 에 의존하지 않는
-//! 것이 이 crate 의 계약이다** — `cargo tree -p table-view-core -i tauri` 가
-//! exit 101 (`did not match any packages`) 이어야 하고,
-//! ADR 0061 의 `tvw` CLI 가 webview 없이 이 crate 만 링크한다.
+//! Holds the DB adapter (`db`), the wire model (`models`), local storage
+//! (`storage`), and the error type (`error`) those three share. **Not depending
+//! on Tauri is this crate's contract** — `cargo tree -p table-view-core -i tauri`
+//! must exit 101 (`did not match any packages`), and ADR 0061's `tvw` CLI links
+//! only this crate, with no webview.
 //!
-//! 앱 쪽 (`table_view_lib`) 은 `pub use table_view_core::{db, error, models}`
-//! 로 그대로 re-export 하므로 기존 `crate::db::…` 경로는 유지된다. `storage`
-//! 만 앱 쪽에 shim 이 있다: boot 글루인 `storage::history_audit` /
-//! `storage::history_retention_boot` 가 `crate::commands::` 를 역참조해서
-//! core 로 못 내려온다.
+//! The app side (`table_view_lib`) re-exports them unchanged via
+//! `pub use table_view_core::{db, error, models}`, so existing `crate::db::…`
+//! paths stay valid. Only `storage` has a shim on the app side: the boot glue
+//! `storage::history_audit` / `storage::history_retention_boot` reaches back into
+//! `crate::commands::`, so it cannot move down into core.
 
 #![deny(unsafe_code)]
 // #1368 — block new `.unwrap()` in production paths. `-D warnings` (CI clippy

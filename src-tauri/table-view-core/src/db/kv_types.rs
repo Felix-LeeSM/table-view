@@ -333,7 +333,7 @@ mod tests {
     use super::*;
 
     // Purpose: KV wire envelopes are the cross-language Redis/Valkey contract
-    // for sprint 465-468 (2026-05-24).
+    // (2026-05-24).
 
     #[test]
     fn kv_scan_page_serializes_public_keys_as_camel_case() {

@@ -6,7 +6,7 @@
 //! table/index/constraint DDL, and PL/SQL body/package source. Issue #1065
 //! adds SID connections (`Config::with_sid`) and Oracle wallet mTLS
 //! (`Config::with_wallet`, `ewallet.pem`) with a host/service/SID injection
-//! whitelist. Issue #1072 (2차) also wires read-only trigger listing
+//! whitelist. Issue #1072 (pass 2) also wires read-only trigger listing
 //! (`list_triggers` over `all_triggers`, header-only definition — the LONG
 //! body is not read). Issue #2154 opens the two remaining dial paths onto the
 //! same `connect_config` axis: a pasted TNS connect descriptor (parsed down to
@@ -679,7 +679,7 @@ impl RdbAdapter for OracleAdapter {
         Box::pin(async move { OracleAdapter::get_function_source(self, namespace, function).await })
     }
 
-    // Reason: #1072 (2차) — list_triggers was the last Oracle catalog stub still
+    // Reason: #1072 (pass 2) — list_triggers was the last Oracle catalog stub still
     // inheriting the RdbAdapter default `Ok(Vec::new())`, so the Structure
     // Triggers tab showed empty for Oracle despite live triggers. It now reads
     // `all_triggers` through `oracle/catalog.rs` like the other list_* surfaces.

@@ -1,7 +1,6 @@
-//! MongoDB adapter — Sprint 197 split (4-way module reorg).
+//! MongoDB adapter — split four ways by topic.
 //!
-//! Pre-split the entire adapter lived in a 1809-line `db/mongodb.rs`. Sprint
-//! 197 carved that into four topic files:
+//! The adapter is carved into four topic files:
 //!
 //! * [`connection`] — `MongoAdapter` struct + connection lifecycle (build /
 //!   probe / `current_client` / `switch_active_db` / `resolved_db_name`)
@@ -13,7 +12,7 @@
 //!   (`validate_ns`, `flatten_cell`, `columns_from_docs`, `project_row`).
 //! * [`mutations`] — `insert_document` / `update_document` /
 //!   `delete_document` bodies + `DocumentId` ↔ `Bson` round-trip helpers.
-//!   Sprint 198 will land bulk-write commands here.
+//!   The bulk-write commands live here as well.
 //!
 //! ## Trait dispatch pattern
 //!
@@ -24,9 +23,8 @@
 //! delegates. Behavior is identical to the pre-split monolith — the split
 //! is module-organisational only.
 //!
-//! Pre-split history docs (Sprint 65 / 66 / 72 / 80 / 131 / 137 / 180)
-//! moved verbatim into the topic files; this `mod.rs` only carries the
-//! dispatch + module composition.
+//! The history docs moved verbatim into the topic files; this `mod.rs` only
+//! carries the dispatch + module composition.
 //!
 //! ## State
 //!
@@ -41,7 +39,7 @@
 //! * scalar BSON (`String`, `Int32/64`, `Double`, `Bool`, `Null`,
 //!   `ObjectId`, `DateTime`) — serialised via `bson::Bson::serialize` which
 //!   emits canonical extended JSON (`{"$oid": "..."}`, `{"$date": "..."}`),
-//!   matching what the Quick Look panel (Sprint 67) expects to see.
+//!   matching what the Quick Look panel expects to see.
 //! * `Document(_)` — replaced with the sentinel string `"{...}"`.
 //! * `Array(arr)` — replaced with the sentinel string `"[N items]"`.
 //!
@@ -70,19 +68,18 @@ use super::{
 };
 
 impl DocumentAdapter for MongoAdapter {
-    /// Sprint 131 — delegates to the inherent `switch_active_db` so the
-    /// trait dispatcher can drive Mongo DB swaps from the unified
-    /// `switch_active_db` Tauri command. Mirrors
-    /// `PostgresAdapter::switch_database` (S130).
+    /// Delegates to the inherent `switch_active_db` so the trait dispatcher
+    /// can drive Mongo DB swaps from the unified `switch_active_db` Tauri
+    /// command. Mirrors `PostgresAdapter::switch_database`.
     fn switch_database<'a>(&'a self, db_name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move { self.switch_active_db(db_name).await })
     }
 
-    /// Sprint 132 — surface the in-memory `active_db` selection without a
-    /// driver round-trip. The `verify_active_db` Tauri command compares
-    /// this against the optimistic `setActiveDb` value the frontend wrote
-    /// after a raw-query DB switch, so the answer must mirror exactly
-    /// what `current_active_db()` would return — same accessor.
+    /// Surface the in-memory `active_db` selection without a driver
+    /// round-trip. The `verify_active_db` Tauri command compares this against
+    /// the optimistic `setActiveDb` value the frontend wrote after a raw-query
+    /// DB switch, so the answer must mirror exactly what `current_active_db()`
+    /// would return — same accessor.
     fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
         Box::pin(async move { Ok(self.current_active_db().await) })
     }
@@ -96,7 +93,7 @@ impl DocumentAdapter for MongoAdapter {
         db: &'a str,
         cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<DocumentCollectionInfo>, AppError>> {
-        // Sprint 180 (AC-180-04): the `tokio::select!` races driver work
+        // AC-180-04: the `tokio::select!` races driver work
         // against the cancel-token's `cancelled()` future. On cancel we
         // return the same `AppError::Database("Operation cancelled")`
         // shape used by `PostgresAdapter::execute_query`. The Mongo
@@ -230,13 +227,14 @@ impl DocumentAdapter for MongoAdapter {
         Box::pin(async move { self.drop_collection_impl(db, collection).await })
     }
 
-    // ── Sprint 308 (2026-05-14) — 6 new trait wirings ──────────────────
+    // ── 6 new trait wirings (2026-05-14) ───────────────────────────────
     //
-    // 작성 이유: A1 mongosh 파서가 dispatch 할 6 새 method 를 `find` /
-    // `aggregate` 의 cancel-token cooperation 패턴을 답습해 wire. read-path
-    // 4 method 는 `tokio::select!` 로 cooperative abort, write-path 2
-    // method 는 driver 가 in-flight write 중단을 지원하지 않아 cancel 인자
-    // 자체가 없다 (trait 정의 측에서 enforced).
+    // Reason: the 6 new methods the A1 mongosh parser dispatches to are wired
+    // by following the cancel-token cooperation pattern of `find` /
+    // `aggregate`. The 4 read-path methods abort cooperatively through
+    // `tokio::select!`; the 2 write-path methods take no cancel argument at
+    // all, because the driver cannot interrupt an in-flight write (enforced on
+    // the trait definition side).
 
     fn find_one<'a>(
         &'a self,
@@ -461,7 +459,7 @@ impl DocumentAdapter for MongoAdapter {
         Box::pin(async move { self.slow_queries_impl(limit).await })
     }
 
-    /// Sprint 381 — `db.runCommand({...})` / `db.adminCommand({...})` generic
+    /// `db.runCommand({...})` / `db.adminCommand({...})` generic
     /// gateway. See `run_command_impl` for routing details.
     fn run_command<'a>(
         &'a self,
