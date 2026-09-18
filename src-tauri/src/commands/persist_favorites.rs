@@ -1,16 +1,18 @@
-//! Sprint 358 (Phase 1 W1 dual-write) → Sprint 370 (Phase 4 W3 SQLite SOT)
+//! dual-write → SQLite-only SOT
 //!
-//! Sprint 358 시점에는 `favoritesStore` 의 every change 가 file SOT
-//! (favorites.json) + SQLite mirror 의 dual-write 였다. Sprint 370 의 W3
-//! cut 이후 file 분기는 제거되고 SQLite-only path 가 된다:
+//! `favoritesStore` used to dual-write every change to the file SOT
+//! (favorites.json) plus the SQLite mirror. After the W3 cut the file branch
+//! was removed and the path became SQLite-only:
 //!
-//!   1. guard_legacy_import_done — pending/importing/failed reject.
-//!   2. SQLite write — tx 안에서 DELETE FROM favorites 후 본 호출의 모든 entry
-//!      재삽입 (full replace). #1547 — INSERT OR REPLACE 만 하면 삭제된 favorite
-//!      row 가 잔존해 다음 boot 의 list 경로가 부활시킨다.
+//!   1. guard_legacy_import_done — rejects pending/importing/failed.
+//!   2. SQLite write — inside a tx, DELETE FROM favorites then re-insert every
+//!      entry of this call (full replace). #1547 — with INSERT OR REPLACE alone
+//!      a deleted favorite row survives and the next boot's list path
+//!      resurrects it.
 //!
-//! W3 진입의 invariant: file SOT 와 LS write 사이트 0. `list_favorites` 가
-//! 추가되어 frontend 는 boot 시점에 SQLite 에서 직접 hydrate.
+//! Invariant since entering W3: zero file-SOT and LS write sites.
+//! `list_favorites` was added so the frontend hydrates directly from SQLite at
+//! boot.
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
@@ -42,11 +44,12 @@ pub async fn persist_favorite_inner(
 ) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;
 
-    // Sprint 370 (Phase 4 W3) — file/LS write 분기 제거. SQLite 가 유일한 SOT.
-    // #1092 (2026-07-02) — W3 cut 이후 SQLite 가 SOT 인데도 실패를 삼키고
-    // Ok 를 반환하던 것이 데이터 무음 소실의 근본 원인. file/LS 대체 원본이
-    // 없으므로 (그리고 boot reconcile 이 배선되어 있지 않으므로) write 실패는
-    // 그대로 IPC 경계로 전파해 frontend 가 사용자에게 알리게 한다.
+    // The file/LS write branch is gone — SQLite is the only SOT.
+    // #1092 (2026-07-02) — after the W3 cut, swallowing failures and returning
+    // Ok while SQLite is the SOT was the root cause of silent data loss. There
+    // is no file/LS fallback copy (and boot reconcile is not wired), so a write
+    // failure propagates straight to the IPC boundary and the frontend tells
+    // the user.
     if is_force_failure_for_tests() {
         return Err(AppError::Storage("forced failure for tests".into()));
     }
@@ -54,11 +57,11 @@ pub async fn persist_favorite_inner(
 }
 
 // ---------------------------------------------------------------------------
-// `list_favorites` — Sprint 370 (Phase 4 W3 read SOT).
+// `list_favorites` — the W3 read SOT.
 //
-// frontend `favoritesStore.loadPersistedFavorites` 가 호출. `favorites.json`
-// 의 LS read 사이트를 0 으로 만든다. Returned shape 는 camelCase
-// frontend 타입에 맞춤 (serde rename_all).
+// Called by the frontend `favoritesStore.loadPersistedFavorites`. Reduces the
+// `favorites.json` LS read sites to zero. The returned shape matches the
+// camelCase frontend type (serde rename_all).
 // ---------------------------------------------------------------------------
 
 /// SQLite favorites row → frontend wire shape.
@@ -149,12 +152,12 @@ pub async fn persist_favorites(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 1 sprint-358) — inline lib smoke for `--lib`
-    //! coverage gate. 통합 시나리오는 `tests/dual_write_connections.rs`.
+    //! Written 2026-05-16 — inline lib smoke for the `--lib` coverage gate.
+    //! The integration scenarios live in `tests/dual_write_connections.rs`.
     //!
-    //! Sprint 370 (Phase 4 W3 SQLite SOT) — file write 분기 retire 이후의
-    //! invariant 추가: `persist_favorite_inner` 호출 후 file (favorites.json)
-    //! 미생성, SQLite row 만. `list_favorites_inner` 가 SQLite 만 read.
+    //! After the file write branch retired (SQLite SOT), one more invariant:
+    //! after a `persist_favorite_inner` call no file (favorites.json) is
+    //! created — only the SQLite row. `list_favorites_inner` reads SQLite only.
 
     use super::*;
     use crate::storage::local;
@@ -246,8 +249,8 @@ mod tests {
             .unwrap();
         assert_eq!(count, 2);
 
-        // Sprint 370 invariant — file SOT 분기 제거. favorites.json 이 디렉토리
-        // 에 생성되지 않아야 한다.
+        // Invariant — the file SOT branch is gone. favorites.json must not be
+        // created in the directory.
         let file = dir.path().join("favorites.json");
         assert!(
             !file.exists(),
@@ -269,8 +272,8 @@ mod tests {
         cleanup();
     }
 
-    // 작성 2026-05-16 (Phase 4 sprint-370 AC-370-04) — `list_favorites_inner`
-    // 가 SQLite 의 favorites 를 sort_order 순으로 반환.
+    // Written 2026-05-16 (AC-370-04) — `list_favorites_inner` returns the
+    // SQLite favorites in sort_order order.
     #[tokio::test]
     #[serial]
     async fn list_favorites_returns_rows_in_sort_order() {

@@ -1,12 +1,13 @@
-//! Sprint 356 (Phase 1, Q22) — keyring fallback sentinel IPC.
+//! Q22 — keyring fallback sentinel IPC.
 //!
-//! 단일 책임: 사용자가 `KeyringFallbackToast` 의 dismiss 를 눌렀을 때 file
-//! sidecar `.keyring-fallback-dismissed` 를 user-data dir 에 set 한다. 다음
-//! boot 의 frontend 는 backend 의 boot-time 신호와 이 sidecar 존재 여부를
-//! 합쳐 toast 표시 여부를 결정한다 (AC-356-06).
+//! Single responsibility: when the user presses dismiss on `KeyringFallbackToast`,
+//! set the file sidecar `.keyring-fallback-dismissed` in the user-data dir. On
+//! the next boot the frontend combines the backend's boot-time signal with the
+//! presence of this sidecar to decide whether to show the toast (AC-356-06).
 //!
-//! 본 명령은 의도적으로 SQLite/AppState 와 무관하다 — keyring 이주 자체가
-//! SQLite migration **전** 단계이므로 meta table 부재 (codex 5차 #5 fix).
+//! This command is deliberately independent of SQLite/AppState — the keyring
+//! migration itself runs **before** the SQLite migration stage, so the meta
+//! table does not exist yet (fix).
 
 use crate::error::AppError;
 use crate::storage::key_migration::{app_data_dir_for_keyring, fallback_dismissed_sentinel_path};
@@ -27,16 +28,16 @@ pub async fn set_keyring_fallback_dismissed() -> Result<(), AppError> {
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    //! Written 2026-05-17 — baseline cleanup.
     //!
-    //! `set_keyring_fallback_dismissed` IPC 는 SQLite/AppState 미관여 — 단순
-    //! file sidecar write. Tauri::command attribute 가 wrapping 만 하기에
-    //! `tauri::test::mock_app` 없이 직접 호출 가능.
+    //! The `set_keyring_fallback_dismissed` IPC does not touch SQLite/AppState —
+    //! it is a plain file sidecar write. The Tauri::command attribute only wraps
+    //! it, so it can be called directly without `tauri::test::mock_app`.
     //!
     //! Test scenarios:
-    //!   - Happy: 빈 dir 에서 sidecar 생성.
-    //!   - 멱등: 두 번째 호출도 정상 (덮어쓰기 OK).
-    //!   - File 내용: 빈 body (위치만 의미 있음).
+    //!   - Happy: sidecar created in an empty dir.
+    //!   - Idempotent: a second call also succeeds (overwrite is fine).
+    //!   - File content: empty body (only the location matters).
     use super::*;
     use serial_test::serial;
     use tempfile::TempDir;
@@ -74,7 +75,8 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn third_call_in_isolated_dir_does_not_resurface_prior_body() {
-        // 별도 새 TempDir 에서도 정상 — 동일 dir 에서의 idempotency 와 분리.
+        // Also fine in a separate fresh TempDir — isolated from the same-dir
+        // idempotency check.
         let dir = TempDir::new().unwrap();
         std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
         for _ in 0..3 {

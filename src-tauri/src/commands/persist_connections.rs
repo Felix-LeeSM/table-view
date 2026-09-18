@@ -1,14 +1,13 @@
-//! Sprint 358 (Phase 1 W1 dual-write) — `persist_connection` IPC.
+//! `persist_connection` IPC.
 //!
-//! 호출 flow:
-//!   1. `guard_legacy_import_done(pool)` — pending/importing/failed 면 reject.
-//!   2. file SOT (`storage::save_connection`) 에 write — 기존 인터페이스 그대로.
-//!   3. SQLite mirror `INSERT OR REPLACE INTO connections(...)` — 실패 시
-//!      `reconcile::record_sqlite_result(domain, Err)` 로 dev 로그 + counter
-//!      증가. 외부 시그니처는 file write 의 결과를 따른다 (silent).
-//!
-//! 본 sprint 의 In Scope 는 IPC + dual-write + guard. snapshot IPC / hydration
-//! consumer / tab affinity 는 후속 sprint.
+//! Call flow:
+//!   1. `guard_legacy_import_done(pool)` — rejects pending/importing/failed.
+//!   2. Write to the file SOT (`storage::save_connection`) — same interface as
+//!      before.
+//!   3. SQLite mirror `INSERT OR REPLACE INTO connections(...)` — on failure,
+//!      `reconcile::record_sqlite_result(domain, Err)` logs for dev and bumps
+//!      the counter. The outer signature follows the file write's result
+//!      (silent).
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
@@ -20,9 +19,9 @@ use sqlx::SqlitePool;
 use std::str::FromStr;
 use tauri::State;
 
-/// IPC request body for `persist_connection`. password 는 별 IPC
-/// (`save_connection`) 가 keyring SOT 로 관리하므로 본 dual-write 에서는 다루지
-/// 않는다 — 단지 file/SQLite mirror 의 메타데이터 path 만.
+/// IPC request body for `persist_connection`. The password is managed by a
+/// separate IPC (`save_connection`) as the keyring SOT, so this dual-write does
+/// not touch it — only the metadata path of the file/SQLite mirror.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersistConnectionRequest {
@@ -119,7 +118,7 @@ pub async fn persist_connection_inner(
     // mirror stores an identical normalized value (not the raw alias/typo input).
     let db_type_tag = db_type_tag(&db_type);
 
-    // SQLite mirror — silent failure path 로 처리.
+    // SQLite mirror — handled as a silent failure path.
     let sqlite_result = if is_force_failure_for_tests() {
         Err(AppError::Storage("forced failure for tests".into()))
     } else {
@@ -175,7 +174,7 @@ async fn write_sqlite_mirror(
     .bind(&req.host)
     .bind(req.port as i64)
     .bind(&req.user)
-    .bind("") // password_enc = keyring SOT 가 별도; file/SQLite mirror 는 둘 다 빈 문자열로 둠.
+    .bind("") // password_enc has its own keyring SOT; the file/SQLite mirror both keep it as an empty string.
     .bind(&req.database)
     .bind(if req.read_only { 1i64 } else { 0i64 })
     .bind(&req.group_id)
@@ -209,9 +208,9 @@ pub async fn persist_connection(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 1 sprint-358) — inline unit smoke for
-    //! `parse_db_type` 와 happy-path dual-write 1회. 전체 시나리오 (guard /
-    //! upsert) 는 `tests/dual_write_connections.rs` 가 담당.
+    //! Written 2026-05-16 — inline unit smoke for `parse_db_type` and one
+    //! happy-path dual-write. The full scenarios (guard / upsert) are covered by
+    //! `tests/dual_write_connections.rs`.
 
     use super::*;
     use crate::storage::local;

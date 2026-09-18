@@ -1,17 +1,19 @@
-//! Sprint 369 (Phase 4) — `meta` 키-밸류 sentinel IPC.
+//! `meta` key-value sentinel IPC.
 //!
-//! `meta` 테이블은 `legacy_imported` / `last_legacy_import_at` 같은 boot-state
-//! 외에 본 sprint 의 `legacy_column_prefs_drop_dismissed` 처럼 frontend 가 한
-//! 번만 처리하는 toast / migration sentinel 도 보관한다. settings 의 "known
-//! key" 와는 별도 — Q21 reset-audit 대상이 아니라 단순한 한 번 boolean.
+//! Besides boot-state keys like `legacy_imported` / `last_legacy_import_at`, the
+//! `meta` table also stores toast / migration sentinels that the frontend handles
+//! exactly once, such as this module's `legacy_column_prefs_drop_dismissed`.
+//! Separate from the settings "known keys" — not a Q21 reset-audit target, just a
+//! one-shot boolean.
 //!
-//! 노출 함수:
-//!   - `get_meta_sentinel(key)` — 부재 시 `None`.
+//! Exposed functions:
+//!   - `get_meta_sentinel(key)` — `None` when absent.
 //!   - `set_meta_sentinel(key, value)` — INSERT OR REPLACE.
 //!
-//! Sentinel 은 frontend 가 toast 를 띄운 직후 set 한다. read 는 guard 없이
-//! (boot 시점에 호출되어야 하므로). write 는 frontend 가 표시 후 best-effort
-//! 호출이라 guard 적용 (다른 mutate IPC 와 동일 정책).
+//! A sentinel is set right after the frontend shows the toast. Reads run without
+//! a guard (they must be callable at boot). Writes go through the guard because
+//! the frontend calls them best-effort after displaying (same policy as other
+//! mutate IPC).
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
@@ -71,7 +73,7 @@ pub async fn set_meta_sentinel(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 4 sprint-369) — sentinel round-trip + guard 검증.
+    //! Written 2026-05-16 — sentinel round-trip + guard verification.
 
     use super::*;
     use crate::storage::local;

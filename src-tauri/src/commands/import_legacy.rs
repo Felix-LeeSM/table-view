@@ -1,16 +1,14 @@
-//! Sprint 355 (Phase 1) — `import_legacy_localstorage` IPC.
+//! `import_legacy_localstorage` IPC.
 //!
-//! Strategy 1140–1180 의 LegacyPayload shape 을 받아 SQLite 에 1회 import.
-//! 4-state transition (pending → importing → done | failed) 을 `meta` table
-//! 로 추적. Idempotent — 이미 `done` 이면 no-op.
+//! Takes the LegacyPayload shape from Strategy lines 1140–1180 and imports it
+//! into SQLite once. The 4-state transition (pending → importing → done |
+//! failed) is tracked in the `meta` table. Idempotent — an already-`done`
+//! state makes it a no-op.
 //!
-//! Phase 1 시점에는 schema 만 적용된 상태라 backend 가 받는 도메인은
-//! `favorites` / `mru` 두 종만 우선 wire. 나머지 (connections / groups /
-//! settings / workspaces / theme / safeMode) 는 sprint-358+ 의 dual-write
-//! 단계에서 추가. **`pending → done` 전이는 빈 payload 도 인정**.
-//!
-//! In Scope (sprint-355): IPC 시그니처, 4-state transition, idempotent guard,
-//! 최소 2 도메인 (favorites/mru) row insert.
+//! `LegacyPayload` carries two domains only — `favorites` / `mru`. The rest of
+//! the legacy localStorage shape (connections / groups / settings / workspaces
+//! / theme / safeMode) has no import path here. **The `pending → done`
+//! transition accepts an empty payload too**.
 
 use crate::commands::connection::AppState;
 use crate::error::AppError;
@@ -21,7 +19,7 @@ use tauri::State;
 use tracing::{info, warn};
 
 // ---------------------------------------------------------------------------
-// Payload — Strategy line 1156–1160 의 frontend 송신 shape (camelCase).
+// Payload — the frontend wire shape from Strategy lines 1156–1160 (camelCase).
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,9 +43,9 @@ pub struct LegacyMruEntry {
     pub last_used: i64,
 }
 
-/// Strategy 1156: 실제 LS shape — `table-view-favorites` (array JSON),
-/// `table-view-mru` (array JSON). 다른 LS key (workspaces / theme / safeMode)
-/// 는 sprint-358+ 에서 추가.
+/// Strategy line 1156: the real LS shape — `table-view-favorites` (array JSON),
+/// `table-view-mru` (array JSON). Other LS keys (workspaces / theme / safeMode)
+/// are added later.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LegacyPayload {
@@ -63,12 +61,13 @@ pub struct LegacyPayload {
 
 /// Idempotent legacy LS import. 4-state transition:
 /// - state == Done → no-op (return Ok)
-/// - state == Pending → transition Importing → apply payload → Done (또는 Failed on err)
-/// - state == Importing → 동시 호출 직렬화 — 결과적으로 마지막 호출이 Done 으로 정착
-/// - state == Failed → 같은 path (재시도 — retry path 가 boot-time 일 수 있으나
-///   run-time 재호출도 안전)
+/// - state == Pending → transition Importing → apply payload → Done (or Failed on err)
+/// - state == Importing → concurrent calls are serialized — the last call in
+///   ends up Done
+/// - state == Failed → same path (retry — the retry path may run at boot time,
+///   but a run-time re-call is also safe)
 ///
-/// 실패 시 state 를 Failed 로 set + 원인 error 전파.
+/// On failure the state is set to Failed and the cause is propagated as an error.
 pub async fn import_legacy_localstorage_inner(
     pool: &SqlitePool,
     payload: LegacyPayload,
@@ -94,8 +93,9 @@ pub async fn import_legacy_localstorage_inner(
         }
         Err(e) => {
             // best-effort: set Failed then propagate the original error.
-            // 사유: 첫 import 실패 후 다음 boot 의 재시도 path 가 동작하려면
-            // state 가 Failed 로 명시되어 있어야 한다 (boot 시 retry 진입 신호).
+            // Reason: the retry path on the next boot after a failed first import
+            // only runs when the state is explicitly Failed (it is the boot-time
+            // retry trigger).
             if let Err(set_err) = set_legacy_import_state(pool, LegacyImportState::Failed).await {
                 warn!(
                     target: "legacy_import",
@@ -157,9 +157,8 @@ async fn apply_payload(pool: &SqlitePool, payload: &LegacyPayload) -> Result<(),
 }
 
 // ---------------------------------------------------------------------------
-// Tauri command — wraps `_inner`. Pool 은 `AppState` 가 보유 (sprint-357 에서
-// 정식 hookup). Phase 1 첫 sprint 는 IPC 시그니처와 4-state 동작만 wire 하고
-// pool 은 OnceCell 로 lazy init.
+// Tauri command — wraps `_inner`. `AppState` holds no pool, so the pool comes
+// from the process-shared `OnceCell` in `commands::sqlite_pool`.
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
@@ -173,21 +172,23 @@ pub async fn import_legacy_localstorage(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    //! Written 2026-05-17 — baseline cleanup.
     //!
-    //! `tests/legacy_import.rs` 가 별도 integration binary 로 있지만 baseline
-    //! coverage 측정 set (`--test storage_integration ...`) 에 포함되지 않아
-    //! 본 모듈이 0% 로 측정됨. inline 테스트로 `--lib` 경로 cover 보강.
+    //! `tests/legacy_import.rs` exists as a separate integration binary but is
+    //! not part of the baseline coverage measurement set (`--test
+    //! storage_integration ...`), so this module measures 0%. Inline tests
+    //! backfill the `--lib` path coverage.
     //!
-    //! Test scenarios 8 원칙:
+    //! Test scenarios (8 principles):
     //!   - Happy: pending → importing → done + favorites/mru rows inserted.
-    //!   - 빈 입력: payload {favorites: None, mru: None} → done 으로 정착.
-    //!   - 에러 복구: state == Failed 또는 Pending 에서 호출 시 또 시도 가능.
-    //!   - 동시성: state == Done 시 두 번째 호출 no-op (idempotent).
-    //!   - 상태 전이: 4-state 모두 (Pending/Importing/Done/Failed) 진입점 검증.
-    //!   - try-await reject: payload 의 fav.id 가 NULL constraint 위반 시 state
-    //!     가 Failed 로 set 되는 contract (best-effort).
-    //!   - wire serde: LegacyPayload / LegacyFavorite / LegacyMruEntry 의 camelCase.
+    //!   - Empty input: payload {favorites: None, mru: None} → settles at done.
+    //!   - Error recovery: a call at state == Failed or Pending can try again.
+    //!   - Concurrency: a second call at state == Done is a no-op (idempotent).
+    //!   - State transition: entry points verified for all four states
+    //!     (Pending/Importing/Done/Failed).
+    //!   - try-await reject: when a payload fav.id violates the NULL constraint,
+    //!     the state is set to Failed (contract, best-effort).
+    //!   - wire serde: camelCase on LegacyPayload / LegacyFavorite / LegacyMruEntry.
     use super::*;
     use crate::storage::local;
     use crate::storage::meta::{get_legacy_import_state, LegacyImportState};
@@ -255,7 +256,7 @@ mod tests {
         cleanup();
     }
 
-    // ---------------- 빈 입력 ----------------
+    // ---------------- empty input ----------------
 
     #[tokio::test]
     #[serial]
@@ -302,7 +303,7 @@ mod tests {
         cleanup();
     }
 
-    // ---------------- 멱등 / Done 분기 ----------------
+    // ---------------- idempotent / Done branch ----------------
 
     #[tokio::test]
     #[serial]
@@ -400,7 +401,7 @@ mod tests {
         cleanup();
     }
 
-    // ---------------- 4-state guard 분기: Failed/Pending 에서 또 다시 진행 ----------------
+    // ---------------- 4-state guard branch: progressing again from Failed/Pending ----------------
 
     #[tokio::test]
     #[serial]
@@ -431,8 +432,8 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn inner_importing_state_proceeds_and_settles_done() {
-        // sprint-355 doc: "Importing → 동시 호출 직렬화 — 결과적으로 마지막
-        // 호출이 Done 으로 정착". Even when entering at Importing the call
+        // doc: "Importing → concurrent calls are serialized — the last
+        // call in ends up Done". Even when entering at Importing the call
         // succeeds end-to-end.
         let (_dir, pool) = setup().await;
         use crate::storage::meta::set_legacy_import_state;
@@ -486,8 +487,8 @@ mod tests {
 
     #[test]
     fn legacy_favorite_default_optional_fields_deserialize_from_minimal_wire() {
-        // wire 의 connectionId / createdAt / updatedAt 가 누락된 frontend
-        // 송신을 견뎌야 함 (#[serde(default)] 의 contract).
+        // Must tolerate a frontend payload whose connectionId / createdAt /
+        // updatedAt are missing (the #[serde(default)] contract).
         let json = r#"{"id":"x","name":"n","sql":"SELECT 1"}"#;
         let f: LegacyFavorite = serde_json::from_str(json).unwrap();
         assert_eq!(f.id, "x");

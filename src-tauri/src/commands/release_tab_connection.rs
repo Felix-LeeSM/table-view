@@ -1,25 +1,22 @@
-//! Sprint 359 (Phase 2 Q5.1 / Q5.2 / Q5.6) — per-tab connection affinity
-//! lifecycle IPC commands.
+//! Per-tab connection affinity lifecycle IPC commands (Q5.1 / Q5.2 / Q5.6).
 //!
 //! Lifecycle (per tab):
 //! 1. Tab open      → no affinity entry yet (Q5.6 lazy).
-//! 2. First query   → `bind_tab_affinity(connection_id, tab_id, server_pid)`
-//!    stores the paradigm-native server pid (pg `pg_backend_pid()` /
-//!    mysql `CONNECTION_ID()` / mongo opid materialised by the runner).
+//! 2. Affinity bind → `bind_tab_affinity_inner(connection_id, tab_id,
+//!    server_pid)` stores the paradigm-native server pid (pg
+//!    `pg_backend_pid()` / mysql `CONNECTION_ID()` / mongo opid materialised
+//!    by the runner). See `TabAffinity` (Issue #1230) for who reads that
+//!    record.
 //! 3. Cancel        → `cancel_query_native(connection_id, server_pid)` fires
 //!    a separate, paradigm-native ABORT against the server (handled in
 //!    `commands::cancel_query`).
 //! 4. Tab close     → `release_tab_connection(connection_id, tab_id)` drops
-//!    the affinity entry. In a future hand-off this is where an
-//!    in-flight transaction will be `ROLLBACK`-ed; the present sprint
-//!    surfaces the IPC and removes the registry entry so the next reuse
-//!    starts clean. The behaviour mirrors `release_cancel_token` —
-//!    idempotent on an absent key.
+//!    the affinity entry so the next reuse starts clean. The behaviour
+//!    mirrors `release_cancel_token` — idempotent on an absent key.
 //!
-//! Out of scope for sprint-359: holding live `PoolConnection` handles and
-//! issuing `ROLLBACK` against them. The strategy doc names that as a
-//! follow-up; today's adapters route through a shared pool with no
-//! long-lived borrow, and the affinity record is server-pid only.
+//! This module holds no live `PoolConnection` handle and issues no
+//! `ROLLBACK`: the adapters route through a shared pool with no long-lived
+//! borrow, and the affinity record carries the server pid only.
 
 use tauri::State;
 use tracing::info;
@@ -83,8 +80,7 @@ fn validate_keys(connection_id: &str, tab_id: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-/// IPC: release the tab's affinity record + (future) ROLLBACK its
-/// in-flight transaction. See module doc for lifecycle.
+/// IPC: release the tab's affinity record. See module doc for lifecycle.
 #[tauri::command]
 pub async fn release_tab_connection(
     state: State<'_, AppState>,
@@ -96,12 +92,13 @@ pub async fn release_tab_connection(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 이유 (2026-05-16, sprint-359):
-    //! - `bind_tab_affinity_inner` / `release_tab_connection_inner` 의
-    //!   기초 lifecycle (insert / remove / idempotent on absent / input
-    //!   validation) 를 unit-level 에서 고정한다. Live PG/MySQL/Mongo
-    //!   integration 은 `tests/release_tab_connection_rollback.rs` 가
-    //!   skip-on-no-container 패턴으로 별도 검증한다.
+    //! Rationale (2026-05-16):
+    //! - Pins at unit level the basic lifecycle of
+    //!   `bind_tab_affinity_inner` / `release_tab_connection_inner` (insert /
+    //!   remove / idempotent on absent / input validation). Live
+    //!   PG/MySQL/Mongo integration is verified separately by
+    //!   `tests/release_tab_connection_rollback.rs` with a
+    //!   skip-on-no-container pattern.
 
     use super::*;
 
@@ -126,9 +123,9 @@ mod tests {
 
     #[tokio::test]
     async fn release_on_absent_returns_false_without_error() {
-        // 빈 영속 (Q5.6 lazy) 상태에서 사용자가 tab 을 열기만 했다가 닫는
-        // 흔한 path — 우리는 silent 에러로 처리한다 (release_cancel_token
-        // 의 no-op-on-absent 와 일관).
+        // The common path of a user opening a tab and closing it while
+        // affinity is empty (Q5.6 lazy) — we treat it as a silent no-op
+        // (consistent with release_cancel_token's no-op-on-absent).
         let state = AppState::new();
         let removed = release_tab_connection_inner(&state, "c", "t")
             .await

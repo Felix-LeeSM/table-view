@@ -93,10 +93,10 @@ fn read_text_file_capped(source_path: &Path, max_bytes: u64) -> Result<String, A
 mod tests {
     //! Test scenarios (8-principle subset):
     //!   - Happy: reads back a `.sql` file's UTF-8 content verbatim.
-    //!   - 빈 입력: empty file → empty string (still Ok).
-    //!   - 에러 복구: oversized file rejected before allocation.
-    //!   - 상태/경로 검증: non-absolute path rejected; directory rejected.
-    //!   - 보안: a file inside the app data dir (connections.json / .key /
+    //!   - Empty input: empty file → empty string (still Ok).
+    //!   - Error recovery: oversized file rejected before allocation.
+    //!   - State/path validation: non-absolute path rejected; directory rejected.
+    //!   - Security: a file inside the app data dir (connections.json / .key /
     //!     state.db) is refused — read-exfil confinement (#1106).
     use super::*;
     use serial_test::serial;

@@ -1,20 +1,21 @@
-//! Sprint 369 (Phase 4, Q20.3) — `set_group_collapsed` IPC.
+//! Q20.3 — the `set_group_collapsed` IPC.
 //!
-//! Strategy doc Q20.3: 기존 `table-view-group-collapsed` LS map → SQLite
-//! `connection_groups.collapsed` boolean. Cross-window 일관성 (group 의 collapse
-//! 가 한 window 에서 바뀌면 다른 window 의 sidebar 도 자동 반영) 을 위해 LS 대신
-//! SQLite SOT.
+//! Strategy doc Q20.3: the old `table-view-group-collapsed` LS map moves to the
+//! SQLite `connection_groups.collapsed` boolean. For cross-window consistency
+//! (a group collapsed in one window is reflected automatically in other
+//! windows' sidebars), the SQLite SOT replaces LS.
 //!
-//! 본 IPC 는 file/LS dual-write 가 아닌 **SQLite-only UPDATE** 다. file 의
-//! `ConnectionGroup.collapsed` 는 기존 save_group 흐름에서 placeholder 로 남아
-//! 있고, 본 sprint 이후 권위는 SQLite. (legacy LS map 은 frontend boot
-//! migration 단계에서 drop.)
+//! This IPC is a **SQLite-only UPDATE**, not a file/LS dual-write. The file
+//! `ConnectionGroup.collapsed` remains a placeholder in the existing
+//! save_group flow, and SQLite is the authority from here on. (The legacy LS
+//! map is dropped in the frontend boot migration step.)
 //!
 //! Flow:
-//!   1. guard_legacy_import_done — A/C mutate IPC 의 표준.
+//!   1. guard_legacy_import_done — the standard for A/C mutate IPCs.
 //!   2. SQLite UPDATE connection_groups SET collapsed = ? WHERE id = ?
-//!   3. row 가 없으면 NotFound — group 자체가 SQLite 에 등록되지 않은 상태에서
-//!      collapse 만 들어오면 race; 호출자가 group create 후 retry.
+//!   3. No row → NotFound — a collapse arriving while the group itself is not
+//!      yet registered in SQLite is a race; the caller retries after creating
+//!      the group.
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
@@ -74,7 +75,7 @@ pub async fn set_group_collapsed(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 4 sprint-369) — inline smoke. 통합 시나리오는
+    //! Written 2026-05-16 — inline smoke. The integration scenarios live in
     //! `tests/groups_collapsed.rs`.
 
     use super::*;

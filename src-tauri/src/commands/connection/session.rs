@@ -1,7 +1,7 @@
-//! Sprint 209 — session id + keep-alive loop.
+//! Session id + keep-alive loop.
 //!
-//! Extracted from the 1710-line `commands/connection.rs` god file. Owns:
-//!   - `get_session_id` Tauri command (with Sprint 175 `rust:first-ipc` boot
+//! Extracted from the `commands/connection.rs` god file. Owns:
+//!   - `get_session_id` Tauri command (with `rust:first-ipc` boot
 //!     timing emission via `FIRST_IPC_INSTANT`).
 //!   - `keep_alive_loop` background task driven by `connect`.
 //!   - `StatusChangeEvent` IPC payload.
@@ -49,10 +49,9 @@ fn emit_status_change(app: &tauri::AppHandle, conn_id: &str, status: ConnectionS
     }
 }
 
-/// Sprint 237 P5 (2026-05-08) — exponential backoff for the keep-alive
-/// reconnection loop, hoisted as a pure helper so the schedule (1s, 2s,
-/// 4s for attempts 1, 2, 3) can be unit-tested without standing up the
-/// full Tauri runtime.
+/// Exponential backoff for the keep-alive reconnection loop, hoisted as a pure
+/// helper so the schedule (1s, 2s, 4s for attempts 1, 2, 3) can be unit-tested
+/// without standing up the full Tauri runtime.
 ///
 /// `attempt` is 1-based (`consecutive_failures` after increment). The
 /// `attempt - 1` underflow guard returns `Duration::ZERO` for attempt 0
@@ -65,11 +64,11 @@ pub(crate) fn backoff_for_attempt(attempt: u32) -> Duration {
     Duration::from_secs(2u64.pow(attempt - 1))
 }
 
-/// Sprint 175 — captured once on the very first `get_session_id` call. The
-/// delta `rust:first-ipc - rust:entry` is the "Tauri startup overhead" line
-/// item in Sprint 175 baseline. `OnceLock::set` returns
-/// `Ok(())` only on the first call, guaranteeing the `info!` line is emitted
-/// exactly once regardless of how many windows race to invoke this command.
+/// Captured once on the very first `get_session_id` call. The delta
+/// `rust:first-ipc - rust:entry` is the "Tauri startup overhead" line item.
+/// `OnceLock::set` returns `Ok(())` only on the first call, guaranteeing the
+/// `info!` line is emitted exactly once regardless of how many windows race to
+/// invoke this command.
 static FIRST_IPC_INSTANT: OnceLock<Instant> = OnceLock::new();
 
 /// Return the process-scoped session UUID. Both launcher and workspace windows
@@ -77,7 +76,7 @@ static FIRST_IPC_INSTANT: OnceLock<Instant> = OnceLock::new();
 /// so stale data from a previous app run is automatically ignored.
 #[tauri::command]
 pub async fn get_session_id(state: tauri::State<'_, AppState>) -> Result<String, AppError> {
-    // Sprint 175 — `rust:first-ipc`. `set` is atomic and returns `Ok(())`
+    // `rust:first-ipc`. `set` is atomic and returns `Ok(())`
     // only on the first call across all threads/windows; later invocations
     // see `Err(_)` and skip the log emission. The delta is computed against
     // `crate::BOOT_T0` (set in `lib.rs::run()`) when available; if the
@@ -238,8 +237,8 @@ pub(super) async fn keep_alive_loop(
             Ok(()) => {
                 info!(conn_id = %conn_id, "Reconnected successfully");
                 let state = app.state::<AppState>();
-                // Sprint 364 — reconnect 도 connect 와 동일하게 active_db 를
-                // config.database 로 seed. 빈 문자열일 때만 None.
+                // Reconnect seeds `active_db` from `config.database` just like
+                // connect does. `None` only when the string is empty.
                 let active_db = if config.database.is_empty() {
                     None
                 } else {
@@ -277,12 +276,13 @@ pub(super) async fn keep_alive_loop(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 이유 (2026-05-08, Sprint 237 P5): `keep_alive_loop` 본체는
-    //! `tauri::AppHandle` / `app.emit` / `app.state` 에 강하게 결합돼
-    //! 단위 테스트가 어렵다. backoff schedule 만 pure helper 로 분리해
-    //! 1s/2s/4s 의 exponential 진행과 attempt=0 underflow 방어를 격리
-    //! 검증. `StatusChangeEvent` 의 wire shape 도 frontend 가 의존하는
-    //! `id` / `status` 필드 이름을 회귀 가드.
+    //! Written 2026-05-08: the `keep_alive_loop` body is tightly
+    //! coupled to `tauri::AppHandle` / `app.emit` / `app.state`, which
+    //! makes it hard to unit-test. Only the backoff schedule is split out
+    //! as a pure helper, isolating the 1s/2s/4s exponential progression and
+    //! the attempt=0 underflow defense. The wire shape of
+    //! `StatusChangeEvent` is also regression-guarded: the frontend depends
+    //! on the `id` / `status` field names.
     use super::*;
 
     #[test]
@@ -302,18 +302,18 @@ mod tests {
 
     #[test]
     fn backoff_attempt_zero_short_circuits_to_zero() {
-        // attempt=0 은 production path 에서 발생하지 않지만 (`consecutive_failures`
-        // 가 +1 후에야 호출), `2u64.pow(0u32.wrapping_sub(1))` 같은 underflow
-        // 를 막는 방어 분기.
+        // attempt=0 never happens on the production path (`consecutive_failures`
+        // is incremented before the call), but this branch defends against
+        // underflow such as `2u64.pow(0u32.wrapping_sub(1))`.
         assert_eq!(backoff_for_attempt(0), Duration::ZERO);
     }
 
     #[test]
     fn status_change_event_serde_uses_id_and_status_camel_case_keys() {
-        // frontend 가 `connection-status-changed` payload 에서 `id`/`status`
-        // 두 키만 본다 — variant 가 추가될 때 wire shape 가 깨지지 않도록.
-        // Sprint 364 (2026-05-16) — `Connected` 가 struct variant 로 승격됐으므로
-        // `active_db: None` 으로 생성.
+        // The frontend reads only the `id`/`status` keys from the
+        // `connection-status-changed` payload — guard the wire shape against
+        // new variants. `Connected` is a struct variant, so the event is built
+        // with `active_db: None`.
         let evt = StatusChangeEvent {
             id: "abc".into(),
             status: ConnectionStatus::Connected { active_db: None },
@@ -324,17 +324,20 @@ mod tests {
     }
 
     // ---------------------------------------------------------------------
-    // 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    // Written 2026-05-17 — baseline cleanup.
     //
-    // `get_session_id` 는 keep_alive_loop / emit_status_change 외에 본 모듈에서
-    // cover 가능한 entry point. `emit_status_change` 는 production `Wry` 런타임에
-    // hard-bind 되어 있어 MockRuntime 으로는 호출 불가 (다른 sprint commit 의
-    // 시그니처를 본 cleanup 으로는 generic 화하지 않음 — boundary 룰).
+    // `get_session_id` is the only entry point in this module that can be
+    // covered besides keep_alive_loop / emit_status_change. `emit_status_change`
+    // takes `&tauri::AppHandle`, which is hard-bound to the production `Wry`
+    // runtime, so MockRuntime cannot call it (this cleanup does not generalize a
+    // signature it did not introduce — boundary rule).
     //
-    // 8 원칙:
-    //   - Happy: get_session_id state 의 session_id 그대로 echo.
-    //   - 멱등: 두 번째 호출도 같은 값 — FIRST_IPC_INSTANT OnceLock 가 1회만 set.
-    //   - 동시성: 같은 state 를 두 호출이 봐도 racy 변화 0 (immutable session_id).
+    // Contract:
+    //   - Happy: get_session_id echoes the session_id held in state.
+    //   - Idempotent: a second call returns the same value — the
+    //     FIRST_IPC_INSTANT OnceLock is set only once.
+    //   - Concurrency: two calls observing the same state see zero racy change
+    //     (immutable session_id).
     // ---------------------------------------------------------------------
     use crate::commands::connection::AppState;
     use tauri::test::{mock_builder, mock_context, noop_assets};

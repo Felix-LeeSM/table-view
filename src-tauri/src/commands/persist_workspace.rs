@@ -1,13 +1,14 @@
-//! Sprint 358 (Phase 1 W1 dual-write) — `persist_workspace` IPC.
+//! `persist_workspace` IPC.
 //!
-//! **SQLite-only** (codex 6차 #5). 다른 4 도메인 (connections/favorites/mru/
-//! settings) 와 달리 workspaces 는 file/LS write 사이트 0. boot 시점의 atomic
-//! snapshot 은 SQLite 의 BEGIN IMMEDIATE 로만 일관성 보장 가능.
+//! **SQLite-only**. Unlike the other four domains (connections/favorites/mru/
+//! settings), workspaces has zero file/LS write sites. The atomic boot
+//! snapshot can only be kept consistent by SQLite's BEGIN IMMEDIATE.
 //!
-//! 호출 flow:
-//!   1. guard_legacy_import_done — pending/importing/failed reject.
-//!   2. SQLite UPSERT — (connection_id, db_name) PK 충돌 시 update in place.
-//!      reconcile / mismatch counter 와 무관 (file SOT 가 없으므로).
+//! Call flow:
+//!   1. guard_legacy_import_done — rejects pending/importing/failed.
+//!   2. SQLite UPSERT — on a (connection_id, db_name) PK conflict, update in
+//!      place. Independent of reconcile / the mismatch counter (there is no
+//!      file SOT).
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
@@ -74,8 +75,8 @@ pub async fn persist_workspace(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 1 sprint-358) — inline lib smoke for `--lib`
-    //! coverage gate. 통합 시나리오는 `tests/workspace_sqlite_only.rs`.
+    //! Written 2026-05-16 — inline lib smoke for the `--lib` coverage gate.
+    //! The integration scenarios live in `tests/workspace_sqlite_only.rs`.
 
     use super::*;
     use crate::storage::local;

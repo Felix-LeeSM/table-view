@@ -1,5 +1,5 @@
-//! Sprint 209 — `commands/connection` entry. 1710-line god file 를
-//! 6-way split (entry + session / crud / groups / io / sqlite_file).
+//! `commands/connection` entry. The former god file is split six ways
+//! (entry + session / crud / groups / io / sqlite_file).
 //!
 //! Entry retains:
 //!   - `AppState` + `impl AppState` + `impl Default for AppState` —
@@ -59,10 +59,10 @@ pub use sqlite_file::create_sqlite_database_file;
 
 /// Build an `ActiveAdapter` for the given database type.
 ///
-/// Sprint 65 adds MongoDB dispatch on top of Sprint 64's Postgres wiring.
-/// Sprint 281 (Phase 17 Slice A) wires MySQL — RdbAdapter read path
-/// (namespaces / tables / columns) is live; DDL / queries / streaming
-/// surfaces still return `AppError::Unsupported` until Slice B~G land.
+/// Postgres and MongoDB dispatch to their own adapters. MySQL uses
+/// `MysqlAdapter`: the RdbAdapter read path (namespaces / tables / columns),
+/// queries, streaming, and structured DDL are live, while trigger create/drop
+/// return `AppError::Unsupported`.
 /// MariaDB shares the MySQL protocol adapter while preserving its distinct
 /// `DatabaseType` on the active adapter. SQLite and DuckDB have file-backed
 /// adapters. SQL Server uses the bounded MSSQL runtime slice: lifecycle,
@@ -71,7 +71,7 @@ pub use sqlite_file::create_sqlite_database_file;
 /// the #905/#906 runtime slice): service-name lifecycle, catalog metadata,
 /// SELECT/DML batch, cooperative cancel, tabular table-data queries, frontend
 /// SQL-batch row edits, structured table/index/constraint DDL, PL/SQL
-/// body/package source, and read-only trigger listing (#1072 2차) are live,
+/// body/package source, and read-only trigger listing (#1072) are live,
 /// while switch-database, raw DDL/admin, and trigger DDL/single-source stay
 /// Unsupported.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
@@ -132,18 +132,18 @@ pub struct TestConnectionRequest {
     pub existing_id: Option<String>,
 }
 
-/// Sprint 359 — per-tab connection affinity record.
+/// Per-tab connection affinity record.
 ///
 /// Lives in `AppState.tab_affinity` under `(connection_id, tab_id)`, keyed so
-/// the same `tab_id` opened against two distinct connections never collides
-/// (codex 7차 #4). Stores a native server-side identifier
+/// the same `tab_id` opened against two distinct connections never collides.
+/// Stores a native server-side identifier
 /// (`pg_backend_pid()` / `CONNECTION_ID()`).
 ///
 /// NOTE (Issue #1230): the native-cancel path does NOT read this record — the
 /// pid the frontend passes to `cancel_query_native` comes from
 /// `AppState.query_server_pids` (recorded per `query_id` by `execute_query`).
-/// This affinity map is sprint-359 scaffolding kept for the future
-/// tab-scoped ROLLBACK hand-off; `bind_tab_affinity_inner` has no caller yet.
+/// This affinity map is scaffolding for a tab-scoped ROLLBACK hand-off;
+/// `bind_tab_affinity_inner` is called only from tests.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TabAffinity {
     pub server_pid: i64,
@@ -152,9 +152,9 @@ pub struct TabAffinity {
 pub struct AppState {
     /// Active adapter handles keyed by `ConnectionConfig::id`.
     ///
-    /// Sprint 64 replaces the previous `HashMap<_, PostgresAdapter>` with an
-    /// `ActiveAdapter` enum so the same map can hold relational, document,
-    /// search, or kv adapters. Command handlers dispatch through
+    /// An `ActiveAdapter` enum replaces the previous
+    /// `HashMap<_, PostgresAdapter>` so the same map can hold relational,
+    /// document, search, or kv adapters. Command handlers dispatch through
     /// `ActiveAdapter::as_rdb()?` / `as_document()?` / … to regain a typed
     /// reference.
     ///
@@ -175,16 +175,15 @@ pub struct AppState {
     /// than reference-counting their teardown.
     pub connection_guards: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     pub query_tokens: Mutex<HashMap<String, CancellationToken>>,
-    /// Sprint 359 (Q5.1 / Q5.6) — per-tab native-cancel affinity.
+    /// Q5.1 / Q5.6 — per-tab native-cancel affinity.
     ///
     /// Boot state is an empty map: every tab starts with no record
-    /// (`None`-equivalent), and the first successful `executeQuery(tab_id,
-    /// …)` writes a `TabAffinity { server_pid }`. `release_tab_connection`
-    /// removes the entry and `cancel_query_native` reads the `server_pid`
-    /// for the paradigm-native abort call.
+    /// (`None`-equivalent). `bind_tab_affinity_inner` writes a
+    /// `TabAffinity { server_pid }` and `release_tab_connection` removes the
+    /// entry. See [`TabAffinity`] for what reads this map.
     ///
     /// Keyed by `(connection_id, tab_id)` so the same tab id can coexist
-    /// across two different connections (codex 7차 #4 — connection scope).
+    /// across two different connections (connection scope).
     pub tab_affinity: Mutex<HashMap<(String, String), TabAffinity>>,
     /// Issue #1230 — per-query server pid for native cancel.
     ///
@@ -198,15 +197,15 @@ pub struct AppState {
     /// (`pg_sleep`, big JOINs) the cooperative token can't abort. The entry
     /// is removed when the query finishes, so only in-flight queries appear.
     pub query_server_pids: Mutex<HashMap<String, i64>>,
-    /// Sprint 359 (Q5.4) — per-connection **introspection pool** selector.
+    /// Q5.4 — per-connection **introspection pool** selector.
     ///
-    /// Sidebar / autocomplete / prefetch borrow idle slots from this map
-    /// instead of the tab pool, so a long user query in tab affinity
-    /// never starves schema introspection. Lookup is `connection_id`,
-    /// the slot count is `max_K=5` (strategy doc line 465). Real
-    /// `pool.acquire()` rewiring of schema commands is the follow-up
-    /// step — this surface is the structural precursor sidebar callers
-    /// will start consuming in sprint-360+.
+    /// The intent is that sidebar / autocomplete / prefetch borrow idle
+    /// slots from this map instead of the tab pool, so a long user query in
+    /// tab affinity never starves schema introspection. Lookup is
+    /// `connection_id`, the slot count is `max_K=5` (strategy doc line 465).
+    /// The map is only created in `AppState::default`: no schema command
+    /// resolves a pool through it, so it is a structural surface with no
+    /// reader.
     pub introspection_pools: Mutex<HashMap<String, IntrospectionPool>>,
     /// Session-scoped UUID generated once per app process. Shared by all
     /// windows so they can agree on which localStorage entries are "current
@@ -393,7 +392,7 @@ mod tests {
     use super::*;
 
     // -------------------------------------------------------------------
-    // make_adapter factory tests (Sprint 65)
+    // make_adapter factory tests
     // -------------------------------------------------------------------
 
     #[test]
@@ -418,8 +417,8 @@ mod tests {
 
     #[test]
     fn test_make_adapter_mysql_returns_rdb_variant() {
-        // Sprint 281 (Phase 17 Slice A) — MySQL 어댑터가 Rdb variant 로
-        // dispatch 되는지 회귀 가드. Slice A 이전엔 Unsupported 였음.
+        // Regression guard: the MySQL adapter must dispatch to the Rdb
+        // variant.
         let adapter = make_adapter(&DatabaseType::Mysql).expect("mysql should succeed");
         assert!(
             matches!(adapter, ActiveAdapter::Rdb(_)),
