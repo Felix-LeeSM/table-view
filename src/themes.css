@@ -4198,7 +4198,7 @@
 :root {
   --tv-destructive: #ef4444;
   --tv-destructive-foreground: #ffffff;
-  /* Sprint 256 (ADR 0023, AC-256-05) — `--tv-success` for the
+  /* ADR 0023, AC-256-05 — `--tv-success` for the
    * ExecuteButton WARN + dev|null|local|testing|development cell. A
    * literal at the common layer, not an alias: no theme block overrides
    * it, so the cell resolves the same in every block. Not to be confused
@@ -4211,7 +4211,7 @@
   --tv-success: #16a34a;
   --tv-success-foreground: #ffffff;
   --tv-warning-foreground: #ffffff;
-  /* Sprint 253 (ADR 0023) — `--tv-warning` deepened from amber #f59e0b
+  /* ADR 0023 — `--tv-warning` deepened from amber #f59e0b
    * to #ea580c so warning/staging chrome and STOP-tier red form a clear
    * visual gradient (amber → orange → red). Amber stays the default for
    * `--tv-status-connecting` so "connecting" reads as a different state
@@ -4222,8 +4222,8 @@
    * themes by name (a count-based floor let most of the catalog drop
    * amber and stay green), and the never-amber direction outright. */
   --tv-warning: #ea580c;
-  /* Sprint 253 (ADR 0023, AC-253-01) — environment-specific tokens for
-   * the upcoming Chrome H stripe (Sprint 256) + ConfirmDestructiveDialog
+  /* ADR 0023, AC-253-01 — environment-specific tokens for
+   * the Chrome H stripe + ConfirmDestructiveDialog
    * header alignment + Button F color × env matrix. Universal (theme-
    * independent) so all 81 theme variants inherit identically. */
   --tv-env-prod: #dc2626;
@@ -4245,7 +4245,7 @@
   --tv-destructive: #f87171;
   --tv-success: #22c55e;
   --tv-highlight: #facc15;
-  /* Sprint 253 lightened warning for dark backgrounds, reasoning that
+  /* The dark-mode warning was lightened for dark backgrounds, reasoning that
    * orange-600 #ea580c was borderline for small text there. That reasoning
    * does not survive a look at who reads the token: the
    * `text-warning` family does not: `--color-warning` aliases

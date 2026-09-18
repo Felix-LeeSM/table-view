@@ -55,10 +55,10 @@ const KNOWN_SAFE_RE =
   /^(BEGIN|START\s+TRANSACTION|COMMIT|END\s+TRANSACTION|ROLLBACK|SAVEPOINT|RELEASE|VACUUM|ANALYZE|REINDEX|CHECKPOINT|PRAGMA)\b/;
 
 /**
- * Sprint 391 — DDL destructive classifier callsite migration.
- * Sprint 392 — DML write triad migration (INSERT / UPDATE / DELETE).
+ * DDL destructive classifier callsite migration.
+ * DML write triad migration (INSERT / UPDATE / DELETE).
  *
- * Convert a parsed AST node (sprint-391 / 392 grammar slice) into the
+ * Convert a parsed AST node (grammar slice) into the
  * `StatementAnalysis` shape used by the rest of the codebase. Returns
  * `null` for AST variants outside the supported scope so the caller
  * falls through to the legacy regex matcher.
@@ -67,24 +67,24 @@ const KNOWN_SAFE_RE =
  * → analysis projection is a *contract* — `kind` / `severity` / `reasons`
  * shape must stay identical to the prior regex output (sqlSafety tests
  * pin this). Isolating the mapper makes the contract auditable and gives
- * sprint-393/394 a single point to extend without re-touching
+ * future grammar extensions a single point to extend without re-touching
  * `analyzeStatement` for every new variant.
  *
- * Sprint-403 invariants:
+ * Mapper invariants:
  * - INSERT — kind:'dml-insert', severity:'info'.
  * - UPDATE — kind:'dml-update'; `where_clause === null` → severity:'danger'
  *   + reason "UPDATE without WHERE clause"; otherwise severity:'warn'.
  * - DELETE — kind:'dml-delete'; `where_clause === null` → severity:'danger'
  *   + reason "DELETE without WHERE clause"; otherwise severity:'warn'.
  *
- * The DML reason strings *match* the pre-sprint-392 regex output bit-for-
+ * The DML reason strings *match* the pre-migration regex output bit-for-
  * bit so the existing sqlSafety test suite stays green (no regression).
  */
 function statementAnalysisFromAst(
   ast: SqlParseResult,
 ): StatementAnalysis | null {
   switch (ast.kind) {
-    // Sprint-393b — `WITH (CTE wrap) <inner-statement>` inherits the inner
+    // `WITH (CTE wrap) <inner-statement>` inherits the inner
     // statement's classification per D1/D2. The recursive call uses the
     // same mapper to avoid duplicating the per-variant rules.
     //
@@ -111,7 +111,7 @@ function statementAnalysisFromAst(
       }
       return worstAnalysis(analyses);
     }
-    // Sprint-395 — EXPLAIN wrap inherits the inner statement's
+    // EXPLAIN wrap inherits the inner statement's
     // classification verbatim per D1. The outer EXPLAIN does not add a
     // reason or escalate severity. If the inner statement is itself
     // unclassifiable (returns null), fall through so the regex fallback
@@ -122,7 +122,7 @@ function statementAnalysisFromAst(
       if (innerAnalysis === null) return null;
       return innerAnalysis;
     }
-    // Sprint-395 — GRANT / REVOKE → permission-change / warn / pinned
+    // GRANT / REVOKE → permission-change / warn / pinned
     // reason. The reason strings are pinned per D5 — exact-string
     // verification in AC-395-X01 / X02.
     case "grant":
@@ -137,16 +137,16 @@ function statementAnalysisFromAst(
         severity: "warn",
         reasons: ["REVOKE — 권한 변경"],
       };
-    // Sprint-395 — SHOW → config-read / info / empty reasons. D4: the
+    // SHOW → config-read / info / empty reasons. D4: the
     // classifier does not distinguish between target variants.
     case "show":
       return { kind: "config-read", severity: "info", reasons: [] };
-    // Sprint-395 — SET → config-write / info / empty reasons. D3: SET's
+    // SET → config-write / info / empty reasons. D3: SET's
     // severity is info, not warn (per-session config change, no row
     // impact).
     case "set-stmt":
       return { kind: "config-write", severity: "info", reasons: [] };
-    // Sprint-395 — COPY → data-movement / warn / direction-specific
+    // COPY → data-movement / warn / direction-specific
     // pinned reason. D2: direction does not escalate severity.
     case "copy":
       return {
@@ -157,7 +157,7 @@ function statementAnalysisFromAst(
             ? ["COPY FROM — 대량 import"]
             : ["COPY TO — 대량 export"],
       };
-    // Sprint-395 — COMMENT → metadata / info / empty reasons.
+    // COMMENT → metadata / info / empty reasons.
     case "comment":
       return { kind: "metadata", severity: "info", reasons: [] };
     case "drop": {
@@ -185,7 +185,7 @@ function statementAnalysisFromAst(
       // so we map it to the same kind — its blast radius (index drop)
       // matches a top-level `DROP INDEX`.
       //
-      // Sprint-394 — additive actions (ADD COLUMN / ADD CONSTRAINT /
+      // Additive actions (ADD COLUMN / ADD CONSTRAINT /
       // RENAME TO / RENAME COLUMN) map to `ddl-alter-add` /
       // `ddl-alter-rename` per the per-action table in the contract.
       // The reason strings are pinned per decision D2 — reviewers must
@@ -236,7 +236,7 @@ function statementAnalysisFromAst(
       }
       return null;
     }
-    // Sprint-394 — DDL additive top-levels. Per contract D1: all three
+    // DDL additive top-levels. Per contract D1: all three
     // CREATE variants classify as `ddl-create` / info / empty reasons.
     // `OR REPLACE` does NOT escalate severity (`create-view.or_replace`
     // is intentionally ignored here).
@@ -244,7 +244,7 @@ function statementAnalysisFromAst(
     case "create-index":
     case "create-view":
       return { kind: "ddl-create", severity: "info", reasons: [] };
-    // Sprint-392 — DML write triad.
+    // DML write triad.
     case "insert":
       return { kind: "dml-insert", severity: "info", reasons: [] };
     case "call":

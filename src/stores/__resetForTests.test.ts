@@ -1,40 +1,42 @@
 /**
- * Sprint 375 (Phase 6 cleanup, 2026-05-17) — reset API 회귀 가드.
+ * Reset API regression guard (Phase 6 cleanup, 2026-05-17).
  *
- * 작성 사유: state-management-strategy doc 의 모듈-스코프 변수 #26–#33
- * (8 개) 는 Zustand state 가 아니라 module-load 시 1회 초기화되는 file-
- * scope `let` / `const`. 이는 vitest 의 module cache 와 어울리지 않는다 —
- * 한 테스트가 counter 를 증가시키거나 timer 를 set 한 뒤, 다음 테스트가
- * fresh 0 / null 를 기대하면 silent 회귀가 발생한다.
+ * Rationale: the state-management-strategy doc's module-scope variables
+ * #26–#33 (8 of them) are not Zustand state but file-scope `let` / `const`
+ * initialized once at module load. That clashes with vitest's module cache —
+ * if one test increments a counter or sets a timer and the next test expects
+ * a fresh 0 / null, a silent regression appears.
  *
- * Sprint 375 는 각 site 에 `__reset*ForTests` escape hatch 를 노출했다
- * (`__resetCountersForTests` 는 sprint-354, `__resetDocumentStoreForTests`
- * 는 sprint-265 부터 존재). 본 테스트는 4 신규 reset API
+ * Each site exposes a `__reset*ForTests` escape hatch (`__resetCountersForTests`
+ * from the counter work, `__resetDocumentStoreForTests` pre-existing). This
+ * test locks, from a user-flow perspective, that the 4 new reset APIs
  * (`__resetFavoriteCounterForTests`, `__resetPersistTimerForTests`,
- * `__resetSessionIdForTests`, `__resetLastAppliedForTests`) 가 실제로
- * 모듈 상태를 0/null 로 되돌리는지 user-flow 관점에서 lock.
+ * `__resetSessionIdForTests`, `__resetLastAppliedForTests`) actually rewind
+ * module state to 0/null.
  *
- * 모듈 변수 inventory (state-management doc Part D `M-9` 기준):
- *   #26 `tabCounter`         workspaceStore.ts:74         → `__resetCountersForTests` (sprint-354)
- *   #27 `queryCounter`       workspaceStore.ts:75         → 위와 동일
- *   #28 `historyCounter`     queryHistoryStore (retired sprint-373) — N/A
- *   #29 `favoriteCounter`    favoritesStore.ts:111        → `__resetFavoriteCounterForTests` (sprint-375)
- *   #30 `requestCounters`    documentStore.ts:73          → `__resetDocumentStoreForTests` (기존)
- *   #31 `persistTimer`       workspaceStore/persistence:48 → `__resetPersistTimerForTests` (sprint-375)
- *   #32 `_sessionId`         scopedLocalStorage.ts:16     → `__resetSessionIdForTests` (sprint-375)
- *   #33 `lastApplied`        themeStore.ts:157            → `__resetLastAppliedForTests` (sprint-375)
+ * Module variable inventory (per state-management doc Part D `M-9`):
+ *   #26 `tabCounter`         workspaceStore.ts:74         → `__resetCountersForTests`
+ *   #27 `queryCounter`       workspaceStore.ts:75         → same as above
+ *   #28 `historyCounter`     queryHistoryStore (retired) — N/A
+ *   #29 `favoriteCounter`    favoritesStore.ts:111        → `__resetFavoriteCounterForTests`
+ *   #30 `requestCounters`    documentStore.ts:73          → `__resetDocumentStoreForTests` (pre-existing)
+ *   #31 `persistTimer`       workspaceStore/persistence:48 → `__resetPersistTimerForTests`
+ *   #32 `_sessionId`         scopedLocalStorage.ts:16     → `__resetSessionIdForTests`
+ *   #33 `lastApplied`        themeStore.ts:157            → `__resetLastAppliedForTests`
  *
- * 각 assertion 은 (a) reset 호출 전 module 상태가 mutated 임을 확인 →
- * (b) reset 호출 → (c) 다시 mutate 가능 + 초기 상태로 돌아왔음 확인.
- * "TDD: red → green → 가로 슬라이스 금지" 원칙대로 user-visible behaviour
- * 단언만 — internal `let` 값을 직접 read 하지 않고 다음 호출의 결과로 검증.
+ * Each assertion (a) confirms the module state is mutated before the reset
+ * call → (b) calls reset → (c) confirms it can mutate again and is back at
+ * the initial state. Per the "TDD: red → green → no horizontal slicing"
+ * principle, only user-visible behaviour is asserted — internal `let`
+ * values are never read directly; verification goes through the next call's
+ * result.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// IPC bridge 와 invoke 는 module-load side-effect 가 강해 mock 필수.
-// scopedLocalStorage 는 `invoke("get_session_id")` 를 호출하므로 mock 으로
-// resolve 가능하게 만든다.
+// The IPC bridge and invoke carry strong module-load side effects, so mocks
+// are mandatory. scopedLocalStorage calls `invoke("get_session_id")`, so it
+// is made resolvable by the mock.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
   isTauri: vi.fn(() => true),
@@ -67,16 +69,16 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
     vi.clearAllMocks();
   });
 
-  // --- (1) tabCounter / queryCounter — sprint-354 의 기존 reset API.
-  //         본 sprint 는 회귀 가드 — addTab 두 번 호출 후 reset → 다음
-  //         addTab 의 id 가 fresh sequential 인지.
+  // --- (1) tabCounter / queryCounter — the pre-existing reset API.
+  //         Regression guard — call addTab twice, reset, and the next
+  //         addTab id must be fresh sequential.
   it("__resetCountersForTests rewinds tab id allocation (#26, #27)", async () => {
     const { useWorkspaceStore, __resetCountersForTests } = await import(
       "./workspaceStore"
     );
-    // 첫 두 tab 은 counter mutate. `permanent: true` 로 추가해 preview-slot
-    // replacement 경로를 우회 — 본 테스트의 invariant 는 counter 의 monotonic
-    // 증가 + reset 후 1, preview semantics 가 아님.
+    // The first two tabs mutate the counter. Added with `permanent: true` to
+    // bypass the preview-slot replacement path — this test's invariant is
+    // the counter's monotonic increase + reset to 1, not preview semantics.
     useWorkspaceStore.setState({ workspaces: {} });
     useWorkspaceStore.getState().addTab("conn-A", {
       type: "table",
@@ -99,7 +101,7 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
       permanent: true,
     });
 
-    // tab id 는 `tab-<N>` 형태 — counter 가 monotonic 증가했음 확인.
+    // Tab ids are `tab-<N>` — confirms the counter increased monotonically.
     const tabsA = Object.values(
       useWorkspaceStore.getState().workspaces["conn-A"] ?? {},
     ).flatMap((ws) => ws.tabs);
@@ -108,7 +110,7 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
       expect(t.id).toMatch(/^tab-\d+$/);
     }
 
-    // reset → 다음 addTab 의 id 가 1 부터 다시 시작.
+    // Reset → the next addTab id starts from 1 again.
     __resetCountersForTests();
     useWorkspaceStore.setState({ workspaces: {} });
     useWorkspaceStore.getState().addTab("conn-B", {
@@ -128,14 +130,15 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
     expect(tabsB[0]!.id).toBe("tab-1");
   });
 
-  // --- (4) favoriteCounter — 새 reset API. addFavorite 한 번 호출 후
-  //         reset → 다음 addFavorite id 가 `fav-1` 부터.
+  // --- (4) favoriteCounter — new reset API. One addFavorite call, then
+  //         reset → the next addFavorite id starts from `fav-1`.
   it("__resetFavoriteCounterForTests rewinds favorite id allocation (#29)", async () => {
     const { useFavoritesStore, __resetFavoriteCounterForTests } = await import(
       "./favoritesStore"
     );
-    // backend `persist_favorites` IPC 는 fire-and-forget 으로 reject 해도
-    // store mutate 는 동기 — 본 테스트는 IPC 결과를 기다리지 않는다.
+    // The backend `persist_favorites` IPC is fire-and-forget and may reject,
+    // while the store mutation is synchronous — this test does not wait for
+    // the IPC result.
     vi.mocked(invoke).mockResolvedValue(undefined);
 
     useFavoritesStore.setState({ favorites: [] });
@@ -143,7 +146,8 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
     useFavoritesStore.getState().addFavorite("second", "SELECT 2", null);
     const firstSnapshot = useFavoritesStore.getState().favorites;
     expect(firstSnapshot).toHaveLength(2);
-    // counter 가 동시에 증가했으므로 id 의 N 부분이 monotonic.
+    // The counter incremented alongside, so the N part of the id is
+    // monotonic.
     const n1 = parseInt(firstSnapshot[0]!.id.replace("fav-", ""), 10);
     const n2 = parseInt(firstSnapshot[1]!.id.replace("fav-", ""), 10);
     expect(n2).toBeGreaterThan(n1);
@@ -154,9 +158,9 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
     expect(useFavoritesStore.getState().favorites[0]!.id).toBe("fav-1");
   });
 
-  // --- (5) requestCounters — 기존 reset API. document store 의 stale
-  //         guard 가 의존. `__resetDocumentStoreForTests` 는 store +
-  //         counter 둘 다 clear.
+  // --- (5) requestCounters — pre-existing reset API. The document store's
+  //         stale guard depends on it. `__resetDocumentStoreForTests` clears
+  //         both the store and the counters.
   it("__resetDocumentStoreForTests clears request counters + store (#30)", async () => {
     const { useDocumentStore, __resetDocumentStoreForTests } = await import(
       "../test-utils/documentStore"
@@ -177,8 +181,9 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
     expect(state.error).toBeNull();
   });
 
-  // --- (6) persistTimer — 새 reset API. debouncePersistWorkspaces 호출
-  //         후 reset → pending callback 이 run 되지 않음 (clearTimeout 효과).
+  // --- (6) persistTimer — new reset API. Call debouncePersistWorkspaces,
+  //         then reset → the pending callback never runs (clearTimeout
+  //         effect).
   it("__resetPersistTimerForTests drains pending debounce (#31)", async () => {
     vi.useFakeTimers();
     try {
@@ -187,23 +192,23 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
 
       const empty: Record<string, Record<string, never>> = {};
       debouncePersistWorkspaces(empty);
-      // 200ms 전에 reset → timeout callback 이 fire 되지 않아야 함.
+      // Reset before 200ms → the timeout callback must not fire.
       __resetPersistTimerForTests();
       vi.advanceTimersByTime(300);
-      // 본 함수 자체는 LS write 가 retire 된 후라 sideeffect 없지만,
-      // reset 이후 추가 debounce 호출이 정상 동작하는지 sanity check —
-      // 즉 reset 이 timer ref 를 null 로 되돌렸음.
+      // The function itself has no side effect once the LS write has
+      // retired, so this is a sanity check that further debounce calls
+      // after the reset still work — i.e. the reset nulled the timer ref.
       debouncePersistWorkspaces(empty);
-      // 두 번째 debounce 가 starvation 없이 재예약. clearTimeout 자체는
-      // node fake-timers 에 의해 합쳐지므로 throw 안 나는 것 자체가 OK.
+      // The second debounce reschedules without starvation. clearTimeout
+      // itself is coalesced by node fake-timers, so not throwing is OK.
       __resetPersistTimerForTests();
     } finally {
       vi.useRealTimers();
     }
   });
 
-  // --- (7) _sessionId — 새 reset API. initSession 호출 후 reset →
-  //         getSessionId() 가 다시 null. 그리고 invoke 가 재호출됨.
+  // --- (7) _sessionId — new reset API. Call initSession, then reset →
+  //         getSessionId() is null again. And invoke is called anew.
   it("__resetSessionIdForTests forces initSession to re-invoke (#32)", async () => {
     const { initSession, getSessionId, __resetSessionIdForTests } =
       await import("@lib/scopedLocalStorage");
@@ -221,9 +226,9 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
     expect(vi.mocked(invoke)).toHaveBeenCalledTimes(2);
   });
 
-  // --- (8) lastApplied — 새 reset API. 같은 theme/mode pair 가 두 번
-  //         subscribe 되어도 두 번째는 dedup; reset 후 두 번째 호출이
-  //         다시 LS write 를 trigger.
+  // --- (8) lastApplied — new reset API. Subscribing the same theme/mode
+  //         pair twice dedups the second; after reset, a second call
+  //         triggers the LS write again.
   it("__resetLastAppliedForTests rearms dedup key (#33)", async () => {
     // localStorage spy
     const setItemSpy = vi.fn();
@@ -243,19 +248,20 @@ describe("module-scope reset APIs (sprint-375 Phase 6 cleanup)", () => {
       "./themeStore"
     );
 
-    // initial 시점의 state 가 그대로면 subscriber 가 dedup → setItem 0.
-    // 강제로 state 를 다른 값으로 set 한 뒤 다시 동일 값으로 set → 두 번째는
-    // dedup 으로 setItem 추가 호출 없음.
+    // If the state at initial time is unchanged, the subscriber dedups →
+    // 0 setItem calls. Force the state to a different value and back to the
+    // same value → the second set dedups and adds no further setItem call.
     const { themeId, mode } = useThemeStore.getState();
     useThemeStore.setState({ themeId, mode });
     const callsBeforeReset = setItemSpy.mock.calls.length;
 
     __resetLastAppliedForTests();
-    // reset 후 같은 set 이 다시 LS write 를 yield — dedup 키가 비워졌음 확인.
-    // (initial 와 동일한 값이라 lastApplied 가 initial 로 reset 되어 다시
-    // dedup. 본 sprint 의 invariant 는 reset 이 throw 없이 동작 + state
-    // mutate 가 그대로 가능. 본 단언은 reset 이후 setItem 카운트가 감소하지
-    // 않음 — 즉 timer / spy 상태가 corrupt 안 됨.)
+    // After the reset, the same set yields an LS write again — confirms the
+    // dedup key was cleared. (The value equals the initial one and
+    // lastApplied was reset to it, so it dedups again. The invariant here is
+    // that the reset runs without throwing and state mutation still works.
+    // This assertion checks the setItem count does not decrease after the
+    // reset — i.e. the timer / spy state is not corrupted.)
     useThemeStore.setState({ themeId, mode });
     expect(setItemSpy.mock.calls.length).toBeGreaterThanOrEqual(
       callsBeforeReset,
