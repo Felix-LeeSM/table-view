@@ -1,14 +1,15 @@
-// 작성 2026-05-16 (Phase 4 sprint-369) — IPC SOT 전환 회귀 lock.
+// Written 2026-05-16 — regression lock for the IPC SOT switch.
 //
-// 사유: sprint-258 / sprint-259 시점의 localStorage-backed 영속은 Q20.4 결정
-// (`datagrid_column_prefs` SQLite SOT) 으로 폐지. 본 sprint 의 invariant 는
-//   (1) `column-widths:*` LS key 의 getItem / setItem 0회,
-//   (2) `pk` 가 주어지면 mount 시 `get_datagrid_prefs` IPC 1회,
-//   (3) drag end (setWidth) 시 `set_datagrid_prefs` IPC widths patch,
-//   (4) reset() 시 `reset_datagrid_prefs` 의 widths field 호출.
-// `pk` 미제공 (ad-hoc query grid) 은 in-memory only — IPC 호출 / LS 접근 모두 0.
+// Reason: the earlier localStorage-backed persistence was retired by decision
+// Q20.4 (`datagrid_column_prefs` SQLite SOT). The invariants:
+//   (1) zero getItem / setItem calls on `column-widths:*` LS keys,
+//   (2) with a `pk`, one `get_datagrid_prefs` IPC on mount,
+//   (3) on drag end (setWidth), a `set_datagrid_prefs` IPC widths patch,
+//   (4) on reset(), a `reset_datagrid_prefs` call for the widths field.
+// Without a `pk` (ad-hoc query grid) the hook is in-memory only — no IPC
+// calls and no LS access.
 //
-// AC-369-08 매핑.
+// Maps to AC-369-08.
 
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
@@ -155,7 +156,8 @@ describe("useColumnWidths — IPC write (AC-369-08)", () => {
       ...PK,
       widths: expect.objectContaining({ active: 200 }),
     });
-    // Hidden 은 patch 에 포함되면 안 됨 — codex 7차 #1 의 독립성.
+    // Hidden columns must not be in the patch — widths and hidden columns
+    // are independent.
     expect(arg.hiddenColumns).toBeUndefined();
   });
 

@@ -58,9 +58,9 @@ export interface UseMigrationExportReturn {
     schemas: string[],
     include: ExportInclude,
   ) => Promise<void>;
-  // Sprint 301 — 단일 table export. SchemaTree row 의 컨텍스트 메뉴
-  // 진입점에서 호출. include 시맨틱 / Unsupported driver 의 toast 정책은
-  // `exportSchema` 와 동일.
+  // Single-table export, called from the SchemaTree row context-menu entry
+  // point. The include semantics / Unsupported-driver toast policy are the
+  // same as `exportSchema`.
   exportTable: (
     connectionId: string,
     database: string,
@@ -250,9 +250,9 @@ export function useMigrationExport(): UseMigrationExportReturn {
         }
 
         const dumpTables = toDumpTables([{ schema, ddlTables }]);
-        // BIGSERIAL/SERIAL 정규화로 column DDL 에 sequence 가 자동 emit
-        // 되지만 row 가 INSERT 된 후 next value 가 1 로 머무는 문제는
-        // 별도 setval 줄로 reset.
+        // BIGSERIAL/SERIAL normalization makes the column DDL emit the
+        // sequence automatically, but after the rows are INSERTed its next
+        // value would stay at 1, so separate setval lines reset it.
         const ddlFooter = buildSequenceResets(
           resolved.dialect,
           schema,

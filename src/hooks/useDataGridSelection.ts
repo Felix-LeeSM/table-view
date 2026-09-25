@@ -1,24 +1,22 @@
-// AC-193-02 — multi-row selection 상태/액션을 useDataGridEdit 에서 분리한
-// sub-hook. paradigm-agnostic (RDB/document 양쪽이 동일 시그니처 사용)
-// 이며 selectedRowIds (Set<number>) + anchorRowIdx (range 시작점) +
-// handleSelectRow (single / meta-toggle / shift-range / shift-fallback
-// 4 분기) 를 한 책임으로 묶는다.
+// AC-193-02 — sub-hook for the multi-row selection state/actions, split
+// out of useDataGridEdit. It is paradigm-agnostic (RDB and document use the
+// same signature) and bundles selectedRowIds (Set<number>) + anchorRowIdx
+// (range start) + handleSelectRow (four branches: single / meta-toggle /
+// shift-range / shift-fallback) as one responsibility.
 //
-// `selectedRowIdx` 는 backward-compat derived 값 — set.size === 1 일
-// 때만 그 한 idx, 그 외 (0 또는 ≥2) 는 null. DataGridToolbar 의 single
-// selection 액션 (delete one / duplicate one) 이 이 값을 읽는다.
+// `selectedRowIdx` is a backward-compat derived value — the one idx only
+// when set.size === 1, otherwise (0 or ≥2) null.
 //
-// 페이지 전환 시 selection 자동 리셋은 facade 의 useEffect 가 담당
-// (`clearSelection` 노출). hook 자체는 page 개념을 모른다 — pagination
-// 정책이 향후 바뀌어도 hook 시그니처는 영향받지 않는다.
+// The facade's useEffect resets the selection on page change (through the
+// exposed `clearSelection`). The hook itself knows nothing about pages — a
+// later change to the pagination policy leaves the hook signature unaffected.
 // date 2026-05-02.
 import { useCallback, useState } from "react";
 
 export interface UseDataGridSelectionReturn {
   selectedRowIds: Set<number>;
   anchorRowIdx: number | null;
-  // derived: size === 1 → 그 idx, else null. 멀티 선택 시 toolbar 의
-  // single-row 액션은 비활성화돼야 하므로 null 이 의도적인 sentinel.
+  // Derived: size === 1 → that idx, else null (a deliberate sentinel).
   selectedRowIdx: number | null;
   handleSelectRow(rowIdx: number, metaKey: boolean, shiftKey: boolean): void;
   clearSelection(): void;
@@ -70,8 +68,8 @@ export function useDataGridSelection(): UseDataGridSelectionReturn {
     setAnchorRowIdx(null);
   }, []);
 
-  // backward-compat derived: single-row 액션이 사용. 멀티 선택 시에는
-  // null 로 떨어져 toolbar 의 단일-행 액션이 비활성화된다.
+  // Backward-compat derived value; see `selectedRowIdx` in
+  // `UseDataGridSelectionReturn`.
   const selectedRowIdx =
     selectedRowIds.size === 1 ? [...selectedRowIds][0]! : null;
 
