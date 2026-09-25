@@ -22,7 +22,7 @@
  * renders it. The scope is display, dismiss, and the sentinel write.
  *
  * The "Why?" link is out of scope (`docs/security/keyring-fallback.md` does
- * not exist yet); a follow-up is planned to add it.
+ * not exist yet); on 2026-05-16 a follow-up was planned to add it.
  */
 
 import { logger } from "@lib/logger";

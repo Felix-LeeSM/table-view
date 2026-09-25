@@ -10,7 +10,7 @@ describe("sqlSafety.analyzeStatement — AST destructive and write contracts", (
   // AST-based DDL destructive classifier callsite (2026-05-17).
   // This block *explicitly preloads the WASM module* and assumes
   // `analyzeStatement` then goes through the `parseSqlPreloaded` path. The
-  // return shape of every case (`kind` / `severity` / `reasons`) is
+  // return shape of every case (the `kind` / `severity` / `reasons` keys) is
   // *identical* to the regex fallback, which proves callers are unaffected.
   // -------------------------------------------------------------------------
   describe("Sprint 391 — AST-based DDL destructive classifier (AC-391-X)", () => {

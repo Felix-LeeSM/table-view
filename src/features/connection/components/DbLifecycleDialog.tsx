@@ -1,4 +1,4 @@
-// Database lifecycle (CREATE / DROP DATABASE) for RDB (PG) + Mongo. Mongo
+// Database lifecycle (CREATE / DROP DATABASE) for RDB + Mongo. Mongo
 // create is lazy (the database is created automatically on the first
 // collection write), so it is handled with informational copy only.
 

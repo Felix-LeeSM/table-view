@@ -81,8 +81,9 @@ export interface ConnectionConfig {
   // `ConnectionConfig.id`, so branding this field buys no call-site
   // protection while forcing the construction sites to re-brand. The
   // `ConnectionId` brand still guards those functions (connectionId is
-  // asserted at each call boundary). Field branding is deferred to a
-  // later phase where a value-level ingress can absorb the blast.
+  // asserted at tab creation, or at the `rawEntryKey` call site). Field
+  // branding is deferred to a later phase where a value-level ingress can
+  // absorb the blast.
   id: string;
   name: string;
   dbType: DatabaseType;

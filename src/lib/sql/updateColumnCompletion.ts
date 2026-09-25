@@ -22,14 +22,16 @@ import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
  * to handle DELETE as well.
  *
  * This source augments the default by walking the syntax tree to the
- * enclosing Statement, identifying the verb (`update` or `insert`), and
- * extracting the target table identifier directly. Columns are then
+ * enclosing Statement, identifying the verb (`update` / `insert` /
+ * `delete` / `select`), and extracting the target table identifier
+ * directly. Columns are then
  * pulled from the provided `SQLNamespace` (the same one fed to
  * `sql({ schema })`), so this source stays in sync with whatever
  * `useSqlAutocomplete` produces.
  *
  * The source is intentionally conservative:
- *   - Returns `null` outside `UPDATE` / `INSERT INTO`.
+ *   - Returns `null` outside `UPDATE` / `INSERT INTO` / `DELETE FROM` /
+ *     `SELECT … FROM`.
  *   - Returns `null` when the cursor is inside the target table
  *     identifier itself (you want table suggestions, not column ones).
  *   - Returns `null` inside strings / numbers / comments (value

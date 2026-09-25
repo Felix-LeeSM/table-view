@@ -1054,9 +1054,9 @@ describe("ConnectionGroup", () => {
   // -----------------------------------------------------------------------
   // Reason (2026-05-16): the `table-view-group-collapsed` localStorage map is
   // retired. The `set_group_collapsed(groupId, collapsed)` IPC commits to the
-  // SQLite SOT. This component mounts from the group.collapsed prop, whose
-  // value reflects the SQLite hydrate result. Invariants: (1) zero LS
-  // getItem/setItem calls, (2) one IPC call per toggle.
+  // SQLite SOT. This component mounts from the group.collapsed prop.
+  // Invariants: (1) zero LS getItem/setItem calls, (2) one IPC call per
+  // toggle.
   it("Sprint 369: toggle dispatches setGroupCollapsed IPC and never touches the legacy LS key", () => {
     const getSpy = vi.spyOn(window.localStorage, "getItem");
     const setSpy = vi.spyOn(window.localStorage, "setItem");
