@@ -19,8 +19,9 @@ export interface SearchUiError {
   label: string;
   detail: string;
   /**
-   * 크리덴셜 redact 후 원문(detail)을 분류해 얻은 행동 힌트 (issue #1056).
-   * 미분류면 undefined — 표면은 label + detail(원문)만 보여준다 (fail-open).
+   * Action hint from classifying the error message (detail) after credential
+   * redaction (issue #1056). Undefined when unclassified — the surface then
+   * shows only label + detail (the message as is) (fail-open).
    */
   hint?: DriverErrorHint;
 }
@@ -52,7 +53,7 @@ export function formatSearchUiError(
   const detail =
     redactSearchErrorDetail(stringifySearchError(error)) ||
     "Unknown Search error";
-  // redact 후 분류 — 힌트는 원문(detail)에서만 나온다.
+  // Classify after redaction — the hint comes only from the message (detail).
   const hint = classifyDriverError(detail);
   return {
     label: ERROR_LABELS[scope],

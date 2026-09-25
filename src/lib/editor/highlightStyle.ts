@@ -2,19 +2,21 @@ import { HighlightStyle } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 
 /**
- * View-Table 공유 HighlightStyle.
+ * Shared View-Table HighlightStyle.
  *
- * `defaultHighlightStyle` 는 keyword·type·string·function 을 거의 같은
- * monochrome tone 으로 렌더 — `CREATE TABLE foo (id BIGSERIAL PRIMARY KEY)`
- * 같은 DDL 도 색 차이로 보이지 않아 "highlight 없음" 으로 인식된다.
+ * `defaultHighlightStyle` renders keyword, type, string, and function in
+ * nearly the same monochrome tone — even DDL such as
+ * `CREATE TABLE foo (id BIGSERIAL PRIMARY KEY)` shows no colour difference
+ * and reads as "no highlighting".
  *
- * 2026-05-15 (ADR 0031) — 12 syntax 토큰 모두 wire. atom/builtin/punct/error
- * 추가. `:root[data-mode]` fallback 이 index.css 에 박혀 있어 토큰 정의
- * 누락이 cascade 로 slate 값 발동 → 옛 fallback chain (`var(--tv-syntax-X,
- * var(--tv-Y))`) 은 redundant 하지만 ESLint rule 도입 전 defensive 로 유지.
+ * 2026-05-15 (ADR 0031) — all 12 syntax tokens are wired;
+ * atom/builtin/punct/error were added. index.css carries a `:root[data-mode]`
+ * fallback, so a missing token definition cascades to the slate values → the
+ * old fallback chain (`var(--tv-syntax-X, var(--tv-Y))`) is redundant and was
+ * dropped.
  *
- * SqlQueryEditor / MongoQueryEditor 가 같은 style 을 mount → JSON property /
- * SQL identifier 가 같은 시각 톤을 공유.
+ * SqlQueryEditor / MongoQueryEditor mount the same style, so JSON properties
+ * and SQL identifiers share one visual tone.
  */
 export const viewTableHighlightStyle = HighlightStyle.define([
   {
