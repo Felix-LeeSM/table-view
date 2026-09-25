@@ -1,15 +1,16 @@
 /**
- * `persistWorkspaces` — Sprint 358 (Phase 1 W1 dual-write).
+ * `persistWorkspaces` — state-management-strategy W1 dual-write.
  *
- * 작성 2026-05-16 (Phase 1 sprint-358).
+ * Written 2026-05-16.
  *
- * 사유:
- *   - workspaces 는 codex 6차 #5 결정에 따라 W1 시작 시점부터 **SQLite-only**.
- *   - 다른 4 도메인 (connections/favorites/mru/settings) 는 file/LS + SQLite
- *     dual-write 지만, workspaces 는 LS write 가 즉시 금지된다 (workspace 데이터
- *     의 boot 시점 atomic snapshot 은 SQLite 의 BEGIN IMMEDIATE 만이 보장 가능).
- *   - 본 테스트는 `persistWorkspaces` 호출 시 `localStorage.setItem` 이
- *     `"table-view-workspaces"` 키로 단 한 번도 호출되지 않음을 spy 로 단언한다.
+ * Reason:
+ *   - workspaces are **SQLite-only** from the start of W1.
+ *   - In W1 the other 4 domains (connections/favorites/mru/settings)
+ *     dual-write to file/LS + SQLite, but workspaces ban LS writes at once
+ *     (only SQLite's BEGIN IMMEDIATE can guarantee an atomic boot-time
+ *     snapshot of workspace data).
+ *   - This test asserts with a spy that calling `persistWorkspaces` never
+ *     calls `localStorage.setItem` with the `"table-view-workspaces"` key.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,7 +47,7 @@ describe("persistWorkspaces — Sprint 358 (no LS write)", () => {
   it("does NOT call localStorage.setItem for the table-view-workspaces key (SQLite-only)", () => {
     expect(STORAGE_KEY).toBe("table-view-workspaces");
     persistWorkspaces({ c1: { d1: makeWorkspace() } });
-    // setItem 호출이 0회 — workspace LS write 사이트 제거 (codex 6차 #5).
+    // Zero setItem calls — the workspace LS write site was removed.
     const calls = setItemSpy.mock.calls.filter(
       ([key]: [string, string]) => key === STORAGE_KEY,
     );
@@ -54,9 +55,9 @@ describe("persistWorkspaces — Sprint 358 (no LS write)", () => {
   });
 
   it("does NOT write ANYTHING to localStorage on persistWorkspaces", () => {
-    // localStorage 시작점 — 다른 테스트가 import 시 setup 한 entry 가 남아
-    // 있을 수 있어 length 의 절대값보다 "persistWorkspaces 호출 후 증가량 == 0"
-    // 을 검증한다.
+    // localStorage starting point — entries that other tests set up at
+    // import time may remain, so verify "zero growth after the
+    // persistWorkspaces call" rather than the absolute length.
     const before = window.localStorage.length;
     persistWorkspaces({
       c1: { d1: makeWorkspace() },

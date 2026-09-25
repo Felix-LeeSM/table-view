@@ -119,7 +119,7 @@ describe("workspaceStore — #1447 keystroke re-render guard", () => {
     expect(activeTabSansSql.renders()).toBe(1);
     expect(tabIds.renders()).toBe(1);
 
-    // The keystroke still landed (기능 계약): the store sql is updated.
+    // The keystroke still landed (feature contract): the store sql is updated.
     const tab = getWs().tabs.find((t) => t.id === activeId)!;
     expect(tab.type === "query" && tab.sql).toBe("sele");
   });

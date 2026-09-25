@@ -1,13 +1,13 @@
 /**
- * `workspaceStore` persistence helpers — ADR 0027 + sprint-358 (Phase 1 W1
- * dual-write).
+ * `workspaceStore` persistence helpers — ADR 0027 + state-management-strategy
+ * W1 dual-write.
  *
- *   - `STORAGE_KEY = "table-view-workspaces"` — **read-only** as of sprint-358.
- *     The fossil key remains for the boot-time legacy LS import path (see
- *     `import_legacy_localstorage`). All write sites have moved to the
- *     SQLite-only `persist_workspace` IPC (codex 6차 #5).
+ *   - `STORAGE_KEY = "table-view-workspaces"` — **read-only**.
+ *     The fossil key remains for the legacy LS read in
+ *     `loadPersistedWorkspaces` (`store.ts`). All write sites have moved to
+ *     the SQLite-only `persist_workspace` IPC.
  *   - `persistWorkspaces` dehydrates every `(connId, db)` cell and UPSERTs it
- *     through the `persist_workspace` IPC (#1091, sprint-365). It no longer
+ *     through the `persist_workspace` IPC (#1091). It no longer
  *     touches localStorage; callers continue to invoke it from the same hooks.
  *   - `debouncePersistWorkspaces` honors the 200ms coalescing window so a burst
  *     of edits (e.g. typing in a query tab) collapses into one IPC flush, with
@@ -43,9 +43,9 @@ import type {
 export const STORAGE_KEY = "table-view-workspaces";
 
 /**
- * Sprint 353 (Phase 0 dehydration, state-management-strategy Q16/M-1).
- * Strips memory-only fields from a `WorkspaceState` before LS write so
- * the persisted blob carries no transient invariants.
+ * Dehydration (state-management-strategy Q16/M-1).
+ * Strips memory-only fields from a `WorkspaceState` before it is persisted
+ * so the persisted blob carries no transient invariants.
  */
 function stripQueryState(tab: Tab): Tab {
   if (tab.type !== "query") return tab;
@@ -77,7 +77,7 @@ let maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingWorkspaces: WorkspacesShape | null = null;
 
 /**
- * Sprint 375 (Phase 6 cleanup, 2026-05-17) — test-only escape hatch for
+ * 2026-05-17 — test-only escape hatch for
  * the module-scope persist timers. The debounce handles are kept in module
  * variables (not Zustand state) so the timer survives across store mutations
  * without being treated as React-driving state; that means a test that mounts
@@ -85,7 +85,7 @@ let pendingWorkspaces: WorkspacesShape | null = null;
  * awaiting the timeout will leak a pending `setTimeout` into the next test. The
  * helper drains the handles without running the callback, so the next test
  * starts from a clean ledger. Mirrors `__resetCountersForTests` in
- * `workspaceStore.ts` (sprint-354) and `__resetFavoriteCounterForTests` in
+ * `workspaceStore/shared.ts` and `__resetFavoriteCounterForTests` in
  * `favoritesStore.ts`. Namespaced `__` to flag intent.
  */
 export function __resetPersistTimerForTests(): void {
@@ -135,12 +135,12 @@ function toPersistRequest(
 
 export function persistWorkspaces(workspaces: WorkspacesShape): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
-  // Sprint 358 (Phase 1 W1) — workspaces 는 codex 6차 #5 결정에 따라 SQLite-only.
-  // #1091 (sprint-365) — dehydrate every `(connId, db)` cell and UPSERT it
-  // through the `persist_workspace` IPC. sprint-358 left this a no-op
-  // (`void dehydrateAll`) so a restart lost every tab / SQL. The 200ms
-  // debounce already coalesces bursts, so this per-workspace loop is bounded
-  // by the number of open workspaces (typically 1–3) — no dirty-diff bookkeeping.
+  // state-management-strategy W1 — workspaces are SQLite-only.
+  // #1091 — dehydrate every `(connId, db)` cell and UPSERT it through the
+  // `persist_workspace` IPC. This used to be a no-op (`void dehydrateAll`),
+  // so a restart lost every tab / SQL. The 200ms debounce already coalesces
+  // bursts, so this per-workspace loop is bounded by the number of open
+  // workspaces (typically 1–3) — no dirty-diff bookkeeping.
   const dehydrated = dehydrateAll(workspaces);
   const pending: Promise<void>[] = [];
   for (const connId of Object.keys(dehydrated)) {
@@ -221,7 +221,7 @@ function migrateTab(t: Tab, workspaceDb: string): Tab {
   if (t.type === "query") {
     const paradigm: Paradigm = t.paradigm ?? "rdb";
     const queryMode: WorkspaceQueryMode | undefined =
-      // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt
       sanitizeWorkspaceQueryMode(paradigm, t.queryMode);
     const queryLanguage = toWorkspaceQueryLanguage({
       paradigm,

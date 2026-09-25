@@ -6,7 +6,7 @@
  * by hand-editing SQLite. The picker now renders whatever the user starred, and
  * the full catalog is browsable in `ThemeGallery`.
  *
- * Persistence follows `themeStore.persistThemeSetting` (sprint-368): the same
+ * Persistence follows `themeStore.persistThemeSetting`: the same
  * `persist_setting` IPC via `persistSettingValue`, no new backend command. The
  * write is optimistic — mutate the store first so the star flips under the
  * user's cursor, then fire the IPC and surface a rejection as `logger.warn` +
@@ -52,8 +52,9 @@ export interface ThemeFavoritesState {
   favoriteThemeIds: readonly ThemeId[];
   /**
    * Session-only: whether the full-catalog overlay is open. Deliberately not
-   * persisted and not broadcast — an open dialog is not durable state
-   * (`memory/engineering/conventions/frontend/memory.md` 「State 경계」).
+   * persisted and not broadcast — an open dialog is not durable state (see
+   * the State boundary section of
+   * `memory/engineering/conventions/frontend/memory.md`).
    */
   galleryOpen: boolean;
 

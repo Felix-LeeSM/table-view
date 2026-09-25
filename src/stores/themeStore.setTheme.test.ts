@@ -1,28 +1,26 @@
 /**
- * 작성 2026-05-16 (Phase 4 sprint-368, AC-368-01)
- * 2026-05-17 update (Wave 9.5 회귀 6/7) — backend-first contract 를 optimistic
- * UI 로 전환. 진짜 사용자 보고 "테마 선택이 안 됨" 의 root cause 는 backend
- * reject / dev rebuild miss 시 store 가 mutate 안 되어 사용자가 silent stuck
- * 이었다. theme 같은 user preference 는 강한 일관성이 user-perceivable
- * 응답성보다 중요하지 않다 — 즉시 mutate + fire-and-forget persist, IPC
- * reject 는 logger.warn 만. SQLite 일관성은 next-boot reconcile path 가 복구.
+ * Written 2026-05-16 (AC-368-01)
+ * 2026-05-17 update — the backend-first contract became optimistic UI; see
+ * the note on `setTheme` in `ThemeStoreState` (`src/stores/themeStore.ts`).
  *
- * 새 contract:
- *   1. 액션 호출 직후 store mutate (sync — subscriber 즉시 fire → DOM/LS/cross-window)
- *   2. fire-and-forget `persist_setting` IPC 1회 호출
- *   3. IPC reject 시: logger.warn 만, store 상태 unchanged from mutate
- *      (사용자 시각에는 이미 적용된 상태)
+ * New contract:
+ *   1. Store mutate right after the action call (sync — the subscriber fires
+ *      at once → DOM/LS/cross-window)
+ *   2. One fire-and-forget `persist_setting` IPC call
+ *   3. On IPC reject: logger.warn + an error toast (#1092); the store keeps
+ *      the mutated state (already applied from the user's view)
  *
- * 회귀 시: (a) IPC 누락 → SQLite 갱신 안 됨 + cross-window 알림 누락,
- * (b) store mutate 가 IPC 응답에 묶여 backend stuck 시 click 후 silent
- * stuck 회귀 (Wave 9.5 회귀 6).
+ * On regression: (a) missing IPC → SQLite not updated + no cross-window
+ * notification, (b) the store mutate is tied to the IPC response, so a stuck
+ * backend leaves the click silently stuck again.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// `@tauri-apps/api/core` 의 invoke 를 mock — Tauri runtime 없는 jsdom 에서도
-// IPC 호출을 단언할 수 있도록 module-load 전에 가로채야 한다. `vi.mock` 는
-// 호이스팅되므로 factory 안에서만 `vi.fn()` 을 생성해야 한다.
+// Mock `invoke` from `@tauri-apps/api/core` — it must be intercepted before
+// module load so IPC calls can be asserted even in jsdom without a Tauri
+// runtime. `vi.mock` is hoisted, so `vi.fn()` must be created only inside
+// the factory.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
@@ -125,20 +123,21 @@ describe("AC-368-01 setTheme backend-first", () => {
   });
 
   it("setTheme IPC reject still mutates store (optimistic UI) + does NOT re-throw", async () => {
-    // Wave 9.5 회귀 6/7 (2026-05-17) — backend-first contract 를 optimistic
-    // 으로 전환. backend stuck 시 사용자가 silent stuck 회귀하던 path 를 차단.
+    // 2026-05-17 — the backend-first contract became optimistic, blocking
+    // the path where a stuck backend left the user silently stuck.
     invokeMock.mockRejectedValueOnce(new Error("forced fail"));
     const initial = useThemeStore.getState();
     expect(initial.themeId).toBe(DEFAULT_THEME_ID);
 
-    // No throw: action 은 fire-and-forget persist, reject 는 logger.warn 만.
+    // No throw: the action persists fire-and-forget; a reject becomes
+    // logger.warn + an error toast.
     await expect(
       useThemeStore.getState().setTheme("github"),
     ).resolves.toBeUndefined();
 
-    // Store mutated optimistically — 사용자가 보는 invariant.
+    // Store mutated optimistically — the invariant the user sees.
     expect(useThemeStore.getState().themeId).toBe("github");
-    // LS written via subscriber — DOM 과 같이 즉시 적용.
+    // LS written via subscriber — applied at once, together with the DOM.
     const themeLsCalls = localStorageMock.setItem.mock.calls.filter(
       (call) => call[0] === THEME_STORAGE_KEY,
     );

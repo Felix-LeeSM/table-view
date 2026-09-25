@@ -9,21 +9,21 @@ export type { SafeMode };
 
 export interface SafeModeState {
   mode: SafeMode;
-  // Sprint 368 (Phase 4 Q12) — backend-first. `setMode` / `toggle` invoke
-  // `persist_setting("safe_mode", JSON)` and mutate the store only after
-  // the IPC resolves. LS write 0 — `safeMode` is not FOUC critical; the
-  // boot snapshot (sprint-367) supplies SQLite truth on the next load,
-  // and the receiver path keeps live windows in sync.
+  // state-management-strategy Q12 — backend-first. `setMode` / `toggle`
+  // invoke `persist_setting("safe_mode", JSON)` and mutate the store only
+  // after the IPC resolves. LS write 0 — `safeMode` is not FOUC critical;
+  // the boot snapshot supplies SQLite truth on the next load, and the
+  // receiver path keeps live windows in sync.
   setMode: (next: SafeMode) => Promise<void>;
   toggle: () => Promise<void>;
   hydrateSafeModeFromSnapshot: (mode: SafeMode) => void;
 }
 
 /**
- * Phase 4 retire (sprint-368) — the `view-table.safeMode` LS key is no
- * longer written. The constant survives so existing tests that explicitly
- * clear / inspect it (e.g. `SafeModeToggle.test.tsx`) compile, but the
- * runtime path never touches it. Phase 6 cleanup removes the constant
+ * The `view-table.safeMode` LS key is no longer written. The constant
+ * survives so existing tests that explicitly clear / inspect it (e.g.
+ * `SafeModeToggle.test.tsx`) compile, but the runtime path never touches
+ * it. The state-management-strategy Phase 6 cleanup removes the constant
  * + any remaining read sites.
  */
 export const SAFE_MODE_STORAGE_KEY = "view-table.safeMode";
@@ -37,7 +37,7 @@ const NEXT_MODE: Record<SafeMode, SafeMode> = {
 };
 
 /**
- * Sprint 368 (Phase 4 Q12) — backend-first safe-mode persistence helper.
+ * state-management-strategy Q12 — backend-first safe-mode persistence helper.
  *
  * Wraps `persist_setting("safe_mode", JSON.stringify(mode))` so both
  * actions (`setMode` / `toggle`) funnel through the same IPC call site.
@@ -50,9 +50,10 @@ async function persistSafeModeSetting(mode: SafeMode): Promise<void> {
 }
 
 export const useSafeModeStore = create<SafeModeState>()((set, get) => ({
-  // 이슈 #1113 — hydration 전 실효 기본값. backend `SafeModeStore::default()`
-  // (snapshot) 와 동일한 `warn` 으로 통일. strict 였던 이전 값은 hydration
-  // 전 짧은 창에서만 실효였고 backend default (off) 와 어긋나 4중 모순이었다.
+  // Issue #1113 — the effective default before hydration, aligned to `warn`
+  // like the backend `SafeModeStore::default()` (snapshot). The previous
+  // `strict` took effect only in the short window before hydration and
+  // disagreed with the backend default (off) — a four-way contradiction.
   mode: "warn",
 
   setMode: async (next) => {
