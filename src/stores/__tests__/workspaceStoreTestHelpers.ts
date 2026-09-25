@@ -12,15 +12,9 @@ import {
 } from "../workspaceStore";
 
 /**
- * sprint-366 (2026-05-16, Phase 4 Q15) — best-effort setter for the
- * fake Tauri window label. Tests that mount workspace-tree components
- * must declare
- *   vi.mock("@lib/window-label", async () => ({
- *     ...(await vi.importActual<typeof import("@lib/window-label")>(
- *       "@lib/window-label",
- *     )),
- *     getCurrentWindowLabel: vi.fn(),
- *   }));
+ * Best-effort setter for the fake Tauri window label (Q15). Tests that
+ * mount workspace-tree components must declare the
+ * `vi.mock("@lib/window-label", ...)` block from `fakeWindowConnectionId.ts`
  * for this to work. If the mock is absent, `vi.mocked()` returns the
  * real function and calling `.mockReturnValue` throws; we silently
  * swallow that case so legacy non-RTL tests that only seed
@@ -102,7 +96,7 @@ export function emptyWorkspacesState(): Pick<
  * workspace correctly. Standalone helper for tests that drive
  * `addTab` / `addQueryTab` directly (rather than via `seedWorkspace`).
  *
- * sprint-366 (2026-05-16): `useCurrentWorkspaceKey()` now resolves
+ * `useCurrentWorkspaceKey()` resolves
  * `connId` from the Tauri window label. Tests that mount workspace-tree
  * components must declare `vi.mock("@lib/window-label", ...)`; this
  * helper additionally writes the fake label so the hook returns
@@ -177,12 +171,12 @@ export function seedWorkspace(
       },
     };
   });
-  // sprint-366 (2026-05-16) — also seed the fake Tauri window label so
+  // Also seed the fake Tauri window label so
   // `useCurrentWindowConnectionId()` (and therefore
   // `useCurrentWorkspaceKey()` and `Sidebar`) resolves to this connId.
   // No-op for files that didn't `vi.mock("@lib/window-label", ...)`.
   trySetWindowLabel(connId);
-  // Sprint 262 Slice B — preserve prior sidebar/closedTabHistory/dirtyTabIds
+  // Preserve prior sidebar/closedTabHistory/dirtyTabIds
   // on re-seed. Without this, tests that call `seedWorkspace(...)` a second
   // time mid-test to update tabs/activeTabId would silently wipe the
   // SchemaTree's per-workspace sidebar state (now stored here, no longer

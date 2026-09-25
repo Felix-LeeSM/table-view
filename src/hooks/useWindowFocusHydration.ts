@@ -17,8 +17,8 @@ import { useEffect } from "react";
  * activeStatuses) when data exists. Zustand skips re-renders when the patched
  * values are referentially equal to the current state.
  *
- * This hook never touches `workspaceStore`. Under the sprint-361 per-connection
- * window model each `workspace-{connId}` window owns only its own tabs, so a
+ * This hook never touches `workspaceStore`. Under the per-connection window
+ * model each `workspace-{connId}` window owns only its own tabs, so a
  * focus event that hydrates a *different* `focusedConnId` (the launcher moved
  * focus elsewhere while this window was hidden) must not clear anything —
  * doing so wiped this window's own tabs (#1098). Workspace teardown belongs to

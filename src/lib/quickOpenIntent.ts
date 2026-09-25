@@ -3,7 +3,7 @@
  *
  * A Quick Open result can target a different connection than the window it was
  * invoked from. Each connection owns its own workspace window
- * (`workspace-{connId}`, sprint-361) and DOM CustomEvents never cross a window
+ * (`workspace-{connId}`) and DOM CustomEvents never cross a window
  * boundary, so a cross-connection selection is delivered in two hops:
  *
  *   1. The origin window focuses / creates the target connection's window via

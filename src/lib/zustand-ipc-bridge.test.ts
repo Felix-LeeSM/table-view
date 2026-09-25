@@ -1,10 +1,6 @@
 /**
- * Sprint 151 — TDD-FIRST contract tests for the Zustand-over-Tauri-events bridge.
- *
- * Authored BEFORE the production module (`src/lib/zustand-ipc-bridge.ts`).
- * Against pre-Sprint-151 code, the import below fails — the module does not
- * yet exist (vitest reports a "module not found" / "Failed to resolve import"
- * error). After the production module ships, the same file goes green.
+ * Contract tests for the Zustand-over-Tauri-events bridge
+ * (`src/lib/zustand-ipc-bridge.ts`).
  *
  * Contract surface verified:
  *  - (a) local→emit: `setState` on an allowlisted key triggers exactly one

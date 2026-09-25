@@ -1,13 +1,11 @@
 // themeStore unit tests — covers hydrate, setTheme, setMode, setState,
 // system-mode resolution, and the cross-window broadcast allowlist.
 //
-// 2026-05-16 update (Phase 4 sprint-368, Q12) — actions became
-// backend-first (`persist_setting("theme", JSON)` IPC). Tests now mock
-// `@tauri-apps/api/core` so the IPC resolves immediately in jsdom and
-// await each action. The single-LS-write invariant locked here (AC-368
-// receiver path) is byte-equivalent to the pre-368 behavior because the
-// subscriber still owns the write — the action just no longer double-
-// writes.
+// Actions persist through `persist_setting("theme", JSON)` IPC (Q12).
+// Tests mock `@tauri-apps/api/core` so the IPC resolves immediately in
+// jsdom and await each action. The single-LS-write invariant locked here
+// (AC-368 receiver path) holds because the subscriber owns the write —
+// the action does not double-write.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -157,7 +155,7 @@ describe("themeStore", () => {
     restore();
   });
 
-  // -- Sprint 153 (AC-153-06) — cross-window broadcast allowlist regression --
+  // -- Cross-window broadcast allowlist regression (AC-153-06) --
   //
   // `SYNCED_KEYS` pins which top-level state keys ride the `theme-sync`
   // channel. `resolvedMode` is intentionally EXCLUDED — it is derived per
