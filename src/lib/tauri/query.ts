@@ -10,14 +10,14 @@ import type { FilterCondition, TableData } from "@/types/schema";
 
 import { wrapNumericCells } from "./numericWrap";
 
-// Sprint 271b — `expectedDatabase` is an opt-in db-mismatch guard. When
+// `expectedDatabase` is an opt-in db-mismatch guard. When
 // provided the backend verifies the adapter's active db matches before
 // dispatch; mismatch surfaces as a typed `AppError::DbMismatch` envelope
 // whose `message` preserves `"Database mismatch: expected 'X', backend
 // pool has 'Y'"`. DataGrid row-fetches forward the workspace `(connId, db)`
 // so a swapped pool can no longer paint stale rows from the wrong database
 // between user click and dispatch. Omitting the argument preserves the
-// pre-271 fast-path.
+// no-guard fast-path.
 export async function queryTableData(
   connectionId: string,
   table: string,
@@ -30,7 +30,7 @@ export async function queryTableData(
   expectedDatabase?: string,
   // Issue #1269 (P1) — optional per-load cancel-token id. The backend
   // `query_table_data` command already registers a `CancellationToken` under
-  // this id (Sprint 180), so passing it lets the grid Cancel button abort the
+  // this id, so passing it lets the grid Cancel button abort the
   // in-flight browse via `cancelQuery` / `cancelQueryNative`. Omitting it
   // preserves the pre-#1269 fast-path (no token registered).
   queryId?: string,
@@ -52,11 +52,8 @@ export async function queryTableData(
 
 // Query execution
 //
-// Sprint 266 — `expectedDatabase` is an opt-in db-mismatch guard. When
-// provided the backend verifies the adapter's active db matches before
-// dispatch; mismatch surfaces as a typed `AppError::DbMismatch` envelope
-// whose `message` preserves `"Database mismatch: expected 'X', backend
-// pool has 'Y'"`. Omitting it preserves the pre-Sprint-266 fast-path.
+// `expectedDatabase` is the same opt-in db-mismatch guard as
+// `queryTableData` above; omitting it preserves the no-guard fast-path.
 // Issue #1112 — `safetyConfirmed` is the Safe Mode confirmation proof. The
 // backend re-classifies the SQL and, for a destructive statement in a
 // confirm-required context (production, or non-production + strict), rejects
@@ -182,7 +179,7 @@ export async function executeQueryBatchEnvelopes(
   );
 }
 
-// Sprint 247 (ADR 0022 Phase 3) — dry-run a batch of SQL statements
+// ADR 0022 Phase 3 — dry-run a batch of SQL statements
 // inside a transaction that is unconditionally rolled back. Returns
 // per-statement statistics (`totalCount` / `executionTimeMs`) for the
 // destructive-statement confirm dialog's preview pane. The eventual
@@ -194,12 +191,12 @@ export async function executeQueryBatchEnvelopes(
 // wrapper because the hook routes paradigm="document" to a disclaimer
 // state without invoking IPC.
 //
-// Sprint 271b — `expectedDatabase` is the same opt-in mismatch guard as
+// `expectedDatabase` is the same opt-in mismatch guard as
 // `executeQuery` / `executeQueryBatch`. The dry-run preview MUST run
 // against the same db the eventual commit will hit; threading the
 // workspace `(connId, db)` lets the backend reject a swapped pool
 // before the preview rolls back against the wrong database. Omitting
-// it preserves the pre-271 fast-path.
+// it preserves the no-guard fast-path.
 export async function executeQueryDryRun(
   connectionId: string,
   statements: string[],
