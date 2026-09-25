@@ -17,7 +17,7 @@ interface UseCopyToClipboardOptions {
 // non-feature component tree can import it across the src/features import
 // boundary (the @hooks alias is off-limits to src/features).
 //
-// Extracted from PreviewCopyButton (sprint-252) so CellDetailDialog,
+// Extracted from PreviewCopyButton so CellDetailDialog,
 // ViewStructurePanel, and ImportExportDialog stop re-implementing the same
 // `navigator.clipboard.writeText` + `setCopied(true)` + timer-revert dance
 // (each a subtly different copy that could drift). One hook keeps the state

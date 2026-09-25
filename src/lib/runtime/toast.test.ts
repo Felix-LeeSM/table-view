@@ -6,7 +6,7 @@ import {
 import { beforeEach, describe, expect, it } from "vitest";
 import { toast } from "./toast";
 
-// Sprint 94 — toast API unit tests.
+// Toast API unit tests.
 //
 // Coverage targets:
 //   1. Each variant helper (success/error/info/warning) pushes a toast with
@@ -109,9 +109,9 @@ describe("toast (lib)", () => {
     expect(useToastStore.getState().toasts).toHaveLength(0);
   });
 
-  // Sprint 269 (2026-05-13) — pin that `options.action` is persisted onto the
-  // resulting `Toast`. The DbMismatch Retry button rides on this field; without
-  // copying it through `push`, the toaster has nothing to render.
+  // Pin that `options.action` is persisted onto the resulting `Toast`. The
+  // DbMismatch Retry button rides on this field; without copying it through
+  // `push`, the toaster has nothing to render.
   it("toast.warning with options.action persists the action on the resulting Toast", () => {
     const onClick = (): void => {};
     const id = toast.warning("mismatch", {
@@ -124,9 +124,8 @@ describe("toast (lib)", () => {
     expect(stored?.action?.onClick).toBe(onClick);
   });
 
-  // Sprint 269 (2026-05-13) — backward-compat: omitting `action` leaves the
-  // field `undefined` on the persisted `Toast` so Sprint 94 call sites and
-  // serialization shape stay byte-equivalent.
+  // Omitting `action` leaves the field off the persisted `Toast` (see
+  // `ToastAction`).
   it("existing call sites (no action) result in a Toast whose action is undefined", () => {
     const id = toast.success("ok");
     const stored = useToastStore.getState().toasts.find((t) => t.id === id);
