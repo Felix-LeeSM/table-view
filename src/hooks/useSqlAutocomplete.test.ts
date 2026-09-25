@@ -1,5 +1,5 @@
 // useSqlAutocomplete — namespace builder for CodeMirror SQL completions.
-// Sprint 263 (2026-05-12) — schemaStore caches now nest by `(connId, db)`,
+// 2026-05-12 — schemaStore caches now nest by `(connId, db)`,
 // so the hook signature is `(connectionId, db, arg?)` and store seeds use
 // `{ conn1: { db1: { schema: [...] } } }`.
 
@@ -103,7 +103,7 @@ describe("useSqlAutocomplete", () => {
     expect(result.current).toHaveProperty("users");
   });
 
-  // -- Sprint 263 regression: db-scoped exclusion -----------------------
+  // -- Regression: db-scoped exclusion ----------------------------------
   // The same connection can hold multiple databases. Autocomplete must
   // only surface tables for the active db.
   it("excludes tables from other databases on the same connection", () => {
@@ -125,7 +125,7 @@ describe("useSqlAutocomplete", () => {
     expect(result.current).not.toHaveProperty("audit_log");
   });
 
-  // -- Sprint 37: Enhanced SQL Autocomplete --
+  // -- Enhanced SQL Autocomplete --
 
   it("includes common SQL functions in namespace", () => {
     const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
@@ -246,7 +246,7 @@ describe("useSqlAutocomplete", () => {
     expect((ns as Record<string, Record<string, unknown>>).users).toEqual({});
   });
 
-  // -- Sprint 60 / S60-5: cached columns + views --
+  // -- Cached columns + views --
 
   it("uses tableColumnsCache when no explicit override is supplied", () => {
     useSchemaStore.setState({
@@ -445,9 +445,9 @@ describe("useSqlAutocomplete", () => {
     expect(ns["main.sales_csv"]).toHaveProperty("order_id");
   });
 
-  // ── Sprint 82: dialect-aware identifier quoting ─────────────────────────
+  // ── Dialect-aware identifier quoting ────────────────────────────────────
 
-  // AC-04: MySQL dialect must surface a backtick-quoted label for
+  // MySQL dialect must surface a backtick-quoted label for
   // mixed-case identifiers so the autocomplete popup inserts `Users`.
   it("emits a backtick-quoted alias for mixed-case MySQL tables", () => {
     useSchemaStore.setState({
@@ -517,7 +517,7 @@ describe("useSqlAutocomplete", () => {
     expect(ns["`sales`.`Orders`"]?.children).toHaveProperty("order_id");
   });
 
-  // AC-04: Postgres dialect → double-quote identifier quoting.
+  // Postgres dialect → double-quote identifier quoting.
   it("emits a double-quoted alias for mixed-case Postgres tables", () => {
     useSchemaStore.setState({
       tables: {
@@ -539,7 +539,7 @@ describe("useSqlAutocomplete", () => {
     expect(aliased?.self?.apply).toBe('"Users"');
   });
 
-  // AC-04: SQLite dialect → first identifier quote char (backtick per
+  // SQLite dialect → first identifier quote char (backtick per
   // CodeMirror's SQLite spec) is used.
   it("emits a quoted alias for mixed-case SQLite tables", () => {
     useSchemaStore.setState({
@@ -578,7 +578,7 @@ describe("useSqlAutocomplete", () => {
     expect(ns).not.toHaveProperty("`users`");
   });
 
-  // AC-07: without a dialect, the legacy namespace shape is preserved.
+  // Without a dialect, the legacy namespace shape is preserved.
   it("omits quoted aliases entirely when no dialect is supplied", () => {
     useSchemaStore.setState({
       tables: {
@@ -596,7 +596,7 @@ describe("useSqlAutocomplete", () => {
     expect(ns).not.toHaveProperty('"Users"');
   });
 
-  // Views follow the same quoting rule as tables (covers AC-04 view branch).
+  // Views follow the same quoting rule as tables (covers the view branch).
   it("emits a quoted alias for mixed-case MySQL views", () => {
     useSchemaStore.setState({
       views: {
@@ -617,7 +617,7 @@ describe("useSqlAutocomplete", () => {
     expect(ns).toHaveProperty("`ActiveUsers`");
   });
 
-  // AC-04 regression: the legacy `tableColumns` record arg still works even
+  // Regression: the legacy `tableColumns` record arg still works even
   // though the hook now also accepts the options-object shape.
   it("keeps pre-Sprint-82 tableColumns record arg working", () => {
     useSchemaStore.setState({
@@ -638,16 +638,13 @@ describe("useSqlAutocomplete", () => {
   });
 
   // 2026-04-30 regression: SQL keywords MUST NOT be auto-quoted by
-  // CodeMirror's `nameCompletion`. 본래는 ns 에 keyword 를 `{ self,
-  // children }` 형태로 직접 inject 해 quote 우회를 강제했었다.
+  // CodeMirror's `nameCompletion`. The namespace used to inject keywords
+  // directly in the `{ self, children }` shape to force the quote bypass.
   //
-  // Sprint 302 갱신 (2026-05-14): keyword 의 책임을 lang-sql 의 자체
-  // `keywordCompletionSource` (line 691-693, dialect.dialect.words 기반,
-  // `defaultKeyword = (label, type) => ({ label, type, boost: -1 })`
-  // 라서 quote 발생 안 함) 로 일원화. ns 에 keyword 를 또 inject 하면
-  // 두 source 가 같은 라벨을 popup 으로 흘려보내 사용자에게 "SELECT 가
-  // 2번 뜨는" 회귀를 만든다 (CodeMirror autocomplete 는 source 간
-  // dedup 을 하지 않음). 따라서 ns 는 더 이상 keyword 를 노출하지 않는다.
+  // Updated 2026-05-14: keyword completion moved to lang-sql's own
+  // `keywordCompletionSource` (lang-sql:691-693), so the namespace no longer
+  // exposes keywords — see the note at the top of
+  // `src/hooks/useSqlAutocomplete.ts`.
   it("ns 는 keyword 를 inject 하지 않는다 — lang-sql 의 자체 keyword source 책임", () => {
     const { result } = renderHook(() =>
       useSqlAutocomplete("conn1", "db1", {
@@ -673,19 +670,19 @@ describe("useSqlAutocomplete", () => {
     expect(ns.COUNT?.self?.type).toBe("function");
   });
 
-  // ── Sprint 233 — UPDATE SET column autocomplete (PG/SQLite) ─────────────
-  // 작성 일자: 2026-05-07. 작성 이유: 사용자 보고 (2026-05-07) — bottom strip
-  // 에 보이는 `"public"."brief_news_tasks"` 형태로 UPDATE 를 작성할 때
-  // CodeMirror SQL 자동완성이 컬럼을 surface 하지 못함. 원인은
-  // useSqlAutocomplete 가 `ns["public.brief_news_tasks"]` (도트 split path)
-  // 와 `ns["brief_news_tasks"]` (bare) 까지만 등록하고, 사용자가 종종 직접
-  // 사용하는 fully-quoted form `"public"."brief_news_tasks"` 는 등록되지
-  // 않아 CodeMirror 의 `addNamespaceObject` (lang-sql:507-523) 가 동일
-  // children 까지 도달하지 못함. PG / SQLite double-quote dialect 에서
-  // 이 키도 emit 해야 함.
+  // ── UPDATE SET column autocomplete (PG/SQLite) ──────────────────────────
+  // Written 2026-05-07. Reason: user report (2026-05-07) — when writing an
+  // UPDATE against the `"public"."brief_news_tasks"` form shown in the
+  // bottom strip, CodeMirror SQL autocomplete did not surface the columns.
+  // The cause: useSqlAutocomplete registered only
+  // `ns["public.brief_news_tasks"]` (the dot-split path) and
+  // `ns["brief_news_tasks"]` (bare), not the fully-quoted form
+  // `"public"."brief_news_tasks"` users often type directly, so CodeMirror's
+  // `addNamespaceObject` (lang-sql:507-523) could not reach the same
+  // children. The PG / SQLite dialects must emit this key too.
 
-  // AC-233-01 — PG dialect 에서 fully-quoted schema-qualified key 가
-  // namespace 에 emit 되며, columns map 을 children 으로 가진다.
+  // AC-233-01 — under the PG dialect, the fully-quoted schema-qualified key
+  // is emitted into the namespace with the columns map as its children.
   it("emits a fully-quoted schema-qualified key for PG dialect (AC-233-01)", () => {
     useSchemaStore.setState({
       tables: {
@@ -791,7 +788,7 @@ describe("useSqlAutocomplete", () => {
   // (with empty children) so when the cache later populates, the next
   // useMemo re-render will surface columns. This guards against the
   // "user typed UPDATE before expanding the table in the SchemaTree"
-  // case described in the orchestrator brief (hypothesis C).
+  // case.
   it("registers fully-quoted key with empty children when columns are not cached (AC-233-03)", () => {
     useSchemaStore.setState({
       tables: {
@@ -818,12 +815,13 @@ describe("useSqlAutocomplete", () => {
     expect(node?.children).toEqual({});
   });
 
-  // ── Sprint 264 — cross-DB isolation audit ─────────────────────────────
-  // Sprint 263 분리 후 회귀 가드. 같은 connection 의 다른 DB 가 활성
-  // namespace 로 누설되지 않는지 6 corner case 로 잠근다.
+  // ── Cross-DB isolation audit ──────────────────────────────────────────
+  // Regression guard after the `(connId, db)` cache split. Six corner cases
+  // lock that another DB on the same connection does not leak into the
+  // active namespace.
 
-  // AC-264-01 #1 — 동일 table 이름이 두 DB 에서 서로 다른 컬럼을 가질
-  // 때, 활성 DB 의 컬럼만 surface.
+  // AC-264-01 #1 — when the same table name has different columns in two
+  // DBs, surface only the active DB's columns.
   it("isolates same-table-name across DBs — columns reflect active DB only (AC-264-01)", () => {
     useSchemaStore.setState({
       tables: {
@@ -901,8 +899,8 @@ describe("useSqlAutocomplete", () => {
     expect(ns.users).not.toHaveProperty("email");
   });
 
-  // AC-264-01 #2 — inactive DB 의 columnsCache 만 채워져 있는 (table 등록
-  // 없는) "ghost" 항목이 활성 namespace 로 새지 않는다.
+  // AC-264-01 #2 — "ghost" entries present only in an inactive DB's
+  // columnsCache (no registered table) do not leak into the active namespace.
   it("inactive-DB columnsCache ghost entries don't surface for active DB (AC-264-01)", () => {
     useSchemaStore.setState({
       tables: {
@@ -941,8 +939,8 @@ describe("useSqlAutocomplete", () => {
     expect(ns).not.toHaveProperty("public.ghost_table");
   });
 
-  // AC-264-01 #3 — db 인자가 변경되면 useMemo 가 재빌드해 새 DB 의
-  // namespace 로 교체된다.
+  // AC-264-01 #3 — when the db argument changes, useMemo rebuilds and swaps
+  // in the new DB's namespace.
   it("rerender with new db rebuilds the namespace (AC-264-01)", () => {
     useSchemaStore.setState({
       tables: {
@@ -969,8 +967,8 @@ describe("useSqlAutocomplete", () => {
     expect(result.current).not.toHaveProperty("alpha");
   });
 
-  // AC-264-01 #4 — schema-qualified key (`public.users`) 도 활성 DB 의
-  // 컬럼만 따른다.
+  // AC-264-01 #4 — the schema-qualified key (`public.users`) also follows
+  // only the active DB's columns.
   it("schema-qualified path isolates per active DB (AC-264-01)", () => {
     useSchemaStore.setState({
       tables: {
@@ -1027,8 +1025,8 @@ describe("useSqlAutocomplete", () => {
     expect(ns["public.users"]).not.toHaveProperty("db2_only");
   });
 
-  // AC-264-01 #5 — PG dialect 의 fully-quoted key
-  // (`"public"."users"`) 도 활성 DB 의 컬럼만 노출한다.
+  // AC-264-01 #5 — the PG dialect's fully-quoted key
+  // (`"public"."users"`) also exposes only the active DB's columns.
   it("fully-quoted PG key isolates per active DB (AC-264-01)", () => {
     useSchemaStore.setState({
       tables: {
@@ -1094,18 +1092,17 @@ describe("useSqlAutocomplete", () => {
     expect(node?.children).not.toHaveProperty("db2_col");
   });
 
-  // ── Sprint 268 (2026-05-13) — intra-DB schema collision ─────────────────
-  // 작성 이유: Sprint 264 OoS #1 — 같은 `(connId, db)` 안에서 두 schema 가
-  // 동일한 table 이름을 가질 때 (예: `public.users`, `auth.users`),
-  // 기존 `cachedColumnsByName[bareName] = colNs` last-writer-wins 가
-  // schema-qualified lookup 까지 오염시켰음. Cache shape 을
-  // schema-preserving 으로 바꾼 뒤에도 회귀가 없는지 4 case 로 잠근다.
+  // ── Intra-DB schema collision (2026-05-13) ──────────────────────────────
+  // Reason: when two schemas in the same `(connId, db)` hold a table of the
+  // same name (e.g. `public.users`, `auth.users`), the old
+  // `cachedColumnsByName[bareName] = colNs` last-writer-wins polluted even
+  // the schema-qualified lookup. Four cases lock that nothing regresses
+  // after the cache shape became schema-preserving.
   //
-  // 채택한 ambiguity policy: Policy A — bare key `ns["users"]` 는 모든
-  // candidate schema 의 컬럼을 column-name 기준 dedupe 한 union 으로
-  // 노출한다. Rationale: silently dropping a candidate column is a worse
-  // failure mode than offering a superset; 사용자는 어차피
-  // `qualifiedName` 으로 좁힐 수 있다.
+  // Adopted ambiguity policy: Policy A (the bare key `ns["users"]` exposes
+  // the union of the candidate schemas' columns, deduped by column name) —
+  // see the policy note above `pickBareColumns` in
+  // `src/hooks/useSqlAutocomplete.ts`.
 
   // AC-268-01 — Same-DB schema collision: qualified lookup MUST return
   // the schema-correct column set, not the cross-schema overwrite.
@@ -1267,7 +1264,7 @@ describe("useSqlAutocomplete", () => {
 
   // AC-268-03 — Single-schema parity: when only one schema holds the
   // table, both bare and schema-qualified lookup expose the same set,
-  // identical to pre-Sprint-268 behaviour.
+  // identical to the pre-fix behaviour.
   it("single-schema parity — ns.users and ns['public.users'] match the cache (AC-268-03)", () => {
     useSchemaStore.setState({
       tables: {
@@ -1408,7 +1405,7 @@ describe("useSqlAutocomplete", () => {
     expect(ns['"auth"."users"']?.children).not.toHaveProperty("name");
   });
 
-  // AC-264-01 #6 — views axis 도 동일 격리.
+  // AC-264-01 #6 — the views axis is isolated the same way.
   it("views isolate same-name across DBs (AC-264-01)", () => {
     useSchemaStore.setState({
       views: {

@@ -6,32 +6,34 @@ import { toast } from "@/lib/runtime/toast";
 import type { SchemaInfo } from "@/types/schema";
 
 /**
- * SchemaTree 의 데이터 레이어 hook. schema/table/view/function 로딩과 캐시
- * 무효화를 담당해 컴포넌트는 순수 트리 렌더링에 집중한다.
+ * Data-layer hook for SchemaTree. Handles schema/table/view/function loading
+ * and cache invalidation so the component can focus on pure tree rendering.
  *
- * Sprint 263 — 캐시 키가 `(connId, db)` 별로 분리되어, 같은 connection 의
- * db1 ↔ db2 toggle 시 캐시가 재사용된다. 호출처는 `db` 를 명시적으로
- * 전달 — DB-aware 한 데이터 경로의 단일 source.
+ * Cache keys are split per `(connId, db)`, so toggling db1 ↔ db2 on the same
+ * connection reuses the cache. Callers pass `db` explicitly — the single
+ * source for the DB-aware data path.
  *
- * 책임:
- * - mount 시 자동 `loadSchemas`. `(connId, db)` 별로 1회만.
- * - #1219 — schema 수가 `EAGER_SCHEMA_LOAD_THRESHOLD` 이하면 mount 시 모든
- *   schema 의 `loadTables` / `prefetchSchemaColumns` 를 즉시 발사(소규모 DB
- *   체감 유지). 초과하면 그 루프를 건너뛰고, 펼쳐진 schema 만 `expandSchema`
- *   로 lazy load (SchemaTree 의 reconciliation 효과가 구동).
- * - no-schema workbench(MySQL/MariaDB) 호출처는 mount 시 views/functions 도
- *   같이 로드한다. schema row 가 숨겨져 lazy expand 진입점이 없기 때문
- *   (`autoLoadAuxiliaryCatalog` = 항상 eager).
- * - schema 한 개 단위 lazy expand (`expandSchema`) — 캐시 미존재 시에만
- *   tables/views/functions + columns(prefetch) load.
- * - 전체 / 단일 schema refresh (`refreshConnection`, `refreshSchema`).
- * - silent failure 를 toast.error + dev console 로 일원화.
+ * Responsibilities:
+ * - Automatic `loadSchemas` on mount per `(connId, db)` (re-run rules:
+ *   `autoLoadedRef` below).
+ * - #1219 — when the user-schema count is at or below
+ *   `EAGER_SCHEMA_LOAD_THRESHOLD`, fire every schema's `loadTables` /
+ *   `prefetchSchemaColumns` right at mount (keeps small DBs feeling instant).
+ *   Above it, skip that loop and lazy-load only the expanded schemas through
+ *   `expandSchema` (driven by SchemaTree's reconciliation effect).
+ * - no-schema workbench (MySQL/MariaDB) callers also load views/functions at
+ *   mount, because the schema row is hidden and there is no lazy-expand entry
+ *   point (`autoLoadAuxiliaryCatalog` = always eager).
+ * - Per-schema lazy expand (`expandSchema`) — loads tables/views/functions +
+ *   columns (prefetch) only when they are not cached.
+ * - Full / single-schema refresh (`refreshConnection`, `refreshSchema`).
+ * - Routes silent failures to toast.error + the dev console.
  *
- * 책임 외:
- * - 트리 UI state (expanded / selected / search) 는 컴포넌트가 보유 +
- *   Sprint 262 부터 `workspaceStore.sidebar` axis 에 위임.
- * - dropTable / renameTable 등 사용자 액션 catch 는 컴포넌트 layer 가
- *   처리.
+ * Out of scope:
+ * - Tree UI state (expanded / selected / search) is held by the component and
+ *   delegated to the `workspaceStore.sidebar` axis.
+ * - Catching user actions such as dropTable / renameTable is left to the
+ *   component layer.
  */
 
 const EMPTY_SCHEMAS: SchemaInfo[] = [];
@@ -140,7 +142,7 @@ export function useSchemaCache(
 
   const [loadingSchemas, setLoadingSchemas] = useState(false);
   const [loadingTables, setLoadingTables] = useState<Set<string>>(new Set());
-  // Sprint 263 — autoLoaded set keyed by `connId|db|aux` so a re-render with
+  // The auto-loaded set is keyed by `connId|db|aux` so a re-render with
   // a different db triggers a fresh mount-time load. The aux bit lets a
   // no-schema DBMS rerun once when its dbType resolves and views/routines need
   // eager loading. Component-instance scoped (Set is recreated on remount) —
@@ -148,7 +150,7 @@ export function useSchemaCache(
   // survives toggles.
   const autoLoadedRef = useRef<Set<string>>(new Set());
 
-  // Sprint 360 Phase 2 (Q23) — also re-run the auto-load when the
+  // state-management-strategy Q23 — also re-run the auto-load when the
   // `schemas[connId]?.[db]` slot transitions from populated to undefined.
   // That transition is the signature of a post-DDL `clearForConnection`
   // wipe; without this signal the autoLoadedRef short-circuit would
@@ -156,15 +158,15 @@ export function useSchemaCache(
   // sidebar is mounted.
   const schemasSlot = useSchemaStore((s) => s.schemas[connectionId]?.[db]);
   useEffect(() => {
-    // Sprint 263 — db === "" 는 transient (focused connection 의 activeDb 가
-    // 아직 미해석된 mount 직후) sentinel. fetch 를 건너뛰고, activeDb 가
-    // 잡히면 effect 가 재실행되며 정상 load 가 트리거된다.
+    // db === "" is a transient sentinel (right after mount, while the focused
+    // connection's activeDb is not resolved yet). Skip the fetch; once
+    // activeDb resolves, the effect re-runs and triggers the normal load.
     if (!db) return;
     const key = `${connectionId}|${db}|aux:${autoLoadAuxiliaryCatalog ? "1" : "0"}`;
-    // Sprint 360 Phase 2 — when the slot is undefined (cleared) drop the
-    // marker so the auto-load below fires again. This converts a
-    // clearForConnection wipe into an eager refetch within the same hook
-    // instance (no remount required).
+    // When the slot is undefined (cleared), drop the marker so the auto-load
+    // below fires again (Q23, see above). This converts a clearForConnection
+    // wipe into an eager refetch within the same hook instance (no remount
+    // required).
     if (schemasSlot === undefined && autoLoadedRef.current.has(key)) {
       autoLoadedRef.current.delete(key);
     }

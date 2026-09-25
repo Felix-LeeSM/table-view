@@ -5,15 +5,16 @@ import { useSchemaStore } from "@stores/schemaStore";
 import { useMemo } from "react";
 import type { DatabaseType } from "@/types/connection";
 
-// Sprint 302 (2026-05-14) — keyword 책임은 lang-sql 의
-// `keywordCompletionSource` 가 dialect.dialect.words 기반으로 단독 수행.
-// 본래 ns 에 reservedToken 으로 keyword 를 직접 inject 했으나, 그 결과
-// `schemaCompletionSource` 도 ns 의 self 를 emit + `keywordCompletionSource`
-// 도 dialect 의 keyword 를 emit 해 같은 라벨이 popup 에 두 번 노출됐다
-// (사용자 보고: "SELECT 가 2번 뜬다"). lang-sql 의 dialect 정의가 우리가
-// 이전에 inject 했던 keyword set 의 superset 이고 auto-quote 도 발생하지
-// 않으므로 (defaultKeyword = (label, type) => ({ label, type, boost: -1 })),
-// ns 의 inject 책임은 제거됐다.
+// 2026-05-14 — keyword completion moved to lang-sql's
+// `keywordCompletionSource` (lang-sql:691-693), driven by
+// dialect.dialect.words. The namespace used to inject keywords directly as
+// reservedToken entries, but then `schemaCompletionSource` emitted the ns
+// `self` entries and `keywordCompletionSource` also emitted the dialect's
+// keywords, so the same label showed up twice in the popup (user report:
+// "SELECT shows up twice"). The lang-sql dialect definition is a superset of
+// the keyword set we used to inject and does not auto-quote either
+// (defaultKeyword = (label, type) => ({ label, type, boost: -1 })), so the
+// namespace no longer injects keywords.
 
 /** Explicit test-only overrides: `table → column names`. */
 export type TableColumnOverrides = Record<string, string[]>;
@@ -28,10 +29,10 @@ export interface UseSqlAutocompleteOptions {
    */
   dialect?: SQLDialect;
   /**
-   * Connection `dbType`. Keyword surface 책임은 lang-sql 의
-   * `keywordCompletionSource` 로 이관되어 이 옵션은 keyword 라우팅에는
-   * 영향이 없다. Function 후보는 dialect-specific drift 를 막기 위해
-   * 이 값으로 분기한다.
+   * Connection `dbType`. The keyword surface moved to lang-sql's
+   * `keywordCompletionSource`, so this option has no effect on keyword
+   * routing. Function candidates branch on this value to prevent
+   * dialect-specific drift.
    */
   dbType?: DatabaseType;
 }
@@ -95,9 +96,9 @@ function identifierNeedsQuoting(name: string): boolean {
  * round-trips through case-sensitive catalogs intact.
  *
  * @param connectionId The active connection identifier.
- * @param db The active database name. Sprint 263 — schemaStore caches are
- *           now keyed by `(connId, db)`, so the namespace is scoped to a
- *           single workspace's catalog.
+ * @param db The active database name. schemaStore caches are keyed by
+ *           `(connId, db)`, so the namespace is scoped to a single
+ *           workspace's catalog.
  * @param arg Either a legacy `Record<string, string[]>` override or
  *            the structured `UseSqlAutocompleteOptions` shape.
  */
@@ -134,13 +135,10 @@ export function useSqlAutocomplete(
       ns[fn] = reservedToken(fn, "function");
     }
 
-    // Sprint 302 — keyword inject 제거. lang-sql 의 dialect 자체
-    // `keywordCompletionSource` 가 dialect.dialect.words 기반으로 SELECT /
-    // FROM / RETURNING / ILIKE 등을 모두 emit 한다. ns 에 inject 하면
-    // schemaCompletionSource 가 같은 라벨을 추가 emit 해 popup 에 두 번
-    // 노출되는 회귀가 발생했다.
+    // Keywords are not injected — lang-sql's own `keywordCompletionSource`
+    // emits them (see the note at the top of this file).
 
-    // Sprint 268 (2026-05-13) — schema-preserving cache shape.
+    // 2026-05-13 — schema-preserving cache shape.
     // Previously `cachedColumnsByName[bareName]` was overwritten on each
     // schema iteration ("last-writer-wins"). When two schemas in the same
     // `(connId, db)` held a table of the same name (e.g. `public.users` +
@@ -168,7 +166,7 @@ export function useSqlAutocomplete(
       }
     }
 
-    // Sprint 268 (2026-05-13) — bare-key ambiguity policy = Policy A
+    // 2026-05-13 — bare-key ambiguity policy = Policy A
     // (union of all candidate columns across schemas, deduped by column
     // name). Rationale: silently dropping a column candidate is a worse
     // failure mode than offering a superset; the user can always
@@ -230,8 +228,8 @@ export function useSqlAutocomplete(
       }
     };
 
-    // Sprint 233 (2026-05-07): also emit the *fully-quoted*
-    // schema-qualified form (`"schema"."table"` for PG/SQLite).
+    // 2026-05-07: also emit the *fully-quoted* schema-qualified form
+    // (`"schema"."table"` for PG; backticks for MySQL / SQLite).
     // CodeMirror's `addNamespaceObject` (lang-sql:507-523) splits keys on
     // `.`, so registering this form yields a top-level child `"schema"`
     // whose child is `"table"` — distinct from the unquoted
@@ -258,11 +256,11 @@ export function useSqlAutocomplete(
       }
     };
 
-    // Sprint 268 (2026-05-13) — track candidate column-sets per bare name
+    // 2026-05-13 — track candidate column-sets per bare name
     // across schemas so the bare-key registration can apply Policy A
     // (union deduped by column name) after the per-schema loop. Built
     // separately for tables vs views so a view never silently unions
-    // into a table of the same name (preserves the pre-Sprint-268
+    // into a table of the same name (preserves the earlier
     // "don't overwrite a table of the same name" rule below).
     const bareTableCandidates: Record<string, Record<string, SQLNamespace>[]> =
       {};
@@ -302,12 +300,11 @@ export function useSqlAutocomplete(
       }
     }
 
-    // Sprint 268 (2026-05-13) — register bare-name entries under Policy A.
+    // 2026-05-13 — register bare-name entries under Policy A.
     // Single candidate: trivial passthrough (preserves AC-268-03
     // single-schema parity). Multi-candidate: union deduped by column
     // name. Tables register first so a view never overwrites a table
-    // of the same name (mirrors the pre-Sprint-268 `if (!ns[v.name])`
-    // guard).
+    // of the same name (mirrors the earlier `if (!ns[v.name])` guard).
     const unionColumns = (
       candidates: Record<string, SQLNamespace>[],
     ): Record<string, SQLNamespace> => {

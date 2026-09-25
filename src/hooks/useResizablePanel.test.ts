@@ -451,8 +451,8 @@ describe("useResizablePanel", () => {
   });
 
   // --- Esc cancels the drag, reverting to the drag-start size ---
-  // Reason: 사용자 요구 — 모든 draggable 은 드래그 중 Esc 로 시작 크기로 복원
-  // (리사이즈 드래그 한정 PR) (2026-07-18)
+  // Reason: user requirement — every draggable reverts to its start size on
+  // Esc during a drag (a PR scoped to resize drags) (2026-07-18)
 
   it("Esc reverts DOM width to the drag-start size in horizontal mode", () => {
     const { result } = renderHook(() =>

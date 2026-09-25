@@ -1,12 +1,15 @@
-// AC-191-02 — `useSchemaCache` 데이터 레이어 hook 단위 테스트. SchemaTree
-// 1963 줄 god component 에서 분리된 책임 (mount load / refresh / lazy
-// expand / silent failure → toast) 을 React 환경 + zustand store 와의
-// 통합으로 단언한다. SchemaTree.test.tsx 도 hook 동작을 간접적으로 단언
-// 하지만 (UI 가 가시화되는 상태만), 본 테스트는 hook 의 fault 분기
-// (load reject → toast.error) 를 직접 단언한다. date 2026-05-02.
+// AC-191-02 — unit tests for the `useSchemaCache` data-layer hook. They
+// assert the responsibilities split out of the SchemaTree god component
+// (mount load / refresh / lazy expand / silent failure → toast) through its
+// integration with the React environment + the zustand store. The
+// `SchemaTree.*.test.tsx` files also assert the hook's behavior indirectly
+// (only the states the UI makes visible), while these tests assert the
+// hook's fault branch (load reject) directly — under the current store
+// contract it lands in the store `error` state, not toast.error (see
+// AC-191-02-4). date 2026-05-02.
 //
-// 2026-05-12 — Sprint 263. hook signature 가 `(connId, db)` 로 확장됐고
-// schemaStore 가 `(connId, db, schema)` 로 nested 됐다.
+// 2026-05-12 — the hook signature was extended to `(connId, db)` and
+// schemaStore was nested by `(connId, db, schema)`.
 
 import { useSchemaStore } from "@stores/schemaStore";
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -14,8 +17,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import { useSchemaCache } from "./useSchemaCache";
 
-// `@lib/runtime/toast` is the canonical sink for hook failures (Sprint 191
-// AC-191-03). The store mocks below already use vi.fn() for tauri
+// `@lib/runtime/toast` is the canonical sink for hook failures
+// (AC-191-03). The store mocks below already use vi.fn() for tauri
 // adapters; here we mock the toast module so we can assert that the
 // hook routes failures to toast.error rather than swallowing them.
 vi.mock("@/lib/runtime/toast", () => ({
@@ -227,14 +230,13 @@ describe("useSchemaCache", () => {
   });
 
   it("[AC-191-02-4] backend listSchemas rejection records store error (current contract)", async () => {
-    // Sprint 191 finding — `useSchemaStore.loadSchemas` swallows tauri
-    // rejections internally and writes `String(e)` to the store's `error`
+    // Finding — `useSchemaStore.loadSchemas` swallows tauri rejections
+    // internally and writes `getTauriErrorMessage(e)` to the store's `error`
     // field instead of re-throwing. The hook's defensive `.catch` blocks
     // therefore never fire under the current store contract; we keep them
     // for forward compatibility but assert the realistic surface (store
-    // error state populated). The follow-up to surface this error to the
-    // user is tracked in findings §6 (UI banner / store contract change).
-    // date 2026-05-02.
+    // error state populated). Surfacing this error to the user (UI banner /
+    // store contract change) is left as a follow-up. date 2026-05-02.
     const tauri = await import("@lib/tauri");
     const listSchemas = tauri.listSchemas as ReturnType<typeof vi.fn>;
     listSchemas.mockRejectedValueOnce(new Error("backend offline"));
