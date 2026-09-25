@@ -1,5 +1,5 @@
 // Characterization tests for the canonical SQL identifier quoter (#1357).
-// Locks the per-dialect quoting + escaping so the 5-way consolidation
+// Locks the per-dialect quoting + escaping so the consolidation
 // (completion / ddl / rawQuery / duckdb) can route through this one helper
 // without changing any call site's output.
 import { describe, expect, it } from "vitest";
@@ -11,7 +11,7 @@ import {
   sqlIdentifier,
 } from "./sqlLiteral";
 
-// Purpose: #2582 축 1 (PR #2575 NB3) — every execution seat derives its
+// Purpose: #2582 axis 1 (PR #2575 NB3) — every execution seat derives its
 // dialect through this mapper, so its dbType → dialect table is the wire the
 // splitter/classifier tests downstream depend on. `mariadb` must fold into
 // the MySQL scanning rules (`\'` escapes, `#` comments) or a MariaDB

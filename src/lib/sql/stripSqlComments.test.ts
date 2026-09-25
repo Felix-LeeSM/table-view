@@ -4,7 +4,7 @@ import { stripSqlComments } from "./stripSqlComments";
 // Purpose: stripSqlComments feeds prepareRdbStatements' "is this fragment
 // comment-only?" check (#1118) that #1223 depends on; these lock its
 // regex-based behaviour incl. its known string-literal quirk
-// (2026-07-03, user directive: bulk test 보충).
+// (2026-07-03, user directive: add tests in bulk).
 describe("stripSqlComments", () => {
   it("removes line and block comments before empty-statement checks", () => {
     expect(stripSqlComments("-- only comment\n/* block */")).toBe("\n");
