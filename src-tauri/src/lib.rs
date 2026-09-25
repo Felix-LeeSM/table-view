@@ -12,11 +12,12 @@ pub mod launcher;
 pub mod state;
 pub mod storage;
 
-// #1769 — `db` / `error` / `models` 본체는 `table-view-core` path crate 에 산다.
-// 여기서 crate root 로 되꽂아 두면 `crate::db::…` / `table_view_lib::models::…`
-// 를 쓰는 command·state·통합 테스트가 그대로 컴파일된다. `storage` 만 위의 shim
-// 모듈이 따로 받는다 — boot 글루 두 파일이 `crate::commands::` 를 역참조해서
-// core 로 못 내려갔다.
+// #1769 — the bodies of `db` / `error` / `models` live in the `table-view-core`
+// path crate. Re-exporting them at the crate root here keeps every command,
+// state module and integration test that uses `crate::db::…` /
+// `table_view_lib::models::…` compiling unchanged. Only `storage` gets its own
+// shim module above — two boot glue files reference `crate::commands::` back,
+// so it could not move down into core.
 pub use table_view_core::{db, error, models};
 
 use commands::connection::AppState;
@@ -30,7 +31,7 @@ use tauri::Manager;
 use tauri::Emitter;
 use tracing::info;
 
-/// Sprint 175 — process-wide `Instant` captured at the very top of `run()`.
+/// Process-wide `Instant` captured at the very top of `run()`.
 /// Every later "Tauri startup overhead" measurement (notably
 /// `rust:first-ipc` in `commands::connection::get_session_id`) reads this
 /// to compute its delta. Using `OnceLock` keeps the API allocation-free
@@ -39,7 +40,7 @@ use tracing::info;
 /// defensive) keep the original `Instant`.
 pub static BOOT_T0: OnceLock<Instant> = OnceLock::new();
 
-/// Sprint 175 Sprint 2 — phase-breakdown helper. Emits a single
+/// Phase-breakdown helper. Emits a single
 /// structured `info!` line on `target: "boot"` so the measurement
 /// protocol can grep deterministically for per-segment deltas
 /// without depending on log line ordering. The protocol lives at
@@ -53,8 +54,8 @@ pub static BOOT_T0: OnceLock<Instant> = OnceLock::new();
 /// The instrumentation is permanent (not feature-gated). It is cheap by
 /// construction — one `Instant::now()`, one `Duration::as_secs_f64()`,
 /// and one `info!` formatter call per phase, well under 100µs of total
-/// added overhead per cold boot. Sprint 1 set this same precedent for
-/// `rust:entry` and `rust:first-ipc`.
+/// added overhead per cold boot. `rust:entry` and `rust:first-ipc` follow
+/// the same precedent.
 fn record_phase(cursor: &mut Instant, phase: &'static str) {
     let now = Instant::now();
     let delta_ms = now.duration_since(*cursor).as_secs_f64() * 1000.0;
@@ -64,7 +65,7 @@ fn record_phase(cursor: &mut Instant, phase: &'static str) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Sprint 175 — `rust:entry` is the first observable timestamp on the
+    // `rust:entry` is the first observable timestamp on the
     // Rust side. Capture it BEFORE the subscriber init so the "Tauri
     // startup overhead" delta honestly includes subscriber bootstrap;
     // we won't print until the subscriber is alive a few microseconds
@@ -143,14 +144,13 @@ pub fn run() {
     // for the literal token regardless of binary name.
     info!(target: "boot", "rust:entry t={:?}", BOOT_T0.get());
 
-    // Sprint 175 Sprint 2 — phase breakdown. The `rust:entry → rust:first-ipc`
-    // segment was 414ms median in the Sprint 1 debug baseline (~96% of the
-    // user-perceived blank window). We slice it into named phases so the
-    // operator's release-mode rebaseline can attribute self-time to each
-    // segment WITHOUT requiring `cargo flamegraph` (which needs sudo on
-    // macOS) or Instruments.app. The spec's AC-175-02-02 explicitly accepts
-    // a `tracing`-instrumented run with named-segment deltas as the
-    // lightest-weight option.
+    // Phase breakdown. The `rust:entry → rust:first-ipc` segment measured
+    // 414ms median in the debug baseline (~96% of the user-perceived blank
+    // window). We slice it into named phases so the operator's release-mode
+    // rebaseline can attribute self-time to each segment WITHOUT requiring
+    // `cargo flamegraph` (which needs sudo on macOS) or Instruments.app. The
+    // spec's AC-175-02-02 explicitly accepts a `tracing`-instrumented run
+    // with named-segment deltas as the lightest-weight option.
     //
     // `cursor` is the moving "previous phase end" timestamp. Each
     // `record_phase` call emits one `info!` line tagged with the phase
@@ -180,8 +180,7 @@ pub fn run() {
     //      position is irrelevant.
     // Reordering for the sake of refactoring is therefore safe so long as
     // (1) and (2) hold. The current order matches the phase-instrumentation
-    // narrative (Sprint 175) and should only change when that narrative
-    // changes.
+    // narrative and should only change when that narrative changes.
     let builder = tauri::Builder::default();
     record_phase(&mut cursor, "builder-default");
 
@@ -202,7 +201,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_process::init());
     record_phase(&mut cursor, "plugin-process-init");
 
-    // Sprint 362 (Phase 3, Q3) — single-instance plugin. The plugin's
+    // Q3 — single-instance plugin. The plugin's
     // `setup` (see tauri-plugin-single-instance 2.4.2) runs on every
     // launch: if a sibling process already owns the Unix socket / named
     // pipe, the 2nd process exits immediately and the live process's
@@ -229,9 +228,9 @@ pub fn run() {
     record_phase(&mut cursor, "plugin-single-instance-init");
 
     let builder = builder.manage(AppState::new());
-    // Wave 9.5 회귀 7 (2026-05-17) — sprint-365 의 cross-window 이벤트 dispatcher
-    // 가 commands 에서 inject 받을 수 있도록 `EventVersionRegistry` 도 process
-    // singleton 으로 manage. 호출 site (`persist_setting` 등) 가 `State` 로 받음.
+    // 2026-05-17 — `EventVersionRegistry` is managed as a process singleton
+    // too, so the cross-window event dispatcher can be injected from the
+    // commands. Call sites such as `persist_setting` receive it as `State`.
     let builder = builder.manage(events::EventVersionRegistry::default());
     // Issue #1443 — chunked grid-export sessions (begin/chunk/finish/abort).
     let builder = builder.manage(commands::export::ExportSessionRegistry::default());
@@ -240,13 +239,13 @@ pub fn run() {
     let builder = commands::registry::register_all(builder);
     record_phase(&mut cursor, "invoke-handler-register");
 
-    // Safety net + sprint-363 launcher-close intercept.
+    // Safety net + launcher-close intercept.
     //
     // 1. Workspace destroyed: if the OS closes a workspace window before
     //    the JS close-requested handler could prevent it, ensure the
     //    launcher is visible so the user isn't left without any window.
     //
-    // 2. Sprint 363 (Q13, strategy line 773) — Launcher CloseRequested:
+    // 2. Q13 (strategy line 773) — Launcher CloseRequested:
     //    when the user clicks the launcher's close button (X), intercept
     //    the OS-level close, `prevent_close()` the event, and hide the
     //    launcher via `handle_launcher_close_request`. This keeps the
@@ -262,10 +261,11 @@ pub fn run() {
             tauri::WindowEvent::Destroyed
                 if window.label().starts_with("workspace-") || window.label() == "workspace" =>
             {
-                // Wave 9.5 회귀 1 (2026-05-16) — sprint-361 의 per-conn label
-                // `workspace-{conn_id}` 도 매칭. 사용자 desired UX:
-                // "모든 connection 창이 다 꺼지면 connections 창에 포커스가 몰리고".
-                // 다른 workspace 가 살아있으면 launcher 는 hide 그대로 유지.
+                // 2026-05-16 — the per-conn label `workspace-{conn_id}`
+                // matches here too. The UX the user asked for: "once every
+                // connection window is closed, focus gathers on the
+                // connections window". While another workspace is still
+                // alive the launcher stays hidden.
                 launcher::handle_workspace_destroyed_safety_net(
                     window.app_handle(),
                     window.label(),
@@ -312,12 +312,11 @@ pub fn run() {
     });
     record_phase(&mut cursor, "window-event-register");
 
-    // Sprint 175 Sprint 2 — iteration 1.5 sub-instrumentation. The
-    // iteration-1 phase breakdown showed Builder-internal phases sum to
-    // ~15ms / ~1% of `rust:entry → rust:first-ipc` (1567ms median in
-    // release-mode operator data). The remaining ~1552ms residual is in
+    // Sub-instrumentation. The earlier phase breakdown showed Builder-internal
+    // phases sum to ~15ms / ~1% of `rust:entry → rust:first-ipc` (1567ms median
+    // in release-mode operator data). The remaining ~1552ms residual is in
     // the `.run()` interior — window creation, WKWebView spawn, bundle
-    // delivery, JS parse, first IPC. Sprint 2 spec AC-175-02-02 forbids a
+    // delivery, JS parse, first IPC. Spec AC-175-02-02 forbids a
     // shrinkage claim without profile evidence, so we add two more hooks
     // to slice that residual:
     //
@@ -332,12 +331,12 @@ pub fn run() {
     //   `launcher` and (eagerly-created) `workspace` windows. If the
     //   `workspace` window contributes meaningfully even though it is
     //   `visible: false`, lazy-creating it from `workspace_show` becomes
-    //   the iteration-2 shrinkage target.
+    //   the next shrinkage target.
     //
     // The hooks themselves are cheap (one `Instant::elapsed` + one
-    // `info!` per fire). Both stay permanent — Sprint 1 set the precedent
-    // that boot instrumentation persists in production builds so future
-    // sprints can re-baseline against the same emission shape.
+    // `info!` per fire). Both stay permanent — boot instrumentation persists
+    // in production builds so a later re-baseline can read the same emission
+    // shape.
     // `app` is only read by the macOS-only `install_macos_menu` call below, so
     // the `not(macos)` build sees an unused param; `_app` keeps it usable where
     // it is needed while satisfying `-D unused-variables` elsewhere.
@@ -361,7 +360,7 @@ pub fn run() {
             info!(target: "boot", "rust:setup-done delta_ms={:.3}", delta_ms);
         }
 
-        // #1103 / Sprint 356 (Q22) — wire the OS-keyring master-key migration.
+        // #1103 / Q22 — wire the OS-keyring master-key migration.
         // Runs BEFORE the SQLite pool spawns below (documented ordering: the
         // key resolves as a boot-time step ahead of SQLite migration) and
         // before any IPC handler can fire, so every storage secret path reads
@@ -387,7 +386,7 @@ pub fn run() {
             ),
         }
 
-        // Sprint 370 (Phase 4 W2→W3) — boot mismatch metric. Compares the
+        // Boot mismatch metric. Compares the
         // 4 dual-write domains (connections / favorites / mru / settings)
         // between file/LS SOT and SQLite mirror. The result is logged
         // (info on match, warn on drift) and the `mismatch_metric::counter`
@@ -421,30 +420,31 @@ pub fn run() {
             }
         });
 
-        // Sprint 373 (Phase 5 F.5) — boot-time history retention vacuum.
-        // `settings.query_history_retention_days` row 를 read 해 sprint-371
-        // 의 `boot_vacuum_old_history(pool, days)` 를 호출. detached task —
-        // 사용자 first paint 블록 0. 실패 시 `tracing::warn` 만, toast 0.
-        // 본 wiring 의 e2e 검증은 `tests/history_retention_31d.rs` 가
-        // 30일 + 1초 row 시드 → vacuum 후 row 0 / 29일 row 유지로 책임.
+        // F.5 — boot-time history retention vacuum. Reads the
+        // `settings.query_history_retention_days` row and calls
+        // `boot_vacuum_old_history(pool, days)`. Detached task — it never
+        // blocks the user's first paint. On failure it only emits a
+        // `tracing::warn`, never a toast. `tests/history_retention_31d.rs`
+        // owns the e2e check of this wiring: it seeds a 30-day + 1-second row,
+        // then asserts that row is gone after the vacuum while a 29-day row
+        // survives.
         tauri::async_runtime::spawn(async {
             storage::history_retention_boot::boot_history_retention_vacuum().await;
         });
 
-        // Sprint 375 (Phase 6 cleanup) — boot-time `query_history.tab_id`
-        // invariant audit. sidebar-prefetch 만 NULL tab_id 를
-        // 허용하므로, `tab_id IS NULL AND source != 'sidebar-prefetch'`
-        // 인 row 가 1개 이상이면 frontend caller 가 tab_id 를 elide 한
-        // 회귀가 있다. Q10 zero-telemetry — `tracing::error!` 한 줄만,
-        // 사용자 visible surface 0. detached task.
+        // Boot-time `query_history.tab_id` invariant audit. Only
+        // sidebar-prefetch may carry a NULL tab_id, so one or more rows
+        // matching `tab_id IS NULL AND source != 'sidebar-prefetch'` means a
+        // frontend caller regressed and elided tab_id. Q10 zero-telemetry —
+        // one `tracing::error!` line, nothing user-visible. Detached task.
         tauri::async_runtime::spawn(async {
             storage::history_audit::boot_audit_history_tab_id_null().await;
         });
 
-        // Sprint 375 (Phase 6 cleanup) — boot-time legacy file cleanup.
-        // W4 의 `.legacy.json` 30일 보관 정책 (strategy F.1 line 862) — 30일
-        // 보다 오래된 파일을 silent delete. 사용자 visible 영향 0 (toast 없음).
-        // detached task — first paint 블록 0.
+        // Boot-time legacy file cleanup. The `.legacy.json` 30-day retention
+        // policy (strategy F.1 line 862) — files older than 30 days are
+        // deleted silently. Nothing user-visible, no toast. Detached task —
+        // it never blocks first paint.
         tauri::async_runtime::spawn(async {
             storage::legacy_cleanup::boot_legacy_file_cleanup().await;
         });
@@ -577,12 +577,13 @@ fn install_macos_menu<R: tauri::Runtime>(
         .accelerator("CmdOrCtrl+N")
         .build(app)?;
 
-    // Wave 9.5 회귀 5 (2026-05-16) — Cmd+W 를 우리 own item 으로 처리.
-    // PredefinedMenuItem::close_window 는 Tauri 의 일반 close 경로 (close-requested
-    // 라이프사이클 + JS bindings 의존) 를 거치는데, 그 path 가 sprint 회귀 4 의
-    // listener trap / silent no-op 경로와 같다. 우리 own dispatcher 는 focused
-    // window 의 라벨을 직접 확인 + workspace 는 destroy / launcher 는 hide 로
-    // 분기 — desired UX 와 정확히 매칭.
+    // 2026-05-16 — Cmd+W is served by our own item.
+    // `PredefinedMenuItem::close_window` goes through Tauri's generic close
+    // route (the close-requested lifecycle plus the JS bindings), and that
+    // route is the same listener-trap / silent no-op path as the earlier close
+    // regression. Our own dispatcher reads the focused window's label directly
+    // and branches — close the workspace, hide the launcher — which matches
+    // the desired UX exactly.
     let close_focused_window = MenuItemBuilder::with_id("close_focused_window", "Close Window")
         .accelerator("CmdOrCtrl+W")
         .build(app)?;
@@ -623,9 +624,9 @@ fn install_macos_menu<R: tauri::Runtime>(
         .item(&PredefinedMenuItem::minimize(app, None)?)
         .item(&PredefinedMenuItem::maximize(app, None)?)
         .separator()
-        // Wave 9.5 회귀 5 — File 메뉴와 같은 item 인스턴스를 재사용.
-        // PredefinedMenuItem::close_window 가 회귀 4 의 silent no-op path
-        // 와 같은 close 라이프사이클을 거치는 회피 위함.
+        // Reuse the same item instance as the File menu, to avoid
+        // `PredefinedMenuItem::close_window` going through the same close
+        // lifecycle as the silent no-op path of the earlier regression.
         .item(&close_focused_window)
         .build()?;
 
@@ -668,19 +669,21 @@ fn focused_window_label<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> Opti
         })
 }
 
-/// Wave 9.5 회귀 5 (2026-05-16) — Cmd+N dispatch.
+/// Cmd+N dispatch (2026-05-16).
 ///
 /// User journey:
-///   1. workspace 가 focused → 그 workspace 안에 raw query tab 열기
-///      ("쿼리 새로 작성" 시그널, sprint-291 mental model)
-///   2. launcher 가 focused (visible) → 기존 동작 (new connection modal emit)
-///   3. 모든 창 hidden (사용자: "창 다 닫혀있을 때") → launcher show only,
-///      modal emit 안 함. 사용자가 직접 + 버튼 눌러야 modal.
+///   1. A workspace is focused → open a raw query tab inside that workspace
+///      (the "write a new query" signal).
+///   2. The launcher is focused (visible) → the existing behaviour, which
+///      emits the new-connection modal.
+///   3. Every window is hidden (the user: "when all the windows are closed")
+///      → show the launcher only, do not emit the modal. The user has to
+///      press the + button to get the modal.
 #[cfg(target_os = "macos")]
 async fn handle_menu_new_connection<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
     let focused = focused_window_label(&handle);
 
-    // (1) workspace focused → workspace 자체에 raw query tab signal
+    // (1) A workspace is focused → send the raw query tab signal to it.
     if let Some(label) = focused.as_ref() {
         if label.starts_with("workspace-") || label == "workspace" {
             if let Some(win) = handle.get_webview_window(label) {
@@ -695,7 +698,7 @@ async fn handle_menu_new_connection<R: tauri::Runtime>(handle: tauri::AppHandle<
         }
     }
 
-    // (2) + (3) launcher 경로. launcher 의 visibility 로 분기.
+    // (2) + (3) The launcher path. Branches on the launcher's visibility.
     let launcher_visible = handle
         .get_webview_window("launcher")
         .and_then(|w| w.is_visible().ok())
@@ -707,7 +710,7 @@ async fn handle_menu_new_connection<R: tauri::Runtime>(handle: tauri::AppHandle<
     }
 
     if launcher_visible {
-        // (2) 사용자가 launcher 를 이미 보고 있는 상태 — modal 자동 emit.
+        // (2) The user is already looking at the launcher — emit the modal.
         if let Some(launcher) = handle.get_webview_window("launcher") {
             let _ = launcher.set_focus();
             if let Err(e) = launcher.emit("menu:new-connection", ()) {
@@ -715,8 +718,9 @@ async fn handle_menu_new_connection<R: tauri::Runtime>(handle: tauri::AppHandle<
             }
         }
     } else {
-        // (3) 모든 창 hidden → launcher 만 surface. modal 은 사용자 후속
-        // 행동 (+ 버튼) 으로만 열림 — 의도치 않은 modal 자동 노출 회피.
+        // (3) Every window is hidden → surface the launcher only. The modal
+        // opens only on a follow-up user action (the + button), which avoids
+        // popping a modal the user never asked for.
         tracing::info!(
             target: "menu",
             "Cmd+N with no visible window: surfacing launcher without modal emit"
@@ -727,13 +731,13 @@ async fn handle_menu_new_connection<R: tauri::Runtime>(handle: tauri::AppHandle<
     }
 }
 
-/// Wave 9.5 회귀 5 (2026-05-16) — Cmd+W dispatch.
+/// Cmd+W dispatch (2026-05-16).
 ///
 /// User journey:
-///   1. workspace focused → backend Window::destroy() (회귀 4 의 JS API
-///      silent no-op path 우회).
-///   2. launcher focused → hide (sprint-363 의 launcher-close = hide UX).
-///   3. focused 없음 → no-op (user 가 app 밖 클릭한 상태).
+///   1. A workspace is focused → `Window::close()` on the backend, which
+///      bypasses the silent no-op path of the JS API.
+///   2. The launcher is focused → hide (the launcher-close = hide UX).
+///   3. Nothing focused → no-op (the user clicked outside the app).
 #[cfg(target_os = "macos")]
 async fn handle_menu_close_focused<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
     let Some(label) = focused_window_label(&handle) else {

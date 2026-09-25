@@ -48,14 +48,15 @@ async fn test_list_schemas() {
     adapter.disconnect_pool().await.unwrap();
 }
 
-/// #1229 (사용자 리포트 2026-07-03) — `CREATE TEMP TABLE` 은 backend 슬롯별
-/// 내부 스키마 `pg_temp_<N>` / `pg_toast_temp_<N>` 를 만들고, 그 pg_namespace
-/// 항목은 세션 종료 후에도 잔존한다. `list_schemas` 가 정확 매칭 3개만
-/// 제외하던 시절엔 이 temp 스키마가 사이드바로 샜다. 여기서는 실 PG 로
-/// temp table 을 만든 뒤 `list_schemas` 결과에 temp 패턴이 없는지 + `public`
-/// 같은 정상 스키마는 그대로 노출되는지(과차단 없음)를 가드한다. 같은
-/// 소스에서 스키마를 나열하는 `list_types` 도 temp 를 흘리지 않음을 함께
-/// 확인한다.
+/// #1229 (user report 2026-07-03) — `CREATE TEMP TABLE` creates the internal
+/// per-backend-slot schemas `pg_temp_<N>` / `pg_toast_temp_<N>`, and those
+/// pg_namespace entries survive the end of the session. Back when
+/// `list_schemas` excluded only three exact matches, these temp schemas leaked
+/// into the sidebar. This creates a temp table against real PG and then guards
+/// that the `list_schemas` result carries no temp pattern and that ordinary
+/// schemas such as `public` are still surfaced (no over-blocking). It also
+/// checks that `list_types`, which lists schemas from the same source, leaks no
+/// temp schema either.
 #[tokio::test]
 async fn test_list_schemas_excludes_temp_namespaces() {
     let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
@@ -63,8 +64,8 @@ async fn test_list_schemas_excludes_temp_namespaces() {
         None => return,
     };
 
-    // 현재 세션에 temp table 을 만들면 backend 가 pg_temp_<N> 네임스페이스를
-    // materialize 한다.
+    // Creating a temp table in the current session makes the backend
+    // materialize a pg_temp_<N> namespace.
     adapter
         .execute("CREATE TEMP TABLE issue_1229_tmp (id INT, blob TEXT)")
         .await
@@ -79,15 +80,16 @@ async fn test_list_schemas_excludes_temp_namespaces() {
             .any(|n| n.starts_with("pg_temp_") || n.starts_with("pg_toast_temp_")),
         "list_schemas must not surface internal temp namespaces, got: {names:?}"
     );
-    // 과차단 금지: 정상 스키마는 그대로.
+    // No over-blocking: ordinary schemas stay.
     assert!(
         names.contains(&"public"),
         "list_schemas must still surface 'public', got: {names:?}"
     );
 
-    // 같은 카탈로그 소스인 list_types 도 temp 스키마를 흘리지 않아야 한다
-    // (temp table 의 composite row type 은 `NOT EXISTS (reltype = t.oid)` 로
-    // 이미 배제되지만, 회귀 가드로 명시).
+    // list_types reads the same catalog source, so it must not leak temp
+    // schemas either (the composite row type of a temp table is already
+    // excluded by `NOT EXISTS (reltype = t.oid)`, but state it as a regression
+    // guard).
     let types = adapter.list_types().await.expect("list_types failed");
     assert!(
         !types
@@ -120,14 +122,16 @@ async fn test_list_tables_empty() {
     adapter.disconnect_pool().await.unwrap();
 }
 
-/// PG parity (사용자 리포트 2026-07-07) — SchemaTree 에 `public` 은 뜨는데
-/// 테이블이 0개였다. 근본 원인: `list_tables` 가 `information_schema.tables`
-/// 를 소스로 써서 *접속 role 이 권한을 가진* 테이블만 노출했다. 타 role 이
-/// 소유하고 접속 role 에 grant 가 없는 테이블은 psql `\dt` / TablePlus 에선
-/// 보여도 앱 목록에선 사라졌다. 여기서는 admin 이 테이블을 만들고, 그 테이블에
-/// **아무 권한도 없는** login role 을 만든 뒤 그 role 로 재접속해도 테이블이
-/// 목록에 뜨는지 가드한다 — catalog(`pg_catalog.pg_class`) 기반 쿼리는 권한
-/// 무관. 구 information_schema 쿼리에선 이 목록이 비어 RED, 신 쿼리에선 GREEN.
+/// PG parity (user report 2026-07-07) — `public` appeared in the SchemaTree
+/// but held 0 tables. Root cause: `list_tables` used
+/// `information_schema.tables` as its source, so it surfaced only the tables
+/// the connecting role held a privilege on. A table owned by another role with
+/// no grant to the connecting role showed up in psql `\dt` / TablePlus but
+/// vanished from the app's list. Here admin creates a table, then a login role
+/// with **no privilege at all** on it, and this guards that the table still
+/// appears in the list after reconnecting as that role — a catalog-based query
+/// (`pg_catalog.pg_class`) is privilege-independent. The old
+/// information_schema query leaves this list empty (RED); the new one is GREEN.
 #[tokio::test]
 async fn test_list_tables_visible_without_table_privilege() {
     let admin = match common::setup_adapter(DatabaseType::Postgresql).await {
@@ -142,7 +146,7 @@ async fn test_list_tables_visible_without_table_privilege() {
     let role = unique_table_name("restricted"); // valid identifier (test_<...>_<nanos>)
     let role_pw = "restricted_pw_1";
 
-    // admin 이 테이블 + 그 테이블에 아무 grant 없는 login role 생성.
+    // admin creates the table plus a login role with no grant on it.
     admin
         .execute(&format!("CREATE TABLE \"{table}\" (id INT)"))
         .await
@@ -153,14 +157,15 @@ async fn test_list_tables_visible_without_table_privilege() {
         ))
         .await
         .expect("create restricted role");
-    // 스키마 USAGE 만 부여 — 실제 "타 소유 테이블" 상황(스키마엔 접근되나
-    // 테이블 권한은 없음)을 재현. 테이블 자체엔 어떤 grant 도 주지 않는다.
+    // Grant schema USAGE only — this reproduces the real "table owned by
+    // another role" situation (the schema is reachable but the table privilege
+    // is missing). The table itself gets no grant at all.
     admin
         .execute(&format!("GRANT USAGE ON SCHEMA public TO \"{role}\""))
         .await
         .expect("grant schema usage");
 
-    // 제한 role 로 재접속.
+    // Reconnect as the restricted role.
     let mut restricted_cfg = base.clone();
     restricted_cfg.user = role.clone();
     restricted_cfg.password = role_pw.to_string();
@@ -177,7 +182,7 @@ async fn test_list_tables_visible_without_table_privilege() {
     let names: Vec<&str> = tables.iter().map(|t| t.name.as_str()).collect();
     let saw_table = names.contains(&table.as_str());
 
-    // cleanup (assert 전에 정리해 role 이 남아 후속 테스트를 방해하지 않도록).
+    // Cleanup before the asserts so a leftover role cannot disturb later tests.
     restricted.disconnect_pool().await.ok();
     admin
         .execute(&format!("DROP TABLE IF EXISTS \"{table}\""))
@@ -195,15 +200,18 @@ async fn test_list_tables_visible_without_table_privilege() {
     );
 }
 
-/// #1709 (sibling of #1411) — SCHEMAS 패널이 빈 채로 떴다(`public` 존재에도).
-/// 근본 원인: `list_schemas` 가 `information_schema.schemata`(권한 종속 뷰)를
-/// 소스로 써서 스키마 노출이 그 뷰의 privilege 시맨틱에 묶였다. psql `\dn` /
-/// 이 파일의 다른 list_* 처럼 `pg_catalog.pg_namespace` +
-/// `has_schema_privilege(nspname, 'USAGE')` 로 옮겨 소유 무관·USAGE 기준으로
-/// 나열한다. 여기서는 admin 이 스키마를 만들고(admin 소유), 그 스키마에 **USAGE
-/// 만** 가진 비소유 login role 로 재접속해도 그 스키마가 목록에 뜨는지(비소유
-/// 노출) + `public` 도 함께 뜨는지(과차단 없음) + role 에 아무 권한도 없는
-/// 스키마는 안 뜨는지(has_schema_privilege 필터 유지 → 과노출 없음)를 가드한다.
+/// #1709 (sibling of #1411) — the SCHEMAS panel came up empty even though
+/// `public` existed. Root cause: `list_schemas` used
+/// `information_schema.schemata` (a privilege-dependent view) as its source, so
+/// schema visibility was bound to that view's privilege semantics. Like psql
+/// `\dn` and the other list_* in this file, it moved to
+/// `pg_catalog.pg_namespace` + `has_schema_privilege(nspname, 'USAGE')` and
+/// lists on a USAGE basis regardless of ownership. Here admin creates the
+/// schemas (admin-owned) and this guards that, after reconnecting as a
+/// non-owner login role holding **only USAGE** on one of them, that schema
+/// appears in the list (non-owner visibility), `public` appears alongside it
+/// (no over-blocking), and a schema the role holds no privilege on does not
+/// appear (the has_schema_privilege filter stays → no over-exposure).
 #[tokio::test]
 async fn test_list_schemas_visible_without_ownership() {
     let admin = match common::setup_adapter(DatabaseType::Postgresql).await {
@@ -214,12 +222,12 @@ async fn test_list_schemas_visible_without_ownership() {
         .await
         .expect("endpoint present when setup_adapter succeeded");
 
-    let usable = unique_schema_name("usable"); // 비소유 role 에 USAGE grant
-    let hidden = unique_schema_name("nousage"); // role 에 아무 grant 없음
+    let usable = unique_schema_name("usable"); // USAGE granted to non-owner role
+    let hidden = unique_schema_name("nousage"); // no grant to the role at all
     let role = unique_table_name("schemaless"); // valid identifier (test_<...>_<nanos>)
     let role_pw = "schemaless_pw_1";
 
-    // admin 이 두 스키마(admin 소유) + 아무 grant 없는 login role 생성.
+    // admin creates both schemas (admin-owned) plus a login role with no grant.
     admin
         .execute(&format!("CREATE SCHEMA \"{usable}\""))
         .await
@@ -234,13 +242,14 @@ async fn test_list_schemas_visible_without_ownership() {
         ))
         .await
         .expect("create non-owner role");
-    // 비소유 role 에 usable 스키마 USAGE 만 부여 — 소유권은 admin 유지.
+    // Grant the non-owner role USAGE on the usable schema only — ownership
+    // stays with admin.
     admin
         .execute(&format!("GRANT USAGE ON SCHEMA \"{usable}\" TO \"{role}\""))
         .await
         .expect("grant schema usage");
 
-    // 비소유 role 로 재접속.
+    // Reconnect as the non-owner role.
     let mut role_cfg = base.clone();
     role_cfg.user = role.clone();
     role_cfg.password = role_pw.to_string();
@@ -259,7 +268,8 @@ async fn test_list_schemas_visible_without_ownership() {
     let saw_public = names.contains(&"public");
     let saw_hidden = names.contains(&hidden.as_str());
 
-    // cleanup (assert 전에 정리해 role/스키마가 남아 후속 테스트를 방해하지 않도록).
+    // Cleanup before the asserts so a leftover role or schema cannot disturb
+    // later tests.
     restricted.disconnect_pool().await.ok();
     admin
         .execute(&format!("DROP SCHEMA IF EXISTS \"{usable}\" CASCADE"))
@@ -447,8 +457,8 @@ async fn test_get_table_columns() {
     assert_eq!(columns.len(), 3, "Expected 3 columns, got {columns:?}");
 
     // Check id column (PK).
-    // Sprint 259 — restore_serial 가 nextval(...) default 검출 시
-    // underlying `integer` → `serial` 로 복원.
+    // When restore_serial detects a nextval(...) default it restores the
+    // underlying `integer` to `serial`.
     let id_col = columns
         .iter()
         .find(|c| c.name == "id")
@@ -457,16 +467,16 @@ async fn test_get_table_columns() {
     assert!(!id_col.nullable);
     assert!(id_col.is_primary_key);
     assert!(!id_col.is_foreign_key);
-    // #1433 — serial 은 attidentity='' (identity 아님). 생략은 nextval
-    // default 경로로 커버되므로 is_identity 는 false 여야 한다.
+    // #1433 — serial has attidentity='' (it is not an identity). Omission is
+    // covered by the nextval default path, so is_identity must be false.
     assert!(
         !id_col.is_identity,
         "serial must not report is_identity, got {id_col:?}"
     );
 
     // Check name column (NOT NULL, no default).
-    // Sprint 258 — format_type + normalize_pg_type 으로 length 포함된
-    // DDL-level 표기 (`varchar(100)`).
+    // format_type + normalize_pg_type give the DDL-level notation with the
+    // length included (`varchar(100)`).
     let name_col = columns
         .iter()
         .find(|c| c.name == "name")
@@ -500,10 +510,10 @@ async fn test_get_table_columns() {
     adapter.disconnect_pool().await.unwrap();
 }
 
-/// #1433 — `get_table_columns` 의 `is_identity` wiring 검증 (실 PG,
-/// `pg_attribute.attidentity`). GENERATED ALWAYS('a') / BY DEFAULT('d') 는
-/// true, serial(attidentity='') / plain 컬럼은 false — datagrid 의
-/// INSERT 컬럼 생략이 이 flag 하나에 의존한다.
+/// #1433 — verifies the `is_identity` wiring of `get_table_columns` (real PG,
+/// `pg_attribute.attidentity`). GENERATED ALWAYS('a') / BY DEFAULT('d') are
+/// true; serial (attidentity='') and plain columns are false — the datagrid's
+/// INSERT column omission rests on this one flag.
 #[tokio::test]
 async fn test_get_table_columns_identity_flags() {
     let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
@@ -1292,12 +1302,12 @@ async fn test_get_view_columns_for_unknown_view_returns_empty() {
     adapter.disconnect_pool().await.unwrap();
 }
 
-// ── Sprint 237 P5+ refactor pass — coverage 확장 시나리오 (2026-05-08) ───
-// 작성 이유: db/postgres/schema.rs 가 29.73% 커버. 미커버 함수들
-// (list_views / list_functions / get_view_definition / get_function_source /
-// list_types / list_databases / list_schema_columns / get_view_columns 의
-// 데이터 path) 를 fixture-기반 통합 시나리오로 hit. 각 시나리오는
-// unique 이름으로 격리.
+// ── Coverage-expansion scenarios (2026-05-08) ────────────────────────────
+// Reason: db/postgres/schema.rs was 29.73% covered. These fixture-based
+// integration scenarios hit the uncovered functions (the data path of
+// list_views / list_functions / get_view_definition / get_function_source /
+// list_types / list_databases / list_schema_columns / get_view_columns). Each
+// scenario is isolated by a unique name.
 
 #[tokio::test]
 async fn test_list_views_returns_created_view() {
@@ -1365,8 +1375,9 @@ async fn test_get_view_definition_returns_select_text() {
         .get_view_definition("public", &view_name)
         .await
         .expect("get_view_definition");
-    // PG `pg_get_viewdef` 는 본문을 SELECT … FROM … 형태로 정규화. 정확한
-    // whitespace 는 PG 버전마다 달라 substring 검사로 fail-safe.
+    // PG `pg_get_viewdef` normalizes the body into `SELECT … FROM …` form. The
+    // exact whitespace differs per PG version, so a substring check is the
+    // fail-safe.
     assert!(
         def.to_lowercase().contains("select"),
         "view definition missing SELECT: {def}"
@@ -1454,7 +1465,8 @@ async fn test_get_function_source_returns_body() {
 
 #[tokio::test]
 async fn test_list_types_includes_pg_builtin_int4() {
-    // pg_type 카탈로그 dump. PG 기본 타입 (`int4`, `text`) 이 즉시 반환되어야 한다.
+    // A pg_type catalog dump. The PG builtin types (`int4`, `text`) must come
+    // back immediately.
     let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
         Some(a) => a,
         None => return,
@@ -1480,8 +1492,8 @@ async fn test_list_databases_includes_admin_dbs() {
         None => return,
     };
     let dbs = adapter.list_databases().await.expect("list_databases");
-    // testcontainers의 PG는 default DB 'postgres'. external override 시
-    // 'table_view_test'. 둘 중 하나는 항상 포함.
+    // The testcontainers PG has the default DB 'postgres'; an external override
+    // uses 'table_view_test'. One of the two is always present.
     let names: Vec<_> = dbs.iter().map(|d| &d.name).collect();
     assert!(
         names
@@ -1540,11 +1552,12 @@ async fn test_list_schema_columns_aggregates_multiple_tables() {
     adapter.disconnect_pool().await.unwrap();
 }
 
-// ── get_table_indexes / get_table_constraints / FK 통합 시나리오 ──────────
-// 작성: 2026-05-08. db/postgres/schema.rs 의 indexes/constraints SQL +
-// BTreeMap 집계 분기, get_table_columns 의 FK reference (`format_fk_reference`)
-// 분기는 통합으로만 hit 된다. UI 의 schema panel 이 직접 노출하는 메타라
-// 회귀 가드 가치가 크다.
+// ── get_table_indexes / get_table_constraints / FK integration scenarios ──
+// Written: 2026-05-08. The indexes/constraints SQL and the BTreeMap
+// aggregation branch in db/postgres/schema.rs, and the FK reference branch
+// (`format_fk_reference`) of get_table_columns, are hit only through
+// integration. The UI's schema panel exposes this metadata directly, so a
+// regression guard is worth a lot here.
 
 #[tokio::test]
 async fn test_get_table_indexes_returns_pk_and_secondary_indexes() {
@@ -1696,8 +1709,9 @@ async fn test_get_table_constraints_pk_unique_check() {
         .iter()
         .find(|c| c.constraint_type == "CHECK")
         .expect("CHECK missing");
-    // CHECK 의 column list 는 information_schema.key_column_usage 에 채워지지
-    // 않으므로 빈 vec 가 가능. 변형 존재 자체만 pin.
+    // The column list of a CHECK is not filled into
+    // information_schema.key_column_usage, so an empty vec is possible. Pin
+    // only that the variant exists.
     let _ = chk;
 
     adapter.execute(&format!("DROP TABLE \"{t}\"")).await.ok();
@@ -1755,9 +1769,9 @@ async fn test_get_table_constraints_foreign_key_carries_reference() {
 
 #[tokio::test]
 async fn test_get_table_columns_populates_fk_reference_in_child() {
-    // get_table_columns 의 FK 분기는 `format_fk_reference("schema.table(col)")`
-    // 형식 string 을 ColumnInfo.fk_reference 에 채운다. 이 분기는 plain
-    // CREATE TABLE 만으로는 hit 안 되고 REFERENCES 가 있어야 활성.
+    // The FK branch of get_table_columns fills ColumnInfo.fk_reference with a
+    // `format_fk_reference("schema.table(col)")` string. A plain CREATE TABLE
+    // does not hit this branch; it activates only with a REFERENCES clause.
     let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
         Some(a) => a,
         None => return,
@@ -1801,13 +1815,13 @@ async fn test_get_table_columns_populates_fk_reference_in_child() {
     adapter.disconnect_pool().await.unwrap();
 }
 
-// ── Sprint 261 (ADR 0026) — numeric wire-format integration tests ────────
+// ── ADR 0026 — numeric wire-format integration tests ─────────────────────
 //
-// 작성 2026-05-11. `query_table_data` / `execute_query` 가 bigint / numeric
-// 컬럼 cell 을 `Value::String` 으로 wire 에 올리고, int4 같은 안전 범위
-// 컬럼은 `Value::Number` 그대로 유지한다는 invariant 를 PG live DB 로 검증.
-// ADR 0026 의 "JSON.parse 정밀도 손실 없이 frontend 에서 BigInt/Decimal 로
-// wrap 가능" 전제의 기반.
+// Written 2026-05-11. Verifies against a live PG DB the invariant that
+// `query_table_data` / `execute_query` put bigint / numeric column cells on
+// the wire as `Value::String` while keeping safe-range columns such as int4 as
+// `Value::Number`. This is the basis of the ADR 0026 premise that the frontend
+// can wrap them as BigInt/Decimal with no JSON.parse precision loss.
 
 #[tokio::test]
 async fn test_query_table_data_bigint_value_is_string_wire() {
@@ -1934,9 +1948,9 @@ async fn test_query_table_data_int4_value_remains_number_wire() {
 #[tokio::test]
 async fn test_execute_query_bigint_select_emits_string_wire() {
     // execute_query path (free-form SELECT) — `SELECT 9223372036854775807::bigint`.
-    // ADR 0026 의 두 번째 적용 site. `Pg::type_info().to_string()` 이
-    // bigint 컬럼에 대해 "INT8" 을 반환하므로 헬퍼의 `lower == "int8"`
-    // 분기에 매칭.
+    // The second application site of ADR 0026. `Pg::type_info().to_string()`
+    // returns "INT8" for a bigint column, so it matches the helper's
+    // `lower == "int8"` branch.
     let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
         Some(a) => a,
         None => return,
@@ -1962,16 +1976,18 @@ async fn test_execute_query_bigint_select_emits_string_wire() {
 }
 
 // =============================================================================
-// Sprint 296 follow-up (2026-05-14) — PG RdbAdapter 트레잇 dispatch 통합
+// PG RdbAdapter trait-dispatch integration (2026-05-14)
 // =============================================================================
-// 작성 이유: `db/postgres.rs` (390 line) 의 트레잇 dispatch wrapper 가
-// 4.62% 만 hit. inherent method 만 직접 호출하던 기존 시나리오는 트레잇 surface
-// 를 건너뛴다. Sprint 296 의 MySQL 측 (`db/mysql.rs`) 합류를 PG 로 mirror —
-// `Arc<dyn DbAdapter>` / `Arc<dyn RdbAdapter>` 로 호출해 wrapper 본체를 hit.
-// PG-only `create_trigger` / `drop_trigger` / `list_types` 도 같은 path 로.
+// Reason: before this scenario the trait-dispatch wrappers in `db/postgres.rs`
+// were barely hit. Scenarios that called only the inherent methods directly
+// skip the trait surface. This mirrors onto PG what the MySQL side
+// (`db/mysql.rs`) did — call through `Arc<dyn DbAdapter>` / `Arc<dyn
+// RdbAdapter>` so the wrapper bodies are hit. The PG-only `create_trigger` /
+// `drop_trigger` / `list_types` go through the same path.
 
-// Trait dispatch test — 단일 통합 시나리오로 38개 wrapper 메소드를 한 번씩 hit.
-// 시나리오 분할 비용보다 한 commit 안에서 surface 전체 회귀 가드 가치가 큼.
+// Trait dispatch test — hits each wrapper method once in a single integration
+// scenario. Guarding the whole surface in one commit is worth more than the
+// cost of splitting it into separate scenarios.
 #[tokio::test]
 async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
     let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
@@ -1980,7 +1996,8 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
     };
     let raw = Arc::new(adapter);
 
-    // (1) DbAdapter — kind / ping. connect/disconnect 은 setup_adapter 이미 호출.
+    // (1) DbAdapter — kind / ping. setup_adapter already called
+    // connect/disconnect.
     let db: Arc<dyn DbAdapter> = raw.clone();
     assert!(
         matches!(db.kind(), DatabaseType::Postgresql),
@@ -1997,15 +2014,15 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
     let dbs = rdb.list_databases().await.expect("trait list_databases");
     assert!(!dbs.is_empty());
 
-    // PG `current_database` 는 trait default — execute_sql 경로로 SELECT
-    // current_database(). 명시적으로 호출해 default 분기 hit.
+    // PG `current_database` is the trait default — SELECT current_database()
+    // through the execute_sql path. Call it explicitly to hit that branch.
     let cur = rdb
         .current_database()
         .await
         .expect("trait current_database");
     assert!(cur.is_some());
 
-    // (3) DDL / schema introspection — fresh table 으로 모든 path.
+    // (3) DDL / schema introspection — every path against a fresh table.
     let table_name = unique_table_name("trait_disp");
     let view_name = format!("{table_name}_v");
     let parent_name = unique_table_name("trait_parent");
@@ -2139,9 +2156,7 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
         .expect("trait get_table_indexes");
     assert!(indexes.iter().any(|i| i.name == idx_name));
 
-    // drop_index. NOTE: PG drop_index 에 `IF EXISTS` 위치 버그 (issue 별도) —
-    // `DROP INDEX "public".IF EXISTS "name"` 으로 emit 되어 syntax error. 본
-    // 시나리오는 `if_exists: false` 로 우회.
+    // drop_index with `if_exists: false`.
     let drop_idx_req = DropIndexRequest {
         connection_id: "c".into(),
         schema: "public".into(),
@@ -2338,16 +2353,17 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
         .expect("trait create_trigger preview");
     assert!(trg_preview.sql.contains("CREATE TRIGGER"));
 
-    // Real trigger 는 BEFORE INSERT trigger function 이 reuse 가능한 형태로 작성
-    // 돼야 함. 본 시나리오의 fn 은 SQL function 으로 trigger function 자격이
-    // 없으므로 preview_only 로 dispatcher 만 hit. 실제 execute 는 sprint 별
-    // PG trigger 시나리오에서 cover.
+    // A real trigger needs its BEFORE INSERT trigger function written in a
+    // reusable form. The fn in this scenario is a SQL function and does not
+    // qualify as a trigger function, so preview_only hits the dispatcher only.
+    // Actual execution is covered by the PG trigger scenarios.
 
     let triggers = rdb
         .list_triggers("public", &table_name)
         .await
         .expect("trait list_triggers");
-    // 본 fixture 는 trigger 를 실제로 만들지 않아 빈 vec — 동작 path 자체만 pin.
+    // This fixture never really creates a trigger, so the vec is empty — pin
+    // only that the path works.
     let _ = triggers;
 
     let drop_trg_req = DropTriggerRequest {
@@ -2365,14 +2381,15 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
         .expect("trait drop_trigger preview");
     assert!(drop_trg_preview.sql.contains("DROP TRIGGER"));
 
-    // get_trigger_source — unknown trigger 도 path 만 hit. PG 는 not-found 시
-    // Err(Connection) 을 반환할 수 있어 .ok() 로 두고 err 도 허용.
+    // get_trigger_source — an unknown trigger still hits the path. PG may
+    // return Err(Connection) on not-found, so leave it at .ok() and allow an
+    // error too.
     let _ = rdb
         .get_trigger_source("public", &table_name, &trigger_name)
         .await
         .ok();
 
-    // list_types (PG-only override — MySQL 은 default Unsupported).
+    // list_types (PG-only override — MySQL keeps the default Unsupported).
     let types = rdb.list_types().await.expect("trait list_types");
     assert!(types.iter().any(|t| t.name == "int4"));
 
@@ -2463,13 +2480,14 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
         .await
         .expect("trait rename_table");
 
-    // namespace_label / switch_database — both default to schema/Unsupported
-    // 가 아니라 PG impl 이 schema namespace + sub-pool switch 를 제공.
+    // namespace_label / switch_database — rather than the schema/Unsupported
+    // defaults, the PG impl provides a schema namespace + sub-pool switch.
     let label = raw.namespace_label();
     assert!(matches!(label, table_view_lib::db::NamespaceLabel::Schema));
 
-    // switch_database — PG sub-pool 가 default DB ("postgres" / "table_view_test") 로
-    // 전환. 본 fixture 의 default DB 와 동일한 이름으로 호출해 dispatch wrapper hit.
+    // switch_database — the PG sub-pool switches to the default DB
+    // ("postgres" / "table_view_test"). Call it with the same name as this
+    // fixture's default DB to hit the dispatch wrapper.
     if let Some(target_db) = cur.as_deref() {
         rdb.switch_database(target_db).await.ok();
     }
@@ -2495,9 +2513,10 @@ async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
     db.disconnect().await.expect("trait disconnect");
 }
 
-// 별도 단위 — DbAdapter trait dispatch 의 connect path 회귀 가드. setup_adapter
-// 이 이미 connect 한 후 라 위 통합 시나리오는 connect 트레잇 wrapper 를 hit
-// 안 함. 본 시나리오는 raw adapter 로 시작해 trait connect 만 호출.
+// A separate unit — regression guard for the connect path of DbAdapter trait
+// dispatch. setup_adapter has already connected, so the integration scenario
+// above never hits the connect trait wrapper. This scenario starts from a raw
+// adapter and calls only the trait connect.
 #[tokio::test]
 async fn test_pg_trait_connect_dispatch_via_box_dyn_db_adapter() {
     let config = match common::pg_test_config().await {

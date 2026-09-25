@@ -1,6 +1,6 @@
 //! MySQL/MariaDB adapter entrypoint.
 //!
-//! Sub-module layout (PG `db/postgres/*` 와 1:1):
+//! Sub-module layout (1:1 with PG `db/postgres/*`):
 //! - `connection` — `MysqlAdapter` struct + lifecycle + multi-DB sub-pool LRU.
 //! - `queries` — `execute_query`, `query_table_data`, `stream_table_rows`,
 //!   `count_null_rows` + cell decoder + raw_where validator.
@@ -10,8 +10,8 @@
 //!   column, create table, create / drop index, add / drop constraint) +
 //!   identifier validators / quoting helpers.
 //!
-//! `create_trigger` / `drop_trigger` 는 PG-shaped request 와 MySQL trigger
-//! body shape 이 달라 `Unsupported` reject 한다.
+//! `create_trigger` / `drop_trigger` reject with `Unsupported` because the
+//! PG-shaped request does not match the MySQL trigger body shape.
 
 mod checks;
 pub(crate) mod connection;
@@ -69,11 +69,11 @@ impl RdbAdapter for MysqlAdapter {
         NamespaceLabel::Database
     }
 
-    /// Sprint 288 — MySQL 은 schema 개념이 없고 database = schema. PG 처럼
-    /// 한 connection 안에서 여러 schema 트리를 보여주는 구조가 아니라,
-    /// 현재 active DB 한 개만 namespace 로 노출해 sidebar 가 (DB → tables)
-    /// 의 단일 hierarchy 로 그려지게 한다. 다른 DB 로의 전환은 별도
-    /// `list_databases` + `switch_database` 경로 (sub-pool LRU) 가 담당.
+    /// MySQL has no schema concept — database = schema. Unlike PG it does not
+    /// show several schema trees inside one connection; only the currently
+    /// active DB is exposed as a namespace, so the sidebar draws a single
+    /// (DB → tables) hierarchy. Switching to another DB is handled by the
+    /// separate `list_databases` + `switch_database` path (sub-pool LRU).
     fn list_namespaces<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<NamespaceInfo>, AppError>> + Send + 'a>> {
@@ -96,7 +96,7 @@ impl RdbAdapter for MysqlAdapter {
         })
     }
 
-    /// Sprint 287 (Slice G) — delegate to `switch_active_db` (sub-pool LRU).
+    /// Delegates to `switch_active_db` (sub-pool LRU).
     fn switch_database<'a>(
         &'a self,
         db_name: &'a str,
@@ -104,7 +104,7 @@ impl RdbAdapter for MysqlAdapter {
         Box::pin(async move { self.switch_active_db(db_name).await })
     }
 
-    /// Sprint 287 — adapter 의 in-memory current_db 를 surface. PG 와 동일.
+    /// Surfaces the adapter's in-memory current_db. Same as PG.
     fn current_database<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Option<String>, AppError>> + Send + 'a>> {
@@ -246,7 +246,7 @@ impl RdbAdapter for MysqlAdapter {
         Box::pin(async move { self.count_null_rows(namespace, table, column).await })
     }
 
-    // ── Slice D (Sprint 284) — DDL ───────────────────────────────────
+    // ── DDL ──────────────────────────────────────────────────────────
     fn drop_table<'a>(
         &'a self,
         req: &'a DropTableRequest,
@@ -289,7 +289,7 @@ impl RdbAdapter for MysqlAdapter {
         Box::pin(async move { self.create_table(req).await })
     }
 
-    // ── Slice E (Sprint 285) — indexes / constraints ─────────────────
+    // ── indexes / constraints ────────────────────────────────────────
     fn create_index<'a>(
         &'a self,
         req: &'a CreateIndexRequest,
@@ -354,7 +354,7 @@ impl RdbAdapter for MysqlAdapter {
         })
     }
 
-    // ── Slice F (Sprint 286) — views / functions / triggers ──────────
+    // ── views / functions / triggers ─────────────────────────────────
     fn list_views<'a>(
         &'a self,
         namespace: &'a str,
@@ -427,9 +427,10 @@ impl RdbAdapter for MysqlAdapter {
         })
     }
 
-    /// MySQL trigger 는 body 가 inline compound statement — PG
-    /// `CreateTriggerRequest.function_name` 필드 의미가 없음. 본 어댑터에선
-    /// raw SQL 사용을 권하고 dialog 차단 (frontend paradigm-aware 분기).
+    /// A MySQL trigger's body is an inline compound statement, so PG's
+    /// `CreateTriggerRequest.function_name` field carries no meaning here.
+    /// This adapter points users at raw SQL and blocks the dialog (the
+    /// frontend branches on paradigm).
     fn create_trigger<'a>(
         &'a self,
         _req: &'a CreateTriggerRequest,
@@ -452,7 +453,7 @@ impl RdbAdapter for MysqlAdapter {
         })
     }
 
-    // ── Refs #1067 — DB lifecycle + EXPLAIN parity (PG 와 동일 delegate) ──
+    // ── Refs #1067 — DB lifecycle + EXPLAIN parity (same delegate as PG) ──
     fn create_database<'a>(
         &'a self,
         name: &'a str,
@@ -521,10 +522,10 @@ impl RdbAdapter for MysqlAdapter {
 
 #[cfg(test)]
 mod tests {
-    //! 작성 이유 (2026-05-13, Sprint 281 → 287 누적): trait dispatcher 본
-    //! 파일은 대부분 inherent method 로 위임이므로 실 DB 의존 — 여기서는
-    //! paradigm tag (`kind`, `namespace_label`) 와 trigger create/drop 의
-    //! Unsupported reject copy 만 회귀 가드.
+    //! Reason: this trait-dispatcher file mostly delegates to inherent
+    //! methods, so it depends on a live DB — the regression guards here cover
+    //! only the paradigm tags (`kind`, `namespace_label`) and the
+    //! `Unsupported` reject copy of `create_trigger` / `drop_trigger`.
     use super::*;
     use crate::models::{CreateTriggerRequest, DropTriggerRequest};
 
@@ -546,12 +547,12 @@ mod tests {
         assert!(matches!(a.namespace_label(), NamespaceLabel::Database));
     }
 
-    /// 작성 이유 (2026-05-13, Sprint 288): MySQL list_namespaces 가 모든
-    /// schema (= DB) 를 노출하던 회귀 — 사용자가 "한번에 3개 schema 가
-    /// 다 뜬다" 고 컴플레인 한 직후 PG 의 (DB → schemas-of-current-DB
-    /// → tables) 와 1:1 로 맞추기 위해 current DB 만 namespace 로 surface
-    /// 하도록 수정. disconnect 상태에선 빈 Vec 을 반환해 frontend
-    /// SchemaTree 가 "no namespaces" placeholder 를 표시한다.
+    /// Reason: MySQL `list_namespaces` used to expose every schema (= DB) —
+    /// a regression a user reported as "all 3 schemas show up at once". Right
+    /// after that it was changed to surface only the current DB as a
+    /// namespace, matching PG's (DB → schemas-of-current-DB → tables) 1:1.
+    /// While disconnected it returns an empty Vec so the frontend SchemaTree
+    /// renders the "no namespaces" placeholder.
     #[tokio::test]
     async fn list_namespaces_returns_empty_when_disconnected() {
         let a = MysqlAdapter::new();

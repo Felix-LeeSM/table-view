@@ -190,20 +190,20 @@ async fn execute_query_inner(
             return Err(err);
         }
         let adapter = active.as_rdb()?;
-        // Sprint 266 — opt-in db-mismatch guard. When the caller passes
-        // `expected_database` we sample the adapter's current db on the
-        // resolved handle and refuse the execute if it does not match (e.g. a
-        // concurrent `switch_active_db` from DbSwitcher moved the backend
-        // pool). PG's sub-pool model already routes by db, but MySQL/SQLite
-        // carry stateful `USE` / `ATTACH` semantics — this is a best-effort
-        // correctness floor, not a hard guarantee. Issue #1087 — probe and
-        // dispatch are two separate awaits on the shared `Arc` handle and are
-        // NO LONGER serialised against a concurrent same-connection
-        // `switch_active_db` by the global lock, so a switch landing between
-        // the probe and the dispatch is a narrow TOCTOU the guard cannot
-        // catch (recorded in docs/product/known-limitations-cross-cutting.md).
-        // Restoring true atomicity would need an adapter-level checked-execute
-        // API, out of #1087 scope.
+        // Opt-in db-mismatch guard. When the caller passes `expected_database`
+        // we sample the adapter's current db on the resolved handle and refuse
+        // the execute if it does not match (e.g. a concurrent
+        // `switch_active_db` from DbSwitcher moved the backend pool). PG's
+        // sub-pool model already routes by db, but MySQL/SQLite carry stateful
+        // `USE` / `ATTACH` semantics — this is a best-effort correctness
+        // floor, not a hard guarantee. Issue #1087 — probe and dispatch are
+        // two separate awaits on the shared `Arc` handle and are NO LONGER
+        // serialised against a concurrent same-connection `switch_active_db`
+        // by the global lock, so a switch landing between the probe and the
+        // dispatch is a narrow TOCTOU the guard cannot catch (recorded in
+        // docs/product/known-limitations-cross-cutting.md). Restoring true
+        // atomicity would need an adapter-level checked-execute API, out of
+        // #1087 scope.
         if let Some(expected) = expected_database {
             let actual = adapter.current_database().await?.unwrap_or_default();
             if actual != expected {
@@ -271,11 +271,10 @@ async fn execute_query_inner(
 ///
 /// # Returns
 /// * `QueryResult` - Query execution results including columns, rows, timing
-/// Sprint 266 — `expected_database` is an optional db-mismatch guard. When
-/// the caller provides it the backend verifies the adapter's active db
-/// matches before dispatching the query; mismatch surfaces as
-/// `AppError::DbMismatch`. Passing `None` preserves the pre-Sprint-266
-/// fast-path (no current_database probe).
+/// `expected_database` is an optional db-mismatch guard. When the caller
+/// provides it the backend verifies the adapter's active db matches before
+/// dispatching the query; mismatch surfaces as `AppError::DbMismatch`. Passing
+/// `None` preserves the fast-path (no current_database probe).
 #[tauri::command]
 pub async fn execute_query(
     window: tauri::Window,
@@ -356,7 +355,7 @@ async fn execute_query_batch_inner(
             return Err(err);
         }
         let adapter = active.as_rdb()?;
-        // Sprint 266 — opt-in db-mismatch guard. Sampled once at batch
+        // Opt-in db-mismatch guard. Sampled once at batch
         // start; mid-batch `USE other_db` style stateful statements stay
         // unguarded (per spec §AC-266-03).
         if let Some(expected) = expected_database {
@@ -393,17 +392,16 @@ async fn execute_query_batch_inner(
     result
 }
 
-/// Sprint 183 — execute a batch of SQL statements inside a single
-/// transaction (BEGIN/COMMIT/ROLLBACK). All-or-nothing: a failure on
-/// statement K causes statements 1..K-1 to be rolled back and the original
-/// failure to surface as `AppError::Database("statement K of N failed: ...")`.
+/// Execute a batch of SQL statements inside a single transaction
+/// (BEGIN/COMMIT/ROLLBACK). All-or-nothing: a failure on statement K causes
+/// statements 1..K-1 to be rolled back and the original failure to surface as
+/// `AppError::Database("statement K of N failed: ...")`.
 ///
-/// Used by the inline-edit commit pipeline (Sprint 182 SQL Preview Dialog →
-/// Commit). Pre-Sprint-183 the frontend looped over `execute_query`, which
-/// applied earlier statements before the failure surfaced; that left rows
-/// in inconsistent state on partial failure. The batch command makes the
-/// commit atomic.
-/// Sprint 266 — see `execute_query` doc on `expected_database`.
+/// Used by the inline-edit commit pipeline (SQL Preview Dialog → Commit).
+/// Before this command the frontend looped over `execute_query`, which applied
+/// earlier statements before the failure surfaced; that left rows in
+/// inconsistent state on partial failure. The batch command makes the commit
+/// atomic. See `execute_query` doc on `expected_database`.
 #[tauri::command]
 pub async fn execute_query_batch(
     window: tauri::Window,
@@ -477,13 +475,13 @@ async fn execute_query_dry_run_inner(
             return Err(err);
         }
         let adapter = active.as_rdb()?;
-        // Sprint 271b — opt-in db-mismatch guard. Byte-equivalent to the
-        // Sprint 266 reference probe inlined in `execute_query_inner`: probe
-        // sampled inside the same `active_connections.lock()` acquisition,
-        // `unwrap_or_default()` coercion on `current_database`, mismatch
-        // returns `AppError::DbMismatch` BEFORE invoking the trait, and
-        // the cancel token is released first so a retry can re-register
-        // under the same query id.
+        // Opt-in db-mismatch guard. Byte-equivalent to the reference probe
+        // inlined in `execute_query_inner`: probe sampled inside the same
+        // `active_connections.lock()` acquisition, `unwrap_or_default()`
+        // coercion on `current_database`, mismatch returns
+        // `AppError::DbMismatch` BEFORE invoking the trait, and the cancel
+        // token is released first so a retry can re-register under the same
+        // query id.
         if let Some(expected) = expected_database {
             let actual = adapter.current_database().await?.unwrap_or_default();
             if actual != expected {
@@ -656,13 +654,13 @@ async fn query_table_data_inner(
             .await
             .ok_or_else(|| not_connected(connection_id))?;
         let adapter = active.as_rdb()?;
-        // Sprint 271b — opt-in db-mismatch guard. Byte-equivalent to the
-        // Sprint 266 reference probe inlined in `execute_query_inner`: it runs
-        // inside the same `active_connections.lock()` acquisition,
-        // `unwrap_or_default()` coercion on `current_database`, mismatch
-        // returns `AppError::DbMismatch` BEFORE invoking the trait. The
-        // cancel token is released before the early-return so the retry
-        // path can re-register the same query id.
+        // Opt-in db-mismatch guard. Byte-equivalent to the reference probe
+        // inlined in `execute_query_inner`: it runs inside the same
+        // `active_connections.lock()` acquisition, `unwrap_or_default()`
+        // coercion on `current_database`, mismatch returns
+        // `AppError::DbMismatch` BEFORE invoking the trait. The cancel token
+        // is released before the early-return so the retry path can
+        // re-register the same query id.
         if let Some(expected) = expected_database {
             let actual = adapter.current_database().await?.unwrap_or_default();
             if actual != expected {
@@ -747,13 +745,12 @@ async fn count_null_rows_inner(
     column: &str,
     expected_database: Option<&str>,
 ) -> Result<i64, AppError> {
-    // Sprint 237 — identifier validation runs *before* connection lookup
-    // so a bogus schema / table / column short-circuits without taking
-    // the `active_connections` lock. Mirrors the
-    // `validate_query_inputs` placement on `execute_query_inner` (line
-    // 57). The validator is the same `[a-zA-Z_][a-zA-Z0-9_]*` +
-    // NAMEDATALEN-63 helper used by every DDL emitter
-    // (`db/postgres/mutations.rs::validate_identifier`).
+    // Identifier validation runs *before* connection lookup so a bogus schema
+    // / table / column short-circuits without taking the `active_connections`
+    // lock. Mirrors the `validate_query_inputs` placement on
+    // `execute_query_inner`. The validator is the same
+    // `[a-zA-Z_][a-zA-Z0-9_]*` + NAMEDATALEN-63 helper used by every DDL
+    // emitter (`db/postgres/mutations.rs::validate_identifier`).
     validate_identifier(schema, "Schema name")?;
     validate_identifier(table, "Table name")?;
     validate_identifier(column, "Column name")?;
@@ -763,31 +760,26 @@ async fn count_null_rows_inner(
         .await
         .ok_or_else(|| not_connected(connection_id))?;
     let adapter = active.as_rdb()?;
-    // Sprint 271c — opt-in DbMismatch guard. Shared
-    // `ensure_expected_db` helper (12 schema + 11 DDL siblings already
-    // use it). `None` is byte-equivalent — no `current_database()`
-    // probe.
+    // Opt-in DbMismatch guard. Shared `ensure_expected_db` helper. `None` is
+    // byte-equivalent — no `current_database()` probe.
     ensure_expected_db(adapter, expected_database).await?;
     adapter.count_null_rows(schema, table, column).await
 }
 
-/// Sprint 237 — count rows where the named column is `NULL`. The
-/// `ColumnsEditor` MODIFY editor debounces a call to this command 500 ms
-/// after the user toggles SET NOT NULL on a column that is currently
-/// nullable. A non-zero result surfaces an inline warning ("`N` rows
-/// have NULL — adding NOT NULL will fail"); zero rows or a probe error
-/// is silently ignored — the warning is advisory and never blocks
-/// preview / commit.
+/// Count rows where the named column is `NULL`. The `ColumnsEditor` MODIFY
+/// editor debounces a call to this command 500 ms after the user toggles SET
+/// NOT NULL on a column that is currently nullable. A non-zero result surfaces
+/// an inline warning ("`N` rows have NULL — adding NOT NULL will fail"); zero
+/// rows or a probe error is silently ignored — the warning is advisory and
+/// never blocks preview / commit.
 ///
 /// Identifiers go through the shared `validate_identifier` helper
-/// (NAMEDATALEN-63 + `[a-zA-Z_][a-zA-Z0-9_]*`). The expression cannot
-/// use parameter binding — PG only binds values, not identifiers — so
-/// the validator + ANSI-quoting (`quote_identifier`) is the SQL-
-/// injection floor.
+/// (NAMEDATALEN-63 + `[a-zA-Z_][a-zA-Z0-9_]*`). The expression cannot use
+/// parameter binding — PG only binds values, not identifiers — so the
+/// validator + ANSI-quoting (`quote_identifier`) is the SQL-injection floor.
 ///
-/// Sprint 271c — `expected_database` opt-in DbMismatch guard runs under
-/// the same `active_connections.lock()` acquisition that dispatches the
-/// trait method.
+/// `expected_database` opt-in DbMismatch guard runs under the same
+/// `active_connections.lock()` acquisition that dispatches the trait method.
 #[tauri::command]
 pub async fn count_null_rows(
     state: State<'_, AppState>,
@@ -844,7 +836,7 @@ async fn explain_rdb_query_inner(
     result
 }
 
-/// Sprint 337 (U2 live wire) — RDB `EXPLAIN (FORMAT JSON)` for the given
+/// U2 — RDB `EXPLAIN (FORMAT JSON)` for the given
 /// SQL. Frontend `ExplainViewer` renders the raw JSON plan tree.
 #[tauri::command]
 pub async fn explain_rdb_query(
@@ -876,14 +868,14 @@ pub async fn query_table_data(
     order_by: Option<String>,
     filters: Option<Vec<FilterCondition>>,
     raw_where: Option<String>,
-    // Sprint 180 (AC-180-04): optional per-call cancellation token id.
+    // AC-180-04: optional per-call cancellation token id.
     // When provided, the command registers a `CancellationToken` in
     // `state.query_tokens` so the existing `cancel_query(query_id)`
     // command can abort the in-flight call cooperatively. When omitted
-    // (legacy callers, fast paths) the trait method is invoked with
-    // `None` and behaves identically to pre-Sprint-180.
+    // (legacy callers, fast paths) no token is registered and the trait
+    // method is invoked with `None`.
     query_id: Option<String>,
-    // Sprint 271b — opt-in db-mismatch guard. See `execute_query` doc.
+    // Opt-in db-mismatch guard. See `execute_query` doc.
     expected_database: Option<String>,
 ) -> Result<TableData, AppError> {
     query_table_data_inner(
@@ -1098,13 +1090,14 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // ── Sprint 237 spec-first dispatch tests (2026-05-08) ────────────────
+    // ── Spec-first dispatch tests (2026-05-08) ───────────────────────────
     //
-    // 작성 이유: query.rs 4 Tauri command (execute_query, execute_query_batch,
-    // cancel_query, query_table_data) 의 dispatch contract 가 검증되지 않음
-    // (기존 7 tests 는 input-validation pure 함수만). 공유 stub
-    // (`StubRdbAdapter`) 로 dispatcher contract 4-step + cancel-token registry
-    // 의 lifecycle 까지 검증. AppState 는 직접 생성 (Tauri State wrapping 우회).
+    // Reason: the dispatch contract of the query.rs Tauri commands
+    // (execute_query, execute_query_batch, cancel_query, query_table_data) was
+    // unverified — the existing tests covered only the input-validation pure
+    // functions. A shared stub (`StubRdbAdapter`) covers the 4-step dispatcher
+    // contract plus the cancel-token registry lifecycle. `AppState` is built
+    // directly, bypassing the Tauri `State` wrapper.
 
     use crate::commands::connection::AppState;
     use crate::commands::test_util::{document_default, state_with};
@@ -1174,8 +1167,8 @@ mod tests {
 
     #[tokio::test]
     async fn execute_query_empty_sql_short_circuits_before_lookup() {
-        // validation 이 lookup 보다 *먼저* 실행됨. 미등록 connection 이라도
-        // empty SQL 이면 Validation 이 surface 되어야 함 (NotFound 아님).
+        // Validation runs *before* the lookup. Even for an unregistered
+        // connection, empty SQL must surface Validation, not NotFound.
         let state = AppState::new();
         match execute_query_inner(&state, "absent", "   ", "q1", None).await {
             Err(AppError::Validation(msg)) => {
@@ -1187,8 +1180,8 @@ mod tests {
 
     #[tokio::test]
     async fn execute_query_round_trip_releases_token() {
-        // 정상 종료 시 query_tokens 에서 등록된 id 가 사라져야 retry path 가
-        // 깨끗하게 다음 시도 가능 (AC-180-05).
+        // On normal completion the registered id must disappear from
+        // query_tokens so the retry path gets a clean next attempt (AC-180-05).
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))).await;
         let _ = execute_query_inner(&state, "c", "SELECT 1", "qid-eq", None).await;
         let tokens = state.query_tokens.lock().await;
@@ -1229,12 +1222,14 @@ mod tests {
 
     // ── Issue #1087 — lock-scope regression ──────────────────────────────
     //
-    // 작성 이유: 이전엔 execute_query 가 `active_connections` 락을 쿼리 await
-    // 내내 잡아, 같은/다른 연결의 모든 커맨드와 `cancel_query_native` 가 그
-    // 락 뒤에서 직렬화됐다 (native cancel 은 정의상 무력). 연결 "c" 의 장기
-    // 쿼리를 in-flight 로 park 시켜 두고, (a) 연결 "d" 의 쿼리와 (b) 연결 "c"
-    // 의 native cancel 이 락을 기다리지 않고 완료됨을 동결한다. Fix 이전엔
-    // (a)/(b) 가 5s timeout 으로 fail (RED).
+    // Reason: execute_query used to hold the `active_connections` lock for the
+    // whole query await, so every command on the same or another connection —
+    // and `cancel_query_native` with them — serialized behind that lock (which
+    // makes native cancel useless by definition). This test parks a long query
+    // on connection "c" in flight and freezes that (a) a query on connection
+    // "d" and (b) a native cancel on connection "c" both complete without
+    // waiting for the lock. Before the fix (a)/(b) failed on the 5s timeout
+    // (RED).
     #[tokio::test]
     async fn long_query_does_not_serialize_other_commands_or_native_cancel_1087() {
         use crate::commands::cancel_query::cancel_query_native_inner;
@@ -1271,16 +1266,18 @@ mod tests {
             conns.insert("d".into(), Arc::new(ActiveAdapter::Rdb(Box::new(fast))));
         }
 
-        // 연결 "c" 장기 쿼리 spawn — execute_sql 안에서 release 를 기다리며 park.
+        // Spawn the long query on connection "c" — it parks inside execute_sql
+        // waiting for release.
         let long_state = Arc::clone(&state);
         let long = tokio::spawn(async move {
             execute_query_inner(&long_state, "c", "SELECT pg_sleep(60)", "q-long", None).await
         });
 
-        // 쿼리가 실제 execute_sql 진입 (락 통과) 할 때까지 대기.
+        // Wait until the query actually enters execute_sql (past the lock).
         entered.notified().await;
 
-        // (a) 다른 연결 "d" 의 쿼리가 락 대기 없이 완료.
+        // (a) The query on the other connection "d" completes without waiting
+        // for the lock.
         let other = timeout(
             Duration::from_secs(5),
             execute_query_inner(&state, "d", "SELECT 1", "q-d", None),
@@ -1291,7 +1288,8 @@ mod tests {
             "connection B command serialized behind connection A's long query (#1087): {other:?}"
         );
 
-        // (b) native cancel 이 락 대기 없이 발행 (성공/실패 무관, 블록만 안 되면 됨).
+        // (b) The native cancel is issued without waiting for the lock (success
+        // or failure does not matter, it only must not block).
         let cancel = timeout(
             Duration::from_secs(5),
             cancel_query_native_inner(&state, "c", 1234, None),
@@ -1302,24 +1300,24 @@ mod tests {
             "native cancel blocked on active_connections lock held by the long query (#1087)"
         );
 
-        // 장기 쿼리 release 후 정리.
+        // Release the long query and clean up.
         release.notify_one();
         let _ = long.await;
     }
 
-    // ── Sprint 266 — expected_database 가드 ──────────────────────────────
+    // ── expected_database guard ──────────────────────────────────────────
     //
-    // 작성 이유 (2026-05-12): DbSwitcher 가 backend pool 의 active db 를
-    // 바꾸는 사이에 in-flight 쿼리가 도착하면 잘못된 db 에서 실행될 race.
-    // Sprint 263 OoS #3 + Sprint 264 OoS #2 가 같은 갭을 다른 각도에서 제기.
-    // 본 sprint 는 opt-in 가드만 — None 이면 기존 경로 그대로, Some 이면
-    // current_database 와 비교해 mismatch 시 DbMismatch 반환.
+    // Reason (2026-05-12): when an in-flight query arrives while DbSwitcher is
+    // changing the backend pool's active db, it races and runs against the
+    // wrong db. The guard is opt-in — `None` keeps the existing path, `Some`
+    // compares the value against `current_database` and returns `DbMismatch`
+    // when they differ.
 
     #[tokio::test]
     async fn execute_query_expected_db_mismatch_returns_dbmismatch() {
         let mut s = StubRdbAdapter::default();
         s.current_database_fn = Some(Box::new(|| Ok(Some("db1".into()))));
-        // execute_sql 이 호출되면 가드가 새는 것 — 의도된 sentinel.
+        // A call to execute_sql means the guard leaked — intentional sentinel.
         s.execute_sql_fn = Some(Box::new(|_| {
             panic!("execute_sql must not run when expected_database mismatches")
         }));
@@ -1394,7 +1392,7 @@ mod tests {
 
     #[tokio::test]
     async fn execute_query_expected_db_none_skips_check_backwards_compat() {
-        // current_database_fn 이 호출되면 안 됨 — None 인 경우 fast-path 유지.
+        // current_database_fn must not be called — `None` keeps the fast path.
         let mut s = StubRdbAdapter::default();
         s.current_database_fn = Some(Box::new(|| {
             panic!("current_database must not be probed when expected_database is None")
@@ -1467,8 +1465,8 @@ mod tests {
 
     #[tokio::test]
     async fn execute_query_expected_db_mismatch_releases_cancel_token() {
-        // 가드가 일찍 short-circuit 해도 register 된 token 은 release 되어야
-        // 다음 시도가 깨끗하게 가능.
+        // Even when the guard short-circuits early, the registered token must
+        // be released so the next attempt starts clean.
         let mut s = StubRdbAdapter::default();
         s.current_database_fn = Some(Box::new(|| Ok(Some("db1".into()))));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
@@ -1504,7 +1502,8 @@ mod tests {
 
     #[tokio::test]
     async fn execute_query_batch_empty_statement_at_index_reports_position() {
-        // 3개 중 2번째가 비어있을 때 "Statement 2 of 3" 메시지에 위치 포함.
+        // When the 2nd of 3 statements is empty, the message carries the
+        // position as "Statement 2 of 3".
         let state = AppState::new();
         let stmts = vec!["SELECT 1".into(), "  ".into(), "SELECT 3".into()];
         match execute_query_batch_inner(&state, "c", &stmts, "qb", None).await {
@@ -1565,12 +1564,12 @@ mod tests {
         assert_eq!(r[1].rows[0][0], serde_json::Value::String("B".into()));
     }
 
-    // ── Sprint 266 — execute_query_batch mismatch guard ──────────────────
+    // ── execute_query_batch mismatch guard ───────────────────────────────
     //
-    // 작성 이유 (2026-05-12): single-query 가드 (위 execute_query_expected_db_*)
-    // 를 batch path 로 mirror. batch 의 일부 statement 가 `USE other_db`
-    // 같은 stateful 명령이라도 사전 검증은 batch 시작 시점 1 회만 (spec
-    // §AC-266-03).
+    // Reason (2026-05-12): mirrors the single-query guard (the
+    // execute_query_expected_db_* tests above) onto the batch path. Even when
+    // some statement in the batch is a stateful command such as `USE
+    // other_db`, the check runs once at batch start (spec §AC-266-03).
 
     #[tokio::test]
     async fn execute_query_batch_expected_db_mismatch_returns_dbmismatch() {
@@ -1764,18 +1763,19 @@ mod tests {
         }
     }
 
-    // ── Sprint 247 (ADR 0022 Phase 3) — dry-run dispatch tests ───────────
+    // ── ADR 0022 — dry-run dispatch tests ────────────────────────────────
     //
-    // 작성 이유 (2026-05-09): execute_query_dry_run_inner 의 input
-    // validation + paradigm guard + adapter dispatch contract 가 검증되지
-    // 않음. execute_query_batch_inner 와 시그니처가 동일해 mirror 6 케이스
-    // 작성 (B1..B6). default trait impl (B7) 은 db/tests.rs 에서 별도
-    // 검증 — RdbAdapter 의 default body 호출 path 는 그쪽이 owner.
+    // Reason (2026-05-09): the input validation, paradigm guard and adapter
+    // dispatch contract of execute_query_dry_run_inner were unverified. Its
+    // signature matches execute_query_batch_inner, so the six cases below
+    // mirror that one (B1..B6). The default trait impl (B7) is verified
+    // separately in db/tests.rs — that file owns the call path through
+    // `RdbAdapter`'s default body.
 
     #[tokio::test]
     async fn dry_run_empty_connection_id_rejected() {
-        // [AC-247-B1] — connection_id 가 trim 후 비어있으면 lookup 도
-        // 안 가고 Validation 으로 short-circuit.
+        // [AC-247-B1] — a connection_id that is empty after trimming
+        // short-circuits with Validation, without reaching the lookup.
         let state = AppState::new();
         let stmts = vec!["SELECT 1".to_string()];
         match execute_query_dry_run_inner(&state, "  ", &stmts, "qd", None).await {
@@ -1788,8 +1788,8 @@ mod tests {
 
     #[tokio::test]
     async fn dry_run_empty_statements_rejected() {
-        // [AC-247-B2] — empty Vec 이면 Validation. PG inherent 의 empty
-        // short-circuit (Ok(vec![])) 보다 outer guard 가 먼저.
+        // [AC-247-B2] — an empty Vec yields Validation. The outer guard runs
+        // before the PG inherent empty short-circuit (Ok(vec![])).
         let state = AppState::new();
         match execute_query_dry_run_inner(&state, "c", &[], "qd", None).await {
             Err(AppError::Validation(msg)) => {
@@ -1801,8 +1801,9 @@ mod tests {
 
     #[tokio::test]
     async fn dry_run_empty_statement_at_index_reports_position() {
-        // [AC-247-B3] — 3개 중 2번째가 비어있으면 "Statement 2 of 3"
-        // 메시지에 위치 포함. execute_query_batch 와 동일 카피.
+        // [AC-247-B3] — when the 2nd of 3 statements is empty the message
+        // carries the position as "Statement 2 of 3". Same copy as
+        // execute_query_batch.
         let state = AppState::new();
         let stmts = vec!["a".into(), "".into(), "".into()];
         match execute_query_dry_run_inner(&state, "c", &stmts, "qd", None).await {
@@ -1815,8 +1816,8 @@ mod tests {
 
     #[tokio::test]
     async fn dry_run_unknown_connection_returns_notfound() {
-        // [AC-247-B4] — connection 미등록 시 NotFound. validation 통과
-        // 후 active_connections lookup 에서 reject.
+        // [AC-247-B4] — an unregistered connection yields NotFound. Validation
+        // passes first, then the active_connections lookup rejects.
         let state = AppState::new();
         let stmts = vec!["SELECT 1".to_string()];
         assert!(matches!(
@@ -1827,8 +1828,8 @@ mod tests {
 
     #[tokio::test]
     async fn dry_run_document_paradigm_returns_unsupported() {
-        // [AC-247-B5] — Mongo 연결을 RDB command 가 reject. as_rdb 의
-        // paradigm guard 가 dry-run 시도조차 못 하게 막음.
+        // [AC-247-B5] — an RDB command rejects a Mongo connection. The paradigm
+        // guard in as_rdb blocks it before the dry-run is even attempted.
         let state = state_with("doc", document_default()).await;
         let stmts = vec!["SELECT 1".to_string()];
         assert!(matches!(
@@ -1839,8 +1840,9 @@ mod tests {
 
     #[tokio::test]
     async fn dry_run_rdb_propagates_results() {
-        // [AC-247-B6] — adapter 의 dry_run_sql_batch 결과를 그대로 propagate.
-        // mock 에서 total_count=3 반환 → command 결과의 total_count 도 3.
+        // [AC-247-B6] — the adapter's dry_run_sql_batch result propagates
+        // verbatim. The mock returns total_count=3, so the command result also
+        // carries total_count=3.
         let mut s = StubRdbAdapter::default();
         s.dry_run_sql_batch_fn = Some(Box::new(|stmts: &[String]| {
             Ok(stmts
@@ -1902,19 +1904,20 @@ mod tests {
         }
     }
 
-    // ── Sprint 271b — execute_query_dry_run mismatch guard ───────────────
+    // ── execute_query_dry_run mismatch guard ─────────────────────────────
     //
-    // 작성 이유 (2026-05-13): dry-run path 가 Sprint 266 의 expected_database
-    // 가드 패턴을 byte-equivalent 하게 받았는지 검증. stateful USE 가
-    // production 에서 흔치 않더라도 SqlPreviewDialog 의 destructive preview
-    // 가 잘못된 db 에서 실행되면 user 가 "준비된 dry-run 결과" 로 잘못
-    // 안심하고 commit 할 위험이 큼.
+    // Reason (2026-05-13): checks that the dry-run path picked up the
+    // expected_database guard pattern byte-equivalently. A stateful USE is
+    // uncommon in production, but if SqlPreviewDialog's destructive preview
+    // runs against the wrong db, the user is falsely reassured by a "prepared
+    // dry-run result" and commits — a large risk.
 
     #[tokio::test]
     async fn execute_query_dry_run_mismatch_returns_dbmismatch_without_dispatching() {
         let mut s = StubRdbAdapter::default();
         s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
-        // dry_run_sql_batch 가 호출되면 guard 가 새는 것 — 의도된 sentinel.
+        // A call to dry_run_sql_batch means the guard leaked — intentional
+        // sentinel.
         s.dry_run_sql_batch_fn = Some(Box::new(|_| {
             panic!("dry_run_sql_batch must not run on db mismatch")
         }));
@@ -1931,9 +1934,9 @@ mod tests {
 
     #[tokio::test]
     async fn execute_query_dry_run_mismatch_releases_cancel_token() {
-        // mismatch 가 early-return 해도 register 된 token 은 release 되어야
-        // 다음 시도가 깨끗하게 가능 (AC-180-05 retry contract). 같은 query_id
-        // 로 두번째 등록을 시도하면 Some 으로 잡혀야 한다.
+        // Even when the mismatch returns early, the registered token must be
+        // released so the next attempt starts clean (AC-180-05 retry contract).
+        // A second registration under the same query_id must then succeed.
         let mut s = StubRdbAdapter::default();
         s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
@@ -2053,18 +2056,20 @@ mod tests {
         assert_eq!(r.total_count, 7);
     }
 
-    // ── Sprint 271b — query_table_data mismatch guard ────────────────────
+    // ── query_table_data mismatch guard ──────────────────────────────────
     //
-    // 작성 이유 (2026-05-13): DataGrid user-initiated row-fetch 가 잘못된
-    // db 에서 실행되면 사용자가 본 그리드와 실제 DB 가 어긋남. backend
-    // 가드가 `query_table_data` 의 trait dispatch 이전에 mismatch 를 catch
-    // 하고 cancel token 까지 깨끗이 release 함을 검증.
+    // Reason (2026-05-13): when a DataGrid user-initiated row fetch runs
+    // against the wrong db, the grid the user sees diverges from the real
+    // database. These tests check that the backend guard catches the mismatch
+    // before the `query_table_data` trait dispatch and releases the cancel
+    // token cleanly.
 
     #[tokio::test]
     async fn query_table_data_mismatch_returns_dbmismatch_without_dispatching() {
         let mut s = StubRdbAdapter::default();
         s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
-        // query_table_data 가 호출되면 guard 가 새는 것 — 의도된 sentinel.
+        // A call to query_table_data means the guard leaked — intentional
+        // sentinel.
         s.query_table_data_fn = Some(Box::new(|_ns: &str, _tbl: &str| {
             panic!("query_table_data must not run on db mismatch")
         }));
@@ -2094,9 +2099,9 @@ mod tests {
 
     #[tokio::test]
     async fn query_table_data_mismatch_releases_cancel_token() {
-        // cancel-token registration 이 query_table_data_inner 에 있어 release
-        // ordering 검증이 본 sprint 의 핵심. mismatch 가 early-return 해도
-        // query_tokens 에서 빠져 retry 가능.
+        // The cancel-token registration lives in query_table_data_inner, so the
+        // release ordering is what this test pins down. Even when the mismatch
+        // returns early, the id leaves query_tokens and a retry is possible.
         let mut s = StubRdbAdapter::default();
         s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
@@ -2157,12 +2162,13 @@ mod tests {
 
     // ── Issue #1269 — grid browse native cancel pid capture ──────────────
     //
-    // 작성 이유 (2026-07-10): SQL 탭은 execute_query 가 실행 커넥션의 server
-    // pid 를 적재해 native cancel (pg_cancel_backend / KILL QUERY) 을 태우지만,
-    // 그리드 브라우징(query_table_data)은 pid 를 적재하지 않아 프론트의
-    // getQueryServerPid 가 항상 null → native 분기가 dormant 였다. 아래는
-    // browse 가 pid-tracked 경로를 타고, 실행 중 pid 가 등록되며, 종료 후
-    // 제거됨을 동결한다.
+    // Reason (2026-07-10): on the SQL tab, execute_query records the server pid
+    // of the running connection and drives native cancel (pg_cancel_backend /
+    // KILL QUERY). Grid browsing (query_table_data) recorded no pid, so the
+    // frontend's getQueryServerPid was always null and the native branch stayed
+    // dormant. The tests below freeze that browse routes through the
+    // pid-tracked path, registers the pid while running, and drops it on
+    // completion.
 
     #[tokio::test]
     async fn query_table_data_records_server_pid_for_native_adapter_1269() {
@@ -2207,8 +2213,8 @@ mod tests {
             .await
         });
 
-        // 그리드 browse 가 pid-tracked 경로에 진입해야 gate 가 fire. 기존
-        // (untracked) 경로면 gate 미발화 → timeout → RED.
+        // The gate fires only once the grid browse enters the pid-tracked path.
+        // On the old (untracked) path the gate never fires → timeout → RED.
         let reached = timeout(Duration::from_secs(5), entered.notified()).await;
         assert!(
             reached.is_ok(),
@@ -2232,8 +2238,8 @@ mod tests {
 
     #[tokio::test]
     async fn query_table_data_records_no_pid_for_non_native_adapter_1269() {
-        // pid 미보고 adapter(default tracked → pid_tx drop)는 아무것도 적재하지
-        // 않아야 그리드가 협조 토큰 취소로 fallback 한다.
+        // An adapter that reports no pid (default tracked → pid_tx dropped) must
+        // record nothing, so the grid falls back to cooperative token cancel.
         let mut stub = StubRdbAdapter::default();
         stub.query_table_data_fn = Some(Box::new(|_ns: &str, _tbl: &str| {
             Ok(TableData {
@@ -2295,7 +2301,7 @@ mod tests {
     async fn cancel_query_present_id_triggers_cancel_and_removes_from_registry() {
         let state = AppState::new();
         let token = CancellationToken::new();
-        // 미리 등록 (정상 lifecycle 의 mid-flight 시뮬레이션)
+        // Register up front (simulating mid-flight in the normal lifecycle).
         {
             let mut tokens = state.query_tokens.lock().await;
             tokens.insert("q-1".into(), token.clone());
@@ -2303,30 +2309,30 @@ mod tests {
 
         let r = cancel_query_inner(&state, "q-1").await.unwrap();
         assert!(r.contains("q-1"), "msg: {r}");
-        // 1) 토큰이 cancel 상태로 전이
+        // 1) The token transitions to the cancelled state.
         assert!(
             token.is_cancelled(),
             "cancel_query 가 token.cancel() 호출 안 함"
         );
-        // 2) registry 에서 제거되어 두번째 호출은 NotFound
+        // 2) It is removed from the registry, so a second call is NotFound.
         match cancel_query_inner(&state, "q-1").await {
             Err(AppError::NotFound(_)) => (),
             other => panic!("두번째 호출은 NotFound 여야 함: {:?}", other),
         }
     }
 
-    // ── Sprint 237 — count_null_rows dispatch + identifier guard ─────────
+    // ── count_null_rows dispatch + identifier guard ──────────────────────
     //
-    // 작성 이유 (2026-05-13): ColumnsEditor 가 SET NOT NULL 토글 시 호출하는
-    // 새 Tauri command 의 contract 를 고정한다. 5 cases:
-    //   (1..3) identifier validation (schema / table / column 각각 invalid →
-    //          Validation, 연결 lookup 도 안 감).
-    //   (4)    happy-path interpolation — sql 문자열에 "schema"."table"
-    //          WHERE "column" IS NULL 가 들어가는지 stub override 로 단언.
-    //   (5)    Sprint 271c mismatch panic-closure — adapter 가 dbA 인데
-    //          caller 가 dbB 를 요청하면 trait 의 count_null_rows 가
-    //          panic 으로 surface 되지 않고 (= 호출 안 됨) DbMismatch 가
-    //          return 되어야.
+    // Reason (2026-05-13): pins the contract of the Tauri command ColumnsEditor
+    // calls when SET NOT NULL is toggled. 5 cases:
+    //   (1..3) identifier validation (an invalid schema / table / column each
+    //          yields Validation without reaching the connection lookup).
+    //   (4)    happy-path interpolation — a stub override asserts the SQL string
+    //          contains "schema"."table" WHERE "column" IS NULL.
+    //   (5)    mismatch panic-closure — when the adapter is at dbA and the
+    //          caller asks for dbB, the trait's count_null_rows must not
+    //          surface as a panic (that is, it is never called) and
+    //          DbMismatch must be returned.
 
     #[tokio::test]
     async fn count_null_rows_rejects_invalid_schema_identifier() {
@@ -2341,7 +2347,8 @@ mod tests {
 
     #[tokio::test]
     async fn count_null_rows_rejects_invalid_table_identifier() {
-        // table 에 `;` 가 섞이면 identifier rule (alnum+underscore) 위반.
+        // A `;` mixed into the table name violates the identifier rule
+        // (alnum+underscore).
         let state = AppState::new();
         match count_null_rows_inner(&state, "absent", "public", "users; DROP", "email", None).await
         {
@@ -2354,7 +2361,8 @@ mod tests {
 
     #[tokio::test]
     async fn count_null_rows_rejects_invalid_column_identifier() {
-        // 컬럼명에 `"` (quote) — 식별자에 허용되지 않는 문자 → Validation.
+        // A `"` (quote) in the column name is a character identifiers do not
+        // allow → Validation.
         let state = AppState::new();
         match count_null_rows_inner(&state, "absent", "public", "users", "em\"ail", None).await {
             Err(AppError::Validation(msg)) => {
@@ -2366,8 +2374,8 @@ mod tests {
 
     #[tokio::test]
     async fn count_null_rows_happy_path_dispatches_with_args_propagated() {
-        // adapter trait 에 (ns, table, column) 가 그대로 전달되는지 검증.
-        // count 값 자체는 stub 이 결정 — 7 을 반환하면 그대로 i64 surface.
+        // Checks that (ns, table, column) reach the adapter trait unchanged.
+        // The count itself is up to the stub — returning 7 surfaces 7 as i64.
         let mut s = StubRdbAdapter::default();
         s.count_null_rows_fn = Some(Box::new(|ns: &str, tbl: &str, col: &str| {
             assert_eq!(ns, "public");
@@ -2384,7 +2392,7 @@ mod tests {
 
     #[tokio::test]
     async fn count_null_rows_expected_db_mismatch_returns_dbmismatch_without_dispatch() {
-        // Sprint 271c — caller passes dbB while adapter is at dbA. The
+        // The caller passes dbB while the adapter is at dbA. The
         // trait `count_null_rows` MUST NOT be invoked; stub panics if
         // it is.
         let mut s = StubRdbAdapter::default();
@@ -2402,7 +2410,7 @@ mod tests {
         }
     }
 
-    // ── Sprint 337 (U2 live wire) — explain_rdb_query ────────────────────
+    // ── U2 — explain_rdb_query ───────────────────────────────────────────
 
     #[tokio::test]
     async fn explain_rdb_query_rejects_empty_sql() {

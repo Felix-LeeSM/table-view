@@ -1,6 +1,6 @@
-//! Sprint 209 — connection-group CRUD + connection→group reassignment.
+//! Connection-group CRUD + connection→group reassignment.
 //!
-//! Extracted from the 1710-line `commands/connection.rs` god file. Owns:
+//! Extracted from the `commands/connection.rs` god file. Owns:
 //!   - `list_groups` / `save_group` / `delete_group`.
 //!   - `move_connection_to_group` (re-parents an existing connection;
 //!     `group_id = None` removes the group reference).

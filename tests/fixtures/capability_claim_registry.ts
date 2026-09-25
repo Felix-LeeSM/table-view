@@ -461,6 +461,17 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
       "product no longer offers.",
   },
   {
+    path: "src-tauri/src/lib.rs",
+    phrases: ["stays hidden"],
+    disposition: "not-a-claim",
+    reason:
+      "Window lifecycle, not DDL: the comment on `run()`'s " +
+      "`WindowEvent::Destroyed` arm says the launcher stays hidden while " +
+      "another workspace is alive. The hidden-affordance pattern is broader " +
+      "than the DDL capability class and this is collateral it picks up; it " +
+      "surfaced when #2630 translated the comment out of Korean.",
+  },
+  {
     path: "src-tauri/table-view-core/src/db/adapters/sqlite/ddl_native.rs",
     phrases: ["sqlite structured ddl"],
     disposition: "ledger-dependent",
@@ -514,12 +525,15 @@ export const CAPABILITY_CLAIM_REGISTRY: readonly CapabilityClaimRow[] = [
   },
   {
     path: "src-tauri/table-view-core/src/db/postgres/mutations.rs",
-    phrases: ["atomic policy"],
+    phrases: [],
     disposition: "not-a-claim",
     reason:
-      "PostgreSQL's own `COMMENT ON COLUMN` chain runs under policy C. It " +
-      "names one engine and is true of it, but CONFORMANCE_CHECKS models no " +
-      "atomicity check, so no ledger move can falsify it.",
+      "Retired phrase. 'atomic policy' sat in a sprint-cited note on " +
+      "`add_column` about a `COMMENT ON COLUMN` chain this path does not " +
+      "emit (`build_add_column_sql` builds one ALTER TABLE). #2630's comment " +
+      "sweep replaced the note with what the code does, so the file sweeps " +
+      "clean. The retired wording was transaction semantics, which " +
+      "CONFORMANCE_CHECKS models no check for.",
   },
   {
     path: "src-tauri/table-view-core/src/db/traits.rs",

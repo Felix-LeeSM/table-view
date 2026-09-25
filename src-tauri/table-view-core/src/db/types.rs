@@ -1,9 +1,9 @@
 //! DTOs and shared type aliases consumed by every adapter paradigm.
 //!
-//! Hoisted out of `db/mod.rs` (Sprint 213, P5 step 2) so the production
-//! mod.rs becomes a thin entry point that just declares submodules and
-//! re-exports the public surface. No behaviour change — `crate::db::*`
-//! still resolves every type below via `pub use` in `db/mod.rs`.
+//! Hoisted out of `db/mod.rs` (P5 step 2) so the production mod.rs stays a
+//! thin entry point that just declares submodules and re-exports the public
+//! surface. No behaviour change — `crate::db::*` still resolves every type
+//! below via `pub use` in `db/mod.rs`.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -26,8 +26,8 @@ pub enum NamespaceLabel {
 }
 
 /// Paradigm-neutral namespace descriptor returned by `RdbAdapter::list_namespaces`.
-/// For Sprint A1 this mirrors `SchemaInfo` — future DBMS adapters may extend
-/// additional fields without breaking existing call sites.
+/// It mirrors `SchemaInfo` — future DBMS adapters may extend additional fields
+/// without breaking existing call sites.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NamespaceInfo {
     pub name: String,
@@ -70,12 +70,12 @@ pub struct DocumentCollectionInfo {
     pub id_index: Option<serde_json::Value>,
 }
 
-/// MongoDB document identifier (Phase 6).
+/// MongoDB document identifier.
 ///
-/// Sprint 65 promotes this from a `serde_json::Value`-backed placeholder to a
-/// native BSON representation now that the `bson` crate is a first-class
-/// dependency. `Raw` retains an escape hatch for exotic `_id` shapes
-/// (composite documents, binary types) that do not fit the top three cases.
+/// The representation is native BSON rather than a `serde_json::Value`-backed
+/// placeholder, because the `bson` crate is a first-class dependency. `Raw`
+/// retains an escape hatch for exotic `_id` shapes (composite documents, binary
+/// types) that do not fit the top three cases.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum DocumentId {
@@ -85,13 +85,13 @@ pub enum DocumentId {
     Raw(bson::Bson),
 }
 
-/// Parameter bundle for `DocumentAdapter::find` (Phase 6).
+/// Parameter bundle for `DocumentAdapter::find`.
 ///
-/// Sprint 65 migrates the filter/sort/projection fields from
-/// `serde_json::Value` placeholders to native `bson::Document` so the
-/// MongoDB driver can consume them without a JSON → BSON conversion pass.
-/// `filter` defaults to an empty document (= no constraint) and the optional
-/// `sort`/`projection` remain `None` by default.
+/// The filter/sort/projection fields are native `bson::Document` rather than
+/// `serde_json::Value` placeholders, so the MongoDB driver consumes them
+/// without a JSON → BSON conversion pass. `filter` defaults to an empty
+/// document (= no constraint) and the optional `sort`/`projection` stay `None`
+/// by default.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FindBody {
     #[serde(default)]
@@ -111,13 +111,12 @@ pub struct FindBody {
     pub comment: Option<String>,
 }
 
-/// Result shape for document-oriented query/aggregation (Phase 6).
+/// Result shape for document-oriented query/aggregation.
 ///
-/// `raw_documents` now carries native `bson::Document` values — the Quick
-/// Look panel (Sprint 66+) will render these directly without a lossy
-/// JSON-Value intermediary. `rows` still uses `serde_json::Value` because the
-/// data grid consumer projects scalar cells through the same JSON pipeline
-/// that the RDB paradigm uses.
+/// `raw_documents` carries native `bson::Document` values — the Quick Look
+/// panel renders these directly without a lossy JSON-Value intermediary.
+/// `rows` uses `serde_json::Value` because the data grid consumer projects
+/// scalar cells through the same JSON pipeline that the RDB paradigm uses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentQueryResult {
@@ -155,14 +154,14 @@ impl DocumentResultEnvelope {
     }
 }
 
-/// Sprint 308 — single-document projection for `find_one`.
+/// Single-document projection for `find_one`.
 ///
-/// 작성 이유 (2026-05-14): A1 mongosh 파서가 `findOne(...)` 을 dispatch
-/// 했을 때 single row 를 grid 또는 scalar panel 로 렌더링할 수 있도록
-/// `DocumentQueryResult` 의 단일-문서 슬라이스 shape 을 그대로 매칭한다.
-/// `columns` 는 `flatten_cell` 의 BFS 순서를 따르고 (`_id` first), `row` 는
-/// `columns` 와 길이가 같다 (`raw` 는 원본 BSON 을 보존해 Quick Look 이
-/// 그대로 렌더링).
+/// Reason (2026-05-14): when the A1 mongosh parser dispatches `findOne(...)`,
+/// the single row has to render into the grid or the scalar panel, so this
+/// matches the single-document slice shape of `DocumentQueryResult` exactly.
+/// `columns` follows the BFS order of `flatten_cell` (`_id` first) and `row`
+/// has the same length as `columns` (`raw` keeps the original BSON so Quick
+/// Look renders it as is).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentRow {
@@ -280,15 +279,17 @@ mod wire_shape_tests {
     }
 }
 
-/// Sprint 308 — `bulkWrite` sub-op wire shape.
+/// `bulkWrite` sub-op wire shape.
 ///
-/// 작성 이유 (2026-05-14): A1 파서가 `db.coll.bulkWrite([...])` 의 배열
-/// 항목을 각 variant 로 reify 하면, A5/A6 dispatch 가 그대로 IPC 페이로드로
-/// 전송한다. serde `tag = "op"` + `rename_all = "camelCase"` 라 wire JSON 은
-/// `{ "op": "updateOne", "filter": {...}, "update": {...} }` 형태.
+/// Reason (2026-05-14): the A1 parser reifies each array item of
+/// `db.coll.bulkWrite([...])` into one variant, and the A5/A6 dispatch sends
+/// it on as the IPC payload unchanged. With serde `tag = "op"` +
+/// `rename_all = "camelCase"` the wire JSON reads
+/// `{ "op": "updateOne", "filter": {...}, "update": {...} }`.
 ///
-/// `ordered: true` 는 Mongo driver default 라 본 enum 에 포함하지 않는다
-/// (contract: "Mongo driver 기본값(`true`)로 고정"). 첫 실패 시 short-circuit.
+/// `ordered: true` is the Mongo driver default, so this enum leaves it out
+/// (contract: "pinned to the Mongo driver default (`true`)"). The batch
+/// short-circuits on the first failure.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase")]
 pub enum BulkWriteOp {
@@ -321,9 +322,9 @@ pub enum BulkWriteOp {
     },
 }
 
-/// Sprint 351 — direction tag for a single field of a Mongo index key spec.
+/// Direction tag for a single field of a Mongo index key spec.
 ///
-/// 작성 이유 (2026-05-15): MongoDB index key documents use `1` / `-1`
+/// Reason (2026-05-15): MongoDB index key documents use `1` / `-1`
 /// integers, but the wire shape from the frontend is intentionally a
 /// string enum so the JSON payload is self-documenting. The adapter maps
 /// `Asc → 1`, `Desc → -1` when assembling the `IndexModel.keys`.
@@ -334,16 +335,16 @@ pub enum MongoIndexDirection {
     Desc,
 }
 
-/// Sprint 351 — single field in a compound (or single-field) index key.
+/// Single field in a compound (or single-field) index key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MongoIndexField {
     pub name: String,
     pub direction: MongoIndexDirection,
 }
 
-/// Sprint 351 — optional collation block for a Mongo index. `locale` is
-/// required when the block is present; `strength` is `1..=5` per the
-/// ICU level convention (`Primary..Identical`).
+/// Optional collation block for a Mongo index. `locale` is required when
+/// the block is present; `strength` is `1..=5` per the ICU level
+/// convention (`Primary..Identical`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MongoIndexCollation {
     pub locale: String,
@@ -351,13 +352,13 @@ pub struct MongoIndexCollation {
     pub strength: Option<u32>,
 }
 
-/// Sprint 351 — full-option create-index request.
+/// Full-option create-index request.
 ///
-/// 작성 이유 (2026-05-15): Mongo index 의 옵션 전부를 한 request 로 묶어
-/// trait surface 를 single-method 로 유지한다. compound 인덱스는 `fields`
-/// 의 길이로 결정되고, TTL(`expire_after_seconds`) 는 단일 필드일 때만
-/// 허용 — compound + TTL 조합은 command 계층에서 `AppError::Validation`
-/// 로 거부한다.
+/// Reason (2026-05-15): bundling every Mongo index option into one request
+/// keeps the trait surface a single method. The length of `fields` decides
+/// whether the index is compound, and TTL (`expire_after_seconds`) is only
+/// allowed on a single-field index — the command layer rejects the
+/// compound + TTL combination with `AppError::Validation`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateMongoIndexRequest {
@@ -382,13 +383,13 @@ pub struct CreateMongoIndexRequest {
     pub collation: Option<MongoIndexCollation>,
 }
 
-/// Sprint 351 — server-returned canonical index name from `create_index`.
+/// Server-returned canonical index name from `create_index`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateMongoIndexResult {
     pub name: String,
 }
 
-/// Sprint 352 — round-trip shape for `get_collection_validator`.
+/// Round-trip shape for `get_collection_validator`.
 ///
 /// `validator` is the validator expression JSON (or `null` when the
 /// collection has no validator configured). `validation_level` and
@@ -407,11 +408,12 @@ pub struct CollectionValidatorRead {
     pub validation_action: Option<String>,
 }
 
-/// Sprint 308 — aggregate counters returned by `bulkWrite`.
+/// Aggregate counters returned by `bulkWrite`.
 ///
-/// 작성 이유 (2026-05-14): A6 `WriteSummaryPanel` 의 per-op breakdown row
-/// 와 직접 mapping. `inserted_count` / `matched_count` / `modified_count` /
-/// `deleted_count` 4 카운터 + `upserted_ids` (서버가 upsert 한 신규 doc id).
+/// Reason (2026-05-14): maps straight onto the per-op breakdown row of the A6
+/// `WriteSummaryPanel`. Four counters — `inserted_count` / `matched_count` /
+/// `modified_count` / `deleted_count` — plus `upserted_ids` (the ids of the new
+/// docs the server upserted).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BulkWriteResult {
     pub inserted_count: i64,

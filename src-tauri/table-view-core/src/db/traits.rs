@@ -2,7 +2,7 @@
 //! paradigm-specific extension traits (`RdbAdapter`, `DocumentAdapter`,
 //! `SearchAdapter`, `KvAdapter`).
 //!
-//! Hoisted out of `db/mod.rs` (Sprint 213, P5 step 2). The trait surface
+//! Hoisted out of `db/mod.rs`. The trait surface
 //! is unchanged — `crate::db::DbAdapter` and friends continue to resolve
 //! via `pub use` in `db/mod.rs`. Adapter implementations and `ActiveAdapter`
 //! enum live in their own siblings.
@@ -67,8 +67,7 @@ pub trait DbAdapter: Send + Sync {
 
     fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>>;
 
-    /// Sprint 359 (Phase 2 Q5.3) — paradigm-native cancel for a running
-    /// statement.
+    /// Q5.3 — paradigm-native cancel for a running statement.
     ///
     /// `server_pid` is the server-side identifier captured at executeQuery
     /// time and recorded in `AppState.query_server_pids` (Issue #1230), which
@@ -136,25 +135,24 @@ pub trait RdbAdapter: DbAdapter {
 
     fn list_namespaces<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>>;
 
-    /// List databases visible to the connected user (Sprint 128).
+    /// List databases visible to the connected user.
     ///
     /// For paradigm symmetry with `DocumentAdapter::list_databases`. PG
     /// surfaces every non-template database in the cluster; future SQLite /
     /// MySQL adapters fall back to the default `Vec::new()` impl below until
-    /// Phase 9 wires their concrete implementations. Empty Vec is the
+    /// their concrete implementations are wired. Empty Vec is the
     /// graceful "no databases to show" signal — frontend renders the
     /// existing read-only label.
     fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
         Box::pin(async { Ok(Vec::new()) })
     }
 
-    /// Switch the adapter's "active database" (Sprint 130).
+    /// Switch the adapter's "active database".
     ///
-    /// Concrete adapters that maintain a per-database connection pool (PG)
-    /// override this to swap the active sub-pool to `db_name`. Adapters
-    /// that do not yet support DB switching (SQLite/MySQL/Redis/ES) fall
-    /// back to the default `Unsupported` error so the frontend toast can
-    /// surface a clear message rather than silently no-op.
+    /// Concrete adapters that maintain a per-database connection pool
+    /// override this to swap the active sub-pool to `db_name`. The default
+    /// returns `Unsupported` so the frontend toast can surface a clear
+    /// message rather than silently no-op.
     fn switch_database<'a>(&'a self, _db_name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async {
             Err(AppError::Unsupported(
@@ -163,7 +161,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Resolve the adapter's currently-active database (Sprint 132).
+    /// Resolve the adapter's currently-active database.
     ///
     /// Used by the `verify_active_db` Tauri command to compare the
     /// optimistic `setActiveDb` value the frontend wrote after a raw
@@ -191,7 +189,7 @@ pub trait RdbAdapter: DbAdapter {
         namespace: &'a str,
     ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>>;
 
-    /// Sprint 180 (AC-180-04): accepts `Option<&CancellationToken>` so an
+    /// AC-180-04: accepts `Option<&CancellationToken>` so an
     /// in-flight schema-introspection query can be cooperatively aborted via
     /// the same `query_tokens` registry that drives `execute_sql`. Adapters
     /// observe the token at the same `tokio::select!` shape used by
@@ -265,7 +263,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
+    /// AC-180-04: cancel-token cooperation as above.
     #[allow(clippy::too_many_arguments)]
     fn query_table_data<'a>(
         &'a self,
@@ -365,7 +363,7 @@ pub trait RdbAdapter: DbAdapter {
     }
 
     // DDL
-    /// Sprint 235 — request-shaped `DROP TABLE` matching `create_table` /
+    /// Request-shaped `DROP TABLE` matching `create_table` /
     /// `alter_table`. `req.preview_only` toggles between SQL emission
     /// (no DB write) and `BEGIN/COMMIT` execution. `req.cascade` opts
     /// into `DROP TABLE … CASCADE`; the default emits the implicit-
@@ -375,7 +373,7 @@ pub trait RdbAdapter: DbAdapter {
         req: &'a DropTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
-    /// Sprint 235 — request-shaped `RENAME TABLE`. Same preview/execute
+    /// Request-shaped `RENAME TABLE`. Same preview/execute
     /// semantics as `create_table` / `alter_table`. Identifier validation
     /// is sourced from the shared `validate_identifier` helper.
     fn rename_table<'a>(
@@ -388,24 +386,24 @@ pub trait RdbAdapter: DbAdapter {
         req: &'a AlterTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
-    /// Sprint 236 — request-shaped `ALTER TABLE … ADD COLUMN`. Same
+    /// Request-shaped `ALTER TABLE … ADD COLUMN`. Same
     /// preview/execute semantics as `create_table` / `rename_table`.
     /// Identifier validation is sourced from the shared
     /// `validate_identifier` helper. SQL emission order is locked at
     /// `<name> <type> [NOT NULL] [DEFAULT <expr>] [CHECK (<expr>)]`;
     /// DEFAULT and CHECK expressions are free-text passthrough (no
-    /// escaping, no syntax check — user-responsible per Sprint 229
+    /// escaping, no syntax check — user-responsible per the
     /// CHECK constraint contract).
     fn add_column<'a>(
         &'a self,
         req: &'a AddColumnRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
-    /// Sprint 236 — request-shaped `ALTER TABLE … DROP COLUMN`. Same
+    /// Request-shaped `ALTER TABLE … DROP COLUMN`. Same
     /// preview/execute + identifier validation as `add_column`.
     /// `req.cascade == true` appends `CASCADE`; the default emits the
     /// implicit-RESTRICT form (no `RESTRICT` keyword in the SQL string,
-    /// mirroring Sprint 235 `drop_table` convention). No pre-existence
+    /// mirroring the `drop_table` convention). No pre-existence
     /// check — let PG surface its native `column "X" does not exist`
     /// error verbatim.
     fn drop_column<'a>(
@@ -413,14 +411,14 @@ pub trait RdbAdapter: DbAdapter {
         req: &'a DropColumnRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
-    /// Sprint 226 — `CREATE TABLE` with PG ANSI quoting + identifier
+    /// `CREATE TABLE` with PG ANSI quoting + identifier
     /// validation + preview/execute branches (transactional commit).
     fn create_table<'a>(
         &'a self,
         req: &'a CreateTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
-    /// Sprint 240 — unified `CREATE TABLE + indexes + constraints` in a
+    /// Unified `CREATE TABLE + indexes + constraints` in a
     /// single round trip. Preview mode joins child SQL with `;\n`;
     /// in execute mode the default impl runs CREATE TABLE first (in its
     /// own tx with COMMENTs), then indexes / constraints each in their
@@ -446,7 +444,7 @@ pub trait RdbAdapter: DbAdapter {
                 primary_key: req.primary_key.clone(),
                 preview_only: req.preview_only,
                 table_comment: req.table_comment.clone(),
-                // Sprint 271c — parent handler already probed `expected_database`
+                // The parent handler already probed `expected_database`
                 // under the `active_connections` lock; child trait calls run
                 // inside the same dispatch and do not re-probe.
                 expected_database: None,
@@ -464,10 +462,10 @@ pub trait RdbAdapter: DbAdapter {
                     index_type: idx.index_type.clone(),
                     is_unique: idx.is_unique,
                     preview_only: req.preview_only,
-                    // Sprint 271c — see parent_req comment.
+                    // See parent_req comment.
                     expected_database: None,
                 };
-                // Sprint 240 — surface the failing index name so the
+                // Surface the failing index name so the
                 // dialog's preview pane shows which row blocked the
                 // chain. Atomic policy = C: earlier-applied indexes
                 // remain applied (no rollback).
@@ -485,10 +483,10 @@ pub trait RdbAdapter: DbAdapter {
                     constraint_name: c.constraint_name.clone(),
                     definition: c.definition.clone(),
                     preview_only: req.preview_only,
-                    // Sprint 271c — see parent_req comment.
+                    // See parent_req comment.
                     expected_database: None,
                 };
-                // Sprint 240 — same per-row name surface as indexes.
+                // Same per-row name surface as indexes.
                 let r = self.add_constraint(&creq).await.map_err(|e| {
                     AppError::Database(format!(
                         "Constraint \"{}\" failed: {}",
@@ -524,7 +522,7 @@ pub trait RdbAdapter: DbAdapter {
         req: &'a DropConstraintRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
-    /// Sprint 237 — count rows where `column` is `NULL` on
+    /// Count rows where `column` is `NULL` on
     /// `"<namespace>"."<table>"`. Used by `ColumnsEditor` MODIFY editor
     /// to surface a pre-execution warning when the user toggles a
     /// nullable column to NOT NULL: a non-zero count predicts the
@@ -583,7 +581,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
+    /// AC-180-04: cancel-token cooperation as above.
     fn get_table_indexes<'a>(
         &'a self,
         namespace: &'a str,
@@ -591,7 +589,7 @@ pub trait RdbAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>>;
 
-    /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
+    /// AC-180-04: cancel-token cooperation as above.
     fn get_table_constraints<'a>(
         &'a self,
         namespace: &'a str,
@@ -599,21 +597,24 @@ pub trait RdbAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>>;
 
-    /// Sprint 192 — server-side cursor 기반 row streaming.
+    /// Server-side cursor-based row streaming.
     ///
-    /// 호출자는 미리 결정된 `column_names` (source column order) 를 넘긴다.
-    /// adapter 는 각 row 의 cell value 를 `column_names` 순서대로 정렬해
-    /// `Vec<serde_json::Value>` 로 만들고, batch (= `Vec<Vec<Value>>`) 단위로
-    /// `sender` 에 송신한다. 반환값은 송신한 row 총 개수.
+    /// The caller passes a pre-determined `column_names` list (source column
+    /// order). The adapter orders each row's cell values to match
+    /// `column_names`, builds a `Vec<serde_json::Value>`, and sends batches
+    /// (= `Vec<Vec<Value>>`) through `sender`. The return value is the total
+    /// number of rows sent.
     ///
-    /// PG 의 정공법 구현은 `BEGIN; DECLARE NO SCROLL CURSOR FOR …; FETCH
-    /// FORWARD batch_size; …; CLOSE; COMMIT` — 단일 transaction 안에서
-    /// server-side cursor 운영. 매 batch 사이마다 `cancel.is_cancelled()`
-    /// 를 체크해 cooperatively abort. receiver drop 도 cancel signal 로
-    /// 취급해 transaction 을 ROLLBACK.
+    /// The straightforward PG implementation runs `BEGIN; DECLARE NO SCROLL
+    /// CURSOR FOR …; FETCH FORWARD batch_size; …; CLOSE; COMMIT` — it
+    /// operates a server-side cursor inside a single transaction. It checks
+    /// `cancel.is_cancelled()` between batches and aborts cooperatively. A
+    /// dropped receiver is also treated as a cancel signal and rolls the
+    /// transaction back.
     ///
-    /// MySQL/SQLite 는 Phase 9 합류 시 dialect 별 streaming 으로 구현.
-    /// default 는 `Unsupported` 라 dump 전 dispatch 단계에서 reject.
+    /// MySQL/SQLite implement dialect-specific streaming when their dialect
+    /// support lands. The default returns `Unsupported`, so the dispatch
+    /// step rejects before the dump starts.
     fn stream_table_rows<'a>(
         &'a self,
         _namespace: &'a str,
@@ -668,13 +669,14 @@ pub trait RdbAdapter: DbAdapter {
         function: &'a str,
     ) -> BoxFuture<'a, Result<String, AppError>>;
 
-    /// Sprint 272 — list triggers attached to `(namespace, table)`.
+    /// List triggers attached to `(namespace, table)`.
     ///
-    /// PG override queries `pg_catalog.pg_trigger` + decodes `tgtype`.
-    /// Non-PG RDB adapters fall back to the default `Ok(Vec::new())` —
-    /// MySQL/SQLite trigger introspection is deferred. Non-RDB adapters
-    /// reach this method only via `as_rdb()?` which already fails with
-    /// `Unsupported(relational)` for Document paradigm callers.
+    /// The PG override queries `pg_catalog.pg_trigger` and decodes `tgtype`;
+    /// other engines carry their own overrides. The default returns
+    /// `Ok(Vec::new())`, so an engine without an override reports no triggers
+    /// instead of failing the panel. Non-RDB adapters reach this method only
+    /// via `as_rdb()?` which already fails with `Unsupported(relational)` for
+    /// Document paradigm callers.
     fn list_triggers<'a>(
         &'a self,
         _namespace: &'a str,
@@ -683,7 +685,7 @@ pub trait RdbAdapter: DbAdapter {
         Box::pin(async { Ok(Vec::new()) })
     }
 
-    /// Sprint 273 — `CREATE TRIGGER` SQL emitter + execute.
+    /// `CREATE TRIGGER` SQL emitter + execute.
     ///
     /// PG override validates identifiers, whitelists timing / orientation
     /// / events, emits canonical SQL, and (when `req.preview_only ==
@@ -703,7 +705,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 274 — `DROP TRIGGER` SQL emitter + execute.
+    /// `DROP TRIGGER` SQL emitter + execute.
     ///
     /// PG override validates identifiers and emits
     /// `DROP TRIGGER "<name>" ON "<schema>"."<table>"` (+ trailing
@@ -725,7 +727,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 272 — `pg_get_triggerdef(t.oid)` for one trigger.
+    /// `pg_get_triggerdef(t.oid)` for one trigger.
     ///
     /// Unlike `list_triggers`, there is no sane "empty" default for a
     /// single-trigger query — non-PG adapters must surface
@@ -745,10 +747,10 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 230 — list every Postgres-style data type visible to the
+    /// List every Postgres-style data type visible to the
     /// active connection. PG overrides to query
     /// `pg_catalog.pg_type ⨝ pg_catalog.pg_namespace`; non-PG adapters
-    /// (MySQL/SQLite/Oracle, Phase 17+) inherit the default
+    /// (MySQL/SQLite/Oracle) inherit the default
     /// `Unsupported` so they continue to compile without code changes
     /// until their dialect-specific implementation lands.
     fn list_types<'a>(&'a self) -> BoxFuture<'a, Result<Vec<PostgresTypeInfo>, AppError>> {
@@ -759,7 +761,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 487 — list installed PostgreSQL extensions. PG overrides to query
+    /// List installed PostgreSQL extensions. PG overrides to query
     /// `pg_catalog.pg_extension`; non-PG adapters inherit `Unsupported`.
     fn list_extensions<'a>(
         &'a self,
@@ -785,7 +787,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 335 — `CREATE DATABASE "<name>"`. PG override runs the
+    /// `CREATE DATABASE "<name>"`. PG override runs the
     /// statement against the pool's `postgres` admin DB (transaction-less);
     /// other RDB adapters inherit `Unsupported` until their dialect ships.
     fn create_database<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
@@ -796,7 +798,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 335 — `DROP DATABASE "<name>"`. Symmetric to
+    /// `DROP DATABASE "<name>"`. Symmetric to
     /// `create_database`.
     fn drop_database<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async {
@@ -806,7 +808,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 336 — list every backend session/operation visible to the
+    /// List every backend session/operation visible to the
     /// active user. PG override queries `pg_stat_activity`; non-PG RDB
     /// adapters return `Unsupported` until their dialect ships.
     fn list_server_activity<'a>(
@@ -819,7 +821,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 336 — terminate a backend session by id. PG override uses
+    /// Terminate a backend session by id. PG override uses
     /// `pg_terminate_backend`; non-PG adapters return `Unsupported`.
     fn kill_session<'a>(&'a self, _id: i64) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async {
@@ -829,7 +831,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 337 — return the query execution plan for `sql`. PG override
+    /// Return the query execution plan for `sql`. PG override
     /// runs `EXPLAIN (FORMAT JSON) <sql>` and parses the first cell (a JSON
     /// array with a single `Plan` node). Non-PG RDB adapters inherit
     /// `Unsupported`.
@@ -844,7 +846,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 338 — collection / table stats. PG override queries
+    /// Collection / table stats. PG override queries
     /// `pg_stat_user_tables` + `pg_class`; non-PG RDB adapters inherit
     /// `Unsupported`.
     fn collection_stats<'a>(
@@ -859,7 +861,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 339 — server identity + key tuning flags. PG override
+    /// Server identity + key tuning flags. PG override
     /// runs `version()` + `pg_settings` queries; non-PG RDB adapters
     /// inherit `Unsupported`.
     fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
@@ -870,7 +872,7 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Sprint 340 — top-N slow queries. PG override reads
+    /// Top-N slow queries. PG override reads
     /// `pg_stat_statements`; non-PG RDB adapters inherit `Unsupported`.
     /// `limit` is clamped to a sensible maximum by the caller — the
     /// adapter trusts the value here.
@@ -885,11 +887,12 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
-    /// Issue #1077 Stage 2 — read-only accounts/permissions listing. PG
+    /// Issue #1077 Stage 2 — read-only accounts/permissions listing. The PG
     /// override queries the `pg_roles` catalog view (which masks passwords);
-    /// non-PG RDB adapters inherit `Unsupported` (PG-first parity lane). This
-    /// default is the backend capability gate — an engine without an override
-    /// cannot serve the panel even if the frontend forgot to hide it.
+    /// MySQL and SQL Server override it too, and every other adapter inherits
+    /// this default. The default is the backend capability gate — an engine
+    /// without an override cannot serve the panel even if the frontend forgot
+    /// to hide it.
     fn list_database_users<'a>(
         &'a self,
     ) -> BoxFuture<'a, Result<Vec<crate::models::DatabaseUserRow>, AppError>> {
@@ -901,17 +904,16 @@ pub trait RdbAdapter: DbAdapter {
     }
 }
 
-// ── DocumentAdapter (Phase 6 placeholder — signatures only) ───────────────
+// ── DocumentAdapter (placeholder — signatures only) ───────────────
 
 pub trait DocumentAdapter: DbAdapter {
-    /// Switch the adapter's "active database" (Sprint 131).
+    /// Switch the adapter's "active database".
     ///
-    /// Mirrors `RdbAdapter::switch_database` (Sprint 130): adapters that
+    /// Mirrors `RdbAdapter::switch_database`: adapters that
     /// maintain a per-connection notion of "current DB" override this to
-    /// flip the user's selection. Adapters that do not yet support DB
-    /// switching fall back to the default `Unsupported` so the unified
-    /// `switch_active_db` Tauri command can dispatch through the trait
-    /// without a paradigm-aware match per-adapter.
+    /// flip the user's selection. The default returns `Unsupported` so the
+    /// unified `switch_active_db` Tauri command can dispatch through the
+    /// trait without a paradigm-aware match per-adapter.
     fn switch_database<'a>(&'a self, _db_name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async {
             Err(AppError::Unsupported(
@@ -920,7 +922,7 @@ pub trait DocumentAdapter: DbAdapter {
         })
     }
 
-    /// Resolve the adapter's currently-active database (Sprint 132).
+    /// Resolve the adapter's currently-active database.
     ///
     /// Mirrors `RdbAdapter::current_database` so the `verify_active_db`
     /// Tauri command can dispatch through a single trait method per
@@ -950,7 +952,7 @@ pub trait DocumentAdapter: DbAdapter {
 
     fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>>;
 
-    /// Sprint 180 (AC-180-04): cancel-token cooperation. Adapters observe
+    /// AC-180-04: cancel-token cooperation. Adapters observe
     /// the token via the same `tokio::select!` pattern used on the RDB
     /// side; on cancel they return `AppError::Database("Operation cancelled")`.
     fn list_collections<'a>(
@@ -959,7 +961,7 @@ pub trait DocumentAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<DocumentCollectionInfo>, AppError>>;
 
-    /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
+    /// AC-180-04: cancel-token cooperation as above.
     fn infer_collection_fields<'a>(
         &'a self,
         db: &'a str,
@@ -968,7 +970,7 @@ pub trait DocumentAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>>;
 
-    /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
+    /// AC-180-04: cancel-token cooperation as above.
     fn find<'a>(
         &'a self,
         db: &'a str,
@@ -977,7 +979,7 @@ pub trait DocumentAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>>;
 
-    /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
+    /// AC-180-04: cancel-token cooperation as above.
     ///
     /// Issue #1269 (P1): `comment` stamps the running op with the cancel tag
     /// (mirrors `FindBody.comment`) so native cancel (`cancel_query_by_tag`)
@@ -1014,7 +1016,7 @@ pub trait DocumentAdapter: DbAdapter {
         id: DocumentId,
     ) -> BoxFuture<'a, Result<(), AppError>>;
 
-    /// Sprint 198: bulk delete by filter. Returns deleted_count surfaced
+    /// Bulk delete by filter. Returns deleted_count surfaced
     /// from the driver. Empty filter `{}` is allowed — Safe Mode classifier
     /// gates the call on the frontend (`analyzeMongoOperation`).
     fn delete_many<'a>(
@@ -1024,7 +1026,7 @@ pub trait DocumentAdapter: DbAdapter {
         filter: bson::Document,
     ) -> BoxFuture<'a, Result<u64, AppError>>;
 
-    /// Sprint 198: bulk update by filter. Returns modified_count surfaced
+    /// Bulk update by filter. Returns modified_count surfaced
     /// from the driver. `_id` in patch is rejected (mirrors single-doc
     /// `update_document` contract).
     fn update_many<'a>(
@@ -1035,7 +1037,7 @@ pub trait DocumentAdapter: DbAdapter {
         patch: bson::Document,
     ) -> BoxFuture<'a, Result<u64, AppError>>;
 
-    /// Sprint 198: drop the entire collection. RDB `dropTable` parallel.
+    /// Drop the entire collection. RDB `dropTable` parallel.
     /// Safe Mode always classifies this as `danger`.
     fn drop_collection<'a>(
         &'a self,
@@ -1043,12 +1045,13 @@ pub trait DocumentAdapter: DbAdapter {
         collection: &'a str,
     ) -> BoxFuture<'a, Result<(), AppError>>;
 
-    /// Sprint 308 — single-document projection.
+    /// Single-document projection.
     ///
-    /// 작성 이유 (2026-05-14): A1 mongosh 파서가 `db.coll.findOne(<filter>)`
-    /// 을 dispatch 할 때 호출. cancel-token cooperation 은 `find` 와 동일한
-    /// `tokio::select!` 패턴으로 따른다. 매칭이 없으면 `Ok(None)`, 매칭이
-    /// 있으면 `DocumentRow` (columns + row + raw) 를 반환.
+    /// Rationale (2026-05-14): called when the A1 mongosh parser dispatches
+    /// `db.coll.findOne(<filter>)`. Cancel-token cooperation follows the
+    /// same `tokio::select!` pattern as `find`. Returns `Ok(None)` when
+    /// nothing matches, and `DocumentRow` (columns + row + raw) when a
+    /// match exists.
     fn find_one<'a>(
         &'a self,
         db: &'a str,
@@ -1057,12 +1060,13 @@ pub trait DocumentAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Option<DocumentRow>, AppError>>;
 
-    /// Sprint 308 — exact-count filter result.
+    /// Exact-count filter result.
     ///
-    /// 작성 이유 (2026-05-14): A1 파서가 `db.coll.countDocuments(<filter>)`
-    /// 을 dispatch 할 때 호출. driver 의 `count_documents` 는 정확한 카운트
-    /// 를 위해 collection scan 을 수행 — `estimated_document_count` 의 O(1)
-    /// metadata 와 의도적으로 분리한다. cancel-token cooperation 동일.
+    /// Rationale (2026-05-14): called when the A1 parser dispatches
+    /// `db.coll.countDocuments(<filter>)`. The driver's `count_documents`
+    /// performs a collection scan for an exact count — deliberately kept
+    /// separate from the O(1) metadata of `estimated_document_count`.
+    /// Cancel-token cooperation is the same.
     fn count_documents<'a>(
         &'a self,
         db: &'a str,
@@ -1071,12 +1075,12 @@ pub trait DocumentAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<i64, AppError>>;
 
-    /// Sprint 308 — O(1) metadata count.
+    /// O(1) metadata count.
     ///
-    /// 작성 이유 (2026-05-14): A1 파서가 `db.coll.estimatedDocumentCount()`
-    /// 을 dispatch 할 때 호출. metadata 기반 estimate — 정확도 trade-off
-    /// 는 frontend `WriteSummaryPanel` 의 caveat 으로 노출. cancel-token
-    /// cooperation 동일.
+    /// Rationale (2026-05-14): called when the A1 parser dispatches
+    /// `db.coll.estimatedDocumentCount()`. Metadata-based estimate — the
+    /// accuracy trade-off is surfaced as a caveat in the frontend
+    /// `WriteSummaryPanel`. Cancel-token cooperation is the same.
     fn estimated_document_count<'a>(
         &'a self,
         db: &'a str,
@@ -1084,12 +1088,13 @@ pub trait DocumentAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<i64, AppError>>;
 
-    /// Sprint 308 — unique field values (post-filter).
+    /// Unique field values (post-filter).
     ///
-    /// 작성 이유 (2026-05-14): A1 파서가 `db.coll.distinct(<field>, <filter>)`
-    /// 을 dispatch 할 때 호출. 결과는 BSON canonical-extjson 통과한
-    /// `Vec<serde_json::Value>` — Quick Look 의 tree viewer 와 grid 의
-    /// `ScalarOrListPanel` 이 동일 shape 으로 소비.
+    /// Rationale (2026-05-14): called when the A1 parser dispatches
+    /// `db.coll.distinct(<field>, <filter>)`. The result is a
+    /// `Vec<serde_json::Value>` passed through BSON canonical-extjson —
+    /// consumed in the same shape by the Quick Look tree viewer and the
+    /// grid's `ScalarOrListPanel`.
     fn distinct<'a>(
         &'a self,
         db: &'a str,
@@ -1099,12 +1104,13 @@ pub trait DocumentAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<serde_json::Value>, AppError>>;
 
-    /// Sprint 308 — multi-document insert.
+    /// Multi-document insert.
     ///
-    /// 작성 이유 (2026-05-14): A1 파서가 `db.coll.insertMany([...])` 을
-    /// dispatch 할 때 호출. **cancel 인자 없음** — mongo driver 가 in-flight
-    /// write 중단을 지원하지 않아 cooperative abort 의 의미가 없다. 빈 배열
-    /// 입력은 `Ok(vec![])` 반환 (driver 의 거부를 wrap 하지 않고 short-circuit).
+    /// Rationale (2026-05-14): called when the A1 parser dispatches
+    /// `db.coll.insertMany([...])`. **No cancel argument** — the mongo
+    /// driver does not support interrupting an in-flight write, so a
+    /// cooperative abort would mean nothing. An empty array input returns
+    /// `Ok(vec![])` (short-circuit without wrapping a driver rejection).
     fn insert_many<'a>(
         &'a self,
         db: &'a str,
@@ -1112,12 +1118,13 @@ pub trait DocumentAdapter: DbAdapter {
         docs: Vec<bson::Document>,
     ) -> BoxFuture<'a, Result<Vec<DocumentId>, AppError>>;
 
-    /// Sprint 308 — heterogeneous bulk-write.
+    /// Heterogeneous bulk-write.
     ///
-    /// 작성 이유 (2026-05-14): A1 파서가 `db.coll.bulkWrite([...])` 을
-    /// dispatch 할 때 호출. **cancel 인자 없음** (mongo driver write 중단
-    /// 미지원). driver 의 `ordered: true` default 를 따라 첫 실패 시
-    /// short-circuit. 빈 배열 입력은 `Ok(BulkWriteResult::default())` 반환.
+    /// Rationale (2026-05-14): called when the A1 parser dispatches
+    /// `db.coll.bulkWrite([...])`. **No cancel argument** (the mongo
+    /// driver does not support interrupting writes). Follows the driver's
+    /// `ordered: true` default and short-circuits on the first failure.
+    /// An empty array input returns `Ok(BulkWriteResult::default())`.
     fn bulk_write<'a>(
         &'a self,
         db: &'a str,
@@ -1125,30 +1132,32 @@ pub trait DocumentAdapter: DbAdapter {
         ops: Vec<BulkWriteOp>,
     ) -> BoxFuture<'a, Result<BulkWriteResult, AppError>>;
 
-    /// Sprint 332 — collection indexes (Mongo `listIndexes` admin cmd).
+    /// Collection indexes (Mongo `listIndexes` admin cmd).
     ///
-    /// 작성 이유 (2026-05-15): Slice J live wire. driver 의
-    /// `Collection::list_indexes()` 를 호출하고, 각 IndexModel 을
-    /// `crate::models::IndexInfo` (RDB 와 같은 shape) 로 매핑한다 —
-    /// `columns` = key spec 의 field 이름 리스트, `index_type` 은
-    /// special index (text/hashed/2dsphere/geo*) 면 그 이름, 일반 BTree
-    /// 면 "btree", compound (≥2 fields) 면 "compound", `is_primary` 는
-    /// name === "_id_" 일 때만 true.
+    /// Rationale (2026-05-15): Slice J live wire. Calls the driver's
+    /// `Collection::list_indexes()` and maps each IndexModel to
+    /// `crate::models::IndexInfo` (the same shape as RDB) —
+    /// `columns` is the list of field names from the key spec;
+    /// `index_type` is the special index's own name for
+    /// text/hashed/2dsphere/geo*, "btree" for a plain BTree, "compound"
+    /// for compound (≥2 fields); `is_primary` is true only when
+    /// name === "_id_".
     fn list_collection_indexes<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
     ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>>;
 
-    /// Sprint 351 — create a collection index from a fully-typed request.
+    /// Create a collection index from a fully-typed request.
     ///
-    /// 작성 이유 (2026-05-15): Mongo index 옵션 전부 (unique / sparse / TTL /
-    /// partialFilterExpression / collation / compound asc-desc) 을 한
-    /// request 로 묶어 trait surface 를 single-method 로 유지한다. driver
-    /// 의 `Collection::create_index` 가 반환하는 canonical name 을 그대로
-    /// 토해낸다 — caller (frontend toast / 후속 list refresh) 가 정확한
-    /// server-assigned 이름을 알 수 있다. 입력 검증 (빈 fields, compound
-    /// TTL) 은 Tauri command 계층 + 어댑터 양쪽에서 enforce.
+    /// Rationale (2026-05-15): bundles every Mongo index option (unique /
+    /// sparse / TTL / partialFilterExpression / collation / compound
+    /// asc-desc) into one request so the trait surface stays
+    /// single-method. Returns the canonical name that the driver's
+    /// `Collection::create_index` produced, verbatim — so the caller
+    /// (frontend toast / follow-up list refresh) knows the exact
+    /// server-assigned name. Input validation (empty fields, compound
+    /// TTL) is enforced on both the Tauri command layer and the adapter.
     fn create_collection_index<'a>(
         &'a self,
         db: &'a str,
@@ -1156,12 +1165,13 @@ pub trait DocumentAdapter: DbAdapter {
         request: CreateMongoIndexRequest,
     ) -> BoxFuture<'a, Result<CreateMongoIndexResult, AppError>>;
 
-    /// Sprint 351 — drop a collection index by canonical name.
+    /// Drop a collection index by canonical name.
     ///
-    /// 작성 이유 (2026-05-15): driver `Collection::drop_index(name)` 의
-    /// thin wrap. `_id_` drop 거부는 Tauri command 계층에서 처리 — 어댑터
-    /// 는 driver 가 거부하는 정상 경로로 흐른다 (MongoDB 가 서버 측에서도
-    /// `_id_` drop 을 거부하므로 UI 우회 시도라도 결국 차단된다).
+    /// Rationale (2026-05-15): a thin wrap of the driver's
+    /// `Collection::drop_index(name)`. Rejecting an `_id_` drop is handled
+    /// at the Tauri command layer — the adapter flows through the driver's
+    /// normal rejection path (MongoDB also refuses an `_id_` drop on the
+    /// server side, so even a UI bypass attempt ends up blocked).
     fn drop_collection_index<'a>(
         &'a self,
         db: &'a str,
@@ -1169,9 +1179,9 @@ pub trait DocumentAdapter: DbAdapter {
         name: &'a str,
     ) -> BoxFuture<'a, Result<(), AppError>>;
 
-    /// Sprint 333 — read the collection's stored validator (Mongo
-    /// `listCollections` options.validator). Sprint 352 extends the return
-    /// shape to also surface `validationLevel` / `validationAction` so the
+    /// Read the collection's stored validator (Mongo
+    /// `listCollections` options.validator). The return
+    /// shape also surfaces `validationLevel` / `validationAction` so the
     /// frontend can hydrate select controls without a second IPC.
     ///
     /// `validator` is the validator expression JSON (or `None` if absent).
@@ -1185,8 +1195,8 @@ pub trait DocumentAdapter: DbAdapter {
         collection: &'a str,
     ) -> BoxFuture<'a, Result<CollectionValidatorRead, AppError>>;
 
-    /// Sprint 333 — apply / clear the collection validator (Mongo `collMod`
-    /// admin cmd). Sprint 352 extends the signature to accept optional
+    /// Apply / clear the collection validator (Mongo `collMod`
+    /// admin cmd). The signature accepts optional
     /// `validation_level` / `validation_action` so the migration pattern
     /// (`moderate` + `warn`) is reachable from the UI. When either is
     /// `None`, the corresponding field is omitted from the `collMod` doc
@@ -1200,13 +1210,13 @@ pub trait DocumentAdapter: DbAdapter {
         validation_action: Option<String>,
     ) -> BoxFuture<'a, Result<(), AppError>>;
 
-    /// Sprint 334 — create a collection with optional creation options
+    /// Create a collection with optional creation options
     /// (capped, timeseries, validator, etc.).
     ///
-    /// 작성 이유 (2026-05-15): Slice L live wire. `options` 는 raw JSON
-    /// object passthrough — `db.runCommand({create: <coll>, ...opts})` 로
-    /// 호출된다. Mongo server 가 unknown 옵션을 거부하므로 validation 은
-    /// driver/서버에 위임.
+    /// Rationale (2026-05-15): Slice L live wire. `options` is a raw JSON
+    /// object passthrough — invoked as
+    /// `db.runCommand({create: <coll>, ...opts})`. The Mongo server rejects
+    /// unknown options, so validation is delegated to the driver/server.
     fn create_collection<'a>(
         &'a self,
         db: &'a str,
@@ -1214,12 +1224,13 @@ pub trait DocumentAdapter: DbAdapter {
         options: Option<serde_json::Value>,
     ) -> BoxFuture<'a, Result<(), AppError>>;
 
-    /// Sprint 334 — rename a collection within the same database.
+    /// Rename a collection within the same database.
     ///
-    /// 작성 이유 (2026-05-15): Slice L live wire. Mongo manual 에 따라
-    /// `admin` db 에서 `runCommand({renameCollection: "<db>.<from>", to:
-    /// "<db>.<to>"})` 로 호출. cross-DB rename / dropTarget 옵션은 본
-    /// sprint scope 외.
+    /// Rationale (2026-05-15): Slice L live wire. Per the Mongo manual,
+    /// invoked against the `admin` db as
+    /// `runCommand({renameCollection: "<db>.<from>", to:
+    /// "<db>.<to>"})`. Cross-DB rename / the dropTarget option are out
+    /// of scope here.
     fn rename_collection<'a>(
         &'a self,
         db: &'a str,
@@ -1227,33 +1238,34 @@ pub trait DocumentAdapter: DbAdapter {
         to: &'a str,
     ) -> BoxFuture<'a, Result<(), AppError>>;
 
-    /// Sprint 335 — drop the entire Mongo database (`db.dropDatabase()`).
+    /// Drop the entire Mongo database (`db.dropDatabase()`).
     ///
-    /// 작성 이유 (2026-05-15): Slice M live wire. Mongo create database
+    /// Rationale (2026-05-15): Slice M live wire. Mongo create database
     /// is implicit (lazy on first write) so no `create_database` trait
     /// method is needed — the UX layer surfaces an informational copy
     /// instead.
     fn drop_database<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<(), AppError>>;
 
-    /// Sprint 336 — list running operations
+    /// List running operations
     /// (`adminCommand({currentOp: 1, "$all": true})`).
     fn current_op<'a>(
         &'a self,
     ) -> BoxFuture<'a, Result<Vec<crate::models::ServerActivityRow>, AppError>>;
 
-    /// Sprint 336 — terminate a running operation by id
+    /// Terminate a running operation by id
     /// (`adminCommand({killOp: 1, op: id})`).
     fn kill_op<'a>(&'a self, id: i64) -> BoxFuture<'a, Result<(), AppError>>;
 
-    /// Sprint 337 — explain a `find` against `(db, collection)`.
+    /// Explain a `find` against `(db, collection)`.
     ///
-    /// 작성 이유 (2026-05-15): Slice U2 live wire. Mongo `explain` 은
-    /// `runCommand({explain: {find, filter, ...}, verbosity})` 형태로 호출된다.
-    /// verbosity 는 `"queryPlanner"`, `"executionStats"`, `"allPlansExecution"`
-    /// 셋 중 하나. Issue #1210 — `body` 로 filter 뿐 아니라
-    /// sort/projection/skip/limit 을 받아 `find` 실행과 동일한 옵션으로 plan
-    /// 을 생성한다. 결과는 raw `serde_json::Value` 로 반환 — frontend tree
-    /// viewer 가 paradigm 차이 없이 같은 shape 으로 렌더.
+    /// Rationale (2026-05-15): Slice U2 live wire. Mongo `explain` is
+    /// invoked as `runCommand({explain: {find, filter, ...}, verbosity})`.
+    /// verbosity is one of `"queryPlanner"`, `"executionStats"`,
+    /// `"allPlansExecution"`. Issue #1210 — `body` carries not only the
+    /// filter but also sort/projection/skip/limit, so the plan is produced
+    /// with the same options as the `find` run. The result is returned as
+    /// a raw `serde_json::Value` — the frontend tree viewer renders the
+    /// same shape regardless of paradigm.
     fn explain_query<'a>(
         &'a self,
         db: &'a str,
@@ -1262,18 +1274,18 @@ pub trait DocumentAdapter: DbAdapter {
         verbosity: &'a str,
     ) -> BoxFuture<'a, Result<serde_json::Value, AppError>>;
 
-    /// Sprint 338 — collection stats (`runCommand({collStats})`).
+    /// Collection stats (`runCommand({collStats})`).
     fn collection_stats<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
     ) -> BoxFuture<'a, Result<crate::models::CollectionStatsRow, AppError>>;
 
-    /// Sprint 339 — server identity + key runtime info
+    /// Server identity + key runtime info
     /// (`runCommand({buildInfo, serverStatus})`).
     fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>>;
 
-    /// Sprint 340 — top-N slow queries from `system.profile`. Caller is
+    /// Top-N slow queries from `system.profile`. Caller is
     /// responsible for enabling profiling beforehand
     /// (`db.setProfilingLevel(level, slowms)`); when profiling is OFF
     /// this returns `Ok(Vec::new())` rather than erroring out.
@@ -1282,22 +1294,23 @@ pub trait DocumentAdapter: DbAdapter {
         limit: i64,
     ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>>;
 
-    /// Sprint 381 — generic `db.runCommand({...})` gateway.
+    /// Generic `db.runCommand({...})` gateway.
     ///
-    /// 작성 이유 (2026-05-17): mongosh 의 모든 admin/diagnostic helper 는
-    /// 본질적으로 `runCommand` wrapper 다. Phase 28 의 method whitelist 에
-    /// 묶이지 않은 admin command (`serverStatus`, `dbStats`, `currentOp`,
-    /// `ping`, …) 을 frontend 가 한 IPC 로 통과시킬 수 있도록 thin gateway
-    /// 를 추가한다.
+    /// Rationale (2026-05-17): every mongosh admin/diagnostic helper is
+    /// essentially a `runCommand` wrapper. This thin gateway lets the
+    /// frontend pass admin commands (`serverStatus`, `dbStats`, `currentOp`,
+    /// `ping`, …) that the method whitelist does not bind through a
+    /// single IPC.
     ///
-    /// - `database = None` 시 `"admin"` 데이터베이스에서 실행
-    ///   (`adminCommand` semantics — `listDatabases` / `serverStatus` 등).
-    /// - `database = Some("myapp")` 시 해당 db 에서 실행 (`dbStats`,
-    ///   `collStats` 등 db-scoped command).
+    /// - With `database = None`, runs against the `"admin"` database
+    ///   (`adminCommand` semantics — `listDatabases` / `serverStatus` etc.).
+    /// - With `database = Some("myapp")`, runs against that db (`dbStats`,
+    ///   `collStats` and other db-scoped commands).
     ///
-    /// 결과는 driver 가 반환한 BSON 응답을 canonical EJSON 으로 직렬화한
-    /// `serde_json::Value`. 호출자가 grid / Quick Look / JSON viewer 에
-    /// paradigm-agnostic 으로 렌더.
+    /// The result is a `serde_json::Value` that serializes the BSON
+    /// response returned by the driver as canonical EJSON. The caller
+    /// renders it in the grid / Quick Look / JSON viewer in a
+    /// paradigm-agnostic way.
     fn run_command<'a>(
         &'a self,
         database: Option<&'a str>,
@@ -1447,11 +1460,12 @@ pub trait SearchAdapter: DbAdapter {
 
 #[cfg(test)]
 mod finalize_cancelled_tests {
-    //! 작성 이유 (2026-07-03, PR #1241 review): native cancel 이 mysql 쿼리를
-    //! ER_QUERY_INTERRUPTED(1317) 또는 SLEEP 의 spurious 성공으로 끝내도,
-    //! 취소 요청(token fired)이면 cancelled 로 수렴해야 한다는 계약을 고정.
-    //! fix 전에는 이 수렴 로직이 없어 mysql 만 error/completed 로 새어
-    //! e2e(query-cancelled-state)가 실패했다.
+    //! Rationale (2026-07-03, PR #1241 review): pins the contract that a
+    //! cancel request (token fired) must converge onto cancelled even when
+    //! native cancel ends the mysql query with ER_QUERY_INTERRUPTED(1317)
+    //! or a spurious SLEEP success. Before the fix this convergence logic
+    //! did not exist, mysql leaked through as error/completed, and the
+    //! e2e(query-cancelled-state) test failed.
     use super::*;
 
     #[test]

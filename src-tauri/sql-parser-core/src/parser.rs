@@ -1,4 +1,4 @@
-//! Recursive-descent parser for the sprint-385 + sprint-391 grammar slices.
+//! Recursive-descent parser for the SQL grammar slices.
 //!
 //! Grammar (EBNF-ish):
 //!   stmt        = select-stmt | drop-stmt | truncate-stmt | alter-stmt
@@ -27,7 +27,7 @@
 //!
 //! - `EmptyInput` — caller passed `""` or whitespace-only.
 //! - `UnsupportedStatement` — first keyword is one we recognize (INSERT /
-//!   UPDATE / DELETE / ALTER ADD …) but is out of scope for this sprint.
+//!   UPDATE / DELETE / ALTER ADD …) but is out of scope.
 //! - `SyntaxError` — everything else (wrong order, missing required
 //!   keyword, extra trailing tokens, mutually-exclusive options, …).
 //! - `LexError` — surfaced verbatim from `lexer::lex`.
@@ -75,7 +75,7 @@ pub fn parse(input: &str) -> ParseResult {
     }
 
     // Pre-scan: if the first non-whitespace word is a known SQL verb
-    // we do NOT support (sprint-391 supports SELECT / DROP / TRUNCATE /
+    // we do NOT support (we support SELECT / DROP / TRUNCATE /
     // ALTER), short-circuit with `UnsupportedStatement` BEFORE handing
     // the input to the lexer. This matters because the lexer chokes on
     // punctuation we don't support (`(`, `)`), so e.g.
@@ -158,9 +158,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Dispatch to the per-verb sub-parser based on the first token.
-    /// Returns `ParseResult` (not just `SelectStatement`) so sprint-391's
-    /// DDL variants (`Drop`, `Truncate`, `AlterTable`) flow through the
-    /// same entry point as the sprint-385 `Select` slice.
+    /// Returns `ParseResult` (not just `SelectStatement`) so the DDL
+    /// variants (`Drop`, `Truncate`, `AlterTable`) flow through the
+    /// same entry point as the `Select` slice.
     fn parse_statement(&mut self) -> Result<ParseResult, ParseError> {
         let first = self
             .peek()
@@ -208,7 +208,7 @@ impl<'a> Parser<'a> {
                 Ok(ParseResult::With(self.parse_with()?))
             }
             Token::Create => {
-                // Sprint-394 — `CREATE TABLE / CREATE INDEX / CREATE
+                // `CREATE TABLE / CREATE INDEX / CREATE
                 // UNIQUE INDEX / CREATE VIEW / CREATE OR REPLACE VIEW`.
                 // Any other follow-up token (FUNCTION / TRIGGER /
                 // EXTENSION / TEMPORARY / MATERIALIZED / …) falls
@@ -237,7 +237,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(ParseResult::SetStmt(self.parse_set_stmt()?))
             }
-            // Sprint-395 — `COPY` and `COMMENT` are intentionally kept as
+            // `COPY` and `COMMENT` are intentionally kept as
             // `Token::Ident` (production schemas often use them as column
             // names). The dispatcher matches them case-insensitively
             // before falling through to the generic ident-as-unsupported
@@ -396,12 +396,12 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    // ---- sprint-395 misc grammar parsers ----------------------------
+    // ---- misc grammar parsers ----------------------------
 
-    /// Sprint-395 — case-insensitive identifier-keyword check (consumes
+    /// Case-insensitive identifier-keyword check (consumes
     /// the token if it matches; leaves cursor in place otherwise). Used
-    /// because most sprint-395 keywords stay as `Token::Ident` to avoid
-    /// breaking sprint-385/391/394 tests that use those strings as
+    /// because most misc-grammar keywords stay as `Token::Ident` to avoid
+    /// breaking tests that use those strings as
     /// identifiers (e.g. `public`, `tables`, `analyze`).
     fn consume_ident_kw(&mut self, expected: &str) -> bool {
         if self.peek_ident_kw(expected) {
@@ -419,7 +419,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Sprint-395 — assert the next token is an identifier whose text
+    /// Assert the next token is an identifier whose text
     /// matches (case-insensitively) `expected`; advance and return Ok.
     /// Used for required pseudo-keywords like `OPTION`, `FOR`, `IN`.
     fn expect_ident_kw(&mut self, expected: &str, msg: &str) -> Result<(), ParseError> {

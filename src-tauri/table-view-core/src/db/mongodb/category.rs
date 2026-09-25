@@ -1,14 +1,16 @@
-// Sprint 238 AC-238-02 — Mongo BSON type tag → `ColumnCategory` 매핑.
-// 작성일 2026-05-10. BSON tag 의 정의는 `bson_type_name` (queries.rs) 에 lock.
+// AC-238-02 — Mongo BSON type tag → `ColumnCategory` mapping.
+// Written 2026-05-10. The BSON tag definitions are locked in `bson_type_name`
+// (queries.rs).
 
 use crate::models::ColumnCategory;
 
-/// Mongo BSON type tag (예: "Int32", "String", "ObjectId") 를 DataGrid
-/// display category 로 매핑한다.
+/// Maps a Mongo BSON type tag (e.g. "Int32", "String", "ObjectId") to a
+/// DataGrid display category.
 ///
-/// 동적 schema (한 column 안에서 row 마다 다른 type) 의 경우 column 의
-/// modal type tag (가장 빈도 높은 type) 가 입력으로 들어오므로 — 본
-/// 함수는 단일 tag 만 본다. 미지 tag 는 `Unknown` fallback.
+/// With a dynamic schema (a different type per row inside one column) the
+/// input is the column's modal type tag (its most frequent type), so this
+/// function looks at a single tag only. An unknown tag falls back to
+/// `Unknown`.
 pub fn map_mongo_data_type(data_type: &str) -> ColumnCategory {
     match data_type {
         "Int32" | "Int64" => ColumnCategory::Int,
@@ -22,13 +24,14 @@ pub fn map_mongo_data_type(data_type: &str) -> ColumnCategory {
         | "JavaScriptCodeWithScope"
         | "DbPointer" => ColumnCategory::Object,
         "Binary" => ColumnCategory::Binary,
-        // Sprint 259 — ObjectId 는 id 식별자 (24 hex chars 고정폭) 로
-        // Uuid category 와 의미 동등. PG uuid 와 동일 width 정책 (default
-        // 18rem, left-align) 으로 통일.
+        // ObjectId is an id (a fixed 24 hex chars), which means the same as
+        // the Uuid category. Unified on the same width policy as PG uuid
+        // (default 18rem, left-align).
         "ObjectId" => ColumnCategory::Uuid,
-        // String / Symbol — 가변 길이 텍스트.
+        // String / Symbol — variable-length text.
         "String" | "Symbol" => ColumnCategory::Text,
-        // Null / Undefined / MaxKey / MinKey — sentinel, 폭 산식에 의미 없음.
+        // Null / Undefined / MaxKey / MinKey — sentinels, no meaning for the
+        // width formula.
         _ => ColumnCategory::Unknown,
     }
 }
@@ -77,7 +80,7 @@ mod tests {
 
     #[test]
     fn maps_string_and_symbol_to_text() {
-        // 가변 길이 텍스트류 (Sprint 259 — ObjectId 는 Uuid category 로 분리).
+        // Variable-length text (ObjectId is split into the Uuid category).
         for s in ["String", "Symbol"] {
             assert_eq!(map_mongo_data_type(s), ColumnCategory::Text, "{s}");
         }
@@ -85,8 +88,8 @@ mod tests {
 
     #[test]
     fn maps_objectid_to_uuid_category_sprint_259() {
-        // Sprint 259 — ObjectId 는 id 식별자 (24 hex chars 고정폭) 로
-        // PG uuid 와 동일 width 정책. text 와 분리.
+        // ObjectId is an id (a fixed 24 hex chars) and takes the same width
+        // policy as PG uuid. Split from text.
         assert_eq!(map_mongo_data_type("ObjectId"), ColumnCategory::Uuid);
     }
 
@@ -99,7 +102,7 @@ mod tests {
 
     #[test]
     fn is_case_sensitive() {
-        // Mongo BSON tag 는 PascalCase 로 fixed. 소문자 입력은 미지로 처리.
+        // Mongo BSON tags are fixed PascalCase. Lowercase input is unknown.
         assert_eq!(map_mongo_data_type("string"), ColumnCategory::Unknown);
     }
 }

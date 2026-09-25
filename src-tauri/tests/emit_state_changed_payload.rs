@@ -1,25 +1,26 @@
-//! 작성 2026-05-16 (Phase 3 sprint-365) — `emit_state_changed` IPC wrapper +
+//! Written 2026-05-16 — `emit_state_changed` IPC wrapper +
 //! `StateChangedPayload` wire shape + per-(domain, entity) version monotonicity.
 //!
-//! sprint-365 (Phase 3 of state-management strategy, F.4): cross-window state
-//! delivery uses one canonical `state-changed` event. Every backend mutation
-//! call calls `emit_state_changed(app, EmitArgs)` which (a) increments the
-//! `(domain, entity_id)` version, (b) constructs the wire payload with
-//! `originWindow` / `version` / `snapshotVersion` / `emittedAt`, and (c)
-//! broadcasts via `AppHandle::emit` so every window listener receives the
-//! same payload.
+//! State-management strategy F.4: cross-window state delivery uses one
+//! canonical `state-changed` event. Every backend mutation call calls
+//! `emit_state_changed(app, EmitArgs)` which (a) increments the `(domain,
+//! entity_id)` version, (b) constructs the wire payload with `originWindow` /
+//! `version` / `snapshotVersion` / `emittedAt`, and (c) broadcasts via
+//! `AppHandle::emit` so every window listener receives the same payload.
 //!
-//! 검증 매트릭스 (Acceptance Criteria):
-//!   - AC-365-01 emit 한 번 → 모든 listener 가 payload 1회 수신.
+//! Verification matrix (Acceptance Criteria):
+//!   - AC-365-01 one emit → every listener receives the payload once.
 //!     Payload shape: domain / op / entityId / version / snapshotVersion /
-//!     originWindow / emittedAt 모두 채워짐.
-//!   - 같은 (domain, entityId) 두 번 emit → version 단조 증가 (1 → 2).
-//!   - 다른 entityId 는 독립 version (둘 다 1 부터 시작).
-//!   - reset op 도 일반 update 와 같은 version 흐름 (no special-case backend
-//!     side — frontend 가 `op:"reset"` 으로 분기).
-//!   - `field` (datagridColumnPrefs.reset 전용) 가 옵션으로 직렬화됨.
-//!   - `entityId=None` (history.clear) 도 직렬화 통과.
-//!   - originWindow=None (backend-initiated) 도 직렬화 통과.
+//!     originWindow / emittedAt are all filled in.
+//!   - two emits on the same (domain, entityId) → version increases
+//!     monotonically (1 → 2).
+//!   - a different entityId gets its own version (both start at 1).
+//!   - a reset op follows the same version flow as an ordinary update (no
+//!     special case on the backend side — the frontend branches on
+//!     `op:"reset"`).
+//!   - `field` (used only by datagridColumnPrefs.reset) serializes as optional.
+//!   - `entityId=None` (history.clear) also passes serialization.
+//!   - originWindow=None (backend-initiated) also passes serialization.
 
 use serde::Deserialize;
 use std::sync::{Arc, Mutex};
@@ -301,7 +302,7 @@ fn datagrid_reset_serializes_field_all() {
 
 #[test]
 fn history_clear_with_null_entity_id_and_null_origin() {
-    // history.clear payload uses `entityId: null` (F.5 / codex 7차 #3) and
+    // history.clear payload uses `entityId: null` (F.5) and
     // backend-initiated emits leave `originWindow: null` (no window owns
     // the action). Both must round-trip through serde.
     let app = make_app();

@@ -1,4 +1,4 @@
-//! sql-parser-core — pure-Rust SQL parser foundation (sprint-385).
+//! sql-parser-core — pure-Rust SQL parser foundation.
 //!
 //! This crate compiles to two targets from one source tree:
 //!
@@ -7,15 +7,15 @@
 //! 2. **`wasm32-unknown-unknown` cdylib** built by `wasm-pack` and lazy-
 //!    loaded from the frontend (`src/lib/sql/sqlAst.ts`).
 //!
-//! Sprint 385 only ships the **foundation** — the dual-target pipeline,
+//! This crate ships the **foundation** — the dual-target pipeline,
 //! the AST, and a single-statement SELECT grammar slice. Grammar
-//! widening (INSERT / UPDATE / DELETE / JOIN / AND-OR / …) is sprint-386+.
+//! widening (INSERT / UPDATE / DELETE / JOIN / AND-OR / …) is future work.
 //!
 //! No Tauri / tokio / io / regex deps — that is the load-bearing invariant
 //! that lets the same code reach the browser via WASM.
 
 #![deny(unsafe_code)]
-// Sprint 385 — the native rlib path never needs to panic, but we keep
+// The native rlib path never needs to panic, but we keep
 // `unwrap_or_default` etc. explicit. `unwrap` is forbidden on user-input
 // paths but allowed in `#[cfg(test)]`. Clippy already enforces the
 // distinction; the lint-level here just documents intent.
@@ -141,7 +141,7 @@ mod tests {
         let result = parse_sql("SELECT * FROM users");
         let json = serde_json::to_value(&result).expect("serialize");
         assert_eq!(json["kind"], "select");
-        // Sprint-393a — `table` is no longer a top-level slot; the FROM
+        // `table` is no longer a top-level slot; the FROM
         // list is the source of truth. The first item's `table` field
         // holds what used to live on the SelectStatement root.
         assert_eq!(json["from"][0]["table"], "users");
@@ -153,9 +153,9 @@ mod tests {
 
     #[test]
     fn smoke_error_serialization_shape() {
-        // Sprint-394 — CREATE/INSERT/UPDATE/DELETE/ALTER/WITH are now
-        // supported. Sprint-395 — GRANT/REVOKE/EXPLAIN/SHOW/SET/COPY/COMMENT
-        // are now supported. Sprint-484 — MERGE is supported, so REPLACE
+        // CREATE/INSERT/UPDATE/DELETE/ALTER/WITH are now
+        // supported. GRANT/REVOKE/EXPLAIN/SHOW/SET/COPY/COMMENT
+        // are now supported. MERGE is supported, so REPLACE
         // keeps the known-but-unsupported smoke path covered.
         let result = parse_sql("REPLACE INTO users VALUES (1)");
         let json = serde_json::to_value(&result).expect("serialize");
@@ -164,7 +164,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // Sprint 391 — DDL destructive serialization (AC-391-S).
+    // DDL destructive serialization (AC-391-S).
     // -----------------------------------------------------------------
 
     #[test]

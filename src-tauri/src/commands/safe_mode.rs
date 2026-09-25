@@ -61,8 +61,8 @@ pub fn decide(mode: SafeMode, environment: Option<&str>, is_danger: bool) -> Gat
     let is_production = environment == Some("production");
     if is_production {
         // strict / warn / off all confirm on production. `off` cannot bypass
-        // a production-tagged connection (Sprint 190 hard-auto policy, kept
-        // by ADR 0022 Phase 1).
+        // a production-tagged connection (hard-auto policy, kept
+        // by ADR 0022).
         return GateOutcome::ConfirmRequired(
             "destructive statement on a production connection requires confirmation".into(),
         );

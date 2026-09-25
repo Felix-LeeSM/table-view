@@ -1,6 +1,6 @@
-//! Sprint 361 (Phase 3, Q13) — Per-connection workspace window launcher.
+//! Q13 — Per-connection workspace window launcher.
 //!
-//! Pre-sprint-361 the app had a single bare `"workspace"` window label.
+//! Previously the app had a single bare `"workspace"` window label.
 //! Q13 of the state-management strategy made workspace windows per-connection:
 //! each open connection mints (or focuses) its own window with the label
 //! `workspace-{connection_id}`. This matches TablePlus — clicking the same
@@ -13,11 +13,10 @@
 //!     is `.set_focus()`-ed; no new window is built.
 //!   - Validates `connection_id` is non-empty so a degenerate "workspace-"
 //!     label can never reach the OS.
-//!   - Sprint 363 addition: emits a `workspace:focused` event on both
-//!     branches (create + idempotent focus) so frontend can react with
-//!     toast / mru update / analytics independently of whether the call
-//!     spawned a fresh window. Payload distinguishes the branches via
-//!     `is_new`.
+//!   - Emits a `workspace:focused` event on both branches (create +
+//!     idempotent focus) so frontend can react with toast / mru update /
+//!     analytics independently of whether the call spawned a fresh window.
+//!     Payload distinguishes the branches via `is_new`.
 //!
 //! The hardcoded geometry / title mirror `launcher::build_workspace_window`
 //! (the legacy single-workspace builder) byte-for-byte so the runtime shape
@@ -32,12 +31,12 @@ use crate::error::AppError;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
-/// Sprint 363 — payload of the `workspace:focused` event. Mirrored on
-/// the frontend (`src/lib/tauri/window.ts` consumes the same shape).
-/// `is_new` distinguishes the build path (true) from the idempotent
-/// re-focus path (false) so the renderer can decide between "first time
-/// we see this conn" actions (e.g. mru bump) and "user is just bringing
-/// the existing window back into focus".
+/// Payload of the `workspace:focused` event. Mirrored on the frontend
+/// (`src/lib/tauri/window.ts` consumes the same shape). `is_new`
+/// distinguishes the build path (true) from the idempotent re-focus path
+/// (false) so the renderer can decide between "first time we see this conn"
+/// actions (e.g. mru bump) and "user is just bringing the existing window
+/// back into focus".
 #[derive(Serialize, Clone, Debug)]
 struct WorkspaceFocusedPayload {
     connection_id: String,
@@ -50,8 +49,8 @@ const WORKSPACE_FOCUSED_EVENT: &str = "workspace:focused";
 
 /// Build the per-conn workspace window. Mirrors the geometry / chrome of
 /// `launcher::build_workspace_window` so the user-visible window is
-/// indistinguishable from the pre-sprint-361 single-workspace shape; only
-/// the `WebviewWindow.label` differs (per-conn instead of bare).
+/// indistinguishable from the legacy single-workspace shape; only the
+/// `WebviewWindow.label` differs (per-conn instead of bare).
 fn build_per_conn_workspace_window<R: Runtime>(
     app: &AppHandle<R>,
     label: &str,
@@ -78,11 +77,11 @@ fn build_per_conn_workspace_window<R: Runtime>(
 /// Returns `AppError::Validation` for empty `connection_id` so frontend
 /// programmer errors surface loudly instead of leaking a degenerate label.
 ///
-/// Sprint 363: both branches emit a `workspace:focused` event whose
-/// `is_new` flag distinguishes the build path (true) from the idempotent
-/// re-focus path (false). Emission is best-effort — a failure to emit
-/// does not abort the call, because the window-effecting side already
-/// landed. A warn-log captures the rare emit failure.
+/// Both branches emit a `workspace:focused` event whose `is_new` flag
+/// distinguishes the build path (true) from the idempotent re-focus path
+/// (false). Emission is best-effort — a failure to emit does not abort the
+/// call, because the window-effecting side already took effect. A warn-log
+/// captures the rare emit failure.
 pub async fn open_workspace_window_inner<R: Runtime>(
     app: AppHandle<R>,
     connection_id: String,
@@ -142,13 +141,13 @@ pub async fn open_workspace_window<R: Runtime>(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 3 sprint-361)
+    //! Written 2026-05-16
     //!
-    //! 사유: integration test (`tests/open_workspace_window_idempotent.rs`)
-    //! 는 AC 위주 검증이고, unit 측은 input validation 분기 단독을
-    //! 잠근다 — empty connection_id 가 Validation error 로 즉시 거부되어
-    //! window 생성 부수효과가 0 임을 unit 단계에서 확인해야 회귀 시
-    //! integration 보다 먼저 잡힌다.
+    //! Reason: the integration test (`tests/open_workspace_window_idempotent.rs`)
+    //! focuses on ACs, while the unit side pins the input-validation branch
+    //! alone — an empty connection_id must be rejected immediately as a
+    //! Validation error with zero window-creation side effects, so a regression
+    //! is caught at the unit stage before the integration test sees it.
     use super::*;
     use tauri::test::{mock_builder, mock_context, noop_assets};
 

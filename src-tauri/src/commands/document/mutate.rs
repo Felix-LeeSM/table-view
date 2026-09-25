@@ -1,10 +1,10 @@
-//! Document paradigm — write-path mutate commands (Sprint 80, Phase 6 F-1).
+//! Document paradigm — write-path mutate commands.
 //!
-//! Sprint 80 closes the backend half of the document write path by exposing
-//! `MongoAdapter`'s freshly-implemented `insert_document` / `update_document`
+//! The backend half of the document write path exposes
+//! `MongoAdapter`'s `insert_document` / `update_document`
 //! / `delete_document` methods as three Tauri commands. The frontend
-//! `mqlGenerator.ts` + `useDataGridEdit` paradigm dispatch (Sprint 86) and
-//! the inline-edit UI (Sprint 87) will call these commands to commit
+//! `mqlGenerator.ts` + `useDataGridEdit` paradigm dispatch and
+//! the inline-edit UI will call these commands to commit
 //! document changes.
 //!
 //! ## Dispatch pattern
@@ -57,7 +57,7 @@
 //! (resolve the connection's profile and reject `!edit.editDocuments` /
 //! `!edit.bulkWrite` before dispatch) rather than relying on the UI alone.
 //!
-//! Sprint 237 P5 (2026-05-08) — handler bodies hoisted into
+//! Handler bodies hoisted into
 //! `_inner(&AppState)` shape so unit tests can drive prod code directly.
 
 use crate::commands::connection::AppState;
@@ -174,7 +174,7 @@ async fn update_document_inner(
 /// maps `matched_count == 0` to `AppError::NotFound` so the UI can surface
 /// stale-row feedback. Nested-path updates (e.g. `{"profile.name": ...}`)
 /// are permitted by MongoDB semantics but not explicitly validated by this
-/// layer — Sprint 87 will revisit that guard at the UI level.
+/// layer — that guard is to be revisited at the UI level.
 #[tauri::command]
 pub async fn update_document(
     window: tauri::Window,
@@ -257,7 +257,7 @@ async fn delete_many_inner(
     adapter.delete_many(database, collection, filter).await
 }
 
-/// Sprint 198 — bulk delete every document matching `filter`. Returns the
+/// Bulk delete every document matching `filter`. Returns the
 /// driver's `deleted_count` so the UI can surface "N row(s) deleted" toast.
 ///
 /// Empty filter (`{}`) is allowed at this layer — the Safe Mode classifier
@@ -306,7 +306,7 @@ async fn update_many_inner(
         .await
 }
 
-/// Sprint 198 — bulk apply `$set` patch to every document matching `filter`.
+/// Bulk apply `$set` patch to every document matching `filter`.
 /// Returns `modified_count`. The adapter rejects `_id` in patch (identity
 /// mutation) — same contract as `update_document`.
 #[tauri::command]
@@ -350,7 +350,7 @@ async fn drop_collection_inner(
     adapter.drop_collection(database, collection).await
 }
 
-/// Sprint 198 — drop the entire collection. Mongo parallel of RDB
+/// Drop the entire collection. Mongo parallel of RDB
 /// `dropTable`; Safe Mode always classifies this as `danger`.
 #[tauri::command]
 pub async fn drop_collection(
@@ -372,12 +372,13 @@ pub async fn drop_collection(
     .await
 }
 
-// ── Sprint 308 (2026-05-14) — 2 new write commands ──────────────────────
+// ── (2026-05-14) — new write commands ──────────────────────
 //
-// 작성 이유: A1 mongosh 파서가 dispatch 할 `insertMany` / `bulkWrite` 2
-// 메서드. write-path 라 cancel-token 인자 없음 (mongo driver 가 in-flight
-// write 중단을 지원하지 않음). 두 inner 함수 모두 `update_many_inner` 패턴
-// (`as_document()?` gate, no cancel handle) 을 그대로 답습.
+// Why: the `insertMany` / `bulkWrite` methods the mongosh parser
+// dispatches. They sit on the write path, so they take no cancel-token
+// argument (the mongo driver does not support aborting an in-flight
+// write). Both inner fns follow the `update_many_inner` pattern
+// (`as_document()?` gate, no cancel handle) verbatim.
 
 async fn insert_many_documents_inner(
     state: &AppState,
@@ -396,7 +397,7 @@ async fn insert_many_documents_inner(
         .await
 }
 
-/// Sprint 308 — bulk insert multiple documents.
+/// Bulk insert multiple documents.
 ///
 /// Returns the server-assigned `_id` for each input document in **input
 /// order** (`Vec<DocumentId>`). Empty input short-circuits to `Ok(vec![])`
@@ -443,7 +444,7 @@ async fn bulk_write_documents_inner(
         .await
 }
 
-/// Sprint 308 — heterogeneous bulk-write.
+/// Heterogeneous bulk-write.
 ///
 /// Dispatches `db.coll.bulkWrite([...])`. The driver's `ordered: true`
 /// default applies — first failure short-circuits the remaining ops.
@@ -476,9 +477,10 @@ pub async fn bulk_write_documents(
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
-    //! 작성 이유 (2026-05-08, Sprint 237 P5): document/mutate.rs 6 commands
-    //! 핸들러를 `_inner(&AppState)` 로 추출했으니 prod 코드 직접 호출.
-    //! 시나리오 매트릭스: NotFound / Unsupported(document) / 트레이트 위임.
+    //! Why this module exists (2026-05-08): document/mutate.rs command
+    //! handlers were extracted as `_inner(&AppState)`, so the tests call
+    //! prod code directly.
+    //! Scenario matrix: NotFound / Unsupported(document) / trait delegation.
     use super::*;
     use crate::commands::test_util::{document_default, rdb_default, state_with};
     use crate::db::testing::StubDocumentAdapter;
@@ -796,13 +798,13 @@ mod tests {
             .is_ok());
     }
 
-    // ── Sprint 308 — insert_many_documents ─────────────────────────────
+    // ── insert_many_documents ─────────────────────────────
     //
-    // 작성 이유 (2026-05-14): A2 의 write-path 2 commands 각각 NotFound /
-    // Unsupported(document) / 트레이트 위임 매트릭스 통과 검증. Stub 의
-    // override 슬롯을 이용해 inserted_ids 의 길이만 흘려보낸 minimal happy
-    // path 로 wiring 만 단언 (정확한 driver-id 모양은 integration test 에서
-    // testcontainers 실행으로 검증).
+    // Why (2026-05-14): verify that the write-path commands each pass the
+    // NotFound / Unsupported(document) / trait delegation matrix. Uses the
+    // stub's override slot to return only an `inserted_ids` length in a
+    // minimal happy path, asserting just the wiring (the exact driver-id
+    // shape is verified by the integration tests that run testcontainers).
 
     #[tokio::test]
     async fn insert_many_unknown_connection_returns_notfound() {
@@ -850,7 +852,7 @@ mod tests {
         assert_eq!(r.len(), 2);
     }
 
-    // ── Sprint 308 — bulk_write_documents ──────────────────────────────
+    // ── bulk_write_documents ──────────────────────────────
 
     #[tokio::test]
     async fn bulk_write_unknown_connection_returns_notfound() {

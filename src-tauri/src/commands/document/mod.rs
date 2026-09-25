@@ -1,12 +1,12 @@
-//! Commands scoped to the document paradigm (Phase 6 / Sprints 66 + 72 + 80).
+//! Commands scoped to the document paradigm.
 //!
-//! Sprint 66 introduced the first four document-flavoured Tauri commands,
+//! The first four document-flavoured Tauri commands are
 //! each a thin dispatcher that resolves the active connection, grabs the
 //! `DocumentAdapter` via `ActiveAdapter::as_document()?`, and forwards to
-//! the adapter trait method. Sprint 72 adds `aggregate_documents` alongside
+//! the adapter trait method. `aggregate_documents` sits alongside
 //! `find_documents` so the frontend can submit an aggregation pipeline.
-//! Sprint 80 (Phase 6 F-1) closes the backend half of the write path by
-//! adding `insert_document` / `update_document` / `delete_document`.
+//! `insert_document` / `update_document` / `delete_document` close the
+//! backend half of the write path.
 //! All commands are registered in `src-tauri/src/lib.rs::run()`.
 //!
 //! Module split follows the RDB convention:
@@ -16,15 +16,15 @@
 //!   - `query`  — document read-path execution (`find_documents`,
 //!     `aggregate_documents`).
 //!   - `mutate` — write-path dispatch (`insert_document`,
-//!     `update_document`, `delete_document`). Sprint 86 (F-2) will wire the
-//!     frontend `mqlGenerator.ts` + `useDataGridEdit` paradigm dispatch, and
-//!     Sprint 87 (F-3) will complete the inline-edit UI + AddDocumentModal.
+//!     `update_document`, `delete_document`). The frontend
+//!     `mqlGenerator.ts` + `useDataGridEdit` paradigm dispatch and the
+//!     inline-edit UI + AddDocumentModal remain to be wired.
 //!
-//! Sprint 237 P5+ (2026-05-08) — `register_cancel_token` /
+//! (2026-05-08) — `register_cancel_token` /
 //! `release_cancel_token` helpers were hoisted to `commands/mod.rs` (twin
-//! copy with `commands/rdb/mod.rs` collapsed). sub-files 의
-//! `use super::{register_cancel_token, release_cancel_token}` 호환을 위해
-//! re-export 만 둔다.
+//! copy with `commands/rdb/mod.rs` collapsed). Only re-exports remain,
+//! so the sub-files' `use super::{register_cancel_token,
+//! release_cancel_token}` keeps working.
 
 pub mod browse;
 mod bulk_write_parse;

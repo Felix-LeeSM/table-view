@@ -2,7 +2,7 @@
 //! `execute_query_batch` (free-form SQL) + `query_table_data` /
 //! `stream_table_rows` (table-row paging / streaming).
 //!
-//! Sprint 202 split from `db/postgres.rs`. SQL-string normalization
+//! Split out of `db/postgres.rs`. SQL-string normalization
 //! helpers (`strip_leading_comments`, `strip_trailing_terminator`,
 //! `pg_cast_type`) co-located here since query-path is the sole consumer.
 
@@ -24,12 +24,11 @@ use crate::models::{
 use super::mutations::{qualified_table, quote_identifier, validate_identifier};
 use super::PostgresAdapter;
 
-/// Sprint 232 — build a deterministic fallback `ORDER BY` clause from
+/// Build a deterministic fallback `ORDER BY` clause from
 /// the table's primary-key columns when the caller supplies no explicit
 /// ordering. Returns `" ORDER BY \"<pk1>\" ASC[, \"<pk2>\" ASC …]"` when
 /// at least one column has `is_primary_key == true`, or an empty string
-/// otherwise (preserves the pre-Sprint-232 behavior for views and
-/// PK-less tables).
+/// otherwise (the older behavior, kept for views and PK-less tables).
 ///
 /// PK columns are emitted in the order they appear in `columns`, which
 /// the schema fetcher already sorts by `pg_attribute.attnum` (= declared
@@ -109,7 +108,7 @@ fn strip_trailing_terminator(sql: &str) -> &str {
     sql.trim_end_matches(|c: char| c == ';' || c.is_whitespace())
 }
 
-/// Sprint 261 (ADR 0026) — convert a `Value::Number` cell to
+/// ADR 0026 — convert a `Value::Number` cell to
 /// `Value::String(n.to_string())` when its column `data_type` belongs to a
 /// precision-sensitive family (PG `bigint`/`int8`/`bigserial`,
 /// `numeric`/`decimal`). All other cells (and other variants) pass through
@@ -201,7 +200,7 @@ fn row_payload_error_marker(column_count: usize, reason: &str) -> Vec<serde_json
 /// - **positional** alignment against `data_types` (order the JSON keys are
 ///   emitted in), never name lookup — duplicate output column names would
 ///   collapse under `serde_json::Map`;
-/// - Sprint 261 (ADR 0026) **bigint / numeric stringify** per column so the JS
+/// - ADR 0026 **bigint / numeric stringify** per column so the JS
 ///   side preserves digit-for-digit precision (`JSON.parse` else coerces to f64);
 /// - a parse failure or a value/column count mismatch surfaces a **marker row**
 ///   rather than a silent all-`Null` or an aborted stream.
@@ -264,11 +263,12 @@ fn pg_cast_type(data_type: &str) -> Option<&'static str> {
     }
 }
 
-/// #2430 — PostgreSQL 방언의 비교 토큰. 이식 가능 토큰 표
-/// (`FilterOperator::comparison_sql`) 는 어느 어댑터에서나 같은 철자인 것만
-/// 담으므로 `ILIKE` 가 거기 없다. 이 함수가 PostgreSQL 철자를 얹고 나머지는 그
-/// 표로 넘긴다 — 다른 방언이 자기 철자를 갖게 되면 그 어댑터에 같은 모양의
-/// 해석기를 둔다.
+/// #2430 — comparison tokens for the PostgreSQL dialect. The portable token
+/// table (`FilterOperator::comparison_sql`) holds only the tokens spelled the
+/// same way in every adapter, so `ILIKE` is not there. This function supplies
+/// the PostgreSQL spelling and hands everything else to that table — when
+/// another dialect gains its own spelling, its adapter gets a resolver of the
+/// same shape.
 fn pg_comparison_sql(operator: &FilterOperator) -> Option<&'static str> {
     match operator {
         FilterOperator::Ilike => Some("ILIKE"),
@@ -774,7 +774,7 @@ impl PostgresAdapter {
         crate::db::traits::finalize_cancelled(result, cancel_token)
     }
 
-    /// Sprint 183 — execute a list of statements inside a single
+    /// Execute a list of statements inside a single
     /// transaction. All-or-nothing: a failure on statement K rolls back
     /// statements 1..K-1 and surfaces the original sqlx error wrapped in
     /// `AppError::Database("statement K of N failed: <msg>")`. Empty input
@@ -871,7 +871,7 @@ impl PostgresAdapter {
         }
     }
 
-    /// Sprint 247 (ADR 0022 Phase 3) — dry-run a list of statements inside
+    /// ADR 0022 — dry-run a list of statements inside
     /// a single transaction WITHOUT committing. Same shape as
     /// `execute_query_batch`, but the transaction is unconditionally
     /// rolled back at the end so the database is left untouched.
@@ -1174,7 +1174,7 @@ impl PostgresAdapter {
                 }
             }
             if !order_parts.is_empty() {
-                // Sprint 243 — append PK columns (ASC) as a tiebreaker
+                // Append PK columns (ASC) as a tiebreaker
                 // when the user's sort doesn't already cover them. PG
                 // freely reorders rows with equal sort keys based on
                 // physical heap layout; an UPDATE moves the tuple to
@@ -1184,8 +1184,8 @@ impl PostgresAdapter {
                 // pins the order deterministically. Skipped when the
                 // user already sorted by every PK column (no point
                 // appending a redundant clause). Same rationale as
-                // Sprint 232's no-sort fallback, extended to the
-                // user-supplied path.
+                // the no-sort fallback, extended to the user-supplied
+                // path.
                 let pk_tiebreaker_parts: Vec<String> = columns
                     .iter()
                     .filter(|c| c.is_primary_key && !user_sort_columns.contains(&c.name))
@@ -1197,7 +1197,7 @@ impl PostgresAdapter {
             }
         }
 
-        // Sprint 232 — when the user supplies no `order_by` (or the
+        // When the user supplies no `order_by` (or the
         // supplied string yields zero valid parts above), fall back to
         // the table's PK columns in `ASC` order. This makes DataGrid
         // refetches deterministic and keeps an UPDATEd row in its
@@ -1248,22 +1248,23 @@ impl PostgresAdapter {
             executed_query,
         })
     }
-    /// Sprint 192 — server-side cursor 기반 row streaming.
+    /// Row streaming on a server-side cursor.
     ///
     /// `BEGIN; DECLARE NO SCROLL CURSOR FOR SELECT row_to_json(t)::text FROM
     /// "schema"."table" t; FETCH FORWARD batch_size; …; CLOSE; COMMIT`.
-    /// row_to_json 으로 모든 PG 타입을 JSON 으로 직렬화 — bytea (`\x...`),
-    /// timestamp (ISO 8601), array / JSON / record 모두 자동 처리.
+    /// `row_to_json` serialises every PG type to JSON — bytea (`\x...`),
+    /// timestamp (ISO 8601), array / JSON / record are all handled for us.
     ///
-    /// 호출자가 넘긴 `column_names` 를 source order 로 신뢰하고, JSON
-    /// object 에서 그 순서대로 lookup 해 `Vec<Value>` 를 만든다.
-    /// `serde_json::Map` 은 `preserve_order` feature 가 비활성이라
-    /// alphabetical sorted 일 수 있는데, lookup-by-name 으로 우회.
+    /// The `column_names` the caller passes are trusted as the source order;
+    /// the JSON object is looked up in that order to build the `Vec<Value>`.
+    /// `serde_json::Map` may come back alphabetically sorted because the
+    /// `preserve_order` feature is off, and lookup-by-name sidesteps that.
     ///
-    /// Cancellation: 매 batch loop 의 시작에서 `cancel.is_cancelled()` 를
-    /// 체크. token fired / receiver drop 모두 `CLOSE cursor; ROLLBACK` 한
-    /// 뒤 `AppError::Database("Operation cancelled")` 또는 `"Receiver
-    /// dropped — export aborted"` 를 반환한다.
+    /// Cancellation: `cancel.is_cancelled()` is checked at the top of every
+    /// batch loop. Both a fired token and a dropped receiver run
+    /// `CLOSE cursor; ROLLBACK` and then return
+    /// `AppError::Database("Operation cancelled")` or `"Receiver
+    /// dropped — export aborted"`.
     pub async fn stream_table_rows(
         &self,
         schema: &str,
@@ -1377,7 +1378,7 @@ impl PostgresAdapter {
         Ok(total)
     }
 
-    /// Sprint 237 — count rows where `column` is `NULL` on
+    /// Count rows where `column` is `NULL` on
     /// `"<schema>"."<table>"`. Backs the `count_null_rows` Tauri command
     /// used by `ColumnsEditor` to surface a pre-execution warning before
     /// the user toggles SET NOT NULL on a nullable column. Identifiers
@@ -1467,7 +1468,7 @@ mod tests {
     }
 
     // -------------------------------------------------------------------
-    // Sprint 130 — sub-pool LRU + switch_active_db unit tests
+    // Sub-pool LRU + switch_active_db unit tests
     // -------------------------------------------------------------------
     //
     // The cache-hit / eviction / current_db-protection tests drive the
@@ -1717,13 +1718,13 @@ mod tests {
     }
 
     // -------------------------------------------------------------------
-    // Sprint 232 — default ORDER BY by primary key.
+    // Default ORDER BY by primary key.
     // -------------------------------------------------------------------
     //
-    // User report (2026-05-07): "기본적으로 id 기반으로 sorting 하게
-    // 해주고, update 했을 때 update 한 row 가 가장 밑으로 내려가는
-    // 버그 수정해줘". Root cause: `query_table_data` emitted no
-    // ORDER BY when the caller passed `order_by = None`, so PG returned
+    // User report (2026-05-07): "sort by id by default, and fix the bug
+    // where an updated row drops to the very bottom". Root cause:
+    // `query_table_data` emitted no ORDER BY when the caller passed
+    // `order_by = None`, so PG returned
     // rows in heap order — and an UPDATE moves a row to the heap tail
     // (dead tuple + new tuple-at-tail). Fallback to PK-ordered ASC
     // closes both complaints with a single SQL-builder change.
@@ -1791,7 +1792,7 @@ mod tests {
     }
 
     // [AC-232-03] — A table without a PK falls back to the empty string,
-    // which preserves the pre-Sprint-232 behavior (no ORDER BY emitted).
+    // which preserves the older behavior (no ORDER BY emitted).
     // Views and unlogged tables hit this path. Date 2026-05-07.
     #[test]
     fn build_default_order_clause_no_pk_returns_empty() {
@@ -1812,7 +1813,7 @@ mod tests {
         );
     }
 
-    // [AC-232-05 회귀] — User-reported repro shape: a `users` table with
+    // [AC-232-05 regression] — User-reported repro shape: a `users` table with
     // a single `id` PK plus a couple of plain columns. Asserts that the
     // helper emits exactly the clause that prevents the UPDATE-tail
     // shift. Date 2026-05-07.
@@ -1835,15 +1836,17 @@ mod tests {
         assert_eq!(build_default_order_clause(&cols), "");
     }
 
-    // ── strip_leading_comments / strip_trailing_terminator 보강 ──────────
-    // 작성: 2026-05-07. 기존 strip_* 테스트가 happy path + 코멘트 분기를
-    // 커버하지만 (a) "코멘트 없이 leading whitespace 만" (b) "빈 입력"
-    // edge 가 비어있어 P4 (빈/누락 입력 분기 동등 비중) 보강.
+    // ── strip_leading_comments / strip_trailing_terminator coverage ──────
+    // Written 2026-05-07. The existing strip_* tests cover the happy path and
+    // the comment branches, but the (a) "leading whitespace with no comment"
+    // and (b) "empty input" edges were missing, so P4 (empty / missing input
+    // branches weigh the same) is filled in here.
 
     #[test]
     fn strip_leading_comments_trims_leading_whitespace_only_without_comment() {
-        // 코멘트 분기를 모두 패스해 break 로 빠지는 경로 — 기존 테스트는
-        // 항상 코멘트 시작으로 분기를 들어가서 이 path 가 비어있었다.
+        // The path that skips every comment branch and falls out through
+        // `break` — the existing tests always entered on a comment start, so
+        // this path had no coverage.
         assert_eq!(strip_leading_comments("   \n\t SELECT 1"), "SELECT 1");
     }
 
@@ -1854,8 +1857,9 @@ mod tests {
 
     #[test]
     fn strip_trailing_terminator_trims_trailing_whitespace_without_semicolon() {
-        // trim_end_matches 자체는 자명하지만 ;없이 whitespace 만 trim 되는
-        // path 가 기존 테스트에서 누락. 회귀 가드.
+        // `trim_end_matches` itself is obvious, but the path that trims only
+        // whitespace with no `;` was missing from the existing tests. Regression
+        // guard.
         assert_eq!(strip_trailing_terminator("SELECT 1   \n"), "SELECT 1");
     }
 
@@ -1865,9 +1869,10 @@ mod tests {
     }
 
     // ── pg_comparison_sql (#2430) ─────────────────────────────────────────
-    // 두 축을 같이 잰다: PostgreSQL 해석기는 `ILIKE` 를 내고, 이식 가능 토큰
-    // 표는 안 낸다. 뒤엣것이 깨지면 MySQL·MSSQL·Oracle 어댑터가 자기 방언에
-    // 없는 토큰을 그대로 쿼리에 싣는다.
+    // Measures both axes together: the PostgreSQL resolver emits `ILIKE` and
+    // the portable token table does not. If the latter breaks, the MySQL,
+    // MSSQL and Oracle adapters put a token their dialect does not have
+    // straight into the query.
 
     #[test]
     fn pg_comparison_sql_renders_ilike_for_postgres() {
@@ -1887,9 +1892,10 @@ mod tests {
     }
 
     // ── pg_cast_type ──────────────────────────────────────────────────────
-    // 작성: 2026-05-07. information_schema.columns.data_type → SQL cast
-    // 타깃 매핑. parameterized 쿼리에서 bind 시 캐스트 누락 → 타입 추론
-    // 실패 회귀를 차단. happy path + edge (text-like → None, 미지 → None).
+    // Written 2026-05-07. Maps information_schema.columns.data_type to the SQL
+    // cast target. Blocks the regression where a missing cast on a bind in a
+    // parameterized query makes type inference fail. Happy path + edges
+    // (text-like → None, unknown → None).
 
     #[test]
     fn pg_cast_type_integer_family() {
@@ -1900,7 +1906,7 @@ mod tests {
 
     #[test]
     fn pg_cast_type_numeric_aliases_collapse_to_numeric() {
-        // PG 는 `numeric` 과 `decimal` 을 alias 로 취급. 둘 다 같은 cast.
+        // PG treats `numeric` and `decimal` as aliases. Both take the same cast.
         assert_eq!(pg_cast_type("numeric"), Some("numeric"));
         assert_eq!(pg_cast_type("decimal"), Some("numeric"));
     }
@@ -1913,9 +1919,9 @@ mod tests {
 
     #[test]
     fn pg_cast_type_timestamp_distinguishes_with_timezone() {
-        // information_schema 는 "timestamp without time zone" /
-        // "timestamp with time zone" 를 풀 표현으로 보고하므로 그 형태가
-        // 입력 — 출력은 `timestamp` / `timestamptz` 의 PG canonical 이름.
+        // information_schema reports the full spellings "timestamp without
+        // time zone" / "timestamp with time zone", so those are the input —
+        // the output is the PG canonical name, `timestamp` / `timestamptz`.
         assert_eq!(
             pg_cast_type("timestamp without time zone"),
             Some("timestamp")
@@ -1941,7 +1947,8 @@ mod tests {
 
     #[test]
     fn pg_cast_type_text_like_returns_none_no_cast_needed() {
-        // text 계열은 bind 시 그냥 text 로 가도 PG 가 추론하므로 cast 불요.
+        // For the text family PG infers the type from a plain text bind, so no
+        // cast is needed.
         for t in &[
             "text",
             "varchar",
@@ -1956,29 +1963,29 @@ mod tests {
 
     #[test]
     fn pg_cast_type_unknown_returns_none() {
-        // 새 타입(예: jsonb, money, geometry) 은 None — 호출 측에서 cast
-        // 없이 bind. 기존 안전 path 유지.
+        // Newer types (jsonb, money, geometry) return None — the caller binds
+        // without a cast, keeping the existing safe path.
         assert_eq!(pg_cast_type("jsonb"), None);
         assert_eq!(pg_cast_type("money"), None);
         assert_eq!(pg_cast_type(""), None);
     }
 
-    // ── Sprint 261 (ADR 0026) — numeric stringify helper ─────────────────
-    // 작성: 2026-05-11. `row_to_json(q)::text` 가 bigint/numeric 을 raw
-    // JSON number 로 직렬화하면 native JSON.parse 단계에서 IEEE 754 f64
-    // 변환으로 정밀도가 소실된다. helper 는 `column.data_type` 을 보고
-    // 정밀도 위험 컬럼 cell 만 `Value::String(n.to_string())` 으로
-    // pre-stringify 해서 wire 위에 string token 으로 올린다. 4 site
-    // (execute_query, query_table_data, stream_table_rows) 에서 같은
-    // 헬퍼를 재사용하므로 분기 의미를 여기 한 곳에 묶어둔다.
+    // ── ADR 0026 — numeric stringify helper ──────────────────────────────
+    // Written 2026-05-11. When `row_to_json(q)::text` serialises bigint/numeric
+    // as raw JSON number tokens, the native `JSON.parse` step converts them to
+    // IEEE 754 f64 and precision is lost. The helper reads `column.data_type`
+    // and pre-stringifies only the cells of precision-sensitive columns into
+    // `Value::String(n.to_string())`, so they travel the wire as string tokens.
+    // `execute_query`, `query_table_data` and `stream_table_rows` all reuse the
+    // same helper, so the branch semantics are pinned here in one place.
 
     fn n(i: i64) -> serde_json::Value {
         serde_json::Value::Number(i.into())
     }
 
-    // [AC-261-02-PG-01] — bigint i64 max (>2^53-1) 값이 string 으로 wire 에
-    // 올라간다. JS BigInt 로 wrap 되기 전 단계에서 digits 가 보존되는지의
-    // 핵심 가드. Date 2026-05-11.
+    // [AC-261-02-PG-01] — a bigint i64 max (>2^53-1) value goes onto the wire
+    // as a string. The core guard that the digits survive the step before the
+    // JS side wraps them in BigInt. Date 2026-05-11.
     #[test]
     fn stringify_numeric_bigint_at_i64_max_emits_string() {
         let cell = n(i64::MAX);
@@ -1989,25 +1996,28 @@ mod tests {
         );
     }
 
-    // [AC-261-02-PG-01] — int8 alias 도 동일하게 처리. PG 가 보고하는
-    // `Pg::type_info()` 가 `INT8` 이라 lower-case 후 매칭. Date 2026-05-11.
+    // [AC-261-02-PG-01] — the int8 alias is handled the same way. PG reports
+    // `Pg::type_info()` as `INT8`, so the match runs after lower-casing.
+    // Date 2026-05-11.
     #[test]
     fn stringify_numeric_int8_alias_emits_string() {
         let out = stringify_numeric_if_precision_sensitive(n(42), "INT8");
         assert_eq!(out, serde_json::Value::String("42".to_string()));
     }
 
-    // [AC-261-02-PG-01] — bigserial 도 i64 라 같은 정밀도 위험. PK 의
-    // 일반 형태이므로 별도 케이스로 고정. Date 2026-05-11.
+    // [AC-261-02-PG-01] — bigserial is i64 too, so it carries the same
+    // precision risk. Pinned as its own case because it is the usual shape of a
+    // PK. Date 2026-05-11.
     #[test]
     fn stringify_numeric_bigserial_emits_string() {
         let out = stringify_numeric_if_precision_sensitive(n(1), "bigserial");
         assert_eq!(out, serde_json::Value::String("1".to_string()));
     }
 
-    // [AC-261-02-PG-02] — numeric / decimal / numeric(p,s) 모두 base-10
-    // 임의 정밀도라 f64 변환 불가. substring 매칭으로 `numeric(20,18)` 같은
-    // parameterized 표현도 잡는다. Date 2026-05-11.
+    // [AC-261-02-PG-02] — numeric / decimal / numeric(p,s) are all base-10
+    // arbitrary precision, so an f64 conversion is impossible. The substring
+    // match also catches parameterized spellings such as `numeric(20,18)`.
+    // Date 2026-05-11.
     #[test]
     fn stringify_numeric_decimal_family_emits_string() {
         let out = stringify_numeric_if_precision_sensitive(n(123), "numeric");
@@ -2021,8 +2031,9 @@ mod tests {
     }
 
     // [AC-261-02-PG-03] — int4 / int2 / real / double precision / float8 /
-    // float4 는 IEEE 754 f64 안전 범위이거나 정확히 같은 표현. wire 에서
-    // 그대로 number 토큰 유지 → JS Number 로 무손실. Date 2026-05-11.
+    // float4 either sit inside the IEEE 754 f64 safe range or have exactly the
+    // same representation. They stay number tokens on the wire → lossless as a
+    // JS Number. Date 2026-05-11.
     #[test]
     fn stringify_numeric_safe_number_families_pass_through() {
         for dt in &[
@@ -2040,10 +2051,11 @@ mod tests {
         }
     }
 
-    // [AC-261-02-PG-04] — number 가 아닌 cell (이미 string / null / object)
-    // 은 정밀도 위험 컬럼이어도 그대로 통과. row_to_json 이 null 이나
-    // 기존 string 으로 보내는 케이스 (예: 빈 cell, jsonb stringify 결과)
-    // 가 잘못 변환되지 않도록 가드. Date 2026-05-11.
+    // [AC-261-02-PG-04] — a non-number cell (already a string / null / object)
+    // passes through untouched even on a precision-sensitive column. Guards the
+    // cases `row_to_json` sends as null or as an existing string (an empty
+    // cell, a jsonb stringify result) against a wrong conversion.
+    // Date 2026-05-11.
     #[test]
     fn stringify_numeric_non_number_cell_passes_through() {
         for cell in &[
@@ -2061,9 +2073,9 @@ mod tests {
         }
     }
 
-    // [AC-261-02-PG-05] — 알 수 없는 data_type ("jsonb", "money", "") 은
-    // 정밀도 위험으로 분류 안 함. PG `money` 는 사용자 비활성, jsonb 는
-    // 별도 sprint (nested 정밀도) 로 미룸. Date 2026-05-11.
+    // [AC-261-02-PG-05] — an unknown data_type ("jsonb", "money", "") is not
+    // classified as precision-sensitive. PG `money` is disabled for users, and
+    // nested precision inside jsonb is not handled. Date 2026-05-11.
     #[test]
     fn stringify_numeric_unknown_type_passes_through() {
         let out = stringify_numeric_if_precision_sensitive(n(123), "jsonb");
@@ -2077,10 +2089,11 @@ mod tests {
     }
 
     // ── #1086 — data-modifying WITH classifier ───────────────────────────
-    // 작성: 2026-07-03. `with_is_data_modifying` 는 wrap(row_to_json) 경로와
-    // per-cell 경로를 가르는 분류기. false negative (data-modifying WITH 를
-    // 못 잡음) 는 wrap 재실행 → 커밋 후 에러 / 이중 INSERT 를 되살리므로
-    // 회귀 가드가 필수다. 입력은 uppercased stripped SQL.
+    // Written 2026-07-03. `with_is_data_modifying` is the classifier that
+    // splits the wrap (row_to_json) path from the per-cell path. A false
+    // negative (missing a data-modifying WITH) re-runs the wrap and brings back
+    // the post-commit error / double INSERT, so a regression guard is
+    // mandatory. The input is uppercased stripped SQL.
 
     #[test]
     fn with_is_data_modifying_detects_dml_ctes() {
@@ -2121,14 +2134,16 @@ mod tests {
     }
 
     // ── #1175 — per-cell timestamp format matches the wrap path ───────────
-    // 작성: 2026-07-03. per-cell 경로(SHOW/EXPLAIN/data-modifying WITH)의
-    // timestamp/timestamptz 직렬화가 wrap 경로(`row_to_json(q)::text`)와
-    // 같은 ISO-8601 `T` 구분자 형식이어야 한다. PG JSON 출력 규칙:
-    //  - `timestamp`  → `2024-01-15T10:30:00`, fractional 은 trailing-zero
-    //    trim (`.5`, `.123456`), offset 없음.
-    //  - `timestamptz`→ 위 + session UTC offset `+00:00`.
-    // 실측 동치성은 query_integration.rs 의 wrap↔per-cell 비교 테스트가
-    // 담당하고, 여기서는 형식 문자열을 결정론적으로 고정한다.
+    // Written 2026-07-03. The timestamp/timestamptz serialisation on the
+    // per-cell path (SHOW/EXPLAIN/data-modifying WITH) has to use the same
+    // ISO-8601 `T`-separator format as the wrap path
+    // (`row_to_json(q)::text`). PG's JSON output rules:
+    //  - `timestamp`  → `2024-01-15T10:30:00`, fractional parts are
+    //    trailing-zero trimmed (`.5`, `.123456`), no offset.
+    //  - `timestamptz`→ the above plus the session UTC offset `+00:00`.
+    // The measured equivalence is owned by the wrap↔per-cell comparison test in
+    // query_integration.rs; here the format strings are pinned
+    // deterministically.
 
     use sqlx::types::chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 

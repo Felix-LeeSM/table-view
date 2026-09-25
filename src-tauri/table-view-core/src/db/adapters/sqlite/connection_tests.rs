@@ -126,11 +126,12 @@ async fn test_sqlite_create_database_file_requires_absolute_path() {
     }
 }
 
-// [#1449] wave 27 보안 2차 P1-1. connect / create 가드가 `state.db`
-// exact-match 만 막아, `state.db.bak`(유효 SQLite 포맷) 를 열어 내부 상태를
-// read 하거나 `.key` / `connections.json` 을 create target 으로 덮어쓸 수
-// 있었다. 가드를 app_data_dir 전체 confine 으로 넓혀 fix. fix 전 아래 reject
-// assertion 은 RED — 모든 인접 파일이 connect/create 를 통과했다.
+// [#1449] security P1-1. The connect / create guard blocked only an exact
+// match on `state.db`, so `state.db.bak` (a valid SQLite format) could be
+// opened to read internal state and `.key` / `connections.json` could be
+// overwritten as a create target. Fixed by widening the guard to confine the
+// whole app_data_dir. Before the fix the reject assertions below were RED —
+// every neighbouring file passed connect/create.
 #[tokio::test]
 #[serial]
 async fn test_sqlite_rejects_internal_app_data_paths() {
@@ -147,12 +148,12 @@ async fn test_sqlite_rejects_internal_app_data_paths() {
         let target = dir.path().join(name);
         let target_str = target.to_str().unwrap();
 
-        // connect 가드 — 존재하는 `state.db.bak` 도 read 대상으로 열 수 없다.
+        // connect guard — even an existing `state.db.bak` cannot be opened for reading.
         match SqliteAdapter::validate_user_database_path(target_str) {
             Err(AppError::Validation(_)) => {}
             other => panic!("connect {name} must be rejected, got: {:?}", other),
         }
-        // create 가드 — 인접 credential 을 create target 으로 줄 수 없다.
+        // create guard — a neighbouring credential cannot be given as a create target.
         match SqliteAdapter::create_database_file(target_str).await {
             Err(AppError::Validation(_)) => {}
             other => panic!("create {name} must be rejected, got: {:?}", other),
@@ -160,7 +161,7 @@ async fn test_sqlite_rejects_internal_app_data_paths() {
         assert!(!target.exists(), "{name} must not be created");
     }
 
-    // 정상 회귀: app_data_dir 밖의 파일은 계속 connect/create 허용.
+    // Normal regression: files outside app_data_dir still allow connect/create.
     let outside = tempfile::tempdir().unwrap();
     let ok_db = outside.path().join("user.sqlite");
     SqliteAdapter::create_database_file(ok_db.to_str().unwrap())
@@ -168,9 +169,10 @@ async fn test_sqlite_rejects_internal_app_data_paths() {
         .unwrap();
     assert!(ok_db.exists(), "external db must still be created");
 
-    // 정상 회귀: `<data_dir>-fixtures` 처럼 data_dir 와 문자열 prefix 만
-    // 공유하는 sibling 은 내부가 아니다 (`Path::starts_with` 는 component
-    // 단위) — e2e smoke fixture 배치가 이 속성에 기댄다 (#1472 회귀).
+    // Normal regression: a sibling that shares only a string prefix with
+    // data_dir, like `<data_dir>-fixtures`, is not internal (`Path::starts_with`
+    // compares per component) — the e2e smoke fixture layout relies on this
+    // property (#1472 regression).
     let mut sibling = dir.path().as_os_str().to_owned();
     sibling.push("-fixtures");
     let sibling_db = std::path::PathBuf::from(sibling).join("fixture.sqlite");

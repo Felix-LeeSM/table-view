@@ -308,7 +308,7 @@ WHERE s.name = @P1
   AND o.type IN (N'P', N'FN', N'IF', N'TF', N'FS', N'FT')
   AND o.is_ms_shipped = 0";
 
-// Issue #1071 (2차) — DML triggers attached to (schema @P1, table @P2). The
+// Issue #1071 (pass 2) — DML triggers attached to (schema @P1, table @P2). The
 // `sys.tables` join scopes to table-parented triggers (DDL/server triggers have
 // `parent_id = 0`), while `sys.trigger_events` fans one row per fired event
 // (INSERT/UPDATE/DELETE) so the shape layer can fold them into one TriggerInfo.
@@ -364,11 +364,11 @@ mod tests {
         }
     }
 
-    // Reason: 회귀 #1071 (2차) — SQL Server trigger introspection 은 이전엔 trait
-    // default `Ok(Vec::new())` 스텁이라 항상 빈 목록이었다. 실 DB 없이 catalog
-    // 쿼리가 DML trigger 계약(sys.triggers ⨝ sys.trigger_events, 시스템 trigger
-    // 제외, per-event fan-out, body 는 OBJECT_DEFINITION)을 유지하는지 고정
-    // 한다 (2026-07-25).
+    // Reason: regression #1071 (pass 2) — SQL Server trigger introspection used
+    // to be the trait default `Ok(Vec::new())` stub, so it always returned an
+    // empty list. Without a live DB this pins that the catalog query keeps the
+    // DML trigger contract (sys.triggers ⨝ sys.trigger_events, system triggers
+    // excluded, per-event fan-out, body from OBJECT_DEFINITION) (2026-07-25).
     #[test]
     fn triggers_query_keeps_dml_trigger_contract() {
         assert!(TRIGGERS_SQL.contains("sys.triggers"));

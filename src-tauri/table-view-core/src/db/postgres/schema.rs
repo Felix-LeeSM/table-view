@@ -1,9 +1,8 @@
 //! PostgreSQL schema introspection — schemas, tables, views, functions,
 //! columns, indexes, constraints, databases.
 //!
-//! Sprint 202 split from `db/postgres.rs`. `format_fk_reference`
-//! co-located here since it is the canonical wire format consumed by
-//! the schema-aware FK rendering path (DataGridTable.tsx
+//! `format_fk_reference` is co-located here since it is the canonical wire
+//! format consumed by the schema-aware FK rendering path (DataGridTable.tsx
 //! `parseFkReference`).
 
 use sqlx::PgPool;
@@ -18,7 +17,7 @@ use super::category::{map_pg_data_type, normalize_pg_type, restore_serial};
 use super::connection::is_pg_database_permission_denied;
 use super::PostgresAdapter;
 
-/// Sprint 230 — canonical SQL emitted by `PostgresAdapter::list_types`.
+/// Canonical SQL emitted by `PostgresAdapter::list_types`.
 ///
 /// Captured as a `pub(crate) const &str` so the runtime executes the
 /// same byte-string the unit test (`list_types_sql_matches_canonical_fixture`)
@@ -142,7 +141,7 @@ pub(crate) const LIST_TABLES_SQL: &str = "SELECT c.relname, s.n_live_tup \
 /// `<schema>.<table>(<column>)` string consumed by the frontend
 /// (`parseFkReference` in `DataGridTable.tsx`).
 ///
-/// Sprint-89 (#FK-1): the previous implementation built this string in SQL
+/// #FK-1: the previous implementation built this string in SQL
 /// (`ccu.table_name || '.' || ccu.column_name`) which (a) silently dropped
 /// the schema and (b) made the format un-testable. This pure helper is the
 /// single source of truth for the wire format and is exercised by both unit
@@ -153,15 +152,14 @@ pub(crate) const LIST_TABLES_SQL: &str = "SELECT c.relname, s.n_live_tup \
 /// contain `.`, `(`, or `)` characters. The fixture intentionally exercises
 /// hyphens, underscores, and spaces (which round-trip cleanly through the
 /// regex on the TS side) but the format does not currently quote or escape
-/// reserved characters — adding that is tracked separately and is not in
-/// sprint-89's scope.
+/// reserved characters — adding that is tracked separately.
 pub(crate) fn format_fk_reference(schema: &str, table: &str, column: &str) -> String {
     format!("{schema}.{table}({column})")
 }
 
-// ── Sprint 272 — `pg_trigger.tgtype` bitmask decoder ───────────────────────
+// ── `pg_trigger.tgtype` bitmask decoder ────────────────────────────────────
 
-/// Sprint 272 — bit constants for `pg_trigger.tgtype`. Sourced from the
+/// Bit constants for `pg_trigger.tgtype`. Sourced from the
 /// PostgreSQL source tree (`src/include/catalog/pg_trigger.h`); reproduced
 /// here so the unit tests assert against an explicit byte-vs-meaning map.
 pub(crate) const TRIGGER_TYPE_ROW: i16 = 0x01;
@@ -221,7 +219,7 @@ pub(crate) fn decode_tgtype(tgtype: i16) -> DecodedTgtype {
         "STATEMENT"
     };
 
-    // Sprint 272 — TRUNCATE is dropped from the event list. The list is
+    // TRUNCATE is dropped from the event list. The list is
     // built in fixed `INSERT, UPDATE, DELETE` order to keep the rendered
     // summary deterministic; the user-visible label `"BEFORE INSERT OR
     // UPDATE"` never depends on which bit happened to be set in PG's
@@ -249,7 +247,7 @@ pub(crate) fn decode_tgtype(tgtype: i16) -> DecodedTgtype {
     }
 }
 
-/// Sprint 272 — render `pg_trigger.tgargs` (PG stores it as a `bytea` of
+/// Render `pg_trigger.tgargs` (PG stores it as a `bytea` of
 /// null-delimited C strings, terminated by an empty string) into the
 /// display form `'arg1', 'arg2'`. Returns `None` when the trigger function
 /// takes no arguments (empty `tgargs` blob).
@@ -329,10 +327,10 @@ impl PostgresAdapter {
         table: &str,
         schema: &str,
     ) -> Result<Vec<ColumnInfo>, AppError> {
-        // Sprint 258 — `information_schema.columns.data_type` 는 generic
-        // 명 ("character varying") 만 노출. `pg_catalog.format_type` 으로
-        // 길이/정밀도/배열 표기 (`varchar(200)`, `numeric(10,2)`,
-        // `text[]`) 까지 DDL-level 그대로 가져온다.
+        // `information_schema.columns.data_type` exposes only the generic
+        // name ("character varying"). `pg_catalog.format_type` brings the
+        // length/precision/array notation (`varchar(200)`, `numeric(10,2)`,
+        // `text[]`) across at DDL level as-is.
         // #1433 — `attidentity` ('a'/'d') marks GENERATED … AS IDENTITY
         // columns, which have NO `pg_attrdef` row (unlike serial's
         // `nextval(...)` default). The frontend INSERT generator needs the
@@ -374,7 +372,7 @@ impl PostgresAdapter {
         let pk_columns: std::collections::HashSet<String> =
             pk_rows.into_iter().map(|(col,)| col).collect();
 
-        // Sprint-89 (#FK-1): select schema/table/column as 3 separate columns
+        // #FK-1: select schema/table/column as 3 separate columns
         // so we can format the FK reference in Rust via `format_fk_reference`,
         // matching the `<schema>.<table>(<column>)` contract that the
         // frontend's `parseFkReference` expects.
@@ -459,10 +457,11 @@ impl PostgresAdapter {
                     };
                     let comment = comment_map.get(&name).and_then(Option::clone);
                     let check_clauses = check_map.remove(&name).unwrap_or_default();
-                    // Sprint 258 — category 매핑은 raw format_type 결과 (parameter
-                    // 표기 포함) 에서 base 만 추출하므로 정규화 전후 무관. 사용자
-                    // 표시용 data_type 은 단축형으로 정규화.
-                    // Sprint 259 — nextval(...) default 패턴 검출 시 정수 → serial.
+                    // The category mapping extracts only the base from the raw
+                    // format_type result (parameter notation included), so it is
+                    // unaffected by normalization. The user-facing data_type is
+                    // normalized to the short form.
+                    // On a detected nextval(...) default pattern, integer → serial.
                     let category = map_pg_data_type(&data_type);
                     let data_type = normalize_pg_type(&data_type);
                     let data_type = restore_serial(data_type, default_value.as_deref());
@@ -491,10 +490,11 @@ impl PostgresAdapter {
     ) -> Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError> {
         let pool = self.active_pool().await?;
 
-        // Sprint 258 — DDL-level type 노출용 `pg_catalog.format_type`
-        // 사용 (information_schema.columns.data_type 는 generic 명만 노출).
-        // #1433 — attidentity: GENERATED … AS IDENTITY 컬럼은 pg_attrdef
-        // row 가 없어 default 만으로는 식별 불가 (per-table 쿼리와 동일).
+        // `pg_catalog.format_type` is used to expose the DDL-level type
+        // (information_schema.columns.data_type exposes only the generic name).
+        // #1433 — attidentity: a GENERATED … AS IDENTITY column has no
+        // pg_attrdef row, so the default alone cannot identify it (same as the
+        // per-table query).
         let col_rows: Vec<(String, String, String, String, Option<String>, bool)> = sqlx::query_as(
             "SELECT c.relname, a.attname, \
                     pg_catalog.format_type(a.atttypid, a.atttypmod), \
@@ -530,7 +530,7 @@ impl PostgresAdapter {
         .map_err(|e| AppError::Connection(e.to_string()))?;
 
         // Foreign keys for all tables in the schema.
-        // Sprint-89 (#FK-1): same restructuring as `get_table_columns` —
+        // #FK-1: same restructuring as `get_table_columns` —
         // separate schema/table/column columns + Rust-side formatting.
         let fk_rows: Vec<(String, String, String, String, String)> = sqlx::query_as(
             "SELECT kcu.table_name, kcu.column_name, \
@@ -802,7 +802,7 @@ impl PostgresAdapter {
             .collect())
     }
 
-    /// Sprint 230 — list every Postgres type visible to the active
+    /// List every Postgres type visible to the active
     /// connection (built-ins from `pg_catalog`, extension types from
     /// any other schema, user-defined enums / domains / ranges /
     /// composites). The SQL string is captured in the module-level
@@ -922,7 +922,7 @@ impl PostgresAdapter {
     ) -> Result<Vec<ColumnInfo>, AppError> {
         let pool = self.active_pool().await?;
 
-        // Sprint 258 — DDL-level type 노출용 format_type. view 도 동일 패턴.
+        // format_type exposes the DDL-level type. Views use the same pattern.
         let rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
             "SELECT a.attname, \
                     pg_catalog.format_type(a.atttypid, a.atttypmod), \
@@ -1044,7 +1044,7 @@ impl PostgresAdapter {
         }
     }
 
-    /// Sprint 272 — list triggers attached to `(schema, table)`.
+    /// List triggers attached to `(schema, table)`.
     ///
     /// Filters `tgisinternal = true` (PG-managed FK / RI / replication
     /// triggers) so only user-defined triggers surface. `tgtype` is the
@@ -1129,7 +1129,7 @@ impl PostgresAdapter {
         Ok(out)
     }
 
-    /// Sprint 272 — `pg_get_triggerdef(t.oid)` for a single trigger.
+    /// `pg_get_triggerdef(t.oid)` for a single trigger.
     ///
     /// Identifiers bound parametrically. `relkind IN ('r', 'p', 'v', 'm')`
     /// is implicit via the join on the named (schema, table) — `pg_trigger`
@@ -1169,7 +1169,7 @@ impl PostgresAdapter {
 
     /// List every non-template database visible to the connected role.
     ///
-    /// Sprint 128 — counterpart to `DocumentAdapter::list_databases`. The
+    /// Counterpart to `DocumentAdapter::list_databases`. The
     /// canonical query is `SELECT datname FROM pg_database WHERE
     /// datistemplate = false ORDER BY datname`. Hosted PG (RDS, Cloud SQL,
     /// Supabase, Neon free tier) frequently revokes `SELECT` on
@@ -1215,7 +1215,7 @@ impl PostgresAdapter {
         }
     }
 
-    /// Sprint 335 (Slice M live wire) — `CREATE DATABASE "<name>"`.
+    /// `CREATE DATABASE "<name>"`.
     ///
     /// PG forbids CREATE/DROP DATABASE inside an explicit transaction
     /// block, so we send the statement through `sqlx::query` against the
@@ -1235,7 +1235,7 @@ impl PostgresAdapter {
         Ok(())
     }
 
-    /// Sprint 336 (U1 live wire) — `pg_stat_activity` snapshot. Excludes
+    /// U1 — `pg_stat_activity` snapshot. Excludes
     /// the current backend so the user does not see their own session
     /// in the activity grid. `state`, `wait_event`, `query` are nullable
     /// in PG → surfaced as `Option<String>` verbatim. `query_start` is
@@ -1283,7 +1283,7 @@ impl PostgresAdapter {
             .collect())
     }
 
-    /// Sprint 336 (U1 live wire) — `pg_terminate_backend(pid)`. Returns
+    /// U1 — `pg_terminate_backend(pid)`. Returns
     /// `Ok(())` unconditionally on driver success — PG returns a boolean
     /// indicating whether the backend was alive, but per the spec
     /// "missing PID" is a successful no-op rather than an error.
@@ -1297,7 +1297,7 @@ impl PostgresAdapter {
         Ok(())
     }
 
-    /// Sprint 335 (Slice M live wire) — `DROP DATABASE "<name>"`.
+    /// `DROP DATABASE "<name>"`.
     ///
     /// Same auto-commit assumption as `create_database`. PG further
     /// requires no active sessions on the target database; the user is
@@ -1315,13 +1315,13 @@ impl PostgresAdapter {
         Ok(())
     }
 
-    /// Sprint 337 (U2 live wire) — `EXPLAIN (FORMAT JSON) <sql>`.
+    /// U2 — `EXPLAIN (FORMAT JSON) <sql>`.
     ///
-    /// `FORMAT JSON` 은 PG 가 plan tree 를 single-row, single-column
-    /// `JSON` 결과로 직렬화하게 한다. result row 가 정확히 1개 / column 도
-    /// 정확히 1개여야 하며, 그 안에 `Vec<Plan>` 형태의 JSON array 가
-    /// 들어있다. `ANALYZE` 는 의도적으로 쓰지 않는다 — Explain UI 는
-    /// plan inspection 이지 profiler / activity path 가 아니다.
+    /// `FORMAT JSON` makes PG serialize the plan tree into a single-row,
+    /// single-column `JSON` result. The result must have exactly one row and
+    /// exactly one column, holding a JSON array shaped like `Vec<Plan>`.
+    /// `ANALYZE` is deliberately not used — the Explain UI is plan inspection,
+    /// not a profiler / activity path.
     pub async fn explain_query(&self, sql: &str) -> Result<serde_json::Value, AppError> {
         let trimmed = sql.trim();
         if trimmed.is_empty() {
@@ -1336,7 +1336,7 @@ impl PostgresAdapter {
         Ok(row.0)
     }
 
-    /// Sprint 340 (U5 live wire) — top-N slow queries from the
+    /// U5 — top-N slow queries from the
     /// `pg_stat_statements` extension. The extension is OPTIONAL — when
     /// it has not been created, sqlx surfaces a `relation
     /// "pg_stat_statements" does not exist` error which we wrap with a
@@ -1392,7 +1392,7 @@ impl PostgresAdapter {
             .collect())
     }
 
-    /// Sprint 339 (U4 live wire) — server identity (`version()` +
+    /// U4 — server identity (`version()` +
     /// host) + tuning flags from `pg_settings`. `extras` carries the
     /// full pg_settings whitelist row-by-row so the UI can render a
     /// raw subsection without hardcoding setting names.
@@ -1506,7 +1506,7 @@ impl PostgresAdapter {
             .collect())
     }
 
-    /// Sprint 338 (U3 live wire) — table stats from
+    /// U3 — table stats from
     /// `pg_stat_user_tables` + `pg_total_relation_size`. Identifiers
     /// are validated by the shared `validate_identifier` helper before
     /// SQL emission. Returns row count from `n_live_tup` (approximate;
@@ -1669,7 +1669,7 @@ mod tests {
             "Expected 'Not connected' error, got: {err_msg}"
         );
     }
-    // ── Sprint-89 (#FK-1) — `format_fk_reference` unit + fixture tests ──
+    // ── #FK-1 — `format_fk_reference` unit + fixture tests ──────────────
 
     #[test]
     fn format_fk_reference_happy_path() {
@@ -1783,7 +1783,7 @@ mod tests {
         }
     }
 
-    // Sprint 337 (U2 live wire) — explain_query unit cases.
+    // U2 — explain_query unit cases.
     #[tokio::test]
     async fn explain_query_rejects_empty_sql() {
         let adapter = PostgresAdapter::new();
@@ -1815,7 +1815,7 @@ mod tests {
         }
     }
 
-    // Sprint 338 (U3 live wire) — collection_stats unit cases.
+    // U3 — collection_stats unit cases.
     #[tokio::test]
     async fn collection_stats_rejects_empty_schema() {
         let adapter = PostgresAdapter::new();
@@ -1858,7 +1858,7 @@ mod tests {
         }
     }
 
-    // Sprint 339 (U4 live wire) — server_info: takes no parameters so
+    // U4 — server_info: takes no parameters so
     // only the no-connection path is reachable from unit tests; real
     // version()/pg_settings shape is covered by integration tests.
     #[tokio::test]
@@ -1872,7 +1872,7 @@ mod tests {
         }
     }
 
-    // Sprint 340 (U5 live wire) — slow_queries: takes only `limit` so
+    // U5 — slow_queries: takes only `limit` so
     // only the no-connection path is unit-testable. The real
     // pg_stat_statements shape + missing-extension error wrapping is
     // covered by integration tests.
@@ -1944,7 +1944,7 @@ mod tests {
             "rolpassword is the credential column — must not be selected"
         );
     }
-    // ── Sprint 230 — list_types SQL builder fixture ────────────────────
+    // ── list_types SQL builder fixture ─────────────────────────────────
 
     /// Asserts the runtime SQL string matches the canonical filter set
     /// byte-for-byte. Any future tweak (new typtype, additional schema
@@ -2002,25 +2002,27 @@ mod tests {
 
     // ── #1229 — list_schemas must not leak internal temp namespaces ────
     //
-    // 작성 이유 (2026-07-03, 사용자 직접 리포트): `CREATE TEMP TABLE` 이
-    // backend 슬롯별로 `pg_temp_<N>` / `pg_toast_temp_<N>` 스키마를
-    // 만들고, 그 pg_namespace 항목은 세션 종료 후에도 잔존한다. 기존
-    // 필터는 정확 매칭 3개(`pg_catalog`/`information_schema`/`pg_toast`)뿐
-    // 이라 temp 패턴이 사이드바로 샜다. Docker 통합 테스트
+    // Reason (2026-07-03, reported directly by a user): `CREATE TEMP TABLE`
+    // creates a `pg_temp_<N>` / `pg_toast_temp_<N>` schema per backend slot,
+    // and those pg_namespace entries survive the end of the session. The old
+    // filter had only 3 exact matches
+    // (`pg_catalog`/`information_schema`/`pg_toast`), so the temp patterns
+    // leaked into the sidebar. The docker integration test
     // (`schema_integration.rs::test_list_schemas_excludes_temp_namespaces`)
-    // 는 실 DB 로 회귀를 가드하지만 docker 없는 CI/로컬에서는 silent-skip
-    // 되므로, 필터 SQL 자체를 byte-level 로 고정하는 docker-free 가드를
-    // 여기 둔다.
+    // guards the regression against a real DB, but it silent-skips on CI/local
+    // machines without docker, so this docker-free guard pins the filter SQL
+    // itself at byte level.
     #[test]
     fn list_schemas_sql_excludes_temp_and_toast_temp_namespaces() {
-        // 정확 매칭 3개는 유지.
+        // The 3 exact matches stay.
         assert!(
             LIST_SCHEMAS_SQL.contains("NOT IN ('pg_catalog', 'information_schema', 'pg_toast')"),
             "fixed system-schema exclusions must remain"
         );
-        // temp 패턴 두 개를 escaped underscore 로 제외 — `_` 가 LIKE
-        // 와일드카드라 `ESCAPE '\'` 로 리터럴 언더스코어 매칭. #1709 이후
-        // 소스가 `pg_catalog.pg_namespace` 로 바뀌어 컬럼은 `n.nspname`.
+        // Exclude the two temp patterns with an escaped underscore — `_` is a
+        // LIKE wildcard, so `ESCAPE '\'` matches a literal underscore. Since
+        // #1709 the source is `pg_catalog.pg_namespace`, so the column is
+        // `n.nspname`.
         assert!(
             LIST_SCHEMAS_SQL.contains("n.nspname NOT LIKE 'pg\\_temp\\_%' ESCAPE '\\'"),
             "pg_temp_N namespaces must be filtered with an escaped LIKE"
@@ -2029,8 +2031,8 @@ mod tests {
             LIST_SCHEMAS_SQL.contains("n.nspname NOT LIKE 'pg\\_toast\\_temp\\_%' ESCAPE '\\'"),
             "pg_toast_temp_N namespaces must be filtered with an escaped LIKE"
         );
-        // 과차단 금지: blanket `pg_%` 는 사용자 스키마(이론상 `pg_*`)까지
-        // 지우므로 절대 쓰지 않는다.
+        // No over-blocking: a blanket `pg_%` would also wipe user schemas
+        // (which can in theory be `pg_*`), so it is never used.
         assert!(
             !LIST_SCHEMAS_SQL.contains("LIKE 'pg\\_%'"),
             "must not blanket-exclude all pg_-prefixed schemas"
@@ -2039,41 +2041,43 @@ mod tests {
 
     // ── #1709 (sibling of #1411) — list_schemas must be catalog-based ─────
     //
-    // 작성 이유: PostgreSQL 연결에서 SCHEMAS 패널이 빈 채로 떴다(`public`
-    // 존재에도). 근본 원인은 `list_schemas` 가 `information_schema.schemata`
-    // (권한 종속 뷰)를 소스로 써서 스키마 노출이 그 뷰의 privilege 시맨틱에
-    // 묶인 것 — `list_tables`(#1411) 와 정확히 같은 클래스의 버그. psql `\dn`
-    // / 이 파일의 다른 list_* 처럼 `pg_catalog.pg_namespace` +
-    // `has_schema_privilege(nspname, 'USAGE')` 로 옮겨 소유 무관·USAGE 기준으로
-    // 나열한다. 실 비소유-role 회귀는 docker 통합 테스트
-    // (`schema_integration.rs::test_list_schemas_visible_without_ownership`)
-    // 가 가드하지만 docker 없는 CI/로컬에선 silent-skip 되므로, 소스 카탈로그를
-    // byte-level 로 고정하는 docker-free 가드를 여기 둔다.
+    // Reason: the SCHEMAS panel came up empty on a PostgreSQL connection even
+    // though `public` existed. The root cause was `list_schemas` sourcing
+    // `information_schema.schemata` (a privilege-dependent view), which tied
+    // schema visibility to that view's privilege semantics — exactly the same
+    // class of bug as `list_tables` (#1411). Like psql `\dn` and the other
+    // list_* in this file, it now reads `pg_catalog.pg_namespace` +
+    // `has_schema_privilege(nspname, 'USAGE')` and lists by USAGE regardless of
+    // ownership. The real non-owner-role regression is guarded by the docker
+    // integration test
+    // (`schema_integration.rs::test_list_schemas_visible_without_ownership`),
+    // but that silent-skips on CI/local machines without docker, so this
+    // docker-free guard pins the source catalog at byte level.
     #[test]
     fn list_schemas_sql_is_catalog_based_and_privilege_independent() {
-        // 카탈로그 기반이어야 한다 — pg_namespace.
+        // Must be catalog-based — pg_namespace.
         assert!(
             LIST_SCHEMAS_SQL.contains("pg_catalog.pg_namespace n"),
             "list_schemas must read pg_catalog.pg_namespace (privilege-independent source), got: {LIST_SCHEMAS_SQL}"
         );
-        // USAGE 필터는 psql `\dn` 패턴 — 접속 role 이 USAGE 가진 스키마
-        // (소유 무관) 를 나열한다.
+        // The USAGE filter is the psql `\dn` pattern — it lists the schemas the
+        // connecting role has USAGE on, regardless of ownership.
         assert!(
             LIST_SCHEMAS_SQL.contains("has_schema_privilege(n.nspname, 'USAGE')"),
             "must filter by has_schema_privilege(USAGE) (psql \\dn parity), got: {LIST_SCHEMAS_SQL}"
         );
-        // 반환 컬럼 계약 보존 — 상위 파서는 위치 기반이지만 `schema_name`
-        // alias 로 계약을 명시 유지한다.
+        // Preserve the returned-column contract — the caller parses by
+        // position, but the `schema_name` alias keeps the contract explicit.
         assert!(
             LIST_SCHEMAS_SQL.contains("n.nspname AS schema_name"),
             "must alias nspname AS schema_name to preserve the column contract"
         );
-        // 권한 종속 뷰를 절대 소스로 쓰지 않는다 — 버그의 근본 원인.
+        // Never source a privilege-dependent view — the root cause of the bug.
         assert!(
             !LIST_SCHEMAS_SQL.contains("information_schema.schemata"),
             "must NOT source information_schema.schemata (privilege-gated), got: {LIST_SCHEMAS_SQL}"
         );
-        // ORDER BY 유지 — 사이드바 렌더 순서 불변.
+        // Keep ORDER BY — the sidebar render order must not change.
         assert!(
             LIST_SCHEMAS_SQL.contains("ORDER BY n.nspname"),
             "must keep alphabetical ORDER BY the schema name"
@@ -2082,18 +2086,19 @@ mod tests {
 
     // ── PG parity (2026-07-07 user report) — list_tables must be catalog-based ──
     //
-    // 작성 이유: 사용자가 TablePlus / psql 로는 보이는 public 테이블이 앱
-    // SchemaTree 에는 0개로 떴다. 근본 원인은 `list_tables` 가
-    // `information_schema.tables` 를 소스로 써서 *접속 role 이 권한을 가진*
-    // 테이블만 노출한 것 — 타 role 소유 + 무권한 테이블이 목록에서 사라졌다.
-    // psql `\dt` / TablePlus 처럼 `pg_catalog.pg_class` 로 바꿔 권한 무관 나열.
-    // 실 제한-role 회귀는 docker 통합 테스트
-    // (`schema_integration.rs::test_list_tables_visible_without_table_privilege`)
-    // 가 가드하지만 docker 없는 CI/로컬에선 silent-skip 되므로, 소스 카탈로그를
-    // byte-level 로 고정하는 docker-free 가드를 여기 둔다.
+    // Reason: public tables that a user could see through TablePlus / psql
+    // showed up as 0 in the app's SchemaTree. The root cause was `list_tables`
+    // sourcing `information_schema.tables`, which exposes only the tables *the
+    // connecting role holds a privilege on* — tables owned by another role with
+    // no privilege vanished from the list. Like psql `\dt` / TablePlus, it now
+    // reads `pg_catalog.pg_class` and lists regardless of privilege. The real
+    // restricted-role regression is guarded by the docker integration test
+    // (`schema_integration.rs::test_list_tables_visible_without_table_privilege`),
+    // but that silent-skips on CI/local machines without docker, so this
+    // docker-free guard pins the source catalog at byte level.
     #[test]
     fn list_tables_sql_is_catalog_based_and_privilege_independent() {
-        // 카탈로그 기반이어야 한다 — pg_class + pg_namespace.
+        // Must be catalog-based — pg_class + pg_namespace.
         assert!(
             LIST_TABLES_SQL.contains("pg_catalog.pg_class c"),
             "list_tables must read pg_catalog.pg_class (privilege-independent), got: {LIST_TABLES_SQL}"
@@ -2102,18 +2107,21 @@ mod tests {
             LIST_TABLES_SQL.contains("pg_catalog.pg_namespace n ON n.oid = c.relnamespace"),
             "must join pg_namespace to scope by schema"
         );
-        // 스키마 인자는 $1 바인딩 유지 — FE 파싱/렌더 무변경.
+        // The schema argument stays bound as $1 — frontend parsing/rendering
+        // is unchanged.
         assert!(
             LIST_TABLES_SQL.contains("n.nspname = $1"),
             "schema must stay bound as $1"
         );
-        // ordinary + partitioned table 만 — 기존 `table_type = 'BASE TABLE'` 대응.
+        // Ordinary + partitioned tables only — the counterpart of the old
+        // `table_type = 'BASE TABLE'`.
         assert!(
             LIST_TABLES_SQL.contains("c.relkind IN ('r', 'p')"),
             "must restrict relkind to ordinary + partitioned tables"
         );
-        // 권한 필터가 절대 없어야 한다 — information_schema 는 role 권한으로
-        // 목록을 거른다(버그의 근본 원인). explicit privilege 함수도 금지.
+        // There must be no privilege filter — information_schema filters the
+        // list by role privilege (the root cause of the bug). An explicit
+        // privilege function is banned too.
         assert!(
             !LIST_TABLES_SQL.contains("information_schema"),
             "must NOT source information_schema (privilege-filtered), got: {LIST_TABLES_SQL}"
@@ -2122,7 +2130,7 @@ mod tests {
             !LIST_TABLES_SQL.contains("has_table_privilege"),
             "must NOT apply an explicit privilege filter"
         );
-        // ORDER BY 유지 — 사이드바 렌더 순서 불변.
+        // Keep ORDER BY — the sidebar render order must not change.
         assert!(
             LIST_TABLES_SQL.contains("ORDER BY c.relname"),
             "must keep alphabetical ORDER BY the table name"
@@ -2153,14 +2161,15 @@ mod tests {
         );
     }
 
-    // ── Sprint 272 — `pg_trigger.tgtype` bitmask decoder unit tests ────
+    // ── `pg_trigger.tgtype` bitmask decoder unit tests ─────────────────
     //
-    // 작성 이유 (2026-05-13): decode_tgtype 가 PG 의 int2 bitmask 를
-    // 정확히 timing / orientation / events 로 풀어내야 SchemaTree /
-    // StructurePanel 양쪽이 거짓말 없이 사용자에게 표시. 4 representative
-    // bitmask 값으로 INSTEAD-OF/BEFORE/AFTER × ROW/STATEMENT × INSERT/
-    // UPDATE/DELETE/TRUNCATE 조합을 cover. 추가로 TRUNCATE-only/multi-
-    // event 경계 케이스 둘과 tgargs 디코더의 happy + empty 케이스.
+    // Reason (2026-05-13): decode_tgtype has to unpack PG's int2 bitmask into
+    // exactly the right timing / orientation / events for SchemaTree and
+    // StructurePanel to show the user the truth. 4 representative bitmask
+    // values cover the INSTEAD-OF/BEFORE/AFTER × ROW/STATEMENT ×
+    // INSERT/UPDATE/DELETE/TRUNCATE combinations, plus two TRUNCATE-only /
+    // multi-event boundary cases and the tgargs decoder's happy + empty
+    // cases.
 
     #[test]
     fn decode_tgtype_row_before_insert() {
@@ -2250,7 +2259,7 @@ mod tests {
         assert_eq!(decode_tgargs(blob), Some("'users', 'DELETE'".to_string()));
     }
 
-    // 작성 이유 (2026-05-13, Sprint 272 attempt 2): Evaluator P2a —
+    // Reason (2026-05-13): Evaluator P2a —
     // `decode_tgargs` already documents "PG escapes embedded single
     // quotes in `tgargs` as `''`" but had no test pinning that we
     // surface the raw decoded bytes verbatim (no extra escaping). PG
@@ -2258,10 +2267,11 @@ mod tests {
     // `pg_get_triggerdef` SQL rendering, not the wire bytes), so the
     // decoded form here is the raw apostrophe — our renderer wraps the
     // whole arg in `'…'` quotes and would emit an invalid SQL literal
-    // if surfaced to user-facing DDL. Sprint 273's CREATE TRIGGER
-    // emitter is the one that needs to re-escape; this helper's job is
-    // only the byte-faithful display form that mirrors `pg_get_triggerdef`'s
-    // already-rendered output. Pinning the embedded-quote case keeps
+    // if surfaced to user-facing DDL. The `CREATE TRIGGER` emitter
+    // (`build_create_trigger_sql`) is the one that needs to re-escape; this
+    // helper's job is only the byte-faithful display form that mirrors
+    // `pg_get_triggerdef`'s already-rendered output. Pinning the
+    // embedded-quote case keeps
     // future helpers from accidentally double-escaping on read.
     #[test]
     fn decode_tgargs_embedded_single_quote_passes_through_verbatim() {

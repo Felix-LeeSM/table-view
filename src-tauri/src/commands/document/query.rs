@@ -1,13 +1,13 @@
-//! Document paradigm — read-path query commands (Sprints 66 + 72).
+//! Document paradigm — read-path query commands.
 //!
-//! Sprint 66 seeded `find_documents`, which wraps the `DocumentAdapter::find`
-//! trait method. The request body carries the
+//! `find_documents` wraps the `DocumentAdapter::find` trait method. The
+//! request body carries the
 //! `filter` / `sort` / `projection` / `skip` / `limit` fields directly as
 //! BSON documents so the frontend can forward its Find builder state
 //! without an intermediate serialisation step.
 //!
-//! Sprint 72 (Phase 6 plan E-1) adds `aggregate_documents`, the sibling
-//! dispatcher for `DocumentAdapter::aggregate`. The pipeline arrives as a
+//! `aggregate_documents` is the sibling dispatcher for
+//! `DocumentAdapter::aggregate`. The pipeline arrives as a
 //! `Vec<bson::Document>` so the frontend can send a
 //! `Record<string, unknown>[]` payload that serde deserialises element-wise
 //! without a wrapper struct. All error paths mirror `find_documents`:
@@ -15,9 +15,8 @@
 //! `AppError::Unsupported` (via `as_document()?`), adapter failures bubble up
 //! as `AppError::Database` / `AppError::Connection` / `AppError::Validation`.
 //!
-//! Sprint 237 P5 (2026-05-08) — handler bodies hoisted into
-//! `_inner(&AppState)` shape; cancel-token helpers moved to
-//! `commands/document/mod.rs`.
+//! Handler bodies are hoisted into `_inner(&AppState)` shape; cancel-token
+//! helpers moved to `commands/document/mod.rs`.
 
 use crate::commands::connection::AppState;
 use crate::db::{DocumentQueryResult, DocumentRow, FindBody};
@@ -71,7 +70,7 @@ pub async fn find_documents(
     database: String,
     collection: String,
     body: Option<FindBody>,
-    // Sprint 180 (AC-180-04): optional cancel-token id.
+    // AC-180-04: optional cancel-token id.
     query_id: Option<String>,
 ) -> Result<DocumentQueryResult, AppError> {
     // Issue #1231 — publish the persisted row cap for the cursor drain loop.
@@ -131,9 +130,9 @@ async fn aggregate_documents_inner(
 /// `find`-equivalent scan (driver default behaviour).
 ///
 /// Side-effect stages (`$out`, `$merge`) are not explicitly blocked by this
-/// command; the Sprint 72 contract limits scope to read-only result
-/// collection, and callers are expected to steer clear. Sprint 80 will
-/// revisit preview / safety guards.
+/// command; the contract limits scope to read-only result
+/// collection, and callers are expected to steer clear. Preview / safety
+/// guards are to be revisited.
 #[tauri::command]
 pub async fn aggregate_documents(
     window: tauri::Window,
@@ -142,7 +141,7 @@ pub async fn aggregate_documents(
     database: String,
     collection: String,
     pipeline: Vec<bson::Document>,
-    // Sprint 180 (AC-180-04): optional cancel-token id, mirrors find_documents.
+    // AC-180-04: optional cancel-token id, mirrors find_documents.
     query_id: Option<String>,
 ) -> Result<DocumentQueryResult, AppError> {
     // Issue #1584 — pipeline stages `$out` / `$merge` write to a collection, so
@@ -161,12 +160,12 @@ pub async fn aggregate_documents(
     .await
 }
 
-// ── Sprint 308 (2026-05-14) — 4 new read-path commands ──────────────────
+// ── Read-path commands (2026-05-14) ─────────────────────────────────────
 //
-// 작성 이유: A1 mongosh 파서가 dispatch 할 `findOne` / `countDocuments` /
-// `estimatedDocumentCount` / `distinct` 4 메서드. 각 inner 함수는 기존
-// `find_documents_inner` 패턴(cancel-token register/release + `as_document()?`
-// gate) 을 그대로 따라간다.
+// Reason: the `findOne` / `countDocuments` / `estimatedDocumentCount` /
+// `distinct` methods the mongosh parser dispatches. Each inner fn follows the
+// existing `find_documents_inner` pattern (cancel-token register/release +
+// `as_document()?` gate) verbatim.
 
 async fn find_one_document_inner(
     state: &AppState,
@@ -198,7 +197,7 @@ async fn find_one_document_inner(
     result
 }
 
-/// Sprint 308 — single-document projection.
+/// Single-document projection.
 ///
 /// Dispatches `db.coll.findOne(<filter>)`. `Ok(None)` when no document
 /// matches; `Ok(Some(DocumentRow))` otherwise (columns + projected row +
@@ -253,7 +252,7 @@ async fn count_documents_inner(
     result
 }
 
-/// Sprint 308 — exact filter count.
+/// Exact filter count.
 ///
 /// Dispatches `db.coll.countDocuments(<filter>)`. The driver scans the
 /// collection for an accurate match — for an O(1) metadata estimate, use
@@ -306,7 +305,7 @@ async fn estimated_document_count_inner(
     result
 }
 
-/// Sprint 308 — O(1) metadata estimate of total document count.
+/// O(1) metadata estimate of total document count.
 ///
 /// Dispatches `db.coll.estimatedDocumentCount()`. Returns an approximate
 /// count sourced from the collection's metadata — exact counts require the
@@ -361,7 +360,7 @@ async fn distinct_documents_inner(
     result
 }
 
-/// Sprint 308 — distinct field values.
+/// Distinct field values.
 ///
 /// Dispatches `db.coll.distinct(<field>, <filter>)`. Returns each unique
 /// value flattened through `flatten_cell` so the wire shape matches the
@@ -428,13 +427,13 @@ async fn explain_mongo_find_inner(
     result
 }
 
-/// Sprint 337 (U2 live wire) — Mongo `runCommand({explain: {find, filter,
-/// ...}, verbosity})`. Issue #1210 — `body` carries the same
+/// Mongo `runCommand({explain: {find, filter, ...}, verbosity})`.
+/// Issue #1210 — `body` carries the same
 /// filter/sort/projection/skip/limit the real `find` executes so the plan
 /// matches actual execution. Returns the raw explain response as
 /// `serde_json::Value`.
 ///
-/// Issue #1619 (E4) — `body` is taken by value, not `Option<FindBody>`: the
+/// Issue #1619 — `body` is taken by value, not `Option<FindBody>`: the
 /// sole caller (`explainMongoFind` in `src/lib/api/explain.ts`) always sends
 /// `body: args.body ?? {}`, so the `None` arm of the old `Option` was dead.
 /// An empty `{}` still deserialises to `FindBody::default()` via each field's
@@ -461,36 +460,36 @@ pub async fn explain_mongo_find(
     .await
 }
 
-// ── Sprint 381 (2026-05-17) — generic runCommand gateway ────────────────
+// ── Generic runCommand gateway (2026-05-17) ─────────────────────────────
 //
-// 작성 이유: Phase 28 mongosh method whitelist 에 묶이지 않은 admin /
-// diagnostic command (`serverStatus`, `dbStats`, `currentOp`, `ping`, …)
-// 을 frontend 가 한 IPC 로 통과시킬 수 있도록 thin gateway. mongosh 의
-// 모든 admin helper 가 본질적으로 `runCommand` wrapper 라는 점에서, AST
-// 파서 완성을 기다리지 않고 generic dispatch 만 먼저 풀어둔다 — Phase
-// 28 의 statement-level method whitelist 와 동거 가능. database 인자가
-// `None` 이면 driver 가 `admin` DB 에서 실행 (adminCommand semantics),
-// `Some("myapp")` 이면 해당 db (db-scoped command).
+// Reason: a thin gateway so the frontend can pass admin / diagnostic commands
+// (`serverStatus`, `dbStats`, `currentOp`, `ping`, …) not covered by the
+// mongosh method whitelist through one IPC call. Every mongosh admin helper is
+// essentially a `runCommand` wrapper, so the generic dispatch is exposed on its
+// own and coexists with the statement-level method whitelist. When `database`
+// is `None` the driver runs against the `admin` DB (adminCommand semantics);
+// `Some("myapp")` targets that db (db-scoped command).
 //
-// ── Sprint 384 (2026-05-17) — extended-JSON → BSON conversion ───────────
+// ── Extended-JSON → BSON conversion (2026-05-17) ────────────────────────
 //
-// 작성 이유: sprint-383 의 mongoshAst 가 `ObjectId("507f…")` 같은 BSON
-// literal 을 extended-JSON placeholder `{"$oid": "507f…"}` 로 normalize
-// 한다. 이 placeholder 가 그대로 `bson::Document` 로 serde-deserialize
-// 되면 driver 는 sub-document 로 인식하고 MongoDB server 는 ObjectId 가
-// 아닌 일반 doc 으로 query — semantic bug. 본 sprint 는 IPC entry 에서
-// `serde_json::Value` 로 받고 `bson::Bson::try_from(...)` 한 줄로 진짜
+// Reason: the mongoshAst normalizes BSON literals like `ObjectId("507f…")`
+// into the extended-JSON placeholder `{"$oid": "507f…"}`. If that
+// placeholder serde-deserializes into `bson::Document` as-is, the driver
+// sees a sub-document and the MongoDB server queries a plain doc instead
+// of an ObjectId — a semantic bug. The IPC entry takes a
+// `serde_json::Value` and converts it with a single
+// `bson::Bson::try_from(...)` call into the real
 // `Bson::ObjectId` / `Bson::DateTime` / `Bson::Int64` / `Bson::Decimal128` /
-// `Bson::Binary(Uuid)` variant 로 변환한다. plain JSON (BSON marker 없는)
-// body 는 동일한 BSON Document 로 변환된다 (regression-lock).
+// `Bson::Binary(Uuid)` variant. A plain JSON body (no BSON markers)
+// converts to the same BSON Document (regression-lock).
 
 /// Convert a frontend-shaped JSON object into a BSON document, honouring
 /// extended-JSON placeholders (`{$oid}`, `{$date}`, `{$numberLong}`,
 /// `{$numberDecimal}`, `{$uuid}`) so the MongoDB driver sees real BSON
 /// variants instead of sub-documents.
 ///
-/// Sprint 384 — the wrapper around `bson::Document::try_from` exists so
-/// (a) we can keep `AppError` boundaries thin and (b) we reject any
+/// The wrapper around `bson::Document::try_from` exists so (a) we can keep
+/// `AppError` boundaries thin and (b) we reject any
 /// non-object root with a clear message (`runCommand` body is always an
 /// object literal at the AST layer, but this is the IPC trust boundary).
 fn extjson_to_bson_document(value: serde_json::Value) -> Result<bson::Document, AppError> {
@@ -577,16 +576,18 @@ fn require_run_command_safety(command: &bson::Document, confirmed: bool) -> Resu
     )))
 }
 
-/// Sprint 381 — execute `db.runCommand({...})` / `db.adminCommand({...})`.
+/// Execute `db.runCommand({...})` / `db.adminCommand({...})`.
 ///
-/// `database` 는 frontend 가 `tab.database` 를 그대로 전달 — 비어 있으면
-/// `None`, 그렇지 않으면 `Some(name)`. backend 는 `None` 일 때 driver 의
-/// `admin` DB context 를 사용해 admin command 의미를 유지한다.
+/// `database` passes the frontend's `tab.database` through verbatim —
+/// `None` when empty, `Some(name)` otherwise. With `None` the backend
+/// uses the driver's `admin` DB context to preserve admin-command
+/// semantics.
 ///
-/// Sprint 384 — `command` 는 `serde_json::Value` 로 받아 `bson::Bson::try_from`
-/// 으로 extended-JSON placeholder (`{$oid}`, `{$date}`, `{$numberLong}`,
-/// `{$numberDecimal}`, `{$uuid}`) 를 진짜 BSON variant 로 변환한 뒤
-/// driver 에 전달한다. plain JSON 은 동일한 BSON Document 로 변환됨.
+/// `command` arrives as a `serde_json::Value` and is converted via
+/// `bson::Bson::try_from`, turning extended-JSON placeholders (`{$oid}`,
+/// `{$date}`, `{$numberLong}`, `{$numberDecimal}`, `{$uuid}`) into real
+/// BSON variants before reaching the driver. Plain JSON converts to the
+/// same BSON Document.
 #[tauri::command]
 pub async fn run_mongo_command(
     window: tauri::Window,
@@ -614,9 +615,9 @@ pub async fn run_mongo_command(
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
-    //! 작성 이유 (2026-05-08, Sprint 237 P5): 핸들러를 `_inner(&AppState)` 로
-    //! 추출했으니 테스트도 그것을 직접 호출. 시나리오: NotFound /
-    //! Unsupported(document) / 트레이트 위임 / cancel-token release.
+    //! Reason (2026-05-08): the handlers were extracted as `_inner(&AppState)`,
+    //! so the tests call them directly. Scenarios: NotFound /
+    //! Unsupported(document) / trait delegation / cancel-token release.
     use super::*;
     use crate::commands::test_util::{document_default, rdb_default, state_with};
 
@@ -727,13 +728,13 @@ mod tests {
         assert_eq!(captured.lock().unwrap().clone(), Some("q-agg".to_string()));
     }
 
-    // ── Sprint 308 (2026-05-14) — 4 new read commands ──────────────────
+    // ── Read commands (2026-05-14) ─────────────────────────────────────
     //
-    // 작성 이유: 각 신규 _inner 핸들러가 (a) 미존재 connection → NotFound,
-    // (b) RDB paradigm → Unsupported, (c) document default stub → 자연
-    // 기본값 (None / 0 / Vec::new) 을 surface 하는 3 거부 + 1 happy 매트릭스를
-    // 통과하는지 검증. cancel-token release 회귀는 read-path 패밀리 공통이라
-    // tracer (`find_one`) 하나로 대표한다.
+    // Reason: verify that each _inner handler passes the 3-rejection + 1-happy
+    // matrix: (a) missing connection → NotFound, (b) RDB paradigm →
+    // Unsupported, (c) document default stub → natural defaults
+    // (None / 0 / Vec::new). The cancel-token release regression is common to
+    // the read-path family, so a single tracer (`find_one`) represents it.
     use crate::db::testing::StubDocumentAdapter;
     use crate::db::ActiveAdapter;
 
@@ -960,7 +961,7 @@ mod tests {
         assert_eq!(r[0], serde_json::json!("got:myfield"));
     }
 
-    // ── Sprint 337 (U2 live wire) — explain_mongo_find ────────────────────
+    // ── explain_mongo_find ─────────────────────────────────────────────
 
     #[tokio::test]
     async fn explain_mongo_find_rejects_empty_collection() {
@@ -1060,12 +1061,12 @@ mod tests {
         assert_eq!(r["ok"], serde_json::Value::from(1));
     }
 
-    // ── Sprint 381 (2026-05-17) — run_mongo_command ─────────────────────
+    // ── run_mongo_command (2026-05-17) ─────────────────────────────────
     //
-    // 작성 이유: generic runCommand gateway 가 (a) 미존재 connection →
-    // NotFound, (b) RDB paradigm → Unsupported, (c) database=None 시
-    // adapter 가 admin context 로 라우팅하는지, (d) database=Some("myapp")
-    // 시 그 이름을 그대로 어댑터에 전달하는지 확인.
+    // Reason: verify that the generic runCommand gateway (a) returns NotFound
+    // for a missing connection, (b) Unsupported for an RDB paradigm,
+    // (c) routes to the admin context when database=None, and (d) passes that
+    // name through to the adapter when database=Some("myapp").
 
     #[tokio::test]
     async fn run_mongo_command_unknown_connection_returns_notfound() {
@@ -1089,10 +1090,11 @@ mod tests {
 
     #[tokio::test]
     async fn run_mongo_command_database_none_routes_to_admin_context() {
-        // 작성 이유: adminCommand semantics — frontend 가 chip 미선택 (`tab.database
-        // = undefined`) + `db.runCommand({serverStatus: 1})` 입력 시
-        // backend 는 `database = None` 으로 호출돼야 한다. 어댑터가 받은
-        // 인자 (None) + command body 를 closure 가 캡처해 검증한다.
+        // Reason: adminCommand semantics — when the frontend sends no chip
+        // (`tab.database = undefined`) plus `db.runCommand({serverStatus: 1})`,
+        // the backend must be called with `database = None`. The closure
+        // captures the argument the adapter received (None) + the command
+        // body to verify it.
         use crate::db::testing::StubDocumentAdapter;
         use crate::db::ActiveAdapter;
         use std::sync::{Arc, Mutex};
@@ -1119,9 +1121,9 @@ mod tests {
 
     #[tokio::test]
     async fn run_mongo_command_database_some_routes_to_named_db() {
-        // 작성 이유: db-scoped command — frontend 가 chip = "myapp" +
-        // `db.runCommand({dbStats: 1})` 입력 시 backend 는 `database =
-        // Some("myapp")` 으로 호출돼야 한다.
+        // Reason: db-scoped command — when the frontend sends chip = "myapp" +
+        // `db.runCommand({dbStats: 1})`, the backend must be called with
+        // `database = Some("myapp")`.
         use crate::db::testing::StubDocumentAdapter;
         use crate::db::ActiveAdapter;
         use std::sync::{Arc, Mutex};
@@ -1236,18 +1238,18 @@ mod tests {
         }
     }
 
-    // ── Sprint 384 (2026-05-17) — extended-JSON → BSON conversion ───────
+    // ── Extended-JSON → BSON conversion (2026-05-17) ───────────────────
     //
-    // 작성 이유: sprint-383 mongoshAst 가 `ObjectId(...)` / `ISODate(...)` /
-    // `NumberLong(...)` / `Decimal128(...)` / `UUID(...)` 를 extended-JSON
-    // placeholder (`{$oid: "..."}` 등) 로 만든다. IPC entry 에서 그 placeholder
-    // 를 real BSON variant 로 변환하지 않으면 driver 가 sub-document 로
-    // 인식해 MongoDB server query 가 의미적으로 깨진다. 본 5개 단위 테스트는
-    // 각 marker 가 실제 Bson variant 로 변환되는지 + plain JSON regression
-    // + invalid placeholder reject 까지 cover.
+    // Reason: the mongoshAst turns `ObjectId(...)` / `ISODate(...)` /
+    // `NumberLong(...)` / `Decimal128(...)` / `UUID(...)` into extended-JSON
+    // placeholders (`{$oid: "..."}` etc.). Unless the IPC entry converts
+    // that placeholder into a real BSON variant, the driver sees a
+    // sub-document and the MongoDB server query breaks semantically. These
+    // unit tests cover each marker converting into the actual Bson variant,
+    // the plain JSON regression, and the rejection of an invalid placeholder.
     //
-    // `StubDocumentAdapter` 와 `ActiveAdapter` 는 sprint-308 블록에서 이미
-    // import 됨 (line 602-603) — 여기서 재import 하면 E0252.
+    // `StubDocumentAdapter` and `ActiveAdapter` are already imported above —
+    // re-importing them here would raise E0252.
 
     use std::sync::{Arc, Mutex};
 

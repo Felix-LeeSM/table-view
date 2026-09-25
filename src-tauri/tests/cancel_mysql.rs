@@ -1,4 +1,4 @@
-//! 작성 2026-05-16 (Phase 2 sprint-359) — AC-359-04: MySQL native cancel.
+//! Written 2026-05-16 — AC-359-04: MySQL native cancel.
 //!
 //! Drives `SELECT SLEEP(60)` and issues `cancel_query_native` mid-flight.
 //! The slow query must terminate within seconds — proves

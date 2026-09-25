@@ -3,51 +3,56 @@ name = "table-view-core"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.91.0"
-# 데스크톱 앱의 내부 crate — crates.io 에 publish 되지 않음. `table-view` 와 같은
-# 표식이라 cargo deny 가 `[licenses.private]` 로 license 검사를 건너뛴다.
+# Internal crate of the desktop app — never published to crates.io. It carries the
+# same marker as `table-view`, so cargo deny skips the license check through
+# `[licenses.private]`.
 publish = false
 description = "Headless core for table-view: DB adapters, wire models, and local storage. No Tauri dependency, so a CLI/daemon surface can link it without a webview."
 
-# #2161 — `src-tauri/Cargo.toml` 을 root 로 하는 Cargo workspace 의 member 다.
-# `[dependencies]` 의 path dependency 라 `members` 에 안 적어도 들어오지만, 그
-# 목록이 곧 CI 의 범위라 거기에도 적혀 있다.
+# #2161 — this crate is a member of the Cargo workspace rooted at
+# `src-tauri/Cargo.toml`. It joins through the path dependency in
+# `[dependencies]` even without being listed in `members`, but that list is also
+# CI's scope, so it is written there as well.
 #
-# 이 crate 가 지키는 성질은 그대로다: 단독으로 빌드하면 Tauri transitive dep 이
-# 하나도 안 딸려온다 (`cargo tree -p table-view-core -i tauri` → exit 101).
-# ADR 0061 의 `tvw` CLI 트랙이 요구하는 성질이고, workspace 는 의존 그래프를 안
-# 바꾸므로 유지된다.
+# The property this crate holds is unchanged: built on its own it pulls in no
+# Tauri transitive dep (`cargo tree -p table-view-core -i tauri` → exit 101).
+# ADR 0061's `tvw` CLI track requires that property, and a workspace does not
+# change the dependency graph, so it still holds.
 #
-# #1769 이 치르던 대가 — 이 crate 의 별도 `Cargo.lock` — 는 없어졌다. 그때는 첫
-# 단독 resolve 가 duckdb 를 1.10503.1 → 1.10505.0 으로 올려 `db/duckdb/value.rs`
-# 의 match 를 E0004 로 깨뜨렸고, 두 lock 을 손으로 맞춰야 했다. 이제 lock 은
-# `src-tauri/Cargo.lock` 하나라 그 유형이 성립하지 않는다.
+# The price #1769 used to pay — a separate `Cargo.lock` for this crate — is gone.
+# Back then the first standalone resolve raised duckdb 1.10503.1 → 1.10505.0 and
+# broke the match in `db/duckdb/value.rs` with E0004, so the two locks had to be
+# reconciled by hand. Now `src-tauri/Cargo.lock` is the only lock, so that failure
+# mode cannot arise.
 
 [lib]
 name = "table_view_core"
 
 [features]
 default = []
-# "이 빌드는 `table-view` 의 테스트 빌드다" 를 뜻한다. `cfg(test)` 로는 못 세는
-# 상태다 — `table-view` 가 이 crate 를 평범한 의존성으로 링크하므로 그쪽 테스트
-# 빌드에서 이 crate 의 `cfg(test)` 는 false 다.
+# Means "this build is a test build of `table-view`". `cfg(test)` cannot express
+# that state — `table-view` links this crate as an ordinary dependency, so this
+# crate's `cfg(test)` is false in that crate's test build.
 #
-# 켜지는 것 둘:
-#   - `db::testing` 의 stub adapter 묶음 (`crate::db::testing::Stub*`).
-#   - #2184 — `storage::data_dir_override` 의 `TABLE_VIEW_TEST_DATA_DIR` 인식.
-#     `debug_assertions` 는 profile 신호라 release 테스트 빌드에 격리 수단을 안
-#     남겼다. 이 feature 가 그 자리를 메운다.
+# Two things it turns on:
+#   - The stub adapter bundle in `db::testing` (`crate::db::testing::Stub*`).
+#   - #2184 — `storage::data_dir_override` honouring `TABLE_VIEW_TEST_DATA_DIR`.
+#     `debug_assertions` is a profile signal, so it left a release test build with
+#     no isolation mechanism. This feature fills that gap.
 #
-# `src-tauri/Cargo.toml` 이 `[dev-dependencies]` 쪽에서만 켜므로 릴리스 빌드에는
-# 안 들어간다. **이 feature 가 일반 빌드 그래프에 들어가면 배포 바이너리를 env 로
-# 다른 데이터 디렉토리에 돌릴 수 있게 되어 #1454 가 다시 열린다.**
+# `src-tauri/Cargo.toml` turns it on only from `[dev-dependencies]`, so it stays
+# out of release builds. **If this feature enters the normal build graph, a
+# shipped binary can be pointed at another data directory through the
+# environment, and #1454 reopens.**
 #
-# 그 사실은 주석이 아니라 CI 가 잰다 — `.github/workflows/ci.yml` 의
-# `Test-only data-dir override stays out of the release graph` 스텝이
-# `cargo tree -i table-view-core --edges normal --format '{f}'` 로 **cargo 가
-# 릴리스 그래프에 실제로 켜 준 feature 집합**을 읽고, 거기 `testing` 이 있으면
-# 실패한다. 아래 `default` 줄을 `default = ["testing"]` 로 바꾸는 것도, workspace
-# 를 resolver 1 로 떨어뜨려 dev-dep feature 를 일반 빌드로 unify 시키는 것도 같은
-# 한 줄이 잡는다 — manifest 텍스트가 아니라 resolve 결과를 읽기 때문이다.
+# CI measures that, not this comment — the `Test-only data-dir override stays out
+# of the release graph` step in `.github/workflows/ci.yml` reads **the feature set
+# cargo actually turned on for the release graph** with
+# `cargo tree -i table-view-core --edges normal --format '{f}'` and fails when
+# `testing` is in it. Changing the `default` line below to `default = ["testing"]`
+# and dropping the workspace to resolver 1 — which unifies dev-dep features into
+# the normal build — are both caught by that one line, because it reads the
+# resolve result rather than the manifest text.
 testing = []
 
 [dependencies]
@@ -67,27 +72,28 @@ base64 = "0.22"
 thiserror = "2"
 tracing = "0.1"
 dirs = "6"
-# Sprint 371 (Phase 5 F.5) — storage/sql_redact.rs 의 query_history
-# `sql_redacted` regex masking (quoted/numeric literal → `?`). 같은 crate 가
-# `mongodb` 의 transitive 로 이미 잠겨 있어 build cost 추가 0.
+# F.5 — query_history `sql_redacted` regex masking in storage/sql_redact.rs
+# (quoted/numeric literal → `?`). The same crate is already locked in as a
+# transitive of `mongodb`, so it adds no build cost.
 regex = "1"
-# #1107 — db/search_http.rs 가 ES/OpenSearch index 이름을 URL path segment 로
-# percent-encode 해서 검증된 index 가 segment 를 탈출하지 못하게 한다. reqwest/url
-# transitive 로 이미 2.3.2 에 잠겨 있어 direct dep 으로 올려도 build cost 0.
+# #1107 — db/search_http.rs percent-encodes an ES/OpenSearch index name as a URL
+# path segment so a validated index cannot escape its segment. Already locked at
+# 2.3.2 through the reqwest/url transitive, so promoting it to a direct dep costs
+# no build time.
 percent-encoding = "2"
-# Sprint 466 — Redis/Valkey KV adapter. `tokio-rustls-comp` 가 기존 Tokio
-# 런타임 위의 async command 지원과 `rediss://` TLS 를 준다.
+# Redis/Valkey KV adapter. `tokio-rustls-comp` gives async command support on the
+# existing Tokio runtime and `rediss://` TLS.
 redis = { version = "0.32", features = ["tokio-rustls-comp"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tiberius = { version = "0.12.3", default-features = false, features = ["tds73", "native-tls", "tokio", "chrono", "bigdecimal"] }
-# Sprint 356 (2026-05-16) — Q22 keyring file-key migration.
-# Cross-platform 추상화는 `storage::crypto::KeyringBackend` 에 있고, 테스트가
-# in-memory backend 를 쓰므로 테스트 시점에 실제 OS keyring 과 링크하지 않는다.
-# 플랫폼별 feature 는 아래 target 블록에서만 켜서 단일 OS 빌드가 나머지 둘의
-# native backend 를 안 끌게 한다.
+# Q22 keyring file-key migration (2026-05-16). The cross-platform abstraction
+# lives in `storage::crypto::KeyringBackend`, and tests use an in-memory backend,
+# so a test build never links the real OS keyring. Per-platform features are
+# turned on only in the target blocks below, so a single-OS build does not pull in
+# the other two native backends.
 keyring = { version = "3", default-features = false }
-# db/raw_where.rs 의 AST allowlist. 범프 시 재감사 규칙은
-# memory/engineering/conventions/rust/memory.md 참조.
+# AST allowlist for db/raw_where.rs. For the re-audit rule that applies on a bump,
+# see memory/engineering/conventions/rust/memory.md.
 sqlparser = "0.62.0"
 duckdb = { version = "1.10503.1", features = ["bundled", "json", "parquet"] }
 oracle-rs = "0.1.7"
@@ -115,6 +121,6 @@ keyring = { version = "3", default-features = false, features = ["sync-secret-se
 tempfile = "3"
 serial_test = "3"
 
-# `[profile.dev] debug = 0` 은 workspace root(`src-tauri/Cargo.toml`)가 든다.
-# member 의 `[profile.*]` 는 cargo 가 경고를 내고 무시하므로 여기 두면 거짓말이
-# 된다 — root 하나가 member 전부에 걸린다 (#2161).
+# `[profile.dev] debug = 0` lives in the workspace root (`src-tauri/Cargo.toml`).
+# Cargo warns about and ignores a member's `[profile.*]`, so putting it here would
+# be a lie — the single root profile covers every member (#2161).

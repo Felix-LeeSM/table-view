@@ -34,7 +34,7 @@ pub mod safe_mode;
 pub mod search;
 pub mod single_instance;
 pub mod snapshot;
-// Sprint 385 (2026-05-17) — backend SQL parser IPC, mirrors the frontend
+// Backend SQL parser IPC, mirrors the frontend
 // `src/lib/sql/sqlAst.ts` facade through the same `sql-parser-core`
 // crate (native compile here, WASM compile in the renderer).
 pub mod sql_parser;
@@ -48,11 +48,10 @@ use tokio_util::sync::CancellationToken;
 use crate::commands::connection::AppState;
 use crate::error::AppError;
 
-/// Sprint 237 P5+ (2026-05-08) — `AppError::NotFound` for an unknown
-/// `connection_id`. 7개 파일 (commands/{meta,rdb/{schema,query,ddl},
-/// document/{browse,query,mutate}}.rs) 에 word-for-word 동일한 helper 가
-/// 분산돼 있어 통합. 메시지 포맷은 frontend 의 `useToast` 가 그대로
-/// 노출하므로 변경하지 말 것.
+/// `AppError::NotFound` for an unknown `connection_id`. The identical helper
+/// was scattered word-for-word across commands/{meta,rdb/{schema,query,ddl},
+/// document/{browse,query,mutate}}.rs and is unified here. The message format
+/// is surfaced verbatim by the frontend's `useToast` — do not change it.
 pub(crate) fn not_connected(connection_id: &str) -> AppError {
     AppError::NotFound(format!("Connection '{}' not found", connection_id))
 }
@@ -64,12 +63,13 @@ pub(crate) fn not_connected(connection_id: &str) -> AppError {
 /// then calls `release_cancel_token` to drop the registration.
 ///
 /// History:
-/// - Sprint 180 (AC-180-04) — initial form on `rdb/schema.rs`.
+/// - AC-180-04 — initial form on `rdb/schema.rs`.
 /// - audit m14 (2026-05-05) — hoisted to `rdb/mod.rs` so all RDB commands share.
-/// - Sprint 237 P5 (2026-05-08) — `&AppState` signature for `_inner` testability.
-/// - Sprint 237 P5+ (2026-05-08) — hoisted again from `rdb/mod.rs` and
+/// - 2026-05-08 — `&AppState` signature for `_inner` testability.
+/// - 2026-05-08 — hoisted again from `rdb/mod.rs` and
 ///   `document/mod.rs` (twin copies) to the paradigm-neutral `commands/mod.rs`.
-///   `export/mod.rs` 도 같은 헬퍼를 inline 으로 들고 있어 후속 정리.
+///   `export/mod.rs` also held an inline copy of the same helper and was
+///   folded in as follow-up cleanup.
 pub(crate) async fn register_cancel_token(
     state: &AppState,
     query_id: Option<&str>,
@@ -96,16 +96,15 @@ pub(crate) async fn release_cancel_token(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 이유 (2026-05-08):
-    //! register_cancel_token / release_cancel_token 의 lifecycle 분기를 검증.
-    //!   - query_id None → no-op (None 반환, registry 변동 없음)
-    //!   - query_id Some(id) → registry 에 (id, fresh token) 삽입, Some 반환
-    //!   - release None → no-op (registry 변동 없음)
-    //!   - release Some(handle) → registry 에서 해당 id 제거
+    //! Written 2026-05-08:
+    //! Verifies the lifecycle branches of register_cancel_token /
+    //! release_cancel_token.
+    //!   - query_id None → no-op (returns None, registry unchanged)
+    //!   - query_id Some(id) → inserts (id, fresh token) into the registry, returns Some
+    //!   - release None → no-op (registry unchanged)
+    //!   - release Some(handle) → removes that id from the registry
     //!
-    //! 헬퍼는 rdb/mod.rs, document/mod.rs 에 각각 존재했으나 본체가 word-for-
-    //! word 동일이라 commands/mod.rs 에 통합. export/mod.rs 도 inline 사본을
-    //! 보유하다 같은 helper 로 통합 (Step 3).
+    //! See the unification history on `register_cancel_token`.
 
     use super::{register_cancel_token, release_cancel_token};
     use crate::commands::connection::AppState;
@@ -129,8 +128,9 @@ mod tests {
 
         let tokens = state.query_tokens.lock().await;
         assert!(tokens.contains_key("q-abc"), "registry 에 'q-abc' 누락");
-        // returned token 과 stored token 은 child/parent 관계 — 외부에서 cancel
-        // 하면 stored 도 함께 cancel 되어야 cancel_query 가 동작.
+        // The returned token and the stored token are in a child/parent
+        // relation — cancelling from outside must cancel the stored one too,
+        // or `cancel_query` would not work.
         let stored = tokens.get("q-abc").unwrap();
         assert!(!stored.is_cancelled());
         returned_token.cancel();
@@ -143,7 +143,7 @@ mod tests {
     #[tokio::test]
     async fn release_with_none_handle_is_noop() {
         let state = AppState::new();
-        // 미리 다른 토큰 하나 추가해서 registry 가 비지 않은 상태에서 시작.
+        // Add one other token first so the registry does not start empty.
         {
             let mut tokens = state.query_tokens.lock().await;
             tokens.insert("untouched".into(), CancellationToken::new());
@@ -176,10 +176,11 @@ mod tests {
 
     #[tokio::test]
     async fn register_same_id_twice_overwrites_previous_token() {
-        // 이 동작은 의도된 것 (HashMap::insert 의 의미론) — same query_id 로
-        // 두 번째 register 가 들어오면 첫 번째 token 은 garbage. 실제 코드
-        // 흐름에서는 release 가 register 와 paired 라 발생하지 않지만,
-        // contract 가 명시되어 있어야 회귀 시 알아차릴 수 있음.
+        // This behavior is intentional (HashMap::insert semantics) — when a
+        // second register comes in with the same query_id, the first token
+        // becomes garbage. The real code flow never hits this because release
+        // is paired with register, but the contract must be spelled out so a
+        // regression gets noticed.
         let state = AppState::new();
         let h1 = register_cancel_token(&state, Some("dup")).await;
         let h2 = register_cancel_token(&state, Some("dup")).await;
@@ -189,7 +190,8 @@ mod tests {
         let tokens = state.query_tokens.lock().await;
         let stored = tokens.get("dup").unwrap();
 
-        // 첫 번째 token 으로 cancel — registry 의 stored 는 영향 없음.
+        // Cancel via the first token — the stored token in the registry is
+        // unaffected.
         token1.cancel();
         assert!(
             !stored.is_cancelled(),

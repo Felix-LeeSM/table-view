@@ -1,15 +1,15 @@
-// Sprint 238 AC-238-02 — PostgreSQL `data_type` → `ColumnCategory` 매핑.
-// Sprint 258 — `format_type(atttypid, atttypmod)` 결과 (varchar(200),
-// numeric(10,2), text[], timestamp with time zone …) 를 DDL-level 친화
-// 표기로 정규화 (`normalize_pg_type`) + parameter / array 표기에서 base
-// type 만 잘라 category 매핑.
+// AC-238-02 — PostgreSQL `data_type` → `ColumnCategory` mapping.
+// `normalize_pg_type` normalises the `format_type(atttypid, atttypmod)` output
+// (varchar(200), numeric(10,2), text[], timestamp with time zone …) into
+// DDL-friendly notation, and the category mapping cuts the base type out of
+// parameter / array notation.
 
 use crate::models::ColumnCategory;
 
-/// Sprint 259 — `format_type` 은 SERIAL 의 underlying type (`integer` /
-/// `bigint` / `smallint`) 만 노출하므로, default 가 `nextval(...)` 인
-/// 정수 컬럼을 원래의 `serial` / `bigserial` / `smallserial` DDL 표기로
-/// 복원한다. category 매핑에는 영향 없음 (정수 → Int 그대로).
+/// `format_type` exposes only SERIAL's underlying type (`integer` / `bigint` /
+/// `smallint`), so an integer column whose default is `nextval(...)` is restored
+/// to its original `serial` / `bigserial` / `smallserial` DDL notation. The
+/// category mapping is unaffected (an integer still maps to Int).
 pub fn restore_serial(data_type: String, default_value: Option<&str>) -> String {
     let is_nextval = default_value
         .map(|d| d.trim_start().to_ascii_lowercase().starts_with("nextval("))
@@ -25,11 +25,11 @@ pub fn restore_serial(data_type: String, default_value: Option<&str>) -> String 
     }
 }
 
-/// `pg_catalog.format_type` 의 raw 출력 (`character varying(200)`,
-/// `timestamp with time zone` …) 을 psql `\d` 와 일치하는 단축형으로
-/// 변환한다. DDL-level 표기성은 유지하되 사용자 가독성을 높인다.
+/// Convert the raw `pg_catalog.format_type` output (`character varying(200)`,
+/// `timestamp with time zone` …) into the short form psql `\d` prints. Keeps the
+/// DDL-level notation while making it easier to read.
 ///
-/// 변환 대상:
+/// Converted:
 /// - `character varying(N)` → `varchar(N)`, `character varying` → `varchar`
 /// - `character(N)` → `char(N)`, `character` → `char`
 /// - `timestamp with time zone` → `timestamptz`
@@ -37,7 +37,7 @@ pub fn restore_serial(data_type: String, default_value: Option<&str>) -> String 
 /// - `time with time zone` → `timetz`
 /// - `time without time zone` → `time`
 pub fn normalize_pg_type(raw: &str) -> String {
-    // 긴 패턴 먼저 (substring overlap 가드).
+    // Longest patterns first (substring overlap guard).
     let pairs: &[(&str, &str)] = &[
         ("character varying", "varchar"),
         ("timestamp with time zone", "timestamptz"),
@@ -53,9 +53,10 @@ pub fn normalize_pg_type(raw: &str) -> String {
     s
 }
 
-/// PostgreSQL DDL-level type (`varchar(200)`, `text[]`, `numeric(10,2)`,
-/// `timestamptz` …) 또는 `type_info().to_string()` 의 short alias 를
-/// DataGrid display category 로 변환한다. 미지 type 은 `Unknown` fallback.
+/// Convert a PostgreSQL DDL-level type (`varchar(200)`, `text[]`,
+/// `numeric(10,2)`, `timestamptz` …) or the short alias from
+/// `type_info().to_string()` into a DataGrid display category. An unknown type
+/// falls back to `Unknown`.
 pub fn map_pg_data_type(data_type: &str) -> ColumnCategory {
     let lower = data_type.to_ascii_lowercase();
     let lower = lower.trim();
@@ -89,12 +90,12 @@ pub fn map_pg_data_type(data_type: &str) -> ColumnCategory {
 
         "bytea" => ColumnCategory::Binary,
 
-        // Sprint 258 — uuid 별도 카테고리 (36자 고정폭, default 18rem).
+        // uuid gets its own category (fixed 36-char width, default 18rem).
         "uuid" => ColumnCategory::Uuid,
 
-        // text / varchar / char / etc. — 가독 가능한 텍스트 흡수.
-        // `character varying` / `character` 는 normalize 전 raw 입력도
-        // 그대로 통과시키기 위한 legacy fallback.
+        // text / varchar / char / etc. — absorbs readable text.
+        // `character varying` / `character` are the legacy fallback that lets
+        // raw, un-normalised input through unchanged.
         "text" | "varchar" | "char" | "name" | "inet" | "cidr" | "macaddr" | "macaddr8" | "xml"
         | "citext" | "character varying" | "character" => ColumnCategory::Text,
 
@@ -164,7 +165,7 @@ mod tests {
 
     #[test]
     fn maps_text_inet_to_text_per_spec() {
-        // Sprint 258 — uuid 는 별도 카테고리로 분리됨 (별도 테스트).
+        // uuid is split into its own category (covered by its own test).
         for s in [
             "text",
             "varchar",
@@ -180,15 +181,15 @@ mod tests {
 
     #[test]
     fn maps_uuid_to_uuid_category_sprint_258() {
-        // Sprint 258 — uuid 는 own category (default 18rem, left-align).
+        // uuid has its own category (default 18rem, left-align).
         assert_eq!(map_pg_data_type("uuid"), ColumnCategory::Uuid);
         assert_eq!(map_pg_data_type("UUID"), ColumnCategory::Uuid);
     }
 
     #[test]
     fn strips_parameter_clauses_sprint_258() {
-        // format_type 결과 ("varchar(200)", "numeric(10,2)") 도 base
-        // type 으로 매칭.
+        // format_type output ("varchar(200)", "numeric(10,2)") also matches on
+        // the base type.
         assert_eq!(map_pg_data_type("varchar(200)"), ColumnCategory::Text);
         assert_eq!(
             map_pg_data_type("character varying(50)"),
@@ -200,7 +201,7 @@ mod tests {
 
     #[test]
     fn maps_array_types_to_object_sprint_258() {
-        // Array 표기 (text[], integer[]) → Object (JSON-like display).
+        // Array notation (text[], integer[]) → Object (JSON-like display).
         assert_eq!(map_pg_data_type("text[]"), ColumnCategory::Object);
         assert_eq!(map_pg_data_type("integer[]"), ColumnCategory::Object);
         assert_eq!(map_pg_data_type("varchar(200)[]"), ColumnCategory::Object);
@@ -208,7 +209,7 @@ mod tests {
 
     #[test]
     fn maps_unknown_custom_type_to_unknown() {
-        // PG custom enum type, hstore, geometry, range type 등 미지 입력.
+        // Unknown input: PG custom enum type, hstore, geometry, range type, etc.
         for s in ["hstore", "geometry", "ltree", "tsvector", "my_custom_enum"] {
             assert_eq!(map_pg_data_type(s), ColumnCategory::Unknown, "{s}");
         }
@@ -223,7 +224,7 @@ mod tests {
 
     #[test]
     fn normalize_pg_type_shortens_long_aliases_sprint_258() {
-        // psql `\d` 와 일치하는 단축형으로 변환.
+        // Convert to the short form psql `\d` prints.
         assert_eq!(normalize_pg_type("character varying(200)"), "varchar(200)");
         assert_eq!(normalize_pg_type("character varying"), "varchar");
         assert_eq!(normalize_pg_type("character(10)"), "char(10)");
@@ -239,7 +240,7 @@ mod tests {
 
     #[test]
     fn normalize_pg_type_leaves_already_short_forms_unchanged_sprint_258() {
-        // 정규화 무관한 입력은 pass-through.
+        // Input that needs no normalisation passes through.
         for s in [
             "integer",
             "bigint",
@@ -256,8 +257,9 @@ mod tests {
 
     #[test]
     fn restore_serial_restores_integer_with_nextval_default_sprint_259() {
-        // SERIAL / BIGSERIAL / SMALLSERIAL 은 format_type 이 underlying
-        // 정수 type 만 반환 → nextval(...) default 패턴 검출 시 복원.
+        // For SERIAL / BIGSERIAL / SMALLSERIAL, format_type returns only the
+        // underlying integer type → restore once the nextval(...) default
+        // pattern is detected.
         assert_eq!(
             restore_serial(
                 "integer".to_string(),
@@ -283,10 +285,10 @@ mod tests {
 
     #[test]
     fn restore_serial_passes_through_when_no_nextval_sprint_259() {
-        // default 가 nextval 이 아니거나 없으면 정수 type 그대로.
+        // When the default is not nextval or is absent, the integer type stays.
         assert_eq!(restore_serial("integer".to_string(), Some("42")), "integer");
         assert_eq!(restore_serial("integer".to_string(), None), "integer");
-        // non-integer type 은 nextval default 가 있어도 pass-through.
+        // A non-integer type passes through even with a nextval default.
         assert_eq!(
             restore_serial("text".to_string(), Some("nextval('foo_seq'::regclass)")),
             "text"
@@ -295,7 +297,7 @@ mod tests {
 
     #[test]
     fn restore_serial_is_case_insensitive_to_default_prefix_sprint_259() {
-        // pg_get_expr 의 출력은 일관되게 소문자 nextval 이지만 보강.
+        // pg_get_expr consistently emits lowercase nextval; this hardens it anyway.
         assert_eq!(
             restore_serial("integer".to_string(), Some("NEXTVAL('foo_seq'::regclass)")),
             "serial"

@@ -90,7 +90,7 @@ pub(super) struct OracleSynonymCatalogRow {
     pub(super) db_link: Option<String>,
 }
 
-/// #1072 (2차) — one `all_triggers` row for a table trigger. The LONG
+/// #1072 (pass 2) — one `all_triggers` row for a table trigger. The LONG
 /// `trigger_body` is deliberately not read (see `TRIGGERS_SQL`), so only the
 /// declaration metadata is carried.
 #[derive(Debug, Clone)]
@@ -360,7 +360,7 @@ fn synonym_target(row: &OracleSynonymCatalogRow) -> String {
     }
 }
 
-// #1072 (2차) — map `all_triggers` rows onto the PG-shaped `TriggerInfo`. Oracle
+// #1072 (pass 2) — map `all_triggers` rows onto the PG-shaped `TriggerInfo`. Oracle
 // triggers have an inline PL/SQL body rather than a separate trigger function
 // (PG semantics), so `function_schema` / `function_name` are left empty; the
 // frontend gates the "function" block on a non-empty `functionName`. The
@@ -862,7 +862,7 @@ mod tests {
         }
     }
 
-    // Reason: #1072 (2차) — a BEFORE EACH ROW trigger must decode into the
+    // Reason: #1072 (pass 2) — a BEFORE EACH ROW trigger must decode into the
     // PG-shaped timing/events/orientation fields, keep the WHEN clause, leave
     // the Oracle-inapplicable function fields empty, and rebuild a FOR EACH ROW
     // header. (2026-07-25)
@@ -902,7 +902,7 @@ mod tests {
         );
     }
 
-    // Reason: #1072 (2차) — a statement-level trigger has no FOR EACH ROW and no
+    // Reason: #1072 (pass 2) — a statement-level trigger has no FOR EACH ROW and no
     // WHEN; the three-event roster must round-trip. (2026-07-25)
     #[test]
     fn build_triggers_decodes_after_statement_multi_event_without_row_or_when() {
@@ -930,7 +930,7 @@ mod tests {
         );
     }
 
-    // Reason: #1072 (2차) — INSTEAD OF triggers are row-level even though
+    // Reason: #1072 (pass 2) — INSTEAD OF triggers are row-level even though
     // trigger_type omits "EACH ROW", and a DISABLED trigger must render a
     // trailing DISABLE so the read-only header reflects its state. (2026-07-25)
     #[test]
@@ -960,7 +960,7 @@ mod tests {
         );
     }
 
-    // Reason: #1072 (2차) — a COMPOUND trigger has no single BEFORE/AFTER timing
+    // Reason: #1072 (pass 2) — a COMPOUND trigger has no single BEFORE/AFTER timing
     // in the PG whitelist, so the raw Oracle keyword surfaces verbatim (the
     // timing field is a free string). (2026-07-25)
     #[test]

@@ -312,7 +312,7 @@ WHERE owner = :1
   AND (:3 != '%' OR type IN ('PROCEDURE', 'FUNCTION', 'PACKAGE', 'PACKAGE BODY'))
 ORDER BY line";
 
-// #1072 (2차) — trigger list for one table. Only the VARCHAR2 dictionary
+// #1072 (pass 2) — trigger list for one table. Only the VARCHAR2 dictionary
 // columns are read; the PL/SQL body (`all_triggers.trigger_body`) is a LONG
 // column the catalog browse deliberately avoids (same policy as
 // `all_views.text`), so the reconstructed definition is header-only.
@@ -378,7 +378,7 @@ mod tests {
         assert!(ROUTINE_SOURCE_SQL.contains("all_source"));
     }
 
-    // Reason: #1072 (2차) — the trigger list must stay table-scoped by
+    // Reason: #1072 (pass 2) — the trigger list must stay table-scoped by
     // (table_owner, table_name) and must never read the LONG trigger_body /
     // description columns (same LONG-avoidance policy as the view browse).
     // (2026-07-25)

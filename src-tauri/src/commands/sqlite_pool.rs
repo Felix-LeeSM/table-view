@@ -1,12 +1,12 @@
-//! Sprint 355 (Phase 1) — process-scope SQLite pool 의 lazy init helper.
+//! Lazy init helper for the process-scope SQLite pool.
 //!
-//! Phase 1 시점에는 AppState 가 pool 을 직접 들고 있지 않다 (sprint-357 의
-//! `get_initial_app_state` 와 같이 정식 hookup 됨). 그 사이 import_legacy /
-//! guard 등 IPC 는 `OnceCell` 로 process-shared pool 을 lazy 생성해 사용한다.
+//! `AppState` holds no pool. IPCs that need SQLite — `import_legacy`, the
+//! legacy-import guard, `get_initial_app_state` — call [`get_or_init_pool`],
+//! which lazily creates one process-shared pool in a `OnceCell`.
 //!
-//! 테스트는 `storage::local::open_pool()` 을 직접 호출하므로 본 helper 를
-//! 거치지 않는다 — `TABLE_VIEW_TEST_DATA_DIR` env 를 set 한 후 fresh pool 을
-//! 만든다.
+//! Tests call `storage::local::open_pool()` directly and do not go through
+//! this helper — they set the `TABLE_VIEW_TEST_DATA_DIR` env and then create
+//! a fresh pool.
 
 use crate::error::AppError;
 use crate::storage::local;
@@ -33,20 +33,21 @@ pub async fn publish_row_cap() {
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    //! Written 2026-05-17 — baseline cleanup.
     //!
-    //! `get_or_init_pool` 은 process-wide `OnceCell` — 단 1회만 init 되고
-    //! 이후 호출은 clone 만. 본 unit test 는 process 안에서 같은 cell 을
-    //! 공유하므로 한 곳에서 한 번만 cover 가능. 시나리오 8 원칙 중:
-    //!   - Happy: 첫 호출 → Ok(pool).
-    //!   - 멱등: 두 번째 호출은 같은 pool (cell hit).
-    //!   - 동시성: 모든 호출이 같은 cell 을 보므로 두 번 호출해도 Ok.
+    //! `get_or_init_pool` is a process-wide `OnceCell` — initialized only
+    //! once, with later calls just cloning. Because this unit test shares the
+    //! same cell within the process, it can be covered only once, in one
+    //! place. From the scenario-8 principles:
+    //!   - Happy: first call → Ok(pool).
+    //!   - Idempotent: the second call returns the same pool (cell hit).
+    //!   - Concurrency: all calls see the same cell, so calling twice is Ok.
     //!
-    //! `TABLE_VIEW_TEST_DATA_DIR` 는 다른 test (`tests/keyring_*` 등) 가
-    //! set 해 둔 상태일 수 있으므로 본 test 는 그 env 가 무엇이든 (set / unset)
-    //! 정상 동작해야 한다 — 다만 OnceCell 의 1회 init 는 process-shared 이므로
-    //! 다른 inline test 와의 순서는 cargo test thread scheduler 가 결정.
-    //! `serial_test` 로 격리.
+    //! `TABLE_VIEW_TEST_DATA_DIR` may already be set by another test
+    //! (`tests/keyring_*` and friends), so this test must behave correctly
+    //! whatever that env is (set / unset) — but since the OnceCell's one-time
+    //! init is process-shared, ordering against other inline tests is decided
+    //! by the cargo test thread scheduler. Isolated with `serial_test`.
     use super::*;
     use serial_test::serial;
     use std::path::PathBuf;

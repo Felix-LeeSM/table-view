@@ -224,8 +224,8 @@ async fn mariadb_returning_runtime_boundary_is_server_resolved_for_fixture_versi
         )
         .await
         .expect("RETURNING readback SELECT");
-    // COUNT(*) 는 BIGINT 를 반환하므로 ADR 0026 (issue #1082) 에 따라 정밀도-보존
-    // JSON string token 으로 wire 된다.
+    // COUNT(*) returns BIGINT, so per ADR 0026 (issue #1082) it is wired as a
+    // precision-preserving JSON string token.
     assert_eq!(
         readback.rows[0][0]
             .as_str()

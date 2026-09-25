@@ -1,31 +1,33 @@
-//! Sprint 356 (Phase 1, Q22) — file-key 이주: 디스크 평문 → OS keyring.
+//! Q22 — file-key migration: plaintext on disk → OS keyring.
 //!
-//! 본 모듈은 SQLite migration **전** 에 1회 호출된다. 따라서 sentinel /
-//! migration-failed 마커는 SQLite `meta` table 에 두지 않고 file sidecar
-//! 로만 둔다 (codex 5차 #5 fix — strategy 873–905 line).
+//! This module runs once **before** the SQLite migration. That is why the
+//! sentinel / migration-failed markers live only in the file sidecar, never
+//! in the SQLite `meta` table.
 //!
-//! 3 path (state-management-strategy 2026-05-15, Q22 + line 873–905):
-//!   - **Path A (신규)**: 디스크 `.key` 없음 + keyring 없음 → 새 key 생성,
-//!     keyring 저장, 디스크 file 폐기. AC-356-01.
-//!   - **Path B (migration)**: 디스크 `.key` 있음 + keyring 없음 → 디스크
-//!     read → (c) ciphertext probe → (a) keyring write → (b) readback 검증 →
-//!     (d) 디스크 secure delete (overwrite + 0o000 + unlink). 실패 시 디스크
-//!     유지 + sidecar `.key.migration-failed`. 단계 이름 (a)~(d) 는 설계
-//!     문서(strategy 873–905)의 것이고 실행 순서는 위와 같다 — (c) 가 (a)
-//!     앞에 서는 이유는 [`path_b_migrate_from_disk`] 가 갖는다 (#2138).
-//!     AC-356-02..04.
-//!   - **Path B 후속 boot**: 디스크 `.key` 없음 + keyring 있음 → keyring
-//!     read. AC-356-03.
-//!   - **재키잉 (#1814)**: 디스크 `.key` 있음 + keyring 있음 → 디스크를 거친
-//!     키는 노출된 키다. 새 키 생성 → keyring 덮어쓰기 → `connections.json`
-//!     재암호화 (임시 파일 + atomic rename) → 디스크 `.key` secure delete.
-//!     디스크 `.key` 가 복구 앵커라 어느 단계에서 죽어도 다음 부팅이 이어받는다.
-//!     `KeyOutcome::rekeyed_after_disk_exposure` 로 수행 여부가 드러난다.
-//!   - **Path C (Linux fallback)**: keyring `is_available()` 가 false →
-//!     디스크 `.key` mode 유지 (현재 0o600), frontend 에 toast event
-//!     emit. AC-356-05..06.
-//!   - **Fatal**: 디스크 `.key` 없음 + keyring 없음 + ciphertext 존재 →
-//!     `KeySource::Fatal` 반환, 호출자가 safe mode 진입. AC-356-09.
+//! Three paths (state-management-strategy 2026-05-15, Q22):
+//!   - **Path A (new)**: no disk `.key` + no keyring → generate a new key,
+//!     store it in the keyring, discard the disk file. AC-356-01.
+//!   - **Path B (migration)**: disk `.key` present + keyring absent → read
+//!     from disk → (c) ciphertext probe → (a) keyring write → (b) readback
+//!     verification → (d) disk secure delete (overwrite + 0o000 + unlink).
+//!     On failure the disk file is kept + sidecar `.key.migration-failed`.
+//!     The step names (a)~(d) come from the design doc and the execution
+//!     order is the one above — [`path_b_migrate_from_disk`] holds the
+//!     reason (c) runs before (a) (#2138). AC-356-02..04.
+//!   - **Path B follow-up boot**: no disk `.key` + keyring present → read
+//!     from the keyring. AC-356-03.
+//!   - **Rekeying (#1814)**: disk `.key` present + keyring present → a key
+//!     that lived on disk is an exposed key. Generate a new key → overwrite
+//!     the keyring → re-encrypt `connections.json` (temp file + atomic
+//!     rename) → secure-delete the disk `.key`. The disk `.key` is the
+//!     recovery anchor, so no matter where the boot dies the next boot picks
+//!     up from there. `KeyOutcome::rekeyed_after_disk_exposure` records
+//!     whether it ran.
+//!   - **Path C (Linux fallback)**: keyring `is_available()` is false →
+//!     keep disk `.key` mode (currently 0o600) and emit a toast event to
+//!     the frontend. AC-356-05..06.
+//!   - **Fatal**: no disk `.key` + no keyring + ciphertext present →
+//!     return `KeySource::Fatal`; the caller enters safe mode. AC-356-09.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -39,85 +41,91 @@ use zeroize::Zeroizing;
 use crate::error::AppError;
 use crate::storage::crypto::{create_key_file, KeyringBackend, KEYRING_ENTRY_NAME};
 
-/// Sprint 356 — 사용자 데이터 디렉토리 안의 file-key 경로.
+/// Path to the file-key inside the user data directory.
 pub fn disk_key_path(data_dir: &Path) -> PathBuf {
     data_dir.join(".key")
 }
 
-/// Sprint 356 — production 시점의 user-data dir 해상도. 이름만 keyring 쪽 호출자를
-/// 위해 남아 있고 판정은 [`crate::storage::app_data_dir`] 한 곳이다 (#2184).
-/// 그 전에는 override → fallback 본문을 여기서 한 벌 더 갖고 있었다.
+/// Resolves the user-data dir for production. Only the name remains, for
+/// keyring-side callers; the decision lives in one place,
+/// [`crate::storage::app_data_dir`] (#2184). Before that this function
+/// carried its own duplicate override → fallback body.
 pub fn app_data_dir_for_keyring() -> Result<PathBuf, AppError> {
     crate::storage::app_data_dir()
 }
 
-/// Sprint 356 — Path B 실패 시 생성되는 sentinel. 다음 boot 가 migration
-/// 재시도. SQLite meta 미존재 시점이라 file sidecar 만 사용.
+/// Sentinel created when Path B fails. The next boot retries the migration.
+/// This runs before SQLite meta exists, so only the file sidecar is used.
 pub fn migration_failed_sentinel_path(data_dir: &Path) -> PathBuf {
     data_dir.join(".key.migration-failed")
 }
 
-/// Sprint 356 — Linux fallback toast 가 한 번 표시된 후 set 되는 file
-/// sidecar. 다음 boot 가 같은 환경이면 toast 안 띄움 (AC-356-06).
+/// File sidecar set after the Linux fallback toast has been shown once.
+/// On the next boot the same environment shows no toast (AC-356-06).
 pub fn fallback_dismissed_sentinel_path(data_dir: &Path) -> PathBuf {
     data_dir.join(".keyring-fallback-dismissed")
 }
 
-/// 어디서 key 가 왔는지의 진실 (호출자의 분기용 / 테스트 단언용).
+/// The truth about where the key came from (for caller branching / test
+/// assertions).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeySource {
-    /// Path A — 새로 생성. 디스크 file 0.
+    /// Path A — newly generated. Zero disk files.
     Generated,
-    /// Path A/B 후 boot — keyring 에서 그대로 read.
+    /// Boot after Path A/B — read as-is from the keyring.
     FromKeyring,
-    /// Path B — 디스크 → keyring 이주 후 디스크 secure-deleted.
+    /// Path B — after the disk → keyring migration the disk file is
+    /// secure-deleted.
     MigratedFromDisk,
-    /// Path C — keyring 미가용, 디스크 file 그대로.
+    /// Path C — keyring unavailable, disk file kept as-is.
     DiskFallback,
-    /// AC-356-09 — keyring + 디스크 둘 다 없는데 ciphertext 있음.
-    /// 호출자는 safe mode 진입, decrypt 시도 금지.
+    /// AC-356-09 — no keyring and no disk file, but ciphertext exists.
+    /// The caller enters safe mode; decrypt attempts are forbidden.
     Fatal,
 }
 
-/// `migrate_or_initialize()` 의 반환. 호출자 (`storage::mod.rs` /
-/// `lib.rs::run()`) 는 `outcome.key` 를 envelope crypto 의 source 로 쓰고
-/// `outcome.fallback_to_disk` 가 true 일 때만 frontend 에 1회 toast 를
-/// emit 한다.
+/// Return value of `migrate_or_initialize()`. Callers (`storage::mod.rs` /
+/// `lib.rs::run()`) use `outcome.key` as the envelope crypto source and
+/// emit a one-time toast to the frontend only when
+/// `outcome.fallback_to_disk` is true.
 #[derive(Debug, Clone)]
 pub struct KeyOutcome {
-    /// 32-byte AES-256-GCM key. `KeySource::Fatal` 의 경우 빈 `Vec`.
+    /// 32-byte AES-256-GCM key. An empty `Vec` for `KeySource::Fatal`.
     pub key: Vec<u8>,
-    /// 어디서 왔는지.
+    /// Where it came from.
     pub source: KeySource,
-    /// `true` = Path C (Linux fallback). `false` = 그 외.
+    /// `true` = Path C (Linux fallback). `false` = otherwise.
     pub fallback_to_disk: bool,
-    /// #1814 — 이번 부팅이 디스크 노출을 거친 키를 폐기하고 새 키로 갈아탔는가.
-    /// `true` 면 `key` 는 이번 부팅에 새로 만든 키이고 `connections.json` 은 그
-    /// 키로 재암호화됐다. 재키잉을 시도했다가 실패한 부팅은 `false` 이고, 그때
-    /// `key` 는 (`source` 가 `FromKeyring` 이어도) 현재 암호문을 여는 키 —
-    /// 디스크 `.key` 앵커의 값일 수 있다. 다음 부팅이 같은 조건을 다시 만나
-    /// 재시도한다.
+    /// #1814 — whether this boot discarded a key that had been exposed on
+    /// disk and switched to a new one. When `true`, `key` is the fresh key
+    /// minted this boot and `connections.json` has been re-encrypted with
+    /// it. A boot that attempted the rekey and failed is `false`; then
+    /// `key` (even when `source` is `FromKeyring`) is the key that opens
+    /// the current ciphertext — it may be the value of the disk `.key`
+    /// anchor. The next boot meets the same conditions and retries.
     pub rekeyed_after_disk_exposure: bool,
 }
 
 impl KeyOutcome {
-    /// 호출자 편의 — fatal path 인가 (decrypt 금지 사인).
+    /// Caller convenience — is this the fatal path (the sign that decryption
+    /// is forbidden).
     pub fn is_fatal(&self) -> bool {
         matches!(self.source, KeySource::Fatal)
     }
 }
 
-/// Sprint 356 (Q22) — file-key 의 3 path 분기. SQLite migration 전에 1회
-/// 호출. `data_dir` 는 호출자가 넘기는 user-data dir 다 — 테스트에서는 tempdir,
-/// 프로덕션에서는 [`app_data_dir_for_keyring`] 이 돌려주는 값, 즉 부팅 때
-/// [`crate::storage::init_production_data_dir`] 이 주입한 경로다 (#2184).
+/// Q22 — the three-path branch for the file-key. Called once before the
+/// SQLite migration. `data_dir` is the user-data dir the caller passes in —
+/// a tempdir in tests, and in production the value returned by
+/// [`app_data_dir_for_keyring`], i.e. the path injected at boot by
+/// [`crate::storage::init_production_data_dir`] (#2184).
 pub fn migrate_or_initialize<B: KeyringBackend>(
     backend: &B,
     data_dir: &Path,
 ) -> Result<KeyOutcome, AppError> {
     fs::create_dir_all(data_dir)?;
 
-    // ---------------- Path C 진단 (가장 먼저) ----------------
+    // ---------------- Path C diagnosis (comes first) ----------------
     if !backend.is_available() {
         // P2-5 (#1455) — the disk fallback is a security downgrade (0600 file,
         // no OS ACL/keyring protection). `is_available()` already retried, so a
@@ -131,14 +139,15 @@ pub fn migrate_or_initialize<B: KeyringBackend>(
         return path_c_disk_fallback(data_dir);
     }
 
-    // ---------------- Path B 후속 boot — keyring hit ----------------
+    // ---------------- Path B follow-up boot — keyring hit ----------------
     if let Some(bytes) = backend.get(KEYRING_ENTRY_NAME)? {
         validate_key_len(&bytes)?;
-        // 디스크 `.key` 가 남아 있다 = 이 프로필이 Path C 디스크 fallback 을
-        // 거쳤거나 Path B 의 secure delete 가 부분 실패했다. 둘 다 master key
-        // 평문이 디스크에 앉아 있던 상태다. 잔재만 지우고 같은 키를 계속 쓰면
-        // 그 파일을 백업·rsync·스냅샷으로 가져간 쪽이 여전히 모든 password 를
-        // 푼다 — 새 키로 갈아탄다 (#1814).
+        // A remaining disk `.key` means this profile went through the Path C
+        // disk fallback, or Path B's secure delete partially failed. Either
+        // way the master key plaintext sat on disk. Deleting only the
+        // remnant and keeping the same key leaves whoever took that file via
+        // backup, rsync, or a snapshot still able to open every password —
+        // switch to a new key (#1814).
         let disk_path = disk_key_path(data_dir);
         if disk_path.exists() {
             return rekey_after_disk_exposure(backend, data_dir, &disk_path, bytes);
@@ -157,10 +166,10 @@ pub fn migrate_or_initialize<B: KeyringBackend>(
         return path_b_migrate_from_disk(backend, data_dir, &disk_path);
     }
 
-    // ---------------- Path A 또는 Fatal ----------------
-    // 디스크 .key 없음, keyring 없음. 만약 ciphertext (connections.json
-    // 안의 password_enc) 가 비어있지 않다면 새 key 를 만들면 orphan ——
-    // fatal 로 표시한다 (AC-356-09).
+    // ---------------- Path A or Fatal ----------------
+    // No disk .key and no keyring. If the ciphertext (password_enc inside
+    // connections.json) is non-empty, minting a new key would orphan it —
+    // mark this fatal (AC-356-09).
     if data_has_password_ciphertext(data_dir)? {
         return Ok(KeyOutcome {
             key: Vec::new(),
@@ -170,12 +179,12 @@ pub fn migrate_or_initialize<B: KeyringBackend>(
         });
     }
 
-    // Path A — fresh install. 새 key 생성 + keyring write.
+    // Path A — fresh install. Generate a new key + write it to the keyring.
     let key = Aes256Gcm::generate_key(aes_gcm::aead::OsRng);
     let key_bytes = key.as_slice().to_vec();
     backend.set(KEYRING_ENTRY_NAME, &key_bytes)?;
 
-    // Readback 검증 — AC-356-07. set 직후 get 으로 byte equality.
+    // Readback verification — AC-356-07. get right after set for byte equality.
     let stored = backend.get(KEYRING_ENTRY_NAME)?.ok_or_else(|| {
         AppError::Encryption("Keyring set succeeded but get returned None".into())
     })?;
@@ -198,33 +207,39 @@ pub fn migrate_or_initialize<B: KeyringBackend>(
     })
 }
 
-/// Path B — 디스크 .key 를 keyring 으로 이주. 모든 step 성공해야만 디스크
-/// secure-delete. 한 step 이라도 실패 시 sentinel sidecar + 디스크 보존
-/// (다음 boot 재시도). decrypt 는 디스크 path 로 fallback (caller
-/// 책임).
+/// Path B — migrates the disk `.key` into the keyring. The disk file is
+/// secure-deleted only after every step succeeds. If any step fails, a
+/// sentinel sidecar is written and the disk file is kept (the next boot
+/// retries). Decryption falls back to the disk path (the caller's
+/// responsibility).
 ///
-/// 실행 순서는 (c) → (a) → (b) → (d) 다. 재정렬이 지켜야 하는 설계 제약은 strategy
-/// line 891 의 「(a)(b)(c) 모두 성공 시에만 (d)」이고 그 조건은 그대로 선다. 스냅샷의
-/// 단계 서술 자체는 a → b → c 로 읽히지만 (strategy line 888 의 (b) 가 (a) 가 쓴
-/// 것을 되읽고, line 889–890 의 (c) 가 `.key` 와 keyring 둘 다를 말한다), (c) 를 앞으로
-/// 뺄 수 있는 것은 구현의 [`validate_ciphertexts_decrypt`] 가 keyring 을 안 보고
-/// `disk_key` 만 읽기 때문이다.
+/// The execution order is (c) → (a) → (b) → (d). The design constraint the
+/// reorder has to keep — "(d) only after (a)(b)(c) all succeed" — stands as
+/// written. The snapshot's own step description reads a → b → c (its (b)
+/// re-reads what (a) wrote, and its (c) covers both `.key` and the keyring),
+/// but (c) can be moved to the front because the implementation's
+/// [`validate_ciphertexts_decrypt`] never looks at the keyring and reads
+/// only `disk_key`.
 ///
-/// (c) 를 맨 앞에 두는 이유는 (a) 뒤에서 실패했을 때 남는 상태다 (#2138). 그 부팅이
-/// keyring 엔트리를 남기면 다음 부팅은 [`migrate_or_initialize`] 의 keyring hit 분기로
-/// 빠져 Path B 에 다시 못 들어온다. sentinel 을 회수하는 자리가 아래 (d) 블록 안이라
-/// 마커는 그대로 남는다. 디스크 평문 `.key` 는 다르다 — 암호문이 다시 열리게 되면
-/// [`rekey_after_disk_exposure`] 의 앵커 arm 이 서서 새 키로 갈아타고 그 함수의
-/// step 3 이 파일을 지운다. 어느 키로도 안 열리는 동안만 같은 함수의 「둘 다 보존」
-/// arm 에 갇힌다.
+/// The reason (c) goes first is the state left behind when (a) fails after
+/// it (#2138). If that boot leaves a keyring entry behind, the next boot
+/// takes the keyring-hit branch of [`migrate_or_initialize`] and can never
+/// re-enter Path B. The sentinel is only reclaimed inside the (d) block
+/// below, so the marker stays where it is. The plaintext disk `.key` is
+/// different — once the ciphertext becomes openable again, the anchor arm
+/// of [`rekey_after_disk_exposure`] fires and switches to a new key, and
+/// that function's step 3 deletes the file. Only while neither key opens
+/// anything is the same function stuck in its "keep both" arm.
 ///
-/// 이 순서가 치르는 값은 노출된 키다. (c) 가 먼저면 그 프로필은 다음 부팅에 Path B 로
-/// 재진입해 **디스크에 평문으로 앉아 있던 그 키를 그대로** keyring 으로 옮긴다. (a) 가
-/// 먼저였다면 같은 프로필이 [`rekey_after_disk_exposure`] 로 가 새 키를 만들고
-/// `connections.json` 을 재암호화했다. Path B 가 같은 키를 이주시키는 것은 AC-356-02
-/// 계약이고, 그 경로의 노출 회수가 아직 열린 공백이라는 것은 `docs/roadmap/h7.md` 의
-/// 「Credential/privacy boundary」 행이 이미 적어 뒀다. [`KeyringBackend`] 에
-/// `delete` 가 없어 (a) 를 되돌릴 수단이 없는 것도 그대로다.
+/// What this order pays is the exposed key. With (c) first, the profile
+/// re-enters Path B on the next boot and moves **the very key that sat in
+/// plaintext on disk** into the keyring. With (a) first, the same profile
+/// would have gone to [`rekey_after_disk_exposure`], minted a new key, and
+/// re-encrypted `connections.json`. Migrating that same key is the
+/// AC-356-02 contract, and the "Credential/privacy boundary" row of
+/// `docs/roadmap/h7.md` already records that recovering the exposure on
+/// this path is still an open gap. Also standing: [`KeyringBackend`] has no
+/// `delete`, so there is no way to undo (a).
 fn path_b_migrate_from_disk<B: KeyringBackend>(
     backend: &B,
     data_dir: &Path,
@@ -232,9 +247,8 @@ fn path_b_migrate_from_disk<B: KeyringBackend>(
 ) -> Result<KeyOutcome, AppError> {
     let disk_key = read_disk_key(disk_path)?;
 
-    // (c) ciphertext decrypt sanity check (strategy line 886–887). Best
-    // effort — if there are no ciphertexts to validate (fresh dual-write
-    // user) we still proceed.
+    // (c) ciphertext decrypt sanity check. Best effort — if there are no
+    // ciphertexts to validate (fresh dual-write user) we still proceed.
     if let Err(e) = validate_ciphertexts_decrypt(data_dir, &disk_key) {
         warn!(
             target: "boot",
@@ -256,7 +270,7 @@ fn path_b_migrate_from_disk<B: KeyringBackend>(
             "key_migration: Path B step (a) keyring write failed ({e}); leaving sentinel"
         );
         write_sentinel(&migration_failed_sentinel_path(data_dir))?;
-        // 디스크 key 로 그대로 decrypt 가능 — DiskFallback 으로 반환.
+        // Decryption still works with the disk key — return DiskFallback.
         return Ok(KeyOutcome {
             key: disk_key,
             source: KeySource::DiskFallback,
@@ -265,7 +279,7 @@ fn path_b_migrate_from_disk<B: KeyringBackend>(
         });
     }
 
-    // (b) readback 검증.
+    // (b) readback verification.
     let stored = backend.get(KEYRING_ENTRY_NAME)?;
     match stored {
         Some(bytes) if bytes == disk_key => {
@@ -306,9 +320,10 @@ fn path_b_migrate_from_disk<B: KeyringBackend>(
     })
 }
 
-/// Path C — Linux fallback. keyring 미가용. 디스크 file mode 유지 (현재
-/// 0o600). 디스크 file 없으면 새로 생성. Frontend 에는 caller 가 file
-/// sidecar `.keyring-fallback-dismissed` 가 부재일 때만 toast 한 번 띄움.
+/// Path C — Linux fallback. The keyring is unavailable. The disk file keeps
+/// its file mode (currently 0o600); if it is missing, a new one is created.
+/// The caller shows the frontend a toast only once, and only while the file
+/// sidecar `.keyring-fallback-dismissed` is absent.
 fn path_c_disk_fallback(data_dir: &Path) -> Result<KeyOutcome, AppError> {
     let disk_path = disk_key_path(data_dir);
     if disk_path.exists() {
@@ -320,11 +335,12 @@ fn path_c_disk_fallback(data_dir: &Path) -> Result<KeyOutcome, AppError> {
             rekeyed_after_disk_exposure: false,
         })
     } else {
-        // #1555 — keyring-only 프로필이 keyring 없는 환경으로 이전/소실되면
-        // 디스크 `.key` 도, keyring 도 없다. 여기서 새 key 를 생성하면 기존
-        // ciphertext 가 orphan 이 되어 저장 password 전량 복호화 불가.
-        // Path A(l.154-160) 및 crypto #1093 가드와 동형으로 Fatal 진입
-        // (호출자가 safe mode). AC-356-09.
+        // #1555 — if a keyring-only profile is moved to, or lost in, an
+        // environment without the keyring, neither the disk `.key` nor the
+        // keyring exists. Minting a new key here would orphan the existing
+        // ciphertext and leave every stored password undecryptable. Enter
+        // Fatal, shaped like the Path A and crypto #1093 guards (the caller
+        // enters safe mode). AC-356-09.
         if data_has_password_ciphertext(data_dir)? {
             warn!(
                 target: "boot",
@@ -337,9 +353,10 @@ fn path_c_disk_fallback(data_dir: &Path) -> Result<KeyOutcome, AppError> {
                 rekeyed_after_disk_exposure: false,
             });
         }
-        // 신규 사용자 + Linux fallback — 디스크에 새 key. write_disk_key 가
-        // atomic publish 후 실제 on-disk key 를 돌려주므로 (동시 boot race 시
-        // winner 의 key), 그 반환값을 사용해 ciphertext orphan 을 방지한다.
+        // New user + Linux fallback — a new key on disk. write_disk_key
+        // returns the key actually on disk after the atomic publish (the
+        // winner's key in a concurrent-boot race); use that return value to
+        // prevent a ciphertext orphan.
         let generated = Aes256Gcm::generate_key(aes_gcm::aead::OsRng);
         let key_bytes = write_disk_key(&disk_path, generated.as_slice())?;
         info!(
@@ -355,25 +372,27 @@ fn path_c_disk_fallback(data_dir: &Path) -> Result<KeyOutcome, AppError> {
     }
 }
 
-/// `connections.json` 안에서 master key 봉투로 감싸이는 필드. `storage::mod.rs`
-/// 의 `save_connection_with_wallet` 이 유일한 `crypto::encrypt` 호출자이고 거기서
-/// 봉투를 타는 값은 이 둘뿐이다. `ConnectionConfig` 에 `rename_all` 이 없어 저장
-/// key 는 필드 이름 그대로다. **새 secret 필드를 추가하면 여기에도 넣어야 한다** —
-/// 빠진 필드는 재키잉 뒤 복호화 불가로 남는다.
+/// Fields inside `connections.json` wrapped under the master key envelope.
+/// `storage::mod.rs`'s `save_connection_with_wallet` is the only
+/// `crypto::encrypt` caller, and these two are the only values it wraps.
+/// `ConnectionConfig` has no `rename_all`, so the stored keys are the field
+/// names as-is. **Any new secret field must be added here too** — a missing
+/// field stays undecryptable after rekeying.
 const SECRET_FIELDS: [&str; 2] = ["password", "wallet_password"];
 
 fn connections_path(data_dir: &Path) -> PathBuf {
     data_dir.join("connections.json")
 }
 
-/// 재키잉이 새 암호문을 먼저 떨어뜨리는 임시 파일. 이름을 고정한 이유는 boot 에
-/// 1회만 도는 경로라 경합이 없고, 앞선 부팅이 남긴 잔재를 매번 회수하기 위해서다.
+/// Temp file where rekeying drops the new ciphertext first. The name is
+/// fixed because this path runs once per boot — no contention — and so each
+/// boot reclaims whatever a previous boot left behind.
 fn rekey_tmp_path(data_dir: &Path) -> PathBuf {
     data_dir.join("connections.json.rekey.tmp")
 }
 
-/// `connections.json` 의 상태. `Corrupt` 는 파싱 실패 — `load_storage_raw()` 가
-/// 다음 호출에서 격리한다.
+/// State of `connections.json`. `Corrupt` means parsing failed —
+/// `load_storage_raw()` quarantines it on the next call.
 enum ConnectionsDoc {
     Absent,
     Corrupt,
@@ -392,7 +411,7 @@ fn read_connections_doc(data_dir: &Path) -> Result<ConnectionsDoc, AppError> {
     })
 }
 
-/// 문서 안의 비어있지 않은 secret 암호문들.
+/// Non-empty secret ciphertexts inside the document.
 fn secret_values(doc: &serde_json::Value) -> impl Iterator<Item = &str> {
     doc.get("connections")
         .and_then(|v| v.as_array())
@@ -407,21 +426,23 @@ fn secret_values(doc: &serde_json::Value) -> impl Iterator<Item = &str> {
         .filter(|enc| !enc.is_empty())
 }
 
-/// 지켜야 할 암호문이 하나라도 있는가. 없으면 재키잉이 잃을 것도 없다.
+/// Is there at least one ciphertext to protect? With none, rekeying has
+/// nothing to lose.
 fn has_secrets(doc: &serde_json::Value) -> bool {
     secret_values(doc).next().is_some()
 }
 
-/// 문서의 모든 secret 이 `key` 로 풀리는가. 하나라도 실패하면 false — 부분 성공을
-/// 성공으로 강등하지 않는다.
+/// Does every secret in the document decrypt under `key`? Any failure makes
+/// it false — a partial success is never downgraded to a success.
 fn secrets_decrypt_under(doc: &serde_json::Value, key: &[u8]) -> bool {
     secret_values(doc).all(|enc| crate::storage::crypto::decrypt(enc, key).is_ok())
 }
 
-/// 모든 secret 을 `old` 로 풀어 `new` 로 다시 감싼다. 하나라도 실패하면 `Err` 이고
-/// 호출자는 원본 파일을 건드리지 않은 채 다음 부팅으로 넘긴다. 평문은 `Zeroizing`
-/// 안에서만 살아 재암호화 직후 지워진다 (ADR 0040 이 재암호화의 비용으로 지목한
-/// "plaintext 메모리 노출 윈도우" 를 최소화).
+/// Decrypts every secret with `old` and rewraps it under `new`. Any failure
+/// returns `Err`, and the caller moves on to the next boot without having
+/// touched the original file. The plaintext lives only inside `Zeroizing`
+/// and is wiped right after re-encryption (minimizing the "plaintext memory
+/// exposure window" that ADR 0040 named as the cost of re-encryption).
 fn reencrypt_secrets(doc: &mut serde_json::Value, old: &[u8], new: &[u8]) -> Result<(), AppError> {
     let Some(connections) = doc.get_mut("connections").and_then(|v| v.as_array_mut()) else {
         return Ok(());
@@ -442,18 +463,22 @@ fn reencrypt_secrets(doc: &mut serde_json::Value, old: &[u8], new: &[u8]) -> Res
     Ok(())
 }
 
-/// 재암호화된 문서를 원자적으로 발행한다 — create-time 0600 임시 파일에 쓰고
-/// `fsync` 한 뒤 rename. `storage::mod.rs` 의 `save_storage_raw()` 와 같은 절차다.
-/// rename 이 성공하기 전에는 원본이 한 바이트도 안 바뀐다.
+/// Publishes the re-encrypted document atomically — write to a create-time
+/// 0600 temp file, `fsync`, then rename. Same procedure as
+/// `storage::mod.rs`'s `save_storage_raw()`. Until the rename succeeds, not
+/// one byte of the original changes.
 ///
-/// #2183 — rename 이 성공한 **뒤에** `connections.json.bak` 을 지운다. 이 함수는
-/// `save_storage_raw` 를 안 거치므로 백업이 갱신되지 않는데, 재키잉의 다음 단계가
-/// 옛 키를 폐기하면 그 백업은 **어디에도 없는 키로 암호화된 암호문**이 된다. JSON
-/// 으로는 멀쩡히 파싱되므로 소실 복구 경로가 성공 분기를 타고 "되살렸다"고 알린
-/// 뒤 사용자는 접속마다 복호화 실패를 만난다. 지우면
-/// `storage::seed_backup_if_absent` 가 같은 부팅의 첫 로드에서 새 키로 다시
-/// 만든다. rename 전에 지우면 발행이 실패했을 때 옛 키로 열리는 멀쩡한 백업까지
-/// 잃으므로 순서가 중요하다.
+/// #2183 — deletes `connections.json.bak` only **after** the rename
+/// succeeds. This function bypasses `save_storage_raw`, so the backup is
+/// not refreshed; if the next rekey step then discards the old key, that
+/// backup becomes **ciphertext encrypted under a key that exists nowhere**.
+/// It still parses as valid JSON, so the loss-recovery path takes the
+/// success branch, reports "restored", and the user then hits a decrypt
+/// failure on every connection. Deleting it lets
+/// `storage::seed_backup_if_absent` recreate it under the new key on the
+/// same boot's first load. The order matters: deleting it before the rename
+/// would also lose a healthy backup that the old key still opens if the
+/// publish fails.
 fn publish_connections_atomically(
     data_dir: &Path,
     doc: &serde_json::Value,
@@ -462,8 +487,9 @@ fn publish_connections_atomically(
     let tmp_path = rekey_tmp_path(data_dir);
     let json = serde_json::to_string_pretty(doc)?;
 
-    // 앞선 부팅의 잔재를 먼저 회수한다. `create_new` 로 열어야 mode(0600) 이 실제로
-    // 걸린다 — 이미 있는 파일을 열면 그 파일의 permission 이 그대로 쓰인다.
+    // Reclaim leftovers from a previous boot first. The open must use
+    // `create_new` for mode(0600) to actually stick — opening an existing
+    // file keeps that file's permissions.
     let _ = fs::remove_file(&tmp_path);
     {
         let mut opts = fs::OpenOptions::new();
@@ -487,20 +513,25 @@ fn publish_connections_atomically(
     Ok(())
 }
 
-/// #1814 — 디스크 노출을 거친 file-key 를 폐기하고 새 키로 갈아탄다.
+/// #1814 — discards a file-key that has been exposed on disk and switches
+/// to a new one.
 ///
-/// 진입 조건은 「keyring 에 키가 있는데 디스크 `.key` 도 있다」 하나다. 별도 마커를
-/// 두지 않는 이유는 디스크 `.key` 의 존재 자체가 노출의 증거이기 때문이다. 사용자
-/// confirm 없이 자동으로 수행한다 (2026-07-25 오너 결정).
+/// The entry condition is exactly one: a key exists in the keyring and a
+/// disk `.key` also exists. No separate marker is used because the mere
+/// existence of the disk `.key` is itself the evidence of exposure. It runs
+/// automatically, without user confirmation (owner decision 2026-07-25).
 ///
-/// 3단계: ① 새 키 생성 → keyring 덮어쓰기 ② `connections.json` 재암호화 → 임시
-/// 파일 → atomic rename ③ 디스크 `.key` secure delete.
+/// Three steps: ① generate a new key → overwrite the keyring ② re-encrypt
+/// `connections.json` → temp file → atomic rename ③ secure-delete the disk
+/// `.key`.
 ///
-/// **복구 앵커** — ① 이 keyring 의 구 키를 덮어쓰므로, 그 구 키가 유일본이면 ①과
-/// ② 사이의 crash 가 모든 password 를 복구 불가로 만든다. 그래서 ① 앞에서 「현재
-/// 암호문을 여는 키가 디스크 `.key` 에 있다」(또는 지킬 암호문이 아예 없다) 를
-/// 확인하고, 아니면 재키잉을 시작하지 않는다. 그 조건이 서면 ①②③ 어디서 죽어도
-/// 다음 부팅이 디스크 `.key` 로 복호화해 이어받는다.
+/// **Recovery anchor** — ① overwrites the old keyring key, so if that old
+/// key is the only copy, a crash between ① and ② makes every password
+/// unrecoverable. That is why, before ①, the code verifies that "the key
+/// opening the current ciphertext is in the disk `.key`" (or that there is
+/// no ciphertext to protect at all), and skips rekeying otherwise. While
+/// that condition holds, a crash at any of ①②③ leaves the next boot
+/// decrypting with the disk `.key` and picking up from there.
 fn rekey_after_disk_exposure<B: KeyringBackend>(
     backend: &B,
     data_dir: &Path,
@@ -514,14 +545,15 @@ fn rekey_after_disk_exposure<B: KeyringBackend>(
         rekeyed_after_disk_exposure: rekeyed,
     };
 
-    // 읽히지 않는 `.key` — secure delete 도중 죽어 zero-overwrite 만 된 잔재 —
-    // 는 앵커가 못 된다.
+    // An unreadable `.key` — a leftover from a boot that died mid secure
+    // delete with only the zero-overwrite done — cannot serve as the anchor.
     let disk_key = read_disk_key(disk_path).ok();
 
     let mut doc = match read_connections_doc(data_dir)? {
         ConnectionsDoc::Corrupt => {
-            // 격리 전이라 어느 키가 맞는지 판정할 수 없다. 아무것도 지우지 않고
-            // 다음 부팅으로 넘긴다 (`load_storage_raw()` 가 격리한 뒤 재시도된다).
+            // Before quarantine there is no way to tell which key is right.
+            // Delete nothing and hand off to the next boot (it retries after
+            // `load_storage_raw()` quarantines the file).
             warn!(
                 target: "boot",
                 "key_migration: rekey deferred — connections.json does not parse; leaving the disk .key in place"
@@ -533,8 +565,9 @@ fn rekey_after_disk_exposure<B: KeyringBackend>(
         ConnectionsDoc::Parsed(value) => Some(value),
     };
 
-    // 현재 암호문을 여는 키. 디스크 `.key` 를 먼저 물어보는 이유는 그게 앵커이기
-    // 때문이다 — 노출 시나리오에서는 keyring 키와 같은 값인 경우가 대부분이다.
+    // The key opening the current ciphertext. The disk `.key` is asked
+    // first because it is the anchor — in the exposure scenario it usually
+    // holds the same value as the keyring key.
     let current = match doc.as_ref() {
         None => keyring_key.clone(),
         Some(parsed) => match disk_key
@@ -543,17 +576,19 @@ fn rekey_after_disk_exposure<B: KeyringBackend>(
         {
             Some(anchor) => anchor.clone(),
             None if secrets_decrypt_under(parsed, &keyring_key) => {
-                // 디스크 `.key` 는 현재 암호문과 무관한 잔재다 (예: 재키잉이
-                // rename 까지 끝내고 secure delete 전에 죽은 부팅이 남긴 구 키).
-                // 갈아탈 대상이 없으니 잔재만 치운다.
+                // The disk `.key` is a leftover unrelated to the current
+                // ciphertext (e.g. an old key left by a boot that finished
+                // the rekey through the rename and died before the secure
+                // delete). Nothing to switch to, so just clear the leftover.
                 if let Err(e) = secure_delete(disk_path) {
                     warn!(target: "boot", "key_migration: stale disk .key cleanup failed: {e}");
                 }
                 return Ok(from_keyring(keyring_key, false));
             }
             None => {
-                // 어느 키로도 안 열린다. 여기서 무엇이든 지우면 복구 가능성만
-                // 줄어든다 — 둘 다 보존하고 아무것도 하지 않는다.
+                // Neither key opens anything. Deleting anything here only
+                // shrinks what can still be recovered — preserve both and do
+                // nothing.
                 warn!(
                     target: "boot",
                     "key_migration: rekey skipped — neither the keyring key nor the disk .key decrypts connections.json; preserving both"
@@ -562,10 +597,11 @@ fn rekey_after_disk_exposure<B: KeyringBackend>(
             }
         },
     };
-    // 이 지점의 불변식: 지킬 암호문이 있다면 `current` 는 디스크 `.key` 안에 그대로
-    // 남아 있다. 아래 ①이 keyring 을 덮어써도 복구가 가능한 근거다.
+    // Invariant at this point: if there is ciphertext to protect, `current`
+    // still lives intact inside the disk `.key`. That is why recovery stays
+    // possible even after ① below overwrites the keyring.
 
-    // ① 새 키 생성 → keyring 덮어쓰기 + readback 검증.
+    // ① Generate a new key → overwrite the keyring + readback verification.
     let new_key = Aes256Gcm::generate_key(aes_gcm::aead::OsRng)
         .as_slice()
         .to_vec();
@@ -587,7 +623,7 @@ fn rekey_after_disk_exposure<B: KeyringBackend>(
         }
     }
 
-    // ② connections.json 재암호화 → 임시 파일 → atomic rename.
+    // ② Re-encrypt connections.json → temp file → atomic rename.
     if let Some(parsed) = doc.as_mut() {
         if let Err(e) = reencrypt_secrets(parsed, &current, &new_key)
             .and_then(|()| publish_connections_atomically(data_dir, parsed))
@@ -600,8 +636,9 @@ fn rekey_after_disk_exposure<B: KeyringBackend>(
         }
     }
 
-    // ③ 디스크 `.key` secure delete. 실패해도 남은 파일은 이제 아무 암호문도 못
-    // 여는 잔재이고, 다음 부팅이 같은 경로에서 다시 치운다.
+    // ③ Secure-delete the disk `.key`. If it fails, the leftover file no
+    // longer opens any ciphertext, and the next boot clears it through this
+    // same path again.
     if let Err(e) = secure_delete(disk_path) {
         warn!(
             target: "boot",
@@ -616,19 +653,22 @@ fn rekey_after_disk_exposure<B: KeyringBackend>(
     Ok(from_keyring(new_key, true))
 }
 
-/// Path B (c) probe — `connections.json` 의 모든 secret 암호문이 `key` 로 풀리는가.
-/// Ok 인 경우는 셋이다: 파일 부재, 파일은 있지만 비어있지 않은 secret 이 없음,
-/// 전부 복호화 성공. 첫 실패에서 Err.
+/// Path B (c) probe — does every secret ciphertext in `connections.json`
+/// decrypt under `key`? There are three Ok cases: the file is absent, the
+/// file exists but holds no non-empty secrets, or everything decrypts. Err
+/// on the first failure.
 ///
-/// 판정 대상은 `SECRET_FIELDS` 전체다 — 재키잉·orphan 가드가 지키는 집합과 같아야
-/// 한다. `password` 만 훑던 동안 secret 이 `wallet_password` 뿐인 프로필은 probe 를
-/// 헛통과해 (d) secure delete 까지 갔다 (#2124). 같은 집합을 도는
-/// `secrets_decrypt_under` 대신 여기서 직접 도는 이유는 실패 사유를 보존하기
-/// 위해서다 — 호출자가 그 문자열을 boot WARN 에 싣는다.
+/// The check covers all of `SECRET_FIELDS` — it must be the same set the
+/// rekey and orphan guards protect. While only `password` was scanned, a
+/// profile whose only secret was `wallet_password` sailed through the probe
+/// and reached the (d) secure delete (#2124). Iterating the set here instead
+/// of reusing `secrets_decrypt_under` preserves the failure reason — the
+/// caller puts that string into the boot WARN.
 fn validate_ciphertexts_decrypt(data_dir: &Path, key: &[u8]) -> Result<(), AppError> {
     let ConnectionsDoc::Parsed(doc) = read_connections_doc(data_dir)? else {
-        // 파일 부재, 또는 Corrupt — 후자는 `load_storage_raw()` 가 다음 호출에서
-        // 격리한다. 이 step 이 검증할 암호문이 없으니 migration 을 막지 않는다.
+        // File absent, or Corrupt — the latter is quarantined by
+        // `load_storage_raw()` on the next call. This step has no ciphertext
+        // to validate, so it does not block the migration.
         return Ok(());
     };
     for enc in secret_values(&doc) {
@@ -638,17 +678,20 @@ fn validate_ciphertexts_decrypt(data_dir: &Path, key: &[u8]) -> Result<(), AppEr
     Ok(())
 }
 
-/// 디스크에 ciphertext 가 있고 key 가 사라진 fatal 케이스 판정. AC-356-09.
-/// `crypto::get_or_create_key` (#1093 orphan guard) 도 같은 신호를 재사용한다.
+/// Decides the fatal case where ciphertext exists on disk and the key is
+/// gone. AC-356-09. `crypto::get_or_create_key` (#1093 orphan guard) reuses
+/// the same signal.
 ///
-/// 판정 대상은 `SECRET_FIELDS` 전체다 — 재키잉이 지키는 집합과 같아야 한다.
-/// `password` 만 훑던 동안 secret 이 `wallet_password` 뿐인 Oracle 프로필은
-/// 「지킬 암호문 없음」으로 판정돼 Path A 가 새 키를 찍었고, 그 순간 wallet
-/// 암호문이 영구 복호화 불가가 됐다 (#2111).
+/// The check covers all of `SECRET_FIELDS` — it must be the same set the
+/// rekey protects. While only `password` was scanned, an Oracle profile
+/// whose only secret was `wallet_password` was judged to have "no ciphertext
+/// to protect", Path A minted a new key, and at that moment the wallet
+/// ciphertext became permanently undecryptable (#2111).
 pub(crate) fn data_has_password_ciphertext(data_dir: &Path) -> Result<bool, AppError> {
     Ok(match read_connections_doc(data_dir)? {
-        // Corrupt 는 판정 근거가 없다 — `load_storage_raw()` 가 다음 호출에서
-        // 격리한다. 여기서 true 를 내면 부팅이 safe mode 에 갇힌다.
+        // Corrupt gives nothing to judge on — `load_storage_raw()` quarantines
+        // it on the next call. Returning true here would trap the boot in
+        // safe mode.
         ConnectionsDoc::Absent | ConnectionsDoc::Corrupt => false,
         ConnectionsDoc::Parsed(doc) => has_secrets(&doc),
     })
@@ -741,27 +784,29 @@ fn write_sentinel(path: &Path) -> Result<(), AppError> {
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    //! Written 2026-05-17 — baseline cleanup.
     //!
-    //! `tests/keyring_*.rs` 통합 binary 가 별도로 존재하지만 본 baseline 의
-    //! coverage 측정 (`--lib --test storage_integration ...`) set 에는 포함되지
-    //! 않아 key_migration.rs 가 0% 로 나옴. inline `#[cfg(test)]` 로 옮겨와
-    //! `--lib` 경로의 cover 를 확보. 시나리오는 통합 binary 와 일부 중복되나
-    //! 더 fine-grained: secure_delete, sentinel, validate_key_len, 그리고 5
-    //! Path 분기 (A, B happy, B fail, B 후속 boot keyring hit, C unavail) 를
-    //! 작은 함수 단위로 lock.
+    //! The `tests/keyring_*.rs` integration binary exists separately but is
+    //! not part of this baseline's coverage measurement set
+    //! (`--lib --test storage_integration ...`), so key_migration.rs showed
+    //! 0%. These tests moved into an inline `#[cfg(test)]` module to secure
+    //! coverage on the `--lib` path. The scenarios partly duplicate the
+    //! integration binary but are more fine-grained: secure_delete, sentinel,
+    //! validate_key_len, and the 5 Path branches (A, B happy, B fail, B
+    //! follow-up boot keyring hit, C unavail) locked at small-function
+    //! granularity.
     //!
-    //! Test scenarios 8 원칙:
+    //! Test scenarios 8 principles:
     //!   - Happy: Path A (fresh user), Path B (disk → keyring), Path C (Linux).
-    //!   - 빈 입력: 빈 connections.json (data_has_password_ciphertext = false).
-    //!   - 에러 복구: keyring set 실패 → 디스크 보존 + sentinel.
-    //!   - 동시성: idempotent — 두 번째 boot 가 keyring hit only.
-    //!   - 상태 전이: Generated → FromKeyring → MigratedFromDisk → DiskFallback → Fatal.
+    //!   - Empty input: empty connections.json (data_has_password_ciphertext = false).
+    //!   - Error recovery: keyring set failure → disk preserved + sentinel.
+    //!   - Concurrency: idempotent — the second boot hits the keyring only.
+    //!   - State transitions: Generated → FromKeyring → MigratedFromDisk → DiskFallback → Fatal.
     //!   - try-await reject: read_disk_key with corrupt base64 / wrong length.
-    //!   - 빈 catch 없음 — Path B 실패 분기는 sentinel write 까지 단언.
+    //!   - No empty catches — Path B failure branches assert up to the sentinel write.
     //!
-    //! `InMemoryKeyringBackend` 가 `tests/keyring_*` 와 같은 in-memory 시뮬레이션
-    //! 이라 OS keyring 미접촉.
+    //! `InMemoryKeyringBackend` is the same in-memory simulation as
+    //! `tests/keyring_*`, so the OS keyring is never touched.
     use super::*;
     use crate::storage::crypto::{encrypt, InMemoryKeyringBackend, KeyringBackend};
     use serial_test::serial;
@@ -797,10 +842,11 @@ mod tests {
 
     // ---------------- helper: disk_key_path / sentinel paths ----------------
 
-    // Reason (2026-07-24, 이슈 #1625): 3 path helper 테스트는 `(fn, 기대
-    // 파일명)` 만 다른 반복 (testing-scenarios P9) — table-driven 으로 회수.
-    // 모든 helper 가 data_dir 를 parent 로 유지하고 고정 파일명을 붙이는
-    // 계약을 값 보존하며 단언한다.
+    // Reason (2026-07-24, issue #1625): the 3 path helper tests are repeats
+    // differing only in `(fn, expected filename)` (testing-scenarios P9) —
+    // recovered as table-driven. Asserts, with the values preserved, the
+    // contract that every helper keeps data_dir as the parent and appends a
+    // fixed filename.
     #[test]
     fn path_helpers_join_expected_filename_under_data_dir() {
         type PathBuilder = fn(&Path) -> PathBuf;
@@ -826,10 +872,11 @@ mod tests {
 
     // ---------------- helper: validate_key_len ----------------
 
-    // Reason (2026-07-24, 이슈 #1625): accept-32 / reject-16 / reject-empty 3개는
-    // 입력만 다른 반복 (testing-scenarios P9) — table-driven. Err 케이스는
-    // `Encryption` variant + 기대(32)/실제 길이가 메시지에 실리는 계약까지
-    // 단언(단순 is_err 강화). 경계값 32/16/0 보존.
+    // Reason (2026-07-24, issue #1625): accept-32 / reject-16 / reject-empty
+    // are repeats differing only in input (testing-scenarios P9) —
+    // table-driven. The Err cases assert the full contract: the `Encryption`
+    // variant plus the expected(32)/actual length carried in the message
+    // (strengthened from a bare is_err). Boundary values 32/16/0 preserved.
     #[test]
     fn validate_key_len_enforces_32_byte_contract() {
         // key → None = expect Ok; Some(parts) = expect Err(Encryption) whose
@@ -1164,16 +1211,18 @@ mod tests {
         );
     }
 
-    /// #2124 — Path B 의 (c) probe 가 `conn.get("password")` 만 읽던 동안, secret 이
-    /// `wallet_password` 뿐인 프로필은 「검증할 암호문 없음」으로 probe 를 헛통과해
-    /// (d) secure delete 까지 갔다. 디스크 `.key` 로 안 열리는 암호문이 하나라도
-    /// 있으면 probe 는 fail-closed 여야 한다 — 디스크 `.key` 보존 + sentinel.
+    /// #2124 — while Path B's (c) probe read only `conn.get("password")`, a
+    /// profile whose only secret was `wallet_password` sailed through the
+    /// probe as "no ciphertext to validate" and reached the (d) secure
+    /// delete. If even one ciphertext does not open under the disk `.key`,
+    /// the probe must fail closed — preserve the disk `.key` + sentinel.
     #[test]
     fn migrate_path_b_wallet_only_ciphertext_failing_probe_preserves_disk_key() {
         let dir = TempDir::new().unwrap();
         let disk_key: Vec<u8> = (0..32u8).collect();
-        // 이 프로필의 wallet 암호문은 이 머신 어디에도 없는 키로 감싸여 있다 —
-        // 디스크 `.key` 를 그대로 이주시켜도 데이터는 안 열린다.
+        // This profile's wallet ciphertext is wrapped under a key that
+        // exists nowhere on this machine — migrating the disk `.key` as-is
+        // still never opens the data.
         let lost_key: Vec<u8> = (200..232u8).collect();
         seed_disk_key(dir.path(), &disk_key);
         let doc = serde_json::json!({
@@ -1208,7 +1257,7 @@ mod tests {
         );
     }
 
-    /// Path B 후속 boot — keyring hit only, disk key absent.
+    /// Path B follow-up boot — keyring hit only, disk key absent.
     #[test]
     fn migrate_second_boot_after_b_reads_keyring_only() {
         let dir = TempDir::new().unwrap();
@@ -1334,10 +1383,12 @@ mod tests {
         assert!(backend.dump().is_empty());
     }
 
-    /// #2111 — 같은 AC-356-09 인데 secret 이 `wallet_password` 뿐인 Oracle 프로필.
-    /// 가드가 `password` 필드만 훑던 동안 이 프로필은 「지킬 암호문 없음」으로
-    /// 판정돼 Path A 가 새 키를 찍었고, 그 순간 wallet 암호문은 영구 복호화
-    /// 불가가 됐다. `SECRET_FIELDS` 전체를 봐야 보존 경로(Fatal)로 간다.
+    /// #2111 — the same AC-356-09, but for an Oracle profile whose only
+    /// secret is `wallet_password`. While the guard scanned only the
+    /// `password` field, this profile was judged to have "no ciphertext to
+    /// protect", Path A minted a new key, and at that moment the wallet
+    /// ciphertext became permanently undecryptable. Only looking at all of
+    /// `SECRET_FIELDS` takes the preserve path (Fatal).
     #[test]
     fn migrate_fatal_when_only_wallet_password_ciphertext_survives_key_loss() {
         let dir = TempDir::new().unwrap();
@@ -1368,13 +1419,15 @@ mod tests {
         assert!(!disk_key_path(dir.path()).exists());
     }
 
-    // ---------------- #1814 재키잉 — 실패 시 원본 보존 ----------------
+    // ---------------- #1814 rekey — original preserved on failure ----------------
 
-    /// 재암호화가 실패하면 원본 `connections.json` 은 한 바이트도 안 바뀌고
-    /// 디스크 `.key` 도 남는다 (복구 앵커). 이번 부팅은 구 키로 계속 동작하고
-    /// 다음 부팅이 앵커를 보고 재키잉을 다시 시도한다.
+    /// If re-encryption fails, the original `connections.json` stays
+    /// byte-identical and the disk `.key` also survives (the recovery
+    /// anchor). This boot keeps working under the old key, and the next boot
+    /// sees the anchor and retries the rekey.
     ///
-    /// 실패 주입: 재암호화가 쓰는 임시 파일 자리를 디렉토리로 막는다.
+    /// Failure injection: the temp file the re-encryption writes to is
+    /// blocked with a directory.
     #[test]
     fn rekey_reencrypt_failure_preserves_connections_json_and_anchor() {
         let dir = TempDir::new().unwrap();
@@ -1418,7 +1471,7 @@ mod tests {
         );
     }
 
-    /// 성공한 재키잉은 flag 를 세우고 임시 파일을 남기지 않는다.
+    /// A successful rekey sets the flag and leaves no temp file.
     #[test]
     fn rekey_reports_the_flag_and_leaves_no_temp_file() {
         let dir = TempDir::new().unwrap();
@@ -1482,8 +1535,8 @@ mod tests {
         );
     }
 
-    /// 재키잉하지 않은 부팅은 flag 를 세우지 않는다 — 디스크 `.key` 가 없는
-    /// 평범한 keyring hit.
+    /// A boot that does not rekey does not set the flag — an ordinary
+    /// keyring hit with no disk `.key`.
     #[test]
     fn keyring_hit_without_disk_key_does_not_report_a_rekey() {
         let dir = TempDir::new().unwrap();
@@ -1497,8 +1550,8 @@ mod tests {
         assert!(!outcome.rekeyed_after_disk_exposure);
     }
 
-    /// 어느 키로도 안 열리는 암호문 앞에서는 아무것도 파괴하지 않는다. 지우면
-    /// 복구 가능성만 줄어든다 (fail-closed).
+    /// Faced with a ciphertext no key opens, nothing is destroyed. Deleting
+    /// only shrinks what can still be recovered (fail-closed).
     #[test]
     fn rekey_preserves_everything_when_no_key_decrypts() {
         let dir = TempDir::new().unwrap();
@@ -1534,8 +1587,9 @@ mod tests {
         );
     }
 
-    /// `connections.json` 이 파싱되지 않으면 어느 키가 맞는지 판정할 수 없다.
-    /// 격리(`load_storage_raw()`) 뒤 다음 부팅으로 미룬다.
+    /// If `connections.json` does not parse, there is no telling which key
+    /// is right. Defer to the next boot, after quarantine
+    /// (`load_storage_raw()`).
     #[test]
     fn rekey_defers_when_connections_json_is_corrupt() {
         let dir = TempDir::new().unwrap();

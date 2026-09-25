@@ -1,20 +1,20 @@
 //! MySQL query execution paths — `execute_query` (free-form SQL) +
-//! `query_table_data` (paged table reads). Sprint 282 (Phase 17 Slice B).
+//! `query_table_data` (paged table reads).
 //!
-//! PG `db/postgres/queries.rs` 패턴 답습 — 단 dialect 차이:
+//! Mirrors the PG `db/postgres/queries.rs` pattern, with dialect differences:
 //! - placeholder: `?` (PG `$N`)
 //! - identifier quote: backtick (PG `"`)
-//! - row → JSON 변환: PG `row_to_json(q)::text` 같은 빌트인이 없어 column
-//!   type-info 기반 per-cell decode 로 우회 (server round-trip 1회, sqlx
-//!   가 column 별 `try_get` 으로 native type 디코딩).
-//! - 시간 타입: MySQL 의 DATETIME/TIMESTAMP/DATE/TIME 은 chrono crate 의
-//!   `NaiveDateTime` / `NaiveDate` / `NaiveTime` 로 decode 후 ISO 8601
-//!   string 으로 직렬화.
-//! - DECIMAL: sqlx-mysql 의 decimal feature 비활성 상태에선 `String`
-//!   으로 fallback decode 가 동작 — string round-trip 으로 정밀도 보존.
+//! - row → JSON conversion: no builtin like PG's `row_to_json(q)::text`, so
+//!   fall back to per-cell decode based on column type-info (one server
+//!   round-trip; sqlx decodes native types via per-column `try_get`).
+//! - Time types: MySQL DATETIME/TIMESTAMP/DATE/TIME decode into the chrono
+//!   `NaiveDateTime` / `NaiveDate` / `NaiveTime` types and serialize as ISO
+//!   8601 strings.
+//! - DECIMAL: while the sqlx-mysql decimal feature is disabled, fallback
+//!   decode into `String` works — precision preserved via string round-trip.
 //!
-//! `executed_query` 컬럼은 사용자가 grid 의 'Query' 패널에서 보는 SQL
-//! 이므로 inner 형태 그대로 (CAST/JSON_OBJECT 같은 wrapper 없음).
+//! The `executed_query` column is the SQL the user sees in the grid's
+//! 'Query' panel, so keep the inner form (no CAST/JSON_OBJECT wrappers).
 
 use futures_util::TryStreamExt;
 use sqlx::Column;
@@ -34,8 +34,9 @@ use super::mutations::{qualified_table, quote_ident, validate_identifier};
 use super::schema::map_mysql_data_type;
 use super::MysqlAdapter;
 
-/// PG queries.rs 와 동일 책무 — leading SQL comment 제거 후 SELECT/WITH
-/// 등 prefix 매칭. byte-for-byte 동일 구현 (dialect-agnostic 헬퍼).
+/// Same duty as PG queries.rs — match prefixes like SELECT/WITH after
+/// stripping leading SQL comments. Byte-for-byte identical implementation
+/// (dialect-agnostic helper).
 fn strip_leading_comments(sql: &str) -> &str {
     let mut s = sql.trim_start();
     loop {
@@ -58,21 +59,21 @@ fn strip_leading_comments(sql: &str) -> &str {
     s
 }
 
-/// PG queries.rs 와 동일. `;` + whitespace 만 trail 에서 제거.
+/// Same as PG queries.rs. Strips only `;` + whitespace from the trail.
 fn strip_trailing_terminator(sql: &str) -> &str {
     sql.trim_end_matches(|c: char| c == ';' || c.is_whitespace())
 }
 
-// quote_ident / qualified_table 은 `super::mutations` 에 single-source.
-// Phase 17 Slice D 이후 DDL/DML emitter 가 동일 helper 를 공유한다.
+// quote_ident / qualified_table are single-sourced in `super::mutations`.
+// The DDL/DML emitters have shared the same helper ever since.
 
-/// PG `pg_cast_type` 와 동일 책무 — column type 별 `CAST(? AS <type>)`
-/// 의 target. MySQL 은 PG 만큼 type 분기가 필요하지 않음 (대부분 string
-/// param 이 자동 coerce) — 단 DATE/DATETIME/DECIMAL/INT 만 명시 cast.
-/// 단 MySQL `CAST(? AS INT)` 는 INT 의 sub-name, MySQL 8.0 에서
-/// `SIGNED INTEGER` 가 canonical 이라 그걸로.
+/// Same duty as PG `pg_cast_type` — the `CAST(? AS <type>)` target per
+/// column type. MySQL needs less type branching than PG (most string
+/// params coerce automatically) — only DATE/DATETIME/DECIMAL/INT get an
+/// explicit cast. Note that MySQL `CAST(? AS INT)` uses the INT sub-name,
+/// and `SIGNED INTEGER` is canonical in MySQL 8.0, so that is what we emit.
 fn mysql_cast_type(data_type: &str) -> Option<&'static str> {
-    // `column_type` 은 `int(11)` 같은 form — base keyword 만 추출.
+    // `column_type` comes in forms like `int(11)` — extract the base keyword.
     let lower = data_type.trim().to_ascii_lowercase();
     let base = lower
         .split(|c: char| c == '(' || c.is_whitespace())
@@ -83,7 +84,7 @@ fn mysql_cast_type(data_type: &str) -> Option<&'static str> {
             Some("SIGNED")
         }
         "decimal" | "numeric" => Some("DECIMAL"),
-        "float" | "double" | "real" => None, // MySQL 자동 coerce
+        "float" | "double" | "real" => None, // MySQL coerces automatically
         "date" => Some("DATE"),
         "datetime" | "timestamp" => Some("DATETIME"),
         "time" => Some("TIME"),
@@ -91,13 +92,13 @@ fn mysql_cast_type(data_type: &str) -> Option<&'static str> {
     }
 }
 
-/// row 의 idx 번째 cell 을 column type-info 보고 `serde_json::Value` 로
-/// decode. 실패 시 try_get_unchecked<String> fallback → 그래도 실패하면
-/// Null. sqlx MysqlValueRef 의 raw bytes 접근은 unsafe 라 피하고, public
-/// `try_get` API 만 사용.
+/// Decodes the idx-th cell of a row into `serde_json::Value` based on the
+/// column type-info. On failure falls back to try_get_unchecked<String>, and
+/// to Null if that fails too. Avoids unsafe raw-bytes access to sqlx
+/// MysqlValueRef and uses only the public `try_get` API.
 fn cell_to_json(row: &sqlx::mysql::MySqlRow, idx: usize) -> serde_json::Value {
-    // NULL 우선 처리 — try_get::<Option<String>> 으로 가장 광범위한 path.
-    // 이 패턴은 PG queries.rs 의 row_to_json 결과의 null 분기와 동일.
+    // Handle NULL first — try_get::<Option<String>> is the broadest path.
+    // This pattern matches the null branch of PG queries.rs's row_to_json.
     let type_name = row.column(idx).type_info().name().to_ascii_uppercase();
 
     macro_rules! try_decode {
@@ -108,52 +109,58 @@ fn cell_to_json(row: &sqlx::mysql::MySqlRow, idx: usize) -> serde_json::Value {
         };
     }
 
-    // type-name 기반 분기. MySQL TypeInfo 의 name() 은 대문자 keyword
-    // (`"INT"`, `"VARCHAR"`, `"DATETIME"`, `"JSON"`, `"BLOB"` 등).
+    // Branch on the type name. MySQL TypeInfo's name() returns uppercase
+    // keywords (`"INT"`, `"VARCHAR"`, `"DATETIME"`, `"JSON"`, `"BLOB"`, etc.).
     match type_name.as_str() {
         "BOOLEAN" => {
-            // sqlx-mysql 은 ColumnType::Tiny 를 폭에 따라 세 keyword 로 report
-            // 한다 (vendored column.rs L175-181): TINYINT(1) → `"BOOLEAN"`,
-            // unsigned → `"TINYINT UNSIGNED"`, 나머지 → `"TINYINT"`. width 1
-            // (`"BOOLEAN"`) 은 MySQL 의 boolean 관용형이라 bool 로 렌더 —
-            // TablePlus 동작 정합. bool decode 실패 시 i64 폴백. 폭이 넓은
-            // `"TINYINT"` 는 아래 정수 분기로 내려가 Number 로 decode 한다
-            // (issue #1484: non-zero TINYINT 정수가 true 로 붕괴하던 버그).
+            // sqlx-mysql reports ColumnType::Tiny as one of three keywords
+            // depending on width (vendored column.rs L175-181): TINYINT(1) →
+            // `"BOOLEAN"`, unsigned → `"TINYINT UNSIGNED"`, otherwise →
+            // `"TINYINT"`. Width 1 (`"BOOLEAN"`) is MySQL's boolean idiom, so
+            // render as bool — matches TablePlus behavior. Falls back to i64
+            // when the bool decode fails. A wide `"TINYINT"` falls through to
+            // the integer branch below and decodes as Number
+            // (issue #1484: bug where non-zero TINYINT integers collapsed to
+            // true).
             if let Ok(Some(v)) = row.try_get::<Option<bool>, _>(idx) {
                 return serde_json::Value::Bool(v);
             }
             try_decode!(i64, |v: i64| serde_json::Value::Number(v.into()));
         }
         "BIGINT" | "BIGINT UNSIGNED" => {
-            // ADR 0026 (issue #1082) — BIGINT (i64) 및 BIGINT UNSIGNED (u64) 는
-            // ±(2^53-1) 을 넘을 수 있어 raw JSON number 로 wire 하면 프론트의
-            // native JSON.parse 가 f64 로 강등하며 무음 손상시킨다. PG bigint 와
-            // 동일하게 정밀도-보존 JSON string token 으로 직렬화하고, 프론트
-            // wrapNumericCells 가 컬럼 data_type 을 보고 BigInt 로 승격한다.
-            // sqlx-mysql 0.8.6 의 type_info().name() 은 unsigned 를
-            // `"BIGINT UNSIGNED"` 로 report 한다 (vendored column.rs L180) —
-            // signed 만 매치하면 unsigned 는 wildcard 로 떨어져 String decode
-            // 실패 → Null 값 소실. 대형 auto-inc PK 관용형이라 명시 매치 필수.
+            // ADR 0026 (issue #1082) — BIGINT (i64) and BIGINT UNSIGNED (u64)
+            // can exceed ±(2^53-1), so wiring them as raw JSON numbers makes
+            // the frontend's native JSON.parse demote them to f64 and silently
+            // corrupt them. As with PG bigint, serialize as a
+            // precision-preserving JSON string token; the frontend's
+            // wrapNumericCells then promotes to BigInt based on the column
+            // data_type. sqlx-mysql 0.8.6's type_info().name() reports
+            // unsigned as `"BIGINT UNSIGNED"` (vendored column.rs L180) —
+            // matching signed only drops unsigned into the wildcard branch,
+            // where String decode fails → Null value loss. Large auto-inc PK
+            // columns are a common idiom, so an explicit match is required.
             try_decode!(i64, |v: i64| serde_json::Value::String(v.to_string()));
             try_decode!(u64, |v: u64| serde_json::Value::String(v.to_string()));
         }
         "TINYINT" | "SMALLINT" | "SMALLINT UNSIGNED" | "MEDIUMINT" | "MEDIUMINT UNSIGNED"
         | "INT" | "INT UNSIGNED" | "INTEGER" | "YEAR" | "TINYINT UNSIGNED" => {
-            // 전부 ≤32bit (u32 max 4_294_967_295 < 2^53) 라 f64 로 무손실 round-
-            // trip — raw Number 유지. `"TINYINT"` (폭 넓은 TINYINT) 는 여기서
-            // 정수로 decode 한다: 예전에는 `"TINYINT" | "BOOLEAN"` 을 묶어 bool
-            // 을 먼저 시도했는데, sqlx bool 은 byte != 0 이면 성공이라 non-zero
-            // TINYINT (2, 127, -5) 가 전부 true 로 붕괴했다 (issue #1484).
-            // TINYINT(1) 은 sqlx 가 `"BOOLEAN"` 으로 report 해 위 bool 분기가
-            // 처리하므로, 여기 `"TINYINT"` 는 순수 정수 컬럼만 온다. unsigned
-            // 변형은 sqlx-mysql 이 별도 keyword (`"INT UNSIGNED"` 등, vendored
-            // column.rs L176-179) 로 report 하므로 명시 매치해야 wildcard 로
-            // 떨어져 Null 값 소실되는 것을 막는다. signed 우선 (i64) → 실패 시 u64.
+            // All of these are ≤32bit (u32 max 4_294_967_295 < 2^53), so they
+            // round-trip through f64 losslessly — keep the raw Number. A wide
+            // `"TINYINT"` decodes as an integer here: `"TINYINT" | "BOOLEAN"`
+            // used to be grouped with bool tried first, and sqlx bool succeeds
+            // whenever byte != 0, so non-zero TINYINT (2, 127, -5) all
+            // collapsed to true (issue #1484). TINYINT(1) is reported by sqlx
+            // as `"BOOLEAN"` and handled by the bool branch above, so only
+            // pure integer columns reach `"TINYINT"` here. Unsigned variants
+            // are reported by sqlx-mysql as separate keywords (`"INT UNSIGNED"`
+            // etc., vendored column.rs L176-179) and must be matched
+            // explicitly, so they do not fall into the wildcard branch and
+            // lose their values as Null. Signed first (i64) → u64 on failure.
             try_decode!(i64, |v: i64| serde_json::Value::Number(v.into()));
             try_decode!(u64, |v: u64| serde_json::Value::Number(v.into()));
         }
         "BIT" => {
-            // BIT(N) 는 sqlx-mysql 에서 u64 로 decode.
+            // BIT(N) decodes as u64 in sqlx-mysql.
             try_decode!(u64, |v: u64| serde_json::Value::Number(v.into()));
         }
         "FLOAT" => {
@@ -167,17 +174,18 @@ fn cell_to_json(row: &sqlx::mysql::MySqlRow, idx: usize) -> serde_json::Value {
                 .unwrap_or(serde_json::Value::Null));
         }
         "DECIMAL" | "NEWDECIMAL" => {
-            // Sprint 296 follow-up — sqlx-mysql 의 prepared statement binary
-            // protocol 은 DECIMAL → String 자동 디코드를 제공하지 않는다 (이전
-            // 가정 오류 — Sprint 296 ignored test 가 노출). Cargo `bigdecimal`
-            // feature 를 enable 한 후 `BigDecimal::to_string()` 으로 정밀도-
-            // 손실 없는 base-10 string 으로 변환. ADR 0026 (PG) 와 동일한
-            // wire format (JSON string) 유지.
+            // Follow-up — the sqlx-mysql prepared statement binary protocol
+            // provides no automatic DECIMAL → String decode (the earlier
+            // assumption was wrong; an ignored test exposed it). With the
+            // Cargo `bigdecimal` feature enabled, convert via
+            // `BigDecimal::to_string()` into a precision-lossless base-10
+            // string. Keeps the same wire format (JSON string) as ADR 0026
+            // (PG).
             try_decode!(sqlx::types::BigDecimal, |v: sqlx::types::BigDecimal| {
                 serde_json::Value::String(v.to_string())
             });
-            // 일부 driver path 가 ASCII string 으로 직접 노출하는 경우 (legacy
-            // text protocol) fallback.
+            // Fallback for driver paths that expose it directly as an ASCII
+            // string (legacy text protocol).
             try_decode!(String, serde_json::Value::String);
         }
         "DATE" => {
@@ -206,48 +214,53 @@ fn cell_to_json(row: &sqlx::mysql::MySqlRow, idx: usize) -> serde_json::Value {
                 .unwrap_or(serde_json::Value::String(s)));
         }
         "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" | "BINARY" | "VARBINARY" => {
-            // Slice B-1 — binary 는 hex 로 string 화 (사용자 grid 가 표시 가능
-            // 한 surface). Slice E (constraint / type-aware editor) 합류 시
-            // base64 + raw 분리 surface 검토.
+            // Render binary as a hex string (a surface the user's grid can
+            // display). Revisit a base64 + raw split surface when the
+            // constraint / type-aware editor work lands.
             try_decode!(Vec<u8>, |v: Vec<u8>| serde_json::Value::String(format!(
                 "0x{}",
                 hex_encode(&v)
             )));
         }
         // VARCHAR / CHAR / TEXT / MEDIUMTEXT / LONGTEXT / TINYTEXT / ENUM / SET /
-        // 그 외 모든 알 수 없는 keyword 는 String 으로 시도.
+        // and every other unknown keyword: try String.
         _ => {
             try_decode!(String, serde_json::Value::String);
         }
     }
 
-    // 위 모든 path 가 실패하면 String fallback 한 번 더. 실제 NULL 이면
-    // try_get::<Option<String>> 이 Ok(None) 이라 아래 raw NULL 분기로 떨어진다.
+    // One more String fallback if every path above failed. An actual NULL
+    // makes try_get::<Option<String>> return Ok(None), dropping to the raw
+    // NULL branch below.
     if let Ok(Some(v)) = row.try_get::<Option<String>, _>(idx) {
         return serde_json::Value::String(v);
     }
 
-    // issue #1083 — 여기까지 온 셀은 "진짜 NULL" 이거나 "값은 있으나 어떤
-    // decode 도 실패" 둘 중 하나다. 예전엔 둘 다 무음 Null 로 뭉갰다 (legacy
-    // zero-date `0000-00-00` / GEOMETRY / 24h 초과 TIME 등 실값이 빈 셀로
-    // 위장 → 사용자가 오인해 덮어쓰면 원본 소실). raw value 의 NULL flag 를
-    // 직접 보고, 진짜 NULL 만 Null 로 내보내고 decode 실패는 명시 마커로
-    // surface 한다 — grid 에서 빈 셀과 시각적으로 구분되어 오인을 막는다.
+    // issue #1083 — a cell that reaches this point is either a "true NULL"
+    // or "has a value but every decode failed". Both used to be lumped into a
+    // silent Null (legacy zero-date `0000-00-00` / GEOMETRY / TIME beyond 24h
+    // etc. masqueraded as empty cells → the user mistook them, overwrote, and
+    // lost the original). Inspect the raw value's NULL flag directly, emit
+    // Null only for true NULLs, and surface decode failures as an explicit
+    // marker — visually distinct from an empty cell in the grid, which
+    // prevents the mistake.
     match row.try_get_raw(idx) {
         Ok(raw) if raw.is_null() => serde_json::Value::Null,
         _ => decode_error_marker(&type_name),
     }
 }
 
-/// issue #1083 — decode 실패 셀 마커. 진짜 NULL 과 구분되는 문자열로,
-/// grid 에서 빈 셀로 오인되어 덮어써지는 데이터 손실을 막는다. 프론트가
-/// 편집 차단/경고 surface 를 붙일 때 훅으로 삼을 수 있는 안정된 형식.
+/// issue #1083 — marker for a decode-failed cell. A string distinguishable
+/// from a true NULL, preventing data loss where a cell is mistaken for empty
+/// and overwritten in the grid. A stable format the frontend can hook into
+/// when it adds an edit-block/warning surface.
 fn decode_error_marker(type_name: &str) -> serde_json::Value {
     serde_json::Value::String(format!("<decode error: {type_name}>"))
 }
 
-/// `hex` crate 의존성을 피하기 위한 minimal hex encoder. Slice B-1 의
-/// BLOB 표시용 — 사용자 grid 가 cell 값을 `0x...` 로 인식하면 충분.
+/// Minimal hex encoder that avoids a `hex` crate dependency. For BLOB
+/// display — enough as long as the user's grid recognizes cell values as
+/// `0x...`.
 fn hex_encode(bytes: &[u8]) -> String {
     const HEX: &[u8] = b"0123456789abcdef";
     let mut out = String::with_capacity(bytes.len() * 2);
@@ -258,17 +271,17 @@ fn hex_encode(bytes: &[u8]) -> String {
     out
 }
 
-/// raw WHERE 입력 검증. 공통 AST validator 가 fragment 를 dialect SELECT 에
-/// 감싸서 boolean expression 만 허용한다.
+/// Validates raw WHERE input. The shared AST validator wraps the fragment
+/// in a dialect SELECT, allowing only boolean expressions.
 fn validate_raw_where(rw: &str) -> Result<(), AppError> {
     validate_raw_where_clause(RawWhereDialect::Mysql, rw)
 }
 
 impl MysqlAdapter {
-    /// Free-form SQL 실행. PG `execute_query` 와 동일 contract:
+    /// Runs free-form SQL. Same contract as PG `execute_query`:
     /// SELECT/WITH/SHOW/EXPLAIN/DESCRIBE/CALL → `QueryType::Select` +
     /// columns + rows; INSERT/UPDATE/DELETE → `QueryType::Dml { rows_affected }`;
-    /// 그 외 → `QueryType::Ddl`.
+    /// anything else → `QueryType::Ddl`.
     pub async fn execute_query(
         &self,
         query: &str,
@@ -303,8 +316,8 @@ impl MysqlAdapter {
             ));
         }
 
-        // Detect query type — DESCRIBE / DESC 는 MySQL 의 SELECT-equivalent
-        // 라 columns + rows 를 돌려준다 (PG 에는 없는 dialect-specific).
+        // Detect query type — DESCRIBE / DESC is MySQL's SELECT-equivalent
+        // and returns columns + rows (dialect-specific, absent in PG).
         let stripped = strip_leading_comments(query);
         let trimmed_query = stripped.to_uppercase();
         let query_type = if trimmed_query.starts_with("SELECT")
@@ -473,9 +486,10 @@ impl MysqlAdapter {
         crate::db::traits::finalize_cancelled(result, cancel_token)
     }
 
-    /// Paged table 데이터. PG `query_table_data` 와 동일 contract — filters /
-    /// order_by / raw_where 의 의미와 fallback 정책까지 동일. Dialect 차이:
-    /// `?` placeholder + backtick quoting + DESC tiebreaker 도 동일.
+    /// Paged table data. Same contract as PG `query_table_data` — identical
+    /// semantics and fallback policy for filters / order_by / raw_where too.
+    /// Dialect differences: `?` placeholder + backtick quoting + DESC
+    /// tiebreaker are also the same.
     #[allow(clippy::too_many_arguments)]
     pub async fn query_table_data(
         &self,
@@ -622,9 +636,9 @@ impl MysqlAdapter {
                                     continue;
                                 };
                                 if let Some(val) = &f.value {
-                                    // MySQL 의 placeholder 는 `?` — index 가
-                                    // 필요 없음. PG 의 `::type` cast 대신
-                                    // `CAST(? AS <type>)` 로 wrap.
+                                    // MySQL's placeholder is `?` — no index
+                                    // needed. Instead of PG's `::type` cast,
+                                    // wrap with `CAST(? AS <type>)`.
                                     let placeholder = match col_types
                                         .get(f.column.as_str())
                                         .and_then(|dt| mysql_cast_type(dt))
@@ -661,7 +675,7 @@ impl MysqlAdapter {
         let page_size = crate::db::clamp_page_size(page_size);
         let offset = (page - 1).max(0) * page_size;
 
-        // ORDER BY — PG queries.rs 와 동일 parsing 정책. PK tiebreaker 도 동일.
+        // ORDER BY — same parsing policy as PG queries.rs, same PK tiebreaker.
         let mut order_clause = String::new();
         let mut user_sort_columns: std::collections::HashSet<String> =
             std::collections::HashSet::new();
@@ -698,7 +712,7 @@ impl MysqlAdapter {
         }
 
         if order_clause.is_empty() {
-            // PG `build_default_order_clause` 와 동일 — PK column ASC.
+            // Same as PG `build_default_order_clause` — PK column ASC.
             let pk_parts: Vec<String> = columns
                 .iter()
                 .filter(|c| c.is_primary_key)
@@ -723,9 +737,9 @@ impl MysqlAdapter {
             .await
             .map_err(|e| AppError::Connection(e.to_string()))?;
 
-        // column 명 → ColumnInfo 인덱스 매핑. row 의 column 순서가 schema
-        // 순서와 다를 수 있으므로 (`SELECT *` 는 보통 동일하나 보수적으로
-        // 명시 매핑).
+        // Column name → ColumnInfo index map. The row's column order can
+        // differ from the schema order (`SELECT *` usually matches, but map
+        // explicitly to stay conservative).
         let col_index: std::collections::HashMap<&str, usize> = columns
             .iter()
             .enumerate()
@@ -755,13 +769,13 @@ impl MysqlAdapter {
         })
     }
 
-    /// Sprint 283 (Slice C) — row streaming. PG `stream_table_rows` 의 MySQL
-    /// 짝꿍. MySQL 은 stored procedure 외에선 server-side cursor 가 없어 PG
-    /// 의 `DECLARE NO SCROLL CURSOR FOR …; FETCH FORWARD` 패턴 그대로는
-    /// 불가능 — `sqlx::query.fetch()` 의 async row stream 으로 등가 구현
-    /// (sqlx-mysql 은 내부적으로 prepared statement 단위로 row chunk 단위
-    /// 수신을 한다). Batch 마다 `cancel.is_cancelled()` 와 `sender.send`
-    /// 실패를 체크해 cooperatively abort.
+    /// Row streaming — the MySQL counterpart of PG `stream_table_rows`.
+    /// Outside stored procedures MySQL has no server-side cursor, so PG's
+    /// `DECLARE NO SCROLL CURSOR FOR …; FETCH FORWARD` pattern cannot be used
+    /// as-is — the equivalent is built on the async row stream of
+    /// `sqlx::query.fetch()` (internally sqlx-mysql receives rows in chunks
+    /// per prepared statement). Every batch checks `cancel.is_cancelled()` and
+    /// a failed `sender.send` so it can abort cooperatively.
     pub async fn stream_table_rows(
         &self,
         schema: &str,
@@ -786,15 +800,17 @@ impl MysqlAdapter {
 
         let pool = self.active_pool().await?;
 
-        // Transaction-wrap 으로 consistent snapshot (InnoDB REPEATABLE READ).
-        // PG 와 동일 의도 — long export 가 다른 commit 에 흔들리지 않게.
+        // Transaction-wrap for a consistent snapshot (InnoDB REPEATABLE READ).
+        // Same intent as PG — a long export must not be shaken by other
+        // commits.
         let mut tx = pool
             .begin()
             .await
             .map_err(|e| AppError::Database(format!("BEGIN failed: {e}")))?;
 
         let qualified = qualified_table(schema, table);
-        // 컬럼 선택은 `column_names` 순서 — 호출자가 source order 를 결정.
+        // Column selection follows the `column_names` order — the caller
+        // decides the source order.
         let cols_clause: Vec<String> = column_names.iter().map(|c| quote_ident(c)).collect();
         let select_sql = format!("SELECT {} FROM {}", cols_clause.join(", "), qualified);
 
@@ -840,7 +856,7 @@ impl MysqlAdapter {
                 None => break,
             }
         }
-        // tail flush — 마지막 batch_size 미만의 잔량.
+        // tail flush — the remainder smaller than batch_size.
         if !batch.is_empty() {
             let count = batch.len() as u64;
             if sender.send(batch).await.is_err() {
@@ -862,8 +878,8 @@ impl MysqlAdapter {
         Ok(total)
     }
 
-    /// Sprint 285 (Slice E) — `SELECT COUNT(*) FROM qualified WHERE col IS NULL`.
-    /// PG `count_null_rows` 와 contract 동일.
+    /// `SELECT COUNT(*) FROM qualified WHERE col IS NULL`. Same contract as
+    /// PG `count_null_rows`.
     pub async fn count_null_rows(
         &self,
         schema: &str,
@@ -889,13 +905,14 @@ impl MysqlAdapter {
         Ok(count)
     }
 
-    /// Sprint 288 — PG `execute_query_batch` 의 MySQL 대응. 모든 statement
-    /// 를 단일 transaction (BEGIN/COMMIT) 안에서 순차 실행. 실패 시 ROLLBACK.
+    /// The MySQL counterpart of PG `execute_query_batch`. Runs every statement
+    /// sequentially inside a single transaction (BEGIN/COMMIT), ROLLBACK on
+    /// failure.
     ///
-    /// MySQL 한계: DDL statement (CREATE/ALTER/DROP/RENAME) 은 implicit
-    /// commit 하므로 후속 statement 실패해도 rollback 되지 않음. 본 batch
-    /// path 는 commit-pipeline (DML) 용도가 주이며, 호출자가 DDL/DML 혼합
-    /// 을 시도하면 부분-적용이 가능함을 user-facing copy 에서 안내한다.
+    /// MySQL limitation: a DDL statement (CREATE/ALTER/DROP/RENAME) commits
+    /// implicitly, so a later statement failing does not roll it back. This
+    /// batch path is mainly for the commit pipeline (DML), and the user-facing
+    /// copy says that mixing DDL/DML can leave a partial apply.
     pub async fn execute_query_batch(
         &self,
         statements: &[String],
@@ -977,14 +994,14 @@ impl MysqlAdapter {
         }
     }
 
-    /// Sprint 288 — PG `dry_run_query_batch` 의 MySQL 대응. BEGIN → 실행 →
-    /// 무조건 ROLLBACK. PG 와 동일하게 DML 의 rows_affected 통계만 보고
-    /// 실제 row 변경은 남기지 않는다.
+    /// The MySQL counterpart of PG `dry_run_query_batch`. BEGIN → run →
+    /// unconditional ROLLBACK. Like PG, it reports only the `rows_affected`
+    /// statistics of the DML and leaves no actual row change behind.
     ///
-    /// MySQL 한계: DDL 은 implicit commit 이라 dry-run 이 실제 schema 변
-    /// 경을 막지 못함 — destructive-confirm 다이얼로그 (ADR 0022) 는 DML
-    /// 전용 use case 라 본 path 가 충분히 안전. DDL preview 는 `preview_only`
-    /// flag 를 통해 SQL emission 만 수행하는 별도 경로를 쓴다.
+    /// MySQL limitation: DDL commits implicitly, so a dry run cannot stop a
+    /// real schema change — the destructive-confirm dialog (ADR 0022) is a
+    /// DML-only use case, so this path is safe enough. DDL preview takes a
+    /// separate route that only emits SQL via the `preview_only` flag.
     pub async fn dry_run_query_batch(
         &self,
         statements: &[String],
@@ -1060,11 +1077,12 @@ impl MysqlAdapter {
 
 #[cfg(test)]
 mod tests {
-    //! 작성 이유 (2026-05-13, Sprint 282): 본 파일의 pure helper 들
+    //! Reason (2026-05-13): the pure helpers in this file
     //! (strip_leading_comments / strip_trailing_terminator / quote_ident /
-    //! qualified / mysql_cast_type / validate_raw_where / hex_encode) 은 실
-    //! DB 없이도 회귀 가드 가능. execute_query / query_table_data 의 실 DB
-    //! integration 은 Sprint 282 후속에서 `mysql_test_config` opt-in 으로.
+    //! qualified / mysql_cast_type / validate_raw_where / hex_encode) can be
+    //! regression-guarded without a real DB. The real-DB integration of
+    //! execute_query / query_table_data lives in the opt-in
+    //! `mysql_test_config` tests.
     use super::*;
 
     #[test]
@@ -1084,9 +1102,10 @@ mod tests {
         assert_eq!(strip_trailing_terminator(";;;"), "");
     }
 
-    // quote_ident / qualified_table 회귀 가드는 mutations.rs 의 unit test
-    // 에서 single-source — 본 파일은 dialect-cast 와 raw_where validator,
-    // 그리고 SELECT/DML 분기 helper 들만 책임.
+    // The regression guard for quote_ident / qualified_table is single-sourced
+    // in the unit tests of mutations.rs — this file covers only the
+    // dialect-cast, the raw_where validator, and the SELECT/DML branch
+    // helpers.
 
     #[test]
     fn mysql_cast_type_routes_common_types() {
@@ -1177,8 +1196,9 @@ mod tests {
         assert_eq!(hex_encode(&[]), "");
     }
 
-    /// issue #1083 — decode 실패는 절대 무음 NULL 로 위장하면 안 된다. 마커
-    /// 는 진짜 NULL 과 구분되는 문자열이어야 하고 실패한 컬럼 타입을 담는다.
+    /// issue #1083 — a decode failure must never disguise itself as a silent
+    /// NULL. The marker has to be a string distinguishable from a real NULL,
+    /// and it carries the column type that failed.
     #[test]
     fn decode_error_marker_is_not_null_and_names_type() {
         let v = decode_error_marker("GEOMETRY");

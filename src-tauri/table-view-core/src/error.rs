@@ -101,28 +101,31 @@ pub enum AppError {
     #[error("Unsupported operation: {0}")]
     Unsupported(String),
 
-    /// Sprint 266 — backend pool 의 활성 db 가 frontend 의 기대 db 와 다른
-    /// 상태에서 RDB 실행 명령이 도착했을 때. `execute_query` /
-    /// `execute_query_batch` 의 사전 검증이 throw. UI 는 `expected` / `actual`
-    /// 을 모두 표시해 race 의 양쪽을 보여줘야 함.
+    /// Raised when an RDB execution command arrives while the backend pool's
+    /// active db differs from the db the frontend expects. Thrown by the
+    /// pre-check in `execute_query` / `execute_query_batch`. The UI must show
+    /// both `expected` and `actual` so the user sees both sides of the race.
     #[error("Database mismatch: expected '{expected}', but found '{actual}'")]
     DbMismatch { expected: String, actual: String },
 
-    /// slow-query 등 관측 기능이 서버측 capability(확장/권한)를 요구하는데
-    /// 이 연결에 설치/허용되지 않은 경우. `Database`와 구분해 UI가 빨간
-    /// 에러 대신 passive "활성화 안내"를 렌더하게 한다. `code`는 안정적인
-    /// 머신 키(프런트가 localized 안내로 매핑), `message`는 영어 fallback.
+    /// Raised when an observability feature such as slow-query needs a
+    /// server-side capability (an extension or a privilege) that is not
+    /// installed or not permitted on this connection. Kept distinct from
+    /// `Database` so the UI renders a passive "how to enable this" notice
+    /// instead of a red error. `code` is a stable machine key (the frontend
+    /// maps it to a localized notice); `message` is the English fallback.
     #[error("{message}")]
     CapabilityNotEnabled { code: String, message: String },
 
     #[error("Window error: {0}")]
     Window(String),
 
-    /// Sprint 355 — A/C 도메인 mutate IPC 는 boot 시 frontend → backend 의
-    /// legacy localStorage import 가 완료된 후에만 진행할 수 있다. import 가
-    /// `pending` / `importing` / `failed` 상태일 때 mutate 가 들어오면 본
-    /// variant 로 reject. Frontend 는 retry path 로 import 를 재시도하거나
-    /// 사용자에게 safe-mode 진입을 알린다. Strategy line 1189.
+    /// An A/C domain mutate IPC may proceed only after the boot-time legacy
+    /// localStorage import from frontend to backend has finished. A mutate
+    /// that arrives while the import is `pending` / `importing` / `failed` is
+    /// rejected with this variant. The frontend either retries the import
+    /// through its retry path or tells the user it is entering safe mode.
+    /// Strategy line 1189.
     #[error("Legacy import in progress — write blocked")]
     LegacyImportInProgress,
 

@@ -1,10 +1,10 @@
 //! Database adapter layer — entry module.
 //!
-//! Sprint 213 (P5 step 2) split the previous 1425-line `mod.rs` into:
+//! The adapter surface is split into:
 //! - `types`   — paradigm-neutral DTOs and the `BoxFuture` alias.
 //! - `traits`  — `DbAdapter` lifecycle + 4 paradigm extension traits.
 //! - `active`  — `ActiveAdapter` enum + paradigm-typed accessors.
-//! - `tests`   — unit tests (Sprint P5 step 1, commit a60074d).
+//! - `tests`   — unit tests.
 //!
 //! Backend adapter topology now exposes:
 //! - `adapters/<dbms>` — canonical concrete adapter modules.
@@ -233,8 +233,8 @@ mod connect_timeout_tests;
 #[cfg(test)]
 mod tests;
 
-/// Stub adapter 묶음. `table-view` 의 command 테스트가 crate 경계 너머로 쓰기
-/// 때문에 `pub` 이고, 릴리스 빌드에 안 들어가도록 `testing` feature 로 막는다
-/// (`src-tauri/Cargo.toml` 의 `[dev-dependencies]` 만 켠다, #1769).
+/// Stub adapter bundle. It is `pub` because `table-view`'s command tests use it
+/// across the crate boundary, and the `testing` feature keeps it out of release
+/// builds (only `src-tauri/Cargo.toml`'s `[dev-dependencies]` turns it on, #1769).
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;

@@ -1,12 +1,13 @@
-//! 작성 2026-05-17 (Phase 5 sprint-371, AC-371-06) — `get_history_detail`
-//! 응답이 `id`, `source`, `sql`, `sqlRedacted` 만 carry.
+//! Written 2026-05-17 (AC-371-06) — the `get_history_detail` response carries
+//! only `id`, `source`, `sql`, `sqlRedacted`.
 //!
 //! Wire shape (camelCase):
 //!   request : `{ id: 42 }`
 //!   response: `{ id: 42, source: "raw", sql: "...", sqlRedacted: "..." }`
 //!
-//! 본 IPC 는 bulk dump path 가 0 — 단일 row id 만 받아 단일 row 반환.
-//! file-analytics 는 detail 에서도 redacted SQL 만 반환한다.
+//! This IPC has no bulk dump path — it takes a single row id and returns a
+//! single row. A `file-analytics` row returns only redacted SQL in the detail
+//! response as well.
 
 use serde_json::{json, Value};
 use serial_test::serial;

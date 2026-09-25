@@ -1,20 +1,22 @@
-//! 작성 2026-05-17 (Phase 5 sprint-371, AC-371-07) — `clear_history`
-//! 의 BEGIN → COUNT → DELETE → COMMIT → VACUUM (transaction 밖) →
-//! `{deletedCount}` 시퀀스 검증.
+//! Written 2026-05-17 (AC-371-07) — verifies the `clear_history` sequence
+//! BEGIN → COUNT → DELETE → COMMIT → VACUUM (outside the transaction) →
+//! `{deletedCount}`.
 //!
 //! Invariants:
-//!   1. 호출 후 `query_history` row 수가 0.
-//!   2. 응답의 `deletedCount` 가 호출 전 row 수와 동일.
-//!   3. VACUUM 이 transaction 밖에서 실행 — `clear_history_inner` 가
-//!      mid-tx VACUUM 으로 인한 SQLite error 없이 성공한다는 자체가
-//!      contract 의 증명 (SQLite 가 mid-transaction VACUUM 을 reject 하므로
-//!      실패하면 곧바로 Err 로 propagate).
-//!   4. clear 호출 후 다시 호출하면 `deletedCount = 0` (멱등).
+//!   1. After the call `query_history` holds 0 rows.
+//!   2. The response's `deletedCount` equals the row count before the call.
+//!   3. VACUUM runs outside the transaction — `clear_history_inner` succeeding
+//!      without a SQLite error from a mid-tx VACUUM is itself the proof of the
+//!      contract (SQLite rejects a mid-transaction VACUUM, so a failure
+//!      propagates straight out as Err).
+//!   4. Calling clear again after a clear gives `deletedCount = 0`
+//!      (idempotent).
 //!
-//! 본 파일은 `clear_history_inner` 를 직접 호출 — IPC 레이어의 emit 은
-//! tauri::App 가 필요한 `tests/emit_state_changed_payload.rs` 패턴이 별도
-//! 검증. AC-371-07 의 emit 단계는 sprint-372 의 frontend listener 통합에서
-//! end-to-end 로 검증.
+//! This file calls `clear_history_inner` directly — the emit of the IPC layer
+//! is verified separately by the `tests/emit_state_changed_payload.rs` pattern,
+//! which needs a `tauri::App`. The emit step of AC-371-07 is covered
+//! end-to-end by the frontend listener integration in
+//! `src/hooks/useQueryHistory.event-refetch.test.ts`.
 
 use serde_json::json;
 use serial_test::serial;
@@ -97,23 +99,23 @@ async fn ac_371_07_clear_on_empty_table_returns_zero() {
     cleanup();
 }
 
-// VACUUM 이 transaction 밖에서 실행되는지의 증명 — 만약 VACUUM 이
-// transaction 안에서 실행되면 SQLite 가 `cannot VACUUM from within a
-// transaction` 으로 즉시 reject 한다. 본 테스트는 (a) seed 후 clear 가
-// Ok 를 반환하고 (b) row 수가 0 이며 (c) 다음 INSERT 가 새 AUTOINCREMENT
-// id 를 잘 받는지를 모두 확인 — VACUUM 이 성공해야만 모두 통과.
+// Proof that VACUUM runs outside the transaction — were it to run inside one,
+// SQLite would reject it at once with `cannot VACUUM from within a
+// transaction`. This test checks all of (a) clear returns Ok after the seed,
+// (b) the row count is 0, and (c) the next INSERT gets a fresh AUTOINCREMENT
+// id — all of which pass only when VACUUM succeeded.
 #[tokio::test]
 #[serial]
 async fn ac_371_07_vacuum_outside_transaction_does_not_error() {
     let (_dir, pool) = setup().await;
     seed(&pool, 3).await;
-    // 만약 VACUUM 이 transaction 안에 들어 있었다면 clear_history_inner 가
-    // SQLite error 로 즉시 Err 반환 — unwrap() 가 panic 하므로 본 호출의
-    // 성공 자체가 VACUUM 가 transaction 밖에서 실행됐다는 증명.
+    // Had VACUUM sat inside the transaction, clear_history_inner would return
+    // Err on the SQLite error at once and unwrap() would panic — so this call
+    // succeeding is itself the proof that VACUUM ran outside the transaction.
     let deleted = clear_history_inner(&pool).await.unwrap();
     assert_eq!(deleted, 3);
 
-    // VACUUM 후에도 정상적으로 새 INSERT 가능.
+    // A new INSERT still works normally after VACUUM.
     let req: AddHistoryEntryRequest = serde_json::from_value(json!({
         "connectionId": "c-1",
         "paradigm": "rdb",
@@ -130,7 +132,7 @@ async fn ac_371_07_vacuum_outside_transaction_does_not_error() {
     cleanup();
 }
 
-// AC-371-07 멱등 — clear 후 clear 다시 호출 → 0.
+// AC-371-07 idempotency — calling clear again after a clear → 0.
 #[tokio::test]
 #[serial]
 async fn ac_371_07_clear_is_idempotent() {

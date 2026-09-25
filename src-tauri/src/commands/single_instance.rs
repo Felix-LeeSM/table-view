@@ -1,8 +1,8 @@
-//! Sprint 362 (Phase 3, Q3) — Single-instance plugin 2nd-launch callback.
+//! (Q3) — Single-instance plugin 2nd-launch callback.
 //!
 //! Background
 //! ----------
-//! The state-management strategy (Q3, line 406) locked single-instance:
+//! The state-management strategy (Q3) locked single-instance:
 //! attempting a 2nd launch must focus the existing process's launcher
 //! window rather than spinning up a parallel app process. `lib.rs` wires
 //! `tauri_plugin_single_instance::init(...)` with a callback that, on
@@ -82,13 +82,13 @@ pub fn handle_second_instance_inner<R: Runtime>(app: &AppHandle<R>) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 3 sprint-362)
+    //! Written 2026-05-16
     //!
-    //! 사유: integration test (`tests/single_instance_2nd_launch.rs`) 가
-    //! AC-362-02 / AC-362-04 의 multi-window 시나리오를 잠근다. 본 unit
-    //! 측은 minimal happy-path + launcher missing 분기를 모듈 안에서
-    //! 잠가, integration 실패가 inner 함수 자체의 회귀인지 plugin wiring
-    //! 회귀인지 빠르게 좁힐 수 있게 한다.
+    //! Reason: the integration test (`tests/single_instance_2nd_launch.rs`)
+    //! locks the AC-362-02 / AC-362-04 multi-window scenarios. This unit side
+    //! pins the minimal happy path + the launcher-missing branch inside the
+    //! module, so an integration failure can be narrowed quickly to either a
+    //! regression in the inner function itself or one in the plugin wiring.
     use super::*;
     use tauri::test::{mock_builder, mock_context, noop_assets};
 

@@ -22,8 +22,8 @@ fn err(input: &str) -> ParseError {
 }
 
 /// Helper: assert the SELECT has exactly one FROM item and return its
-/// table identifier. Used by sprint-385 narrow tests that were written
-/// before FROM-list widening.
+/// table identifier. Used by narrow-grammar tests written before
+/// FROM-list widening.
 fn single_table(s: &SelectStatement) -> &str {
     assert_eq!(s.from.len(), 1, "expected single FROM item");
     &s.from[0].table
@@ -187,11 +187,11 @@ fn ac_p7_missing_table_after_from_is_syntax_error() {
     assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
 }
 
-// Sprint-392 — INSERT/UPDATE/DELETE are now supported. The
-// sprint-385 tests that asserted they were `UnsupportedStatement`
-// are inverted to assert successful parse + correct ParseResult
-// variant. The `UnsupportedStatement` path is still exercised by
-// verbs the parser still does not implement (REPLACE, etc.).
+// INSERT/UPDATE/DELETE are now supported. The earlier tests that
+// asserted they were `UnsupportedStatement` are inverted to assert
+// successful parse + correct ParseResult variant. The
+// `UnsupportedStatement` path is still exercised by verbs the parser
+// still does not implement (REPLACE, etc.).
 #[test]
 fn ac_p8_insert_is_now_supported_statement() {
     let r = parse("INSERT INTO users VALUES (1)");
@@ -221,25 +221,25 @@ fn ac_p8_create_unknown_type_is_syntax_error() {
 
 #[test]
 fn ac_p8_explain_is_now_supported_statement() {
-    // Sprint-395 — EXPLAIN is now supported (was UnsupportedStatement
-    // in sprint-385..394). The pre-sprint-395 baseline expected an
-    // error; sprint-395 expects a successful Explain parse.
+    // EXPLAIN is now supported (it was UnsupportedStatement in earlier
+    // revisions). The earlier baseline expected an error; the current
+    // grammar expects a successful Explain parse.
     let r = parse("EXPLAIN SELECT * FROM users");
     assert!(matches!(r, ParseResult::Explain(_)));
 }
 
 #[test]
 fn ac_p8_grant_is_now_supported_statement() {
-    // Sprint-395 — GRANT is now supported (was UnsupportedStatement
-    // in sprint-385..394).
+    // GRANT is now supported (it was UnsupportedStatement in earlier
+    // revisions).
     let r = parse("GRANT SELECT ON users TO alice");
     assert!(matches!(r, ParseResult::Grant(_)));
 }
 
 #[test]
 fn ac_484_m01_merge_update_first_slice_parses() {
-    // Reason: Sprint 484 promotes the narrow PostgreSQL MERGE write
-    // surface out of unsupported-statement fallback. (2026-05-27)
+    // Reason: the narrow PostgreSQL MERGE write surface is promoted out
+    // of unsupported-statement fallback. (2026-05-27)
     let m = ok_merge(
         "MERGE INTO users USING incoming ON users.id = incoming.id \
          WHEN MATCHED THEN UPDATE SET name = incoming.name",
@@ -323,8 +323,8 @@ fn ac_484_m03_merge_do_nothing_parses() {
 
 #[test]
 fn ac_484_m04_merge_delete_action_stays_unsupported() {
-    // Reason: DELETE inside MERGE has a larger destructive surface
-    // than this first slice commits to parse. (2026-05-27)
+    // Reason: DELETE inside MERGE has a larger destructive surface than
+    // the narrow MERGE grammar commits to parse. (2026-05-27)
     let e = err("MERGE INTO users USING incoming ON users.id = incoming.id \
          WHEN MATCHED THEN DELETE");
     assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
@@ -460,16 +460,15 @@ fn ac_p10_trailing_semicolon_accepted() {
 
 #[test]
 fn extra_trailing_tokens_rejected() {
-    // Sprint-393a — `users garbage` is now a bare alias (`AC-393a-A04`),
-    // not a trailing-tokens error. Pick an input that genuinely has
+    // `users garbage` is now a bare alias (`AC-393a-A04`), not a
+    // trailing-tokens error. Pick an input that genuinely has
     // unconsumable trailing tokens: a second statement after a
     // semicolon-style sequence. We use `SELECT * FROM users 1` —
     // the integer literal after the table name is not a valid alias
     // (aliases must be identifiers), so the parser stops at the
-    // unexpected token. The earlier sprint-385 test relied on the
-    // narrow FROM grammar; sprint-393a's bare-alias relaxation makes
-    // that input ambiguous, so we re-target the same trailing-tokens
-    // contract here.
+    // unexpected token. The earlier test relied on the narrow FROM
+    // grammar; the bare-alias relaxation makes that input ambiguous,
+    // so we re-target the same trailing-tokens contract here.
     let e = err("SELECT * FROM users 123");
     assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
     assert!(e.message.to_lowercase().contains("trailing"));
@@ -483,8 +482,8 @@ fn unknown_first_keyword_is_syntax_error_not_unsupported() {
 }
 
 // =================================================================
-// Sprint 393a — SELECT widening (FROM / JOIN / WHERE expr / GROUP /
-// HAVING / ORDER / LIMIT).
+// SELECT widening (FROM / JOIN / WHERE expr / GROUP / HAVING / ORDER /
+// LIMIT).
 // =================================================================
 
 // ---- AC-393a-A FROM clause widening -----------------------------
@@ -825,8 +824,8 @@ fn ac_393a_c08_and_of_two_column_comparisons() {
 
 #[test]
 fn ac_393a_c09_in_list_now_parses_as_in_list() {
-    // Sprint-393b — AC-393b-I01 lifts the sprint-393a deferral. The
-    // same input now parses successfully as a `SelectExpr::InList`.
+    // AC-393b-I01 lifts the earlier deferral. The same input now parses
+    // successfully as a `SelectExpr::InList`.
     let s = ok_select("SELECT a FROM x WHERE id IN (1, 2, 3)");
     match s.where_clause {
         Some(SelectExpr::InList { column, values }) => {
@@ -1340,12 +1339,10 @@ fn ac_393a_extra_join_chain_with_using_and_on_mixed() {
 
 #[test]
 fn ac_393a_where_column_to_column_now_parses() {
-    // Sprint-385 surfaced `WHERE a = b` as SyntaxError. Sprint-393a
-    // widens the SELECT WHERE expression to accept column-column
+    // The narrow grammar surfaced `WHERE a = b` as SyntaxError. The
+    // widened SELECT WHERE expression accepts column-column
     // comparisons (see AC-393a-C01) — the same input now parses as a
-    // `ColumnComparison` primary. The DML-WHERE path (`WhereExpr`)
-    // still rejects cross-column comparisons in sprint-393a; that
-    // unification lands in 393b.
+    // `ColumnComparison` primary.
     let s = ok_select("SELECT * FROM t WHERE a = b");
     match s.where_clause.expect("WHERE") {
         SelectExpr::ColumnComparison { left, op, right } => {
@@ -1358,7 +1355,7 @@ fn ac_393a_where_column_to_column_now_parses() {
 }
 
 // -----------------------------------------------------------------
-// Sprint 391 — DDL destructive grammar.
+// DDL destructive grammar.
 // -----------------------------------------------------------------
 
 fn ok_drop(input: &str) -> DropStatement {
@@ -1799,7 +1796,7 @@ fn ac_391_a14_alter_table_add_column_is_supported_post_394() {
 
 #[test]
 fn ac_391_a_alter_missing_table_keyword_is_syntax_error() {
-    // `ALTER VIEW v RENAME` etc. — sprint-391 only supports ALTER TABLE.
+    // `ALTER VIEW v RENAME` etc. — only ALTER TABLE is supported.
     let e = err("ALTER VIEW v RENAME TO w");
     assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
 }
@@ -1831,7 +1828,7 @@ fn ac_391_a_alter_drop_index_missing_name_is_syntax_error() {
 }
 
 // -----------------------------------------------------------------
-// Sprint 392 — DML write triad (INSERT / UPDATE / DELETE).
+// DML write triad (INSERT / UPDATE / DELETE).
 // -----------------------------------------------------------------
 
 fn ok_insert(input: &str) -> InsertStatement {
@@ -2269,7 +2266,7 @@ fn ac_392_u01_update_no_where() {
 
 #[test]
 fn ac_392_u02_update_with_where_eq() {
-    // Sprint-393b — DML WHERE migrates from `WhereExpr` to `SelectExpr`.
+    // DML WHERE migrates from `WhereExpr` to `SelectExpr`.
     // The `Comparison` shape now carries a `ColumnRef` left-hand side
     // instead of a bare `String` column name.
     let s = ok_update("UPDATE users SET name = 'a' WHERE id = 1");
@@ -2323,10 +2320,10 @@ fn ac_392_u05_update_with_placeholders() {
 
 #[test]
 fn ac_392_u06_update_from_cross_table_where_now_parses_as_column_comparison() {
-    // Sprint-393b — DML WHERE unifies with SELECT WHERE, so the form
-    // `UPDATE ... FROM other WHERE other.id = users.id` (cross-table
-    // column-comparison) now parses successfully. Sprint-392 had
-    // marked this as `UnsupportedExpression`; the deferral is lifted.
+    // DML WHERE unifies with SELECT WHERE, so the form `UPDATE ... FROM
+    // other WHERE other.id = users.id` (cross-table column-comparison)
+    // now parses successfully. The narrow grammar marked this as
+    // `UnsupportedExpression`; the deferral is lifted.
     let s = ok_update("UPDATE users SET name = 'a' FROM other WHERE other.id = users.id");
     match s.where_clause {
         Some(SelectExpr::ColumnComparison { left, op, right }) => {
@@ -2450,9 +2447,9 @@ fn ac_392_d03_delete_where_and() {
 
 #[test]
 fn ac_392_d04_delete_using_cross_table_where_now_parses() {
-    // Sprint-393b — DML WHERE unifies with SELECT WHERE, so cross-
-    // table column comparisons parse as `ColumnComparison`. Sprint-392
-    // marked this as `UnsupportedExpression`; the deferral is lifted.
+    // DML WHERE unifies with SELECT WHERE, so cross-table column
+    // comparisons parse as `ColumnComparison`. The narrow grammar marked
+    // this as `UnsupportedExpression`; the deferral is lifted.
     let s = ok_delete("DELETE FROM users USING orders WHERE orders.user_id = users.id");
     assert!(matches!(
         s.where_clause,
@@ -2473,9 +2470,9 @@ fn ac_392_d05_delete_where_is_null() {
 
 #[test]
 fn ac_392_d06_delete_where_in_list_now_parses_as_in_list() {
-    // Sprint-393b — AC-393b-I03 lifts the sprint-392 deferral
-    // (AC-392-D06). `WHERE id IN (1, 2, 3)` now parses successfully
-    // as the new `in-list` primary.
+    // AC-393b-I03 lifts the earlier deferral (AC-392-D06).
+    // `WHERE id IN (1, 2, 3)` now parses successfully as the new
+    // `in-list` primary.
     let s = ok_delete("DELETE FROM users WHERE id IN (1, 2, 3)");
     match s.where_clause {
         Some(SelectExpr::InList { column, values }) => {
@@ -2562,8 +2559,8 @@ fn ac_392_s03_delete_serializes_with_kind_delete() {
 
 #[test]
 fn ac_392_s04_where_comparison_serializes_with_kind_comparison() {
-    // Sprint-393b — DML WHERE migrates from sprint-392 narrow
-    // `WhereExpr::Comparison { column: String }` to the unified
+    // DML WHERE migrates from the narrow
+    // `WhereExpr::Comparison { column: String }` shape to the unified
     // `SelectExpr::Comparison { left: ColumnRef }`. The `column`
     // scalar slot is replaced by a `left` object with a `column`
     // sub-slot.
@@ -2627,8 +2624,8 @@ fn ac_483_pg07_predicate_function_call_serializes_as_select() {
 }
 
 // =================================================================
-// Sprint 393b — SELECT widening 2 (CTE / set ops / subquery / window
-// / CASE / IN-list).
+// SELECT widening 2 (CTE / set ops / subquery / window / CASE /
+// IN-list).
 // =================================================================
 
 // Helpers --------------------------------------------------------
@@ -3001,8 +2998,8 @@ fn ac_393b_o07_count_star_dedicated_variant() {
 
 #[test]
 fn ac_483_pg01_predicate_function_call_parses() {
-    // Reason: Sprint 483 lifts the common PostgreSQL read path
-    // `WHERE lower(col) = ...` out of Safe Mode fallback (2026-05-27).
+    // Reason: the common PostgreSQL read path `WHERE lower(col) = ...`
+    // is lifted out of Safe Mode fallback (2026-05-27).
     let s = ok_select("SELECT x FROM t WHERE lower(x) = 'a'");
     match s.where_clause {
         Some(SelectExpr::ExpressionComparison { left, op, value }) => {
@@ -3414,8 +3411,9 @@ fn ac_393b_extra_window_function_in_order_by_select_list_only() {
     // Window function only valid in SELECT list / ORDER BY position
     // per contract; we verify SELECT-list position here, ORDER BY is
     // not exercised because the existing parse_ordering_list expects
-    // a ColumnRef, not an expression. Sprint-393b widens select-list
-    // positions; ORDER BY by-expression is a future refinement.
+    // a ColumnRef, not an expression. The widened grammar covers
+    // select-list positions; ORDER BY by-expression is a future
+    // refinement.
     let s = ok_select("SELECT row_number() OVER (PARTITION BY a ORDER BY b) FROM x");
     assert!(matches!(s.columns, Columns::Expressions { .. }));
 }
@@ -3731,8 +3729,8 @@ fn ac_393b_extra_subquery_from_round_trips() {
 }
 
 // ═════════════════════════════════════════════════════════════════
-// Sprint 394 — DDL additive grammar (CREATE TABLE / CREATE INDEX /
-//              CREATE VIEW + ALTER TABLE ADD / RENAME).
+// DDL additive grammar (CREATE TABLE / CREATE INDEX / CREATE VIEW
+// + ALTER TABLE ADD / RENAME).
 // ═════════════════════════════════════════════════════════════════
 
 fn ok_create_table(input: &str) -> CreateTableStatement {
@@ -4052,9 +4050,9 @@ fn ac_394_t22_create_table_no_name_is_syntax_error() {
 
 #[test]
 fn ac_394_t23_create_temporary_table_is_syntax_error() {
-    // TEMPORARY is not a lexed keyword in this sprint — it parses as
-    // an identifier, the dispatcher sees `Token::Ident("TEMPORARY")`
-    // after CREATE, and surfaces SyntaxError.
+    // TEMPORARY is not a lexed keyword — it parses as an identifier, the
+    // dispatcher sees `Token::Ident("TEMPORARY")` after CREATE, and
+    // surfaces SyntaxError.
     let e = err("CREATE TEMPORARY TABLE t (a INTEGER)");
     assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
 }
@@ -4287,8 +4285,8 @@ fn ac_394_a09_alter_rename_no_target_is_syntax_error() {
 
 #[test]
 fn ac_394_a10_alter_column_type_is_syntax_error() {
-    // ALTER COLUMN TYPE is out of scope (only ADD / RENAME / DROP
-    // are accepted as ALTER actions in this sprint).
+    // ALTER COLUMN TYPE is out of scope (only ADD / RENAME / DROP are
+    // accepted as ALTER actions).
     let e = err("ALTER TABLE users ALTER COLUMN email TYPE VARCHAR(255)");
     assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
 }
@@ -4686,7 +4684,7 @@ fn ac_394_extra_alter_add_constraint_unique_named() {
 
 #[test]
 fn ac_394_extra_create_table_compound_check_expression() {
-    // CHECK predicate widened by sprint-393a/b's expression grammar
+    // CHECK predicate widened by the unified expression grammar
     // — confirm an AND-joined check expression parses.
     let s = ok_create_table("CREATE TABLE t (a INTEGER, b INTEGER, CHECK (a > 0 AND b > 0))");
     match &s.table_constraints[0].body {
@@ -4886,8 +4884,8 @@ fn ac_512_s06_tsql_scripting_and_admin_verbs_are_known_unsupported() {
 }
 
 // =================================================================
-// Sprint 395 — misc grammar parser tests (GRANT / REVOKE / EXPLAIN /
-// SHOW / SET / COPY / COMMENT). AC-395-G/R/E/H/T/C/M/S/V.
+// Misc grammar parser tests (GRANT / REVOKE / EXPLAIN / SHOW / SET /
+// COPY / COMMENT). AC-395-G/R/E/H/T/C/M/S/V.
 // =================================================================
 
 fn ok_grant(input: &str) -> GrantStatement {

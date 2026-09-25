@@ -1,5 +1,5 @@
-//! 작성 2026-05-17 (Phase 5 sprint-371, AC-371-01) — `add_history_entry` 의
-//! discriminated union 검증.
+//! Written 2026-05-17 (AC-371-01) — verifies the discriminated union of
+//! `add_history_entry`.
 //!
 //! Wire shape:
 //!   `{ paradigm: "rdb",      queryMode: "sql" }`  → OK
@@ -7,10 +7,11 @@
 //!   `{ paradigm: "document", queryMode: "find" }` → OK
 //!   `{ paradigm: "document", queryMode: "sql" }`  → 400 (serde reject)
 //!
-//! 본 파일의 invariant 는 frontend wrapper test (`src/lib/tauri/history.test.ts`)
-//! 와 동일 wire shape — invoke("add_history_entry", { req: {...} }) 의 req
-//! payload 를 byte-equivalent JSON 으로 serde 처리해 backend 의 검증을 통과
-//! 시키거나 (rdb+sql) reject (rdb+find) 하는 것을 확인한다.
+//! The invariant here uses the same wire shape as the frontend wrapper test
+//! (`src/lib/tauri/history.test.ts`) — it runs the req payload of
+//! invoke("add_history_entry", { req: {...} }) through serde as
+//! byte-equivalent JSON and checks that the backend's validation accepts it
+//! (rdb+sql) or rejects it (rdb+find).
 
 use serde_json::json;
 use serial_test::serial;
@@ -41,7 +42,7 @@ fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
-/// AC-371-01 case 1: rdb + sql → OK. INSERT 가 성공하고 row id 반환.
+/// AC-371-01 case 1: rdb + sql → OK. The INSERT succeeds and returns a row id.
 #[tokio::test]
 #[serial]
 async fn rdb_sql_round_trips_successfully() {

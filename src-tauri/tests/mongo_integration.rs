@@ -1,33 +1,32 @@
-//! MongoAdapter integration test (Sprints 65 + 66 + 72 + 80).
+//! MongoAdapter integration test.
 //!
-//! Sprint 65 walks the catalog happy path:
+//! The catalog happy path:
 //! `connect → ping → list_databases → list_collections → disconnect`.
 //!
-//! Sprint 66 adds the read-path coverage: seeding a small fixture
-//! (a per-test `table_view_test.users_*` collection) with heterogeneous
-//! documents, invoking `infer_collection_fields` and `find`, and verifying
-//! the expected column shape + sentinel flattening before dropping the
-//! fixture.
+//! Read-path coverage: seeding a small fixture (a per-test
+//! `table_view_test.users_*` collection) with heterogeneous documents,
+//! invoking `infer_collection_fields` and `find`, and verifying the expected
+//! column shape + sentinel flattening before dropping the fixture.
 //!
 //! Isolation note (#1240): CI runs these via `cargo nextest`, which executes
 //! each test in its OWN process. `#[serial_test::serial]` is an in-process
 //! lock and therefore does NOT serialise tests across nextest processes — so
 //! every test that touches Mongo must own a unique collection name. The
-//! Sprint 66/72 read-path tests originally shared `table_view_test.users`,
-//! which let one test's idempotency `drop()` empty another's freshly seeded
-//! fixture mid-flight (flaky "$group ... got 0 rows"). Each read-path test
-//! now uses a dedicated `users_*` collection like the mutate/index tests.
+//! read-path tests originally shared `table_view_test.users`, which let one
+//! test's idempotency `drop()` empty another's freshly seeded fixture
+//! mid-flight (flaky "$group ... got 0 rows"). Each read-path test now uses
+//! a dedicated `users_*` collection like the mutate/index tests.
 //!
-//! Sprint 72 (Phase 6 plan E-1) adds aggregate-pipeline coverage:
+//! Aggregate-pipeline coverage:
 //!   * `test_mongo_adapter_aggregate_match_sort` — `$match` + `$sort` stage
 //!     pair filters/orders the seeded users deterministically.
 //!   * `test_mongo_adapter_aggregate_group_count` — `$group` with `$sum`
 //!     returns a single count row whose `total` column reflects the seeded
 //!     document count.
 //!
-//! Sprint 80 (Phase 6 plan F-1) adds write-path coverage against
-//! per-test collections under `table_view_test.mutate_*` so the read-path
-//! fixtures above are never touched:
+//! Write-path coverage runs against per-test collections under
+//! `table_view_test.mutate_*` so the read-path fixtures above are never
+//! touched:
 //!   * `test_mongo_adapter_insert_roundtrip` / `_update_applies_set` /
 //!     `_delete_removes_document` — happy paths.
 //!   * `test_mongo_adapter_update_rejects_id_in_patch` / `_missing_id_*` —
@@ -59,10 +58,10 @@ async fn seed_client(config: &ConnectionConfig) -> Client {
         host: config.host.clone(),
         port: Some(config.port),
     }];
-    // Sprint 237 P5+ (2026-05-08) — testcontainers의 Mongo image는 auth
-    // 비활성이라 user 가 빈 문자열로 들어온다. credential 을 무조건
-    // set 하면 SCRAM 인증 시도로 `Authentication failed` 가 나므로,
-    // user 가 비어있을 때만 익명 연결.
+    // The testcontainers Mongo image has auth disabled, so `user` arrives as
+    // an empty string. Setting a credential unconditionally would attempt
+    // SCRAM auth and fail with `Authentication failed`, so the connection
+    // stays anonymous whenever `user` is empty.
     if !config.user.is_empty() {
         opts.credential = Some(
             Credential::builder()
@@ -122,11 +121,12 @@ async fn test_mongo_adapter_connect_ping_list_disconnect_happy_path() {
         collections.len()
     );
 
-    // Sprint 237 P5+ (2026-05-08) — empty-name guard 는
-    // `db::mongodb::schema::tests::list_collections_rejects_empty_db_name`
-    // 에서 결정적으로 검증된다. 통합 테스트에서는 setup 이 default_db
-    // 를 셋팅하므로 빈 string 이 fallback 분기로 흘러 Ok([]) 가 정당
-    // 결과. 환경 독립성을 위해 이 검증은 unit-level 에 위임.
+    // The empty-name guard is verified deterministically in
+    // `db::mongodb::schema::tests::list_collections_rejects_empty_db_name`.
+    // In the integration test, setup assigns a default_db, so an empty string
+    // flows into the fallback branch and Ok([]) is the legitimate result.
+    // This check is delegated to the unit level to stay environment
+    // independent.
 
     // Issue #1821 — the `hello` + `buildInfo` probe that `connect()` fires
     // degrades to `unknown` instead of erroring; this test has a live server
@@ -204,7 +204,7 @@ async fn test_mongo_adapter_ping_without_connect_returns_error() {
     );
 }
 
-/// Sprint 66 — infer + find happy path against a seeded fixture.
+/// infer + find happy path against a seeded fixture.
 ///
 /// Seeds `table_view_test.users_infer_find` with three documents:
 ///   1. `{ _id, name, age, profile: { city } }`
@@ -379,9 +379,9 @@ async fn test_mongo_adapter_infer_and_find_on_seeded_collection() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 72 — `$match` + `$sort` pipeline returns a deterministic subset.
+/// `$match` + `$sort` pipeline returns a deterministic subset.
 ///
-/// Seeds the same three-user fixture as the Sprint 66 test, then runs
+/// Seeds the same three-user fixture as the infer + find test, then runs
 /// `[{ $match: { age: { $gt: 25 } } }, { $sort: { _id: 1 } }]`. With the
 /// seeded ages (Ada=30, Grace=85, Alan=no age), only Ada and Grace pass the
 /// `$match`, and `$sort` pins `_id: 1` (Ada) first.
@@ -475,7 +475,7 @@ async fn test_mongo_adapter_aggregate_match_sort() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 72 — `$group` with `$sum` returns a single count row.
+/// `$group` with `$sum` returns a single count row.
 ///
 /// Seeds the same three-user fixture then runs
 /// `[{ $group: { _id: null, total: { $sum: 1 } } }]`. The pipeline output is
@@ -584,7 +584,7 @@ async fn test_mongo_adapter_aggregate_group_count() {
         .expect("disconnect should succeed");
 }
 
-// ── Sprint 80 (Phase 6 plan F-1) — mutate coverage ────────────────────────
+// ── mutate coverage ───────────────────────────────────────────────────────
 //
 // Each test uses its own collection name under `table_view_test` so the
 // read-path fixtures above remain untouched and parallel-safe collection
@@ -610,7 +610,7 @@ async fn seed_one_doc(seed: &Client, collection: &str, document: Document) -> Bs
     res.inserted_id
 }
 
-/// Sprint 80 — `insert_document` round-trip.
+/// `insert_document` round-trip.
 ///
 /// `adapter.insert_document` inserts a single document then `adapter.find`
 /// confirms exactly one row is visible in the target collection. The
@@ -693,7 +693,7 @@ async fn test_mongo_adapter_insert_roundtrip() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 80 — `update_document` wraps the patch with `$set`.
+/// `update_document` wraps the patch with `$set`.
 ///
 /// Seeds a document with a known ObjectId, calls `update_document` with a
 /// `{ name: "new" }` patch, and confirms the post-update document reflects
@@ -762,7 +762,7 @@ async fn test_mongo_adapter_update_applies_set() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 80 — `update_document` rejects `_id` in the patch.
+/// `update_document` rejects `_id` in the patch.
 ///
 /// The adapter must guard against identity mutation before any network
 /// round-trip. This test exercises the guard with a patch containing a
@@ -829,7 +829,7 @@ async fn test_mongo_adapter_update_rejects_id_in_patch() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 80 — `update_document` on an unknown `_id` returns NotFound.
+/// `update_document` on an unknown `_id` returns NotFound.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mongo_adapter_update_on_missing_id_returns_not_found() {
@@ -879,7 +879,7 @@ async fn test_mongo_adapter_update_on_missing_id_returns_not_found() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 80 — `delete_document` removes the target document.
+/// `delete_document` removes the target document.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mongo_adapter_delete_removes_document() {
@@ -930,7 +930,7 @@ async fn test_mongo_adapter_delete_removes_document() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 80 — `delete_document` on an unknown `_id` returns NotFound.
+/// `delete_document` on an unknown `_id` returns NotFound.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mongo_adapter_delete_on_missing_id_returns_not_found() {
@@ -980,15 +980,16 @@ async fn test_mongo_adapter_delete_on_missing_id_returns_not_found() {
         .expect("disconnect should succeed");
 }
 
-// ── Sprint 308 (2026-05-14) — A1 dispatch surface integration ─────────────
+// ── A1 dispatch surface integration ───────────────────────────────────────
 //
-// 작성 이유: A1 mongosh 파서가 dispatch 할 6 신규 method 가 실 mongo
-// (testcontainers) 에 대해 의도된 wire shape + side-effect 를 보장하는지
-// 검증한다. 각 method 가 자체 collection 을 쓰므로 read-path 픽스처와
-// 충돌 없이 직렬 실행. happy path + boundary case (`insert_many([])`,
-// `bulk_write([])`) 까지 한 묶음으로 검증.
+// Reason: verifies that the 6 methods the A1 mongosh parser dispatches to
+// hold the intended wire shape + side effects against a real mongo
+// (testcontainers). Each method uses its own collection, so these run
+// serially without clashing with the read-path fixtures. Happy path and the
+// boundary cases (`insert_many([])`, `bulk_write([])`) are covered in one
+// bundle.
 
-/// Sprint 308 — `insert_many` returns N inserted ids and the find round-trip
+/// `insert_many` returns N inserted ids and the find round-trip
 /// observes exactly N rows.
 #[tokio::test]
 #[serial_test::serial]
@@ -1039,8 +1040,8 @@ async fn test_mongo_adapter_insert_many_returns_ids() {
         .expect("find should succeed");
     assert_eq!(find_result.rows.len(), n);
 
-    // Sprint 308 boundary case — empty input short-circuits without a
-    // driver round-trip and returns an empty vec.
+    // Boundary case — empty input short-circuits without a driver
+    // round-trip and returns an empty vec.
     let empty = adapter
         .insert_many("table_view_test", "sprint308_insert_many", Vec::new())
         .await
@@ -1054,7 +1055,7 @@ async fn test_mongo_adapter_insert_many_returns_ids() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 308 — `count_documents` returns the exact match count and
+/// `count_documents` returns the exact match count and
 /// `estimated_document_count` returns at least the same value.
 #[tokio::test]
 #[serial_test::serial]
@@ -1126,7 +1127,7 @@ async fn test_mongo_adapter_count_and_estimated_counts() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 308 — `distinct` returns the unique value set for a field
+/// `distinct` returns the unique value set for a field
 /// (post-filter) and `find_one` returns a single matching DocumentRow.
 #[tokio::test]
 #[serial_test::serial]
@@ -1214,7 +1215,7 @@ async fn test_mongo_adapter_distinct_and_find_one() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 308 — `bulk_write` runs a heterogeneous mix of ops and the
+/// `bulk_write` runs a heterogeneous mix of ops and the
 /// aggregate counters reflect the per-op outcomes. Also exercises the
 /// empty-input short-circuit.
 #[tokio::test]
@@ -1287,7 +1288,7 @@ async fn test_mongo_adapter_bulk_write_aggregate_counters() {
             // testcontainers' default Mongo image ships an older server
             // version that does not yet expose the unified `bulk_write`
             // command (8.0+). Treat that as a SKIP rather than failing the
-            // suite so the rest of the Sprint 308 surface stays gated by
+            // suite so the rest of the dispatch surface stays gated by
             // this single scenario.
             eprintln!("Skipping bulk_write op-mix assertion: {msg}");
             coll.drop().await.expect("cleanup drop_collection");
@@ -1333,16 +1334,18 @@ async fn test_mongo_adapter_bulk_write_aggregate_counters() {
         .expect("disconnect should succeed");
 }
 
-// ── Sprint 351 (2026-05-15) — Mongo index CRUD integration ────────────────
+// ── Mongo index CRUD integration ──────────────────────────────────────────
 //
-// 작성 이유: Mongo index CRUD trait method (`create_collection_index` /
-// `drop_collection_index`) 가 실제 mongod 에 대해 의도된 wire shape (unique,
-// TTL, partialFilterExpression, compound + collation) 을 round-trip 하는지
-// 검증. 각 테스트가 `table_view_test.idx_*` 자체 collection 을 써서
-// read-path 픽스처와 충돌 없이 직렬 실행. 컨테이너가 없으면 setup helper
-// 가 None → early return → 통과 (기존 skip-on-no-container 패턴 답습).
+// Reason: verifies that the Mongo index CRUD trait methods
+// (`create_collection_index` / `drop_collection_index`) round-trip the
+// intended wire shape (unique, TTL, partialFilterExpression, compound +
+// collation) against a real mongod. Each test uses its own
+// `table_view_test.idx_*` collection, so these run serially without clashing
+// with the read-path fixtures. With no container the setup helper returns
+// None → early return → pass (the same skip-on-no-container pattern as
+// elsewhere).
 
-/// Sprint 351 — unique single-field index round-trip.
+/// Unique single-field index round-trip.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mongo_adapter_create_index_unique_roundtrip() {
@@ -1401,7 +1404,7 @@ async fn test_mongo_adapter_create_index_unique_roundtrip() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 351 — TTL single-field index (`expireAfterSeconds`).
+/// TTL single-field index (`expireAfterSeconds`).
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mongo_adapter_create_index_ttl_single_field() {
@@ -1469,7 +1472,7 @@ async fn test_mongo_adapter_create_index_ttl_single_field() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 351 — partialFilterExpression round-trip.
+/// partialFilterExpression round-trip.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mongo_adapter_create_index_partial_filter() {
@@ -1537,7 +1540,7 @@ async fn test_mongo_adapter_create_index_partial_filter() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 351 — compound (2-field) index with collation.
+/// Compound (2-field) index with collation.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mongo_adapter_create_index_compound_with_collation() {
@@ -1603,7 +1606,7 @@ async fn test_mongo_adapter_create_index_compound_with_collation() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 351 — drop an existing index by name.
+/// Drop an existing index by name.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mongo_adapter_drop_existing_index() {
@@ -1668,7 +1671,7 @@ async fn test_mongo_adapter_drop_existing_index() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 351 — dropping the `_id_` index goes through the driver and is
+/// Dropping the `_id_` index goes through the driver and is
 /// rejected (MongoDB enforces this server-side; the adapter does not
 /// special-case `_id_` because the Tauri command shim handles the
 /// friendly Validation message before the driver round-trip).
@@ -1713,7 +1716,7 @@ async fn test_mongo_adapter_drop_id_index_rejected() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 351 — creating two indexes with the same name + different
+/// Creating two indexes with the same name + different
 /// options yields an `IndexOptionsConflict` (or similar) driver error.
 #[tokio::test]
 #[serial_test::serial]
@@ -1780,14 +1783,14 @@ async fn test_mongo_adapter_create_index_duplicate_name_errors() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 352 — round-trip a validator together with `validationLevel`
-/// = "moderate" and `validationAction` = "warn". After collMod the
-/// driver-side `listCollections.options` must surface all three values.
+/// Round-trip a validator together with `validationLevel` = "moderate" and
+/// `validationAction` = "warn". After collMod the driver-side
+/// `listCollections.options` must surface all three values.
 ///
-/// 작성 이유 (2026-05-15): 본 sprint 가 validator + level + action 의
-/// IPC 페어 라운드트립을 wire-up 한다. live 라우팅에서 server-side
-/// `options` 가 응답에 포함되어야 ValidatorPanel UI 가 select 컨트롤
-/// 을 hydrate 할 수 있다.
+/// Reason: the validator + level + action IPC pair is wired up as a
+/// round trip. On live routing the server-side `options` have to come back in
+/// the response, otherwise the ValidatorPanel UI cannot hydrate its select
+/// controls.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mongo_adapter_set_validator_with_level_and_action_roundtrip() {
@@ -1855,14 +1858,14 @@ async fn test_mongo_adapter_set_validator_with_level_and_action_roundtrip() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 352 — omitting `validation_level` / `validation_action` lets
-/// MongoDB apply its server-side defaults (`strict` / `error`). The
-/// backward-compat path: pre-sprint callers only sent the validator, and
-/// the new wire format must produce the same observable server state.
+/// Omitting `validation_level` / `validation_action` lets MongoDB apply its
+/// server-side defaults (`strict` / `error`).
 ///
-/// 작성 이유 (2026-05-15): 옴 미트된 옵션이 collMod 에서 누락되어야
-/// 백워드 컴팻 요구사항을 만족한다. MongoDB 가 server-side 기본값을
-/// 적용하므로 readback 은 strict + error 여야 한다.
+/// Reason: the backward-compat path. Older callers sent only the validator,
+/// and the new wire format has to produce the same observable server state —
+/// which requires the omitted options to be absent from collMod. MongoDB
+/// then applies its server-side defaults, so the readback must be strict +
+/// error.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mongo_adapter_set_validator_omitted_level_action_preserves_server_defaults() {
@@ -1926,28 +1929,28 @@ async fn test_mongo_adapter_set_validator_omitted_level_action_preserves_server_
         .expect("disconnect should succeed");
 }
 
-/// Sprint 352 — the Tauri command shim rejects unknown `validationLevel`
-/// values with `AppError::Validation` before any adapter round-trip.
+/// The Tauri command shim rejects unknown `validationLevel` values with
+/// `AppError::Validation` before any adapter round-trip.
 ///
-/// 작성 이유 (2026-05-15): 화이트리스트 게이트가 통합 레벨에서도
-/// 화이트리스트 사양에 부합하는지 검증. 어댑터까지 도달하지 않는
-/// 다는 점에서 client 안전 보장이 핵심.
+/// Reason: verifies the whitelist gate matches the whitelist spec at the
+/// integration level too. The client-side safety guarantee is exactly that
+/// such a value never reaches the adapter.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mongo_adapter_set_validator_rejects_unknown_level() {
-    // 이 테스트는 어댑터 자체가 아니라 Tauri command 계층의 화이트리스트를
-    // 검증한다. 컨테이너가 없으면 setup 이 None 을 반환하지만, 화이트
-    // 리스트는 connection 도달 전에 작동하므로 정상 동작 검증을 위해
-    // adapter 가 준비된 환경에서 돌아가야 한다.
+    // This test exercises the whitelist in the Tauri command layer, not the
+    // adapter itself. With no container setup returns None; the whitelist
+    // fires before the connection is reached, but the check still needs an
+    // environment where the adapter is ready to confirm normal operation.
     if common::setup_mongo_adapter().await.is_none() {
         return;
     }
-    // Tauri command 계층 (`set_mongo_validator_inner`) 은 pub(crate) 가
-    // 아니라 mod-private 이므로 통합 테스트는 `set_collection_validator`
-    // trait 시그니처를 우회해 호출할 수 없다. 대신 adapter 가 화이트
-    // 리스트와 무관하게 (`Some("bogus")`) 값을 수신했을 때 driver 가
-    // collMod 에서 거부하는지를 확인한다 — 화이트리스트가 동작하지
-    // 않는 최악의 경우에도 server-side 가 차단함을 보장.
+    // The Tauri command layer (`set_mongo_validator_inner`) is mod-private
+    // rather than pub(crate), so an integration test cannot call it around
+    // the `set_collection_validator` trait signature. Instead this checks
+    // that the driver rejects the value at collMod when the adapter receives
+    // it (`Some("bogus")`) regardless of the whitelist — proving the server
+    // side blocks it even in the worst case where the whitelist fails.
     let adapter = common::setup_mongo_adapter().await.expect("setup");
     let config = common::mongo_test_config()
         .await
@@ -1983,7 +1986,7 @@ async fn test_mongo_adapter_set_validator_rejects_unknown_level() {
         .expect("disconnect should succeed");
 }
 
-/// Sprint 351 — TTL on a compound index is rejected by the adapter
+/// TTL on a compound index is rejected by the adapter
 /// before any driver round-trip.
 #[tokio::test]
 #[serial_test::serial]

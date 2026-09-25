@@ -29,7 +29,7 @@ fn view_info_serde_roundtrip() {
 
 #[test]
 fn trigger_info_serde_roundtrip() {
-    // Sprint 272 — TriggerInfo round-trips with camelCase wire form
+    // TriggerInfo round-trips with camelCase wire form
     // (`functionSchema`, `functionName`, `whenExpression`). Older
     // payloads that omit `arguments` / `whenExpression` deserialize to
     // `None` via `Option<String>`.
@@ -84,7 +84,7 @@ fn trigger_info_serde_roundtrip() {
 
 #[test]
 fn create_trigger_request_serde_roundtrip() {
-    // Sprint 273 — `CreateTriggerRequest` round-trips with camelCase
+    // `CreateTriggerRequest` round-trips with camelCase
     // wire form (`connectionId`, `triggerName`, `whenExpression`,
     // `functionSchema`, `functionName`, `functionArguments`,
     // `previewOnly`, `expectedDatabase`). `preview_only` and
@@ -150,7 +150,7 @@ fn create_trigger_request_serde_roundtrip() {
 
     // Back-compat — payload omitting `previewOnly`, `expectedDatabase`,
     // `whenExpression`, `functionArguments` deserialises to false /
-    // None (Sprint 273 default-flag invariant).
+    // None (default-flag invariant).
     let minimal = r#"{
             "connectionId":"c",
             "schema":"s",
@@ -171,7 +171,7 @@ fn create_trigger_request_serde_roundtrip() {
 
 #[test]
 fn drop_trigger_request_serde_roundtrip() {
-    // Sprint 274 — `DropTriggerRequest` round-trips with camelCase
+    // `DropTriggerRequest` round-trips with camelCase
     // wire form (`connectionId`, `triggerName`, `cascade`,
     // `previewOnly`, `expectedDatabase`). `cascade`, `preview_only`
     // and `expected_database` default to `false` / `None` when
@@ -207,8 +207,8 @@ fn drop_trigger_request_serde_roundtrip() {
     assert_eq!(deserialized.expected_database, Some("appdb".to_string()));
 
     // Back-compat — payload omitting `cascade`, `previewOnly`, and
-    // `expectedDatabase` deserialises to false / None (Sprint 274
-    // default-flag invariant).
+    // `expectedDatabase` deserialises to false / None (default-flag
+    // invariant).
     let minimal = r#"{
             "connectionId":"c",
             "schema":"s",

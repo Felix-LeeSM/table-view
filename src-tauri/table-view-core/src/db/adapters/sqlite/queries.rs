@@ -47,17 +47,19 @@ fn cell_to_json(row: &SqliteRow, idx: usize) -> serde_json::Value {
 
     match type_name.as_str() {
         "INTEGER" | "INT" | "BIGINT" | "SMALLINT" | "TINYINT" => {
-            // ADR 0026 (issue #1082) — SQLite 는 INTEGER-affinity 컬럼을 선언
-            // 타입과 무관하게 i64 로 저장하므로 (sqlx 는 declared type 이 아니라
-            // storage class "INTEGER" 를 report 한다), 2^53 을 넘는 값이 raw
-            // JSON number 로 wire 되면 프론트의 native JSON.parse 가 f64 로
-            // 강등하며 무음 손상시킨다. 정밀도-보존 JSON string token 으로
-            // 직렬화하고, 프론트 wrapNumericCells 가 컬럼 data_type (free-form
-            // 은 storage class "INTEGER", table preview 는 PRAGMA 선언 타입)
-            // 을 보고 BigInt 로 승격한다. 타입 정보가 없는 컬럼/표현식
-            // (type_info == "NULL") 은 아래 untyped fallback 으로 내려가 Number
-            // 로 남는다 — 프론트에 승격 매핑이 없으므로 string 화하면 오히려
-            // grid 에 raw string 이 노출된다.
+            // ADR 0026 (issue #1082) — SQLite stores an INTEGER-affinity column
+            // as i64 regardless of its declared type (sqlx reports the storage
+            // class "INTEGER", not the declared type), so a value above 2^53
+            // wired as a raw JSON number is demoted to f64 by the frontend's
+            // native JSON.parse and silently corrupted. Serialize it as a
+            // precision-preserving JSON string token; the frontend's
+            // wrapNumericCells reads the column data_type (storage class
+            // "INTEGER" for free-form, the PRAGMA-declared type for a table
+            // preview) and promotes it to BigInt. A column or expression with no
+            // type information (type_info == "NULL") drops to the untyped
+            // fallback below and stays a Number — the frontend has no promotion
+            // mapping for it, so turning it into a string would instead expose a
+            // raw string in the grid.
             try_decode!(i64, |v: i64| serde_json::Value::String(v.to_string()));
         }
         "REAL" | "DOUBLE" | "FLOAT" | "NUMERIC" | "DECIMAL" => {
@@ -546,10 +548,11 @@ fn build_filter_clause(
             FilterOperator::IsNull => conditions.push(format!("{column} IS NULL")),
             FilterOperator::IsNotNull => conditions.push(format!("{column} IS NOT NULL")),
             _ => {
-                // #2430 — 손으로 복제한 토큰 표를 이식 가능 토큰 표로 바꾼다.
-                // 복제본은 `_ => unreachable!()` 로 닫혀 있어서, 이 방언에 철자가
-                // 없는 연산자(`Ilike`)가 들어오면 컴파일은 지나가고 런타임에
-                // 패닉했다. duckdb·mssql·oracle 어댑터가 이미 쓰는 갈래와 같다.
+                // #2430 — replace the hand-copied token table with the portable
+                // one. The copy was closed with `_ => unreachable!()`, so an
+                // operator this dialect has no spelling for (`Ilike`) compiled
+                // fine and panicked at runtime. Same branch the duckdb, mssql and
+                // oracle adapters already use.
                 let Some(op) = filter.operator.comparison_sql() else {
                     continue;
                 };

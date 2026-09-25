@@ -1,17 +1,18 @@
-//! 작성 2026-05-16 (Phase 1 sprint-356)
+//! Written 2026-05-16
 //!
-//! AC-356-05 / AC-356-06 / AC-356-09 — Path C (Linux Secret Service /
-//! kwallet 미가용 환경의 fallback) + Fatal (key 사라짐 + ciphertext 있음).
+//! AC-356-05 / AC-356-06 / AC-356-09 — Path C (fallback for environments where
+//! Linux Secret Service / kwallet is unavailable) + Fatal (key gone while
+//! ciphertext is present).
 //!
-//! 본 파일은 OS 와 무관하게 keyring backend 가 `is_available() == false`
-//! 인 상황을 in-memory 로 시뮬레이션해 다음을 단언한다:
-//!   - 디스크 `.key` 가 보존된다 (없으면 새로 만들어진다, mode 0o600 유지).
-//!   - 반환 `KeyOutcome.fallback_to_disk == true`.
-//!   - 호출자가 `fallback_dismissed_sentinel_path` 부재일 때만 1회 toast 를
-//!     띄울 수 있도록, sentinel 의 부재 (첫 boot) / 존재 (다음 boot) 가
-//!     올바르게 보고된다.
-//!   - Fatal 케이스: keyring 미가용 + 디스크 `.key` 부재 + ciphertext 존재
-//!     → 새 key 생성 금지 + `KeySource::Fatal` 반환.
+//! Independently of the OS, this file simulates in memory a keyring backend
+//! whose `is_available()` is false and asserts:
+//!   - The disk `.key` is preserved (created when absent, mode 0o600 kept).
+//!   - The returned `KeyOutcome.fallback_to_disk == true`.
+//!   - Absence (first boot) / presence (the next boot) of the sentinel is
+//!     reported correctly, so the caller can raise the toast once and only
+//!     while `fallback_dismissed_sentinel_path` is absent.
+//!   - Fatal case: keyring unavailable + disk `.key` absent + ciphertext
+//!     present → no new key is generated, `KeySource::Fatal` is returned.
 
 use std::fs;
 use std::path::Path;

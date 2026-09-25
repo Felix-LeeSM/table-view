@@ -1,4 +1,4 @@
-//! Document paradigm — catalog/browse commands (Sprint 66).
+//! Document paradigm — catalog/browse commands.
 //!
 //! Every handler resolves the connection via
 //! `state.active_connections.lock().await`, then dispatches through
@@ -7,7 +7,7 @@
 //! invoked. This mirrors the pattern established for RDB commands in
 //! `commands/rdb/schema.rs`.
 //!
-//! Sprint 237 P5 (2026-05-08) — handler bodies hoisted into
+//! Handler bodies hoisted into
 //! `_inner(&AppState)` so unit tests drive prod code directly without
 //! a `tauri::State` mock; cancel-token helpers moved to the shared
 //! `commands/document/mod.rs`.
@@ -125,7 +125,7 @@ pub async fn list_mongo_collections(
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
-    // Sprint 180 (AC-180-04): optional cancel-token id.
+    // AC-180-04: optional cancel-token id.
     query_id: Option<String>,
 ) -> Result<Vec<CollectionInfo>, AppError> {
     list_mongo_collections_inner(
@@ -170,7 +170,7 @@ async fn infer_collection_fields_inner(
 
 /// Infer the top-level column layout of `collection` by sampling up to
 /// `sample_size` documents. `sample_size = None` falls back to 100 which
-/// is plenty for the P0 Quick Open preview.
+/// is plenty for the Quick Open preview.
 #[tauri::command]
 pub async fn infer_collection_fields(
     state: tauri::State<'_, AppState>,
@@ -178,7 +178,7 @@ pub async fn infer_collection_fields(
     database: String,
     collection: String,
     sample_size: Option<u32>,
-    // Sprint 180 (AC-180-04): optional cancel-token id.
+    // AC-180-04: optional cancel-token id.
     query_id: Option<String>,
 ) -> Result<Vec<ColumnInfo>, AppError> {
     infer_collection_fields_inner(
@@ -208,9 +208,9 @@ async fn list_mongo_indexes_inner(
         .await
 }
 
-/// Sprint 332 (Slice J live wire) — Mongo collection 인덱스 메타데이터를
-/// `IndexInfo[]` 로 반환. RDB 의 `get_table_indexes` 와 같은 wire shape 이라
-/// frontend 가 같은 grid 컴포넌트로 두 paradigm 의 인덱스를 렌더할 수 있다.
+/// Returns Mongo collection index metadata as `IndexInfo[]`. The wire
+/// shape matches RDB's `get_table_indexes`, so the frontend can render
+/// indexes for both paradigms with the same grid component.
 #[tauri::command]
 pub async fn list_mongo_indexes(
     state: tauri::State<'_, AppState>,
@@ -252,7 +252,7 @@ async fn create_mongo_index_inner(
         .await
 }
 
-/// Sprint 351 — create a Mongo collection index. Accepts the full
+/// Create a Mongo collection index. Accepts the full
 /// option set (unique / sparse / TTL / partialFilterExpression /
 /// collation / compound asc-desc). Driver errors (E11000,
 /// IndexOptionsConflict, …) flow back as `AppError::Database` so the
@@ -305,7 +305,7 @@ async fn drop_mongo_index_inner(
         .await
 }
 
-/// Sprint 351 — drop a Mongo collection index by canonical name. The
+/// Drop a Mongo collection index by canonical name. The
 /// `_id_` index is rejected at the Tauri layer (`AppError::Validation`)
 /// so the contract holds even when callers bypass the UI's disabled
 /// trash button.
@@ -347,7 +347,7 @@ async fn get_mongo_validator_inner(
         .await
 }
 
-/// Sprint 333/352 (Slice K live wire) — read the validator currently
+/// Read the validator currently
 /// stored on the Mongo collection (`listCollections.options.validator`)
 /// along with the persisted `validationLevel` / `validationAction`. Each
 /// of the three fields is `None` when MongoDB has not stored a value;
@@ -363,7 +363,7 @@ pub async fn get_mongo_validator(
     get_mongo_validator_inner(state.inner(), &connection_id, &database, &collection).await
 }
 
-/// Sprint 352 — whitelist allowed `validationLevel` values. `None` means
+/// Whitelist allowed `validationLevel` values. `None` means
 /// the caller omitted the field; the adapter then skips the field in the
 /// `collMod` doc and MongoDB applies its server-side default.
 fn validate_level(level: Option<&str>) -> Result<(), AppError> {
@@ -376,7 +376,7 @@ fn validate_level(level: Option<&str>) -> Result<(), AppError> {
     }
 }
 
-/// Sprint 352 — whitelist allowed `validationAction` values. Same
+/// Whitelist allowed `validationAction` values. Same
 /// semantics as [`validate_level`].
 fn validate_action(action: Option<&str>) -> Result<(), AppError> {
     match action {
@@ -418,12 +418,11 @@ async fn set_mongo_validator_inner(
         .await
 }
 
-/// Sprint 333/352 (Slice K live wire) — apply (`Some(value)`) or clear
-/// (`None`) the validator on a Mongo collection via `collMod`. Sprint
-/// 352 extends the payload with optional `validation_level` /
-/// `validation_action`. Both default to MongoDB's server-side defaults
-/// (`strict` / `error`) when the field is omitted by the caller —
-/// preserving wire-level backward compatibility with pre-sprint
+/// Apply (`Some(value)`) or clear (`None`) the validator on a Mongo
+/// collection via `collMod`. The payload also carries optional
+/// `validation_level` / `validation_action`. Both default to MongoDB's
+/// server-side defaults (`strict` / `error`) when the field is omitted by
+/// the caller — preserving wire-level backward compatibility with older
 /// payloads. Unknown values are rejected with `AppError::Validation`
 /// before the adapter is invoked.
 #[tauri::command]
@@ -468,7 +467,7 @@ async fn create_collection_inner(
         .await
 }
 
-/// Sprint 334 (Slice L live wire) — create a Mongo collection with
+/// Create a Mongo collection with
 /// optional creation options (capped, timeseries, validator, etc.) via
 /// the driver's `create` command.
 #[tauri::command]
@@ -508,9 +507,8 @@ async fn rename_collection_inner(
         .await
 }
 
-/// Sprint 334 (Slice L live wire) — rename a Mongo collection inside
-/// the same database (admin runCommand renameCollection). Cross-DB
-/// renames are out of scope for this slice.
+/// Rename a Mongo collection inside the same database (admin runCommand
+/// renameCollection). Same-DB rename only; cross-DB rename is out of scope.
 #[tauri::command]
 pub async fn rename_collection(
     window: tauri::Window,
@@ -539,7 +537,7 @@ async fn drop_mongo_database_inner(
     adapter.drop_database(name).await
 }
 
-/// Sprint 335 (Slice M live wire) — drop the entire Mongo database
+/// Drop the entire Mongo database
 /// (`db.dropDatabase()`). The driver is idempotent: dropping a
 /// non-existent DB succeeds.
 #[tauri::command]
@@ -563,14 +561,15 @@ pub async fn drop_mongo_database(
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
-    //! 작성 이유 (2026-05-08, Sprint 237 P5): commands/document/browse.rs 3
-    //! Tauri command (list_mongo_databases, list_mongo_collections,
-    //! infer_collection_fields). 핸들러를 `_inner(&AppState)` 로 추출했으니
-    //! 테스트도 그것을 직접 호출. 시나리오:
+    //! Why this module exists (2026-05-08): the Tauri commands of
+    //! `commands/document/browse.rs` (`list_mongo_databases`,
+    //! `list_mongo_collections`, `infer_collection_fields`). The handlers
+    //! were extracted as `_inner(&AppState)`, so the tests call them
+    //! directly. Scenarios:
     //!   1. lookup miss → NotFound
     //!   2. as_document()? → Rdb/Search/Kv → Unsupported(document)
-    //!   3. trait 위임 결과 propagate (Ok/Err)
-    //!   4. NamespaceInfo→DatabaseInfo, TableInfo→CollectionInfo 변환 verbatim
+    //!   3. trait delegation results propagate (Ok/Err)
+    //!   4. NamespaceInfo→DatabaseInfo, TableInfo→CollectionInfo converted verbatim
     use super::*;
     use crate::commands::test_util::{document_default, rdb_default, state_with};
     use crate::db::testing::{clone_app_error, StubDocumentAdapter};
@@ -760,7 +759,7 @@ mod tests {
         assert!(!tokens.contains_key("q-icf"));
     }
 
-    // ── Sprint 335 — drop_mongo_database wiring ────────────────────────────
+    // ── drop_mongo_database wiring ───────────────────────────────────────
 
     #[tokio::test]
     async fn drop_mongo_database_unknown_connection_returns_notfound() {
@@ -782,7 +781,7 @@ mod tests {
 
     #[tokio::test]
     async fn drop_mongo_database_routes_to_trait_method() {
-        // Sprint 335 — closure stub captures the name argument so the
+        // The closure stub captures the name argument so the
         // wiring proves the inner fn forwards verbatim. Happy-path
         // dispatch (lock acquired → as_document() OK → trait fn → Ok).
         let mut s = crate::db::testing::StubDocumentAdapter::default();
@@ -796,19 +795,19 @@ mod tests {
             .unwrap();
     }
 
-    // ── Sprint 351 — create_mongo_index / drop_mongo_index wiring ──────────
+    // ── create_mongo_index / drop_mongo_index wiring ─────────────────────
     //
-    // 작성 이유 (2026-05-15): 새 두 Tauri command shim 의 server-side
-    // validation gate 와 trait dispatch 를 통합 테스트와 별개로 단위 검증.
-    // 시나리오:
-    //   * empty fields → Validation (어댑터 도달 전 차단)
+    // Why (2026-05-15): unit-verify the server-side validation gate and
+    // trait dispatch of the two new Tauri command shims separately from
+    // the integration tests. Scenarios:
+    //   * empty fields → Validation (blocked before the adapter is reached)
     //   * compound + TTL → Validation
-    //   * happy path → adapter 에 같은 request 가 전달되고 returned name 이
-    //     wire 로 propagate
+    //   * happy path → the adapter receives the same request and the
+    //     returned name propagates over the wire
     //   * unknown connection → NotFound
     //   * rdb paradigm → Unsupported
     //   * `_id_` drop → Validation
-    //   * non-`_id_` drop → adapter 호출 happen
+    //   * non-`_id_` drop → the adapter call happens
 
     use crate::db::{
         CreateMongoIndexRequest, CreateMongoIndexResult, MongoIndexDirection, MongoIndexField,
@@ -955,12 +954,13 @@ mod tests {
             .unwrap();
     }
 
-    // ── Sprint 352 — set_mongo_validator whitelist + dispatch wiring ───────
+    // ── set_mongo_validator whitelist + dispatch wiring ──────────────────
     //
-    // 작성 이유 (2026-05-15): Validator IPC 가 새 level/action 인자를 받기
-    // 시작했으므로 (a) 화이트리스트가 어댑터 도달 전에 차단하는지, (b) 정상
-    // 입력이 verbatim 으로 전달되는지, (c) 옴미트되었을 때 어댑터에도 None
-    // 으로 흐르는지 (백워드 컴팻 보장) 를 단위로 검증한다.
+    // Why (2026-05-15): the Validator IPC now takes level/action
+    // arguments, so verify at unit level that (a) the whitelist blocks
+    // before the adapter is reached, (b) valid input passes through
+    // verbatim, and (c) omitted arguments reach the adapter as `None`
+    // (backward-compat guarantee).
 
     #[tokio::test]
     async fn set_mongo_validator_rejects_unknown_level_with_validation_error() {
@@ -1045,7 +1045,7 @@ mod tests {
         // Backward-compat — payload that carries only a validator (no
         // level/action keys) must reach the adapter with `None` on both
         // optional positions. This is the byte-equivalent of the
-        // pre-Sprint-352 wire format.
+        // previous wire format.
         let mut s = crate::db::testing::StubDocumentAdapter::default();
         s.set_collection_validator_fn = Some(Box::new(|_db, _coll, _validator, level, action| {
             assert!(
