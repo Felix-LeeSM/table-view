@@ -267,7 +267,11 @@ export default function ConnectionGroup({
       </div>
 
       {showEditDialog && (
-        <GroupDialog group={group} onClose={() => setShowEditDialog(false)} />
+        <GroupDialog
+          group={group}
+          memberCount={connections.length}
+          onClose={() => setShowEditDialog(false)}
+        />
       )}
 
       <AlertDialog

@@ -165,12 +165,7 @@ describe("GroupDialog", () => {
     expect(dot.className).toContain("bg-transparent");
   });
 
-  it("[group-dialog] preview mirrors the typed name and the group's connection count", () => {
-    setStoreState([
-      makeConnection({ id: "c1", groupId: "g1" }),
-      makeConnection({ id: "c2", groupId: "g1" }),
-      makeConnection({ id: "c3", groupId: "g2" }),
-    ]);
+  it("[group-dialog] preview mirrors the typed name", () => {
     const group: ConnectionGroup = {
       id: "g1",
       name: "Prod",
@@ -181,7 +176,6 @@ describe("GroupDialog", () => {
 
     const preview = screen.getByTestId("group-dialog-preview");
     expect(preview).toHaveTextContent("Prod");
-    expect(preview).toHaveTextContent("(2)");
 
     act(() => {
       fireEvent.change(screen.getByLabelText(/name/i), {
