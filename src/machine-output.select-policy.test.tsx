@@ -52,7 +52,7 @@ describe("machine output vs. the selection policy (#2432)", () => {
     expect(holder?.textContent).toBe(DRIVER_ERROR);
   });
 
-  it("[select-policy] the collapsed copy of that error is selectable once opened", () => {
+  it("[select-policy] the collapsed copy of that error is inside an element the policy keeps selectable", () => {
     const { container } = render(
       <QueryErrorDetail error={DRIVER_ERROR} collapsible />,
     );
