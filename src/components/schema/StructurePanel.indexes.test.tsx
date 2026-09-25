@@ -1,10 +1,8 @@
-// Sprint 220 — `indexes` axis split from `StructurePanel.test.tsx` (P11
-// step 3). Covers the Index-CRUD behaviour: Create Index button + modal
-// + columns checkboxes + close / submit (preview + execute) + delete (PK
-// skip / non-PK delete) + Actions header + drop modal cancel +
-// createIndex preview error + dropIndex preview error + dropIndex
-// execute error + Preview SQL disabled validation. Cases are
-// byte-equivalent to the originals — no behaviour change.
+// `indexes` axis of the StructurePanel suite. Covers the Index-CRUD
+// behaviour: Create Index button + modal + column picker + close / submit
+// (preview + execute) + delete (PK skip / non-PK delete) + Actions header +
+// drop modal cancel + createIndex preview error + dropIndex preview error +
+// dropIndex execute error + Preview SQL disabled validation.
 
 import * as tauri from "@lib/tauri";
 import { act, fireEvent, screen } from "@testing-library/react";
@@ -87,11 +85,10 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Create index" }));
     });
 
-    // Sprint 239 — replaced the multi-checkbox grid with the
-    // OrderedColumnPicker. Each column surfaces as a `+ name` button
-    // inside the picker; the wrapper carries `aria-label="Index column
-    // picker"`. Three columns mounted by `renderPanel()` (id / name /
-    // email) → three `+`-chip buttons.
+    // The column picker is an OrderedColumnPicker. Each column surfaces as
+    // a `+ name` button inside the picker; the wrapper carries
+    // `aria-label="Index column picker"`. Three columns mounted by
+    // `renderPanel()` (id / name / email) → three `+`-chip buttons.
     const dialog = screen.getByRole("dialog", { name: "Create Index" });
     expect(dialog).toBeInTheDocument();
     const picker = dialog.querySelector(
@@ -153,8 +150,8 @@ describe("StructurePanel", () => {
       });
     });
 
-    // Sprint 239 — column picker is now an OrderedColumnPicker with `+`
-    // chip buttons keyed by `aria-label="Index column: <name>"`.
+    // The OrderedColumnPicker's `+` chip buttons are keyed by
+    // `aria-label="Index column: <name>"`.
     await act(async () => {
       fireEvent.click(screen.getByLabelText("Index column: name"));
     });
@@ -271,10 +268,9 @@ describe("StructurePanel", () => {
   });
 
   it("executing drop index calls dropIndex without preview_only", async () => {
-    // Sprint 245 (ADR 0022 Phase 1) — pin Safe Mode to `warn` so the
-    // destructive DROP INDEX flows through. The default `strict` mode
-    // would now open the M.1 non-production confirm dialog and short-
-    // circuit this commit-path test.
+    // ADR 0022 Phase 1 — pin Safe Mode to `warn` so the destructive DROP
+    // INDEX flows through. `strict` would open the M.1 non-production
+    // confirm dialog and short-circuit this commit-path test.
     const { useSafeModeStore } = await import("@stores/safeModeStore");
     useSafeModeStore.setState({ mode: "warn" });
     await act(async () => {
@@ -378,7 +374,7 @@ describe("StructurePanel", () => {
       });
     });
 
-    // Sprint 239 — column picker is now an OrderedColumnPicker.
+    // Column picker is an OrderedColumnPicker.
     await act(async () => {
       fireEvent.click(screen.getByLabelText("Index column: name"));
     });
@@ -388,9 +384,9 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Preview SQL" }));
     });
 
-    // Error should appear in the create index modal (Sprint 271c: bare
-    // `err.message` — `useDdlPreviewExecution` surfaces the message verbatim
-    // so `parseDbMismatch` can match its `^Database mismatch:` anchor).
+    // Error should appear in the create index modal — useDdlPreviewExecution
+    // surfaces `getTauriErrorMessage(e)`, the bare message without the
+    // `"Error: "` prefix `String(e)` would add.
     expect(screen.getByText("Index creation failed")).toBeInTheDocument();
   });
 
@@ -411,13 +407,13 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByLabelText("Delete index users_name_idx"));
     });
 
-    // Error should appear in the preview modal (Sprint 271c: bare message).
+    // Error should appear in the preview modal (bare message).
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("Drop index failed")).toBeInTheDocument();
   });
 
   it("shows error in modal when execute drop index fails", async () => {
-    // Sprint 245 — pin warn so the destructive DROP INDEX flows
+    // Pin warn so the destructive DROP INDEX flows
     // through (otherwise non-prod + strict opens the M.1 confirm
     // dialog and the failure-during-execute branch never fires).
     const { useSafeModeStore } = await import("@stores/safeModeStore");
@@ -443,7 +439,7 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Execute" }));
     });
 
-    // Modal should still be open with error (Sprint 271c: bare message).
+    // Modal should still be open with error (bare message).
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("Execute failed")).toBeInTheDocument();
   });

@@ -1,5 +1,5 @@
 /**
- * Reason: Sprint-180 (AC-180-01) — the threshold gate that powers the
+ * Reason: AC-180-01 — the threshold gate that powers the
  * shared `AsyncProgressOverlay`. Validates Doherty (1s threshold) and the
  * synchronous-reset invariant so rapid cancel→retry cycles don't leak
  * timers or paint a stale "true" after the source op resolves.
