@@ -1,6 +1,5 @@
-// Sprint 250 — DataGrid window Esc keydown listener (modal-aware
-// pending discard). Maps to AC-250-02 / AC-250-03 / AC-250-04 from
-// Sprint 250 contract. Date 2026-05-09.
+// DataGrid window Esc keydown listener (modal-aware pending discard).
+// Maps to AC-250-02 / AC-250-03 / AC-250-04.
 //
 // Asserted scenarios (component layer):
 // - AC-250-02 (superseded → gated): Esc on document.body now opens the
@@ -159,7 +158,7 @@ describe("DataGrid — Sprint 250 modal-aware Esc discard (AC-250-02..04)", () =
     // Use blur (not Enter) to commit so editingCell drops to null —
     // Enter triggers `next-row` navigation which would re-open the next
     // cell's editor and trip the Esc handler's `editingCell !== null`
-    // guard. blur is the Sprint 250 onBlur path under test.
+    // guard. blur is the onBlur path under test.
     await act(async () => {
       fireEvent.change(input, { target: { value: "Bob" } });
       fireEvent.blur(input);

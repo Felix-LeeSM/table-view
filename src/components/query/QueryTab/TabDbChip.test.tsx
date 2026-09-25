@@ -1,15 +1,18 @@
-// TabDbChip — Mongo query tab의 tab-local database selector.
+// TabDbChip — the tab-local database selector for a Mongo query tab.
 //
-// 2026-05-15 — Sprint 329 의 display-only chip 을 interactive selector 로
-// 교체. 사용자가 "database 선택도 못 한다 친구야" 로 lock 해제 요구해서
-// chip 동작이 완전히 바뀌었다. 본 suite 는 새 contract 를 guard:
+// The display-only chip was replaced by an interactive selector after the
+// user asked for the lock to be lifted ("you can't even pick a
+// database"), which changed the chip's behaviour completely. This suite
+// guards the new contract:
 //
-//   1. database label 이 chip 텍스트로 노출.
-//   2. database === "" 일 때도 affordance 가 사라지지 않고 "(select
-//      database)" 로 self-rendering (옛 self-hide 동작 폐기 — 그게 바로
-//      사용자가 "선택 못 한다" 라고 한 정확한 증상).
-//   3. 클릭 → popover 열림 → `listDatabases(connectionId)` 호출.
-//   4. 항목 선택 → `setQueryTabDatabase(connId, db, tabId, target)` 호출.
+//   1. The database label is exposed as the chip text.
+//   2. Even when database === "", the affordance does not disappear and
+//      the chip renders "(no database)" itself (the old self-hide
+//      behaviour is dropped — that was the exact symptom the user
+//      reported as "can't pick one").
+//   3. Click → popover opens → `listDatabases(connectionId)` is called.
+//   4. Picking an item → `setQueryTabDatabase(connId, db, tabId, target)`
+//      is called.
 
 import {
   resetFakeWindowConnectionId,
@@ -53,10 +56,9 @@ describe("TabDbChip — interactive database selector", () => {
       },
     });
     useWorkspaceStore.setState({ workspaces: {} });
-    // sprint-366 (2026-05-16) — TabDbChip uses `useCurrentWorkspaceKey()`
-    // which now resolves `connId` from the Tauri window label. Stub the
-    // label so the chip can write to the (`conn-mongo`, `analytics`)
-    // workspace slot under test.
+    // TabDbChip uses `useCurrentWorkspaceKey()`, which resolves `connId`
+    // from the Tauri window label. Stub the label so the chip can write
+    // to the (`conn-mongo`, `analytics`) workspace slot under test.
     setFakeWindowConnectionId("conn-mongo");
   });
 
@@ -79,15 +81,15 @@ describe("TabDbChip — interactive database selector", () => {
   });
 
   it("renders an actionable placeholder when the database is empty", () => {
-    // The display-only Sprint 329 chip self-hid when database was "". That
-    // produced the exact symptom the user complained about: "데이터베이스
-    // 선택도 못 한다." The new contract keeps the affordance visible so
-    // the user always has a clickable surface to set a database.
+    // The display-only chip self-hid when database was "". That produced
+    // the exact symptom the user complained about: "you can't even pick a
+    // database." The new contract keeps the affordance visible so the
+    // user always has a clickable surface to set a database.
     //
-    // Sprint 381 (2026-05-17) — Mongo db-contract α: label changes from
-    // "(select database)" → "(no database)" so the chip reflects the
-    // *binding* (none), not a nag-CTA. Admin commands run without one;
-    // collection commands surface a separate error.
+    // Mongo db-contract α: the label changed from "(select database)" to
+    // "(no database)" so the chip reflects the *binding* (none), not a
+    // nag-CTA. Admin commands run without one; collection commands
+    // surface a separate error.
     render(<TabDbChip tabId="query-1" database="" connectionId="conn-mongo" />);
     const trigger = screen.getByRole("button", {
       name: /no database bound/i,

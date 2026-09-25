@@ -1,15 +1,17 @@
 /**
- * 작성 2026-07-17 (#1566) — "Reveal logs" 버튼.
+ * #1566 — "Reveal logs" button.
  *
- * `open_log_dir` IPC 를 발사해 진단 로그 폴더(#1599 file sink)를 OS 파일
- * 탐색기로 연다. 비개발자 사용자가 플랫폼 data dir 경로를 찾지 않고도 로그를
- * 버그 리포트에 첨부할 수 있게 하는 support affordance.
+ * Fires the `open_log_dir` IPC to open the diagnostic log folder (the
+ * #1599 file sink) in the OS file explorer. A support affordance so a
+ * non-developer user can attach logs to a bug report without hunting
+ * down the platform data dir path.
  *
- * UX: 클릭 → IPC. 성공은 OS 탐색기가 열리는 것으로 자명하므로 toast 없음.
- * 실패(파일 탐색기 부재 / IO)는 silent 하지 않게 error toast 로 surface.
+ * UX: click → IPC. Success is self-evident from the explorer opening, so
+ * no toast. Failure (no file explorer / IO) surfaces as an error toast
+ * rather than staying silent.
  *
- * ClearHistoryButton 의 standalone settings-button 패턴을 재사용 —
- * launcher footer 등 어느 settings surface 에서도 재사용 가능.
+ * Reuses the standalone settings-button pattern of `ClearHistoryButton`
+ * — usable from any settings surface, the launcher footer included.
  */
 
 import { Button } from "@components/ui/button";

@@ -1,6 +1,6 @@
-// Sprint 338 (2026-05-15) — U3 live wire. Replaces the
-// BackendPendingPlaceholder with a live stats grid sourced from
-// `pg_stat_user_tables` (RDB) or `runCommand({collStats})` (Mongo).
+// U3 live wire. Replaces the BackendPendingPlaceholder with a live stats
+// grid sourced from `pg_stat_user_tables` (RDB) or
+// `runCommand({collStats})` (Mongo).
 
 import { DataGridSkeleton } from "@components/datagrid";
 import { Loader2, RefreshCw } from "lucide-react";

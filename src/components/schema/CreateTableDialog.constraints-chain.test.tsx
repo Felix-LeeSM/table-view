@@ -30,27 +30,13 @@ import {
   setProductionConnection,
 } from "./__tests__/createTableDialogTestHelpers";
 
-// ── Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional ─────────
+// ── Foreign Keys + CHECK + UNIQUE tab functional ──────────────────────
 //
-// Date: 2026-05-07.
+// See the block header in `CreateTableDialog.constraints.test.tsx` for
+// why this block exists: the three constraint families on one tab, the
+// `tauri.addConstraint` chain target, and atomic policy C.
 //
-// Why this block exists:
-//
-// Sprint 228 left the Foreign Keys tab as a stale Sprint 229
-// placeholder. Sprint 229 closes that loop: replace the placeholder with
-// an interactive editor housing **three** constraint families on a
-// single tab — Foreign Keys + CHECK + UNIQUE — sharing the same
-// `tauri.addConstraint` chain target after the Sprint 228 createIndex
-// chain. Atomic policy C — table+COMMENT in one transaction, indexes
-// then constraints sequentially each in its own transaction; failures
-// do NOT roll back earlier-applied work. The failing constraint name
-// surfaces verbatim in the inline preview pane error slot.
-//
-// Path A backend extension landed: `ConstraintDefinition::ForeignKey`
-// gains `on_delete` / `on_update` (`#[serde(default)]`), whitelist
-// `{NO ACTION | RESTRICT | CASCADE | SET NULL | SET DEFAULT}`.
-//
-// Source: Sprint 229 contract AC-229-01..AC-229-12.
+// Source: AC-229-01..AC-229-12.
 
 describe("Sprint 229 — Constraint chain and cache contracts", () => {
   beforeEach(resetCreateTableDialogConstraintState);
@@ -110,9 +96,9 @@ describe("Sprint 229 — Constraint chain and cache contracts", () => {
       addFkRow();
       await addCheckRow();
       await addUniqueRow();
-      // Sprint 241 — sub-tabs hide inactive panels; each family's fields
-      // are only reachable while its sub-tab is active. Re-activate
-      // before manipulating each family's controls.
+      // Sub-tabs hide inactive panels; each family's fields are only
+      // reachable while its sub-tab is active. Re-activate before
+      // manipulating each family's controls.
       await activateConstraintSubTab("Foreign Keys");
       const panel = getForeignKeysPanel();
 
@@ -167,8 +153,8 @@ describe("Sprint 229 — Constraint chain and cache contracts", () => {
         within(getForeignKeysPanel()).getByLabelText("Unique column: user_id"),
       );
 
-      // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
-      // 2026-05-11 — intermediate debounce flushes (FK, FK+CHECK, FK+CHECK+UNIQUE)
+      // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
+      // Intermediate debounce flushes (FK, FK+CHECK, FK+CHECK+UNIQUE)
       // fire during real-timer awaits, so exact call counts are non-deterministic
       // under heavy parallel load (full-suite coverage runs reproduce it).
       // Assert on terminal state instead — every constraint name eventually shows
@@ -307,7 +293,7 @@ describe("Sprint 229 — Constraint chain and cache contracts", () => {
       });
       fireEvent.click(within(panel).getByLabelText("Unique column: user_id"));
 
-      // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+      // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
       // Intermediate debounce flushes are timing-sensitive under full-suite
       // coverage load, so assert the terminal preview state instead of exact
       // preview call counts.
@@ -471,7 +457,7 @@ describe("Sprint 229 — Constraint chain and cache contracts", () => {
       });
       fireEvent.click(within(panel).getByLabelText("Unique column: user_id"));
 
-      // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+      // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
       // Intermediate debounce flushes (FK+CHECK, then FK+CHECK+UNIQUE) fire during real-timer
       // awaits, so exact call count is non-deterministic. Assert on content instead.
       await waitFor(() =>
@@ -605,7 +591,7 @@ describe("Sprint 229 — Constraint chain and cache contracts", () => {
       target: { value: "integer" },
     });
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -642,7 +628,7 @@ describe("Sprint 229 — Constraint chain and cache contracts", () => {
         target: { value: "id > 0" },
       });
 
-      // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+      // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
       await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
       act(() => {

@@ -30,7 +30,7 @@ describe("QueryResultGrid — row cap banner (#1231)", () => {
     const banner = screen.getByTestId("row-cap-banner");
     expect(banner).toBeInTheDocument();
     expect(banner).toHaveAttribute("role", "status");
-    // Cause + fix must both be present (issue requires "원인+해결 병기").
+    // Cause + fix must both be present (the issue requires them side by side).
     // The row count is interpolated from the returned rows (== the cap hit).
     expect(banner.textContent).toMatch(/42/);
     expect(banner.textContent).toMatch(/LIMIT/i);

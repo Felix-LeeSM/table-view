@@ -1,15 +1,13 @@
-// Sprint 241 — inline FK editor surfaced on each `CreateTableDialog`
-// column row (TablePlus parity). The popover lets the user pick a
-// reference schema / table / column + ON DELETE / ON UPDATE actions
-// for *single-column* foreign keys. Multi-column FKs continue to live
-// in the Constraints tab.
-//
-// Date: 2026-05-08.
+// Inline FK editor surfaced on each `CreateTableDialog` column row
+// (TablePlus parity). The popover lets the user pick a reference
+// schema / table / column + ON DELETE / ON UPDATE actions for
+// *single-column* foreign keys. Multi-column FKs continue to live in
+// the Constraints tab.
 //
 // Why this file exists:
-//   - `CreateTableDialog.tsx` is already at 1900+ LOC; inlining a
-//     full popover (combobox × 3 + dropdown × 2) would push it past
-//     the de-facto file ceiling.
+//   - `CreateTableDialog.tsx` is already large; inlining a full
+//     popover (combobox × 3 + dropdown × 2) would push it past the
+//     de-facto file ceiling.
 //   - The popover surface is self-contained: parent passes the
 //     current FK fields + lazy-loaded ref schemas / tables / columns
 //     and one `onChange(updates)` callback. No back-channel to the

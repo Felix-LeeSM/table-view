@@ -6,11 +6,11 @@ import {
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { ConnectionId, TabId } from "@/types/branded";
 
-// sprint-366 (2026-05-16) — Sidebar reads its window's connection identity
-// from `useCurrentWindowConnectionId()` (which delegates to
-// `getCurrentWindowLabel()`). Tests inject the label via this mock so
-// each `setStores({ connections: [...] })` call can pair with
-// `setFakeWindowConnectionId("<id>")` to drive the new derive path.
+// Sidebar reads its window's connection identity from
+// `useCurrentWindowConnectionId()` (which delegates to
+// `getCurrentWindowLabel()`). Tests inject the label via this mock so each
+// `setStores({ connections: [...] })` call can pair with
+// `setFakeWindowConnectionId("<id>")` to drive the derive path.
 vi.mock("@lib/window-label", async () => {
   const actual =
     await vi.importActual<typeof import("@lib/window-label")>(
@@ -54,8 +54,8 @@ import Sidebar from "./Sidebar";
   });
 }
 
-// Mock WorkspaceSidebar (sprint 126 swap-in for SchemaPanel) so we don't
-// have to render the full paradigm-aware tree. The test still asserts on
+// Mock WorkspaceSidebar (the swap-in for SchemaPanel) so we don't have to
+// render the full paradigm-aware tree. The test still asserts on
 // `data-testid="schema-panel"` for stability — the slot's role from
 // Sidebar's perspective is unchanged.
 vi.mock("@components/workspace/WorkspaceSidebar", () => ({
@@ -93,14 +93,13 @@ function setStores(opts: {
   connections?: ConnectionConfig[];
   active?: string[];
   /**
-   * sprint-366 — Synthetic Tauri window label connection id. Pre-sprint-366
-   * the Sidebar read `focusedConnId` from the store; tests seeded that
-   * slot. After Q15 lock the Sidebar reads from
-   * `useCurrentWindowConnectionId()` (window label derive). Tests that
-   * previously relied on the "seed focus to first-connected" effect now
-   * pass an explicit window connection id here. Default `null` (launcher
-   * / jsdom path) so tests that exercise the "no-connection" branch
-   * still pass.
+   * Synthetic Tauri window label connection id. The Sidebar used to read
+   * `focusedConnId` from the store and tests seeded that slot; after the Q15
+   * lock it reads from `useCurrentWindowConnectionId()` (window label
+   * derive). Tests that relied on the "seed focus to first-connected" effect
+   * pass an explicit window connection id here instead. Default `null`
+   * (launcher / jsdom path) so tests that exercise the "no-connection"
+   * branch still pass.
    */
   windowConnId?: string | null;
 }) {
@@ -125,9 +124,9 @@ function setStores(opts: {
   setFakeWindowConnectionId(opts.windowConnId ?? null);
 }
 
-// Sprint 125 — Sidebar is now Workspace-only (schemas mode). Connection
-// management was extracted to HomePage; the SidebarModeToggle and the
-// connections-mode rendering branch were removed.
+// Sidebar is Workspace-only (schemas mode). Connection management was
+// extracted to HomePage; the SidebarModeToggle and the connections-mode
+// rendering branch were removed.
 describe("Sidebar (schemas-only)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -136,8 +135,8 @@ describe("Sidebar (schemas-only)", () => {
   });
 
   afterEach(() => {
-    // sprint-366: ensure each test's window-label mock value doesn't bleed
-    // into the next describe block.
+    // Ensure each test's window-label mock value doesn't bleed into the next
+    // describe block.
     resetFakeWindowConnectionId();
   });
 
@@ -155,10 +154,10 @@ describe("Sidebar (schemas-only)", () => {
   });
 
   it("AC-366-04: Sidebar's selectedId comes from the window label hook (fake provider)", () => {
-    // 사유 (2026-05-16, sprint-366, Phase 4 Q15): contract AC-366-04 —
-    // verify the connId Sidebar passes to its WorkspaceSidebar slot is
-    // sourced from `useCurrentWindowConnectionId()` (label `workspace-c-fake`
-    // → `"c-fake"`) and *not* from `connectionStore.focusedConnId`.
+    // Reason (Q15): contract AC-366-04 — verify the connId Sidebar passes
+    // to its WorkspaceSidebar slot is sourced from
+    // `useCurrentWindowConnectionId()` (label `workspace-c-fake` →
+    // `"c-fake"`) and *not* from `connectionStore.focusedConnId`.
     // The connectionStore.focusedConnId is intentionally seeded to a
     // different value so any regression that resurrects the store read
     // would surface here.
@@ -173,9 +172,8 @@ describe("Sidebar (schemas-only)", () => {
   });
 
   it("shows connection name in the header when a connection is focused", () => {
-    // sprint-366: the focused connection comes from the window label
-    // (workspace-c1) — `windowConnId: "c1"` simulates a workspace
-    // window opened for c1.
+    // The focused connection comes from the window label (workspace-c1) —
+    // `windowConnId: "c1"` simulates a workspace window opened for c1.
     setStores({
       connections: [makeConnection("c1")],
       active: ["c1"],
@@ -194,9 +192,8 @@ describe("Sidebar (schemas-only)", () => {
   });
 
   it("sprint-366: sidebar shows the WINDOW's connection id (label derive), not the active tab's", () => {
-    // 사유 (2026-05-16, sprint-366, Phase 4 Q15): pre-sprint-366 Sidebar
-    // would auto-`setFocusedConn(activeTabConnId)` when a tab from a
-    // different conn became active. Under per-conn windows (sprint-361)
+    // Reason (Q15): the Sidebar used to auto-`setFocusedConn(activeTabConnId)`
+    // when a tab from a different conn became active. Under per-conn windows
     // this is by-construction impossible — a workspace window only ever
     // holds tabs for its own connection. The defensive invariant locked
     // here: even if a stray cross-conn tab seeds the active workspace,
@@ -235,14 +232,12 @@ describe("Sidebar (schemas-only)", () => {
   });
 
   it("sprint-366: sidebar reflects window connection id even after the connection list mutates", () => {
-    // 사유 (2026-05-16, sprint-366): pre-sprint-366 the "heal vanished
-    // focused conn" effect re-pointed focus to the first surviving
-    // connected conn. Under per-conn windows, deleting the window's own
-    // conn means the window itself should close (handled elsewhere);
-    // until that lands, the sidebar still surfaces the window's label-
-    // derived conn id rather than silently switching to another conn,
-    // so the user sees an unambiguous "this window's conn vanished"
-    // state.
+    // Reason: the "heal vanished focused conn" effect used to re-point focus
+    // to the first surviving connected conn. Under per-conn windows, deleting
+    // the window's own conn means the window itself should close (handled
+    // elsewhere); until that lands, the sidebar still surfaces the window's
+    // label-derived conn id rather than silently switching to another conn,
+    // so the user sees an unambiguous "this window's conn vanished" state.
     setStores({
       connections: [makeConnection("c1"), makeConnection("c2")],
       active: ["c1", "c2"],
@@ -264,8 +259,8 @@ describe("Sidebar (schemas-only)", () => {
 
   describe("New Query Tab button", () => {
     it("opens a new query tab when connected", () => {
-      // sprint-366: button enabled requires the window-derived
-      // `focusedConnId` to be present and connected.
+      // Button enabled requires the window-derived `focusedConnId` to be
+      // present and connected.
       setStores({
         connections: [makeConnection("c1")],
         active: ["c1"],
@@ -287,9 +282,8 @@ describe("Sidebar (schemas-only)", () => {
     });
 
     it("is disabled when there is no connected connection", () => {
-      // sprint-366: even with `windowConnId: "c1"`, the connection's
-      // status is "disconnected" so `selectedConnected` is false → button
-      // disabled.
+      // Even with `windowConnId: "c1"`, the connection's status is
+      // "disconnected" so `selectedConnected` is false → button disabled.
       setStores({
         connections: [makeConnection("c1")],
         active: [],
@@ -303,11 +297,11 @@ describe("Sidebar (schemas-only)", () => {
   });
 
   describe("Misc", () => {
-    // 작성 이유 (2026-05-13, Sprint 291): workspace 윈도우에서 Cmd+N 의
-    // 의미가 "새 연결" 에서 "새 쿼리 탭" 으로 바뀌면서 Sidebar 의
-    // `new-connection` listener + 임베디드 ConnectionDialog mount 가
-    // 제거되었다. 본 회귀 가드는 (a) 이벤트가 와도 dialog 가 mount
-    // 되지 않고 (b) 컴포넌트 자체는 정상 렌더링됨을 단언한다.
+    // Reason: Cmd+N in a workspace window now means "new query tab" instead
+    // of "new connection", so the Sidebar's `new-connection` listener and the
+    // embedded ConnectionDialog mount were removed. This regression guard
+    // asserts that (a) the dialog does not mount even when the event fires
+    // and (b) the component itself still renders.
     it("Sprint 291 — new-connection 이벤트는 더 이상 dialog 를 열지 않는다", () => {
       render(<Sidebar />);
       expect(screen.queryByTestId("connection-dialog")).toBeNull();
@@ -319,10 +313,11 @@ describe("Sidebar (schemas-only)", () => {
       expect(screen.queryByTestId("connection-dialog")).toBeNull();
     });
 
-    // Reason: #1738 (2026-07-25) — 테마/언어 컨트롤을 사이드바 상단 단일
-    // 영역(WorkspacePage 헤더 theme 팝오버)으로 이관. 사이드바 하단 footer
-    // 의 theme 팝오버 + LanguageSwitcher 는 제거되어 더 이상 렌더되지 않음을
-    // lock (하단 중복 제거 회귀 가드).
+    // Reason: #1738 — the theme/language controls moved to a single area at
+    // the top of the sidebar (the WorkspacePage header theme popover). Locks
+    // that the theme popover + LanguageSwitcher in the sidebar footer were
+    // removed and no longer render (regression guard for the duplicate at
+    // the bottom).
     it("does NOT render a theme/language control in the sidebar footer (#1738 상단 단일화)", () => {
       render(<Sidebar />);
       expect(

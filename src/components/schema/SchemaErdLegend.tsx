@@ -14,16 +14,16 @@ import { useTranslation } from "react-i18next";
  * The legend is what makes the diagram readable without colour vision: each
  * entry draws the same line pattern and arrow head the canvas draws, so the
  * difference between a real FK and a hand-drawn virtual FK is carried by shape
- * as well as by tint (ADR 0055 "색 단독 인코딩 금지"). Colours are not part of
- * `ERD_RELATIONSHIP_ENCODINGS` at all — `currentColor` here, canvas palette
- * there.
+ * as well as by tint (ADR 0055 — no colour-alone encoding). Colours are not
+ * part of `ERD_RELATIONSHIP_ENCODINGS` at all — `currentColor` here, canvas
+ * palette there.
  *
  * It also hosts the reset affordance for the persisted virtual FKs. The rule is
- * `memory/product/memory.md` 「위치 룰」, whose per-entity row reads "그 entity 의
- * 헤더 우클릭 메뉴" — this is that entity's header, but the control is a plain
- * button, not a right-click menu: the ERD header strip carries no context menu,
- * and stored links the current schema cannot draw are invisible, so the way out
- * of them has to be visible too.
+ * the placement-rule table in `memory/product/memory.md`, whose per-entity row
+ * reads "that entity's header right-click menu" — this is that entity's header,
+ * but the control is a plain button, not a right-click menu: the ERD header
+ * strip carries no context menu, and stored links the current schema cannot
+ * draw are invisible, so the way out of them has to be visible too.
  */
 export interface SchemaErdLegendProps {
   /** Relationship kinds currently on the canvas. */

@@ -4,14 +4,14 @@ import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * `QueryTab` 의 favorites state + handler + toggle event 캡슐화.
+ * Encapsulates the `QueryTab` favorites state, handlers and toggle event.
  *
- * 책임:
- *   - Save 폼 / FavoritesPanel popover 의 열림/닫힘 + 입력 중인 favorite
- *     이름 state (3 useState).
- *   - Save / Load 두 handler.
- *   - `toggle-favorites` window event listener (Cmd+Shift+F) — active
- *     tab 일 때만 panel 토글.
+ * Responsibilities:
+ *   - Open/closed state for the Save form and the FavoritesPanel popover,
+ *     plus the favorite name being typed (3 useState).
+ *   - The Save and Load handlers.
+ *   - `toggle-favorites` window event listener (Cmd+Shift+F) — toggles the
+ *     panel only on the active tab.
  *
  * Invariants:
  * - The Save and Favorites popovers can't both be open. The Toolbar

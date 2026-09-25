@@ -1,6 +1,5 @@
-// Sprint 250 (ADR 0022 Phase 5 follow-up) — onBlur commit hook-layer
-// guards. Maps to AC-250-01 / AC-250-04 / AC-250-05 from
-// Sprint 250 contract. Date 2026-05-09.
+// ADR 0022 — onBlur commit hook-layer guards. Maps to AC-250-01 /
+// AC-250-04 / AC-250-05.
 //
 // Scope (hook layer only):
 // - AC-250-01: saveCurrentEdit applied via the onBlur entry point persists
@@ -132,8 +131,8 @@ describe("useDataGridEdit — Sprint 250 onBlur commit + race guard", () => {
       result.current.saveCurrentEdit();
     });
 
-    // No pending entry, no undo snapshot — the no-op skip rule from
-    // Sprint 249 must still hold for the onBlur path.
+    // No pending entry, no undo snapshot — the no-op skip rule must hold for
+    // the onBlur path too.
     expect(result.current.pendingEdits.size).toBe(0);
     expect(result.current.canUndo).toBe(false);
     expect(result.current.editingCell).toBeNull();

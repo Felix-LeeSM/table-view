@@ -1,9 +1,7 @@
-// Sprint 218 — `execution` axis split from `QueryTab.test.tsx` (P11
-// step 2). Covers Sprint 36 multi-statement execution, the Cancel
-// button live path, multi-statement history recording, non-Error
-// rejection coercion, the format-sql window event, and the Sprint 53
-// uglify-sql window event. Cases are byte-equivalent to the originals —
-// no behaviour change.
+// `execution` axis split from `QueryTab.test.tsx`. Covers multi-statement
+// execution, the Cancel button live path, multi-statement history
+// recording, non-Error rejection coercion, the format-sql window event,
+// and the uglify-sql window event.
 
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
@@ -42,19 +40,12 @@ beforeEach(() => {
   });
 });
 
-// Sprint 132 — the QueryTab raw-query hook calls `verifyActiveDb` after
-// optimistic `setActiveDb`. The wrapper itself is unit-tested in
-// `verifyActiveDb.test.ts`; here we mock it so the test can fix the
-// "backend says X" return value per scenario.
+// See the `verifyActiveDb` mock note in `QueryTab.document.test.tsx`.
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: (...args: unknown[]) => mockVerifyActiveDb(...args),
 }));
 
-// Sprint 139 — QueryTab now routes directly to SqlQueryEditor /
-// MongoQueryEditor based on `tab.paradigm`. Both editors are mocked to a
-// shared DOM testbed (`data-testid="mock-editor"`) so the existing
-// fixtures keep working — the mock records `paradigm` from a synthesised
-// prop so the dialect / mongo / paradigm assertions stay meaningful.
+// See the editor-mock note in `QueryTab.document.test.tsx`.
 vi.mock("./SqlQueryEditor", async () => {
   const React = await import("react");
   const MockSqlQueryEditor = React.forwardRef<
@@ -166,7 +157,7 @@ describe("QueryTab — execution", () => {
     resetQueryTabStores();
   });
 
-  // ── Sprint 36: Multi-Statement Execution ──
+  // ── Multi-Statement Execution ──
 
   it("executes multiple statements sequentially", async () => {
     const secondResult: QueryResult = {
@@ -193,7 +184,7 @@ describe("QueryTab — execution", () => {
     await waitFor(() => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(2);
     });
-    // Sprint 266 — 4th arg is `expectedDatabase` (opt-in db mismatch guard).
+    // 4th arg is `expectedDatabase` (opt-in db mismatch guard).
     expect(mockExecuteQuery).toHaveBeenNthCalledWith(
       1,
       "conn1",
@@ -222,7 +213,7 @@ describe("QueryTab — execution", () => {
   });
 
   it("retains per-statement breakdown on partial multi-statement failure", async () => {
-    // Sprint 100 — partial failure no longer collapses to `status: "error"`.
+    // Partial failure no longer collapses to `status: "error"`.
     // Instead, the run remains `completed` so the Tabs view can show one
     // tab per statement (success rows / failed marker). The store's
     // `statements` array carries per-stmt status + error message + result.
@@ -277,9 +268,10 @@ describe("QueryTab — execution", () => {
     // actually failed — the skipped tail is never executed, so there is no
     // "Syntax error 2".
     //
-    // Sprint 255/254 (2026-05-09) — `BAD` statements 는 analyzer 가 `kind:
-    // "other"` (default severity `info`) 로 분류해 WARN dialog 를 skip 하고
-    // 직접 IPC 를 호출하므로, dialog 우회 없이 store 행동이 검증된다.
+    // The analyzer classifies `BAD` statements as `kind: "other"`
+    // (default severity `info`), so they skip the WARN dialog and call
+    // IPC directly — store behaviour is verified without a dialog
+    // bypass.
     mockExecuteQuery
       .mockRejectedValueOnce(new Error("Syntax error 1"))
       .mockRejectedValueOnce(new Error("Syntax error 2"));
@@ -309,8 +301,8 @@ describe("QueryTab — execution", () => {
   });
 
   it("populates statements[] with all-success on multi-statement happy path", async () => {
-    // Sprint 100 — every statement succeeds → statements[] has N
-    // success entries and `result` mirrors the last successful result.
+    // Every statement succeeds → statements[] has N success entries and
+    // `result` mirrors the last successful result.
     const secondResult: QueryResult = {
       columns: [{ name: "n", dataType: "integer", category: "unknown" }],
       rows: [[42]],
@@ -632,7 +624,7 @@ describe("QueryTab — execution", () => {
   });
 
   it("handles non-Error rejection in multi-statement execution", async () => {
-    // Sprint 100 — partial-failure now stays `completed` with statements[].
+    // Partial-failure stays `completed` with statements[].
     // The non-Error rejection ("raw error" string) is coerced via
     // String(err) and recorded on the failing statement entry, not on the
     // collapsed top-level error message.
@@ -670,7 +662,7 @@ describe("QueryTab — execution", () => {
     });
   });
 
-  // -- Sprint 53: Uglify SQL event --
+  // -- Uglify SQL event --
 
   it("uglifies SQL on uglify-sql event when tab is active", () => {
     const tab = makeQueryTab({ sql: "SELECT  id\n  FROM  users" });

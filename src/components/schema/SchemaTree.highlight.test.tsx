@@ -1,11 +1,10 @@
-// Sprint 216 — `highlight` axis split from `SchemaTree.test.tsx`. Covers
-// row-count rendering (AC-09 tilde estimate, null `?`, zero `~0`),
-// the loadTables-rejection spinner cleanup path, click selection
+// `highlight` axis split from `SchemaTree.test.tsx`. Covers row-count
+// rendering (AC-09 tilde estimate, null `?`, zero `~0`), the
+// loadTables-rejection spinner cleanup path, click selection
 // (AC-SEL-01..03), active-tab highlight (AC-ACTIVE-01..03), the
 // schema-collapsed Folder icon (AC-VIS-02), indentation classes
 // (AC-VIS-03), schema separators (AC-SEP-01), category icons
-// (AC-ICON-02..04), and the views/functions count badge mix. Cases are
-// byte-equivalent to the originals.
+// (AC-ICON-02..04), and the views/functions count badge mix.
 
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
@@ -45,8 +44,8 @@ describe("SchemaTree — highlight", () => {
   // AC-09: row_count display
   // -----------------------------------------------------------------------
   it("displays row_count with the sprint-143 tilde estimate prefix", async () => {
-    // Sprint 143 (AC-148-1) — visible cell now reads `~12,345` so the
-    // user reads the number as an estimate rather than an exact count.
+    // AC-148-1 — the visible cell reads `~12,345` so the user reads the
+    // number as an estimate rather than an exact count.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {
@@ -64,9 +63,9 @@ describe("SchemaTree — highlight", () => {
   });
 
   it("renders `?` for the row_count cell when the value is null (sprint 143)", async () => {
-    // Sprint 143 (AC-148-2 edge case) — `null` row_count renders the
-    // literal `?` instead of being suppressed, so the user reads
-    // "value unknown" rather than mistaking a missing cell for `0`.
+    // AC-148-2 edge case — `null` row_count renders the literal `?`
+    // instead of being suppressed, so the user reads "value unknown"
+    // rather than mistaking a missing cell for `0`.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {
@@ -88,9 +87,8 @@ describe("SchemaTree — highlight", () => {
   // AC-04: row_count edge case — zero
   // -----------------------------------------------------------------------
   it("displays '~0' for row_count of 0 (sprint 143 — still an estimate)", async () => {
-    // Sprint 143 (AC-148-1) — `0` is a valid estimate (empty table that
-    // *was* analyzed) and gets the same `~` prefix as any non-null
-    // estimate. Pre-S143 the cell read a bare "0".
+    // AC-148-1 — `0` is a valid estimate (empty table that *was*
+    // analyzed) and gets the same `~` prefix as any non-null estimate.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {
@@ -122,7 +120,7 @@ describe("SchemaTree — highlight", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144: auto-expand on mount fires loadTables which rejects.
+    // Auto-expand on mount fires loadTables which rejects.
     // Wait for the rejected promise to settle and loading state to clear.
     const schemaButton = screen.getByLabelText("public schema");
     await waitFor(() => {
@@ -147,8 +145,8 @@ describe("SchemaTree — highlight", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144: schema is auto-expanded on mount, but clicking still
-    // selects it (and toggles the expand state — that's a separate axis).
+    // Schema is auto-expanded on mount, but clicking still selects it (and
+    // toggles the expand state — that's a separate axis).
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
       fireEvent.click(schemaButton);
@@ -173,9 +171,10 @@ describe("SchemaTree — highlight", () => {
       fireEvent.click(viewsCategory);
     });
 
-    // Sprint 226 polish (2026-05-06): selected highlight 가 button 자체가 아닌
-    // wrapper div 로 이동 (Tables 옆 '+' 버튼 + itemCount badge 가 button 밖
-    // sibling 으로 분리되면서 row 전체 hover/selected 색은 wrapper 가 담당).
+    // The selected highlight lives on the wrapper div, not on the button
+    // itself: the '+' button next to Tables and the itemCount badge are
+    // split out as siblings outside the button, so the wrapper owns the
+    // hover/selected colour for the whole row.
     expect(viewsCategory.parentElement).toHaveClass("bg-muted");
   });
 
@@ -192,10 +191,10 @@ describe("SchemaTree — highlight", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144: auto-expanded on mount. Click schema once to put it in
-    // the selected state — but that also collapses the tree. Click again
-    // to re-expand so the table row remains in the DOM. Schema is still
-    // the selected node after the second click.
+    // Auto-expanded on mount. Click schema once to put it in the selected
+    // state — but that also collapses the tree. Click again to re-expand
+    // so the table row remains in the DOM. Schema is still the selected
+    // node after the second click.
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
       fireEvent.click(schemaButton);
@@ -226,8 +225,8 @@ describe("SchemaTree — highlight", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144: schema is auto-expanded on mount, so click once to
-    // collapse and exercise the collapsed Folder-icon rendering.
+    // Schema is auto-expanded on mount, so click once to collapse and
+    // exercise the collapsed Folder-icon rendering.
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
       fireEvent.click(schemaButton);
@@ -239,7 +238,7 @@ describe("SchemaTree — highlight", () => {
   });
 
   // =========================================================================
-  // NEW: Active tab highlight (Sprint 54)
+  // Active tab highlight
   // =========================================================================
 
   // AC-ACTIVE-01: Table node matching active tab gets highlight class
@@ -473,7 +472,7 @@ describe("SchemaTree — highlight", () => {
   });
 
   // =========================================================================
-  // NEW: Icon rendering per hierarchy level (Sprint 54)
+  // Icon rendering per hierarchy level
   // =========================================================================
 
   it("shows count badges for views and functions", async () => {
@@ -516,8 +515,8 @@ describe("SchemaTree — highlight", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 226 polish (2026-05-06): itemCount badge 가 button 밖
-    // sibling div 로 이동 — row 전체 (wrapper) textContent 검사.
+    // The itemCount badge sits in a sibling div outside the button, so the
+    // check runs on the whole row's (wrapper) textContent.
     const tablesRow = screen.getByLabelText("Tables in public").parentElement!;
     const viewsRow = screen.getByLabelText("Views in public").parentElement!;
     const functionsRow = screen.getByLabelText("Functions in public")

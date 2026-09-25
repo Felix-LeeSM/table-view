@@ -1,7 +1,8 @@
-// Sprint 260 (2026-05-11) — AC-260-02: DocumentDataGrid drag-resize 확대.
-// RDB DataGridTable 와 같은 harness 패턴 (mousedown handle → mousemove
-// document → --cols 첫 token 만 증가, 인접 column 불변). Document grid 의
-// resize 결과는 `document:<db>:<coll>` localStorage 에 persist.
+// AC-260-02: widens DocumentDataGrid drag-resize. Same harness pattern as
+// the RDB DataGridTable (mousedown handle → mousemove document → only the
+// first `--cols` token grows, adjacent column unchanged). The Document
+// grid's resize result persists through the `set_datagrid_prefs` IPC, not
+// localStorage.
 
 import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -137,10 +138,10 @@ describe("DocumentDataGrid — column resize (Sprint 260 AC-260-02)", () => {
     expect(after[1]!).toBe(before[1]!);
   });
 
-  // Sprint 369 (Phase 4) — `column-widths:document:<db>:<coll>` LS 영속 폐기.
-  // drag end 시 `set_datagrid_prefs` IPC 가 widths-only patch 를 보내며 LS 는
-  // 0회 read/write. IPC body 의 자세한 contract (PK / patch shape) 는
-  // `src/hooks/useColumnWidths.test.ts` 가 lock.
+  // `column-widths:document:<db>:<coll>` LS persistence is dropped. On drag
+  // end the `set_datagrid_prefs` IPC sends a widths-only patch and LS sees
+  // zero reads/writes. The detailed IPC body contract (PK / patch shape) is
+  // locked by `src/hooks/useColumnWidths.test.ts`.
   it("drag end 시 LS 의 column-widths:* key 를 만들지 않는다 (Sprint 369)", async () => {
     const getSpy = vi.spyOn(window.localStorage, "getItem");
     const setSpy = vi.spyOn(window.localStorage, "setItem");

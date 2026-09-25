@@ -120,7 +120,7 @@ describe("ContextMenu", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 48: Keyboard navigation and disabled support
+  // Keyboard navigation and disabled support
   // -----------------------------------------------------------------------
   it("focuses the first item when opened", async () => {
     render(<ContextMenu x={100} y={100} items={items} onClose={onClose} />);

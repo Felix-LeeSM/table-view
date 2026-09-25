@@ -1,5 +1,5 @@
-// Sprint 312 (Phase 28 Slice A6, 2026-05-14) — RTL coverage of the four
-// `WriteSummaryPanel` variants (insert / update / delete / bulkWrite).
+// RTL coverage of the four `WriteSummaryPanel` variants (insert / update /
+// delete / bulkWrite).
 //
 // Test axes:
 //   1. insert     — headline + chevron-expandable id list

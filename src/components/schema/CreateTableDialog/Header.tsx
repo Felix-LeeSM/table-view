@@ -8,16 +8,13 @@ import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 /**
- * `CreateTableDialogHeader` — extracted 2026-05-07 (Sprint 227 redesign)
- * and slimmed in Sprint 234 (Phase 27 sprint 9).
+ * `CreateTableDialogHeader` — a thin title bar: title +
+ * `DialogDescription sr-only` + close `<X>` button only.
  *
- * Sprint 234 change:
- *   - The schema picker block (label + `<Select>`) was REMOVED from the
- *     header per user feedback ("schema picker 위치는 header 말고 body
- *     안 (table name 위)"). The picker now lives in
- *     `CreateTableDialog.tsx` body, ABOVE the Table name input. The
- *     header collapses back to a thin title bar — title +
- *     `DialogDescription sr-only` + close `<X>` button only.
+ * The schema picker block (label + `<Select>`) is NOT in the header, per
+ * user feedback ("put the schema picker in the body, above the table
+ * name, not in the header"). It lives in the `CreateTableDialog.tsx`
+ * body, ABOVE the Table name input.
  *
  * The `selectedSchema` value is still used by the screen-reader-only
  * `DialogDescription` so the modal's accessible description tells the

@@ -1,5 +1,5 @@
 /**
- * Sprint-88 AC-02: self-verification for `expectNodeStable`.
+ * AC-02: self-verification for `expectNodeStable`.
  *
  * Covers the canonical scenarios:
  * - Happy path: same DOM node identity → passes silently.

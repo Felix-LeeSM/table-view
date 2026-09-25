@@ -108,9 +108,10 @@ afterEach(() => {
   window.matchMedia = originalMatchMedia;
 });
 
-// Reason: 이슈 #2152 — reduced-motion 이면 ERD 캔버스 전환이 0ms 여야 한다.
-// 두 방향을 같은 목록으로 돈다: 켜져 있으면 0ms, 꺼져 있으면 기존 200ms 그대로
-// (한 방향만 재면 "언제나 0ms" 인 구현도 통과한다).
+// Reason: issue #2152 — ERD canvas transitions must be 0ms under
+// reduced-motion. Both directions run off the same list: 0ms when it is on,
+// the existing 200ms when it is off (measuring one direction alone would
+// also pass an implementation that is "always 0ms").
 describe.each([
   { motion: "reduce", reduced: true, expected: 0 },
   { motion: "no-preference", reduced: false, expected: ANIMATED_MS },

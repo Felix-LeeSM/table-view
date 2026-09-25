@@ -1,9 +1,9 @@
-// Sprint 321 (2026-05-15) — Slice F.1: nested expand popover component.
+// Nested expand popover component.
 //
-// 작성 이유: sentinel cell 의 1-depth inspect popover 가 (a) trigger
-// 클릭 시 마운트 되고 (b) object / array 각 entry 가 label + value +
-// type subtitle 로 렌더되며 (c) trigger 클릭의 row-selection
-// propagation 이 stop 되는지를 회귀 가드.
+// Reason: regression guard for the sentinel cell's 1-depth inspect popover
+// — (a) it mounts on trigger click, (b) each object / array entry renders
+// as label + value + type subtitle, (c) the trigger click's row-selection
+// propagation is stopped.
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -70,7 +70,7 @@ describe("NestedExpandPopover (Sprint 321 F.1)", () => {
     expect(onRowClick).not.toHaveBeenCalled();
   });
 
-  // Sprint 322 — Slice F.2: edit flow.
+  // Edit flow.
   it("shows a Pencil button on scalar entries only when onCommitEdit is provided", () => {
     const onCommitEdit = vi.fn();
     render(
@@ -150,8 +150,8 @@ describe("NestedExpandPopover (Sprint 321 F.1)", () => {
     expect(pending).toHaveTextContent("admin");
   });
 
-  // Sprint 324 (2026-05-15) — Slice G.2: BSON wrapper entry 의 Pencil
-  // 클릭은 BsonTypeEditor (type-aware input) 마운트.
+  // A Pencil click on a BSON wrapper entry mounts the BsonTypeEditor
+  // (type-aware input).
   it("Pencil on a $oid entry mounts the BsonTypeEditor (24-hex hint)", () => {
     render(
       <NestedExpandPopover

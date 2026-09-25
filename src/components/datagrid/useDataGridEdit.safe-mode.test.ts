@@ -1,14 +1,12 @@
-// AC-185-04 — useDataGridEdit Safe Mode gate. Originally 4 cases per
-// Sprint 185 contract.
-// AC-186-04 — Sprint 186 adds warn-tier handoff (pendingConfirm +
-// confirmDangerous + cancelDangerous).
-// Sprint 244 (2026-05-08) tightened the policy to "production+strict|off
-// = read-only" — that tightening is REVERTED in Sprint 245 (ADR 0022
-// Phase 1). `[AC-244-10]` (block on prod+strict + safe DML) was
+// AC-185-04 — useDataGridEdit Safe Mode gate.
+// AC-186-04 — warn-tier handoff (pendingConfirm + confirmDangerous +
+// cancelDangerous).
+// The earlier "production+strict|off = read-only" policy is REVERTED
+// (ADR 0022 Phase 1). `[AC-244-10]` (block on prod+strict + safe DML) was
 // re-inverted back to a pass-through assertion below — same statement
 // (DELETE WHERE pk), opposite expectation, fresh AC id (AC-245-C1).
 //
-// Current policy (Sprint 245 — ADR 0022 Phase 1, destructive-only):
+// Current policy (ADR 0022 Phase 1, destructive-only):
 //   - production + any mode: SELECT and safe writes (INSERT, UPDATE
 //     WHERE, DELETE WHERE, CREATE, ALTER additive) flow through;
 //     destructive (DROP / TRUNCATE / WHERE-less DELETE-UPDATE / etc.)
@@ -17,7 +15,6 @@
 //   - non-production + strict: destructive opens the dialog (M.1 new
 //     flow); safe writes / SELECT pass.
 //   - non-production + warn / off: bypass.
-// date 2026-05-01 (initial), 2026-05-08 (Sprint 244 → Sprint 245).
 
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { act, renderHook } from "@testing-library/react";
@@ -117,10 +114,10 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
   });
 
   it("[AC-185-04a] production + strict + WHERE-less DELETE → confirm dialog, executeQueryBatch not called", async () => {
-    // Sprint 245 (ADR 0022 Phase 1) — was "block" under Sprint 244's
-    // read-only policy. Production destructive now opens the confirm
-    // dialog regardless of mode. Reason copy stays bare for strict /
-    // warn (rendered by the Yes/No confirm dialog — Sprint 246, Phase 2).
+    // ADR 0022 Phase 1 — was "block" under the earlier read-only policy.
+    // Production destructive now opens the confirm dialog regardless of
+    // mode. Reason copy stays bare for strict / warn (rendered by the
+    // Yes/No confirm dialog).
     const { result } = renderHookFor("production", "strict");
 
     act(() => {
@@ -140,10 +137,10 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
   });
 
   it("[AC-245-C1] production + strict + safe DML (DELETE WHERE pk) → executeQueryBatch called once (Sprint 244 block reverted)", async () => {
-    // Sprint 245 — was [AC-244-10] "block". The destructive-only policy
-    // lets safe writes flow through on production regardless of mode.
-    // Cmd+Z undoes uncommitted grid edits only; committed writes are not
-    // recoverable (Phase 5 compensating-commit undo pending, #1126).
+    // Was [AC-244-10] "block". The destructive-only policy lets safe
+    // writes flow through on production regardless of mode. Cmd+Z after a
+    // commit re-stages the pre-commit values as a new pending edit; it
+    // does not roll the write back on the server (#1126).
     const { result } = renderHookFor("production", "strict");
 
     act(() => {
@@ -161,11 +158,11 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
   });
 
   it("[AC-185-04c] non-production + strict + WHERE-less DELETE → confirm dialog (M.1 new flow)", async () => {
-    // Sprint 245 — was "passes through" (non-prod bypass). Strict on
-    // non-production now also opens the destructive dialog (M.1 — for
-    // shared-staging / learning environments). Distinguishing reason
-    // copy ("Safe Mode strict — destructive statement in non-
-    // production") differentiates this from the bare prod+strict copy.
+    // Was "passes through" (non-prod bypass). Strict on non-production
+    // now also opens the destructive dialog (M.1 — for shared-staging /
+    // learning environments). Distinguishing reason copy ("Safe Mode
+    // strict — destructive statement in non-production") differentiates
+    // this from the bare prod+strict copy.
     const { result } = renderHookFor("development", "strict");
 
     act(() => {
@@ -184,9 +181,9 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
   });
 
   it("[AC-185-04c-2] non-production + warn + WHERE-less DELETE → passes through (warn unguarded outside prod)", async () => {
-    // Sprint 245 — paired with the new strict-mode flow above so the
-    // matrix coverage stays complete: warn / off on non-prod do NOT
-    // open the dialog even on destructive statements.
+    // Paired with the strict-mode flow above so the matrix coverage stays
+    // complete: warn / off on non-prod do NOT open the dialog even on
+    // destructive statements.
     const { result } = renderHookFor("development", "warn");
 
     act(() => {
@@ -202,12 +199,11 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
   });
 
   it("[AC-245-L6] production + off + WHERE-less DELETE → confirm dialog with prod-auto copy", async () => {
-    // Sprint 245 — was [AC-190-01-3] "block (prod-auto)". The
-    // destructive-only policy opens the confirm dialog instead of
-    // blocking; prod-auto reason copy ("production environment forces
-    // Safe Mode — change connection environment tag to override") is
-    // preserved so downstream UI guidance still differs from the
-    // toolbar-override copy.
+    // Was [AC-190-01-3] "block (prod-auto)". The destructive-only policy
+    // opens the confirm dialog instead of blocking; prod-auto reason copy
+    // ("production environment forces Safe Mode — change connection
+    // environment tag to override") is preserved so downstream UI guidance
+    // still differs from the toolbar-override copy.
     const { result } = renderHookFor("production", "off");
 
     act(() => {
@@ -226,9 +222,8 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
   });
 
   it("[AC-186-04a] production + warn + WHERE-less DELETE → pendingConfirm set, executeQueryBatch not called", async () => {
-    // Sprint 245 — preserves Sprint 244 warn-tier dialog text exactly
-    // (bare analyzer reason). The Yes/No confirm dialog (Sprint 246,
-    // Phase 2) renders this reason verbatim.
+    // Preserves the earlier warn-tier dialog text exactly (bare analyzer
+    // reason). The Yes/No confirm dialog renders this reason verbatim.
     const { result } = renderHookFor("production", "warn");
 
     act(() => {

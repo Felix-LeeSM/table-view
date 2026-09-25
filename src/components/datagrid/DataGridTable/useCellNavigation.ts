@@ -3,21 +3,21 @@ import type { TableData } from "@/types/schema";
 import { cellToEditValue, editKey } from "../dataGridEditFsm";
 
 /**
- * `DataGridTable` 의 inline-edit cursor 이동 hook.
+ * `DataGridTable`'s inline-edit cursor movement hook.
  *
- * 책임: Tab / Shift-Tab / Enter / Shift-Enter 로 다음 셀 / 이전 셀 /
- * 다음 행 / 이전 행 으로 active editor 를 옮기는 한 가지 동작. 행 끝에
- * 닿으면 다음 행 첫 컬럼으로 wrap, 그리드 끝에 닿으면 현재 편집을
- * commit 하고 멈춤. 시각 (visual) 순서는 `order` 가 결정 — 사용자가
- * 보는 순서대로 next/prev 가 해석됨.
+ * Responsibility: one behaviour — Tab / Shift-Tab / Enter / Shift-Enter move
+ * the active editor to the next cell / previous cell / next row / previous
+ * row. At the end of a row it wraps to the first column of the next row; at
+ * the end of the grid it commits the current edit and stops. `order`
+ * decides the visual sequence, so next/prev follow the order the user sees.
  *
  * Invariants:
- * - `onStartEdit(row, col, value)` 의 `value` 는 pending edit 이 있으면
- *   그 값, 없으면 `cellToEditValue(cell)`. 본 hook 이 값 결정 책임을
- *   짊어짐 — 호출자가 미리 `onSaveCurrentEdit` 을 부를 필요 없음
- *   (`onStartEdit` 자체가 in-flight edit 을 commit 하고 다음 셀 연다).
- * - 그리드 boundary 를 넘으면 `onSaveCurrentEdit` 만 부르고 종료 — (0,0)
- *   으로 wrap 안 함.
+ * - `value` in `onStartEdit(row, col, value)` is the pending edit when there
+ *   is one, otherwise `cellToEditValue(cell)`. This hook owns that decision
+ *   — the caller need not call `onSaveCurrentEdit` first (`onStartEdit`
+ *   itself commits the in-flight edit and opens the next cell).
+ * - Crossing the grid boundary only calls `onSaveCurrentEdit` and stops —
+ *   it does not wrap back to (0,0).
  */
 
 export type CellNavigationDirection =

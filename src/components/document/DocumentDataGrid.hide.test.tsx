@@ -1,9 +1,10 @@
-// Sprint 317 (2026-05-15) — Slice D.1: Mongo DataGrid hide column.
+// Mongo DataGrid hide column.
 //
-// 작성 이유: `useHiddenColumns` + `HeaderRow.onHideColumn` 의 wire-up
-// 이 grid 차원에서 (a) hidden column 이 header/row 에서 모두 사라지고
-// (b) badge + Show all 이 노출/복원하며 (c) localStorage key
-// `hidden-columns:document:<db>:<coll>` 에 persist 되는 회귀를 lock.
+// Reason: locks the `useHiddenColumns` + `HeaderRow.onHideColumn` wire-up
+// at grid level — (a) a hidden column disappears from both header and
+// rows, (b) the badge + Show all expose and restore it, and (c) nothing is
+// read from or written to the `hidden-columns:document:<db>:<coll>`
+// localStorage key.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -201,11 +202,11 @@ describe("DocumentDataGrid — hide column (Sprint 317 D.1)", () => {
     ).toBeNull();
   });
 
-  // Sprint 369 — mount 시 hydration 은 `get_datagrid_prefs` IPC 가 담당.
-  // 본 test 는 backend 가 없는 jsdom 환경 (invoke mock 미설치) 에서는 IPC
-  // 응답이 없어 항상 empty 로 hydrate. 자세한 IPC contract 는
-  // `src/hooks/useHiddenColumns.test.ts` 가 lock — 여기서는 legacy LS 의
-  // 부재만 invariant 로 확인한다.
+  // Hydration on mount is handled by the `get_datagrid_prefs` IPC. In this
+  // test's jsdom environment there is no backend (no invoke mock), so no
+  // IPC response arrives and hydration is always empty. The detailed IPC
+  // contract is locked by `src/hooks/useHiddenColumns.test.ts` — here only
+  // the absence of the legacy LS entry is checked as an invariant.
   it("Sprint 369: legacy hidden-columns:* LS 값 무시 (LS 영속 폐기)", async () => {
     window.localStorage.setItem(
       "hidden-columns:document:table_view_test:users",
@@ -215,7 +216,7 @@ describe("DocumentDataGrid — hide column (Sprint 317 D.1)", () => {
     renderGrid();
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    // email 은 더 이상 LS 에서 hydrate 되지 않으므로 header 가 노출되어야 함.
+    // email is no longer hydrated from LS, so its header must be visible.
     expect(queryHeader("email")).not.toBeNull();
     expect(screen.queryByLabelText("Hidden columns badge")).toBeNull();
   });

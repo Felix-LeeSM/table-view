@@ -30,17 +30,17 @@ export interface UseDocumentGridDataParams {
   activeFilter: Record<string, unknown>;
   activeFilterCount: number;
   /**
-   * Sprint 315 — multi-column sort. Empty array → no sort field on
-   * the find body (Mongo default = natural order). The hook converts
-   * `SortInfo` (`column` + `ASC|DESC`) into the Mongo wire shape
+   * Multi-column sort. Empty array → no sort field on the find body
+   * (Mongo default = natural order). The hook converts `SortInfo`
+   * (`column` + `ASC|DESC`) into the Mongo wire shape
    * (`{ field: 1 | -1 }`).
    */
   sorts?: readonly SortInfo[];
   /**
-   * Sprint 325 — Slice H: server-side field projection. `undefined` or
-   * empty object → backend returns all top-level fields. Mixed include /
-   * exclude is invalid in Mongo and the backend will reject it; the
-   * dialog only emits canonical shapes.
+   * Server-side field projection. `undefined` or an empty object →
+   * backend returns all top-level fields. Mixed include / exclude is
+   * invalid in Mongo and the backend will reject it; the dialog only
+   * emits canonical shapes.
    */
   projection?: Record<string, 0 | 1>;
 }
@@ -93,7 +93,7 @@ export function useDocumentGridData({
     async ({ queryId, isStale, setError }: GridDataLoaderRunContext) => {
       // The backend `find_documents` command registers the cancel token under
       // `queryId` and stamps the running op with `comment == queryId`
-      // (Sprint 180 AC-180-04), which the native `killOp` step keys off.
+      // (AC-180-04), which the native `killOp` step keys off.
       try {
         await runFind(
           connectionId,

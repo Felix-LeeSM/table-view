@@ -1,9 +1,7 @@
-// Sprint 222 — `filters-pagination` axis split from `DataGrid.test.tsx`
-// (P11 step 5, last). Covers filter-bar toggle (button + Cmd+F) +
-// pagination (next-page / page-size / first-last / jump-to-page —
-// Sprint 26) + props-change page reset + props-change column-width
-// reset. Cases are byte-equivalent to the originals — no behaviour
-// change.
+// `filters-pagination` axis of the DataGrid tests. Covers filter-bar
+// toggle (button + Cmd+F) + pagination (next-page / page-size /
+// first-last / jump-to-page) + props-change page reset + props-change
+// column-width reset.
 
 import { act, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -51,8 +49,8 @@ beforeEach(() => {
   });
 });
 
-// Sprint 76 — a minimal reactive mock that mirrors zustand's hook + getState
-// shape. The component subscribes through the selector; `updateTabSorts`
+// A minimal reactive mock that mirrors zustand's hook + getState shape.
+// The component subscribes through the selector; `updateTabSorts`
 // mutates the tab entry and bumps `version` so every selector re-runs on
 // the next render. `forceRerender` via `useTabStoreBump` keeps React in
 // sync without dragging the real zustand library into the mock.
@@ -179,8 +177,8 @@ describe("DataGrid", () => {
     // Should have been called with page=2
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    // Sprint 354 (L2 fix) — see DataGrid.lifecycle.test for the
-    // index-shift rationale (db moved to last positional slot).
+    // See DataGrid.lifecycle.test for the index-shift rationale (db
+    // moved to last positional slot).
     expect(lastCall[3]).toBe(2);
   });
 
@@ -229,7 +227,7 @@ describe("DataGrid", () => {
     expect(lastCall[1]).toBe("orders");
   });
 
-  // ── Sprint 26: Pagination Enhancement ──
+  // ── Pagination Enhancement ──
 
   // 29. Page size selector renders
   it("renders page size selector", async () => {
@@ -238,8 +236,8 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("250 rows");
 
-    // Sprint-112: Radix Select trigger advertises the current value via
-    // its accessible text, not via a `.value` property.
+    // The Radix Select trigger advertises the current value via its
+    // accessible text, not via a `.value` property.
     const trigger = screen.getByLabelText("Page size");
     expect(trigger).toBeInTheDocument();
     expect(trigger).toHaveTextContent("300");
@@ -253,8 +251,8 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("500 rows");
 
-    // Sprint-112: Radix Select migration — open the trigger and pick
-    // the desired page size option.
+    // Radix Select: open the trigger and pick the desired page size
+    // option.
     const trigger = screen.getByLabelText("Page size");
     await user.click(trigger);
     await user.click(screen.getByRole("option", { name: "300" }));
@@ -317,8 +315,8 @@ describe("DataGrid", () => {
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
     // totalPages = ceil(500/300) = 2
-    // Sprint 354 (L2 fix) — see DataGrid.lifecycle.test for the
-    // index-shift rationale (db moved to last positional slot).
+    // See DataGrid.lifecycle.test for the index-shift rationale (db
+    // moved to last positional slot).
     expect(lastCall[3]).toBe(2);
   });
 

@@ -23,7 +23,7 @@ import {
 } from "./SchemaTree.perfFixtures";
 
 /**
- * Sprint-115 (#PERF-2, #TREE-4) — virtualization regression tests.
+ * Virtualization regression tests (#PERF-2, #TREE-4).
  *
  * The SchemaTree flattens its expanded subtree into a "visible rows" list and
  * hands rendering off to `@tanstack/react-virtual` once that list grows past
@@ -31,9 +31,9 @@ import {
  * `offsetHeight` and clamps `getBoundingClientRect` to a zero rect, which
  * makes the virtualizer think the scroll container has no viewport and
  * render zero rows. Patching `offsetWidth` / `offsetHeight` /
- * `getBoundingClientRect` on `HTMLElement.prototype` (the same trick
- * sprint-114 uses for the DataGrid virtualization tests) lifts the viewport
- * to a sensible size so `getVirtualItems()` returns a stable window.
+ * `getBoundingClientRect` on `HTMLElement.prototype` (the same trick the
+ * DataGrid virtualization tests use) lifts the viewport to a sensible size so
+ * `getVirtualItems()` returns a stable window.
  */
 
 const VIEWPORT_HEIGHT = 600;
@@ -45,9 +45,9 @@ const mockLoadViews = vi.fn().mockResolvedValue(undefined);
 const mockLoadFunctions = vi.fn().mockResolvedValue(undefined);
 const mockPrefetchSchemaColumns = vi.fn().mockResolvedValue(undefined);
 
-// Sprint 263 — translate flat-key seeds into the new `(connId, db)`-nested
-// cache shape under `db1` and auto-seed activeStatuses for any conn id
-// referenced in the schemas overlay so SchemaTree's workspace key resolves.
+// Translate flat-key seeds into the new `(connId, db)`-nested cache shape
+// under `db1` and auto-seed activeStatuses for any conn id referenced in the
+// schemas overlay so SchemaTree's workspace key resolves.
 const DEFAULT_DB = "db1";
 function translateFlatSeeds(
   overrides: Record<string, unknown>,
@@ -285,8 +285,8 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144 (AC-145-1): schemas auto-expand on mount, so all 1000 table
-    // rows are already in the visible-rows list — no explicit click needed.
+    // AC-145-1: schemas auto-expand on mount, so all 1000 table rows are
+    // already in the visible-rows list — no explicit click needed.
 
     // After expansion the visible-rows list is roughly:
     //   schema (1) + 4 categories + search input (1) + 1000 table items
@@ -342,8 +342,8 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144 (AC-145-1): schema auto-expands on mount, so virtualized
-    // table rows must already be in the DOM without an explicit click.
+    // AC-145-1: schema auto-expands on mount, so virtualized table rows must
+    // already be in the DOM without an explicit click.
     expect(
       screen.getAllByLabelText(/^table_\d+ table$/).length,
     ).toBeGreaterThan(0);
@@ -375,9 +375,9 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144 (AC-145-1): schema auto-expands on mount; the Tables
-    // category is auto-expanded too, so item rows should already be
-    // present without any clicks.
+    // AC-145-1: schema auto-expands on mount; the Tables category is
+    // auto-expanded too, so item rows should already be present without any
+    // clicks.
     expect(
       screen.getAllByLabelText(/^table_\d+ table$/).length,
     ).toBeGreaterThan(0);
@@ -397,7 +397,7 @@ describe("SchemaTree virtualization (sprint-115)", () => {
   });
 
   // ---------------------------------------------------------------------
-  // AC-03 — F2 rename still works under virtualization (sprint-107 regression)
+  // AC-03 — F2 rename still works under virtualization (regression)
   // ---------------------------------------------------------------------
   it("AC-03 — F2 on a virtualized table row opens the rename dialog with the input focused", async () => {
     setSchemaStoreState({
@@ -409,13 +409,13 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144 (AC-145-1): schema auto-expands on mount, so virtualized
-    // table rows are already in the DOM.
+    // AC-145-1: schema auto-expands on mount, so virtualized table rows are
+    // already in the DOM.
 
     // Pick the first virtualized table row that's actually in the DOM —
     // we don't care which one, only that F2 on a virtualized item still
     // opens the rename Dialog with the row's name selected, identical to
-    // the non-virtualized path (sprint-107).
+    // the non-virtualized path.
     const tableButtons = screen.getAllByLabelText(/^table_\d+ table$/);
     expect(tableButtons.length).toBeGreaterThan(0);
     const firstButton = tableButtons[0]!;
@@ -451,8 +451,8 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144 (AC-145-1): schema auto-expands on mount; virtualized
-    // table rows are immediately available.
+    // AC-145-1: schema auto-expands on mount; virtualized table rows are
+    // immediately available.
     const firstButton = screen.getAllByLabelText(/^table_\d+ table$/)[0]!;
     const expectedName = firstButton
       .getAttribute("aria-label")!
@@ -486,7 +486,7 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144 (AC-145-1): schema auto-expands on mount.
+    // AC-145-1: schema auto-expands on mount.
 
     const tableButtons = screen.getAllByLabelText(/^table_\d+ table$/);
     expect(tableButtons).toHaveLength(50);
@@ -505,7 +505,7 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144 (AC-145-1): schema auto-expands on mount.
+    // AC-145-1: schema auto-expands on mount.
     const searchInput = screen.getByLabelText("Filter tables in public");
     await act(async () => {
       fireEvent.change(searchInput, { target: { value: "table_0001" } });

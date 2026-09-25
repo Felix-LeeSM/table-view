@@ -1,7 +1,7 @@
-// Sprint 341 (2026-05-15) — DocumentTreePanel V1.
+// DocumentTreePanel.
 // Locks the public contract NestedExpandPopover used to satisfy so the
 // grid-level commit flow keeps working unchanged: value / fieldName /
-// pendingByPath / onCommitEdit. Plus the new toggles + search + edit
+// pendingByPath / onCommitEdit. Plus the toggles + search + edit
 // behavior that the inline tree introduces.
 
 import { render, screen, within } from "@testing-library/react";
@@ -117,11 +117,11 @@ describe("DocumentTreePanel", () => {
     expect(leaf.textContent).toBe("SGML-v2");
   });
 
-  // Sprint 341 feedback (1) — Enter on an unchanged value must NOT fire
-  // onCommitEdit, otherwise a stray click+blur on a leaf creates a
-  // phantom pendingEdit. 작성 이유 (2026-05-15): 사용자가 클릭만 하고
-  // 같은 값으로 Enter 했을 때 mqlGenerator 가 빈 $set 을 만들어 update
-  // 가 silently 실행되던 회귀.
+  // Enter on an unchanged value must NOT fire onCommitEdit, otherwise a
+  // stray click+blur on a leaf creates a phantom pendingEdit.
+  // Reason: a regression where the user clicked and pressed Enter on the
+  // same value, so mqlGenerator built an empty $set and the update ran
+  // silently.
   it("no-op commit (draft equals rendered value) skips onCommitEdit", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -163,11 +163,11 @@ describe("DocumentTreePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  // #1445 KV JSON tree Phase 1 (2026-07-17) — read-only gate. When the panel is
-  // reused as a read-only viewer (no onCommitEdit — the KV JSON tree case), a
-  // leaf click must NOT open the inline editor: the editor's commit is a no-op
-  // there, so an input that opens only to swallow edits is a dead-end. The
-  // shared startEdit entry point is gated on onCommitEdit.
+  // #1445 KV JSON tree — read-only gate. When the panel is reused as a
+  // read-only viewer (no onCommitEdit — the KV JSON tree case), a leaf click
+  // must NOT open the inline editor: the editor's commit is a no-op there, so
+  // an input that opens only to swallow edits is a dead-end. The shared
+  // startEdit entry point is gated on onCommitEdit.
   it("does not open a leaf editor when onCommitEdit is absent (read-only)", async () => {
     const user = userEvent.setup();
     render(<DocumentTreePanel value={VALUE} fieldName="profile" />);
@@ -185,8 +185,8 @@ describe("DocumentTreePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  // #1445 (2026-07-17) — Mongo regression guard: with onCommitEdit the editor
-  // still opens on a leaf click (the invariant the read-only gate must not break).
+  // #1445 — Mongo regression guard: with onCommitEdit the editor still opens on
+  // a leaf click (the invariant the read-only gate must not break).
   it("opens the leaf editor when onCommitEdit is provided", async () => {
     const user = userEvent.setup();
     render(
@@ -206,12 +206,11 @@ describe("DocumentTreePanel", () => {
     ).toBeInTheDocument();
   });
 
-  // Sprint 342 V2 (2026-05-15) — BSON wrappers now open the type-aware
-  // BsonTypeEditor instead of being read-only. Commits are normalized
-  // back to a __bson__: wrapper at the grid layer (tagBsonWrapper round-
-  // trip) so pendingEdits Map shape doesn't change. 작성 이유: Sprint 341
-  // V1 은 BSON 을 잠금 처리해서 ObjectId/Date 등을 inline 수정하지 못했고,
-  // 사용자가 별도 cell 단위 BSON editor 로 돌아가야 했다.
+  // BSON wrappers open the type-aware BsonTypeEditor instead of being
+  // read-only. Commits are normalized back to a __bson__: wrapper at the
+  // grid layer (tagBsonWrapper round-trip) so the pendingEdits Map shape
+  // doesn't change. Reason: locking BSON left ObjectId/Date uneditable
+  // inline and sent the user back to a separate per-cell BSON editor.
   it("BSON wrapper leaves open BsonTypeEditor and commit EJSON wrappers", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -233,11 +232,11 @@ describe("DocumentTreePanel", () => {
     });
   });
 
-  // Sprint 342 V2 (2026-05-15) — structural edit: leaf delete. Trash icon
-  // commits a `__op__:unset` sentinel against the leaf path; the grid-
-  // level commit bar then routes it through mqlGenerator into a `$unset`
-  // operator. 작성 이유: 사용자가 legacy field 를 별도 dialog 로 가지 않고
-  // tree 안에서 바로 mark-for-delete 할 수 있어야 했다.
+  // Structural edit: leaf delete. Trash icon commits a `__op__:unset`
+  // sentinel against the leaf path; the grid-level commit bar then routes
+  // it through mqlGenerator into a `$unset` operator. Reason: the user
+  // must be able to mark a legacy field for deletion inside the tree
+  // instead of going to a separate dialog.
   it("trash icon commits __op__:unset and renders strike + 'will delete' badge", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -276,10 +275,9 @@ describe("DocumentTreePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  // Sprint 342 V2 (2026-05-15) — `_id` MUST NOT have a trash button.
-  // MongoDB rejects $unset on _id and mqlGenerator's id-in-patch guard
-  // would drop the whole row; surfacing a non-functional trash icon would
-  // be a UX trap.
+  // `_id` MUST NOT have a trash button. MongoDB rejects $unset on _id and
+  // mqlGenerator's id-in-patch guard would drop the whole row; surfacing a
+  // non-functional trash icon would be a UX trap.
   it("does not render trash for _id leaves", () => {
     render(
       <DocumentTreePanel
@@ -293,9 +291,9 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByTestId("tree-delete-name")).toBeInTheDocument();
   });
 
-  // Sprint 342 V2 (2026-05-15) — regex toggle promotes the search box to
-  // JS-regex mode. Locking the wire-up so a future refactor of the
-  // visiblePaths memo can't silently drop the option.
+  // The regex toggle promotes the search box to JS-regex mode. Locks the
+  // wire-up so a future refactor of the visiblePaths memo can't silently
+  // drop the option.
   it("regex toggle switches the search to JS regex matching", async () => {
     const user = userEvent.setup();
     render(<DocumentTreePanel value={VALUE} fieldName="profile" />);
@@ -316,12 +314,11 @@ describe("DocumentTreePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  // Sprint 344 Slice A (2026-05-15) — ghost rendering: a path that
-  // exists only in `pendingByPath` must render as a visible leaf with
-  // a "NEW" badge that is distinct from the existing "● edited" badge.
-  // Without this, the `+ key` / `+ item` affordances arriving in Slices
-  // B/C have no on-screen feedback — committed adds would silently
-  // vanish until Save.
+  // Ghost rendering: a path that exists only in `pendingByPath` must
+  // render as a visible leaf with a "NEW" badge that is distinct from the
+  // existing "● edited" badge. Without this, the `+ key` / `+ item`
+  // affordances have no on-screen feedback — committed adds would
+  // silently vanish until Save.
   it("renders a root-level ghost path with a NEW badge", () => {
     const pending = new Map<string, string>([["tag", "alpha"]]);
     render(
@@ -342,10 +339,9 @@ describe("DocumentTreePanel", () => {
     expect(within(ghost).queryByText(/edited/)).not.toBeInTheDocument();
   });
 
-  // Sprint 344 Slice A (2026-05-15) — edit + add coexist on the same
-  // parent. A pending entry on an existing path renders the amber edit
-  // badge; a pending entry on a new path renders the NEW badge. No
-  // de-duplication mistake collapses them.
+  // Edit + add coexist on the same parent. A pending entry on an existing
+  // path renders the amber edit badge; a pending entry on a new path
+  // renders the NEW badge. No de-duplication mistake collapses them.
   it("renders both an edit on existing-key and a NEW ghost together", () => {
     const pending = new Map<string, string>([
       ["name", "Bob"],
@@ -366,9 +362,9 @@ describe("DocumentTreePanel", () => {
     expect(within(ghost).getByText("NEW")).toBeInTheDocument();
   });
 
-  // Sprint 344 Slice A (2026-05-15) — nested JSON-parseable ghost value
-  // expands into a visible subtree. Locks the integration between the
-  // panel and `buildTreeNodesWithGhosts` for the expand branch.
+  // A nested JSON-parseable ghost value expands into a visible subtree.
+  // Locks the integration between the panel and `buildTreeNodesWithGhosts`
+  // for the expand branch.
   it("expands a JSON-parseable ghost into nested ghost rows", () => {
     const pending = new Map<string, string>([["meta", '{"role":"owner"}']]);
     render(
@@ -389,8 +385,8 @@ describe("DocumentTreePanel", () => {
     expect(inner.textContent).toMatch(/owner/);
   });
 
-  // Sprint 344 Slice A (2026-05-15) — parse-fail fallback: the ghost
-  // stays a single string leaf, no nested children. No crash.
+  // Parse-fail fallback: the ghost stays a single string leaf, no nested
+  // children. No crash.
   it("renders a non-JSON ghost value as a plain string leaf", () => {
     const pending = new Map<string, string>([["raw", "not-json {"]]);
     render(
@@ -418,15 +414,13 @@ describe("DocumentTreePanel", () => {
   });
 
   // -----------------------------------------------------------------
-  // Sprint 344 Slice B — `+ key` inline pair input on object nodes.
-  // AC-344-B-01 ~ 11. Each new test below carries its reason + the
-  // sprint date `2026-05-15` per the team convention.
+  // `+ key` inline pair input on object nodes. AC-344-B-01 ~ 11.
   // -----------------------------------------------------------------
 
-  // AC-344-B-01 (2026-05-15) — the `+ key` affordance must appear on
-  // every object node (root + nested) only when `onCommitEdit` is
-  // provided. Without onCommitEdit the panel is effectively read-only
-  // and the affordance must NOT render.
+  // AC-344-B-01 — the `+ key` affordance must appear on every object
+  // node (root + nested) only when `onCommitEdit` is provided. Without
+  // onCommitEdit the panel is effectively read-only and the affordance
+  // must NOT render.
   it("AC-344-B-01: renders `+ key` affordance on object nodes only when onCommitEdit is provided", () => {
     const { rerender } = render(
       <DocumentTreePanel
@@ -451,9 +445,9 @@ describe("DocumentTreePanel", () => {
     expect(screen.queryByTestId("tree-add-key-nested")).not.toBeInTheDocument();
   });
 
-  // AC-344-B-02 (2026-05-15) — clicking `+ key` reveals the paired
-  // inputs and the key input must be focused first so the user can
-  // start typing immediately.
+  // AC-344-B-02 — clicking `+ key` reveals the paired inputs and the
+  // key input must be focused first so the user can start typing
+  // immediately.
   it("AC-344-B-02: clicking `+ key` reveals key + value inputs, key focused", async () => {
     const user = userEvent.setup();
     render(
@@ -473,9 +467,9 @@ describe("DocumentTreePanel", () => {
     expect((valueInput as HTMLInputElement).placeholder).toMatch(/value/i);
   });
 
-  // AC-344-B-03 (2026-05-15) — Tab from key input moves focus to value
-  // input; Shift+Tab from value input goes back. Locks the keyboard
-  // flow so the user never has to grab the mouse to commit a pair.
+  // AC-344-B-03 — Tab from key input moves focus to value input;
+  // Shift+Tab from value input goes back. Locks the keyboard flow so
+  // the user never has to grab the mouse to commit a pair.
   it("AC-344-B-03: Tab moves key→value, Shift+Tab moves value→key", async () => {
     const user = userEvent.setup();
     render(
@@ -495,9 +489,9 @@ describe("DocumentTreePanel", () => {
     expect(keyInput).toHaveFocus();
   });
 
-  // AC-344-B-04 (2026-05-15) — Enter from key OR value input commits
-  // exactly once. Path = parentPath joined with the typed key (root =
-  // bare key). Value = the Slice D coerced JSON value.
+  // AC-344-B-04 — Enter from key OR value input commits exactly once.
+  // Path = parentPath joined with the typed key (root = bare key).
+  // Value = the coerced JSON value.
   it("AC-344-B-04: Enter from key or value input commits exactly once with coerced value", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -517,9 +511,8 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("age", 42);
   });
 
-  // AC-344-B-05 (2026-05-15) — Esc closes the input pair and does NOT
-  // commit. After Esc the `+ key` affordance is visible again so the
-  // user can retry.
+  // AC-344-B-05 — Esc closes the input pair and does NOT commit. After
+  // Esc the `+ key` affordance is visible again so the user can retry.
   it("AC-344-B-05: Esc closes the inputs without committing", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -544,9 +537,9 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByTestId("tree-add-key-__root")).toBeInTheDocument();
   });
 
-  // AC-344-B-06 (2026-05-15) — empty key + Enter must NOT commit. The
-  // inputs surface `aria-invalid` and an inline validation message
-  // (aria-live polite for screen readers).
+  // AC-344-B-06 — empty key + Enter must NOT commit. The inputs surface
+  // `aria-invalid` and an inline validation message (aria-live polite
+  // for screen readers).
   it("AC-344-B-06: empty key + Enter blocks commit and surfaces aria-invalid", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -567,8 +560,8 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByText(/key required/i)).toBeInTheDocument();
   });
 
-  // AC-344-B-07 (2026-05-15) — duplicate key collision against `value`
-  // OR `pendingByPath` blocks commit. The hint message must say "key
+  // AC-344-B-07 — duplicate key collision against `value` OR
+  // `pendingByPath` blocks commit. The hint message must say "key
   // already exists" so the user knows why the commit didn't fire.
   it("AC-344-B-07a: duplicate key against existing value blocks commit", async () => {
     const user = userEvent.setup();
@@ -590,9 +583,9 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByText(/key already exists/i)).toBeInTheDocument();
   });
 
-  // AC-344-B-07b (2026-05-15) — duplicate against a path that is only
-  // in `pendingByPath` (not yet in `value`) also rejects. Without this
-  // the user could fire two `+ key` commits with the same key and the
+  // AC-344-B-07b — duplicate against a path that is only in
+  // `pendingByPath` (not yet in `value`) also rejects. Without this the
+  // user could fire two `+ key` commits with the same key and the
   // second would silently overwrite the first.
   it("AC-344-B-07b: duplicate key against pendingByPath ghost blocks commit", async () => {
     const user = userEvent.setup();
@@ -614,9 +607,9 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByText(/key already exists/i)).toBeInTheDocument();
   });
 
-  // AC-344-B-08 (2026-05-15) — empty VALUE with a non-empty key IS
-  // allowed; the user is explicitly adding a key with an empty-string
-  // value. Slice D's coerceTreeAddValue returns "" for empty input.
+  // AC-344-B-08 — empty VALUE with a non-empty key IS allowed; the user
+  // is explicitly adding a key with an empty-string value.
+  // `coerceTreeAddValue` returns "" for empty input.
   it("AC-344-B-08: empty value + non-empty key commits with empty string", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -635,9 +628,9 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("note", "");
   });
 
-  // AC-344-B-09 (2026-05-15) — after a successful commit the input
-  // pair disappears and the `+ key` affordance re-renders so the user
-  // can immediately add another key.
+  // AC-344-B-09 — after a successful commit the input pair disappears
+  // and the `+ key` affordance re-renders so the user can immediately
+  // add another key.
   it("AC-344-B-09: commit closes the inputs and re-renders `+ key`", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -658,8 +651,8 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByTestId("tree-add-key-__root")).toBeInTheDocument();
   });
 
-  // AC-344-B-10 (2026-05-15) — nested objects get the same affordance.
-  // Path is parent-joined (`nested.newKey`).
+  // AC-344-B-10 — nested objects get the same affordance. Path is
+  // parent-joined (`nested.newKey`).
   it("AC-344-B-10: nested object `+ key` commits the joined path", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -679,10 +672,10 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("nested.fresh", true);
   });
 
-  // AC-344-B-11 (2026-05-15) — coerce outer-quotes rule. `42` (no
-  // quotes) commits as the number 42; `"42"` (with quotes) commits as
-  // the string "42". Slice D's `coerceTreeAddValue` is the authority —
-  // this test pins the helper's wire-up at the panel boundary.
+  // AC-344-B-11 — coerce outer-quotes rule. `42` (no quotes) commits as
+  // the number 42; `"42"` (with quotes) commits as the string "42".
+  // `coerceTreeAddValue` is the authority — this test pins the helper's
+  // wire-up at the panel boundary.
   it("AC-344-B-11a: bare numeric value commits as number (coerce)", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -720,9 +713,9 @@ describe("DocumentTreePanel", () => {
     expect(typeof (commit.mock.calls[0]?.[1] as unknown)).toBe("string");
   });
 
-  // Edge (2026-05-15) — whitespace-only key is rejected (contract
-  // treats it as empty). Without trimming, " " would pass as a valid
-  // path component and produce un-clickable rows in the tree.
+  // Edge — whitespace-only key is rejected (contract treats it as
+  // empty). Without trimming, " " would pass as a valid path component
+  // and produce un-clickable rows in the tree.
   it("AC-344-B-06 edge: whitespace-only key is treated as empty and rejected", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -740,11 +733,11 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByText(/key required/i)).toBeInTheDocument();
   });
 
-  // Edge (2026-05-15) — Enter while focused in the VALUE input also
-  // commits (mirrors leaf-edit UX where Enter wherever you are inside
-  // the editor fires the same commit). Locked separately from AC-04
-  // because that case fires Enter via the global keyboard helper,
-  // which can fail to specify which input is focused.
+  // Edge — Enter while focused in the VALUE input also commits (mirrors
+  // leaf-edit UX where Enter wherever you are inside the editor fires
+  // the same commit). Locked separately from AC-04 because that case
+  // fires Enter via the global keyboard helper, which can fail to
+  // specify which input is focused.
   it("AC-344-B-04 edge: Enter from value input also commits", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -765,9 +758,9 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("foo", "bar");
   });
 
-  // Edge (2026-05-15) — unicode + special-char key names. Slice B must
-  // not strip or normalise the key beyond a trim; `joinPath` preserves
-  // the full UTF-8 string. Spec edge list explicitly calls this out.
+  // Edge — unicode + special-char key names. The `+ key` flow must not
+  // strip or normalise the key beyond a trim; `joinPath` preserves the
+  // full UTF-8 string. Spec edge list explicitly calls this out.
   it("AC-344-B-04 edge: unicode key commits intact", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -785,9 +778,9 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("한국어", "value");
   });
 
-  // Edge (2026-05-15) — typing keeps the input pair open and clears
-  // the previous validation error so the user can recover from an
-  // empty/duplicate reject in the same session.
+  // Edge — typing keeps the input pair open and clears the previous
+  // validation error so the user can recover from an empty/duplicate
+  // reject in the same session.
   it("AC-344-B-06 edge: re-typing after empty-key reject clears the error", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -809,15 +802,13 @@ describe("DocumentTreePanel", () => {
   });
 
   // -----------------------------------------------------------------
-  // Sprint 344 Slice C — `+ item` inline value input on array nodes.
-  // AC-344-C-01 ~ 10. Each new test below carries its reason + the
-  // sprint date `2026-05-15` per the team convention.
+  // `+ item` inline value input on array nodes. AC-344-C-01 ~ 10.
   // -----------------------------------------------------------------
 
-  // AC-344-C-01 (2026-05-15) — the `+ item` affordance must appear on
-  // every array node only when `onCommitEdit` is provided. Without
-  // onCommitEdit the panel is read-only and the affordance must NOT
-  // render, mirroring Slice B's `+ key` discipline.
+  // AC-344-C-01 — the `+ item` affordance must appear on every array
+  // node only when `onCommitEdit` is provided. Without onCommitEdit the
+  // panel is read-only and the affordance must NOT render, mirroring
+  // the `+ key` discipline.
   it("AC-344-C-01: renders `+ item` affordance on array nodes only when onCommitEdit is provided", () => {
     const { rerender } = render(
       <DocumentTreePanel
@@ -843,10 +834,9 @@ describe("DocumentTreePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  // AC-344-C-02 (2026-05-15) — clicking `+ item` reveals a single value
-  // input and an index label `[N]` where N = current array length. The
-  // value input is auto-focused so the user can start typing
-  // immediately.
+  // AC-344-C-02 — clicking `+ item` reveals a single value input and an
+  // index label `[N]` where N = current array length. The value input
+  // is auto-focused so the user can start typing immediately.
   it("AC-344-C-02: clicking `+ item` reveals `[N]` label + value input (auto-focused)", async () => {
     const user = userEvent.setup();
     render(
@@ -866,9 +856,8 @@ describe("DocumentTreePanel", () => {
     expect(indexLabel.textContent).toBe("[2]");
   });
 
-  // AC-344-C-03 (2026-05-15) — Enter commits exactly once. Path uses
-  // bracket notation (`tags[2]`), value is Slice D coerced (number `42`
-  // not string).
+  // AC-344-C-03 — Enter commits exactly once. Path uses bracket
+  // notation (`tags[2]`), value is coerced (number `42` not string).
   it("AC-344-C-03: Enter commits exactly once with bracket path and coerced value", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -887,8 +876,8 @@ describe("DocumentTreePanel", () => {
     expect(typeof (commit.mock.calls[0]?.[1] as unknown)).toBe("number");
   });
 
-  // AC-344-C-04 (2026-05-15) — Esc closes the input and does NOT
-  // commit. After Esc the `+ item` affordance is visible again.
+  // AC-344-C-04 — Esc closes the input and does NOT commit. After Esc
+  // the `+ item` affordance is visible again.
   it("AC-344-C-04: Esc closes the input without committing", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -909,9 +898,9 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByTestId("tree-add-item-tags")).toBeInTheDocument();
   });
 
-  // AC-344-C-05 (2026-05-15) — empty value + Enter IS allowed (user
-  // wants to append the string `""`). Slice D's coerceTreeAddValue
-  // returns `""` for empty input.
+  // AC-344-C-05 — empty value + Enter IS allowed (user wants to append
+  // the string `""`). `coerceTreeAddValue` returns `""` for empty
+  // input.
   it("AC-344-C-05: empty value + Enter commits empty string", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -928,10 +917,10 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("tags[1]", "");
   });
 
-  // AC-344-C-06 (2026-05-15) — two consecutive `+ item` commits without
-  // a save in between produce `[N]` and `[N+1]`. The second click must
-  // see the pending append already accounted for so the label advances
-  // and both rows render as separate ghosts (Slice A integration).
+  // AC-344-C-06 — two consecutive `+ item` commits without a save in
+  // between produce `[N]` and `[N+1]`. The second click must see the
+  // pending append already accounted for so the label advances and both
+  // rows render as separate ghosts (ghost-render integration).
   it("AC-344-C-06: two consecutive `+ item` commits use sequential indexes", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -975,9 +964,8 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledTimes(2);
   });
 
-  // AC-344-C-07 (2026-05-15) — nested arrays (an array inside an
-  // object) get the same affordance and the joined bracket path
-  // (`meta.tags[N]`).
+  // AC-344-C-07 — nested arrays (an array inside an object) get the
+  // same affordance and the joined bracket path (`meta.tags[N]`).
   it("AC-344-C-07: nested array `+ item` commits the joined bracket path", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -996,10 +984,10 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("meta.tags[1]", "y");
   });
 
-  // AC-344-C-08 (2026-05-15) — the index label is a read-only span,
-  // NOT an input. Verify it carries no value/onChange surface (text
-  // content only) and is not focusable, so accidental clicks or
-  // keystrokes inside it cannot mutate the auto-derived index.
+  // AC-344-C-08 — the index label is a read-only span, NOT an input.
+  // Verify it carries no value/onChange surface (text content only) and
+  // is not focusable, so accidental clicks or keystrokes inside it
+  // cannot mutate the auto-derived index.
   it("AC-344-C-08: index label is a read-only span, not an input", async () => {
     const user = userEvent.setup();
     render(
@@ -1021,10 +1009,10 @@ describe("DocumentTreePanel", () => {
     expect(valueInput).toHaveFocus();
   });
 
-  // AC-344-C-09 (2026-05-15) — coerce outer-quotes rule for array
-  // values. `42` → number 42; `[1,2]` → array (Slice A then expands
-  // the nested ghost subtree). This pins the Slice D wire at the
-  // panel boundary just like AC-344-B-11 does for `+ key`.
+  // AC-344-C-09 — coerce outer-quotes rule for array values. `42` →
+  // number 42; `[1,2]` → array (the ghost render then expands the
+  // nested subtree). This pins the coercion wire at the panel boundary
+  // just like AC-344-B-11 does for `+ key`.
   it("AC-344-C-09a: bare numeric value commits as number (coerce)", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -1065,9 +1053,9 @@ describe("DocumentTreePanel", () => {
     expect(arg).toEqual([1, 2]);
   });
 
-  // AC-344-C-10 (2026-05-15) — first add on an empty array yields
-  // index `[0]`. The current array length is 0, no prior pending
-  // appends, so the auto-derived index naturally lands at 0.
+  // AC-344-C-10 — first add on an empty array yields index `[0]`. The
+  // current array length is 0, no prior pending appends, so the
+  // auto-derived index naturally lands at 0.
   it("AC-344-C-10: first add on an empty array uses index [0]", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -1086,10 +1074,10 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("tags[0]", "first");
   });
 
-  // Edge (2026-05-15) — opening `+ item` does NOT show a key input
-  // (only `+ key` on object nodes shows the key input). Guards
-  // against an accidental shared-state bug where the array-add UI
-  // accidentally reveals the object-add inputs.
+  // Edge — opening `+ item` does NOT show a key input (only `+ key` on
+  // object nodes shows the key input). Guards against an accidental
+  // shared-state bug where the array-add UI accidentally reveals the
+  // object-add inputs.
   it("AC-344-C-02 edge: opening `+ item` does not render the key input", async () => {
     const user = userEvent.setup();
     render(
@@ -1110,16 +1098,16 @@ describe("DocumentTreePanel", () => {
   });
 
   // -----------------------------------------------------------------
-  // Sprint 344 Slice F — paradigm-agnostic `forbiddenRootKeys` guard.
+  // Paradigm-agnostic `forbiddenRootKeys` guard.
   // The Mongo grid wires `Set(["_id"])`; the RDB grid omits the prop.
   // The panel stays paradigm-agnostic — its only job is to reject the
   // root-level add for keys in the supplied set.
   // -----------------------------------------------------------------
 
-  // AC-344-F-04 (2026-05-15) — without `forbiddenRootKeys`, a root
-  // `_id` add commits (paradigm-agnostic default = no reserved keys).
-  // Guards against an accidental "always-on" `_id` block bleeding into
-  // the RDB grid where `_id` is a legitimate column name.
+  // AC-344-F-04 — without `forbiddenRootKeys`, a root `_id` add commits
+  // (paradigm-agnostic default = no reserved keys). Guards against an
+  // accidental "always-on" `_id` block bleeding into the RDB grid where
+  // `_id` is a legitimate column name.
   it("AC-344-F-04 default: `_id` at root commits when forbiddenRootKeys is absent", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -1138,10 +1126,10 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("_id", "x");
   });
 
-  // AC-344-F-04 (2026-05-15) — when `forbiddenRootKeys` contains
-  // `_id`, a root `_id` add is rejected with aria-invalid + inline
-  // message; `onCommitEdit` MUST NOT fire. Mongo grid uses this to
-  // prevent `_id` mutations the backend would reject anyway.
+  // AC-344-F-04 — when `forbiddenRootKeys` contains `_id`, a root `_id`
+  // add is rejected with aria-invalid + inline message; `onCommitEdit`
+  // MUST NOT fire. Mongo grid uses this to prevent `_id` mutations the
+  // backend would reject anyway.
   it("AC-344-F-04 reject: root `_id` add is blocked when forbiddenRootKeys contains it", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
@@ -1165,12 +1153,12 @@ describe("DocumentTreePanel", () => {
     ).toBeInTheDocument();
   });
 
-  // AC-344-F-04 (2026-05-15) — the guard only fires at the document
-  // root. A literal `_id` field inside a nested object stays legal
-  // because Mongo permits arbitrary keys below the root, and the
-  // generator's id-in-patch check only inspects the top-level `_id`.
-  // Without this nested escape hatch, `meta._id` would be unreachable
-  // through the inline tree.
+  // AC-344-F-04 — the guard only fires at the document root. A literal
+  // `_id` field inside a nested object stays legal because Mongo
+  // permits arbitrary keys below the root, and the generator's
+  // id-in-patch check only inspects the top-level `_id`. Without this
+  // nested escape hatch, `meta._id` would be unreachable through the
+  // inline tree.
   it("AC-344-F-04 nested: `_id` inside a nested object commits even when forbiddenRootKeys includes it", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();

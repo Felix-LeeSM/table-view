@@ -1,6 +1,7 @@
-// Purpose: Document 그리드 행 선택 키보드 도달 가드 (issue #1130 AC2). focus 된
-// 셀에서 Space 로 행을 선택하면 그 행이 aria-selected="true" 로 반영된다. row
-// aria-selected 노출은 이미 존재 — Space 키 경로만 추가한다. (2026-07-03)
+// Purpose: keyboard-reach guard for Document grid row selection (issue
+// #1130 AC2). Pressing Space on a focused cell selects that row, and the
+// row reflects it as aria-selected="true". Row aria-selected exposure
+// already existed — only the Space key path is added.
 
 import {
   act,

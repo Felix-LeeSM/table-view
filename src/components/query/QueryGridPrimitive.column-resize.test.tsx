@@ -2,8 +2,8 @@
 //   read-only (QueryResultTable) and editable (EditableQueryResultGrid) mounts.
 //   Consolidates the byte-identical QueryResultGrid.column-resize +
 //   EditableQueryResultGrid.column-resize copies (issue #1622, P9 duplication) into
-//   one describe.each over both mounts. (2026-07-22)
-// Reason: Sprint 260 AC-260-02 — resize handle per column; drag → mouseup grows only
+//   one describe.each over both mounts.
+// Reason: AC-260-02 — resize handle per column; drag → mouseup grows only
 //   its own `--cols` px track (neighbour unchanged); query results have no stable
 //   identity so neither mount persists widths to localStorage.
 

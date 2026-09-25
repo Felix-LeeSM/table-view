@@ -9,7 +9,7 @@ import { buildSchemaGraphCatalogSnapshot } from "@/lib/schemaGraphSnapshot";
 import { schemaGraphTableId } from "@/test-utils/schemaGraphIds";
 
 // ---------------------------------------------------------------------------
-// Sprint 109 — SqlPreviewDialog uses SqlSyntax for syntax-highlighted preview.
+// SqlPreviewDialog uses SqlSyntax for syntax-highlighted preview.
 // AC-01: keyword token spans rendered with `text-syntax-keyword` class.
 // AC-02: empty sql falls back to "-- No changes to preview" placeholder.
 // AC-03: confirm/cancel callbacks fire from the footer buttons.
@@ -107,10 +107,9 @@ describe("SqlPreviewDialog (sprint-109 syntax highlight)", () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  // Sprint 256 (2026-05-09, AC-256-05) — footer Execute is now
-  // ExecuteButton with env-aware label. SqlPreviewDialog plumbs
-  // `environment` + `connectionLabel` so production reads
-  // "Execute on <conn>" with the destructive (red) token.
+  // AC-256-05 — footer Execute is an ExecuteButton with an env-aware label.
+  // SqlPreviewDialog plumbs `environment` + `connectionLabel` so production
+  // reads "Execute on <conn>" with the destructive (red) token.
   it("[AC-256-05] env=production + connectionLabel renders 'Execute on <conn>' with destructive token", () => {
     render(
       <SqlPreviewDialog
@@ -191,10 +190,9 @@ describe("SqlPreviewDialog (sprint-109 syntax highlight)", () => {
     expect(screen.getAllByText("public.users").length).toBeGreaterThan(0);
   });
 
-  // Sprint 256 (2026-05-09): the AC-187-03a 1px env color stripe above the
-  // dialog header was removed per user feedback ("border 도 적용 안 되고
-  // 구리군 — 그냥 제거해"). Env signal now flows exclusively through the
-  // footer ExecuteButton's color × env matrix and the
-  // ConfirmDestructiveDialog header tokens. The regression guard for the
-  // stripe is intentionally dropped.
+  // The AC-187-03a 1px env color stripe above the dialog header was removed
+  // per user feedback ("the border isn't even applied and it looks bad — just
+  // remove it"). The env signal now flows exclusively through the footer
+  // ExecuteButton's color × env matrix and the ConfirmDestructiveDialog header
+  // tokens. The regression guard for the stripe is intentionally dropped.
 });

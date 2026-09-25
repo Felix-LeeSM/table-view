@@ -22,14 +22,14 @@ import CreateTableTypeCombobox from "./CreateTableTypeCombobox";
 import { validateIdentifier } from "./identifier";
 
 /**
- * Sprint 236 — `AddColumnDialog`. Modal that mirrors the Sprint 235
- * `RenameTableDialog` shell shape but with the column-add field set:
+ * `AddColumnDialog`. Modal that mirrors the `RenameTableDialog` shell
+ * shape but with the column-add field set:
  * column name input + type combobox (`<CreateTableTypeCombobox>`
  * reused with `typesSource` + `typeKindMap` from
  * `usePostgresTypes(connectionId)`) + NOT NULL toggle (default OFF —
  * nullable is the default per locked decision) + DEFAULT free-text +
  * CHECK free-text + collapsible Show DDL pane (default collapsed,
- * mirror Sprint 226 `CreateTableDialog`).
+ * mirror `CreateTableDialog`).
  *
  * Apply is `disabled` when:
  *   - name fails identifier validation
@@ -41,27 +41,26 @@ import { validateIdentifier } from "./identifier";
  *     permissive — PG surfaces the verbatim error if the user hits the
  *     IPC directly).
  *
- * `useDdlPreviewExecution` (Sprint 214) owns the preview/execute
- * lifecycle including Safe Mode gate dispatch. ADD COLUMN is
- * classified `ddl-other`/safe so the gate is a no-op-equivalent — but
- * the `pendingConfirm` mount stays in place for the warn-tier case
- * (defense-in-depth, mirrors Sprint 235 dialogs).
+ * `useDdlPreviewExecution` owns the preview/execute lifecycle including
+ * Safe Mode gate dispatch. ADD COLUMN is classified `ddl-other`/safe so
+ * the gate is a no-op-equivalent — but the `pendingConfirm` mount stays
+ * in place for the warn-tier case (defense-in-depth, mirrors the other
+ * DDL dialogs).
  *
  * On commit success the dialog calls `onColumnAdded()` which the
  * parent `ColumnsEditor` wires to `onRefresh` → `getTableColumns`
  * (writes through the `tableColumnsCache`). NO direct
- * `useSchemaTableMutations` call (Sprint 223 hook is table-scoped, see
- * Sprint 236 contract Decisions §Cache invalidation path).
+ * `useSchemaTableMutations` call (that hook is table-scoped).
  */
 
 export interface AddColumnDialogProps {
   /** Connection id used by Safe Mode + `usePostgresTypes`. */
   connectionId: string;
   /**
-   * Sprint 271c — workspace active database. Forwarded as
-   * `expectedDatabase` on the ADD COLUMN request so a swapped pool
-   * rejects with `AppError::DbMismatch` before mutation. Optional only
-   * for back-compat; new callers pass the workspace db.
+   * Workspace active database. Forwarded as `expectedDatabase` on the
+   * ADD COLUMN request so a swapped pool rejects with
+   * `AppError::DbMismatch` before mutation. Optional only for
+   * back-compat; new callers pass the workspace db.
    */
   database?: string;
   /** Schema name (display + payload). */
@@ -99,9 +98,9 @@ export default function AddColumnDialog({
   const [notNull, setNotNull] = useState(false);
   const [defaultExpr, setDefaultExpr] = useState("");
   const [checkExpr, setCheckExpr] = useState("");
-  // Sprint 242 — IDENTITY toggle. When on, the backend forces NOT NULL
-  // and ignores `default_value`; the dialog mirrors that by disabling
-  // both fields visually.
+  // IDENTITY toggle. When on, the backend forces NOT NULL and ignores
+  // `default_value`; the dialog mirrors that by disabling both fields
+  // visually.
   const [isIdentity, setIsIdentity] = useState(false);
   // Preview pane defaults open — auto-debounced fetch fills it as the
   // user types. Hiding it by default required an extra click and made
@@ -130,13 +129,13 @@ export default function AddColumnDialog({
     onRefresh: async () => {
       // The parent (`ColumnsEditor`) is responsible for refetching
       // columns; the hook awaits this so a refresh failure surfaces as
-      // a commit-error history entry (Sprint 187/196 parity).
+      // a commit-error history entry.
       await onColumnAdded();
       onClose();
     },
   });
 
-  // Reset form state on (re)open. Same pattern as Sprint 235 dialogs.
+  // Reset form state on (re)open. Same pattern as the other DDL dialogs.
   useEffect(() => {
     if (open) {
       setColumnName("");
@@ -168,19 +167,20 @@ export default function AddColumnDialog({
   const canPreview = !validationError && trimmedType.length > 0 && !collision;
   const canApply = canPreview && !ddl.previewLoading && !!ddl.previewSql;
 
-  // Sprint 238 — auto-refresh debounced. 5 form 필드(이름/타입/NOT NULL/
-  // DEFAULT/CHECK) 중 어느 하나라도 변하면 250 ms 후 preview 를 재빌드.
-  // 사용자는 form 을 채우는 동안 SQL 이 라이브로 업데이트되는 것을 보고,
-  // Apply 는 stale 게이트 없이 preview 가 존재하기만 하면 활성화.
+  // Auto-refresh, debounced. When any one of the 5 form fields (name /
+  // type / NOT NULL / DEFAULT / CHECK) changes, the preview is rebuilt
+  // 250 ms later. The user sees the SQL update live while filling in the
+  // form, and Apply is enabled as soon as a preview exists, with no
+  // stale gate.
   useEffect(() => {
     if (!open) return;
     if (!canPreview) return;
     const handle = window.setTimeout(() => {
       const trimmedDefault = defaultExpr.trim();
       const trimmedCheck = checkExpr.trim();
-      // Sprint 242 — `is_identity` only attached when true so the
-      // wire payload stays byte-equivalent to pre-Sprint-242 callers
-      // (backend `#[serde(default)]` accepts both omitted and `false`).
+      // `is_identity` is only attached when true so the wire payload
+      // stays byte-equivalent to callers that never send it (backend
+      // `#[serde(default)]` accepts both omitted and `false`).
       // When identity is on the backend forces NOT NULL and drops the
       // user `default_value`; emit the field for clarity but the
       // backend is the single source of truth.
@@ -198,7 +198,7 @@ export default function AddColumnDialog({
         },
         checkExpression: trimmedCheck.length > 0 ? checkExpr : null,
         previewOnly,
-        // Sprint 271c — opt-in DbMismatch guard. Forward workspace db.
+        // Opt-in DbMismatch guard. Forward workspace db.
         expectedDatabase: database,
       });
       void ddl.loadPreview(
@@ -323,9 +323,9 @@ export default function AddColumnDialog({
               </div>
 
               <div className="flex items-center gap-3">
-                {/* Sprint 242 — IDENTITY columns are SQL-standard
-                    NOT NULL and use the sequence as the default;
-                    NOT NULL + DEFAULT inputs disable while on. */}
+                {/* IDENTITY columns are SQL-standard NOT NULL and use
+                    the sequence as the default; NOT NULL + DEFAULT
+                    inputs disable while on. */}
                 <label
                   className={`flex cursor-pointer items-center gap-2 text-xs text-foreground ${isIdentity ? "opacity-50" : ""}`}
                 >

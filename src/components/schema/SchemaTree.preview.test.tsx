@@ -7,7 +7,7 @@ import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import SchemaTree from "./SchemaTree";
 
 // ---------------------------------------------------------------------------
-// Sprint 136 — Preview / persist click semantics for the relational tree.
+// Preview / persist click semantics for the relational tree.
 //
 // The PG sidebar must satisfy:
 //   AC-S136-01  single-click on a table row → preview tab (`isPreview: true`).
@@ -23,10 +23,10 @@ const mockLoadViews = vi.fn().mockResolvedValue(undefined);
 const mockLoadFunctions = vi.fn().mockResolvedValue(undefined);
 const mockPrefetchSchemaColumns = vi.fn().mockResolvedValue(undefined);
 
-// Sprint 263 — translate flat-key seeds (legacy `{ conn1: [...] }`,
-// `{ "conn1:public": [...] }`) into the new `(connId, db)`-nested cache
-// shape under `db1` so the existing test seeds work against the
-// db-aware schemaStore without per-test edits.
+// Translate flat-key seeds (legacy `{ conn1: [...] }`,
+// `{ "conn1:public": [...] }`) into the new `(connId, db)`-nested cache shape
+// under `db1` so the existing test seeds work against the db-aware
+// schemaStore without per-test edits.
 const DEFAULT_DB = "db1";
 function translateFlatSeeds(
   overrides: Record<string, unknown>,
@@ -222,7 +222,7 @@ describe("SchemaTree — Sprint 136 preview / persist click semantics", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Sprint 136 — AC-S136-05: function category overflow cap.
+// AC-S136-05: function category overflow cap.
 //
 // When a schema's function list is large the rendered list must be capped
 // (max-height + overflow-y-auto) so it cannot push schema rows or other

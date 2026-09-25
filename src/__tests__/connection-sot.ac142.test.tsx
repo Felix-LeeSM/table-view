@@ -1,11 +1,11 @@
 /**
- * Sprint 148 — AC-142-* (Connection SoT cleanup + Disconnect) regression tests.
+ * AC-142-* (Connection SoT cleanup + Disconnect) regression tests.
  *
- * Sprint 134 already removed the Workspace connection picker / Cmd+K picker
- * and shipped a `DisconnectButton` with `aria-label="Disconnect"`; this file
- * locks the four AC-142-* invariants so a future change cannot silently
- * resurrect a Workspace connection switcher, drop the Disconnect button,
- * leak cross-connection tabs on swap, or break post-disconnect reconnect.
+ * The Workspace connection picker / Cmd+K picker were already removed and a
+ * `DisconnectButton` with `aria-label="Disconnect"` shipped; this file locks
+ * the AC-142-* invariants so a future change cannot silently resurrect a
+ * Workspace connection switcher, drop the Disconnect button, leak
+ * cross-connection tabs on swap, or break post-disconnect reconnect.
  *
  * Each `it(...)` name embeds the AC label (AC-142-N) for grep-ability.
  */
@@ -34,12 +34,9 @@ beforeEach(() => {
   });
 });
 
-// Sprint 154 — `@lib/window-controls` is the new lifecycle seam. HomePage's
-// activation handler routes through it. These tests previously asserted on
-// the legacy app-shell field after activation; they now assert on the seam
-// call shape, which is the same user-observable invariant (workspace
-// becomes the active surface) but expressed in the post-Sprint-154
-// architecture.
+// `@lib/window-controls` is the lifecycle seam, mocked here so the cases can
+// assert on the seam call shape: activation is store-side only and reaches
+// no window control.
 vi.mock("@lib/window-controls", () => ({
   showWindow: vi.fn(() => Promise.resolve()),
   hideWindow: vi.fn(() => Promise.resolve()),
@@ -187,10 +184,10 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     const tabs = getTestWorkspace().tabs;
     expect(tabs).toHaveLength(0);
     expect(getTestWorkspace().activeTabId).toBeNull();
-    // Wave 9.5 (2026-05-16) — 사용자 desired UX: launcher 항상 visible.
-    // HomePage 의 handleActivate 는 store side (focused conn / stale tabs)
-    // 만 책임 — window seam 호출 0. workspace 윈도우는 ConnectionList 의
-    // `openWorkspaceWindow(id)` 가 per-conn label 로 build.
+    // Desired UX: the launcher stays visible. HomePage's handleActivate owns
+    // the store side only (focused conn / stale tabs) — zero window seam
+    // calls. ConnectionList's `openWorkspaceWindow(id)` builds the workspace
+    // window under a per-conn label.
     expect(useConnectionStore.getState().focusedConnId).toBe("c2");
     expect(windowControls.showWindow).not.toHaveBeenCalled();
     expect(windowControls.hideWindow).not.toHaveBeenCalled();
@@ -238,8 +235,8 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     const ws = getTestWorkspace("c1", "db1");
     expect(ws.tabs).toHaveLength(1);
     expect(ws.activeTabId).toBe("query-1");
-    // Wave 9.5 (2026-05-16) — launcher 는 항상 visible. handleActivate 의
-    // 책임은 store side 만 — window seam 호출 0.
+    // The launcher stays visible; handleActivate owns the store side only —
+    // zero window seam calls.
     expect(windowControls.showWindow).not.toHaveBeenCalled();
     expect(windowControls.hideWindow).not.toHaveBeenCalled();
   });

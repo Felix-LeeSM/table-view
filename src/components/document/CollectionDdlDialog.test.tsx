@@ -1,7 +1,6 @@
-// Sprint 334 (2026-05-15) — Slice L live wire. CollectionDdlDialog 가
-// create / rename / drop 3 모드 모두 실제 IPC 를 dispatch 하고 성공시
-// onClose / onSuccess 를 호출한다. JSON options 파싱 + required field
-// 가드도 같이 가드.
+// Live wire. CollectionDdlDialog dispatches a real IPC in all three modes
+// (create / rename / drop) and calls onClose / onSuccess on success. Also
+// guards JSON options parsing and the required-field guard.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

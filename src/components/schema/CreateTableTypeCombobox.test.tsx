@@ -1,6 +1,4 @@
-// Sprint 227 — `CreateTableTypeCombobox` test suite (Phase 27 sprint 2).
-//
-// Date: 2026-05-06.
+// `CreateTableTypeCombobox` test suite.
 //
 // Why this file exists:
 // - Locks AC-227-03 (filter behaviour, Enter commits highlighted
@@ -167,10 +165,10 @@ describe("CreateTableTypeCombobox (Sprint 227 — AC-227-03)", () => {
     expect(spy).toHaveBeenLastCalledWith("uuid");
   });
 
-  // Sprint 227 hot-fix (2026-05-07): the combobox should open the
-  // suggestion list as soon as the user focuses the input, even with
-  // an empty value, so the user discovers the picker without having
-  // to know the ArrowDown / chevron-click affordance up front.
+  // The combobox should open the suggestion list as soon as the user
+  // focuses the input, even with an empty value, so the user discovers
+  // the picker without having to know the ArrowDown / chevron-click
+  // affordance up front.
   it("auto-opens the listbox on focus (empty value shows full canonical list)", async () => {
     render(<ControlledHost />);
     const input = screen.getByRole("combobox", { name: "Column data type" });
@@ -186,10 +184,9 @@ describe("CreateTableTypeCombobox (Sprint 227 — AC-227-03)", () => {
     expect(labels).toContain("text");
   });
 
-  // Sprint 227 hot-fix (2026-05-07): the chevron button must be
-  // clickable — it toggles the popover and re-focuses the input. The
-  // pre-fix combobox rendered a `pointer-events-none` chevron which
-  // was visually misleading.
+  // The chevron button must be clickable — it toggles the popover and
+  // re-focuses the input. The pre-fix combobox rendered a
+  // `pointer-events-none` chevron which was visually misleading.
   it("clicking the chevron toggles the listbox (AC-227-03 follow-up)", async () => {
     render(<ControlledHost />);
     const chevron = screen.getByRole("button", { name: "Show types" });
@@ -202,11 +199,11 @@ describe("CreateTableTypeCombobox (Sprint 227 — AC-227-03)", () => {
     await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
   });
 
-  // Sprint 227 hot-fix (2026-05-07): bare parametric types
-  // auto-expand to a canonical default — `varchar` → `varchar(255)`,
-  // `char` → `char(1)`, `numeric` → `numeric(10,2)` — so the user
-  // doesn't have to remember the parameter syntax. Free-text override
-  // still works (covered by the `numeric(10,4)` blur case).
+  // Bare parametric types auto-expand to a canonical default —
+  // `varchar` → `varchar(255)`, `char` → `char(1)`, `numeric` →
+  // `numeric(10,2)` — so the user doesn't have to remember the
+  // parameter syntax. Free-text override still works (covered by the
+  // `numeric(10,4)` blur case).
   it("selecting bare 'varchar' auto-expands to 'varchar(255)'", async () => {
     const spy = vi.fn();
     render(<ControlledHost onChangeSpy={spy} />);
@@ -291,8 +288,8 @@ describe("CreateTableTypeCombobox (Sprint 230 — typesSource prop)", () => {
     vi.clearAllMocks();
   });
 
-  // Sprint 230 — when `typesSource` is provided, the combobox filters
-  // the dynamic list rather than the canonical `POSTGRES_COMMON_TYPES`.
+  // When `typesSource` is provided, the combobox filters the dynamic
+  // list rather than the canonical `POSTGRES_COMMON_TYPES`.
   it("typesSource={...} filters the dynamic list (geo → geometry, varchar excluded)", async () => {
     const dynamic = ["geometry", "public.my_enum", "varchar", "uuid"];
     render(<ControlledHostWithSource typesSource={dynamic} />);
@@ -311,8 +308,8 @@ describe("CreateTableTypeCombobox (Sprint 230 — typesSource prop)", () => {
     expect(labels).not.toContain("uuid");
   });
 
-  // Sprint 230 — when `typesSource` is omitted (back-compat), the
-  // combobox falls back to the canonical list path.
+  // When `typesSource` is omitted (back-compat), the combobox falls
+  // back to the canonical list path.
   it("typesSource omitted — canonical list path is used (back-compat)", async () => {
     render(<ControlledHostWithSource />);
     const input = screen.getByRole("combobox", { name: "Column data type" });
@@ -330,9 +327,9 @@ describe("CreateTableTypeCombobox (Sprint 230 — typesSource prop)", () => {
     }
   });
 
-  // Sprint 230 — `expandParametricDefault` parity with the dynamic
-  // list. Bare `varchar` MUST still expand to `varchar(255)` because
-  // canonical types are guaranteed-present in the merged head.
+  // `expandParametricDefault` parity with the dynamic list. Bare
+  // `varchar` MUST still expand to `varchar(255)` because canonical
+  // types are guaranteed-present in the merged head.
   it("parametric default expansion intact when canonical bare 'varchar' is in the dynamic list (AC-230-09)", async () => {
     const spy = vi.fn();
     const dynamic = ["varchar", "varchar(255)", "geometry", "public.my_enum"];
@@ -350,8 +347,8 @@ describe("CreateTableTypeCombobox (Sprint 230 — typesSource prop)", () => {
     expect(spy).toHaveBeenLastCalledWith("varchar(255)");
   });
 
-  // Sprint 230 — `geometry` is non-parametric in the dynamic list, so
-  // committing it forwards the value verbatim.
+  // `geometry` is non-parametric in the dynamic list, so committing it
+  // forwards the value verbatim.
   it("non-parametric dynamic entry (geometry) commits verbatim", async () => {
     const spy = vi.fn();
     const dynamic = ["geometry", "public.my_enum"];
@@ -370,9 +367,7 @@ describe("CreateTableTypeCombobox (Sprint 230 — typesSource prop)", () => {
   });
 });
 
-// Sprint 234 — `typeKindMap` color-dot rendering (Phase 27 sprint 9).
-//
-// Date: 2026-05-07.
+// `typeKindMap` color-dot rendering.
 //
 // Why this block exists:
 // - Locks AC-234-08 (color dot per `type_kind`) — `enum` blue, `domain`
@@ -404,7 +399,7 @@ describe("CreateTableTypeCombobox (Sprint 234 — typeKindMap color dots)", () =
     vi.clearAllMocks();
   });
 
-  // Sprint 234 AC-234-08 — enum kinds render a blue dot.
+  // AC-234-08 — enum kinds render a blue dot.
   it("renders a blue dot prefix for enum-typed options when typeKindMap supplies enum (AC-234-08)", async () => {
     const dynamic = ["public.my_enum", "uuid"];
     const kindMap = new Map<string, string>([
@@ -430,7 +425,7 @@ describe("CreateTableTypeCombobox (Sprint 234 — typeKindMap color dots)", () =
     ).toContain("public.my_enum");
   });
 
-  // Sprint 234 AC-234-08 — domain (green), range (purple), composite (orange).
+  // AC-234-08 — domain (green), range (purple), composite (orange).
   it("renders a green dot for domain, purple for range, orange for composite (AC-234-08)", async () => {
     const dynamic = ["public.my_domain", "public.my_range", "public.my_comp"];
     const kindMap = new Map<string, string>([
@@ -472,7 +467,7 @@ describe("CreateTableTypeCombobox (Sprint 234 — typeKindMap color dots)", () =
     ).toContain("text-typekind-composite");
   });
 
-  // Sprint 234 AC-234-08 — `base` kind omits the dot (no DOM noise).
+  // AC-234-08 — `base` kind omits the dot (no DOM noise).
   it("omits the dot for base-kind options (AC-234-08)", async () => {
     const dynamic = ["uuid"];
     const kindMap = new Map<string, string>([["uuid", "base"]]);
@@ -486,8 +481,8 @@ describe("CreateTableTypeCombobox (Sprint 234 — typeKindMap color dots)", () =
     expect(opt.querySelector('[data-testid="type-kind-dot"]')).toBeNull();
   });
 
-  // Sprint 234 AC-234-08 — back-compat: omitting `typeKindMap` renders
-  // identically to Sprint 230 (no dots regardless of suggestion list).
+  // AC-234-08 — back-compat: omitting `typeKindMap` renders no dots
+  // regardless of the suggestion list.
   it("omits the dot when typeKindMap is undefined (back-compat) (AC-234-08)", async () => {
     const dynamic = ["public.my_enum", "uuid"];
     render(<ControlledHostWithKindMap typesSource={dynamic} />);
@@ -502,7 +497,7 @@ describe("CreateTableTypeCombobox (Sprint 234 — typeKindMap color dots)", () =
     expect(uuidOpt.querySelector('[data-testid="type-kind-dot"]')).toBeNull();
   });
 
-  // Sprint 234 — unknown kind degrades gracefully (no throw, no dot).
+  // Unknown kind degrades gracefully (no throw, no dot).
   it("unknown kind in typeKindMap renders no dot (graceful degrade) (AC-234-08)", async () => {
     const dynamic = ["public.future_kind"];
     const kindMap = new Map<string, string>([

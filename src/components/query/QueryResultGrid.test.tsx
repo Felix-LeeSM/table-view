@@ -162,37 +162,42 @@ describe("QueryResultGrid", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Connection lost");
   });
 
-  // Purpose: raw 드라이버 에러 노출 → 친화적 매핑 + 원문 접기 회귀 가드 (#1723).
-  //          쿼리 실패 시 sqlx/드라이버 내부 문자열이 primary 로 노출돼 SQL 문제
-  //          인지 연결/프록시 문제인지 알 수 없던 사용자 보고 (2026-07-24).
+  // Purpose: raw driver error exposure → regression guard for the friendly
+  //          mapping + folded original (#1723). Users reported that on query
+  //          failure the sqlx/driver internal string surfaced as the primary
+  //          message, leaving it unclear whether the SQL or the
+  //          connection/proxy was at fault.
   describe("friendly driver-error mapping (#1723)", () => {
     const INTROSPECTION_ERROR =
       'Database error: error returned from database: Index was outside the bounds of the array.; query: "SELECT ... pg_catalog.pg_attribute ..." (sqlx_postgres::connection::describe:492)';
 
-    // Reason: 알려진 에러 클래스는 친화적 1줄 메시지가 전면(primary)에 오고 원문은
-    //         "상세 보기" 접기 뒤로 이동해 즉시 노출되지 않아야 한다 (2026-07-24).
+    // Reason: for a known error class the friendly one-line message must come
+    //         to the front (primary) and the original must move behind the
+    //         details toggle so it is not exposed immediately.
     it("promotes a friendly message to primary and collapses the raw error behind a details toggle", async () => {
       render(
         <QueryResultGrid
           queryState={{ status: "error", error: INTROSPECTION_ERROR }}
         />,
       );
-      // 친화적 요약이 전면에 보인다.
+      // The friendly summary is visible up front.
       expect(
         screen.getByText(/couldn't read the result metadata/i),
       ).toBeInTheDocument();
-      // 원문은 닫힌 <details> 안에 접혀 있다(디버깅용으로 보존하되 즉시 안 보임).
+      // The original is folded into a closed <details> (kept for debugging
+      // but not immediately visible).
       const rawNode = screen.getByText(/sqlx_postgres::connection::describe/i);
       const details = rawNode.closest("details");
       expect(details).not.toBeNull();
       expect(details).not.toHaveAttribute("open");
-      // 토글하면 원문이 펼쳐진다.
+      // Toggling expands the original.
       await userEvent.click(screen.getByText(/show error details/i));
       expect(details).toHaveAttribute("open");
     });
 
-    // Reason: 미분류 에러는 억지 매핑 없이 원문을 그대로 노출하는 안전한 fallback
-    //         이어야 한다 — 접기 뒤로 숨기면 진단 정보가 사라진다 (2026-07-24).
+    // Reason: an unclassified error must fall back safely to showing the
+    //         original as-is with no forced mapping — hiding it behind a fold
+    //         loses the diagnostic information.
     it("shows an unclassified error inline as a safe fallback (no details toggle)", () => {
       render(
         <QueryResultGrid
@@ -205,7 +210,7 @@ describe("QueryResultGrid", () => {
       expect(screen.getByRole("alert")).toHaveTextContent(
         'syntax error at or near "SELCT"',
       );
-      // 접기 토글이 없어야 한다 (원문이 곧 primary).
+      // There must be no fold toggle (the original is the primary).
       expect(screen.queryByText(/show error details/i)).not.toBeInTheDocument();
     });
   });
@@ -307,8 +312,8 @@ describe("QueryResultGrid", () => {
     expect(screen.getByText(/2 rows/)).toBeInTheDocument();
     // Execution time
     expect(screen.getByText("15 ms")).toBeInTheDocument();
-    // [AC-181-10] Sprint 181 ExportButton mounted into the SELECT toolbar.
-    // 2026-05-01 — regression guard so future toolbar refactors don't drop it.
+    // [AC-181-10] ExportButton mounted into the SELECT toolbar.
+    // Regression guard so future toolbar refactors don't drop it.
     expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
   });
 

@@ -423,7 +423,7 @@ export default function ConstraintsEditor({
           constraint_name: params.constraintName,
           definition: params.definition,
           preview_only: true,
-          // Sprint 271c — opt-in DbMismatch guard.
+          // Opt-in DbMismatch guard.
           expected_database: database,
         }),
       () => async () => {
@@ -434,7 +434,7 @@ export default function ConstraintsEditor({
           constraint_name: params.constraintName,
           definition: params.definition,
           preview_only: false,
-          // Sprint 271c — opt-in DbMismatch guard.
+          // Opt-in DbMismatch guard.
           expected_database: database,
         });
         setShowPreviewModal(false);
@@ -468,7 +468,7 @@ export default function ConstraintsEditor({
           table,
           constraint_name: constraintName,
           preview_only: true,
-          // Sprint 271c — opt-in DbMismatch guard.
+          // Opt-in DbMismatch guard.
           expected_database: database,
         }),
       () => async () => {
@@ -479,7 +479,7 @@ export default function ConstraintsEditor({
             table,
             constraint_name: constraintName,
             preview_only: false,
-            // Sprint 271c — opt-in DbMismatch guard.
+            // Opt-in DbMismatch guard.
             expected_database: database,
           },
           // Issue #1112 — commit runs only after the Safe Mode gate + preview
@@ -628,7 +628,7 @@ export default function ConstraintsEditor({
         />
       )}
 
-      {/* Warn-tier destructive confirmation dialog (Sprint 246). */}
+      {/* Warn-tier destructive confirmation dialog. */}
       {ddl.pendingConfirm && (
         <ConfirmDestructiveDialog
           open

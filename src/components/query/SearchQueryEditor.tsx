@@ -87,9 +87,10 @@ const SearchQueryEditor = forwardRef<EditorView | null, SearchQueryEditorProps>(
           keymap.of([
             {
               key: "Mod-Enter",
-              // #2509 — 실행하면 자동완성 팝업을 닫는다. `closeOnBlur` 는
-              // 실행이 blur 를 일으킬 때만 도는데 단축키 실행은 포커스를
-              // 에디터에 남기므로, 남은 팝업이 결과 그리드를 덮었다.
+              // #2509 — executing closes the autocomplete popup.
+              // `closeOnBlur` only runs when execution causes a blur, but a
+              // shortcut execution leaves focus in the editor, so the popup
+              // that stayed open covered the result grid.
               run: (view) => {
                 closeCompletion(view);
                 onExecuteRef.current();

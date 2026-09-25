@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
 import { useDataGridEdit } from "./useDataGridEdit";
 
-// Sprint 98 — Cmd+S immediate visual feedback.
+// Cmd+S immediate visual feedback.
 // Covers AC-01..AC-03:
 //  AC-01: flashing flips to true synchronously after `commit-changes` dispatch
 //         when there are pending edits — well before the SQL preview opens.

@@ -270,8 +270,8 @@ export interface BuildVisibleRowsArgs {
   expandedSchemas: Set<string>;
   expandedCategories: Record<string, Set<CategoryKey>>;
   loadingTables: ReadonlySet<string>;
-  // Sprint 263 — per-`(connId, db)` schema slice already sliced by the
-  // caller. Keys are bare schema names; no `connId:` prefix.
+  // Per-`(connId, db)` schema slice already sliced by the caller. Keys are
+  // bare schema names; no `connId:` prefix.
   tables: Record<string, TableInfo[]>;
   views: Record<string, ViewInfo[]>;
   functions: Record<string, FunctionInfo[]>;

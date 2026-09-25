@@ -3,7 +3,7 @@ import { coerceToSqlLiteral, generateSql } from "./sqlGenerator";
 import { BASE_DATA } from "./sqlGenerator.fixtures";
 
 // ---------------------------------------------------------------------------
-// Sprint 75 — coerceToSqlLiteral: pure-function type coercion per column type.
+// coerceToSqlLiteral: pure-function type coercion per column type.
 // ---------------------------------------------------------------------------
 
 describe("coerceToSqlLiteral — tri-state (null, '', value)", () => {
@@ -71,9 +71,9 @@ describe("coerceToSqlLiteral — tri-state (null, '', value)", () => {
   });
 
   it("'' + non-textual types → SQL NULL (empty picker = explicit clear)", () => {
-    // Sprint 75 AC-01: empty input on integer/numeric/boolean/date/etc
-    // collapses to NULL because `SET col = ''` is invalid for those types
-    // and the user clearing a picker almost always means "null me out".
+    // AC-01: empty input on integer/numeric/boolean/date/etc collapses to
+    // NULL because `SET col = ''` is invalid for those types and the user
+    // clearing a picker almost always means "null me out".
     expect(coerceToSqlLiteral("", "integer")).toEqual({
       kind: "sql",
       sql: "NULL",

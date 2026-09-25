@@ -8,8 +8,8 @@
  * applies the theme and closes, and the star toggles the favorite without
  * closing.
  *
- * Shape decided 2026-08-03 (issue #2118 「결정 기록」): a full-screen overlay in
- * the current window, not a new Tauri window (which would need window creation,
+ * Shape decided in issue #2118 "Decision record": a full-screen overlay in the
+ * current window, not a new Tauri window (which would need window creation,
  * `document.title` sync and a `theme-sync` bridge seat) and not a workspace tab
  * (which the launcher cannot open, and the launcher mounts the picker too).
  *
@@ -36,7 +36,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
-/** Search haystack: id + display name + vibe, as the issue's 할 일 2 asks. */
+/** Search haystack: id + display name + vibe, as the issue's task 2 asks. */
 function matches(
   entry: (typeof THEME_CATALOG)[number],
   lowerTerm: string,

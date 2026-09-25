@@ -1,13 +1,14 @@
-// Mongo query tab의 tab-local database selector.
+// The tab-local database selector for a Mongo query tab.
 //
-// 2026-05-15 — Sprint 329 lock 뒤집힘. 이전엔 DataGrip-style display chip
-// 으로, database 변경은 사이드바 우클릭 "New query here" 의 단일 owner
-// 였다. 사용자가 직접 toolbar 안에서 변경 가능해야 한다고 명시 요구
-// ("database 선택도 못 한다 친구야") 해서 chip 을 interactive popover
-// switcher 로 교체한다. RDB 의 `DbSwitcher` 와 시각적 패리티를 맞추되,
-// 대상 시맨틱은 tab-local (`tab.database` 만 갱신; `connection.activeDb`
-// 는 건드리지 않는다 — Mongo 는 RDB 의 active sub-pool 개념이 없어서
-// 전역 chip 으로 바인딩하면 다른 탭에 부수효과가 생긴다).
+// The lock was reversed. The chip used to be a DataGrip-style display
+// chip, and the sidebar right-click "New query here" was the single owner
+// of a database change. The user explicitly asked to be able to change it
+// from the toolbar ("you can't even pick a database"), so the chip is an
+// interactive popover switcher. It keeps visual parity with the RDB
+// `DbSwitcher`, but the target semantics are tab-local (it updates only
+// `tab.database` and leaves `connection.activeDb` alone — Mongo has no
+// equivalent of the RDB active sub-pool, so binding this to a global chip
+// would have side effects on other tabs).
 
 import {
   Popover,
@@ -28,8 +29,8 @@ import type { DatabaseInfo } from "@/types/document";
 export interface TabDbChipProps {
   tabId: string;
   /** Mongo database currently bound to the tab. Empty string renders the
-   *  "(none)" placeholder so the user always sees the affordance — never
-   *  self-hides like the legacy Sprint 329 chip did, because hiding the
+   *  "(no database)" placeholder so the user always sees the affordance —
+   *  it never self-hides like the legacy chip did, because hiding the
    *  control was the original "I can't select a database" complaint. */
   database: string;
   connectionId: string;
@@ -98,12 +99,12 @@ export default function TabDbChip({
     [workspaceKey, database, setQueryTabDatabase, tabId],
   );
 
-  // Sprint 381 (2026-05-17) — Mongo db-contract α: chip label reflects
-  // the *binding*, not a CTA. Empty `database` means the tab has no
-  // collection-scope target bound — admin commands (`db.runCommand`,
-  // `db.adminCommand`) can still run; only collection commands require
-  // the user to pick one. "(no database)" makes the absence visible
-  // without nagging the user to select before every admin call.
+  // Mongo db-contract α: the chip label reflects the *binding*, not a
+  // CTA. Empty `database` means the tab has no collection-scope target
+  // bound — admin commands (`db.runCommand`, `db.adminCommand`) can still
+  // run; only collection commands require the user to pick one.
+  // "(no database)" makes the absence visible without nagging the user to
+  // select before every admin call.
   const label = database === "" ? t("tabDbChip.noDatabase") : database;
 
   return (

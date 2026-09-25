@@ -257,19 +257,19 @@ export const UNDO_STACK_MAX = 50;
  * commit rides the normal preview / Safe Mode pipeline, so an unreproducible
  * reversal is rejected there rather than punched through here.
  *
- * - UPDATE reversal (Phase 1) → edits keyed by the base cell key
- *   (`${rowIdx}-${colIdx}`), value = the ORIGINAL cell from the row-identity
- *   anchor (`pendingEditRowSnapshots`). Nested JSON-path keys collapse to one
+ * - UPDATE reversal → edits keyed by the base cell key (`${rowIdx}-${colIdx}`),
+ *   value = the ORIGINAL cell from the row-identity anchor
+ *   (`pendingEditRowSnapshots`). Nested JSON-path keys collapse to one
  *   whole-cell reversal; the anchor is carried so the reversal's WHERE targets
  *   the row the user touched.
- * - DELETE reversal (Phase 2) → re-INSERT each committed-deleted row from its
+ * - DELETE reversal → re-INSERT each committed-deleted row from its
  *   `pendingDeletedRowSnapshots` value. Needs the snapshot; a deleted key
  *   without one can't be reproduced → whole commit `restageBlocked`.
- * - INSERT reversal (Phase 2) → DELETE each committed-inserted row, anchored on
- *   the typed new-row values. Reversible only when the table has PK column(s)
- *   AND every new row carries all PK values (auto-increment / server-default PKs
- *   aren't reproducible) → otherwise whole commit `restageBlocked`, so undo pops
- *   it with a toast instead of staging a wrong-row DELETE.
+ * - INSERT reversal → DELETE each committed-inserted row, anchored on the typed
+ *   new-row values. Reversible only when the table has PK column(s) AND every
+ *   new row carries all PK values (auto-increment / server-default PKs aren't
+ *   reproducible) → otherwise whole commit `restageBlocked`, so undo pops it
+ *   with a toast instead of staging a wrong-row DELETE.
  * - Nothing reversible → `null`; the stack ends up empty.
  */
 export function buildRestageSnapshot(
@@ -286,7 +286,7 @@ export function buildRestageSnapshot(
   const hasDelete = source.pendingDeletedRowKeys.size > 0;
 
   // Reproducibility gates. If any add/delete in the commit can't be reversed
-  // safely, the whole commit is blocked (matches Phase 1's all-or-nothing).
+  // safely, the whole commit is blocked.
   const pkIdx: number[] = [];
   if (columns) {
     columns.forEach((c, i) => {

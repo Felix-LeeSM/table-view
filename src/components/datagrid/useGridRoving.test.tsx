@@ -1,16 +1,17 @@
-// Purpose: useGridRoving 훅 단위 테스트 (Design-swarm #4 Phase 2). 실제
-// react-virtual 없이 손으로 만든 container DOM 으로 결정적으로 검증한다.
-// 커버: (1) 보이는 row 방향키 이동은 scrollRowIntoView 를 부르지 않는다,
-// (2) virtualization sync — off-DOM row 로 이동 시 scrollRowIntoView 로
-// row 를 render 시킨 뒤 focus 가 새 cell 에 안착, (3) edge clamp. (2026-07-01)
+// Purpose: unit tests for the useGridRoving hook. Verified
+// deterministically with a hand-built container DOM, no real
+// react-virtual. Covers: (1) visible-row arrow nav does not call
+// scrollRowIntoView, (2) virtualization sync — moving to an off-DOM row has
+// scrollRowIntoView render the row, then focus lands on the new cell,
+// (3) edge clamp. (2026-07-01)
 
 import { act, renderHook } from "@testing-library/react";
 import { createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { useGridRoving } from "./useGridRoving";
 
-// rAF 를 N 프레임 flush. onKeyDown → focusCell 이 `.focus()` 를 프레임 단위로
-// defer 하고, virtualization miss 시 최대 MAX_FOCUS_FRAMES 재시도한다.
+// Flush rAF for N frames. onKeyDown → focusCell defers `.focus()` per frame
+// and retries up to MAX_FOCUS_FRAMES on a virtualization miss.
 async function flushRaf(frames = 8) {
   for (let i = 0; i < frames; i++) {
     await act(async () => {
@@ -19,7 +20,7 @@ async function flushRaf(frames = 8) {
   }
 }
 
-/** data cell div (row, col). tabindex 는 -1 로 시작 (roving 이 갱신). */
+/** Data cell div (row, col). tabindex starts at -1 (roving updates it). */
 function makeCell(row: number, col: number): HTMLElement {
   const el = document.createElement("div");
   el.setAttribute("data-grid-row", String(row));
@@ -29,8 +30,9 @@ function makeCell(row: number, col: number): HTMLElement {
 }
 
 describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
-  // Reason: 모든 cell 이 DOM 에 있는 non-virtualized 경로에선 ArrowDown 이
-  // 바로 다음 row cell 로 focus 를 옮기고 scroll 콜백을 부르지 않는다. (2026-07-01)
+  // Reason: on the non-virtualized path where every cell is in the DOM,
+  // ArrowDown moves focus straight to the next row's cell and does not call
+  // the scroll callback. (2026-07-01)
   it("visible-row nav moves focus without calling scrollRowIntoView", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -45,7 +47,7 @@ describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
       useGridRoving(2, 1, containerRef, { scrollRowIntoView: scrollSpy }),
     );
 
-    // (0,0) 이 focus 를 쥔 상태에서 ArrowDown.
+    // ArrowDown while (0,0) holds focus.
     cell00.focus();
     act(() => result.current.syncFocus(0, 0));
     act(() => {
@@ -63,22 +65,22 @@ describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
     container.remove();
   });
 
-  // Reason: virtualization sync — target row 가 처음엔 DOM 에 없다. hook 이
-  // 첫 프레임 miss 를 감지해 scrollRowIntoView(R) 를 부르고, 그 콜백이 row R
-  // cell 을 append (virtualizer render 시뮬레이션) 하면 재시도가 focus 를
-  // 새 cell 에 안착시킨다. Phase 2 의 핵심 문제. (2026-07-01)
+  // Reason: virtualization sync — the target row is not in the DOM at first.
+  // The hook detects the first-frame miss and calls scrollRowIntoView(R);
+  // once that callback appends the row R cell (simulating a virtualizer
+  // render), the retry lands focus on the new cell. (2026-07-01)
   it("virtualization sync scrolls an off-DOM row in, then focuses it", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
-    // 초기엔 rows 0–1 만 DOM 에 있다 (virtual window).
+    // Initially only rows 0–1 are in the DOM (virtual window).
     const cell00 = makeCell(0, 0);
     const cell10 = makeCell(1, 0);
     container.append(cell00, cell10);
     const containerRef = createRef<HTMLElement>();
     (containerRef as { current: HTMLElement }).current = container;
 
-    // scrollRowIntoView(R): virtualizer 가 row R 을 render 한 것처럼 cell 을
-    // container 에 append.
+    // scrollRowIntoView(R): appends the cell to the container as if the
+    // virtualizer had rendered row R.
     const scrollSpy = vi.fn((row: number) => {
       if (!container.querySelector(`[data-grid-row="${row}"]`)) {
         container.appendChild(makeCell(row, 0));
@@ -89,20 +91,21 @@ describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
       useGridRoving(50, 1, containerRef, { scrollRowIntoView: scrollSpy }),
     );
 
-    // (1,0) 에서 시작, off-window row 로 점프 (End 는 col 이동이라 row 로
-    // 가야 함 → ArrowDown 을 여러 번 대신 focusedRef 를 row 40 근처로 옮기고
-    // ArrowDown 한 번). 여기선 syncFocus 로 anchor 를 row 40 에 두고 ArrowDown.
+    // Start at (1,0), jump to an off-window row (End moves by column, so to
+    // reach a lower row we move focusedRef near row 40 and press ArrowDown
+    // once instead of pressing ArrowDown many times). Here syncFocus parks
+    // the anchor at row 40 and then ArrowDown.
     act(() => result.current.syncFocus(40, 0));
     act(() => {
       result.current.onKeyDown({
         key: "ArrowDown",
-        target: cell10, // [data-grid-row] 를 가진 cell → 가드 통과
+        target: cell10, // cell carrying [data-grid-row] → passes the guard
         preventDefault: vi.fn(),
       } as unknown as React.KeyboardEvent);
     });
     await flushRaf();
 
-    // row 41 은 초기 DOM 에 없었다 → scroll 콜백이 41 로 불려야 한다.
+    // Row 41 was not in the initial DOM → the scroll callback must fire with 41.
     expect(scrollSpy).toHaveBeenCalledWith(41);
     const target = container.querySelector<HTMLElement>(
       `[data-grid-row="41"][data-grid-col="0"]`,
@@ -112,9 +115,9 @@ describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
     container.remove();
   });
 
-  // Reason: PageDown 은 한 페이지(PAGE_ROWS=10) 아래로 점프한다. AC1 의
-  // Page 키 요구. row 0..12 가 DOM 에 있는 non-virtualized 경로에서 row 10 으로
-  // focus + tabIndex 이동. (issue #1130)
+  // Reason: PageDown jumps down one page (PAGE_ROWS=10). AC1's Page key
+  // requirement. On the non-virtualized path with rows 0..12 in the DOM,
+  // focus + tabIndex move to row 10. (issue #1130)
   it("PageDown jumps down one page (PAGE_ROWS) of rows", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -145,7 +148,7 @@ describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
     container.remove();
   });
 
-  // Reason: PageUp 은 한 페이지 위로 점프하며 top 에서 clamp (no wrap). (issue #1130)
+  // Reason: PageUp jumps up one page and clamps at the top (no wrap). (issue #1130)
   it("PageUp jumps up one page and clamps at row 0", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -171,15 +174,16 @@ describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
     });
     await flushRaf();
 
-    // 5 - 10 → clamp 0.
+    // 5 - 10 → clamp to 0.
     expect(result.current.cellTabIndex(0, 0)).toBe(0);
     expect(cells[0]).toHaveFocus();
     container.remove();
   });
 
-  // Reason: #1127 AC1 — 최상단 row 에서 ArrowUp → 대응 컬럼 header 셀 진입.
-  // header 는 role="columnheader" 형제로 container 에 있고, N번째 columnheader =
-  // visual col N. body roving anchor 는 (0,col) 그대로 유지된다. (2026-07-05)
+  // Reason: #1127 AC1 — ArrowUp from the top row enters the matching
+  // column's header cell. The headers are role="columnheader" siblings of
+  // the container and the N-th columnheader is visual col N. The body roving
+  // anchor stays at (0,col). (2026-07-05)
   it("ArrowUp at row 0 focuses the header cell of the current col (#1127)", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -209,13 +213,14 @@ describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
     await flushRaf();
 
     expect(h1).toHaveFocus();
-    // body anchor 유지: (0,1) 여전히 tab stop.
+    // Body anchor kept: (0,1) is still the tab stop.
     expect(result.current.cellTabIndex(0, 1)).toBe(0);
     container.remove();
   });
 
-  // Reason: #1127 AC2 — Ctrl+Home = 첫 셀(0,0), Ctrl+End = 마지막 셀
-  // (last row, last col) 점프. 수식어 없는 Home/End 는 col 만 이동(기존). (2026-07-05)
+  // Reason: #1127 AC2 — Ctrl+Home jumps to the first cell (0,0), Ctrl+End to
+  // the last cell (last row, last col). Bare Home/End still move by column
+  // (existing behavior). (2026-07-05)
   it("Ctrl+Home jumps to (0,0), Ctrl+End to the last cell (#1127)", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -260,8 +265,9 @@ describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
     container.remove();
   });
 
-  // Reason: #1127 AC2 — 가상화 경로에서 PageDown 이 off-window row 로 점프해도
-  // scrollRowIntoView 로 스크롤-인 후 focus 가 유지된다 (page 단위 + 가상화). (2026-07-05)
+  // Reason: #1127 AC2 — on the virtualized path, even when PageDown jumps to
+  // an off-window row, scrollRowIntoView scrolls it in and focus holds
+  // (page-sized + virtualized). (2026-07-05)
   it("PageDown to an off-window row scrolls it in then focuses (virtualized) (#1127)", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -289,7 +295,7 @@ describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
     });
     await flushRaf();
 
-    // 5 + PAGE_ROWS(10) = 15, off-DOM → scroll 콜백으로 render 후 focus.
+    // 5 + PAGE_ROWS(10) = 15, off-DOM → the scroll callback renders it, then focus.
     expect(scrollSpy).toHaveBeenCalledWith(15);
     const target = container.querySelector<HTMLElement>(
       `[data-grid-row="15"][data-grid-col="0"]`,
@@ -298,7 +304,7 @@ describe("useGridRoving (Design-swarm #4 Phase 2)", () => {
     container.remove();
   });
 
-  // Reason: ArrowUp at row 0 은 clamp (no wrap), (0,0) 이 tab stop 유지. (2026-07-01)
+  // Reason: ArrowUp at row 0 clamps (no wrap); (0,0) stays the tab stop. (2026-07-01)
   it("ArrowUp at row 0 clamps and keeps (0,0) the tab stop", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);

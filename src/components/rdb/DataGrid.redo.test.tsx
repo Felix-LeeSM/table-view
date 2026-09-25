@@ -1,6 +1,6 @@
 // Issue #1527 (ADR 0050) — DataGrid Cmd/Ctrl+Shift+Z keyboard binding for
-// pending-edit redo, the symmetric counterpart of the Sprint 249 Cmd+Z undo
-// binding (see DataGrid.undo.test.tsx). Asserted scenarios:
+// pending-edit redo, the symmetric counterpart of the Cmd+Z undo binding
+// (see DataGrid.undo.test.tsx). Asserted scenarios:
 // - KR1: undo a pending Add, then Cmd+Shift+Z restores it.
 // - KR2: Cmd+Shift+Z with an empty redo stack is a no-op.
 // - KR3: focused INPUT → browser native redo wins (our handler skips).

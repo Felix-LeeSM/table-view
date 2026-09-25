@@ -1,8 +1,8 @@
-// Sprint 238 AC-238-08 — DataRow 가 column category 에 따라 text-align
-// 클래스 (`text-right` / `text-center`) 를 cell `<td>` 에 적용하는지 DOM
-// 단언으로 lock. category lookup table 자체는 columnCategory.test 에서
-// 검증; 본 파일은 grid renderer wiring 의 회귀 가드.
-// 작성일 2026-05-10.
+// AC-238-08 — DOM assertions locking that DataRow applies the text-align
+// class (`text-right` / `text-center`) to the grid cell according to the
+// column category. The category lookup table itself is verified in
+// columnCategory.test; this file is the regression guard for the grid
+// renderer wiring.
 
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -106,14 +106,14 @@ describe("DataGridTable — text-align by ColumnCategory (AC-238-08)", () => {
     // bool → text-center
     expect(cells[2]!.className).toContain("text-center");
     expect(cells[2]!.className).not.toContain("text-right");
-    // text → 좌편향 (text-left 디폴트 — 명시적 클래스 없음)
+    // text → left-aligned (text-left default — no explicit class)
     expect(cells[3]!.className).not.toContain("text-right");
     expect(cells[3]!.className).not.toContain("text-center");
   });
 
   it("ColumnInfo.category 가 누락되어도 'unknown' 으로 fallback (좌편향)", () => {
     const data = makeData();
-    // category 필드가 없는 legacy fixture 시뮬레이션.
+    // Simulates a legacy fixture with no category field.
     const legacyCol = { ...data.columns[0]! };
     delete (legacyCol as { category?: unknown }).category;
     const legacyData: TableData = {
@@ -127,7 +127,7 @@ describe("DataGridTable — text-align by ColumnCategory (AC-238-08)", () => {
       '[role="row"][aria-rowindex="2"] [role="gridcell"]',
     );
     expect(firstCell).not.toBeNull();
-    // unknown → 좌편향 (text-right / text-center 없음).
+    // unknown → left-aligned (no text-right / text-center).
     expect(firstCell!.className).not.toContain("text-right");
     expect(firstCell!.className).not.toContain("text-center");
   });

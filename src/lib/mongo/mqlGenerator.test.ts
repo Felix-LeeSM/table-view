@@ -295,7 +295,7 @@ describe("generateMqlPreview — edge cases", () => {
     });
   });
 
-  // Sprint 322 — Slice F.2: dot-notation nested edits.
+  // Slice F.2: dot-notation nested edits.
   it("emits dot-notation $set for a single nested edit", () => {
     const { previewLines, commands } = generateMqlPreview(
       makeInput({
@@ -356,12 +356,12 @@ describe("generateMqlPreview — edge cases", () => {
     );
   });
 
-  // Sprint 342 V2 (2026-05-15) — DocumentTreePanel's delete action stores
-  // the `__op__:unset` sentinel against a field path. The generator must
-  // route that into a `$unset` operator (and let it coexist with `$set`
-  // on the same row so one click of Save covers overwrite + delete).
-  // 작성 이유: 기존 sprint 322 의 `$set` 단독 patch 가 inline-tree 의 leaf
-  // 삭제 (예: `meta.legacyField`) 를 표현할 수 없었다.
+  // DocumentTreePanel's delete action stores the `__op__:unset` sentinel
+  // against a field path. The generator must route that into a `$unset`
+  // operator (and let it coexist with `$set` on the same row so one click
+  // of Save covers overwrite + delete).
+  // Reason: the earlier `$set`-only patch could not express inline-tree
+  // leaf deletion (e.g. `meta.legacyField`).
   it("routes __op__:unset sentinel into a $unset patch", () => {
     const { previewLines, commands, errors } = generateMqlPreview(
       makeInput({
@@ -455,10 +455,10 @@ describe("generateMqlPreview — edge cases", () => {
   });
 });
 
-// Sprint 324 (2026-05-15) — Slice G.2: canonical EJSON BSON wrapper 가
-// mongosh literal 로 출력되는 경로의 회귀 가드. G.1 helper 가 wrapper
-// shape 을 만들고, mqlGenerator 는 그 shape 을 사용자에게 친숙한 mongosh
-// 표기 (ObjectId("..."), ISODate("...") 등) 로 표시한다.
+// Slice G.2: regression guard for the path where the canonical EJSON BSON
+// wrapper is printed as a mongosh literal. The G.1 helper builds the
+// wrapper shape, and mqlGenerator renders that shape in user-friendly
+// mongosh notation (ObjectId("..."), ISODate("..."), etc).
 describe("generateMqlPreview — BSON literal (Sprint 324 G.2)", () => {
   it('formats $oid wrapper as ObjectId("...") in the preview', () => {
     const { previewLines } = generateMqlPreview(
@@ -547,32 +547,34 @@ describe("generateMqlPreview — BSON literal (Sprint 324 G.2)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Sprint 344 (2026-05-15) — Slice E — Generator dispatch for inline-tree
-// `+ key` adds on Mongo grid. mqlGenerator 자체는 코드 변경 없이 dot-path
-// 를 native 로 처리 — `$set` 가 missing path 를 자동 생성한다. 본 회귀
-// 가드는 두 가지를 잠근다:
-//  - AC-344-E-05: cell `meta = {}` 에 `meta.role` add → 정확히 1개의
-//    updateOne 이 `$set: { "meta.role": "admin" }` 를 emit.
-//  - AC-344-E-06: nested-only path edit (top-level edit 없음) 가 sentinel-edit
-//    guard 를 발동시키지 않음 — guard 는 path === null 일 때만 fire.
+// Slice E — Generator dispatch for inline-tree `+ key` adds on Mongo grid.
+// mqlGenerator itself needs no code change: it handles dot-paths natively —
+// `$set` auto-creates the missing path. This regression guard locks two
+// things:
+//  - AC-344-E-05: adding `meta.role` to a `meta = {}` cell → exactly one
+//    updateOne emits `$set: { "meta.role": "admin" }`.
+//  - AC-344-E-06: a nested-only path edit (no top-level edit) does not
+//    trigger the sentinel-edit guard — the guard fires only when
+//    path === null.
 // ---------------------------------------------------------------------------
 
 describe("generateMqlPreview — Slice E add-key dispatch (Sprint 344)", () => {
   it("AC-344-E-05: nested $set 가 missing path 를 native 로 생성 (resulting patch key = 'meta.role')", () => {
-    // Slice B/C 의 + key affordance 가 `role` 을 meta 컬럼 (colIdx=1) 에
-    // commit 했을 때 pendingEdits 는 `"0-1:role" => "admin"` 으로 저장된다.
-    // mqlGenerator 는 col.name (meta) + path (role) 을 dot-join 해서
-    // patch field path `meta.role` 을 만든다 → MongoDB 의 `$set` 가
-    // native 로 missing key (`role`) 를 `meta = {}` 위에 생성한다. 한 개의
-    // updateOne 만 emit. 작성 이유: AC-344-E-05 generator dispatch lock.
+    // When the Slice B/C + key affordance commits `role` to the meta column
+    // (colIdx=1), pendingEdits stores `"0-1:role" => "admin"`. mqlGenerator
+    // dot-joins col.name (meta) + path (role) into the patch field path
+    // `meta.role` → MongoDB's `$set` natively creates the missing key
+    // (`role`) on top of `meta = {}`. Exactly one updateOne is emitted.
+    // Reason: AC-344-E-05 generator dispatch lock.
     const { previewLines, commands, errors } = generateMqlPreview(
       makeInput({
         columns: [
           { name: "_id", data_type: "objectId", is_primary_key: true },
           { name: "meta", data_type: "document", is_primary_key: false },
         ],
-        // cell value 가 empty object (`{}`) — sentinel string 이 아니다.
-        // sentinel-edit guard 는 nested path 에 발동하지 않는다 (path !== null).
+        // cell value is an empty object (`{}`) — not a sentinel string.
+        // the sentinel-edit guard does not fire on nested paths
+        // (path !== null).
         rows: [[{ $oid: HEX_A }, {}]],
         pendingEdits: new Map<string, unknown>([["0-1:role", "admin"]]),
       }),
@@ -590,18 +592,18 @@ describe("generateMqlPreview — Slice E add-key dispatch (Sprint 344)", () => {
   });
 
   it("AC-344-E-06: sentinel cell `{}` + nested-only newKey — guard 미발동", () => {
-    // Slice B 의 + key 가 sentinel cell `{...}` 에 newKey 를 commit 했을 때.
-    // pendingEdits Map { "0-1:newKey" => "alpha" } only — top-level edit 없음.
-    // sentinel-edit guard 는 path === null (top-level) 일 때만 fire 하므로
-    // 이 nested-only path 는 그대로 $set 로 emit 된다. column name 과 path 가
-    // dot-join 되어 `<col>.<newKey>` 가 patch field path.
+    // When the Slice B + key commits newKey to a sentinel cell `{...}`.
+    // pendingEdits Map { "0-1:newKey" => "alpha" } only — no top-level edit.
+    // The sentinel-edit guard fires only when path === null (top-level), so
+    // this nested-only path is emitted as-is via $set. The column name and
+    // path are dot-joined into the `<col>.<newKey>` patch field path.
     const { previewLines, commands, errors } = generateMqlPreview(
       makeInput({
         columns: [
           { name: "_id", data_type: "objectId", is_primary_key: true },
           { name: "meta", data_type: "document", is_primary_key: false },
         ],
-        // sentinel string "{...}" — top-level edit 는 막혀야 하지만 nested 는 허용.
+        // sentinel string "{...}" — top-level edits must stay blocked, nested allowed.
         rows: [[{ $oid: HEX_A }, "{...}"]],
         pendingEdits: new Map<string, unknown>([["0-1:newKey", "alpha"]]),
       }),
@@ -619,11 +621,12 @@ describe("generateMqlPreview — Slice E add-key dispatch (Sprint 344)", () => {
   });
 
   it("AC-344-E-06 contrast: top-level sentinel edit STILL blocked (guard fires only on top-level)", () => {
-    // 회귀 가드 — sentinel-edit guard 는 top-level (path === null) 의
-    // edit value 가 sentinel 문자열일 때 정상 동작해야 한다. nested 는
-    // 우회한다는 invariant 의 contrapositive (top-level 은 blocked).
-    // 작성 이유: AC-344-E-06 가 sentinel guard 의 nested 우회만 잠그므로,
-    // top-level sentinel guard 의 회귀를 별도로 한 줄로 같이 cover.
+    // Regression guard — the sentinel-edit guard must still work when a
+    // top-level (path === null) edit value is a sentinel string. This is
+    // the contrapositive of the nested bypass invariant (top-level is
+    // blocked).
+    // Reason: AC-344-E-06 only locks the sentinel guard's nested bypass, so
+    // this covers the top-level sentinel guard separately in one line.
     const { previewLines, commands, errors } = generateMqlPreview(
       makeInput({
         columns: [
@@ -631,7 +634,7 @@ describe("generateMqlPreview — Slice E add-key dispatch (Sprint 344)", () => {
           { name: "meta", data_type: "document", is_primary_key: false },
         ],
         rows: [[{ $oid: HEX_A }, "{...}"]],
-        // top-level edit 의 value 자체가 sentinel — guard 가 fire 해야 함.
+        // the top-level edit's value is itself a sentinel — the guard must fire.
         pendingEdits: new Map<string, unknown>([["0-1", "{...}"]]),
       }),
     );
@@ -644,22 +647,27 @@ describe("generateMqlPreview — Slice E add-key dispatch (Sprint 344)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Purpose: MongoDB nested array-element $set path + scalar unwrap 회귀 가드 —
-// user report 2026-07-18. DocumentTreePanel 로 `items[0]` 에 key `a`=3 을
-// 추가하면 `$set: { "items.[0].a": "__bson__:3" }` 가 나가 MongoDB 가
-// WriteError code 28 (Cannot create field '[0]') 로 거부했다. 두 결함:
-//   1) 배열 원소 하위 필드는 dot-index 표기 (`items.0.a`) 여야 하는데 트리
-//      경로의 대괄호 세그먼트 (`[0]`) 가 그대로 붙었다.
-//   2) 트리로 추가한 스칼라 (number/boolean/null) 는 grid 가 `__bson__:` 로
-//      태그해 string-typed pendingEdits 를 통과시키는데, generator 의 언랩
-//      가드가 object 만 풀어 리터럴 `"__bson__:3"` 문자열로 커밋됐다.
+// Purpose: regression guard for the MongoDB nested array-element $set path
+// + scalar unwrap — user report 2026-07-18. Adding key `a`=3 to `items[0]`
+// from DocumentTreePanel sent `$set: { "items.[0].a": "__bson__:3" }` and
+// MongoDB rejected it with WriteError code 28 (Cannot create field '[0]').
+// Two defects:
+//   1) An array element's subfield must use dot-index notation
+//      (`items.0.a`), but the bracket segment (`[0]`) of the tree path was
+//      appended verbatim.
+//   2) A scalar added from the tree (number/boolean/null) is tagged with
+//      `__bson__:` by the grid and passes through string-typed
+//      pendingEdits, but the generator's unwrap guard only unwrapped
+//      objects, so it committed the literal `"__bson__:3"` string.
 // ---------------------------------------------------------------------------
 describe("generateMqlPreview — nested array-element $set (user report 2026-07-18)", () => {
   it("normalizes bracket array indices to Mongo dot-index and unwraps the scalar (exact repro)", () => {
-    // Reason: user report 2026-07-18 — `items[0]` 에 `a`=3 추가 시 커밋 실패.
-    // 배열 원소 경로 `[0].a` 는 `items.0.a` 로, `__bson__:3` 태그 스칼라는
-    // 실제 number 3 으로 나가야 한다. 같은 행의 bracket-free 객체 경로
-    // (`meta.verified`) 는 정규화 대상이 아님을 함께 잠근다 (회귀 방지).
+    // Reason: user report 2026-07-18 — commit failed when adding `a`=3 to
+    // `items[0]`. The array element path `[0].a` must come out as
+    // `items.0.a`, and the `__bson__:3`-tagged scalar must go out as the
+    // real number 3. Also locks that the bracket-free object path
+    // (`meta.verified`) on the same row is not a normalization target
+    // (regression prevention).
     const { previewLines, commands, errors } = generateMqlPreview(
       makeInput({
         columns: [
@@ -684,8 +692,9 @@ describe("generateMqlPreview — nested array-element $set (user report 2026-07-
   });
 
   it("normalizes a mid-path bracket index (foo[2].bar) and a bare index ([0])", () => {
-    // Reason: user report 2026-07-18 — 정규화가 leading / mid / trailing 대괄호
-    // 를 모두 dot-index 로 바꾸는지 (앞 잉여 `.` 없이) 잠근다.
+    // Reason: user report 2026-07-18 — locks that normalization turns
+    // leading / mid / trailing brackets all into dot-index (without a
+    // stray leading `.`).
     const { commands, errors } = generateMqlPreview(
       makeInput({
         columns: [
@@ -717,11 +726,12 @@ describe("generateMqlPreview — nested array-element $set (user report 2026-07-
   ])(
     "unwraps a tree-added value $tagged into its real type in the update patch (not the literal tag string)",
     ({ tagged, expected }) => {
-      // Reason: user report 2026-07-18 — `+ key` 스칼라 add 는 grid 가
-      // `__bson__:<json>` 로 태그해 string-typed pendingEdits 를 통과시킨다.
-      // 언랩은 wrap 과 대칭인 JSON round-trip 이어야 한다 — object 뿐 아니라
-      // number/boolean/null 도 풀어야 하고, 기존 BSON wrapper object 언랩은
-      // 회귀 없어야 한다 (마지막 케이스가 그 가드).
+      // Reason: user report 2026-07-18 — a `+ key` scalar add is tagged
+      // `__bson__:<json>` by the grid and passes through string-typed
+      // pendingEdits. The unwrap must be a JSON round-trip symmetric with
+      // the wrap — unwrapping not only objects but also
+      // number/boolean/null, while the existing BSON wrapper object unwrap
+      // stays regression-free (the last case is that guard).
       const { commands, errors } = generateMqlPreview(
         makeInput({
           columns: [

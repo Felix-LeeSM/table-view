@@ -92,12 +92,12 @@ export const SYNCED_KEYS: ReadonlyArray<keyof WorkspaceStoreState> = [
   "workspaces",
 ] as const;
 
-// #1097 — attach only in workspace windows. sprint-361 renamed the window
-// label from bare `"workspace"` to `workspace-{connection_id}`, so a strict
-// `=== "workspace"` guard never matched and the bridge was dead code. Reuse
+// #1097 — attach only in workspace windows. The window-label rename (bare
+// `"workspace"` → `workspace-{connection_id}`) left a strict
+// `=== "workspace"` guard never matching, so the bridge was dead code. Reuse
 // `parseWorkspaceLabel` (the single label parser) so the guard tracks the real
 // label format: non-null connection id → a workspace window; `"launcher"`,
-// the pre-sprint-361 bare `"workspace"`, and `null` (vitest jsdom) → no attach.
+// the old bare `"workspace"`, and `null` (vitest jsdom) → no attach.
 const currentLabel = getCurrentWindowLabel();
 if (currentLabel && parseWorkspaceLabel(currentLabel) !== null) {
   void attachZustandIpcBridge<WorkspaceStoreState>(useWorkspaceStore, {

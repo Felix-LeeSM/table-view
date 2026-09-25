@@ -6,11 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, DatabaseType } from "@/types/connection";
 import SchemaTree from "./SchemaTree";
 
-// Sprint 263 — flat-key seeds (`{ pg1: [...] }`, `{ "pg1:public": [...] }`)
-// are translated into the new `(connId, db)`-nested cache shape under the
-// `db1` sentinel. The local `activateConnection` seed mirrors the shared
-// `schemaTreeTestHelpers.resetStores` pattern so `useSchemaCache` can
-// resolve the workspace db.
+// Flat-key seeds (`{ pg1: [...] }`, `{ "pg1:public": [...] }`) are translated
+// into the new `(connId, db)`-nested cache shape under the `db1` sentinel. The
+// local `activateConnection` seed mirrors the shared
+// `schemaTreeTestHelpers.resetStores` pattern so `useSchemaCache` can resolve
+// the workspace db.
 const DEFAULT_DB = "db1";
 function translateFlatSeeds(
   overrides: Record<string, unknown>,
@@ -59,14 +59,14 @@ function activateConnection(connId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Sprint 137 — AC-S137-03: PG row count cell must carry an aria-label /
-// tooltip explaining that the number is an *estimate* sourced from
-// `pg_class.reltuples`. The user check on 2026-04-27 found the bare number
-// misleading — users assumed it was an exact COUNT(*).
+// AC-S137-03: PG row count cell must carry an aria-label / tooltip
+// explaining that the number is an *estimate* sourced from
+// `pg_class.reltuples`. The user check found the bare number misleading —
+// users assumed it was an exact COUNT(*).
 //
 // Per the contract we implemented Option (a) (tooltip + aria-label) rather
 // than Option (b) (right-click → exact COUNT(*) action), so AC-S137-04
-// (confirm dialog gating) is N/A in this sprint and not exercised here.
+// (confirm dialog gating) is N/A and not exercised here.
 // ---------------------------------------------------------------------------
 
 const mockLoadSchemas = vi.fn().mockResolvedValue(undefined);
@@ -142,9 +142,9 @@ describe("SchemaTree — Sprint 137 / 143 row count rendering", () => {
     });
 
     // Expand the schema so the table row (and its row-count cell) is
-    // Sprint 143 (AC-148-1) — the cell now prefixes the locale-separated
-    // number with `~` so users read it as an estimate at a glance. The
-    // long-form aria-label/title still names the estimate source.
+    // AC-148-1 — the cell now prefixes the locale-separated number with `~`
+    // so users read it as an estimate at a glance. The long-form
+    // aria-label/title still names the estimate source.
     const cell = document.querySelector('[data-row-count="true"]');
     expect(cell).not.toBeNull();
     expect(cell?.getAttribute("aria-label")).toBe(
@@ -182,8 +182,8 @@ describe("SchemaTree — Sprint 137 / 143 row count rendering", () => {
     expect(cell?.getAttribute("title")).toBe(
       "Estimated row count from information_schema.tables",
     );
-    // Sprint 143 (AC-148-1) — MySQL is also an estimate source, so the
-    // tilde prefix is required just like PG.
+    // AC-148-1 — MySQL is also an estimate source, so the tilde prefix is
+    // required just like PG.
     expect(cell?.textContent).toBe(`~${(9876).toLocaleString()}`);
   });
 
@@ -219,11 +219,11 @@ describe("SchemaTree — Sprint 137 / 143 row count rendering", () => {
   });
 
   it("AC-148-2: PG row-count cell renders `?` when the schema fetch returned no estimate", async () => {
-    // Sprint 143 (AC-148-2) — `row_count: null` happens when the catalog
-    // query failed or the table is brand-new (no ANALYZE yet). Pre-S143
-    // the cell was suppressed entirely; per spec edge case the user
-    // should now see `?` so they know the value is *unknown*, not
-    // *zero*. The catch-all `?` rendering is shared with SQLite.
+    // AC-148-2 — `row_count: null` happens when the catalog query failed or
+    // the table is brand-new (no ANALYZE yet). Previously the cell was
+    // suppressed entirely; per spec edge case the user should now see `?` so
+    // they know the value is *unknown*, not *zero*. The catch-all `?`
+    // rendering is shared with SQLite.
     useConnectionStore.setState({
       connections: [makeConnection("pg1", "postgresql")],
     });

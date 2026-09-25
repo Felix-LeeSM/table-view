@@ -273,11 +273,11 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
 }
 
 /**
- * Sprint 270 — first-paint skeleton for the no-active-tab main area. Shape
- * mirrors the `EmptyState` welcome card (logo block + two message lines +
- * a CTA-sized button) so the post-hydrate swap doesn't reflow. `role="status"`
- * + `aria-busy="true"` keeps screen-reader users informed that the surface
- * is hydrating, not empty.
+ * First-paint skeleton for the no-active-tab main area. Shape mirrors the
+ * `EmptyState` welcome card (logo block + two message lines + a CTA-sized
+ * button) so the post-hydrate swap doesn't reflow. `role="status"` +
+ * `aria-busy="true"` keeps screen-reader users informed that the surface is
+ * hydrating, not empty.
  */
 function MainAreaSkeleton() {
   const { t } = useTranslation("layout");
@@ -300,9 +300,9 @@ function MainAreaSkeleton() {
 function EmptyState() {
   const { t } = useTranslation("layout");
   // This workspace window is pinned to one connection via its Tauri window
-  // label (sprint-366). The empty-state target must be *that* connection —
-  // not a global MRU/first-connected pick — so the lead paradigm and the
-  // "New Query" CTA both act on the connection this window actually renders.
+  // label. The empty-state target must be *that* connection — not a global
+  // MRU/first-connected pick — so the lead paradigm and the "New Query" CTA
+  // both act on the connection this window actually renders.
   // The old MRU/first-connected target let a Redis window mislabel itself
   // "SQL against <DuckDB>" and open its New Query tab in the DuckDB workspace
   // slot, which this window never reads (invisible = "New Query does nothing").
@@ -362,9 +362,9 @@ export default function MainArea() {
   const activeTabId = useActiveTabId();
   const workspaceKey = useCurrentWorkspaceKey();
   const setSubView = useWorkspaceStore((s) => s.setSubView);
-  // Sprint 270 — gates the no-active-tab fallback between skeleton (pre-
-  // hydrate) and `EmptyState` (post-hydrate). Once flipped to true the
-  // skeleton never re-renders for the remainder of the session.
+  // Gates the no-active-tab fallback between skeleton (pre-hydrate) and
+  // `EmptyState` (post-hydrate). Once flipped to true the skeleton never
+  // re-renders for the remainder of the session.
   const hasLoadedOnce = useConnectionStore((s) => s.hasLoadedOnce);
   // #2426 — the bottom dock replaced the two stacked flyouts. The
   // `toggle-global-query-log` channel survives unchanged (App.tsx's

@@ -1,11 +1,9 @@
-// Sprint 222 — `refetch-overlay` axis split from `DataGrid.test.tsx`
-// (P11 step 5, last). Covers Sprint 180 loading-flicker gate
-// (centered spinner on initial load / table-in-DOM during refetch /
-// post-threshold overlay / overlay removal on completion / refetch
-// failure surfacing) + column resize handles + drag-mousemove width
-// computation + null tableRef tolerance + race-condition stale
-// response. Cases are byte-equivalent to the originals — no
-// behaviour change.
+// `refetch-overlay` axis of the DataGrid tests. Covers the
+// loading-flicker gate (centered spinner on initial load / table-in-DOM
+// during refetch / post-threshold overlay / overlay removal on
+// completion / refetch failure surfacing) + column resize handles +
+// drag-mousemove width computation + null tableRef tolerance +
+// race-condition stale response.
 
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -51,8 +49,8 @@ beforeEach(() => {
   });
 });
 
-// Sprint 76 — a minimal reactive mock that mirrors zustand's hook + getState
-// shape. The component subscribes through the selector; `updateTabSorts`
+// A minimal reactive mock that mirrors zustand's hook + getState shape.
+// The component subscribes through the selector; `updateTabSorts`
 // mutates the tab entry and bumps `version` so every selector re-runs on
 // the next render. `forceRerender` via `useTabStoreBump` keeps React in
 // sync without dragging the real zustand library into the mock.
@@ -173,8 +171,8 @@ describe("DataGrid", () => {
     expect(screen.getByText("Alice")).toBeInTheDocument();
   });
 
-  // 17. Refetch shows overlay spinner on top of existing table — Sprint 180
-  // (AC-180-01) shifted the overlay behind a 1s threshold gate. We use
+  // 17. Refetch shows overlay spinner on top of existing table.
+  // AC-180-01 shifted the overlay behind a 1s threshold gate. We use
   // `findByRole` which polls on real timers to wait past the gate.
   it("shows overlay spinner on top of table during refetch (post-threshold)", async () => {
     // First load completes (real timers — the fetch resolves on a microtask).
@@ -251,8 +249,8 @@ describe("DataGrid", () => {
     expect(resizeHandles.length).toBe(3); // one per column
   });
 
-  // 20a. Sprint 258 — drag-resize 가 outer container 의 `--cols` CSS
-  // variable 첫 토큰 px 를 증가시킨다.
+  // 20a. Drag-resize increases the first token px of the outer
+  // container's `--cols` CSS variable.
   it("starts column resize drag and applies width via DOM", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
@@ -281,8 +279,8 @@ describe("DataGrid", () => {
     document.body.style.userSelect = "";
   });
 
-  // Sprint 238 / 258: drag-resize 가 negative delta 에서도 crash 하지
-  // 않으며, AC-258-04 user-free policy 에 따라 0 까지 허용한다.
+  // Drag-resize does not crash on a negative delta, and per the
+  // AC-258-04 user-free policy it allows down to 0.
   it("handles resize that drags below initial width without crashing", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");

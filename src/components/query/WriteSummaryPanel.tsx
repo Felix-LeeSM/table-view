@@ -1,4 +1,4 @@
-// Sprint 312 (Phase 28 Slice A6, 2026-05-14) — Mongo write summary panel.
+// Mongo write summary panel.
 //
 // Renders the four variants of `WriteSummaryData`:
 //   - "insert"    → headline + chevron-expandable id list

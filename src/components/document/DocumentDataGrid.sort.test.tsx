@@ -1,11 +1,11 @@
-// Sprint 315 (2026-05-15) — Slice C.1 multi-column sort wire-up.
+// Multi-column sort wire-up.
 //
-// 작성 이유: Mongo DocumentDataGrid 가 RDB DataGrid 의 sort mechanic
-// (click cycle, shift+click multi-key) 을 1:1 복제해야 하고, 결과로
-// `findDocuments` IPC 의 body 가 Mongo `sort` shape (`{ field: 1|-1 }`)
-// 으로 흘러가는지 회귀 가드. 본 spec 은 (a) header click → primary
-// ASC, (b) 같은 column click → DESC, (c) 다시 click → clear,
-// (d) shift+click → secondary 추가 4 경로를 lock.
+// Reason: the Mongo DocumentDataGrid must copy the RDB DataGrid sort
+// mechanic (click cycle, shift+click multi-key) 1:1, and the resulting
+// `findDocuments` IPC body must carry the Mongo `sort` shape
+// (`{ field: 1|-1 }`). This spec locks (a) header click → primary ASC,
+// (b) click the same column → DESC, (c) click again → clear,
+// (d) shift+click → add a secondary.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";

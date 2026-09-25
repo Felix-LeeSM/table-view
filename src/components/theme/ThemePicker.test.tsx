@@ -1,8 +1,8 @@
-// 작성 (legacy) — ThemePicker 컴포넌트의 click / hover / mode-toggle 검증.
-// 2026-05-16 update (Phase 4 sprint-368) — `setTheme` / `setMode` 가 IPC 를
-// 호출하는 async 액션이 된 뒤, 클릭 핸들러는 promise 를 await 하지 않으므로
-// 테스트는 `Promise.resolve()` flush 로 microtask 를 비운 뒤 단언한다.
-// `@tauri-apps/api/core` 는 mock 으로 즉시 resolve.
+// Verifies the ThemePicker component's click / hover / mode-toggle. Since
+// `setTheme` / `setMode` are async actions that call IPC and the click handler
+// does not await the promise, the tests flush microtasks with
+// `Promise.resolve()` before asserting. `@tauri-apps/api/core` is mocked to
+// resolve immediately.
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -122,8 +122,8 @@ describe("ThemePicker", () => {
     }
   });
 
-  // 수용 기준 4 — an empty favorites list must read as guidance, not as a
-  // blank rectangle the user cannot interpret.
+  // Acceptance criterion 4 — an empty favorites list must read as guidance,
+  // not as a blank rectangle the user cannot interpret.
   it("shows guidance instead of a bare empty grid when nothing is starred", () => {
     useThemeFavoritesStore.setState({ favoriteThemeIds: [] });
 
@@ -176,13 +176,14 @@ describe("ThemePicker", () => {
     expect(screen.getByTestId("theme-picker-grid")).toBeInTheDocument();
   });
 
-  // Wave 9.5 회귀 6 (2026-05-16) — 사용자 보고: "테마가 선택이 안돼.
-  // 미리보기는 되는데, 선택이 안돼". 이전 click test 는 `useThemeStore.getState()
-  // .themeId` (store state) 만 lock 했고, user-facing invariant — DOM 의
-  // `data-theme` attribute 가 클릭한 id 로 실제 변경됨 — 은 검증 안 했다.
-  // 새 feedback rule (feedback_test_scenarios_user_journey) 의 첫 적용:
-  // mock 단언이 아니라 user 가 보는 사실 (CSS variable 을 발동시키는 DOM
-  // attribute) 까지 path 를 따라가 lock.
+  // User report: "the theme won't get selected. The preview works, but
+  // selecting doesn't." The earlier click test locked only
+  // `useThemeStore.getState().themeId` (store state) and never checked the
+  // user-facing invariant — that the DOM `data-theme` attribute really changes
+  // to the clicked id. First application of the new feedback rule
+  // (feedback_test_scenarios_user_journey): follow the path to the fact the
+  // user sees (the DOM attribute that drives the CSS variable) and lock that,
+  // not a mock assertion.
   it("Wave 9.5 회귀 6 — 카드 클릭 후 document.documentElement[data-theme] 가 클릭한 id 로 변경된다", async () => {
     render(<ThemePicker />);
     expect(document.documentElement.getAttribute("data-theme")).toBe(
@@ -196,8 +197,9 @@ describe("ThemePicker", () => {
       await Promise.resolve();
     });
 
-    // user-facing invariant: DOM attribute 가 변경 → CSS [data-theme="github"]
-    // 셀렉터가 cascade 에서 적용됨 → user 가 보는 색깔이 github 테마.
+    // user-facing invariant: the DOM attribute changes → the CSS
+    // [data-theme="github"] selector applies in the cascade → the color the
+    // user sees is the github theme.
     expect(document.documentElement.getAttribute("data-theme")).toBe("github");
   });
 
@@ -256,12 +258,13 @@ describe("ThemePicker", () => {
     );
   });
 
-  // 2026-05-16 사용자 요구: "light, dark 도 마우스 호버링하면 미리보기
-  // 해줬으면 좋겠어". 모드 toggle 의 hover 가 mode 만 일시 적용 → DOM 의
-  // `data-mode` 가 hover 된 mode 로 변경 (store 는 그대로). 카드 hover 와
-  // 동일한 preview pattern.
+  // User request: "I'd like light and dark to preview on mouse hover too."
+  // Hovering a mode toggle applies only the mode temporarily → the DOM
+  // `data-mode` changes to the hovered mode (the store is untouched). Same
+  // preview pattern as card hover.
   it("hovering the light mode toggle previews data-mode='light' without touching the store", () => {
-    // 초기: system mode (테스트 환경의 prefers-color-scheme 기본).
+    // Initial: system mode (the test environment's prefers-color-scheme
+    // default).
     render(<ThemePicker />);
     const initialStoreMode = useThemeStore.getState().mode;
 
@@ -271,7 +274,7 @@ describe("ThemePicker", () => {
     });
 
     expect(document.documentElement.getAttribute("data-mode")).toBe("light");
-    // Store 는 그대로 — preview 는 DOM-only.
+    // The store is untouched — the preview is DOM-only.
     expect(useThemeStore.getState().mode).toBe(initialStoreMode);
   });
 
@@ -301,7 +304,8 @@ describe("ThemePicker", () => {
     act(() => {
       fireEvent.mouseLeave(toggleGroup);
     });
-    // 초기 store mode 로 복귀 — system 의 resolved mode (jsdom prefers-color-scheme).
+    // Back to the initial store mode — system's resolved mode (jsdom
+    // prefers-color-scheme).
     const resolved = useThemeStore.getState().resolvedMode;
     expect(document.documentElement.getAttribute("data-mode")).toBe(resolved);
   });

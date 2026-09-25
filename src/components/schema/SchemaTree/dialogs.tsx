@@ -6,25 +6,23 @@ import ImportCsvDialog from "../ImportCsvDialog";
 import RenameTableDialog from "../RenameTableDialog";
 
 /**
- * Dialog mount slots for `SchemaTree`. Sprint 235 collapses the legacy
- * `DropTableConfirmDialog` + `RenameTableDialog` (the minimal pre-Phase
- * 27 dialogs) into thin slot wrappers that forward to the new
- * Phase 27-shaped modals (`RenameTableDialog` + `DropTableDialog` —
- * `useDdlPreviewExecution` reuse, inline DDL preview, typing-confirm,
- * Safe Mode dispatch).
+ * Dialog mount slots for `SchemaTree`. The legacy `DropTableConfirmDialog` +
+ * `RenameTableDialog` (the minimal predecessors) collapse into thin slot
+ * wrappers that forward to the new modals (`RenameTableDialog` +
+ * `DropTableDialog` — `useDdlPreviewExecution` reuse, inline DDL preview,
+ * typing-confirm, Safe Mode dispatch).
  *
- * The `CreateTableDialogSlot` (Sprint 226) stays unchanged.
+ * The `CreateTableDialogSlot` stays unchanged.
  *
- * Sprint 275 — `CreateTriggerDialogSlot` / `DropTriggerDialogSlot` were
- * retired; trigger CRUD now mounts inside `StructurePanel` (sidebar
- * Triggers child group removed). The Create/Drop dialog components
- * themselves (`CreateTriggerDialog` / `DropTriggerDialog`) live on
- * unchanged.
+ * `CreateTriggerDialogSlot` / `DropTriggerDialogSlot` were retired; trigger
+ * CRUD now mounts inside `StructurePanel` (sidebar Triggers child group
+ * removed). The Create/Drop dialog components themselves
+ * (`CreateTriggerDialog` / `DropTriggerDialog`) live on unchanged.
  */
 
 /**
- * Sprint 226 — `CreateTableDialog` mount slot. Threads connectionId +
- * the right-clicked schema name + the post-commit refresh callback.
+ * `CreateTableDialog` mount slot. Threads connectionId + the right-clicked
+ * schema name + the post-commit refresh callback.
  */
 interface CreateTableDialogSlotProps {
   connectionId: string;
@@ -41,9 +39,8 @@ export function CreateTableDialogSlot({
   onClose,
   onRefresh,
 }: CreateTableDialogSlotProps) {
-  // Sprint 227 — populate the modal's Target schema dropdown from the
-  // window-local schema store. Sprint 263 — schemas are now keyed by
-  // `(connId, db)`.
+  // Populate the modal's Target schema dropdown from the window-local schema
+  // store. Schemas are keyed by `(connId, db)`.
   const schemaInfos = useSchemaStore(
     (s) => s.schemas[connectionId]?.[database],
   );
@@ -68,8 +65,8 @@ export function CreateTableDialogSlot({
 }
 
 /**
- * Sprint 235 — `RenameTableDialog` mount slot. Wraps the new modal so
- * the SchemaTree shell stays readable (mirror `CreateTableDialogSlot`).
+ * `RenameTableDialog` mount slot. Wraps the new modal so the SchemaTree
+ * shell stays readable (mirror `CreateTableDialogSlot`).
  */
 interface RenameTableDialogSlotProps {
   connectionId: string;
@@ -98,8 +95,7 @@ export function RenameTableDialogSlot({
 }
 
 /**
- * Sprint 235 — `DropTableDialog` mount slot. Same shape as
- * `RenameTableDialogSlot`.
+ * `DropTableDialog` mount slot. Same shape as `RenameTableDialogSlot`.
  */
 interface DropTableDialogSlotProps {
   connectionId: string;

@@ -27,9 +27,9 @@ const SUB_SUB_TABS: readonly MongoStructureSubTab[] = [
   "indexes",
   "validator",
   // #1054 — U3 collection stats. CollectionStatsPanel was authored + tested
-  // (Sprint 338) but never mounted; this is its collection-context home
-  // (it needs (database, collection), so the connection-level Operations
-  // flyout is the wrong entry point — ui-parity §3 exception).
+  // but never mounted; this is its collection-context home (it needs
+  // (database, collection), so the connection-level Operations flyout is
+  // the wrong entry point — ui-parity §3 exception).
   "stats",
 ] as const;
 

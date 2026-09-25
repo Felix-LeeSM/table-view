@@ -1,12 +1,12 @@
 /**
- * Sprint 153 — TDD-FIRST cross-window sync tests for the remaining shared
- * stores (`tabStore`, `mruStore`, `themeStore`, `favoritesStore`) plus the
+ * TDD-FIRST cross-window sync tests for the remaining shared stores
+ * (`tabStore`, `mruStore`, `themeStore`, `favoritesStore`) plus the
  * app-shell window context (window-scoped, deliberately unbridged).
  *
  * Authored BEFORE the per-store `attachZustandIpcBridge` wirings ship.
- * Against pre-Sprint-153 code these cases fail because none of the four
- * stores yet broadcast on their respective channels and inbound payloads
- * are not applied.
+ * Without those wirings these cases fail because none of the four stores
+ * broadcast on their respective channels and inbound payloads are not
+ * applied.
  *
  * Pattern follows `cross-window-connection-sync.test.tsx`:
  *  - one in-process event bus mocked via `vi.hoisted` so the module-load
@@ -101,7 +101,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: busModule.listen,
 }));
 
-// Sprint 368 (Phase 4 Q12) — theme / safe-mode actions invoke
+// Q12 — theme / safe-mode actions invoke
 // `persist_setting`. Mock to immediate-resolve so the unawaited promise in
 // the legacy bridge regression below doesn't surface as an unhandled
 // rejection.
@@ -125,18 +125,17 @@ beforeEach(() => {
 
 // Default the window label to a real `workspace-{connection_id}` label so
 // `workspaceStore`'s attach guard fires at module load. #1097: the guard used
-// to compare against the bare legacy `"workspace"` label that sprint-361 no
-// longer produces, so mocking bare `"workspace"` here masked the dead branch.
+// to compare against the bare legacy `"workspace"` label the app no longer
+// produces, so mocking bare `"workspace"` here masked the dead branch.
 // Mocking the real format keeps this file honest — the guard must accept
 // `parseWorkspaceLabel(label) !== null`, not a byte-for-byte `"workspace"`.
 // The launcher-only test below re-imports the store with the label flipped to
 // "launcher" via `vi.resetModules` + `vi.doMock`.
 const WORKSPACE_LABEL = "workspace-c1";
 vi.mock("@lib/window-label", async () => {
-  // sprint-366 (2026-05-16) — keep the real parseWorkspaceLabel /
-  // formatWorkspaceLabel exports (pure string ops) so
-  // `useCurrentWindowConnectionId()` and downstream selectors don't
-  // crash when this file's tests mount workspace-tree components.
+  // Keep the real parseWorkspaceLabel / formatWorkspaceLabel exports (pure
+  // string ops) so `useCurrentWindowConnectionId()` and downstream selectors
+  // don't crash when this file's tests mount workspace-tree components.
   const actual =
     await vi.importActual<typeof import("@lib/window-label")>(
       "@lib/window-label",
@@ -174,7 +173,7 @@ const mockedInvoke = invoke as unknown as Mock;
 
 /**
  * Simulate a remote window emitting on the given channel. Mirrors what the
- * Sprint 151 bridge ships on the wire: `{ origin, state }` envelope.
+ * bridge ships on the wire: `{ origin, state }` envelope.
  */
 function simulateRemoteEmit(
   channel: string,
@@ -223,7 +222,7 @@ describe("cross-window store sync (Sprint 153)", () => {
   // -------------------------------------------------------------------------
 
   describe("tabStore (workspace-only)", () => {
-    // ADR 0027 (Sprint 262) — the cross-window bridge moved off the flat
+    // ADR 0027 — the cross-window bridge moved off the flat
     // `tab-sync` channel onto the per-workspace `workspace-sync` channel.
     // The wire payload now carries `{ workspaces }` (a 2-level map keyed
     // by `(connId, db)`) instead of the flat `{ tabs, activeTabId }`.
@@ -450,7 +449,7 @@ describe("cross-window store sync (Sprint 153)", () => {
   // -------------------------------------------------------------------------
   // workspaceStore — cross-window bridge label guard (#1097)
   //
-  // sprint-361 renamed workspace windows from bare `"workspace"` to
+  // Workspace windows were renamed from bare `"workspace"` to
   // `workspace-{connection_id}`, but the attach guard kept a strict
   // `=== "workspace"` compare, so the `workspace-sync` bridge never attached
   // (dead code). The fix routes the guard through `parseWorkspaceLabel`, the
@@ -459,7 +458,7 @@ describe("cross-window store sync (Sprint 153)", () => {
   //   (a) a real `workspace-{id}` label DOES attach — a mutation broadcasts
   //       on `workspace-sync` tagged with that exact label (RED before the
   //       fix: the bridge never attached so no emit fires).
-  //   (b) the legacy bare `"workspace"` label sprint-361 no longer produces
+  //   (b) the legacy bare `"workspace"` label the app no longer produces
   //       does NOT attach — the guard is format-aware, not a loosened
   //       `startsWith("workspace")` that would re-admit the dead label.
   // -------------------------------------------------------------------------
@@ -492,16 +491,16 @@ describe("cross-window store sync (Sprint 153)", () => {
       expect(syncCall).toBeDefined();
       const payload = syncCall![1] as { origin: string };
       // The regression: origin is the real `workspace-{connection_id}` label,
-      // proving the guard matched the sprint-361 format (not bare "workspace").
+      // proving the guard matched the per-conn format (not bare "workspace").
       expect(payload.origin).toBe(WORKSPACE_LABEL);
     });
 
     it("AC-1097-02: a fresh store loaded under the legacy bare `workspace` label does NOT attach", async () => {
-      // Re-import with the label pinned to the pre-sprint-361 bare
-      // `"workspace"`. `parseWorkspaceLabel("workspace")` is null, so the
-      // guard must short-circuit — the bridge does not attach and a local
-      // mutation emits nothing on `workspace-sync`. A naive
-      // `startsWith("workspace")` guard would wrongly re-admit this label.
+      // Re-import with the label pinned to the legacy bare `"workspace"`.
+      // `parseWorkspaceLabel("workspace")` is null, so the guard must
+      // short-circuit — the bridge does not attach and a local mutation
+      // emits nothing on `workspace-sync`. A naive `startsWith("workspace")`
+      // guard would wrongly re-admit this label.
       vi.resetModules();
       vi.doMock("@lib/window-label", async () => {
         const actual =
@@ -620,9 +619,8 @@ describe("cross-window store sync (Sprint 153)", () => {
   describe("themeStore (symmetric)", () => {
     it("AC-153-03a: setMode emits on `theme-sync` carrying themeId + mode", async () => {
       mockedEmit.mockClear();
-      // Sprint 368: setMode is now async (await IPC). Await before the
-      // assertion so the bridge has a chance to emit on the post-IPC
-      // store mutate.
+      // setMode is async (await IPC). Await before the assertion so the
+      // bridge has a chance to emit on the post-IPC store mutate.
       await useThemeStore.getState().setMode("dark");
       await Promise.resolve();
       await Promise.resolve();
@@ -841,14 +839,13 @@ describe("cross-window store sync (Sprint 153)", () => {
 
   describe("app-shell context (window-scoped, no bridge)", () => {
     it("AC-153-05: app-shell window context does NOT broadcast on any sync channel", async () => {
-      // Sprint 153 originally locked this against the legacy app-shell
-      // setter flipping a window-context field. Sprint 155 removed the
-      // store entirely (multi-window split made the screen context
-      // implied by `getCurrentWindowLabel()`). The user-observable
-      // invariant the case pinned — "no app-shell channel exists, no
-      // emit carries a window-context field" — survives untouched and is
-      // still load-bearing: any future "appshell-sync" / "screen-sync" /
-      // "window-context-sync" channel addition must trip this check.
+      // This originally locked against the legacy app-shell setter flipping
+      // a window-context field. That store is gone (the multi-window split
+      // made the screen context implied by `getCurrentWindowLabel()`), but
+      // the invariant it pinned — "no app-shell channel exists, no emit
+      // carries a window-context field" — is still load-bearing: any future
+      // "appshell-sync" / "screen-sync" / "window-context-sync" channel
+      // addition must trip this check.
       mockedEmit.mockClear();
 
       // Drive any signal that COULD plausibly trigger app-shell broadcast

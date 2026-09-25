@@ -1,29 +1,30 @@
 import { useCallback, useRef } from "react";
 
 /**
- * Sprint 258 — column-resize hook for the CSS-Grid DataGrid.
+ * Column-resize hook for the CSS-Grid DataGrid.
  *
- * drag 중에는 outer container 의 `--cols` CSS variable 만 imperative 갱신
- * (per-frame setState 회피). drag-end 시 `onCommitWidth(name, px)` 로 React
- * state 커밋 → 다음 render 가 동일 `--cols` 값을 다시 발행 → 시각 회귀 0.
+ * During the drag only the outer container's `--cols` CSS variable is
+ * updated imperatively (avoiding a per-frame setState). At drag-end
+ * `onCommitWidth(name, px)` commits to React state → the next render emits
+ * the same `--cols` value again → zero visual regression.
  *
- * Sprint 238 의 `<table>` / `<th>` querySelector 기반 imperative DOM mutate
- * 는 폐기. CSS variable cascade 가 모든 row 의 grid-template-columns 를
- * 한 곳에서 통제한다.
+ * The earlier `<table>` / `<th>` querySelector-based imperative DOM mutation
+ * is dropped. The CSS variable cascade controls every row's
+ * grid-template-columns from one place.
  */
 
 export interface UseColumnResizeArgs {
   /**
-   * Outer scroll container (`<div role="grid">`). 본 hook 이 `--cols` CSS
-   * variable 을 직접 mutate 하는 단일 element.
+   * Outer scroll container (`<div role="grid">`). The single element whose
+   * `--cols` CSS variable this hook mutates directly.
    */
   outerRef: React.RefObject<HTMLElement | null>;
   /**
-   * Visual order 의 현재 widths (px). drag-time 에 자기 column index 만
-   * 갱신해서 새 `--cols` 문자열을 만든다.
+   * Current widths (px) in visual order. At drag time only the dragged
+   * column's own index is updated to build the new `--cols` string.
    */
   getCurrentWidths: () => number[];
-  /** drag-end 시 React state 커밋. */
+  /** Commits to React state at drag-end. */
   onCommitWidth: (colName: string, px: number) => void;
 }
 

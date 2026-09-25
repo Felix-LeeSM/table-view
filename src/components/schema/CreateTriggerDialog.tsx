@@ -19,7 +19,7 @@ import { useTranslation } from "react-i18next";
 import type { CreateTriggerRequest } from "@/types/schema";
 
 /**
- * Sprint 273 — `CreateTriggerDialog`. Modal for `CREATE TRIGGER`.
+ * `CreateTriggerDialog`. Modal for `CREATE TRIGGER`.
  *
  * Form fields (top → bottom):
  *   - Trigger name (text input, identifier validation)
@@ -34,7 +34,7 @@ import type { CreateTriggerRequest } from "@/types/schema";
  *     hasn't fetched. Rendered as an `<input list>` + `<datalist>` —
  *     accessible, supports both autocomplete and free-text edit.
  *   - Function arguments (optional free-text). Server doubles every `'`
- *     before interpolating into `(args)` (Sprint 272 findings § P3 fix).
+ *     before interpolating into `(args)`.
  *   - Collapsible Show DDL pane (default open), 250ms debounced auto-
  *     refresh on every form edit.
  *
@@ -46,13 +46,13 @@ import type { CreateTriggerRequest } from "@/types/schema";
  *   - function name + function schema pass identifier validation,
  *   - preview SQL has been fetched, no preview error in flight.
  *
- * `useDdlPreviewExecution` (Sprint 214) drives the lifecycle. On
+ * `useDdlPreviewExecution` drives the lifecycle. On
  * `AppError::DbMismatch` (user-initiated Apply), the hook routes
- * through Sprint 267 `syncMismatchedActiveDb` and surfaces the
- * canonical Retry toast. CREATE TRIGGER is classified `ddl-other`/safe
- * so the gate is a no-op in the safe tier; the `pendingConfirm` mount
- * stays in place for the warn-tier (defense-in-depth, mirrors Sprint
- * 235/236 dialogs).
+ * through `syncMismatchedActiveDb` and surfaces the canonical Retry
+ * toast. CREATE TRIGGER is classified `ddl-other`/safe so the gate is a
+ * no-op in the safe tier; the `pendingConfirm` mount stays in place for
+ * the warn-tier (defense-in-depth, mirrors the sibling schema
+ * dialogs).
  */
 
 const IDENTIFIER_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -88,8 +88,8 @@ export interface CreateTriggerDialogProps {
   /** Connection id used by Safe Mode + function picker source. */
   connectionId: string;
   /**
-   * Active database — schemaStore cache key dimension (Sprint 263) and
-   * `expectedDatabase` payload (Sprint 271c).
+   * Active database — schemaStore cache key dimension and
+   * `expectedDatabase` payload.
    */
   database: string;
   /** Schema name (display + payload). */
@@ -131,7 +131,7 @@ export default function CreateTriggerDialog({
   const [functionName, setFunctionName] = useState("");
   const [functionArguments, setFunctionArguments] = useState("");
   // Preview pane defaults open — auto-debounced fetch fills it as the
-  // user types. Mirrors Sprint 235 / 236 dialogs.
+  // user types. Mirrors the sibling schema dialogs.
   const [showDdl, setShowDdl] = useState(true);
 
   const connectionEnvironment = useConnectionStore(
@@ -165,7 +165,7 @@ export default function CreateTriggerDialog({
     },
   });
 
-  // Reset form state on (re)open. Same pattern as Sprint 235 / 236
+  // Reset form state on (re)open. Same pattern as the sibling schema
   // dialogs. `tableName` / `schemaName` are the seeds so retargeting
   // the modal to a new table resets the form.
   useEffect(() => {
@@ -211,7 +211,7 @@ export default function CreateTriggerDialog({
     !insteadOfStatementError;
   const canApply = canPreview && !ddl.previewLoading && !!ddl.previewSql;
 
-  // 250ms debounced auto-refresh — mirrors Sprint 235 / 236 dialogs.
+  // 250ms debounced auto-refresh — mirrors the sibling schema dialogs.
   useEffect(() => {
     if (!open) return;
     if (!canPreview) return;
@@ -232,7 +232,7 @@ export default function CreateTriggerDialog({
         functionArguments:
           trimmedArgs.length > 0 ? functionArguments : undefined,
         previewOnly,
-        // Sprint 271c — opt-in DbMismatch guard.
+        // Opt-in DbMismatch guard.
         expectedDatabase: database,
       });
       void ddl.loadPreview(

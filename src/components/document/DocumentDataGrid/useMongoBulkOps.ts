@@ -69,7 +69,7 @@ export function useMongoBulkOps({
   safeModeGate,
   fetchData,
 }: UseMongoBulkOpsParams): UseMongoBulkOpsResult {
-  // sprint-373 — `recordHistoryEntry` 가 disable gate + wire shape normalise.
+  // `recordHistoryEntry` handles the disable gate and the wire-shape normalise.
   // Both dialogs share the current `activeFilter` as their predicate; an
   // empty filter ⇒ "whole collection", which the Safe Mode gate classifies
   // as `danger`.

@@ -1,14 +1,14 @@
-// Sprint 351 (2026-05-15) — CreateMongoIndexDialog full-option modal.
+// CreateMongoIndexDialog full-option modal.
 //
-// 작성 이유: AC-351-04 의 5 option group (compound fields, unique/sparse,
+// Reason: checks AC-351-04's option groups (compound fields, unique/sparse,
 // TTL with compound-aware gate, partialFilterExpression JSON validation,
-// collation locale+strength) + Save 동작 (happy / driver-error inline
-// alert) 을 검증한다. createMongoIndex 는 vi.mock 으로 캡처.
+// collation locale+strength) and Save behaviour (happy / driver-error
+// inline alert). `createMongoIndex` is captured with `vi.mock`.
 //
-// #1791 (2026-08-01) — 필드 방향 / collation strength 가 native `<select>` 에서
-// Radix `<Select>` 로 옮겨갔다. Radix 는 trigger 버튼(role="combobox") + portal
-// listbox 라 `fireEvent.change` 가 닿지 않는다: trigger 클릭 → `role="option"`
-// 클릭으로 고른다.
+// #1791 — field direction / collation strength moved from a native
+// `<select>` to a Radix `<Select>`. Radix renders a trigger button
+// (role="combobox") plus a portal listbox, so `fireEvent.change` never
+// reaches it: click the trigger, then click the `role="option"`.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -298,8 +298,8 @@ describe("CreateMongoIndexDialog", () => {
     expect(call[3].fields).toEqual([{ name: "email", direction: "desc" }]);
   });
 
-  // #1791 — the sprint-112 rule the eslint guard encodes: this dialog must not
-  // fall back to a native `<select>`. Fails RED the moment one is reintroduced.
+  // #1791 — the rule the eslint guard encodes: this dialog must not fall
+  // back to a native `<select>`. Fails RED the moment one is reintroduced.
   it("#1791 — renders no native <select> (sprint-112 normalize)", () => {
     render(
       <CreateMongoIndexDialog

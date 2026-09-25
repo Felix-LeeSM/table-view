@@ -1,21 +1,22 @@
 /**
- * Sprint 373 (Phase 5 F.5) — "Disable history" 토글.
+ * F.5 — "Disable history" toggle.
  *
- * 작성 2026-05-17. `query_history_enabled` setting 의 사용자 control. ON
- * (default) → 6 source caller 가 `add_history_entry` IPC 를 호출. OFF →
- * IPC 호출 path 가 0 (AC-373-03 의 spy invariant).
+ * User control for the `query_history_enabled` setting. ON (default) →
+ * the 6 source callers invoke the `add_history_entry` IPC. OFF → the IPC
+ * call path is 0 (the AC-373-03 spy invariant).
  *
  * UX:
- *   - 단일 button 토글 (Power 아이콘) — 클릭 시 즉시 store mutate +
- *     fire-and-forget `persist_setting` IPC. UI 변경이 backend reject 보다
- *     앞서므로 사용자 인식 latency 0.
- *   - aria-pressed 가 truth 동기화 — accessibility test 가 본 attribute 로
- *     사용자 의도 검증.
- *   - 옵션 tooltip (`title=`) 는 사용자가 disable 후 행동 변화를 설명:
- *     "Disable → 향후 쿼리는 기록 안 됨. 기존 row 는 그대로 (clear 별도)."
+ *   - A single button toggle (Power icon) — a click mutates the store
+ *     immediately plus a fire-and-forget `persist_setting` IPC. The UI
+ *     change lands ahead of any backend reject, so perceived latency is 0.
+ *   - aria-pressed stays in sync with the truth — the accessibility test
+ *     verifies user intent through this attribute.
+ *   - The optional tooltip (`title=`) explains the behaviour change after
+ *     disabling: "Disable → future queries are not recorded. Existing
+ *     rows remain (Clear is separate)."
  *
- * 위치: Settings 영역 (HomePage / launcher 의 설정 surface). 본 sprint
- * 에서는 컴포넌트 정의만 — placement 는 sprint-376 의 UI audit.
+ * Placement: the Settings area (the settings surface of HomePage /
+ * launcher). No surface mounts the component yet.
  */
 
 import { Button } from "@components/ui/button";
@@ -29,9 +30,9 @@ export default function HistorySettings() {
   const setEnabled = useHistorySettingsStore((s) => s.setQueryHistoryEnabled);
 
   const Icon = enabled ? Power : PowerOff;
-  // sprint-373 — toggle off 가 "disable" 의 의도임을 명확히. enable/disable
-  // 의 정관사 라벨이 button 자체에 살아있어 toggle 양 state 의 label 이
-  // 사용자에게 분명.
+  // Toggling off plainly means "disable". The explicit enable/disable
+  // label lives on the button itself, so both toggle states read clearly
+  // to the user.
   const label = enabled
     ? t("historySettings.labelOn")
     : t("historySettings.labelOff");

@@ -168,9 +168,9 @@ describe("FilterBar", () => {
     };
     renderFilterBar({ filters: [filterWithValue], onFiltersChange });
 
-    // Sprint-112: Radix Select migration — open the operator trigger and
-    // pick the IS NULL option (label `∅` — the rendered HTML uses the
-    // accessibility name "IS NULL" via the option text content).
+    // Radix Select: open the operator trigger and pick the IS NULL
+    // option (label `∅` — the rendered HTML uses the accessibility name
+    // "IS NULL" via the option text content).
     const operatorTrigger = screen.getByLabelText("Filter operator");
     await user.click(operatorTrigger);
     await user.click(screen.getByRole("option", { name: "IS NULL" }));
@@ -310,8 +310,8 @@ describe("FilterBar", () => {
     const onFiltersChange = vi.fn();
     renderFilterBar({ onFiltersChange });
 
-    // Sprint-112: Radix Select migration — open the column trigger then
-    // click the option with the column name we want to switch to.
+    // Radix Select: open the column trigger then click the option with
+    // the column name we want to switch to.
     const columnTrigger = screen.getByLabelText("Filter column");
     await user.click(columnTrigger);
     await user.click(screen.getByRole("option", { name: "name" }));
@@ -333,8 +333,8 @@ describe("FilterBar", () => {
     };
     renderFilterBar({ filters: [isNullFilter], onFiltersChange });
 
-    // Sprint-112: Radix Select migration — open the operator trigger and
-    // click the "=" option (Eq).
+    // Radix Select: open the operator trigger and click the "=" option
+    // (Eq).
     const operatorTrigger = screen.getByLabelText("Filter operator");
     await user.click(operatorTrigger);
     await user.click(screen.getByRole("option", { name: "=" }));
@@ -426,7 +426,7 @@ describe("FilterBar", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 48: aria-label and role="alert" for accessibility
+  // aria-label and role="alert" for accessibility
   // -----------------------------------------------------------------------
   it("has aria-label on column and operator selects", () => {
     renderFilterBar();

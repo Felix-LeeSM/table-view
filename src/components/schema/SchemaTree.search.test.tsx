@@ -1,9 +1,8 @@
-// Sprint 216 — `search` axis split from `SchemaTree.test.tsx`. Covers
-// AC-SEARCH-01..10: per-schema table filter input rendering, typing
-// filter, case-insensitivity, clear (X) button, empty-result vs
-// always-empty placeholders, isolation from non-tables categories,
-// per-schema state independence, and placeholder text. Cases are
-// byte-equivalent to the originals.
+// `search` axis split from `SchemaTree.test.tsx`. Covers AC-SEARCH-01..10:
+// per-schema table filter input rendering, typing filter, case-insensitivity,
+// clear (X) button, empty-result vs always-empty placeholders, isolation from
+// non-tables categories, per-schema state independence, and placeholder text.
+// Cases are byte-equivalent to the originals.
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";

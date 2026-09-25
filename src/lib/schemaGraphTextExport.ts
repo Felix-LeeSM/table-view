@@ -1,23 +1,27 @@
-// SchemaGraph → 텍스트 ERD export (issue #1661, ADR 0054 세부 결정 5).
-// mermaid `erDiagram` 과 DBML 은 텍스트라 diff 가 되고 문서에 그대로 붙는다.
-// SVG / PNG 래스터와 UI 배선은 이 모듈 밖이다 (#1655 캔버스 교체 이후 2차).
+// SchemaGraph → text ERD export (issue #1661, ADR 0054 detail decision 5).
+// mermaid `erDiagram` and DBML are text, so they diff and paste straight into
+// docs. SVG / PNG raster and UI wiring live outside this module (second pass
+// after the #1655 canvas replacement).
 //
-// 순수 모듈: React / IPC / IO 없음. 관계의 SOT 는 SchemaGraph 의
-// `foreign-key-table` edge 하나뿐이라 (`selectSchemaGraphForeignKeys`),
-// 컬럼 플래그를 여기서 다시 해석하지 않는다 — 그래야 attribute 의 FK 표시와
-// 관계선이 갈라지지 않는다. 가상 FK (#1659) 는 미배송이라 범위 밖이고,
-// SQLite 처럼 제약 카탈로그가 없어 컬럼 플래그에서 합성된 FK 는 그래프가 이미
-// 실제 edge 로 만들어 두므로 그대로 실린다.
+// Pure module: no React / IPC / IO. The SOT for relationships is the single
+// `foreign-key-table` edge of SchemaGraph (`selectSchemaGraphForeignKeys`), so
+// column flags are not re-interpreted here — that is what keeps the FK marks
+// on attributes and the relationship lines from diverging. Virtual FKs
+// (#1659) are undelivered and out of scope; FKs synthesized from column flags
+// where a constraint catalog is missing (SQLite) ride along as the real edges
+// the graph already created.
 //
-// **이 파일에 추측으로 쓴 문법 단정은 없다.** 근거는 두 종류고 어느 쪽인지
-// 상수마다 밝혀 뒀다: mermaid attribute 정리는 고정한 `mermaid@11.16.0` 의 렉서
-// 규칙을 옮겨 적은 것(`mermaidWord` 위 주석)이고, 나머지 — 따옴표 문자열이
-// 거부하는 문자, DBML 의 escape 부재 — 는 파서로 잰 값이다. `mermaid` 와
-// `@dbml/core` 가 devDependency 로 들어와 있고 `schemaGraphTextExport.test.ts` 의
-// "exporter output parses with the real parsers" 가 이 모듈의 산출물을
-// `mermaid.parse()` / `Parser.parse(…, "dbml")` 에 그대로 먹인다. 문자 클래스나
-// fallback 을 건드리면 그 왕복·스윕 테스트로 다시 재라 — 추측으로 고친 이스케이프가
-// 두 번 연속 결함이었다 (#2097).
+// **No syntax claim in this file is guesswork.** The evidence comes in two
+// kinds, and each constant says which one it is: the mermaid attribute rules
+// are transcribed from the lexer of the pinned `mermaid@11.16.0` (comment
+// above `mermaidWord`), while the rest — characters quoted strings reject,
+// DBML's missing escape — were measured with the parsers. `mermaid` and
+// `@dbml/core` ship as devDependencies, and "exporter output parses with the
+// real parsers" in `schemaGraphTextExport.test.ts` feeds this module's output
+// straight into `mermaid.parse()` / `Parser.parse(…, "dbml")`. If you touch a
+// character class or a fallback, re-measure with those round-trip and sweep
+// tests — a guess-fixed escape has already been a defect twice in a row
+// (#2097).
 import type {
   SchemaGraph,
   SchemaGraphCatalogSnapshot,
@@ -38,24 +42,26 @@ export type SchemaGraphTextExportInput =
   | SchemaGraphCatalogSnapshot;
 
 /**
- * SchemaGraph 를 mermaid `erDiagram` 텍스트로 만든다. 엔티티 이름은
- * `"schema.table"` 로 스키마 수식하고, 컬럼은 `type name PK, FK` 형태로 적는다.
- * 관계선의 부모쪽 기수는 FK 소스 컬럼이 하나라도 nullable 이면 `|o`(0 또는 1),
- * 전부 NOT NULL 이면 `||`(정확히 1) 다 — SQL MATCH SIMPLE 에서 소스 컬럼 중
- * 하나라도 NULL 이면 FK 가 검사되지 않기 때문이다.
+ * Renders a SchemaGraph as mermaid `erDiagram` text. Entity names are
+ * schema-qualified as `"schema.table"`, and columns are written as
+ * `type name PK, FK`. The parent-side cardinality of a relationship is `|o`
+ * (zero or one) when any FK source column is nullable, and `||` (exactly one)
+ * when all are NOT NULL — under SQL MATCH SIMPLE the FK is not checked when
+ * any source column is NULL.
  *
- * 컬럼이 아직 안 올라온 테이블은 빈 엔티티 블록으로 남는다 — mermaid 는 빈
- * 블록을 받는다(왕복 테스트 실측). 같은 상황에서 DBML 은 블록을 못 받아
- * `schemaGraphToDbml` 이 다르게 처리한다.
+ * A table whose columns have not loaded yet stays as an empty entity block —
+ * mermaid accepts empty blocks (measured by the round-trip test). DBML does
+ * not, so `schemaGraphToDbml` handles that case differently.
  */
 export function schemaGraphToMermaid(
   input: SchemaGraphTextExportInput,
 ): string {
   const model = toExportModel(input);
   const lines: string[] = ["erDiagram"];
-  // 정리를 거치면 서로 다른 원본이 같은 문자열이 될 수 있다(`a@b` 와 `a$b` 는 둘 다
-  // `a_b`). mermaid 는 중복 엔티티·attribute 를 파싱은 하지만, 그러면 두 테이블이 한
-  // 엔티티로 합쳐지고 컬럼 둘이 한 줄로 보인다 — DBML 쪽과 같은 규칙으로 가른다.
+  // Sanitizing can collapse distinct sources to the same string (`a@b` and
+  // `a$b` both become `a_b`). mermaid does parse duplicate entities and
+  // attributes, but then the two tables merge into one entity and the two
+  // columns show on one line — dedupe with the same rule as the DBML side.
   const takenEntityNames = new Set<string>();
   const entityNameByTableId = new Map<string, string>();
 
@@ -81,8 +87,9 @@ export function schemaGraphToMermaid(
   for (const foreignKey of model.foreignKeys) {
     const source = entityNameByTableId.get(foreignKey.sourceTableId);
     const target = entityNameByTableId.get(foreignKey.targetTableId);
-    // 양끝 테이블이 실제로 인쇄됐을 때만 선을 긋는다. 스냅샷 입력에서는 그래프가
-    // 이미 걸러 주지만 `SchemaGraph` 직접 주입은 이 모듈의 공개 입력이다.
+    // Draw the line only when both ends were actually printed. Snapshot input
+    // is already filtered by the graph, but a direct `SchemaGraph` is a public
+    // input of this module.
     if (!source || !target) continue;
     const parentSide = isOptionalForeignKey(model, foreignKey) ? "|o" : "||";
     lines.push(
@@ -96,12 +103,14 @@ export function schemaGraphToMermaid(
 }
 
 /**
- * SchemaGraph 를 DBML 텍스트로 만든다. 테이블 블록을 먼저, `Ref:` 줄을 뒤에
- * 모아 적는다 — dbdiagram.io 가 참조 대상 테이블을 앞에서 요구하지 않으므로
- * 순서는 diff 가독성 기준으로 고정한다. 그래프가 비면 빈 문자열이다.
+ * Renders a SchemaGraph as DBML text. Table blocks come first, and `Ref:`
+ * lines are gathered after them — dbdiagram.io does not require the referenced
+ * table to appear first, so the order is fixed for diff readability. An empty
+ * graph yields an empty string.
  *
- * 컬럼이 하나도 없는 테이블은 블록 대신 `//` 주석 한 줄로 남기고, 그 테이블에
- * 걸린 `Ref:` 도 함께 뺀다. 근거는 `dbmlSkipsColumnlessTable` 주석에 있다.
+ * A table with no columns is kept as a single `//` comment line instead of a
+ * block, and the `Ref:` lines touching that table are dropped as well. See the
+ * `dbmlSkipsColumnlessTable` comment for the rationale.
  */
 export function schemaGraphToDbml(input: SchemaGraphTextExportInput): string {
   const model = toExportModel(input);
@@ -135,22 +144,25 @@ export function schemaGraphToDbml(input: SchemaGraphTextExportInput): string {
     blocks.push([`Table "${schema}"."${table}" {`, ...body, "}"].join("\n"));
   }
 
-  // 선언되지 않은 테이블·컬럼을 가리키는 `Ref:` 는 파서가 문서 전체를 거부한다
-  // (실측: `Can't find field "x" in table "t"`). 위에서 실제로 인쇄한 이름만
-  // 통과시키므로, 생략된 테이블 · 그래프에 없는 테이블 · 카탈로그가 안 준 컬럼이
-  // 한 판정으로 걸린다.
+  // A `Ref:` pointing at an undeclared table or column makes the parser reject
+  // the whole document (measured: `Can't find field "x" in table "t"`). Only
+  // names actually printed above pass through, so an omitted table, a table
+  // missing from the graph, and a column the catalog did not deliver are all
+  // caught by this one decision.
   const refLines = model.foreignKeys.map((foreignKey) =>
     dbmlRefLine(declared, foreignKey),
   );
-  // 완전히 같은 `Ref:` 두 줄도 파서가 거부한다(실측). 같은 컬럼쌍에 이름만 다른
-  // FK 제약이 둘 있으면 이 모듈은 제약 이름을 안 실으므로 두 줄이 바이트 단위로
-  // 같아진다 — 중복을 접는다.
+  // Two byte-identical `Ref:` lines are also rejected by the parser
+  // (measured). Two FK constraints with different names over the same column
+  // pair produce identical lines here because this module does not carry the
+  // constraint name — fold the duplicates.
   const refs = [...new Set(refLines.filter((line) => line !== null))];
   if (refs.length > 0) blocks.push(refs.join("\n"));
 
   const omitted = refLines.filter((line) => line === null).length;
   if (omitted > 0) {
-    // 생략된 테이블 주석은 테이블만 알린다 — 같이 사라진 관계도 세어 둔다.
+    // The omission comment only names tables — relationships dropped along
+    // with them are counted here too.
     blocks.push(
       `// omitted ${omitted} reference(s) to tables or columns that are not declared above`,
     );
@@ -162,13 +174,14 @@ export function schemaGraphToDbml(input: SchemaGraphTextExportInput): string {
 interface DeclaredDbmlTable {
   readonly schema: string;
   readonly table: string;
-  /** 카탈로그 원본 컬럼명 → 실제로 인쇄한 이름. `Ref:` 가 이 표를 통해서만 쓴다. */
+  /** Catalog column name → name actually printed. `Ref:` lines read only through this map. */
   readonly columnNames: ReadonlyMap<string, string>;
 }
 
-// 한 스코프 안에서 이름이 겹치면 파서가 문서를 통째로 거부한다 — 실측:
-// `Field "a" existed in table "t"`, `Table "t" existed`. 정리 과정에서 서로 다른
-// 원본이 같은 문자열로 접힐 수 있으므로(예: `a"b` 와 `a_b`) 접미사로 가른다.
+// Name collisions inside one scope make the parser reject the whole document
+// — measured: `Field "a" existed in table "t"`, `Table "t" existed`. Sanitizing
+// can fold distinct sources to the same string (e.g. `a"b` and `a_b`), so
+// disambiguate with a suffix.
 function takeUniqueName(taken: Set<string>, candidate: string): string {
   let name = candidate;
   for (let suffix = 2; taken.has(name); suffix += 1) {
@@ -187,16 +200,17 @@ function dbmlRefLine(
   return source && target ? `Ref: ${source} > ${target}` : null;
 }
 
-// DBML 은 본문 없는 `Table` 블록을 파싱하지 못한다 — `@dbml/core` 가
-// `Expected comment, valid name, or whitespace but "}" found` 로 거부하고,
-// DBML 은 블록 하나가 깨지면 문서 전체가 무효라 테이블 하나 때문에 export 결과가
-// 통째로 못 쓰게 된다 (#2097).
+// DBML cannot parse a `Table` block with no body — `@dbml/core` rejects it
+// with `Expected comment, valid name, or whitespace but "}" found`, and one
+// broken block invalidates the whole DBML document, so a single table can
+// make the entire export unusable (#2097).
 //
-// 컬럼 0개는 예외 상태가 아니다. 카탈로그는 테이블 목록을 먼저 싣고 컬럼을 마운트
-// 뒤 비동기로 채우므로(`schemaGraphCatalog.ts` 의 `?? []`), 로딩 중 export 는
-// 흔한 경로다. 컬럼을 지어내지 않고 생략 사실만 주석으로 남긴다 — 주석은 DBML 이
-// 최상위에서 받는 문법이다. Postgres 처럼 컬럼 0개 테이블을 실제로 허용하는
-// 엔진도 있어 문구는 원인을 단정하지 않는다.
+// Zero columns is not an error state. The catalog ships the table list first
+// and fills columns asynchronously after mount (`?? []` in
+// `schemaGraphCatalog.ts`), so exporting mid-load is a common path. Do not
+// invent columns; record only the omission as a comment — comments are syntax
+// DBML accepts at the top level. Engines like Postgres really do allow
+// zero-column tables, so the wording does not assert a cause.
 function dbmlSkipsColumnlessTable(node: SchemaGraphTableNode): string {
   return `// skipped table ${dbmlTableName(node)}: no columns available`;
 }
@@ -215,13 +229,15 @@ interface ExportModel {
 }
 
 function toExportModel(input: SchemaGraphTextExportInput): ExportModel {
-  // 무거운 `selectSchemaGraphIntelligence` 대신 필요한 selector 둘만 부른다 —
-  // 그쪽도 그래프를 한 번만 펴지만, 이 모듈이 안 읽는 diagnostics 색인과 테이블별
-  // metadata readiness 두 패스를 더 돈다.
-  // ponytail: `"nodes" in input` 은 `schemaGraphSelectors` 의 비공개
-  // `isCatalogSnapshot` 을 반대 키로 다시 판별하는 것이다 — 셋째 선언이 나온
-  // 지금(같은 union 이 selectors · diff · 여기) 판별과 타입을 한쪽에서 export 해
-  // 모으는 편이 낫고, 그건 이 PR 밖 파일을 건드린다.
+  // Call only the two selectors needed instead of the heavy
+  // `selectSchemaGraphIntelligence` — that one also flattens the graph once,
+  // but runs two extra passes this module never reads: the diagnostics index
+  // and per-table metadata readiness.
+  // ponytail: `"nodes" in input` re-derives `schemaGraphSelectors`' private
+  // `isCatalogSnapshot` with the inverted key — now that a third declaration
+  // exists (the same union in selectors · diff · here), exporting the guard
+  // and the type from one side would be better, but that touches files
+  // outside this PR.
   const graph: SchemaGraph =
     "nodes" in input ? input : extractSchemaGraph(input);
   const nodeMaps = selectSchemaGraphNodeMaps(graph);
@@ -231,10 +247,11 @@ function toExportModel(input: SchemaGraphTextExportInput): ExportModel {
   return {
     tables: sortById([...tablesById.values()]).map((node) => ({
       node,
-      // 그래프의 컬럼 맵은 id(퍼센트 인코딩된 이름) 정렬이라 특이한 이름이
-      // 재배열된다. 그래프가 스스로 매기는 `ordinal` 을 따른다 — 그 값이
-      // `sortByName` **뒤**의 인덱스라(`schemaGraph.ts`) 결과는 DDL 물리 순서가
-      // 아니라 컬럼 이름 알파벳순이다. 이 계층이 물리 순서를 복원할 방법은 없다.
+      // The graph's column map is sorted by id (percent-encoded name), which
+      // rearranges unusual names. Follow the graph's own `ordinal` — that
+      // value is the index **after** `sortByName` (`schemaGraph.ts`), so the
+      // result is alphabetical by column name, not DDL physical order. This
+      // layer has no way to recover the physical order.
       columns: [...(columnsByTableId.get(node.id) ?? [])].sort(
         (left, right) => left.ordinal - right.ordinal,
       ),
@@ -252,29 +269,33 @@ function isOptionalForeignKey(
   model: ExportModel,
   foreignKey: SchemaGraphForeignKeySelection,
 ): boolean {
-  // 컬럼 노드를 못 찾으면 optional 로 본다 — nullability 를 모르는 상태에서
-  // `||`(정확히 1) 는 없는 제약을 있다고 그리는 쪽이라 더 나쁜 거짓말이다.
+  // Treat a missing column node as optional — with nullability unknown, `||`
+  // (exactly one) would draw a constraint that may not exist, the worse lie.
   return foreignKey.sourceColumnIds.some(
     (columnId) => model.columnsById.get(columnId)?.data.nullable ?? true,
   );
 }
 
 function mermaidEntityName(node: SchemaGraphTableNode): string {
-  // 스키마와 테이블을 각각 정리한 뒤 잇는다 — 이어 붙인 뒤 다듬으면 `public. tbl`
-  // 처럼 안쪽 공백이 그대로 남는다.
+  // Sanitize schema and table separately, then join — sanitizing the joined
+  // text leaves inner spaces behind, as in `public. tbl`.
   return `${mermaidSafeText(node.schema)}.${mermaidSafeText(node.table)}`;
 }
 
-// 엔티티 이름과 관계선 라벨은 따옴표 문자열 토큰이라 attribute 와 사정이 다르다.
-// 렉서 규칙이 `/^(?:"[^"]*")/i` — 구분자 `"` 하나만 토큰을 끝내고 그 안은 무엇이든
-// 받는다. 그래서 여기는 "위험 문자가 몇 개나 더 있나"(attribute 를 네 라운드 돌린
-// 열린 질문)가 아니라 **구분자 하나 + 렉싱 전에 도는 전처리**로 닫힌다:
-// `%` 는 주석(`%%`), `\` 는 전처리에서 걸리고 제어문자는 줄을 끊는다 — 셋 다 파서로
-// 잰 값이고 스윕이 다섯 자리에서 매 실행 다시 잰다. Postgres 는 따옴표 식별자 안에서
-// 셋 다 허용하므로 사용자 데이터로 도달한다.
-// ponytail: 그래서 라벨은 `numeric(10,2)` 같은 원문을 그대로 유지한다 — attribute
-// 처럼 문법 부분집합으로 좁힐 이유가 없다. `a"b` · `a%b` · `a\b` 만 한 이름으로
-// 접히고, 구분이 필요해지면 별칭(`entity["label"]`) 표기로 올린다.
+// Entity names and relationship labels are quoted-string tokens, a different
+// situation from attributes. The lexer rule is `/^(?:"[^"]*")/i` — a single
+// `"` delimiter ends the token and everything inside is accepted. So the
+// question here closes as **one delimiter plus preprocessing that runs before
+// lexing**, not "how many more dangerous characters are there" (the open
+// question that took four rounds on attributes): `%` starts a comment (`%%`),
+// `\` is caught by the preprocessing, and control characters break the line —
+// all three measured with the parsers, and the sweep re-measures them on every
+// run in five spots. Postgres allows all three inside quoted identifiers, so
+// user data reaches here.
+// ponytail: labels therefore keep raw text like `numeric(10,2)` — there is no
+// reason to narrow them to a grammar subset the way attributes are. Only
+// `a"b`, `a%b`, and `a\b` fold into one name; move up to the alias
+// (`entity["label"]`) notation if distinguishing them becomes necessary.
 const MERMAID_STRING_REJECTS = /["%\\]/g;
 const CONTROL_OR_SPACE = /[\p{Cc}\p{Cf}\s]+/gu;
 
@@ -287,55 +308,66 @@ function mermaidSafeText(value: string): string {
     .replace(CONTROL_OR_SPACE, " ")
     .replace(MERMAID_STRING_REJECTS, "_")
     .trim();
-  // 토큰은 최소 1자를 요구한다 — 빈 따옴표는 Parse error 다.
+  // The token requires at least one character — empty quotes are a parse
+  // error.
   return safe.length > 0 ? safe : "unnamed";
 }
 
-// mermaid 의 attribute 는 따옴표를 못 쓰는 단어 토큰이다. 아래 셋은 이 PR 이
-// 고정한 `mermaid@11.16.0` 의 erDiagram 렉서 규칙을 **그대로 옮긴 것**이지
-// 실측으로 고른 목록이 아니다. 원본은 그 패키지의
-// `dist/chunks/mermaid.esm/erDiagram-*.mjs` 안 lexer `rules` 배열이고, attribute
-// 자리에서 우리 산출물에 닿을 수 있는 규칙은 둘뿐이다:
+// A mermaid attribute is a word token that cannot contain quotes. The three
+// below are **transcribed verbatim from the erDiagram lexer rules** of the
+// `mermaid@11.16.0` pinned by this PR, not a list picked by measurement. The
+// source is the lexer `rules` array in that package's
+// `dist/chunks/mermaid.esm/erDiagram-*.mjs`, and only two of its rules can be
+// reached by our output in the attribute position:
 //
 //   ATTRIBUTE_KEY   /^(?:\b((?:PK)|(?:FK)|(?:UK))\b)/i
 //   ATTRIBUTE_WORD  /^(?:([*A-Za-z_\u00C0-\uFFFF][A-Za-z0-9\-_[\]().,\u00C0-\uFFFF*]*))/i
 //
-// (그 사이의 `([^\s]*)[~].*[~]([^\s]*)` 는 `~` 를 요구하는데 `~` 는 아래에서
-// 내려가므로 절대 안 맞는다.)
+// (The rule between them, `([^\s]*)[~].*[~]([^\s]*)`, requires `~`, and `~`
+// is removed below, so it can never match.)
 //
-// **위험 문자를 열거해 빼는 방식은 폐기했다.** 그 구조는 반례가 나올 때마다
-// 목록에 한 줄을 더하는 열린 집합이라 #2097 에서 네 라운드 연속 반례가 나왔다.
-// 대신 산출 토큰을 위 두 규칙이 받는 언어의 부분집합으로 **구성으로** 가둔다 —
-// 남는 질문이 "이 문자가 위험한가"(끝이 없다)에서 "문법 클래스를 옮겨 적었나"
-// (파일 하나를 보면 끝난다)로 바뀐다.
+// **Enumerating and stripping dangerous characters was abandoned.** That
+// structure is an open set that gains a line for every new counterexample,
+// and #2097 produced counterexamples in four consecutive rounds. Instead the
+// output token is confined **by construction** to a subset of the language
+// the two rules above accept — the remaining question changes from "is this
+// character dangerous" (endless) to "did we transcribe the grammar classes
+// right" (checking one file settles it).
 //
-// ponytail: 라벨은 뭉개진다 — `numeric(10,2)` 가 `numeric_10_2_`, `a@b` 와 `a$b`
-// 가 둘 다 `a_b` 다. 산출물이 무효가 되느니 라벨을 잃는 쪽을 택한 오너 결정이고
-// (2026-08-02, PR #2097), 원문 보존은 본가의 backtick 표기
-// (mermaid-js/mermaid#5138)가 머지되면 다시 연다.
+// ponytail: labels are mangled — `numeric(10,2)` becomes `numeric_10_2_`, and
+// `a@b` and `a$b` both become `a_b`. Owner decision to lose the label rather
+// than emit an invalid document (2026-08-02, PR #2097); preserving the
+// original text reopens when upstream's backtick notation
+// (mermaid-js/mermaid#5138) merges.
 
-// ATTRIBUTE_WORD 의 tail 클래스에서 구분자(`- . , ( ) [ ] *`)를 뺀 나머지.
-// 구분자는 문법상 합법이지만 렉서가 ATTRIBUTE_KEY 를 먼저 시도하므로 `pk-a` 처럼
-// 앞머리가 예약어면 토큰이 쪼개져 문서 전체가 깨진다 (#2097).
-// `u` 플래그를 일부러 안 붙인다 — 문법이 코드유닛 범위(`\u00C0-\uFFFF`)로 쓰여
-// 있어서, 그래야 astral 문자를 surrogate 쌍째로 렉서와 똑같이 통과시킨다.
+// ATTRIBUTE_WORD's tail class minus the delimiters (`- . , ( ) [ ] *`).
+// Delimiters are legal in the grammar, but the lexer tries ATTRIBUTE_KEY
+// first, so a reserved-word prefix like `pk-a` splits the token and breaks
+// the whole document (#2097).
+// The `u` flag is deliberately omitted — the grammar is written with code-unit
+// ranges (`\u00C0-\uFFFF`), which is what lets astral characters through as
+// surrogate pairs exactly like the lexer.
 const MERMAID_WORD_REJECTS = /[^A-Za-z0-9_\u00C0-\uFFFF]/g;
-// ATTRIBUTE_WORD 의 head 클래스에서 `*`(위에서 이미 내려감)를 뺀 것. 위 치환을
-// 거친 토큰 중 여기 안 걸리는 것은 숫자로 시작하는 토큰뿐이다.
+// ATTRIBUTE_WORD's head class minus `*` (already removed above). Of the
+// tokens that survived the replacements above, only ones starting with a
+// digit miss this.
 const MERMAID_WORD_HEAD = /^[A-Za-z_\u00C0-\uFFFF]/;
-// ATTRIBUTE_KEY 규칙 그대로. `\b` 는 ASCII 단어 경계라 토큰이 그 낱말**로 시작만
-// 해도** 뒤 문자가 `[A-Za-z0-9_]` 가 아니면 키 표시자로 떨어져 나간다 —
-// `pk`(단독)·`pk이름`·`pḱ` 전부 여기 걸리고, `pka`·`pk_`·`pk1` 은 안 걸린다.
-// 완전 일치(`^(pk|fk|uk)$`)로 보던 이전 코드가 앞의 둘을 통과시켰다.
+// Copied verbatim from the ATTRIBUTE_KEY rule. `\b` is an ASCII word
+// boundary, so as soon as a token merely **starts** with that word, a
+// following character outside `[A-Za-z0-9_]` drops it out as the key marker —
+// `pk` (alone)·`pk` + a non-word suffix·`pḱ` are all caught here, while
+// `pka`·`pk_`·`pk1` are not. The previous code, which demanded an exact match
+// (`^(pk|fk|uk)$`), let the first two through.
 const MERMAID_RESERVED_WORDS = /^(?:PK|FK|UK)\b/i;
 
 function mermaidWord(value: string): string {
-  // 공백만 있는 타입/이름은 `_` 로 채우지 말고 placeholder 로 보낸다 —
-  // `dbmlType` 의 빈 값 처리와 같은 기준이다.
+  // Send whitespace-only types/names to the placeholder instead of padding
+  // with `_` — same rule as `dbmlType`'s empty-value handling.
   const cleaned = value.trim().replace(MERMAID_WORD_REJECTS, "_");
   if (cleaned.length === 0) return "unknown";
-  // 선두 `_` 하나가 두 보정을 동시에 끝낸다: ATTRIBUTE_KEY 의 `\b(PK|FK|UK)\b` 가
-  // 더 이상 안 맞고, `_` 자체가 head 클래스 안이다.
+  // One leading `_` settles both fixes at once: ATTRIBUTE_KEY's
+  // `\b(PK|FK|UK)\b` no longer matches, and `_` itself is inside the head
+  // class.
   if (MERMAID_RESERVED_WORDS.test(cleaned)) return `_${cleaned}`;
   return MERMAID_WORD_HEAD.test(cleaned) ? cleaned : `_${cleaned}`;
 }
@@ -361,7 +393,8 @@ function dbmlEndpoint(
 
   const qualifier = `"${table.schema}"."${table.table}"`;
   const quoted = columns.map((column) => `"${column}"`);
-  // 단일 컬럼은 평문 형태, 복합 키만 괄호 목록 — dbdiagram.io 문서의 두 형태다.
+  // Single columns in plain form, only composite keys as a parenthesized
+  // list — both forms come from the dbdiagram.io docs.
   return quoted.length === 1
     ? `${qualifier}.${quoted[0]}`
     : `${qualifier}.(${quoted.join(", ")})`;
@@ -375,13 +408,14 @@ function dbmlType(dataType: string): string {
   return DBML_BARE_TYPE.test(trimmed) ? trimmed : dbmlQuoted(trimmed);
 }
 
-// DBML 의 따옴표 식별자에는 **escape 문법이 없다** — 실측: `"a\"b"` 도 `"a""b"` 도
-// `@dbml/core` 가 거부하고, `\` 는 escape 가 아니라 그냥 문자라 `"a\b"` 는 이름이
-// `a\b` 인 채로 통과한다. 그래서 backslash 는 그대로 두고 `"` 만 mermaid 와 같은
-// 기준으로 `_` 로 내린다.
+// DBML quoted identifiers have **no escape syntax** — measured: `@dbml/core`
+// rejects both `"a\"b"` and `"a""b"`, and `\` is not an escape but a plain
+// character, so `"a\b"` passes through with the name `a\b`. So backslash is
+// left as-is and only `"` is lowered to `_` by the same rule as mermaid.
 //
-// 빈 식별자(`""`)와 줄바꿈은 파서가 거부하므로, 줄바꿈·제어문자는 공백으로 접고
-// 양끝을 턴 뒤 비면 placeholder 를 쓴다 — `mermaidSafeText` 와 같은 낱말이다.
+// Empty identifiers (`""`) and newlines are rejected by the parser, so
+// newlines and control characters fold to spaces, and if trimming both ends
+// leaves nothing, use the placeholder — same wording as `mermaidSafeText`.
 function dbmlQuoted(value: string): string {
   return `"${dbmlIdentifier(value)}"`;
 }

@@ -51,7 +51,7 @@ export function VirtualTreeRows({
   );
 }
 
-// Sprint 344 Slice B (2026-05-15) — `+ key` row. Two render branches:
+// `+ key` row. Two render branches:
 //  1. Closed: a small dashed-button affordance ("+ key") that opens
 //     the input pair on click.
 //  2. Open: key + value inputs side-by-side at the parent's child
@@ -201,7 +201,7 @@ export function AddKeyRow({
   );
 }
 
-// Sprint 344 Slice C (2026-05-15) — `+ item` row for array nodes.
+// `+ item` row for array nodes.
 // Closed state: dashed `+ item` button at the array's child indent.
 // Open state: a muted, read-only `[N]` index label sitting next to a
 // single value input. Enter commits, Esc cancels — there is no key
@@ -366,10 +366,10 @@ export function TagBadge({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Sprint 344 Slice A — amber NEW pill for ghost rows (paths that exist
-// only in `pendingByPath`). Visually distinct from the inline
-// "● edited" marker used for edits on existing leaves; same amber tone
-// keeps it in the pending family.
+// Amber NEW pill for ghost rows (paths that exist only in
+// `pendingByPath`). Visually distinct from the inline "● edited" marker
+// used for edits on existing leaves; same amber tone keeps it in the
+// pending family.
 export function NewBadge() {
   return (
     <span className="ml-2 inline-block rounded bg-amber-400/20 px-1 py-0 align-middle text-4xs font-semibold uppercase tracking-wider text-amber-500 dark:text-amber-300">

@@ -1,17 +1,15 @@
-// Sprint 234 — `IndexesTabBody` presentation tests.
-//
-// Date: 2026-05-07.
+// `IndexesTabBody` presentation tests.
 //
 // Why this file exists:
 //   - `IndexesTabBody.tsx` was extracted from `CreateTableDialog.tsx`
-//     in Sprint 228 (parent body LOC ceiling). Sprint 234 adds two
-//     new behaviours to this sub-component:
+//     (parent body LOC ceiling). Two behaviours of this sub-component
+//     are covered here:
 //       1. ↑ / ↓ reorder buttons left of the `−` remove button
 //          (AC-234-03). Boundary-disabled at first row (↑) and last
 //          row (↓). Click invokes `onMove(trackingId, -1 | 1)`.
 //       2. Locked empty-state message
 //          "Add named columns in the Columns tab to use this picker."
-//          (AC-234-02) — replaces the Sprint 228 verbose form.
+//          (AC-234-02) — replaces the older verbose form.
 //
 // Per AC-234 contract Test Requirements: ≥ 2 new cases live here.
 
@@ -45,10 +43,10 @@ function defaultProps() {
 }
 
 describe("IndexesTabBody (Sprint 234)", () => {
-  // Sprint 234 AC-234-03 — ↑ disabled at top row, ↓ disabled at bottom
-  // row. Defense-in-depth: the parent's onMove also no-ops on
-  // boundary clicks but the disabled attribute blocks the click in the
-  // first place.
+  // AC-234-03 — ↑ disabled at top row, ↓ disabled at bottom row.
+  // Defense-in-depth: the parent's onMove also no-ops on boundary
+  // clicks but the disabled attribute blocks the click in the first
+  // place.
   it("renders Move up/down buttons disabled at first and last index row (AC-234-03)", () => {
     const indexes = [
       indexDraft({ trackingId: "ix-1", name: "idx_a", columns: ["id"] }),
@@ -82,9 +80,8 @@ describe("IndexesTabBody (Sprint 234)", () => {
     expect(onMove).toHaveBeenCalledWith("ix-2", 1);
   });
 
-  // Sprint 234 AC-234-02 — locked empty-state message replaces the
-  // Sprint 228 verbose form. Text must match the contract verbatim
-  // (period-terminated).
+  // AC-234-02 — locked empty-state message replaces the older verbose
+  // form. Text must match the contract verbatim (period-terminated).
   it("renders the locked empty-state message when availableColumns is empty (AC-234-02)", () => {
     const indexes = [indexDraft({ trackingId: "ix-1", name: "idx_anon" })];
     render(
@@ -104,8 +101,8 @@ describe("IndexesTabBody (Sprint 234)", () => {
     ).toBeInTheDocument();
   });
 
-  // Sprint 234 — ↑ click forwards `(trackingId, -1)` for non-boundary
-  // rows (regression-proofs the parent contract).
+  // ↑ click forwards `(trackingId, -1)` for non-boundary rows
+  // (regression-proofs the parent contract).
   it("clicking Move up on a non-first row forwards (trackingId, -1) (AC-234-03)", () => {
     const indexes = [
       indexDraft({ trackingId: "ix-1", name: "idx_a", columns: ["id"] }),
