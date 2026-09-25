@@ -32,6 +32,15 @@ function useCopyWithToast(): (text: string) => Promise<void> {
   );
 }
 
+/**
+ * Whether `text` leaves the user nothing to paste. Both affordances decide
+ * through this so they cannot disagree on it (#2505); whitespace only
+ * counts as nothing.
+ */
+function isNothingToCopy(text: string): boolean {
+  return text.trim().length === 0;
+}
+
 export interface CopyTextButtonProps {
   text: string;
   ariaLabel: string;
@@ -49,7 +58,7 @@ export function CopyTextButton({
   const copyWithToast = useCopyWithToast();
   const resolvedDisabledReason = disabledReason ?? t("nothingToCopy");
   const [copying, setCopying] = useState(false);
-  const disabled = copying || text.trim().length === 0;
+  const disabled = copying || isNothingToCopy(text);
 
   async function handleCopy() {
     if (disabled) return;
@@ -98,14 +107,15 @@ export interface CopyableTextProps {
  * copy" hint rides on `title`, which reads as the description instead of
  * replacing what the value is.
  *
- * An empty value renders as inert text: a focusable control with nothing to
- * announce and nothing to copy is a tab stop that wastes the user's time.
+ * A value with nothing to copy (empty or whitespace only) renders as inert
+ * text: a focusable control with nothing to announce and nothing to copy is
+ * a tab stop that wastes the user's time.
  */
 export function CopyableText({ text, className }: CopyableTextProps) {
   const { t } = useTranslation("shared");
   const copyWithToast = useCopyWithToast();
 
-  if (text === "") return <span className={className} />;
+  if (isNothingToCopy(text)) return <span className={className}>{text}</span>;
 
   return (
     <button
