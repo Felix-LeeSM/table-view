@@ -21,7 +21,7 @@
 export type SqlColumns =
   | { kind: "star" }
   | { kind: "named"; names: string[] }
-  // Sprint-393b — at least one item is a non-bare-column expression
+  // At least one item is a non-bare-column expression
   // (CASE / window-function / scalar-subquery / literal). The list
   // preserves input order.
   | { kind: "expressions"; items: SqlSelectListItem[] };
@@ -35,7 +35,7 @@ export type SqlSelectListItem =
   | { kind: "column"; reference: SqlColumnRef; alias: string | null }
   | { kind: "expression"; expression: SqlSelectExpr };
 
-// ---- sprint-393a SELECT widening types -------------------------------
+// ---- SELECT widening types -------------------------------------------
 
 /**
  * A column reference — `column` (unqualified) or `table.column`
@@ -51,16 +51,13 @@ export interface SqlColumnRef {
 export type SqlLikeCase = "sensitive" | "insensitive";
 
 /**
- * Sprint-393a widened expression — used by SELECT's WHERE, HAVING, and
- * JOIN ON predicates. The variant set adds three new primaries over the
- * sprint-392 narrow `SqlWhereExpr` (which remains in use for DML WHERE
- * until sprint-393b):
+ * Widened expression — used by SELECT's WHERE, HAVING, and JOIN ON
+ * predicates, and by DML WHERE through the `SqlWhereExpr` alias. The
+ * variant set includes:
  *
  * - `comparison` — column-op-(literal|placeholder|default). The left side
  *   is a `SqlColumnRef` (qualified or unqualified); the right side is an
- *   `SqlInsertValue`. This is the same wire shape sprint-392 produced for
- *   DML WHERE, except the left side is widened from `string` to
- *   `SqlColumnRef`.
+ *   `SqlInsertValue`.
  * - `column-comparison` — column-op-column (cross-table or same-table).
  * - `extension-operator-comparison` — column symbolic-operator value/column
  *   for bounded PostgreSQL extension/operator-class tolerance.
@@ -112,7 +109,6 @@ export type SqlSelectExpr =
   | { kind: "not"; inner: SqlSelectExpr }
   | { kind: "is-null"; column: SqlColumnRef }
   | { kind: "is-not-null"; column: SqlColumnRef }
-  // Sprint-393b — new primaries.
   | {
       kind: "in-list";
       column: SqlColumnRef;
@@ -155,7 +151,7 @@ export type SqlExtensionOperatorOperand =
   | { kind: "value"; value: SqlInsertValue }
   | { kind: "column"; column: SqlColumnRef };
 
-// Sprint-393b — window-function support types --------------------------
+// ---- window-function support types -----------------------------------
 
 export type SqlWindowArgument =
   | { kind: "star" }
@@ -198,7 +194,7 @@ export type SqlJoinPredicate =
 /**
  * How a FROM item attaches to the preceding item. The first FROM item
  * always carries `comma` (the variant is reused for "no join" so the
- * AST shape stays uniform). The spec keeps `comma` and `cross-join`
+ * AST shape stays uniform). The parser keeps `comma` and `cross-join`
  * distinct — downstream tooling must accept both shapes (no normalization).
  */
 export type SqlJoinDescriptor =
@@ -217,7 +213,7 @@ export interface SqlFromItem {
   alias: string | null;
   join: SqlJoinDescriptor;
   /**
-   * Sprint-393b — discriminated FROM-item source. For a plain table
+   * Discriminated FROM-item source. For a plain table
    * reference: `kind="table"` with `schema` + `table` (duplicating the
    * top-level slots). For `FROM (SELECT ...) AS alias`: `kind="subquery"`
    * with the nested SELECT body.
@@ -254,7 +250,7 @@ export interface SqlSelectStatement {
   order_by: SqlOrderingItem[];
   limit: SqlLimitClause | null;
   /**
-   * Sprint-393b — chained set operations (`UNION` / `UNION ALL` /
+   * Chained set operations (`UNION` / `UNION ALL` /
    * `INTERSECT` / `EXCEPT`). Empty when the SELECT is not part of a chain.
    * Entries are in left-to-right input order — implementations must NOT
    * normalize or reorder.
@@ -272,11 +268,9 @@ export type SqlParseErrorKind =
   | "unsupported-statement"
   | "syntax-error"
   | "empty-input"
-  // Sprint-392 — verb-level structure was recognized but the inner
-  // expression (WHERE / SET RHS) uses a construct outside the narrow
-  // sprint-392 expression slice (subquery / IN-list / cross-table
-  // comparison / arithmetic / function call). Callers may treat this as
-  // "fall back to regex heuristic".
+  // Verb-level structure was recognized but the inner expression
+  // (WHERE / SET RHS) uses an unsupported construct. Callers may treat
+  // this as "fall back to regex heuristic".
   | "unsupported-expression";
 
 export interface SqlParseError {
@@ -286,14 +280,10 @@ export interface SqlParseError {
   at: number | null;
 }
 
-// ---- sprint-392 shared value primitives ------------------------------
+// ---- shared value primitives -----------------------------------------
 
 /**
- * Sprint-392 widened literal set — sprint-385's `SqlLiteral` covered only
- * `integer` / `string`; DML VALUES needs every JSON-shaped column type.
- * Re-using the existing `SqlLiteral` name would be a breaking change for
- * sprint-385 callsites (sqlAst.test, useSafeModeGate, etc.), so we name
- * the new union `SqlLiteralValue` and keep `SqlLiteral` untouched.
+ * Literal values — covers every JSON-shaped column type DML VALUES needs.
  */
 export type SqlLiteralValue =
   | { kind: "integer"; value: number }
@@ -310,7 +300,7 @@ export type SqlInsertValue =
 export type SqlCompareOp = "eq" | "ne" | "lt" | "le" | "gt" | "ge";
 
 /**
- * Sprint-393b — DML WHERE migrates to the unified `SqlSelectExpr` shape.
+ * DML WHERE uses the unified `SqlSelectExpr` shape.
  * `SqlWhereExpr` is preserved as a type alias for backwards compatibility
  * (downstream callers may still import the name), but the union expanded
  * to match the wider `SqlSelectExpr` shape.
