@@ -246,7 +246,7 @@ function FlatTableList({
             isActive: activeSchema === schema.name && activeTable === item.name,
           },
           ctx,
-          true, // flat=true → pl-3 + table-only ContextMenu 분기
+          true, // flat=true → pl-3 + table-only ContextMenu branch
         );
       })}
       {fileAnalyticsSources.length > 0 && (

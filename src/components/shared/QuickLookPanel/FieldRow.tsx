@@ -100,7 +100,7 @@ export function FieldRow({
   return (
     <div className="flex border-b border-border last:border-b-0">
       {/* Column name + type stacked vertically so a long type cannot
-          truncate the column name (sprint-90 #QL-2). */}
+          truncate the column name (#QL-2). */}
       <div
         className="flex w-44 shrink-0 flex-col border-r border-border bg-muted/30 px-3 py-2 font-medium text-muted-foreground"
         title={column.data_type}

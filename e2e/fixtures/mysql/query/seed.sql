@@ -1,4 +1,4 @@
--- Sprint 250 — MySQL E2E seed. Mirror of seed.sql for Phase 17 MySQL adapter.
+-- MySQL E2E seed. Mirror of seed.sql for Phase 17 MySQL adapter.
 --
 -- Idempotency contract: re-running this file against an already-seeded
 -- database MUST exit 0. Pipe with `mysql --abort-source-on-error -u ...

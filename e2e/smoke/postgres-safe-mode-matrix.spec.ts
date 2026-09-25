@@ -57,7 +57,7 @@ import {
  *   - class D (prod + off) is the "off can't bypass production" prod-auto
  *     net — distinct copy, so asserted explicitly.
  *
- * Single representative DBMS (Postgres) per #1124 ("대표 DBMS 1개로 충분").
+ * Single representative DBMS (Postgres) per #1124.
  * mysql / duckdb DBMS-specific destructive-confirm smoke (#1124 checkbox 3)
  * is the already-covered class C on new engines and is left as a follow-up.
  *

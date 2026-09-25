@@ -1,4 +1,4 @@
--- sprint-297 — canonical E2E smoke Postgres seed.
+-- Canonical E2E smoke Postgres seed.
 --
 -- Single source of truth for the smoke suite's Postgres fixture data.
 --
