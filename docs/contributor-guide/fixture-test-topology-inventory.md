@@ -207,7 +207,7 @@ file:
 | `src-tauri/tests/mysql_integration.rs` | 5026 | MySQL runtime/query/catalog/cancel evidence shares one large integration file. |
 | `src-tauri/tests/schema_integration.rs` | 2512 | PostgreSQL schema/catalog evidence is broad and smoke-adjacent. |
 | `src-tauri/tests/query_integration.rs` | 2249 | PostgreSQL query/edit/runtime evidence is broad and smoke-adjacent. |
-| `src/lib/sql/sqlAst.test.ts` | 2171 | SQL AST/parser fixture-style examples are concentrated in one frontend test. |
+| `src/lib/sql/sqlAst.test.ts` | 2170 | SQL AST/parser fixture-style examples are concentrated in one frontend test. |
 | `src-tauri/tests/mongo_integration.rs` | 2027 | MongoDB runtime/query/edit/cancel evidence is broad and fixture-adjacent. |
 | `src/hooks/useSqlAutocomplete.test.ts` | 1471 | Completion evidence spans dialect/context behavior below smoke. |
 
