@@ -68,7 +68,7 @@ export default function App() {
     (s) => s.loadPersistedTableActivity,
   );
   // MRU marking is the caller's responsibility — `addTab`/`addQueryTab` no
-  // longer emit it implicitly, so the three handlers below pair the call.
+  // longer emit it implicitly, so the handlers below pair the call.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
   const activeTabId = useActiveTabId();
@@ -78,9 +78,9 @@ export default function App() {
   const activeTab = useActiveTabSansSql();
   const tabIds = useCurrentTabIds();
   const workspaceKey = useCurrentWorkspaceKey();
-  // Wave 9.5 회귀 5 — Cmd+N + menu:new-query-tab 의 fallback path 에서 사용.
-  // 컴포넌트에서 `store.getState()` 직접 호출은 룰 (no-restricted-syntax) 위반
-  // 이라 selector hook 으로 받는다.
+  // Used by the Cmd+N and `menu:new-query-tab` fallback paths. Calling
+  // `store.getState()` directly in a component breaks the lint rule
+  // (no-restricted-syntax), so it is read through a selector hook.
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
   const removeTab = useWorkspaceStore((s) => s.removeTab);
   const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
@@ -154,14 +154,16 @@ export default function App() {
     loadPersistedTableActivity,
   ]);
 
-  // Cmd+W / Ctrl+W — 활성 탭이 있으면 그 탭을 닫고, 빈 워크스페이스면 창
-  // 자체를 destroy. macOS native NSMenu 의 Cmd+W (lib.rs `close_focused_window`)
-  // 가 우선이지만, webview 가 가로채는 input field focus 같은 경우 fallback
-  // 으로 같은 시맨틱 (workspace → destroy, launcher → hide) 제공.
+  // Cmd+W / Ctrl+W — close the active tab if there is one; in an empty
+  // workspace, destroy the window itself. The macOS native NSMenu Cmd+W
+  // (lib.rs `close_focused_window`) takes precedence; this handler is the
+  // fallback when the webview takes the key first, such as while an input
+  // field holds focus.
   //
-  // Wave 9.5 회귀 5 (2026-05-16): 이전 핸들러는 빈 탭일 때 `preventDefault()`
-  // 만 호출해 OS default close 도 막아 no-op 으로 떨어졌다. 사용자: "탭 없는
-  // 상태에서 Cmd+W = window 꺼져야 해" — destroyCurrentWindow 명시 호출로 fix.
+  // 2026-05-16: with no tabs, the earlier handler called only
+  // `preventDefault()`, which also blocked the OS default close and left
+  // Cmd+W a no-op. With no tab open Cmd+W must close the window, so the
+  // handler calls destroyCurrentWindow explicitly.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.key !== "w") return;
@@ -174,12 +176,13 @@ export default function App() {
         );
         return;
       }
-      // 빈 워크스페이스 — backend `workspace_close` 가 caller webview 의
-      // Window::destroy() 직접 호출. launcher 안에서 fire 되면 backend 는
-      // 노출된 command 의 caller 가 launcher 라는 점만 보고 destroy — launcher
-      // hide 시맨틱은 native menu 가 처리하므로 webview keydown 으로 도달할
-      // 경로는 사실상 workspace 만 (launcher 의 Cmd+W 는 NSMenu 가 먼저
-      // 가로채 hide 분기로 간다). 탭이 없으므로 dirty 검사 불필요.
+      // Empty workspace — the backend `workspace_close` calls
+      // Window::destroy() on the caller webview directly. Fired inside the
+      // launcher, the backend would only see that the command's caller is
+      // the launcher and destroy it; the native menu owns the launcher hide
+      // semantics, so in practice only a workspace reaches this path through
+      // a webview keydown (the launcher's Cmd+W is taken by NSMenu first and
+      // goes to the hide branch). No tabs, so no dirty check is needed.
       void destroyCurrentWindow();
     };
     document.addEventListener("keydown", handleKeyDown);
@@ -293,17 +296,16 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [activeTab]);
 
-  // Sprint 291 + Wave 9.5 회귀 5 (2026-05-16) — workspace 윈도우에서의 Cmd+N
-  // 은 connection-create dialog 가 아니라 raw query tab 을 연다 (Cmd+T 와
-  // 동일 동작). 사용자 요청: workspace 안에서 새 연결 만들기는 launcher 윈도우
-  // (macOS 메뉴 / 별도 진입점) 의 책무이고, workspace 의 Cmd+N 은 "쿼리 새로
-  // 작성" 시그널이라는 멘탈 모델.
+  // 2026-05-16 — in a workspace window Cmd+N opens a raw query tab (same as
+  // Cmd+T), not the connection-create dialog. Creating a new connection is
+  // the launcher window's job (macOS menu / a separate entry point); inside
+  // a workspace, Cmd+N means "write a new query".
   //
-  // 빈 탭 fallback (회귀 5): 이전 핸들러는 activeTab 의 connectionId 가
-  // 비어있으면 no-op 으로 떨어졌다. workspace 마운트 직후엔 tab 이 없을 수
-  // 있으므로 window label (`workspace-{conn_id}`) 에서 conn 을 추출해
-  // addQueryTab. macOS NSMenu Cmd+N 의 dispatch (lib.rs::handle_menu_new_connection)
-  // 가 우선이지만 webview 가 가로채는 input field focus 같은 경우 fallback.
+  // Empty-tab fallback: a workspace can have no tab right after it mounts,
+  // so when the active tab has no connectionId, take the conn from the window
+  // label (`workspace-{conn_id}`) and call addQueryTab. The macOS NSMenu
+  // Cmd+N dispatch (lib.rs::handle_menu_new_connection) takes precedence;
+  // this handler is the fallback when the webview takes the key first.
   // Cmd+S / Ctrl+S — commit changes
   // Cmd+P / Ctrl+P — quick open
   useEffect(() => {
@@ -318,15 +320,15 @@ export default function App() {
         e.preventDefault();
         let connectionId = activeTab?.connectionId ?? "";
         if (!connectionId) {
-          // 회귀 5 fallback A — 현재 window 라벨에서 conn 추출 (workspace
-          // window 의 가장 authoritative source). launcher 라벨은
-          // parseWorkspaceLabel 이 null 반환.
+          // Fallback A — take the conn from the current window label (the
+          // most authoritative source in a workspace window).
+          // parseWorkspaceLabel returns null for the launcher label.
           const label = getCurrentWindowLabel();
           if (label) connectionId = parseWorkspaceLabel(label) ?? "";
         }
         if (!connectionId) {
-          // 회귀 5 fallback B — store 의 focusedConnId. WorkspacePage mount
-          // 직후 `useWindowFocusHydration` 이 set 한 값.
+          // Fallback B — the store's focusedConnId, which
+          // `useWindowFocusHydration` sets right after WorkspacePage mounts.
           connectionId = focusedConnId ?? "";
         }
         if (connectionId) {
@@ -353,10 +355,11 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [activeTab, addQueryTab, markConnectionUsed, focusedConnId]);
 
-  // Wave 9.5 회귀 5 (2026-05-16) — backend NSMenu Cmd+N 가 workspace 라벨로
-  // 발사하는 `menu:new-query-tab` 수신. user journey: workspace focused +
-  // Cmd+N → backend dispatcher 가 이 window 에 emit → raw query tab 열림.
-  // 빈 탭 상태에서도 동작 — workspace label 의 conn id 를 추출해 addQueryTab.
+  // 2026-05-16 — receives `menu:new-query-tab`, which the backend NSMenu
+  // Cmd+N emits to the focused workspace window. User journey: workspace
+  // focused + Cmd+N → the backend dispatcher emits to this window → a raw
+  // query tab opens. Works with no tabs too — takes the conn id from the
+  // workspace label and calls addQueryTab.
   useTauriListener(
     () =>
       listen("menu:new-query-tab", () => {
@@ -665,13 +668,12 @@ export default function App() {
     return () => window.removeEventListener("quickopen-function", handler);
   }, [addQueryTab, markConnectionUsed, updateQuerySql]);
 
-  // Sprint 256 (ADR 0023, AC-256-02) — prod-only 1px window border
-  // tracks the *active tab* (not focusedConnId) so a user pivoting from
-  // a prod tab to a dev tab loses the red frame instantly. The
-  // `chrome-prod-border` class is opted-in here on a wrapper that lives
-  // *outside* the existing flex shell so the existing layout math is
-  // untouched (prevents a re-layout / scroll-shift the moment the
-  // border appears).
+  // ADR 0023, AC-256-02 — prod-only 1px window border tracks the *active
+  // tab* (not focusedConnId) so a user pivoting from a prod tab to a dev tab
+  // loses the red frame instantly. The border (an inset `box-shadow`) is
+  // opted in here on a wrapper that lives *outside* the existing flex shell
+  // so the existing layout math is untouched (prevents a re-layout /
+  // scroll-shift the moment the border appears).
   const activeConnection = useActiveTabConnection();
   const isProdActive = activeConnection?.environment === "production";
 
