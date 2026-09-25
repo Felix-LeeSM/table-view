@@ -1,12 +1,13 @@
 /**
- * 작성 2026-05-16 (Phase 3 sprint-365, AC-365-04)
+ * Written 2026-05-16 (AC-365-04)
  *
- * 사유: F.4 protection #2 — Version gap 감지.
- * `version > lastApplied + 1` 이면 missed event 가 있다는 신호. 해당
- * domain 전체 refetch (예: `domain:"connection"` 이면 `get_all_connections()`
- * 재호출). gap 처리가 누락되면 frontend store 가 영구적으로 stale 상태에
- * 머무를 수 있다 — listener 가 모든 event 를 한 번에 받는다는 보장 없음
- * (Tauri runtime 동작 변경, OS hot-loop 등).
+ * Reason: F.4 protection #2 — version gap detection.
+ * `version > lastApplied + 1` signals a missed event, and the response is a
+ * refetch of that whole domain (the strategy doc's example: call
+ * `get_all_connections()` again for `domain:"connection"`). Without gap
+ * handling the frontend store can stay stale for good — nothing guarantees
+ * that the listener receives every event (Tauri runtime behavior changes,
+ * an OS hot loop, etc.).
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";

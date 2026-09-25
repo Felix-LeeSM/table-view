@@ -1,26 +1,31 @@
 /**
- * Purpose: cross-window `state-changed` 라우터의 9-domain 완전성 불변식 —
- * Phase 3 sprint-365 F.4 (재작성 이슈 #1627, 2026-07-24)
+ * Purpose: the 9-domain completeness invariant of the cross-window
+ * `state-changed` router — F.4 (rewritten under issue #1627, 2026-07-24)
  *
- * 사유(재작성): 이전 버전은 `stateChanged.ts` 소스를 `readFileSync` +
- * 문자열 grep 하여 `case "<domain>":` 존재를 세는 change-detector 였다
- * (P2/P9 위반 — 소스 문자열 매칭). 라우터 완전성이라는 의도는 정당하나
- * 수단이 소스 텍스트에 결합돼 실제 라우팅 동작을 관측하지 못했고 주석
- * 리네이밍/포맷 변경만으로도 깨졌다.
+ * Reason (rewrite): the previous version was a change-detector that ran
+ * `readFileSync` + a string grep over the `stateChanged.ts` source to count
+ * `case "<domain>":` occurrences (a P2/P9 violation — source string
+ * matching). Router completeness is a legitimate intent, but the means was
+ * coupled to the source text: it never observed actual routing, and a
+ * comment rename or a format change alone broke it.
  *
- * 재작성 방식: 각 domain 을 normal + gap 두 라우터로 **실제 dispatch** 해
- * 등록한 handler 호출을 단언한다 (behavioral). 완전성은 두 겹으로 잠근다.
- *   1. compile-time — `DOMAIN_PROBES` 를 `Record<EventDomain, DomainProbe>` 로
- *      타입 고정. `EventDomain` union 에 10번째 domain 을 추가하면 이 테이블에
- *      키가 없어 `tsc` 가 컴파일 에러로 잡는다 (누락 강제 검출).
- *   2. runtime — 그 테이블을 순회하며 각 domain 을 실제 라우팅. `routeNormalHandler`
- *      / `routeGapHandler` 의 `switch` 에 그 domain case 가 없으면 handler 가
- *      호출되지 않아 단언이 fail 한다 (switch 는 default throw 없이 silent no-op).
+ * Rewrite approach: **actually dispatch** each domain through both the
+ * normal and gap routers and assert the registered handler calls
+ * (behavioral). Completeness is locked in two layers.
+ *   1. compile-time — `DOMAIN_PROBES` is typed as
+ *      `Record<EventDomain, DomainProbe>`. Adding a 10th domain to the
+ *      `EventDomain` union leaves this table without that key, and `tsc`
+ *      reports a compile error (the omission is forced into view).
+ *   2. runtime — iterate that table and actually route each domain. If the
+ *      `switch` in `routeNormalHandler` / `routeGapHandler` lacks that
+ *      domain's case, the handler is not called and the assertion fails
+ *      (the switch has no default throw; a missing case is a silent no-op).
  *
- * 역할 분담: `stateChanged.test.ts` = domain×op 세부 매트릭스(normal 경로 상세).
- *            `version-gap.test.ts` = gap 감지 임계/baseline 의미론(단일 domain).
- *            본 파일 = 9 domain 이 normal+gap 두 라우터에 모두 존재하는지의
- *            완전성 가드 하나만. op 세부는 재검증하지 않는다.
+ * Division of roles:
+ *   `stateChanged.test.ts` = the detailed domain×op matrix (normal path).
+ *   `version-gap.test.ts` = gap-detection threshold/baseline semantics.
+ *   This file = only the completeness guard that all 9 domains exist in
+ *   both the normal and gap routers. It does not re-verify op details.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -186,8 +191,9 @@ describe("nine-domain router completeness", () => {
     resetStateChangedRegistryForTests();
   });
 
-  // Reason: normal 라우터가 9 domain 모두를 등록 handler 로 라우팅 —
-  // switch case 누락이면 handler 미호출로 fail. 이슈 #1627 (2026-07-24)
+  // Reason: the normal router routes all 9 domains to their registered
+  // handler — a missing switch case leaves the handler uncalled and fails.
+  // Issue #1627 (2026-07-24)
   it.each(ALL_DOMAINS)(
     "routes a normal %s event to its registered handler",
     (domain) => {
@@ -204,8 +210,9 @@ describe("nine-domain router completeness", () => {
     },
   );
 
-  // Reason: gap 라우터가 9 domain 모두를 onGapDetected 로 라우팅 —
-  // version > baseline+1 일 때. switch case 누락이면 fail. 이슈 #1627 (2026-07-24)
+  // Reason: the gap router routes all 9 domains to onGapDetected when
+  // version > baseline+1. A missing switch case fails. Issue #1627
+  // (2026-07-24)
   it.each(ALL_DOMAINS)(
     "routes a version-gap %s event to onGapDetected",
     (domain) => {
@@ -226,9 +233,10 @@ describe("nine-domain router completeness", () => {
     },
   );
 
-  // Reason: FE 상수는 backend `src-tauri/src/events.rs::STATE_CHANGED_EVENT`
-  // 와의 wire-name 계약 미러. 값이 어긋나면 cross-window delivery 가 조용히
-  // 끊긴다 (backend 쪽 parity 는 Rust listen 테스트가 검증). 이슈 #1627 (2026-07-24)
+  // Reason: the FE constant mirrors the wire-name contract with the backend
+  // `src-tauri/src/events.rs::STATE_CHANGED_EVENT`. If the values drift
+  // apart, cross-window delivery silently breaks (the Rust listen tests
+  // verify the backend-side parity). Issue #1627 (2026-07-24)
   it("exports the canonical `state-changed` wire name", () => {
     expect(STATE_CHANGED_EVENT).toBe("state-changed");
   });

@@ -1,25 +1,29 @@
 /**
- * Sprint 369 (Phase 4) — legacy column-prefs LS key 일괄 drop + 1회 toast.
+ * Bulk-drops the legacy column-prefs LS keys and shows a one-time toast.
  *
- * Background: sprint-259 ~ sprint-318 시점에 `useColumnWidths` /
- * `useHiddenColumns` 가 `column-widths:<key>` / `hidden-columns:<key>` LS
- * 영속을 들고 있었지만, strategy doc Q20.4–Q20.5 결정 (`datagrid_column_prefs`
- * SQLite SOT) 으로 sprint-369 에서 폐기. legacy key 는 PK 5-tuple 의
- * connection_id / db_name 정보가 없어 SQLite 로 migrate 가 불가능 — 그래서
- * 우리는 *drop without migration* 만 한다 (strategy doc 745).
+ * Background: `useColumnWidths` / `useHiddenColumns` used to persist
+ * `column-widths:<key>` / `hidden-columns:<key>` in LS; the strategy doc
+ * Q20.4–Q20.5 decision (`datagrid_column_prefs` as the SQLite SOT) retired
+ * that. The legacy keys lack the connection_id / db_name parts of the PK
+ * 5-tuple, so they cannot be migrated to SQLite — hence we only
+ * *drop without migration* (strategy doc 748).
  *
- * 사용자에게는 "Per-table preferences will reset once" 안내를 1회만 띄운다.
- * 다음 boot 부터는 sentinel `meta.legacy_column_prefs_drop_dismissed = "1"`
- * 가 set 되어 있어 본 함수가 noop.
+ * The user sees the "Per-table preferences will reset once" notice only
+ * once. From the next boot on, the sentinel
+ * `meta.legacy_column_prefs_drop_dismissed = "1"` is set and this function
+ * is a no-op.
  *
- * Invariants (sprint-369 contract):
- *   - sentinel == "1" → noop (LS 도 건드리지 않음, toast 도 안 띄움).
- *   - sentinel == null + legacy key 존재 → key delete + toast 1회 + sentinel set.
- *   - sentinel == null + legacy key 부재 → toast skip, sentinel 만 set.
- *   - 모든 IPC 실패는 swallow — boot 진행은 보장 (best-effort).
+ * Invariants:
+ *   - sentinel == "1" → no-op (LS untouched, no toast).
+ *   - sentinel == null + legacy keys present → delete the keys + one toast
+ *     + set the sentinel.
+ *   - sentinel == null + no legacy keys → skip the toast, set only the
+ *     sentinel.
+ *   - Every IPC failure is swallowed — boot is guaranteed to proceed
+ *     (best-effort).
  *
- * 본 함수는 boot bootstrap (사프린트-367 의 loadAllFromSnapshot 직후) 시점에
- * 한 번 호출되어야 한다.
+ * This function must be called once during boot bootstrap, right after
+ * `loadAllFromSnapshot`.
  */
 
 import i18n from "@lib/i18n";

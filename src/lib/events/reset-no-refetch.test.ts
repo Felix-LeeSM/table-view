@@ -1,15 +1,16 @@
 /**
- * 작성 2026-05-16 (Phase 3 sprint-365, AC-365-05)
+ * Written 2026-05-16 (AC-365-05)
  *
- * 사유: F.4 "Reset op 처리 흐름" (strategy doc lines 1416–1444 + codex 6차
- * #4 통일). `op:"reset"` 은 update 와 달리 refetch 경로를 타지 않는다 —
- * backend `reset_setting` 은 row 를 삭제하기에 `get_setting` 결과가
- * null 이 되어 refetch 가 무의미. 수신자는 frontend `SETTING_DEFAULTS`
- * 상수를 직접 적용한다.
+ * Reason: the F.4 reset-op flow (strategy doc lines 1419–1447). Unlike
+ * update, `op:"reset"` does not take the refetch path — backend
+ * `reset_setting` deletes the row, so `get_setting` returns null and a
+ * refetch is pointless. Per F.4, the receiver applies the frontend
+ * `SETTING_DEFAULTS` constant directly.
  *
- * 본 테스트는 dispatcher 가 reset op 를 `onReset` 핸들러로만 라우팅하고
- * `onUpdated` (refetch 핸들러) 는 호출 0회임을 잠근다. 회귀 시 reset
- * 후 store 가 두 번 갱신되거나, default 대신 null/stale 값이 들어간다.
+ * This test locks that the dispatcher routes the reset op only to the
+ * `onReset` handler and calls `onUpdated` (the refetch handler) zero times.
+ * On regression the store updates twice after a reset, or gets a
+ * null/stale value instead of the default.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";

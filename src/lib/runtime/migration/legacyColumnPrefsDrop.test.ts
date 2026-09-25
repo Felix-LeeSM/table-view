@@ -1,12 +1,13 @@
-// 작성 2026-05-16 (Phase 4 sprint-369) — legacy LS drop + 1회 toast.
+// Written 2026-05-16 — legacy LS drop + one-time toast.
 //
-// 사유: sprint-369 의 invariant 는
-//   (1) boot 시 `column-widths:*` / `hidden-columns:*` LS key 전부 delete,
-//   (2) 사용자에게 "Per-table preferences will reset once" toast 1회만,
-//   (3) sentinel (`meta.legacy_column_prefs_drop_dismissed`) 가 이미 "1" 이면
-//       toast skip 하고 LS 도 건드리지 않음 (이미 done).
+// Reason: the invariants are
+//   (1) at boot, delete every `column-widths:*` / `hidden-columns:*` LS key,
+//   (2) show the user the "Per-table preferences will reset once" toast only
+//       once,
+//   (3) when the sentinel (`meta.legacy_column_prefs_drop_dismissed`) is
+//       already "1", skip the toast and leave LS alone (already done).
 //
-// AC-369-11 매핑.
+// Maps to AC-369-11.
 
 import {
   afterEach,

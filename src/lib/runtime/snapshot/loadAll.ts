@@ -1,38 +1,40 @@
 /**
- * Sprint 367 (Phase 4) — atomic snapshot hydration + listener pre-register.
+ * Atomic snapshot hydration + listener pre-register.
  *
  * Boot critical path:
  *
- *   1. `registerSnapshotListener()` — `listen("state-changed", …)` 등록.
- *      등록 직후 buffer 모드가 ON 이며, dispatch 는 사프린트-365 의
- *      `dispatchStateChangedPayload` 으로 위임하지 않고 큐에 적재.
- *   2. `loadAllFromSnapshot()` — `getInitialAppState()` IPC 호출. fake fast
- *      path < 100ms. 응답이 도착하면 5 boot-critical store + runtime
- *      `activeStatuses` 를 await Promise.all 로 일괄 hydrate.
- *   3. snapshot 적용 후 buffer drain. snapshotVersion <= snap.snapshotVersion 인
- *      event 는 이미 truth 에 포함되어 있으므로 drop (중복 dispatch 방지).
- *      newer event 는 sprint-365 의 dispatch 로 1회 전달.
+ *   1. `registerSnapshotListener()` — registers `listen("state-changed", …)`.
+ *      Buffer mode is ON right after registration: events are queued
+ *      instead of being handed to `dispatchStateChangedPayload`.
+ *   2. `loadAllFromSnapshot()` — calls the `getInitialAppState()` IPC. Fast
+ *      path < 100ms with a fake IPC. When the response arrives, the 5
+ *      boot-critical stores + runtime `activeStatuses` are hydrated together
+ *      via await Promise.all.
+ *   3. After the snapshot applies, drain the buffer. Events with
+ *      snapshotVersion <= snap.snapshotVersion are already part of the
+ *      truth, so they are dropped (no double dispatch). Newer events are
+ *      dispatched once through `dispatchStateChangedPayload`.
  *
- * Failure 처리 (AC-367-05):
+ * Failure handling (AC-367-05):
  *
- *   - IPC reject 시 store 는 default 그대로 유지 — partial hydrate 0.
+ *   - On IPC reject the stores stay at their defaults — no partial hydrate.
  *   - `toast.error("Failed to load app state …", { action: { label: "Retry", … } })`
- *     로 사용자에게 노출. Retry click → `loadAllFromSnapshot()` 재호출.
- *   - listener 는 등록된 채로 유지 + buffer 활성 → 다음 retry 에서 race-window
- *     event 가 다시 잡힌다.
+ *     surfaces it to the user. Retry click → `loadAllFromSnapshot()` again.
+ *   - The listener stays registered and the buffer stays active → the next
+ *     retry catches race-window events again.
  *
- * In Scope (sprint-367):
- *   - 5 store hydrate path + runtime mirror.
- *   - listener buffer drain.
+ * In Scope:
+ *   - 5 store hydrate paths + runtime mirror.
+ *   - Listener buffer drain.
  *
  * Out of Scope:
- *   - 9 domain receiver 본문 (sprint-365 완료).
- *   - LS retire — theme/safeMode (sprint-368), datagrid prefs (sprint-369).
- *   - `useCurrentWindowConnectionId` (sprint-366).
+ *   - 9 domain receiver bodies.
+ *   - LS retirement — theme/safeMode, datagrid prefs.
+ *   - `useCurrentWindowConnectionId`.
  */
 
 // CRITICAL: listener registration MUST precede the IPC call line below.
-// AC-367-03 (codex 2차 #12 strict order) regression-locked by
+// AC-367-03 (strict order) regression-locked by
 // `loadAll.listener-order.test.ts` — the static grep test scans this file for
 // `listen("state-changed"` and `getInitialAppState(` and asserts the former
 // appears at a lower line number. Do NOT swap the imports or relocate the
@@ -81,7 +83,7 @@ let listenerRegistered = false;
 /**
  * Register the singleton `state-changed` listener for this window. The
  * handler queues into `buffer` while `bufferActive` is true, otherwise
- * dispatches straight to the sprint-365 router.
+ * dispatches straight to `dispatchStateChangedPayload`.
  *
  * Best-effort: if the Tauri runtime is unavailable (vitest jsdom default),
  * returns silently. Tests inject buffered events via
@@ -110,7 +112,7 @@ function handleIncomingEvent(payload: unknown): void {
     buffer.push({ payload });
     return;
   }
-  // Buffer is drained — route to sprint-365 dispatcher immediately.
+  // Buffer is drained — route to `dispatchStateChangedPayload` immediately.
   const label = getCurrentWindowLabel() ?? "";
   dispatchStateChangedPayload(label, payload);
 }
@@ -366,10 +368,11 @@ async function hydrateTheme(snap: InitialAppState): Promise<void> {
     slot.mode === "light" || slot.mode === "dark" || slot.mode === "system"
       ? slot.mode
       : "system";
-  // wire 의 `themeId` 가 frontend catalog 에 없는 id (legacy "default", 사용자
-  // SQLite tamper, schema drift 등) 면 DEFAULT_THEME_ID 로 fallback. unsafe
-  // cast 가 themes.css 의 매칭 selector 가 없는 `data-theme` 을 박아 시각적
-  // 깨짐을 일으켰던 회귀를 막는다 (Wave 9.5, 2026-05-16).
+  // Fall back to DEFAULT_THEME_ID when the wire `themeId` is not in the
+  // frontend catalog (legacy "default", a user tampering with SQLite, schema
+  // drift, etc.). This blocks the regression where an unsafe cast wrote a
+  // `data-theme` with no matching selector in themes.css and visibly broke
+  // the styles (2026-05-16).
   const themeId = isThemeId(slot.themeId) ? slot.themeId : DEFAULT_THEME_ID;
   useThemeStore.getState().hydrateThemeFromSnapshot({ themeId, mode });
 }

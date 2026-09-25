@@ -1,18 +1,20 @@
 /**
- * 작성 2026-05-16 (Phase 3 sprint-365)
+ * Written 2026-05-16
  *
- * 사유: cross-window `state-changed` event 의 9 domain 라우팅을 잠근다.
- * 각 domain × op 조합이 등록된 핸들러로 정확히 dispatch 되는지 — 그리고
- * 등록 안 된 조합은 silently drop 되는지 — 가 strategy doc F.4 의 핵심
- * 계약. 회귀 시 (예: 도메인 추가하면서 switch case 빠뜨림) 본 테스트가
- * 첫 알람이 되어 frontend 가 멈춰 있는 모드 (event 수신했는데 store 가
- * 안 갱신) 를 막는다.
+ * Reason: locks the 9-domain routing of the cross-window `state-changed`
+ * event. That each domain × op combination dispatches to its registered
+ * handler exactly — and that an unregistered combination is silently
+ * dropped — is the core contract of strategy doc F.4. On regression (e.g. a
+ * switch case lost while adding a domain) this test is the first alarm and
+ * prevents a stuck frontend (the event arrives but the store does not
+ * update).
  *
- * 9 domain × {create/update/delete/reorder, status, bulk, invalidate,
- * reset, clear} 의 contract-spec 조합을 한 곳에서 검증.
+ * Verifies the contract-spec combinations of 9 domains ×
+ * {create/update/delete/reorder, status, bulk, invalidate, reset, clear} in
+ * one place.
  *
- * Out of scope: 실제 store mutate (각 store 의 unit test 가 담당).
- *               dedup / self-echo / gap (별도 파일).
+ * Out of scope: the actual store mutate (each store's unit tests own it).
+ *               dedup / self-echo / gap (separate files).
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -221,7 +223,7 @@ describe("datagridColumnPrefs domain receiver — #9", () => {
   });
 
   it("reset field='widths' → onReset with field='widths'", () => {
-    // AC-365-06 — field 별 분기 (widths only)
+    // AC-365-06 — per-field branch (widths only)
     const onReset = vi.fn();
     setStateChangedHandlers({ datagridColumnPrefs: { onReset } });
     dispatchStateChangedPayload(
