@@ -18,27 +18,22 @@ import {
 } from "../../model";
 
 /**
- * Sprint 213 (post-209 P6) — draft form state machine extracted from
- * `ConnectionDialog.tsx`. Owns:
+ * Draft form state machine for `ConnectionDialog.tsx`. Owns:
  *
  *   - `form` / `setForm` (the `ConnectionDraft` itself).
  *   - `passwordInput` / `setPasswordInput` (separate UI state, ADR-0005:
  *     the password input is never folded into the draft until save).
  *   - `clearPassword` / `setClearPassword` (edit-mode keep/clear toggle).
- *   - `pendingDbTypeChange` (Sprint 108 — confirmation flow when the user
+ *   - `pendingDbTypeChange` (confirmation flow when the user
  *     swaps `dbType` while a custom port is set).
- *   - `applyDbTypeChange` (Sprint 138 — DBMS-aware defaults; preserves
+ *   - `applyDbTypeChange` (DBMS-aware defaults; preserves
  *     `host` / `name` / `groupId` / `color` / `environment`).
- *   - `resolvePassword` (Sprint 178 — keep/clear/set semantics).
- *   - `trimDraft` (Sprint 178 — name/host/database/user; password verbatim).
+ *   - `resolvePassword` (keep/clear/set semantics).
+ *   - `trimDraft` (name/host/database/user; password verbatim).
  *   - `applyParsedConnection` (URL mode `Parse & Continue` + form-mode
  *     host-paste detection share this merge — both routes borrow the
  *     parsed `database` as the connection name when name is still blank
  *     and populate `passwordInput` separately).
- *
- * No behaviour change vs. pre-split: the hook is a transparent move of the
- * draft state machine. The only delta is that consumers now read/write via
- * the returned API instead of inline `useState` declarations.
  */
 
 export interface UseConnectionDraftFormReturn {
@@ -59,10 +54,8 @@ export interface UseConnectionDraftFormReturn {
   hadPassword: boolean;
   isFileConnection: boolean;
   /**
-   * Sprint 381 (2026-05-17) — true when the draft targets MongoDB.
-   * Mongo's `database` is *optional* (the user can leave it blank and
-   * pick one per-tab from the toolbar chip); RDB types still require a
-   * non-empty database. ConnectionDialog.handleSave branches on this.
+   * True when the draft targets MongoDB, whose `database` is *optional*
+   * (Mongo db-contract α; see `validateConnectionDraft`).
    */
   isMongo: boolean;
   isSearch: boolean;
@@ -141,7 +134,7 @@ export function useConnectionDraftForm(
   // DB password, kept out of the draft until save (ADR 0005).
   const [walletPasswordInput, setWalletPasswordInput] = useState("");
   const [clearWalletPassword, setClearWalletPassword] = useState(false);
-  // Sprint-108 (#CONN-DIALOG-2): when the user changes DB type with a custom
+  // #CONN-DIALOG-2: when the user changes DB type with a custom
   // port set, defer the swap until they confirm port replacement. The form
   // mutation only applies on confirm; cancel leaves dbType + port untouched.
   const [pendingDbTypeChange, setPendingDbTypeChange] = useState<{
@@ -149,14 +142,12 @@ export function useConnectionDraftForm(
   } | null>(null);
 
   const isFileConnection = form.dbType === "sqlite" || form.dbType === "duckdb";
-  // Sprint 381 (2026-05-17) — Mongo db-contract α: `database` is optional
-  // on Mongo (default DB landing field, not connection-required) so the
-  // Save validator skips the "Database is required" branch when true.
+  // `database` is optional on Mongo — see `validateConnectionDraft`.
   const isMongo = form.dbType === "mongodb";
   const isSearch = isSearchFamily(form.dbType);
 
   /**
-   * Sprint 138 — when the user changes `dbType`, reset the DBMS-specific
+   * When the user changes `dbType`, reset the DBMS-specific
    * defaults (`port`, `user`, `database`) but **preserve** entries the user
    * has likely typed deliberately (`host`, `name`, `groupId`, `color`,
    * `environment`). The `host` preservation matters because users often
@@ -228,7 +219,7 @@ export function useConnectionDraftForm(
     return null;
   };
 
-  // Sprint 178 (AC-178-02): trim user-pasteable string fields at the
+  // AC-178-02: trim user-pasteable string fields at the
   // save/test boundary, NEVER on keystroke. The list is narrowly scoped:
   // `password` is excluded per ADR-0005 (some legacy systems require
   // whitespace in the password) and `database` for file-backed DBMSes is
@@ -250,8 +241,7 @@ export function useConnectionDraftForm(
    * form-mode borrow the parsed `database` as the name only when `name` is
    * still blank — preserving any user-typed name.
    *
-   * The two modes differ in two narrow places, preserved verbatim from the
-   * pre-split inline lambdas:
+   * The two modes differ in two narrow places:
    *   - URL mode: `f.name || parsed.database || ""` + `setPasswordInput`
    *     on any string (including empty).
    *   - Paste mode: `f.name || parsed.database || f.name` + skip

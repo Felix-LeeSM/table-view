@@ -11,10 +11,9 @@
  * persists state (e.g. focusedConnId) tagged with the session ID, and the
  * workspace reads it back immediately on boot — no IPC timing dependency.
  *
- * Sprint 375 (Phase 6 cleanup, 2026-05-17) — renamed from
- * `session-storage.ts` to `scopedLocalStorage.ts`. The previous name was a
- * misnomer (M-4 in the state-management strategy doc): data lives in
- * `window.localStorage`, not `window.sessionStorage`. The session scoping
+ * Renamed from `session-storage.ts` to `scopedLocalStorage.ts`. The previous
+ * name was a misnomer (M-4 in the state-management strategy doc): data lives
+ * in `window.localStorage`, not `window.sessionStorage`. The session scoping
  * is an envelope-level UUID match, not a medium switch. Public function
  * names (`sessionSet` / `sessionGet` / `sessionRemove` / `initSession`)
  * are unchanged so call sites still read with the intended semantics.
@@ -111,14 +110,12 @@ function sessionHasCurrentValue(key: string): boolean {
 }
 
 /**
- * Sprint 375 (Phase 6 cleanup, 2026-05-17) — test-only escape hatch for
- * the module-scope `_sessionId` cache. Each app process resolves the
- * UUID exactly once via `initSession()`; vitest, however, runs multiple
- * "session" cases inside one process and would otherwise see the first
- * test's UUID leak into the second. This helper drops the cache so a
- * subsequent `initSession()` re-invokes the Rust IPC. Mirrors the
- * `__resetCountersForTests` / `__resetFavoriteCounterForTests` pattern.
- * Namespaced `__` to flag intent.
+ * Test-only escape hatch for the module-scope `_sessionId` cache. Each app
+ * process resolves the UUID exactly once via `initSession()`; vitest,
+ * however, runs multiple "session" cases inside one process and would
+ * otherwise see the first test's UUID leak into the second. This helper
+ * drops the cache so a subsequent `initSession()` re-invokes the Rust IPC.
+ * Same pattern as `__resetCountersForTests` (`workspaceStore/shared.ts`).
  */
 export function __resetSessionIdForTests(): void {
   _sessionId = null;

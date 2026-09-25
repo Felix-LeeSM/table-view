@@ -75,7 +75,7 @@ function patchQueryCompatibilityMetadata(
   let changed = false;
   const tabs = ws.tabs.map((t) => {
     if (t.id !== tabId || t.type !== "query") return t;
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt
     if (t.queryMode === queryMode && t.queryLanguage === queryLanguage) {
       return t;
     }
@@ -94,7 +94,7 @@ export function createQuerySlice(
       const { id, title } = nextQueryTabIdentity();
       const paradigm: Paradigm =
         opts.paradigm ?? resolveParadigmForConnection(connId);
-      // Sprint 309 — Find/Aggregate toggle removed. RDB tabs still need
+      // Find/Aggregate toggle removed. RDB tabs still need
       // `"sql"`; document tabs leave the field undefined on new tabs.
       const queryMode: WorkspaceQueryMode | undefined =
         paradigm === "rdb" ? "sql" : opts.queryMode;
@@ -225,7 +225,7 @@ export function createQuerySlice(
           const tabs = ws.tabs.map((t) => {
             if (t.id !== tabId || t.type !== "query") return t;
             if (t.paradigm === "rdb" && mode !== "sql") return t;
-            // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
+            // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt
             if (t.queryMode === mode) return t;
             changed = true;
             return { ...t, queryMode: mode };

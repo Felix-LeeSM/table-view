@@ -1,12 +1,11 @@
 /**
- * `workspaceStore` lifecycle axis. Sprint 262 (ADR 0027) TDD slice.
+ * `workspaceStore` lifecycle axis. ADR 0027 TDD slice.
  *
- * Behaviors covered (in TDD increment order from sprint-262/spec.md):
+ * Behaviors covered (in TDD increment order):
  *   1. Tracer bullet: `addTab(connId, init)` → workspaces[connId][db].tabs
  *      holds one tab + activeTabId === tab.id.
  *   2..: multi-DB isolation, closeTab, setActiveTab, clearForConnection.
- *      Extended in subsequent increments — kept in this file (lifecycle
- *      axis) per the tabStore.lifecycle.test.ts precedent.
+ *      Extended in subsequent increments — kept in this file (lifecycle axis).
  *
  * Author intent (2026-05-12): vertical slice. One test → minimal store
  * code → next test. No batch test authoring.
@@ -266,7 +265,7 @@ describe("workspaceStore — lifecycle", () => {
   });
 
   it("[RISK-039] removeTab purges only the closing database's pending edit key", () => {
-    // Reason: Sprint 433 RISK-039 — same conn/schema/table can be open in
+    // Reason: RISK-039 — same conn/schema/table can be open in
     // dbA and dbB; closing dbA must not discard dbB pending edits.
     // (2026-05-22)
     const store = useWorkspaceStore.getState();
@@ -307,7 +306,7 @@ describe("workspaceStore — lifecycle", () => {
     expect(entries.get(dbBKey)?.pendingEdits.get("0-1")).toBe("dbB edit");
   });
 
-  // Sprint 353 (AC-353-05, 2026-05-16) — in-memory closedTabHistory cap
+  // AC-353-05 — in-memory closedTabHistory cap
   // was 20; Q19 raises it to 25 so the dehydration cap and the in-memory
   // cap agree (newest-first, oldest dropped on overflow).
   it("AC-353-05 — caps in-memory closedTabHistory at 25 entries; the 26th close drops the oldest", () => {

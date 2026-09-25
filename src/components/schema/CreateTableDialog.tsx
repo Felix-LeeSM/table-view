@@ -296,7 +296,7 @@ export default function CreateTableDialog(props: CreateTableDialogProps) {
                   />
                 </TabsContent>
 
-                {/* Indexes tab — Sprint 228 editor (extracted body) */}
+                {/* Indexes tab */}
                 <TabsContent
                   value="indexes"
                   className="pt-3 data-[state=inactive]:hidden"
@@ -315,7 +315,7 @@ export default function CreateTableDialog(props: CreateTableDialogProps) {
                   />
                 </TabsContent>
 
-                {/* Foreign Keys tab — Sprint 229 editor (extracted body) */}
+                {/* Foreign Keys tab */}
                 {canDeclareConstraints && (
                   <TabsContent
                     value="foreign_keys"

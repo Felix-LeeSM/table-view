@@ -17,9 +17,9 @@ interface GroupDialogProps {
 /**
  * Single dialog that doubles as "create group" and "edit group color/name".
  * - Name is required.
- * - Color is optional: picked from the shared connection palette (Sprint 78
- *   keeps the palette stable — no new hex values).
- * - Sprint 96: migrated to the `FormDialog` preset (Layer 2). The preset
+ * - Color is optional: picked from the shared connection palette (no new
+ *   hex values).
+ * - Uses the `FormDialog` preset (Layer 2). The preset
  *   owns the title + body + submit/cancel footer boilerplate; this file
  *   keeps the form-specific bits (palette radio group, name validation).
  */

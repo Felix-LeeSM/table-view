@@ -166,7 +166,7 @@ describe("ConnectionDialog Test Connection (#2437)", () => {
   // -------------------------------------------------------------------
   it("[conn-test] an untested dialog reserves no visible result band", () => {
     renderDialog();
-    // The slot stays mounted (sprint-92 identity contract) but costs no
+    // The slot stays mounted (#CONN-DIALOG-6 identity contract) but costs no
     // layout. jsdom loads no Tailwind sheet, so the class is the only
     // available proxy for "takes no space".
     expect(feedbackSlot()).not.toBeNull();

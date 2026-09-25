@@ -118,7 +118,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       </span>
       <span className="min-w-0 flex-1 break-words">{toast.message}</span>
       {toast.action ? (
-        // Sprint 269 — optional Retry-style action. Rendered BEFORE the
+        // Optional Retry-style action. Rendered BEFORE the
         // dismiss X. Clicking fires the callback synchronously, then
         // dismisses the toast so a stale notification doesn't linger
         // after the new query is in flight. Mirrors the dismiss button's

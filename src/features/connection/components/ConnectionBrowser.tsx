@@ -12,7 +12,7 @@ import RecentConnections from "./RecentConnections";
  * connections on the right. `All` and `Recent` are rail entries alongside the
  * groups, so adding groups widens the rail instead of lengthening the list.
  *
- * `Recent` used to be a collapsible footer strip under the list (sprint 296);
+ * `Recent` used to be a collapsible footer strip under the list;
  * it is a rail view now, which is why HomePage no longer owns a collapse flag.
  */
 type RailView =

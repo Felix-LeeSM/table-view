@@ -1,17 +1,13 @@
-// AC-185-03 — SafeModeToggle component tests. 3 cases per Sprint 185 contract.
-// AC-186-02 — Sprint 186 adds warn-mode visual + 3-way cycle.
-// Post-Sprint-187 hotfix (HF-187-A) — verbose per-mode help is delivered via
-// the native `title` tooltip (same surface as DisconnectButton /
-// HistoryButton) for affordance uniformity. An earlier HoverCard prototype
-// was reverted after the user pointed out it fired alongside the `title`
-// attribute and an Info-icon variant would have collided with the parent
-// button's tooltip on hover. One new case pins the per-mode title content
-// (Strict / Warn / Off heading + canonical danger statement examples for
-// strict + non-production scoping note) so the help text stays in sync with
-// the contract. date 2026-05-01.
+// AC-185-03 — SafeModeToggle component tests.
+// AC-186-02 — warn-mode visual + 3-way cycle.
+// HF-187-A — verbose per-mode help is delivered via the native `title`
+// tooltip (same surface as DisconnectButton) for affordance uniformity. An
+// earlier HoverCard prototype was reverted after the user pointed out it
+// fired alongside the `title` attribute and an Info-icon variant would have
+// collided with the parent button's tooltip on hover. date 2026-05-01.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Sprint 368 (Phase 4 Q12) — safe-mode toggle now invokes `persist_setting`.
+// Q12 — safe-mode toggle invokes `persist_setting`.
 // Mock so jsdom click handlers can await the async toggle.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.resolve()),
@@ -82,14 +78,13 @@ describe("SafeModeToggle", () => {
   // [AC-245-T1..T3] per-mode `title` tooltip pins:
   //   1. heading line names the mode AND its next click action;
   //   2. strict tooltip surfaces the canonical destructive-statement set
-  //      AND the new "all environments" scoping (M.1 — Phase 1 redefines
-  //      strict to confirm in dev too);
+  //      AND the "all environments" scoping (M.1 — strict confirms in dev too);
   //   3. warn tooltip names the production-only scope;
   //   4. off tooltip preserves the prod-auto disclaimer (production
   //      remains gated even when off is selected).
   // We test through the rendered DOM `title` attribute rather than mocking
   // a tooltip primitive — the toolbar uses native browser tooltips for
-  // every sibling button. date 2026-05-08 (Sprint 245).
+  // every sibling button.
   it("[AC-245-T1] strict tooltip names all-environment scope + destructive statements", () => {
     render(<SafeModeToggle />);
     const strictTitle = screen
@@ -103,8 +98,8 @@ describe("SafeModeToggle", () => {
     // matrix in `decideSafeModeAction` shows up as a test failure.
     expect(strictTitle).toMatch(/all environments/);
     expect(strictTitle).toMatch(/non-production/);
-    // Canonical destructive statement set — same as Sprint 187 baseline,
-    // ensures the help copy can't drift away from `analyzeStatement`.
+    // Canonical destructive statement set — ensures the help copy can't
+    // drift away from `analyzeStatement`.
     expect(strictTitle).toMatch(
       /DROP TABLE \/ DATABASE \/ SCHEMA \/ INDEX \/ VIEW/,
     );
@@ -132,8 +127,8 @@ describe("SafeModeToggle", () => {
       /Safe Mode: Off \(click to re-enable for non-production\)/,
     );
     // prod-auto: production-tagged connections still gate destructive
-    // statements even when off is selected. Sprint 245 keeps this
-    // copy distinct from warn so users know off cannot bypass production.
+    // statements even when off is selected. This copy is kept distinct
+    // from warn so users know off cannot bypass production.
     expect(offTitle).toMatch(/production-auto|Production-tagged/);
     expect(offTitle).toMatch(/local \/ testing/);
     expect(offTitle).toMatch(/development \/ staging/);

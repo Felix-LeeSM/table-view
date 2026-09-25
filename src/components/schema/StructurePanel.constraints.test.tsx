@@ -1,10 +1,9 @@
-// Sprint 220 — `constraints` axis split from `StructurePanel.test.tsx`
-// (P11 step 3). Covers the Constraint-CRUD behaviour: Add Constraint
-// button + dynamic modal (FK reference fields / CHECK expression /
-// UNIQUE column checkboxes) + submit (preview + execute) + delete (3
-// row buttons + drop modal preview/execute/cancel) + Actions header +
-// dropConstraint preview error + Preview SQL disabled validation. Cases
-// are byte-equivalent to the originals — no behaviour change.
+// `constraints` axis of the StructurePanel suite. Covers the
+// Constraint-CRUD behaviour: Add Constraint button + dynamic modal (FK
+// reference fields / CHECK expression / UNIQUE column checkboxes) + submit
+// (preview + execute) + delete (3 row buttons + drop modal
+// preview/execute/cancel) + Actions header + dropConstraint preview error +
+// Preview SQL disabled validation.
 
 import * as tauri from "@lib/tauri";
 import { act, fireEvent, screen } from "@testing-library/react";
@@ -88,8 +87,8 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Add constraint" }));
     });
 
-    // Sprint-112: Radix Select migration — open the constraint type
-    // trigger and click the FOREIGN KEY option.
+    // The constraint type is a Radix Select — open its trigger and click
+    // the FOREIGN KEY option.
     const trigger = screen.getByLabelText("Constraint type");
     await user.click(trigger);
     await user.click(screen.getByRole("option", { name: "FOREIGN KEY" }));
@@ -112,8 +111,8 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Add constraint" }));
     });
 
-    // Sprint-112: Radix Select migration — open the constraint type
-    // trigger and click the CHECK option.
+    // The constraint type is a Radix Select — open its trigger and click
+    // the CHECK option.
     const trigger = screen.getByLabelText("Constraint type");
     await user.click(trigger);
     await user.click(screen.getByRole("option", { name: "CHECK" }));
@@ -266,10 +265,9 @@ describe("StructurePanel", () => {
   });
 
   it("executing drop constraint calls dropConstraint without preview_only", async () => {
-    // Sprint 245 (ADR 0022 Phase 1) — pin Safe Mode to `warn` so the
-    // destructive DROP CONSTRAINT flows through. The default `strict`
-    // mode would now open the M.1 non-production confirm dialog and
-    // short-circuit this commit-path test.
+    // ADR 0022 Phase 1 — pin Safe Mode to `warn` so the destructive DROP
+    // CONSTRAINT flows through. `strict` would open the M.1 non-production
+    // confirm dialog and short-circuit this commit-path test.
     const { useSafeModeStore } = await import("@stores/safeModeStore");
     useSafeModeStore.setState({ mode: "warn" });
     await act(async () => {
@@ -373,8 +371,8 @@ describe("StructurePanel", () => {
     });
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    // Sprint 271c: useDdlPreviewExecution surfaces bare `err.message` so the
-    // parseDbMismatch anchor matches; the legacy `"Error: "` prefix is gone.
+    // useDdlPreviewExecution surfaces `getTauriErrorMessage(e)`, the bare
+    // message without the `"Error: "` prefix `String(e)` would add.
     expect(screen.getByText("Drop constraint failed")).toBeInTheDocument();
   });
 

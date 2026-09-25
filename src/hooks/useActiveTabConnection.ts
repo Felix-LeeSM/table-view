@@ -1,5 +1,5 @@
 /**
- * Sprint 256 (ADR 0023, AC-256-02 / AC-256-03) — `useActiveTabConnection`.
+ * `useActiveTabConnection` (ADR 0023, AC-256-02 / AC-256-03).
  *
  * Combines `useTabStore.activeTabId` + `useConnectionStore.connections`
  * into a single "the connection backing the currently-focused tab"

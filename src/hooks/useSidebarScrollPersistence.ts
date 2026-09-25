@@ -1,4 +1,4 @@
-// Sprint 262 Slice B (2026-05-12) — per-workspace scrollTop persistence
+// Per-workspace scrollTop persistence
 // for the sidebar's scroll container. Lives in `src/hooks/` (not `.tsx`)
 // so the restore path can read `useWorkspaceStore.getState()` without
 // running through a re-rendering selector — touching scrollTop every

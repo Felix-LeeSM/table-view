@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
-// Sprint 252 (2026-05-09) — Reusable Copy button for Preview dialogs.
+// Reusable Copy button for Preview dialogs.
 //
 // Why extract: PreviewDialog (`src/components/ui/dialog/PreviewDialog.tsx`)
 // and DataGrid's inline SQL preview (`src/components/rdb/DataGrid.tsx`) both

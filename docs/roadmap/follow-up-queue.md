@@ -75,7 +75,7 @@ normalizing legacy `QueryResult` at the Tauri wrapper.
 2026-08-29 (#2583) 등록: #2583 이 `src-tauri/sql-parser-core/src/lexer.rs` 에서
 문자열과 대괄호 식별자의 비-ASCII 보존을 고치면서, 체크인된 산출물인
 `src/lib/sql/wasm/sql_parser_core_bg.wasm` 은 다시 빌드하지 않았다. 프런트엔드가
-그 산출물을 읽는 자리는 `src/lib/sql/sqlAstParser.ts:112` 의 `parseSqlPreloaded`
+그 산출물을 읽는 자리는 `src/lib/sql/sqlAstParser.ts:111` 의 `parseSqlPreloaded`
 이고, `src/lib/sql/queryAnalyzer.ts:260` 의 `analyzeResultEditability` 는 `:239`
 의 `parseSingleTableAst` 를 거쳐 그 함수에 닿으며, `:306` 의
 `parseSelectInstances` 와 `:333` 의 `analyzeMultiTableEditability` 는 그 함수를
@@ -333,12 +333,13 @@ settings 수신부를 함께 봐야 한다. 그만한 값을 치를 만할 때 �
 2026-08-29 (#2576) 등록: `loadPersistedMru` 가 본문이 빈 함수로 남아 있는데
 `src/App.tsx` 와 `src/AppRouter.tsx` 의 부팅 `useEffect` 는 여전히 그 함수를
 부른다. sprint-370 이 부팅 하이드레이션을 `get_initial_app_state` 스냅샷으로
-옮기면서 커밋 `f12c9d0b` 로 본문을 비웠다. `src/stores/mruStore.ts` 의 주석은 그
-호출부를 sprint-375 가 지운다고 적어 두었지만, 제목에 sprint-375 를 단 커밋
-`93c536ff7` (2026-05-17) 는 `src/stores/mruStore.ts` 와 `src/App.tsx`,
-`src/AppRouter.tsx` 를 하나도 건드리지 않았으므로
+옮기면서 커밋 `f12c9d0b` 로 본문을 비웠고, 같은 커밋이 `src/stores/mruStore.ts`
+주석에 그 호출부는 sprint-375 가 지운다고 적었다
+(`git show f12c9d0b -- src/stores/mruStore.ts`). 그러나 제목에 sprint-375 를 단
+커밋 `93c536ff7` (2026-05-17) 는 `src/stores/mruStore.ts` 와 `src/App.tsx`,
+`src/AppRouter.tsx` 를 하나도 건드리지 않았다
 (`git show --stat 93c536ff7 -- src/stores/mruStore.ts src/App.tsx src/AppRouter.tsx`
-가 빈 출력을 낸다) 그 주석은 살아 있는 소유자를 가리키지 못한다. 걷어낼 때 함께
+가 빈 출력을 낸다). 걷어낼 때 함께
 봐야 하는 자리는 `git grep -n loadPersistedMru` 가 내는 목록이고, 그 안에는 no-op
 을 잠그는 `src/stores/mruStore.test.ts` 의 케이스와 잠그지 않는 사유를 적은
 `src/App.bootstrap.test.tsx` 헤더, 그리고 이 항목 자신도 들어 있다. #2576 은 부팅

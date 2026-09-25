@@ -1,28 +1,25 @@
 /**
- * Sprint 309 (Phase 28 Slice A3) — store axis for Find/Aggregate toggle
- * removal. Two RED tests authored 2026-05-14 to lock the backward-compat
- * contract:
+ * Store axis for Find/Aggregate toggle removal. These tests lock the
+ * backward-compat contract:
  *
  *   1. `addQueryTab` on a document paradigm tab MUST leave `queryMode`
- *      undefined. Pre-sprint-309 the store defaulted to `"find"` so the
- *      toggle had something to read; post-sprint-309 the toggle is gone
- *      and the dispatch path in `useQueryExecution` tolerates undefined
- *      (falls through the legacy `=== "aggregate"` check into find).
- *      A5 (sprint-311) will replace the dispatch branch entirely.
+ *      undefined. While the toggle existed the store defaulted to
+ *      `"find"` so the toggle had something to read; document dispatch
+ *      in `useQueryExecution` is parser-driven and does not read the
+ *      field.
  *
  *   2. Loading a persisted localStorage payload that still carries
  *      `queryMode: "find" | "aggregate"` on a document tab must NOT
- *      throw and must NOT discard the field — it survives the migration
- *      so the legacy dispatch branch remains observable until A5. New
- *      tabs created after the rehydrate continue to land without the
- *      field.
+ *      throw and must NOT discard the field — it survives the migration;
+ *      `recordHistory` in `useQueryContext` falls back to it when a
+ *      history payload carries no `queryMode`. New tabs created after
+ *      the rehydrate continue to land without the field.
  *
  * These tests live in their own file (not piggy-backed on the existing
- * lifecycle / persistence suites) so the contract is greppable by sprint
- * label and so deleting the deprecation in a later sprint is a single
+ * lifecycle / persistence suites) so deleting the deprecation is a single
  * file delete instead of a scatter-edit.
  */
-/* eslint-disable @typescript-eslint/no-deprecated -- #1403: this whole suite exercises the deliberately-deprecated QueryTab.queryMode contract; it is deleted wholesale when sprint-311 A5 lands */
+/* eslint-disable @typescript-eslint/no-deprecated -- #1403: this whole suite exercises the deliberately-deprecated QueryTab.queryMode contract */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   installFakeLocalStorage,
@@ -52,12 +49,8 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
     const tab = ws!.tabs[0]!;
     expect(tab.type).toBe("query");
     if (tab.type === "query") {
-      // Pre-sprint-309 this would have been `"find"`. Post-A3 the field
-      // is deliberately absent on new document tabs — the editor surface
-      // no longer carries a Find/Aggregate toggle, and A5 will replace
-      // the legacy dispatch branch keyed on `=== "aggregate"`. `undefined`
-      // is the intended "default to find dispatch" path during the
-      // interim.
+      // The field is deliberately absent on new document tabs; see item 1
+      // in the file header.
       expect(tab.queryMode).toBeUndefined();
       expect(tab.paradigm).toBe("document");
     }
@@ -81,11 +74,10 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
 
   it("loadPersistedWorkspaces tolerates a legacy document tab with queryMode='aggregate' (Sprint 309)", () => {
     // Synthesise a localStorage payload that mirrors what a user upgrading
-    // from a pre-sprint-309 build will have on disk: a document query tab
-    // that was last used in Aggregate mode. The migration path must keep
-    // the field (so the legacy dispatch branch keeps routing aggregate
-    // text to `aggregateDocuments` until A5 replaces the dispatch) and
-    // MUST NOT throw at load time.
+    // from a build with the Find/Aggregate toggle will have on disk: a
+    // document query tab that was last used in Aggregate mode. The
+    // migration path must keep the field (see item 2 in the file header)
+    // and MUST NOT throw at load time.
     const legacyPayload = {
       workspaces: {
         "conn-mongo": {
@@ -128,10 +120,7 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
     const tab = ws!.tabs[0]!;
     expect(tab.type).toBe("query");
     if (tab.type === "query") {
-      // Backward-compat: the field survives the rehydrate so the legacy
-      // `useQueryExecution` dispatch branch continues to route aggregate
-      // text to `aggregateDocuments` (sprint-311 A5 replaces this with
-      // parser-driven dispatch).
+      // Backward-compat: the field survives the rehydrate.
       expect(tab.queryMode).toBe("aggregate");
       expect(tab.paradigm).toBe("document");
       expect(tab.sql).toBe('[{"$match":{"active":true}}]');
@@ -139,12 +128,10 @@ describe("workspaceStore — Sprint 309 queryMode backward-compat", () => {
   });
 
   it("loadPersistedWorkspaces tolerates a legacy document tab with queryMode='find' (Sprint 309)", () => {
-    // Companion to the aggregate case above. A pre-sprint-309 doc tab
-    // that was last used in Find mode must rehydrate cleanly and keep
-    // the `"find"` flag — even though it has no observable effect on
-    // the editor surface anymore, the legacy dispatch branch still
-    // reads it (and returns `false` against `=== "aggregate"`, which
-    // is the intended "route to find" path).
+    // Companion to the aggregate case above. A legacy doc tab that was
+    // last used in Find mode must rehydrate cleanly and keep the `"find"`
+    // flag — even though it has no observable effect on the editor
+    // surface anymore. See item 2 in the file header.
     const legacyPayload = {
       workspaces: {
         "conn-mongo": {

@@ -5,9 +5,8 @@
  * session data from stale data left by a previous app run, and that
  * connection store hydration reads/writes the correct keys. (2026-04-28)
  *
- * Sprint 375 (Phase 6 cleanup, 2026-05-17) — file renamed from
- * `session-storage.ts` to `scopedLocalStorage.ts`. Tests now import via
- * `@lib/scopedLocalStorage`; describe block label updated.
+ * `scopedLocalStorage.ts` was renamed from `session-storage.ts`; see its
+ * module doc.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

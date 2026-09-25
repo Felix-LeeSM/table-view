@@ -1,5 +1,5 @@
 /**
- * Sprint 356 (Phase 1, Q22) — Linux keyring fallback sentinel writer.
+ * Linux keyring fallback sentinel writer (Q22).
  *
  * Backend lives in `src-tauri/table-view-core/src/storage/key_migration.rs`. The toast lives
  * outside any SQLite migration so it can't use the `meta` table; instead a
@@ -8,7 +8,7 @@
  * sidecar; here we expose the typed wrapper so the React component can call
  * it without worrying about IPC plumbing.
  *
- * Implementation note: as of sprint-356 the Tauri command is registered as
+ * Implementation note: the Tauri command is registered as
  * `set_keyring_fallback_dismissed`. This wrapper exists to give us a single
  * place to swap the command name (or stub it out in unit tests, as the
  * `KeyringFallbackToast.test.tsx` `vi.mock` does).

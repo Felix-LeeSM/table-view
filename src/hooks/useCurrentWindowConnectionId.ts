@@ -1,13 +1,11 @@
 /**
- * Sprint 366 (Phase 4, Q15) — Resolve the connection id implied by the
- * current Tauri webview window's label.
+ * Resolve the connection id implied by the current Tauri webview window's
+ * label (Q15).
  *
- * Background: pre-sprint-361 every workspace window shared the bare
- * `"workspace"` label and the "which connection am I looking at?" question
- * was answered by `connectionStore.focusedConnId`. Sprint 361 made
- * workspace labels per-connection (`workspace-{connection_id}`); from this
- * sprint on the workspace tree derives its connection identity from the
- * window label rather than from the cross-window store slot; see
+ * Background: workspace labels are per-connection
+ * (`workspace-{connection_id}`; see `KnownWindowLabel`), so the workspace
+ * tree derives its connection identity from the window label rather than
+ * from the cross-window `connectionStore.focusedConnId` slot; see
  * `memory/engineering/architecture/state-management/memory.md`. The
  * `focusedConnId` slot is now launcher-only.
  *

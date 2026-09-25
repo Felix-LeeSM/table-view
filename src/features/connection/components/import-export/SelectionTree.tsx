@@ -19,7 +19,7 @@ interface ResolvedGroup {
 }
 
 /**
- * Sprint 140 — multi-select connection picker with indeterminate group
+ * Multi-select connection picker with indeterminate group
  * checkboxes. The header offers a master "Select all" toggle alongside a
  * "X connections, Y groups selected" counter. Each group renders its
  * children as nested checkboxes; the group header checkbox flips into

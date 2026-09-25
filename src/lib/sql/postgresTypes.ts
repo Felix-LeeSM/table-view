@@ -1,12 +1,12 @@
-// Sprint 227 — canonical Postgres common-type list for the CREATE
-// TABLE column-type combobox. Extracted from `CreateTableDialog.tsx`
-// so unit tests can exercise the filter behaviour against a stable
-// source-of-truth list without re-rendering the modal.
+// Canonical Postgres common-type list for the CREATE TABLE column-type
+// combobox. Kept out of `CreateTableDialog.tsx` so unit tests can
+// exercise the filter behaviour against a stable source-of-truth list
+// without re-rendering the modal.
 //
 // Ordering matches the spec's `AC-227-03` exemplar list (≥ 25 entries).
-// The combobox renders entries verbatim — no coloring (deferred to
-// Sprint 230 polish) — and supports free-text fallback for any custom
-// type string (`numeric(10,4)`) by committing the raw input on blur.
+// The combobox renders entries verbatim and supports free-text fallback
+// for any custom type string (`numeric(10,4)`) by committing the raw
+// input on blur.
 export const POSTGRES_COMMON_TYPES: readonly string[] = [
   "serial",
   "bigserial",
@@ -73,7 +73,7 @@ export function expandParametricDefault(type: string): string {
 }
 
 /**
- * Sprint 230 — case-insensitive substring filter against an arbitrary
+ * Case-insensitive substring filter against an arbitrary
  * type list. Used by the combobox when a dynamic `typesSource` prop
  * is supplied (the dialog merges canonical + live PG types via
  * `usePostgresTypes`). Empty `query` returns the full list; matching

@@ -1,4 +1,4 @@
-// Sprint 241 — `DialogShell` compound layout for tall, multi-region
+// `DialogShell` compound layout for tall, multi-region
 // modal forms (CreateTableDialog, future structure editors). Splits a
 // `DialogContent` into three regions:
 //

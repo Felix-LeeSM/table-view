@@ -1,4 +1,4 @@
-// Sprint 337 (U2 live wire) — paradigm-aware explain wrappers.
+// U2 live wire — paradigm-aware explain wrappers.
 // RDB → EXPLAIN (FORMAT JSON), Mongo → runCommand({explain: …}).
 // Both return the raw plan tree as `unknown` (JSON value) so the
 // `ExplainViewer` can render a paradigm-neutral tree.

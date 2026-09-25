@@ -1,4 +1,4 @@
-// Sprint 256 (2026-05-09): `useActiveTabConnection` — combine
+// `useActiveTabConnection` — combine
 // `useWorkspaceStore.activeTabId` + `useConnectionStore.connections` →
 // `Connection | null`. Drives the EnvironmentChromeStripe + prod window
 // border + ExecuteButton callsites. Tests cover: happy path (tab →

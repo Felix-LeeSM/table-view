@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 /**
  * shadcn/ui canonical `Skeleton` primitive — a low-contrast `animate-pulse`
  * placeholder block that matches the rest of the app's design tokens
- * (`bg-muted`, `rounded-md`). Used by Sprint 270 to show app chrome during
+ * (`bg-muted`, `rounded-md`). Used, for example, to show app chrome during
  * the pre-hydrate IPC round-trip that populates `connections`, instead of a
  * blank window. Accepts all standard `<div>` attributes so callers can layer
  * width / height utilities via `className`.

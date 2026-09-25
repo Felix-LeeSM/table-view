@@ -5,9 +5,9 @@ import { toast } from "@/lib/runtime/toast";
 import { useToastStore } from "@/stores/toastStore";
 import { Toaster } from "./toaster";
 
-// Sprint 94 — Toaster container tests.
+// Toaster container tests.
 //
-// Coverage targets the AC list in Sprint 94 contract:
+// Coverage targets these ACs:
 //   AC-01: toast.success / error / info / warning render via the container.
 //   AC-05: variant-specific role (status/alert), Esc key dismiss, dismiss
 //          button aria-label.
@@ -205,7 +205,7 @@ describe("Toaster", () => {
     expect(container.className).toContain("fixed");
   });
 
-  // --- Sprint 269 (2026-05-13): action button rendering --------------------
+  // --- Action button rendering ---------------------------------------------
   // The DbMismatch toast carries a Retry action; the toast row must render a
   // button whose accessible name equals `action.label`, click must fire the
   // callback exactly once and dismiss the toast in the same gesture.

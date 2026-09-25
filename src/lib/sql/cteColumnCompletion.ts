@@ -7,11 +7,11 @@ import { syntaxTree } from "@codemirror/language";
 import { type SqlToken, tokenizeSql } from "@lib/sql/sqlTokenize";
 
 /**
- * Sprint 295 (2026-05-14) — Slice B — CTE / derived subquery column source.
+ * CTE / derived subquery column source.
  *
  * Why this source exists
  * ----------------------
- * Sprint 292 (Level-1 single-table) + Sprint 294 (Level-2 alias-aware JOIN)
+ * Level-1 (single-table) and Level-2 (alias-aware JOIN) completion
  * resolve `<alias>.<column>` candidates only when the alias binds to a
  * **real** base table in the namespace. They miss two patterns external
  * IDEs (DataGrip / TablePlus) handle out of the box:
@@ -23,7 +23,7 @@ import { type SqlToken, tokenizeSql } from "@lib/sql/sqlTokenize";
  *      FROM orders) sub` — `sub` is a virtual table whose columns are the
  *      inner SELECT's projection list.
  *
- * Sprint 294's `parseFromContext` walks tokens with a flat scanner and
+ * `parseFromContext` walks tokens with a flat scanner and
  * never descends into the inner SELECT inside parentheses, so the inner
  * projection list is invisible to it. This source closes that gap with a
  * paren-depth-aware mini-parser.
@@ -62,28 +62,19 @@ import { type SqlToken, tokenizeSql } from "@lib/sql/sqlTokenize";
  *        - `col AS alias`  → `alias`
  *        - `tbl.col`        → `col`
  *        - `col`            → `col`
- *        - `*`              → ignored (Slice D handles SELECT * fallback)
+ *        - `*`              → ignored (see `extractProjectionColumns`)
  *
  * Guards
  * ------
  *   - `getSchema()` undefined / array (legacy flat list) → `null`.
  *   - cursor inside String / Number / LineComment / BlockComment → `null`
- *     (sprint-292 / 294 pattern).
+ *     (same guard as `aliasColumnCompletionSource`).
  *   - cursor not at `<alias>.<partial>` → `null`.
  *   - alias resolved but not in the virtual table map → `null`. (This
- *     lets sprint-294's alias source handle real base-table aliases.)
+ *     lets `aliasColumnCompletionSource` handle real base-table aliases.)
  *
- * Out of scope (Slice D)
- * ----------------------
- *   - `SELECT *` inside the CTE → fallback to inner FROM base table.
- *   - `WITH RECURSIVE` explicit column list nuances.
- *   - CTE referencing another CTE (chaining beyond a single step).
- *   - CTE / base table name conflict resolution (CTE wins) — verified
- *     in Slice E.
- *
- * Wiring is done in Slice C (`SqlQueryEditor.tsx`); until then this
- * source is exercised via the unit test below and the level-3 baseline
- * test's `callAll` helper.
+ * Only tests exercise this source: #685 moved query completion into the
+ * WASM core and dropped its wiring.
  */
 export function cteColumnCompletionSource(
   getSchema: () => SQLNamespace | undefined,
@@ -98,8 +89,8 @@ export function cteColumnCompletionSource(
     const tree = syntaxTree(state);
     const node = tree.resolveInner(pos, -1);
 
-    // sprint-292 / 294 guard — never surface column candidates inside
-    // value surfaces (strings / numbers / comments).
+    // Never surface column candidates inside value surfaces (strings /
+    // numbers / comments).
     if (
       node.name === "String" ||
       node.name === "Number" ||
@@ -117,7 +108,7 @@ export function cteColumnCompletionSource(
     // ── build the virtual table map over the whole buffer ──────────────
     // Pass the namespace through so the mini-parser can resolve
     // `SELECT *` projections to the inner FROM's base table columns
-    // (Slice D — D1 SELECT * fallback, D4 schema-qualified inner table,
+    // (D1 SELECT * fallback, D4 schema-qualified inner table,
     // D7 CTE chaining single-level).
     const virtualTables = extractVirtualTables(state.doc.toString(), schema);
     const columns = lookupVirtualColumns(virtualTables, aliasName);
@@ -139,7 +130,8 @@ interface AliasDotMatch {
 /**
  * Inspect the doc text up to the cursor and decide whether the cursor is
  * at an `<alias>.<partial>` position. Mirrors the textual-scan approach
- * sprint-294 uses (more robust than syntax-tree shape during mid-typing).
+ * of `matchAliasDotPrefix` in `aliasColumnCompletion.ts` (more robust
+ * than syntax-tree shape during mid-typing).
  */
 function matchAliasDotPrefix(prefixText: string): AliasDotMatch | null {
   let i = prefixText.length;
@@ -195,14 +187,10 @@ function lookupVirtualColumns(
  * map of `alias → projection column names` covering both CTE and derived
  * subquery patterns. See the module header for the full algorithm.
  *
- * Slice D (sprint-295, 2026-05-14) — the optional `schema` parameter is
- * the namespace passed by the completion source. It is consulted when
- * the inner SELECT projects `*` (SELECT * fallback → inner FROM's base
- * table columns), and the dotted-identifier coalescing reused from
- * sprint-294 makes schema-qualified inner tables (`public.users`)
- * resolve correctly. CTE chaining (single level: `b AS (SELECT * FROM
- * a)` inherits a's columns) is handled by consulting the partially-built
- * `out` map for already-registered CTE aliases.
+ * The optional `schema` parameter is the namespace passed by the
+ * completion source. It is consulted when the inner SELECT projects `*`;
+ * see `extractProjectionColumns` for the SELECT * fallback,
+ * schema-qualified inner tables, and CTE chaining.
  */
 export function extractVirtualTables(
   sql: string,
@@ -300,11 +288,8 @@ export function extractVirtualTables(
  * Returns the index of the last consumed token (so the caller's loop
  * resumes from `i + 1`).
  *
- * Slice D (sprint-295) — `schema` is threaded through so each CTE's
- * inner SELECT can resolve `*` to base-table columns. The partially
- * built `out` map is also passed so a later CTE that does
- * `SELECT * FROM <earlier-cte>` inherits its columns (single-level
- * chaining).
+ * `schema` and the partially built `out` map are threaded through for
+ * the SELECT * fallback and CTE chaining; see `extractProjectionColumns`.
  */
 function extractCtes(
   tokens: SqlToken[],
@@ -382,11 +367,9 @@ function extractCtes(
       return i;
     }
 
-    // Resolve columns: explicit > inner projection.
-    // Slice D (sprint-295) — when the inner projection is `SELECT *`,
-    // the projection extractor consults the namespace + earlier CTEs
-    // (via the partially-built `out` map) to fall back to the inner
-    // FROM's base-table columns or inherit from an earlier CTE.
+    // Resolve columns: explicit > inner projection. A `SELECT *`
+    // projection falls back to the namespace or an earlier CTE; see
+    // `extractProjectionColumns`.
     let cols: string[];
     if (explicitCols && explicitCols.length > 0) {
       cols = explicitCols;
@@ -465,14 +448,14 @@ function findMatchingParen(tokens: SqlToken[], openIdx: number): number {
  *   5. For each item: extract the column name (alias if `AS` present,
  *      else last identifier).
  *
- * Slice D (sprint-295, 2026-05-14) — when the projection is the single
- * `*` token (SELECT *), look at the inner FROM clause's base table and
- * return that table's columns from the namespace. Schema-qualified
- * inner tables (`public.users`) are coalesced into a dotted name and
- * the **last** segment (rightmost) is used for namespace lookup, which
- * matches sprint-294's dotted-identifier coalescing pattern. If the
- * inner FROM names an already-registered CTE alias, inherit that
- * alias's columns (CTE chaining, single level).
+ * When the projection is the single `*` token (SELECT *), look at the
+ * inner FROM clause's base table and return that table's columns from
+ * the namespace. Schema-qualified inner tables (`public.users`) are
+ * coalesced into a dotted name and the **last** segment (rightmost) is
+ * used for namespace lookup, which matches the dotted-identifier
+ * coalescing in `parseFromContext`. If the inner FROM names an
+ * already-registered CTE alias, inherit that alias's columns (CTE
+ * chaining, single level).
  */
 function extractProjectionColumns(
   tokens: SqlToken[],
@@ -538,7 +521,7 @@ function extractProjectionColumns(
   if (projEnd === -1) projEnd = rangeEnd;
   if (projStart > projEnd) return [];
 
-  // ── Slice D D1: SELECT * fallback ─────────────────────────────────
+  // ── D1: SELECT * fallback ─────────────────────────────────────────
   // If the projection is exactly the single `*` token, look up the
   // inner FROM's base table in the namespace (or in the known-virtual
   // map for single-step CTE chaining).
@@ -550,9 +533,9 @@ function extractProjectionColumns(
     if (fromIdx === -1) return [];
     const baseName = readBaseTableAfterFrom(tokens, fromIdx + 1, rangeEnd);
     if (!baseName) return [];
-    // CTE chaining (Slice D D7) — earlier CTE wins over namespace
+    // CTE chaining (D7) — earlier CTE wins over namespace
     // lookup so `b AS (SELECT * FROM a)` inherits a's projection
-    // even if a's name shadows a real base table (Slice D D6).
+    // even if a's name shadows a real base table (D6).
     if (knownVirtual) {
       const inherited = lookupVirtualColumns(knownVirtual, baseName);
       if (inherited && inherited.length > 0) return inherited;
@@ -589,7 +572,7 @@ function extractProjectionColumns(
 }
 
 /**
- * Slice D (sprint-295, 2026-05-14) — read the base table name after a
+ * Read the base table name after a
  * `FROM` keyword inside an inner SELECT. Handles schema-qualified names
  * like `public.users` (returns the last segment so namespace lookup hits
  * the table key) and quoted identifiers. Returns `null` if no
@@ -604,7 +587,7 @@ function readBaseTableAfterFrom(
   if (start > rangeEnd) return null;
   const first = tokens[start];
   if (!first || first.kind !== "identifier") return null;
-  // Sprint 294's dotted-identifier coalescing — `tenant.schema.tbl`.
+  // `parseFromContext`'s dotted-identifier coalescing — `tenant.schema.tbl`.
   let last = start;
   while (
     last + 2 <= rangeEnd &&
@@ -614,14 +597,14 @@ function readBaseTableAfterFrom(
   ) {
     last += 2;
   }
-  // Take the rightmost segment for lookup (sprint-294 pattern — the
-  // namespace key is the bare table name; the schema/db segments are
-  // discarded for lookup purposes).
+  // Take the rightmost segment for lookup (the namespace key is the
+  // bare table name; the schema/db segments are discarded for lookup
+  // purposes).
   return stripIdentifierQuotes(tokens[last]!.text);
 }
 
 /**
- * Slice D (sprint-295, 2026-05-14) — given a `SQLNamespace` and a base
+ * Given a `SQLNamespace` and a base
  * table name, return that table's column names. The namespace shape is
  * recursive (`Record<string, SQLNamespace | …>`); the convention used
  * elsewhere in this codebase is `{ tableName: { col1: {}, col2: {} } }`.
@@ -647,8 +630,7 @@ function resolveBaseTableColumns(
   if (!match) return [];
   // The matched value may be a `{ self, children }` shape (lang-sql's
   // verbose form) or a plain record (`{ col: {} }`). For our usage the
-  // plain record is the dominant shape — sprint-292/294 tests and
-  // production wire-up both use it.
+  // plain record is the dominant shape.
   if (typeof match === "object" && match !== null && !Array.isArray(match)) {
     // Lang-sql verbose form: `{ self: { label, type }, children: [...] }`.
     const verbose = match as { self?: unknown; children?: unknown };
@@ -691,7 +673,7 @@ function resolveBaseTableColumns(
  *   - `<expr> AS <alias>`  → `<alias>`
  *   - `<tbl>.<col>`         → `<col>`
  *   - `<col>`                → `<col>`
- *   - `*`                    → ignored (slice D)
+ *   - `*`                    → ignored (see `extractProjectionColumns`)
  */
 function projectionItemName(
   tokens: SqlToken[],
@@ -726,8 +708,8 @@ function projectionItemName(
     if (t.kind === "identifier") {
       return stripIdentifierQuotes(t.text);
     }
-    // `*` is a punct — ignored for slice B (slice D handles SELECT *
-    // base-table fallback).
+    // `*` is a punct — ignored here (`extractProjectionColumns` handles
+    // the SELECT * base-table fallback).
   }
   return null;
 }

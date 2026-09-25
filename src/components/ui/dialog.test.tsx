@@ -19,7 +19,7 @@ import {
 } from "./dialog";
 
 // ---------------------------------------------------------------------------
-// Sprint 91 — DialogHeader row layout + close-button parity
+// DialogHeader row layout + close-button parity
 // ---------------------------------------------------------------------------
 
 describe("DialogHeader (sprint-91)", () => {
@@ -263,7 +263,7 @@ describe("close-button matrix (sprint-91 AC-04)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Sprint 95 — Dialog 2-Layer Primitive Layer 1
+// Dialog 2-Layer Primitive Layer 1
 // ---------------------------------------------------------------------------
 
 describe("DialogContent tone (sprint-95 AC-01)", () => {
@@ -427,7 +427,8 @@ describe("DialogFeedback (sprint-95 AC-03)", () => {
     expect(
       document.querySelector('[data-slot="test-feedback"]'),
     ).not.toBeNull();
-    // The default slot name is gone — sprint-92 selector contract holds.
+    // The default slot name is gone — the #CONN-DIALOG-6 selector contract
+    // holds.
     expect(document.querySelector('[data-slot="dialog-feedback"]')).toBeNull();
   });
 
@@ -440,7 +441,7 @@ describe("DialogFeedback (sprint-95 AC-03)", () => {
     rerender(<DialogFeedback state="loading" loadingText="..." />);
     const slotLoading = document.querySelector('[data-slot="dialog-feedback"]');
     // Same DOM node — only inner content varies. This is the stable-identity
-    // contract that sprint-92 `expectNodeStable` relies on.
+    // contract that `expectNodeStable` (#CONN-DIALOG-6) relies on.
     expect(slotLoading).toBe(slotIdle);
 
     rerender(<DialogFeedback state="success" message="ok" />);

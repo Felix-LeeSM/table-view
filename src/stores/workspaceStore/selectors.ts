@@ -30,8 +30,8 @@ export type WorkspaceKey = { connId: string; db: string };
 /**
  * Derive the current `(connId, db)` workspace coordinate.
  *
- * Sprint-366 (Phase 4, Q15 lock): `connId` comes from the Tauri window
- * label via `useCurrentWindowConnectionId()` — each workspace window is
+ * `connId` comes from the Tauri window label via
+ * `useCurrentWindowConnectionId()` (Q15) — each workspace window is
  * pinned to one connection. The `db` half still resolves from
  * `connectionStore.activeStatuses[connId].activeDb` because the active
  * sub-pool is mutated at runtime (e.g. RDB DB switcher).

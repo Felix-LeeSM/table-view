@@ -22,7 +22,7 @@ export const BOOT_MILESTONES = [
   "T0",
   "theme:applied",
   "session:initialized",
-  // Sprint 367 (Phase 4) — listener pre-register + snapshot hydrate
+  // Listener pre-register + snapshot hydrate
   // milestones. Order reflects the boot sequence: listener registered
   // before any IPC, snapshot applied after the first await Promise.all
   // hydrate. `snapshot:applied` fires asynchronously inside the
@@ -162,8 +162,8 @@ export function summarizeBoot(): string {
 
 /**
  * Emit the summary line via `console.info`. Production-safe (single line per
- * boot, not per milestone). Returns the rendered string for tests / Sprint 1
- * evidence so callers can assert on the exact wire format.
+ * boot, not per milestone). Returns the rendered string for tests so
+ * callers can assert on the exact wire format.
  *
  * Idempotent: subsequent calls within the same boot are no-ops. This lets
  * the auto-trigger on `app:effects-fired` race the fallback timeout without

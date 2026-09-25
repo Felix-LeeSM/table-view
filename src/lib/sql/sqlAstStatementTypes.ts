@@ -22,10 +22,10 @@ import type {
   SqlWhereExpr,
 } from "./sqlAstTypes";
 
-// ---- sprint-391 DDL destructive types --------------------------------
+// ---- DDL destructive types -------------------------------------------
 
 /**
- * Object kinds the sprint-391 grammar recognises after `DROP`.
+ * Object kinds the grammar recognises after `DROP`.
  * Trigger / function / procedure / role are deliberately out of scope —
  * sqlSafety's regex fallback continues to classify them.
  */
@@ -73,7 +73,7 @@ export type SqlAlterAction =
       cascade: SqlCascadeBehavior | null;
     }
   | { kind: "drop-index"; index: string }
-  // Sprint-394 — additive ALTER actions.
+  // Additive ALTER actions.
   | {
       kind: "add-column";
       column: SqlColumnDefinition;
@@ -92,11 +92,11 @@ export interface SqlAlterTableStatement {
   action: SqlAlterAction;
 }
 
-// ---- sprint-394 DDL additive types -----------------------------------
+// ---- DDL additive types ----------------------------------------------
 
 /**
- * Sprint-394 — schema-qualified table / view / index reference. Mirrors
- * the sprint-393a FROM-item shape (`schema: string | null` +
+ * Schema-qualified table / view / index reference. Mirrors
+ * the FROM-item shape (`schema: string | null` +
  * `table: string`). CREATE TABLE, CREATE INDEX (`ON <table>`), CREATE
  * VIEW (the view's own name), ALTER TABLE ADD CONSTRAINT REFERENCES
  * target, and column-level REFERENCES targets all carry this shape.
@@ -107,7 +107,7 @@ export interface SqlTableRef {
 }
 
 /**
- * Sprint-394 — column-type discriminated union. The `kind` tag is the
+ * Column-type discriminated union. The `kind` tag is the
  * kebab-case lowercase form of the SQL type-name. Vendor-specific
  * synonyms (INT4 / STRING / DATETIME / LONGTEXT) parse to
  * `SqlParseError` unless they are known PostgreSQL extension-backed types.
@@ -148,7 +148,7 @@ export type SqlExtensionTypeModifier =
   | { kind: "string"; value: string };
 
 /**
- * Sprint-394 — column-level constraint. The optional `name` slot is
+ * Column-level constraint. The optional `name` slot is
  * populated when the user wrote `CONSTRAINT <name> <body>`; bare
  * constraints leave it `null`.
  */
@@ -170,7 +170,7 @@ export type SqlColumnConstraintBody =
   | { kind: "check"; expression: SqlSelectExpr };
 
 /**
- * Sprint-394 — table-level constraint. Same `name` + `body` shape as
+ * Table-level constraint. Same `name` + `body` shape as
  * `SqlColumnConstraint`; the body variants carry a `columns` slot for
  * `primary-key` / `unique` / `references`. `check` carries only an
  * expression (the predicate already names columns).
@@ -194,7 +194,7 @@ export type SqlTableConstraintBody =
   | { kind: "check"; expression: SqlSelectExpr };
 
 /**
- * Sprint-394 — one column definition in a CREATE TABLE / ALTER TABLE
+ * One column definition in a CREATE TABLE / ALTER TABLE
  * ADD COLUMN list. `source_index` is the zero-based ordinal of this
  * column in the source list — set by the parser, not the user.
  */
@@ -223,7 +223,7 @@ export interface SqlCreateIndexStatement {
 }
 
 /**
- * Sprint-394 — CREATE VIEW body. The two body shapes match the AST
+ * CREATE VIEW body. The two body shapes match the AST
  * `CreateViewBody` enum: a plain SELECT (with optional set-operation
  * chain) or a CTE-wrapped SELECT (`WITH t AS (...) SELECT ...`). The
  * discriminator uses the same kebab-case `kind` tag scheme as the rest
@@ -240,7 +240,7 @@ export interface SqlCreateViewStatement {
   body: SqlCreateViewBody;
 }
 
-// ---- sprint-392 DML write triad types --------------------------------
+// ---- DML write triad types -------------------------------------------
 
 export type SqlInsertSource =
   | { kind: "values"; rows: SqlInsertValue[][] }
@@ -317,7 +317,7 @@ export interface SqlDeleteStatement {
   returning: string[];
 }
 
-// ---- sprint-484 PostgreSQL MERGE first-slice types -------------------
+// ---- PostgreSQL MERGE types ------------------------------------------
 
 export interface SqlMergeStatement {
   kind: "merge";
@@ -340,9 +340,9 @@ export interface SqlMergeWhenClause {
 export type SqlMergeValue = SqlSelectExpr;
 
 /**
- * Sprint-393b — `WITH [RECURSIVE] cte AS (...) <inner-statement>`. The
+ * `WITH [RECURSIVE] cte AS (...) <inner-statement>`. The
  * inner statement is one of SELECT / INSERT / UPDATE / DELETE (nested
- * WITH is rejected at parse time, out of scope this sprint).
+ * WITH is rejected at parse time).
  */
 export interface SqlWithStatement {
   kind: "with";
@@ -352,7 +352,7 @@ export interface SqlWithStatement {
 }
 
 /**
- * Sprint-393b — the four statement variants accepted as the inner body
+ * The four statement variants accepted as the inner body
  * of a `WITH`. Serialized with a `kind` discriminator matching the Rust
  * `WithInner` enum.
  */
@@ -369,10 +369,10 @@ export interface SqlCteDefinition {
   body: SqlSelectStatement;
 }
 
-// ---- sprint-395 misc grammar types -----------------------------------
+// ---- misc grammar types ----------------------------------------------
 
 /**
- * Sprint-395 — One privilege tag in a GRANT/REVOKE statement. `select`,
+ * One privilege tag in a GRANT/REVOKE statement. `select`,
  * `update`, and `references` may carry a `columns` slot (empty when the
  * privilege applies to all columns of the table). `all` represents both
  * `ALL` and `ALL PRIVILEGES`.
@@ -390,7 +390,7 @@ export type SqlPrivilegeTag =
   | { kind: "execute" };
 
 /**
- * Sprint-395 — GRANT/REVOKE object target. `all-in-schema` represents
+ * GRANT/REVOKE object target. `all-in-schema` represents
  * the PG `ALL TABLES IN SCHEMA name` shorthand.
  */
 export type SqlGrantObject =
@@ -402,7 +402,7 @@ export type SqlGrantObject =
   | { kind: "all-in-schema"; schema_name: string };
 
 /**
- * Sprint-395 — grantee / revokee reference. Plain identifier roles get
+ * Grantee / revokee reference. Plain identifier roles get
  * `kind="role"`. `PUBLIC` gets `kind="public"`. Both `CURRENT_USER` and
  * `SESSION_USER` normalize to `kind="current-session"`.
  */
@@ -429,9 +429,8 @@ export interface SqlRevokeStatement {
 }
 
 /**
- * Sprint-395 — EXPLAIN/COPY option pair. The `name` slot is normalized to
- * lowercase by the parser. The `value` slot uses the sprint-392
- * `SqlInsertValue` shape.
+ * EXPLAIN/COPY option pair. The `name` slot is normalized to
+ * lowercase by the parser. The `value` slot uses the `SqlInsertValue` shape.
  */
 export interface SqlExplainOption {
   name: string;
@@ -439,7 +438,7 @@ export interface SqlExplainOption {
 }
 
 /**
- * Sprint-395 — statement variants accepted as the inner body of an
+ * Statement variants accepted as the inner body of an
  * EXPLAIN. The discriminator uses kebab-case `kind` tags matching the
  * Rust `ExplainInner` enum.
  */
@@ -460,7 +459,7 @@ export interface SqlExplainStatement {
 }
 
 /**
- * Sprint-395 — SHOW target variant. The `variable` form carries the
+ * SHOW target variant. The `variable` form carries the
  * variable name (possibly dotted); the `tables` form carries an optional
  * schema qualifier.
  */
@@ -478,7 +477,7 @@ export interface SqlShowStatement {
 export type SqlSetScope = "session" | "local" | "default";
 
 /**
- * Sprint-395 — SET RHS. Distinct from `SqlInsertValue` so bare-identifier
+ * SET RHS. Distinct from `SqlInsertValue` so bare-identifier
  * SET targets (`SET search_path = public`) do not pollute the placeholder
  * surface used by DML/SELECT.
  */
@@ -514,7 +513,7 @@ export interface SqlCopyStatement {
 }
 
 /**
- * Sprint-395 — COMMENT object target. `column` carries `table` + `column`;
+ * COMMENT object target. `column` carries `table` + `column`;
  * `constraint` carries `table` + `constraint`; the rest carry a single
  * `name` slot.
  */
@@ -529,7 +528,7 @@ export type SqlCommentTarget =
   | { kind: "constraint"; table: string; constraint: string };
 
 /**
- * Sprint-395 — COMMENT text. The `null` variant captures `IS NULL` (clear
+ * COMMENT text. The `null` variant captures `IS NULL` (clear
  * the comment); `string` carries the literal text.
  */
 export type SqlCommentText =
@@ -556,7 +555,7 @@ export type SqlParseResult =
   | SqlDeleteStatement
   | SqlMergeStatement
   | SqlWithStatement
-  // Sprint-395 — misc grammar top-levels.
+  // Misc grammar top-levels.
   | SqlGrantStatement
   | SqlRevokeStatement
   | SqlExplainStatement

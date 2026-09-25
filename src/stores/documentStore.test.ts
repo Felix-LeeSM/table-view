@@ -1,4 +1,4 @@
-// Sprint 265 (2026-05-12) — documentStore cache shape lifted from flat
+// documentStore cache shape lifted from flat
 // colon-keyed strings to `(connId, db, collection)` nested maps. Existing
 // stale-guard / clearConnection semantics preserved; assertions migrated
 // to the nested form. Aggregate results moved to a dedicated axis
@@ -316,7 +316,7 @@ describe("documentStore", () => {
     expect(s.queryResults["conn-1"]).toBeUndefined();
   });
 
-  // -- Sprint 73: runAggregate ----------------------------------------------
+  // -- runAggregate ---------------------------------------------------------
 
   it("runAggregate calls aggregateDocuments with the pipeline and caches the result", async () => {
     const pipeline = [{ $match: { active: true } }, { $limit: 10 }];
@@ -436,7 +436,7 @@ describe("documentStore", () => {
     ).toBeUndefined();
   });
 
-  // -- Sprint 265 — cross-connection isolation (new) -----------------------
+  // -- cross-connection isolation -------------------------------------------
 
   it("loadCollections for different connections don't share cache slots (AC-265-01)", async () => {
     vi.mocked(tauri.listMongoCollections)

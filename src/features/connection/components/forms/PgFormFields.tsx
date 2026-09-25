@@ -1,6 +1,6 @@
 /**
- * Sprint 138 (#4 — DBMS-aware connection form): PostgreSQL-specific form
- * fields. The previous monolithic `ConnectionDialog` rendered host / port /
+ * PostgreSQL-specific form fields.
+ * The previous monolithic `ConnectionDialog` rendered host / port /
  * user / password / database / Mongo block all in one column regardless of
  * `dbType`, which (a) leaked the `user="postgres"` default into every other
  * DBMS and (b) showed irrelevant host/port for SQLite. This file owns the

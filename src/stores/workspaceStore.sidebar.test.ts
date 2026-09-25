@@ -1,5 +1,5 @@
 /**
- * `workspaceStore` sidebar axis. Sprint 262 (ADR 0027) TDD slice.
+ * `workspaceStore` sidebar axis. ADR 0027 TDD slice.
  *
  * Behaviors covered:
  *   - `toggleExpand(connId, db, nodeId)` — lazy workspace creation +

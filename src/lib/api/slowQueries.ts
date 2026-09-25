@@ -1,4 +1,4 @@
-// Sprint 340 (U5 live wire) — paradigm-neutral slow query / profiler.
+// U5 live wire — paradigm-neutral slow query / profiler.
 // RDB → pg_stat_statements. Mongo → system.profile.find(). Caller passes
 // `limit`; backend clamps to [1, 500].
 

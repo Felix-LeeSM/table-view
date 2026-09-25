@@ -1,10 +1,10 @@
 /**
  * `persistWorkspaces` → `persist_workspace` IPC wiring (#1091).
  *
- * sprint-358 left `persistWorkspaces` a no-op (`void dehydrateAll(...)`),
+ * `persistWorkspaces` was left a no-op (`void dehydrateAll(...)`),
  * dropping the dehydration result on the floor — zero `invoke` sites, so a
- * restart lost every tab / SQL. sprint-365 was meant to hook up the consumer
- * but never did. These tests lock the wiring.
+ * restart lost every tab / SQL. A follow-up was meant to hook up the
+ * consumer but never did. These tests lock the wiring.
  *
  * Boundary mock: only `@tauri-apps/api/core` `invoke` is stubbed (mock-scope
  * rule). Dehydration + request shaping run for real, so any snake_case /

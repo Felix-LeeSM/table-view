@@ -1,14 +1,14 @@
 /**
- * Reason: Sprint-176 / RISK-035 — first-render flash gate for the
- * StructurePanel. Before sprint-176, mounting the panel with a
- * slow-resolving (or never-resolving) `getTableColumns` fetch would
- * briefly render `ColumnsEditor` with `columns={[]}`, surfacing the
- * "No columns found" empty state to the user before the actual data
- * arrived. This file pins the sprint-176 contract: empty-state copy
- * does not appear before the first fetch on each tab settles, and
- * does appear after the fetch resolves with `[]`.
+ * Reason: RISK-035 — first-render flash gate for the StructurePanel.
+ * Without the gate, mounting the panel with a slow-resolving (or
+ * never-resolving) `getTableColumns` fetch would briefly render
+ * `ColumnsEditor` with `columns={[]}`, surfacing the "No columns found"
+ * empty state to the user before the actual data arrived. This file pins
+ * the gate contract: empty-state copy does not appear before the first
+ * fetch on each tab settles, and does appear after the fetch resolves
+ * with `[]`.
  *
- * Date: 2026-04-30 (sprint-176, generator phase)
+ * Date: 2026-04-30
  */
 
 import { useSchemaStore } from "@stores/schemaStore";
@@ -110,15 +110,14 @@ describe("StructurePanel first-render flash gate (sprint-176)", () => {
   // never-resolving columns fetch and confirm none of the three empty
   // state strings ("No columns found", "No indexes found",
   // "No constraints found") are in the DOM during the pre-fetch window.
-  // Pre-sprint-176, "No columns found" would appear because
-  // `ColumnsEditor` mounted with `columns={[]}`.
+  // Without the gate, "No columns found" would appear because
+  // `ColumnsEditor` would mount with `columns={[]}`.
   // Date: 2026-04-30
   it("[AC-176-03] does not render empty-state copy before first fetch settles", () => {
     renderPanel();
 
-    // Sprint-180 update (2026-04-30): the spinner is now threshold-gated
-    // (1s — `useDelayedFlag`) so the immediate-mount assertion that the
-    // spinner is present has been removed. The load-bearing AC-176-03
+    // The spinner is threshold-gated (1s — `useDelayedFlag`), so this test
+    // does not assert it at mount. The load-bearing AC-176-03
     // invariant — that no empty-state copy paints during the pre-fetch
     // window — is independent of the spinner's visibility and is
     // exercised by the queryByText negatives below.
@@ -177,9 +176,9 @@ describe("StructurePanel first-render flash gate (sprint-176)", () => {
       fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
-    // Pre-sprint-176, IndexesEditor would mount briefly with indexes=[]
-    // and surface "No indexes found". Sprint-176 gates that until the
-    // fetch resolves.
+    // Without the gate, IndexesEditor would mount briefly with indexes=[]
+    // and surface "No indexes found". The gate holds it until the fetch
+    // resolves.
     expect(screen.queryByText("No indexes found")).not.toBeInTheDocument();
 
     // Resolve the indexes fetch with an empty array — empty state must

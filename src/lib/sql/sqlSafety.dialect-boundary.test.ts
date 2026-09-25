@@ -122,7 +122,7 @@ describe("sqlSafety.analyzeStatement — PostgreSQL and MSSQL boundary contracts
     });
 
     it("classifies DO with an inner DROP as routine-call / warn, not danger", () => {
-      // Immediate-execution path (Sprint 485). Pre-fix the inner `; DROP …;`
+      // Immediate-execution path. Pre-fix the inner `; DROP …;`
       // split into a standalone fragment and escalated the whole DO block to
       // danger; the dollar-quote-aware splitter keeps it a single warn-tier
       // routine call.

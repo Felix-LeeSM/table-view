@@ -1,4 +1,4 @@
-// Sprint 338 (U3 live wire) — paradigm-aware collection/table stats.
+// U3 live wire — paradigm-aware collection/table stats.
 // RDB → pg_stat_user_tables + pg_total_relation_size + pg_indexes.
 // Mongo → runCommand({collStats}). Both flatten into CollectionStatsRow.
 

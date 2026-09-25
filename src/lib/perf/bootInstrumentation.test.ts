@@ -1,12 +1,12 @@
 /**
- * Sprint 175 — boot-instrumentation primitive tests.
+ * Boot-instrumentation primitive tests.
  *
- * Reason: AC-175-01-02 requires the eight named milestones to be observable
+ * Reason: AC-175-01-02 requires the named milestones to be observable
  * via `performance.getEntriesByName()` AND visible in the single-line
  * boot summary; AC-175-01-05 requires missing milestones to render as a
  * literal `<missing>` token (not silent omission). These tests pin both
- * shapes so future sprints can refactor `boot()` without losing the
- * milestone surface. (2026-04-30)
+ * shapes so `boot()` can be refactored without losing the milestone
+ * surface. (2026-04-30)
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,7 +29,7 @@ describe("bootInstrumentation", () => {
       performance.clearMarks?.();
       performance.clearMeasures?.();
     }
-    // sprint-175 — `logBootSummary` is idempotent across a single boot
+    // `logBootSummary` is idempotent across a single boot
     // (auto-triggers from `markBootMilestone("app:effects-fired")` AND
     // the 5s fallback in `scheduleBootSummary`). Reset the once-guard
     // between tests so each `it` can assert the single-log invariant
@@ -51,7 +51,7 @@ describe("bootInstrumentation", () => {
     await vi.advanceTimersByTimeAsync(1);
     markBootMilestone("theme:applied");
     markBootMilestone("session:initialized");
-    // Sprint 367 (Phase 4) — listener pre-register milestone inserted
+    // Listener pre-register milestone inserted
     // between session:initialized and connectionStore:imported.
     markBootMilestone("snapshot:listener-registered");
     markBootMilestone("connectionStore:imported");
@@ -59,7 +59,7 @@ describe("bootInstrumentation", () => {
     markBootMilestone("react:render-called");
     markBootMilestone("react:first-paint");
     markBootMilestone("app:effects-fired");
-    // Sprint 367 (Phase 4) — `snapshot:applied` fires from the fire-and-forget
+    // `snapshot:applied` fires from the fire-and-forget
     // promise in `main.tsx`, AFTER `app:effects-fired`. Order reflects the
     // arrival pattern; the summary line tolerates absent markers anyway.
     markBootMilestone("snapshot:applied");
@@ -83,9 +83,8 @@ describe("bootInstrumentation", () => {
     }
   });
 
-  // Reason: AC-175-01-02 + Sprint 1 contract Test Requirements — missing
-  // milestones MUST be visible as a literal `<missing>` token, not silently
-  // dropped. (2026-04-30)
+  // Reason: AC-175-01-02 — missing milestones MUST be visible as a literal
+  // `<missing>` token, not silently dropped. (2026-04-30)
   it("renders missing milestones as <missing> in the summary line", () => {
     markT0();
     markBootMilestone("theme:applied");
@@ -105,9 +104,8 @@ describe("bootInstrumentation", () => {
     expect(line).toContain("app:effects-fired=<missing>");
   });
 
-  // Reason: contract Test Requirements — boundary case for duplicate
-  // marks; the contract accepts either "first or latest wins" so long as
-  // calling twice does NOT throw. (2026-04-30)
+  // Reason: boundary case for duplicate marks; either "first or latest
+  // wins" is accepted so long as calling twice does NOT throw. (2026-04-30)
   it("does not throw when the same milestone is marked twice", () => {
     markT0();
     expect(() => {
@@ -154,13 +152,10 @@ describe("bootInstrumentation", () => {
     expect(findMilestoneDelta("app:effects-fired")).toBeNull();
   });
 
-  // Reason: contract Required Checks #8/#9/#10 grep for milestone literals
-  // in specific files; this test asserts the canonical list IS the
-  // milestones the contract pins, in order. A future refactor that adds /
-  // removes / reorders milestones would break the baseline report's table
-  // shape and is rejected here. (2026-04-30; sprint-367 extended to ten
-  // milestones — added `snapshot:listener-registered` and
-  // `snapshot:applied` for Phase 4 atomic hydration.)
+  // Reason: grep audits look for each milestone literal in the file
+  // expected to mark it (see `BOOT_MILESTONES`); this test asserts the
+  // canonical list, in order. A future refactor that adds / removes /
+  // reorders milestones is rejected here. (2026-04-30)
   it("exports the ten contractual milestone names in order", () => {
     expect(BOOT_MILESTONES).toEqual([
       "T0",

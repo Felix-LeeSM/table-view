@@ -1,5 +1,5 @@
 /**
- * Sprint 432 — checked-in SQL WASM artifact regression.
+ * Checked-in SQL WASM artifact regression.
  *
  * `sqlAst.test.ts` intentionally mocks the wasm-pack module to keep facade
  * tests small. This file loads the real checked-in `.wasm` bytes, so Rust
