@@ -659,7 +659,7 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
     // Split cells into $set vs $unset by sentinel.
     // The `__op__:unset` sentinel is owned by DocumentTreePanel's delete
     // action; it's a string so the existing pendingEdits Map type stays
-    // unchanged (string | object).
+    // unchanged (string | null).
     const rawSetOps: Record<string, unknown> = {};
     const rawUnsetOps: Record<string, unknown> = {};
     for (const { column, value } of cells) {

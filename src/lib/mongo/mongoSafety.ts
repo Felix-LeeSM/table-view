@@ -291,7 +291,7 @@ function isEmptyFilter(filter: Record<string, unknown>): boolean {
  *
  * 2026-05-09 — simplified to a direct `severity === "info"` comparison,
  * keeping the meaning of the earlier mapping (`mongo-other` + safe): only a
- * read-only pipeline is classified as severity "info".
+ * read-only pipeline was classified as severity "info".
  *
  * Issue #2375 — delegates to the negation of `requiresPreviewDialog`, which
  * the QueryTab gate uses, so the same INFO boundary is not defined twice.

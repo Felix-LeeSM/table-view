@@ -18,7 +18,7 @@ import { parseMongoshStatement } from "./mongoshAst/index";
  * - `collection-command` — `db.<coll>.<method>(...)`. Requires a chip (same
  *   semantics as the Phase 28 method whitelist).
  * - `unknown` — empty / whitespace-only input, parse failure, multiple
- *   statements, BSON literal, etc. The Toolbar gates it like
+ *   statements, malformed BSON literal, etc. The Toolbar gates it like
  *   `collection-command` (a chip is required).
  */
 export type MongoStatementKind =

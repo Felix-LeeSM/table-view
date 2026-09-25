@@ -1,6 +1,6 @@
 // AC-188-01 — `analyzeMongoPipeline` unit tests. Pin the cases that the
 // contract enumerates so the danger taxonomy stays in sync with what
-// `useSafeModeGate` will block / confirm. date 2026-05-01.
+// `useSafeModeGate` will confirm. date 2026-05-01.
 //
 // 2026-05-09 — the Mongo classifier also splits into the same 3-tier
 // severity as the SQL paradigm (`info` / `warn` / `danger`): read-only
