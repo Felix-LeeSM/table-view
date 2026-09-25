@@ -12,7 +12,7 @@
  * delimiters themselves are preserved so the per-statement regex still anchors
  * cleanly on whitespace boundaries.
  *
- * Out of scope (sprint 132): full SQL parser, multi-match extraction, and
+ * Out of scope: full SQL parser, multi-match extraction, and
  * dialect inference (caller passes the dialect).
  */
 export type DbMutationHint =
@@ -273,8 +273,8 @@ function sliceCapture(
 
 /**
  * Extract a DB-mutation hint from `sql` for the given dialect. Returns the
- * LAST matching hint across multi-statement input (sprint contract — the
- * frontend hook only acts on the most recent state change).
+ * LAST matching hint across multi-statement input (the frontend hook only
+ * acts on the most recent state change).
  *
  * Returns `null` when:
  *   - input is empty / whitespace-only

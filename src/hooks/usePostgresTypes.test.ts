@@ -1,4 +1,4 @@
-// Sprint 230 — `usePostgresTypes` hook test suite (Phase 27 sprint 5).
+// `usePostgresTypes` hook test suite.
 //
 // Date: 2026-05-07.
 //
@@ -8,13 +8,12 @@
 //   `pg_catalog.X` strips to `X`, other schemas qualify as
 //   `<schema>.<name>`).
 // - Locks AC-230-11 (`invalidatePostgresTypesCache(connectionId)` cache
-//   punch) and the concurrency / stale-connectionId edge cases the
-//   contract requires.
+//   punch) and the concurrency / stale-connectionId edge cases.
 //
 // Mock pattern: `vi.hoisted` + factory mock for `@lib/tauri` so the
 // `tauri.listPostgresTypes` mock is re-bindable inside test bodies.
-// Pattern source: Sprint 219/223/224/229
-// (`useConnectionMutations.test.ts` / `CreateTableDialog.test.tsx`).
+// Pattern source: `useConnectionMutations.test.ts` /
+// `CreateTableDialog.test.tsx`.
 
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -78,7 +77,7 @@ describe("usePostgresTypes (Sprint 230)", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(mockListPostgresTypes).toHaveBeenCalledTimes(1);
-    // Sprint 271a — wrapper now takes optional expectedDatabase as 2nd arg.
+    // The wrapper takes optional expectedDatabase as 2nd arg.
     // No connectionStore status seeded → resolveActiveDb returns "" → undefined forwarded.
     expect(mockListPostgresTypes).toHaveBeenCalledWith("conn-1", undefined);
     // Merged list contains the canonical entries first, then the
@@ -304,12 +303,12 @@ describe("usePostgresTypes (Sprint 230)", () => {
     expect(second.result.current.types).toContain("public.second");
   });
 
-  // ── Sprint 234 — typesByName Map surface (AC-234-09) ─────────────
+  // ── typesByName Map surface (AC-234-09) ──────────────────────────
 
-  // Sprint 234 — `usePostgresTypes` exposes a `typesByName: Map<string,
+  // `usePostgresTypes` exposes a `typesByName: Map<string,
   // string>` alongside `types`. Map values mirror the live
   // `PostgresTypeInfo.type_kind` so the combobox can render color dots
-  // (Sprint 234 AC-234-08) without re-querying. Keys use the same
+  // (AC-234-08) without re-querying. Keys use the same
   // display label rules as `types` (`pg_catalog.X` strips to `X`).
   it("surfaces a typesByName map matching the live PostgresTypeInfo entries (AC-234-09)", async () => {
     mockListPostgresTypes.mockResolvedValueOnce([
@@ -335,7 +334,7 @@ describe("usePostgresTypes (Sprint 230)", () => {
     expect(result.current.typesByName.get("uuid")).toBe("base");
   });
 
-  // Sprint 234 — when no live extras arrive (empty fetch, or pre-fetch
+  // When no live extras arrive (empty fetch, or pre-fetch
   // first render), the canonical entries still seed the map with
   // `"base"`. Ensures combobox lookups never throw on missing keys for
   // the canonical types.
@@ -353,7 +352,7 @@ describe("usePostgresTypes (Sprint 230)", () => {
     }
   });
 
-  // Sprint 234 — pre-fetch first render returns an empty `Map` rather
+  // Pre-fetch first render returns an empty `Map` rather
   // than `undefined` so consumers can call `.get(label)` safely.
   it("returns an empty Map (not undefined) on the very first render before the fetch resolves (AC-234-09)", async () => {
     let resolveFetch: ((v: PostgresTypeInfo[]) => void) | null = null;
