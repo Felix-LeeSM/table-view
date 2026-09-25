@@ -27,9 +27,8 @@ vi.mock("@lib/runtime/toast", () => ({
 // ---------------------------------------------------------------------------
 // ConnectionDialog — URL-form input handling (Postel's Law).
 //
-// Split from ConnectionDialog.test.tsx (1300+ lines) by domain: URL
-// paste/blur detection is its own surface. AC-178-0X IDs reference the
-// originating sprint-178 spec.
+// Split from ConnectionDialog.test.tsx by domain: URL paste/blur detection
+// is its own surface. The AC-178-0X IDs reference the originating spec.
 //
 // Mechanism notes:
 //   * Detection trigger:    onPaste on the form wrapper (delegated). A
@@ -145,7 +144,7 @@ interface PasteCase {
   };
 }
 
-// Paste detection은 *supported* DBMS 에 한해 form 을 1-step 채운다.
+// Paste detection fills the form in one step only for *supported* DBMSs.
 const PASTE_CASES: PasteCase[] = [
   {
     scheme: "postgres",
@@ -352,10 +351,8 @@ const PASTE_CASES: PasteCase[] = [
 ];
 
 /**
- * #2436 — the connection form is split into Basic / Advanced / SSH-SSL
- * segments and Radix unmounts the inactive panels, so a test that reads a
- * control has to open the segment that owns it. `TabsTrigger` selects on
- * `mousedown`, not `click`.
+ * #2436 — see `openSegment` in `ConnectionDialog.test.tsx`: Radix unmounts
+ * the inactive segment panels, and `TabsTrigger` selects on `mousedown`.
  */
 async function openSegment(name: "Basic" | "Advanced" | "SSH/SSL") {
   await act(async () => {

@@ -326,7 +326,7 @@ describe("ConnectionItem", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 46: Connecting spinner and error inline message
+  // Connecting spinner and error inline message
   // -----------------------------------------------------------------------
   it("renders spinner when connecting", () => {
     setStoreState({
@@ -354,9 +354,10 @@ describe("ConnectionItem", () => {
     expect(mockConnect).not.toHaveBeenCalled();
   });
 
-  // Reason: #1056 (2026-07-03) — 분류된 드라이버 에러는 collapsed 에서 사람이
-  //         읽는 요약(title)을 보이고, 원문은 title 속성/expand 로 보존한다.
-  //         이전(Sprint 110)엔 원문을 그대로 collapsed 에 노출했다.
+  // Reason: #1056 (2026-07-03) — a classified driver error shows the
+  //         human-readable summary (title) while collapsed and keeps the raw
+  //         message in the title attribute / expanded view. Previously the
+  //         raw message was shown as-is while collapsed.
   it("renders classified summary collapsed with raw preserved in title attr", () => {
     setStoreState({
       activeStatuses: {
@@ -373,14 +374,15 @@ describe("ConnectionItem", () => {
     expect(errorSpan).toBeInTheDocument();
     expect(errorSpan.className).toContain("text-xs");
     expect(errorSpan.className).toContain("text-destructive");
-    // 원문은 tooltip 으로 보존.
+    // The raw message is preserved in the tooltip.
     expect(errorSpan).toHaveAttribute(
       "title",
       "Connection refused (os error 61)",
     );
   });
 
-  // Reason: #1056 (2026-07-03) — fail-open. 미분류 원문은 그대로 collapsed 노출.
+  // Reason: #1056 (2026-07-03) — fail-open. An unclassified raw message is
+  //         shown as-is while collapsed.
   it("renders raw message collapsed when the error is unclassified", () => {
     setStoreState({
       activeStatuses: {
@@ -397,7 +399,8 @@ describe("ConnectionItem", () => {
     expect(errorSpan).toHaveAttribute("title", "some unmapped driver failure");
   });
 
-  // Reason: #1056 (2026-07-03) — expand 는 행동 힌트 + 원문을 함께 보인다.
+  // Reason: #1056 (2026-07-03) — the expanded view shows the action hint
+  //         together with the raw message.
   it("shows the action hint and raw message when a classified error is expanded", () => {
     setStoreState({
       activeStatuses: {
@@ -434,7 +437,7 @@ describe("ConnectionItem", () => {
 
     const expandedSpan = screen.getByText("Detailed error message here");
     expect(expandedSpan).toBeInTheDocument();
-    // Sprint 110 — expanded variant also promoted to text-xs.
+    // Expanded variant also promoted to text-xs.
     expect(expandedSpan.className).toContain("text-xs");
     expect(expandedSpan.className).toContain("text-destructive");
     expect(screen.getByLabelText("Hide error details")).toBeInTheDocument();
@@ -1078,7 +1081,7 @@ describe("ConnectionItem", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 59: Environment badge rendering
+  // Environment badge rendering
   // -----------------------------------------------------------------------
   it("does not render environment badge when environment is null", () => {
     setStoreState({});
@@ -1268,7 +1271,7 @@ describe("ConnectionItem", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 78 AC-03 — "Move to group" context-menu submenu
+  // AC-03 — "Move to group" context-menu submenu
   // -----------------------------------------------------------------------
   describe("Move to group submenu", () => {
     it("exposes a 'Move to group' submenu trigger in the context menu", () => {
@@ -1416,7 +1419,8 @@ describe("ConnectionItem", () => {
   // -----------------------------------------------------------------------
   // Phase 15 AC-15-03 — inGroup indent styling
   // -----------------------------------------------------------------------
-  // Reason: Phase 15 AC-15-03 — inGroup prop 시 들여쓰기 스타일 적용 (2026-04-28)
+  // Reason: Phase 15 AC-15-03 — apply the indent style when inGroup is set
+  // (2026-04-28)
   it("applies pl-6 indent style when inGroup is true", () => {
     setStoreState({});
     render(
@@ -1432,7 +1436,8 @@ describe("ConnectionItem", () => {
     expect(item.className).not.toContain("px-3");
   });
 
-  // Reason: Phase 15 AC-15-03 — 기본(inGroup=false) 시 기존 패딩 유지 (2026-04-28)
+  // Reason: Phase 15 AC-15-03 — keep the existing padding by default
+  // (inGroup=false) (2026-04-28)
   it("uses default px-3 padding when not in group", () => {
     setStoreState({});
     render(<ConnectionItem connection={makeConnection({ name: "Root DB" })} />);
@@ -1442,7 +1447,8 @@ describe("ConnectionItem", () => {
     expect(item.className).not.toContain("pl-6");
   });
 
-  // Reason: Phase 15 AC-15-03 — inGroup={false} 명시 시에도 기본 패딩 유지 (2026-04-28)
+  // Reason: Phase 15 AC-15-03 — keep the default padding even when
+  // inGroup={false} is passed explicitly (2026-04-28)
   it("uses default px-3 padding when inGroup is explicitly false", () => {
     setStoreState({});
     render(
@@ -1458,9 +1464,10 @@ describe("ConnectionItem", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Phase 15 Sprint 164 — Drag handle icon and focus-visible ring
+  // Phase 15 — Drag handle icon and focus-visible ring
   // -----------------------------------------------------------------------
-  // Reason: Phase 15 AC-15-01 — drag handle icon (GripVertical)이 렌더링됨 (2026-04-28)
+  // Reason: Phase 15 AC-15-01 — the drag handle icon (GripVertical) renders
+  // (2026-04-28)
   it("renders a drag handle icon with aria-hidden", () => {
     setStoreState({});
     render(
@@ -1474,7 +1481,8 @@ describe("ConnectionItem", () => {
     expect(handle?.tagName.toLowerCase()).toBe("svg");
   });
 
-  // Reason: Phase 15 AC-15-01 — keyboard focus 시 focus-visible ring 클래스 적용 (2026-04-28)
+  // Reason: Phase 15 AC-15-01 — apply the focus-visible ring classes on
+  // keyboard focus (2026-04-28)
   it("has focus-visible ring classes on the row element", () => {
     setStoreState({});
     render(

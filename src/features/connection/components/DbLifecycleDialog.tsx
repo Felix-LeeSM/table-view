@@ -1,6 +1,6 @@
-// Sprint 335 (2026-05-15) — Slice M live wire. Database lifecycle
-// (CREATE / DROP DATABASE) for RDB (PG) + Mongo. Mongo create는 lazy
-// (collection 첫 write 시 자동 생성) — informational copy 로만 처리.
+// Database lifecycle (CREATE / DROP DATABASE) for RDB (PG) + Mongo. Mongo
+// create is lazy (the database is created automatically on the first
+// collection write), so it is handled with informational copy only.
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";

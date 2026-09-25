@@ -1,24 +1,28 @@
 /**
- * Sprint 356 (Phase 1, Q22) — Linux Secret Service / kwallet 미가용 환경
- * (AC-356-05) 에서 표시되는 1회용 안내 toast.
+ * One-time notice toast (Q22) shown where the Linux Secret Service / kwallet
+ * is unavailable (AC-356-05).
  *
- * 표시 조건:
- *   - `fallbackActive == true` : backend 의 `KeySource::DiskFallback` 신호.
- *   - `dismissed == false` : 사용자가 이전 boot 에서 dismiss 한 적 없음
- *     (`.keyring-fallback-dismissed` file sidecar 부재).
+ * Shown when:
+ *   - `fallbackActive == true`: the backend's `KeySource::DiskFallback`
+ *     signal.
+ *   - `dismissed == false`: the user has not dismissed it on an earlier boot
+ *     (no `.keyring-fallback-dismissed` file sidecar).
  *
  * Dismiss:
- *   - 사용자가 "Dismiss" 클릭 → IPC 로 file sidecar set → 즉시 toast 숨김.
- *   - IPC 실패 시에도 UI 는 숨긴다 (best-effort; 다음 boot 가 같은 환경이면
- *     toast 재출현, 사용자가 다시 dismiss 가능).
+ *   - The user clicks "Dismiss" → the toast hides immediately and the IPC
+ *     sets the file sidecar.
+ *   - The UI hides even when the IPC fails (best-effort; if the next boot runs
+ *     in the same environment the toast reappears and the user can dismiss it
+ *     again).
  *
- * 본 컴포넌트는 toast container 가 아니라 inline alert 다 — `Toaster()`
- * 가 boot 시점에 마운트되지 않을 수 있어 (frontend store hydration 전)
- * boot 후 첫 paint 에 안정적으로 보이도록 ConnectionList / Launcher 안에
- * 마운트한다. Phase 1 의 scope 는 표시 / dismiss / sentinel 쓰기까지.
+ * This component is an inline alert, not a toast container — `Toaster()` may
+ * not be mounted at boot (before frontend store hydration), so it is meant to
+ * mount inside ConnectionList / Launcher to show reliably on the first paint
+ * after boot. Nothing mounts it yet — only `KeyringFallbackToast.test.tsx`
+ * renders it. The scope is display, dismiss, and the sentinel write.
  *
- * "Why?" link 는 sprint-356 의 out-of-scope (docs/security/keyring-fallback.md
- * 가 아직 없음). Phase 후속 sprint 에서 link 추가 예정.
+ * The "Why?" link is out of scope (`docs/security/keyring-fallback.md` does
+ * not exist yet); a follow-up is planned to add it.
  */
 
 import { logger } from "@lib/logger";
@@ -30,9 +34,10 @@ import { setKeyringFallbackDismissed } from "@/lib/keyringFallback";
 import { cn } from "@/lib/utils";
 
 export interface KeyringFallbackToastProps {
-  /** Backend `migrate_or_initialize()` 가 `fallback_to_disk = true` 를 보고하면 set. */
+  /** Set when the backend `migrate_or_initialize()` reports
+   *  `fallback_to_disk = true`. */
   fallbackActive: boolean;
-  /** File sidecar `.keyring-fallback-dismissed` 존재 여부. */
+  /** Whether the file sidecar `.keyring-fallback-dismissed` exists. */
   dismissed: boolean;
 }
 

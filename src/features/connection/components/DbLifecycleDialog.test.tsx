@@ -1,8 +1,8 @@
-// Sprint 335 (2026-05-15) — Slice M live wire. DbLifecycleDialog 4-case
-// 매트릭스: RDB create / RDB drop / Mongo lazy create info / Mongo drop.
-// 작성 이유: 본 sprint 가 Sprint 327 placeholder 를 실제 IPC dispatch 로
-// 교체한다. paradigm × mode 4 case 각각 dispatch 인자 + close + Mongo
-// create 의 informational copy 가드.
+// DbLifecycleDialog 4-case matrix: RDB create / RDB drop / Mongo lazy create
+// info / Mongo drop.
+// Reason: the dialog dispatches real IPC instead of a placeholder. Guards the
+// dispatch arguments + close for each of the 4 paradigm × mode cases, plus
+// the informational copy for Mongo create (2026-05-15).
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

@@ -19,10 +19,6 @@ export type DatabaseType =
  * exposure is derived from `capabilities.connection.test` and tested to stay
  * aligned with this compatibility list.
  *
- * Sprint 281 (Phase 17 Slice A) — MySQL 추가. read path (namespaces /
- * tables / columns) 만 동작 — DDL / queries / streaming 은 Slice B~G
- * 합류 전까지 `AppError::Unsupported` 가 surfacing 된다.
- *
  * Oracle is exposed for service-name lifecycle plus bounded catalog/query/cancel
  * runtime. The dial also takes a SID and a wallet (#1065), a TNS connect
  * descriptor and wallet-less 1-way TCPS (#2154). Edit/DDL, parser/completion,
@@ -47,8 +43,9 @@ export function isSupportedDatabaseType(t: DatabaseType): boolean {
   return SUPPORTED_DATABASE_TYPES.includes(t);
 }
 
-/** UI 라벨. SUPPORTED 와 별개로 모든 variant 에 대해 정의 — URL parser 가
- * 인식한 unsupported scheme 의 거부 메시지에서도 사용한다. */
+/** UI labels. Defined for every variant independently of SUPPORTED — the
+ * rejection message for an unsupported scheme the URL parser recognises uses
+ * them too. */
 export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
   postgresql: "PostgreSQL",
   mysql: "MySQL",
@@ -82,7 +79,7 @@ export interface ConnectionConfig {
   // #1493 — kept as `string` in Phase 1: the swap-prone functions
   // (`rawEntryKey` / `findLiveIdleTab`) read `tab.connectionId`, never
   // `ConnectionConfig.id`, so branding this field buys no call-site
-  // protection while forcing ~90 construction sites to re-brand. The
+  // protection while forcing the construction sites to re-brand. The
   // `ConnectionId` brand still guards those functions (connectionId is
   // asserted at each call boundary). Field branding is deferred to a
   // later phase where a value-level ingress can absorb the blast.

@@ -30,12 +30,12 @@ interface ConnectionListProps {
   onActivate?: (id: string) => void;
 }
 
-// Sprint 363 (Phase 3, Q13) — connection activation opens/focuses the
-// per-conn workspace window. A second activation of the same conn is handled
-// idempotently by the backend (`open_workspace_window_inner`), which only
-// focuses the existing `workspace-{conn_id}` window (sprint-361 잠금).
-// IPC failure logs a `logger.warn` instead of a toast — the `onActivate`
-// callback still runs so store/UI state lands regardless.
+// Q13 — connection activation opens/focuses the per-conn workspace window. A
+// second activation of the same conn is handled idempotently by the backend
+// (`open_workspace_window_inner`), which only focuses the existing
+// `workspace-{conn_id}` window. IPC failure logs a `logger.warn` instead of a
+// toast — the `onActivate` callback still runs so store/UI state lands
+// regardless.
 //
 // #2457 — shared by the launcher activation routes: `ConnectionList` rows
 // (All / group views) and `RecentConnections` rows (Recent view). The
@@ -82,8 +82,8 @@ export default function ConnectionList({
   const [dropZone, setDropZone] = useState<DropZone | null>(null);
   const overRoot = dropZone?.kind === "root";
 
-  // Sprint 363 (Phase 3, Q13) — see `activateConnection` above for the
-  // window-open semantics shared with the Recent view.
+  // Q13 — see `activateConnection` above for the window-open semantics
+  // shared with the Recent view.
   const handleActivate = useCallback(
     (id: string) => {
       activateConnection(id, onActivate);

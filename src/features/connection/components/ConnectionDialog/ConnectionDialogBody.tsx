@@ -40,7 +40,7 @@ import RedisFormFields from "../forms/RedisFormFields";
 import SearchFormFields from "../forms/SearchFormFields";
 import SqliteFormFields from "../forms/SqliteFormFields";
 
-// Sprint-112: Radix `<SelectItem>` cannot have an empty value, so we use
+// Radix `<SelectItem>` cannot have an empty value, so we use
 // sentinel string `__none__` to represent the "None" environment option.
 // The form's `environment` field still stores `null` (canonical empty).
 const ENV_NONE_SENTINEL = "__none__";
@@ -109,7 +109,7 @@ function segmentForField(field: ConnFieldKey): ConnFormSection | null {
 }
 
 /**
- * Sprint 213 — presentational body of `ConnectionDialog`. Hosts the Form/URL
+ * Presentational body of `ConnectionDialog`. Hosts the Form/URL
  * toggle (new connections only), the URL input + Parse & Continue button, and
  * the form-mode fields. Stateless — all state lives in the entry / hooks; this
  * component only renders.
@@ -119,9 +119,9 @@ function segmentForField(field: ConnFieldKey): ConnFormSection | null {
  * DBMS form component is handed the segment being rendered and emits only its
  * share.
  *
- * The `assertNever` exhaustive switch in `renderDbmsFields` lives here per
- * Sprint 213 contract (entry or body acceptable; body chosen so the entry
- * stays free of DBMS-specific imports).
+ * The `assertNever` exhaustive switch in `renderDbmsFields` lives here (entry
+ * or body acceptable; body chosen so the entry stays free of DBMS-specific
+ * imports).
  */
 export default function ConnectionDialogBody({
   isEditing,
@@ -157,7 +157,7 @@ export default function ConnectionDialogBody({
 }: ConnectionDialogBodyProps) {
   const { t } = useTranslation("featuresConnection");
   /**
-   * Sprint 138 — exhaustive switch on `dbType`. Adding a new
+   * Exhaustive switch on `dbType`. Adding a new
    * `DatabaseType` variant without updating this switch fails the
    * `assertNever` compile-time check.
    *
@@ -409,7 +409,7 @@ export default function ConnectionDialogBody({
 
       {/* Form fields */}
       {inputMode === "form" && (
-        // Sprint 178 (AC-178-01 / AC-178-03): paste-detect + blur-split
+        // AC-178-01 / AC-178-03: paste-detect + blur-split
         // are wired via React's bubbled synthetic events on the form
         // wrapper. Both handlers short-circuit on any target other
         // than `#conn-host` (the input rendered by the DBMS-specific
@@ -453,10 +453,10 @@ export default function ConnectionDialogBody({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {/* 새 connection 생성 시엔 백엔드 어댑터가 wire-up 된 DBMS
-                    만 노출. 편집 모드에서 기존 connection 의 dbType 이
-                    unsupported 라면 그 항목도 예외적으로 추가해 Select 가
-                    빈값으로 보이지 않게 한다. */}
+                {/* When creating a connection, list only the DBMSs whose
+                    backend adapter is wired up. In edit mode, if the existing
+                    connection's dbType is unsupported, add that entry as an
+                    exception so the Select does not show an empty value. */}
                 {CONNECTION_DIALOG_DATABASE_TYPES.map((t) => (
                   <SelectItem key={t} value={t}>
                     {DATABASE_TYPE_LABELS[t]}
@@ -540,10 +540,10 @@ export default function ConnectionDialogBody({
             </TabsList>
 
             <TabsContent value="basic" className="space-y-3 pt-3">
-              {/* DBMS-aware fields (Sprint 138) */}
+              {/* DBMS-aware fields */}
               {renderDbmsFields("basic")}
 
-              {/* Sprint 178 (AC-178-01) — non-modal "detected" affordance.
+              {/* AC-178-01 — non-modal "detected" affordance.
                   This is a calm, advisory inline note shown after a
                   successful URL paste into the host field. It deliberately
                   does NOT carry `role="alert"` or `role="status"` so it

@@ -82,7 +82,8 @@ const DB_ROOT = resolve(REPO_ROOT, "src-tauri/table-view-core/src/db");
  * anything else, so an initializer this evaluator cannot read fails loudly
  * instead of silently dropping the const from the guarded set. */
 function evalConstIntExpr(expr: string): number | null {
-  // 토큰화 뒤에 글자가 남으면 숫자 산술이 아닌 형태다 (식별자·캐스트·접미사…).
+  // Characters left over after tokenizing mean the form is not numeric
+  // arithmetic (an identifier, a cast, a suffix…).
   if (expr.replace(/\d[\d_]*|[()+\-*/%]|\s+/g, "") !== "") return null;
   const tokens = expr.match(/\d[\d_]*|[()+\-*/%]/g);
   if (tokens === null) return null;

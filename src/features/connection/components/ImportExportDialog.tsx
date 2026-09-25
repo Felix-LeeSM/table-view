@@ -21,8 +21,8 @@ interface ImportExportDialogProps {
   initialTab?: "export" | "import";
 }
 /**
- * Sprint 140 — canonical message rendered inline when the user enters the
- * wrong master password. The backend emits the same string from
+ * Canonical message rendered inline when the user enters the wrong master
+ * password. The backend emits the same string from
  * `AppError::Encryption("Incorrect master password — the file could not be
  * decrypted")`. Tests assert that this exact string makes it to the UI
  * surface.
@@ -50,22 +50,23 @@ const PANE_HEADING_CLASS =
 const DIALOG_WIDTH_CLASS = "bg-secondary sm:max-w-3xl";
 
 /**
- * Sprint 96: migrated to the `TabsDialog` preset. The Export/Import panes
- * keep their bodies; the preset owns the title + tab list + dialog shell.
+ * Migrated to the `TabsDialog` preset. The Export/Import panes keep their
+ * bodies; the preset owns the title + tab list + dialog shell.
  * Issue #2438 kept the preset untouched — its `content` slot already takes an
  * arbitrary node, so the left/right split lives in the panes below and no
  * other `TabsDialog` caller is affected.
  *
- * Sprint 140: the Export pane wraps the selection in a master-password
- * envelope (Argon2id + AES-256-GCM) instead of emitting plain JSON; the
- * Import pane auto-detects envelope vs plain payload and surfaces the
- * shared "Incorrect master password" message on a wrong-password failure.
+ * The Export pane wraps the selection in a master-password envelope
+ * (Argon2id + AES-256-GCM) instead of emitting plain JSON; the Import pane
+ * auto-detects envelope vs plain payload and surfaces the shared "Incorrect
+ * master password" message on a wrong-password failure.
  *
- * 2026-05-05: Export pane는 사용자가 password를 직접 입력하지 않는다.
- * backend가 BIP39 12-word mnemonic을 자동 생성해 envelope과 함께 돌려주고,
- * 사용자는 받은 mnemonic을 비밀번호 매니저에 보관한 뒤 체크박스로 책임을
- * 명시 인정해야 다음 단계 진행. dialog 닫히면 mnemonic은 React state에서
- * 사라진다 (브라우저 메모리 위생은 best-effort).
+ * 2026-05-05: in the Export pane the user does not type a password. The
+ * backend auto-generates a BIP39 12-word mnemonic and returns it with the
+ * envelope; the user stores the mnemonic in a password manager and must
+ * explicitly acknowledge that responsibility with the checkbox before moving
+ * on. When the dialog closes the mnemonic leaves React state (browser memory
+ * hygiene is best-effort).
  */
 export default function ImportExportDialog({
   onClose,
@@ -383,9 +384,10 @@ function ImportPanel({ onImported }: ImportPanelProps) {
     try {
       // backward-compatible import: the plain `importConnections` path accepts
       // unencrypted JSON exports from older app versions unchanged; only
-      // envelopes require the master password. frontend-compat 인벤토리가 이
-      // 파일을 이 marker 로 추적한다 (refactor-02) — 사용자 도움말 문구는
-      // locale 로 이주했으므로 호환 동작 설명을 코드 주석에 남겨 marker 보존.
+      // envelopes require the master password. The frontend-compat inventory
+      // (refactor-02) tracks this file by this marker — the user-facing help
+      // text moved to the locale files, so the compat behavior is described in
+      // this code comment to keep the marker.
       const r = isEnvelope
         ? await importConnectionsEncrypted(text, masterPassword)
         : await importConnections(text);
@@ -411,7 +413,7 @@ function ImportPanel({ onImported }: ImportPanelProps) {
             {t("importExport.paneImportWhat")}
           </h3>
 
-          {/* eslint-disable no-restricted-syntax -- placeholder 는 import JSON 형식 예시(기술 토큰), 번역 대상 아님 (#1074) */}
+          {/* eslint-disable no-restricted-syntax -- the placeholder is an import JSON format example (technical tokens), not a translation target (#1074) */}
           <textarea
             className="h-40 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-ring"
             placeholder='{"v":1,"kdf":"argon2id","alg":"aes-256-gcm",...} or {"schema_version":1,"connections":[...],"groups":[...]}'
@@ -444,9 +446,10 @@ function ImportPanel({ onImported }: ImportPanelProps) {
           <MasterPasswordField
             value={masterPassword}
             onChange={setMasterPassword}
-            // 2026-05-05 — export는 BIP39 12-word mnemonic을 자동 생성한다.
-            // 사용자 정의 password는 더 이상 만들 수 없으므로 입력 단계에서
-            // 길이 검사도 무의미. 빈 값 vs 비어있지 않음만 본다.
+            // 2026-05-05 — export auto-generates a BIP39 12-word mnemonic.
+            // A user-defined password can no longer be created, so a length
+            // check at input time is pointless; only empty vs non-empty
+            // matters.
             minLength={0}
             label={t("importExport.mpLabel")}
             placeholder={t("importExport.mpPlaceholder")}

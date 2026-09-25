@@ -1,4 +1,4 @@
-// Purpose: Recent Connections UI 컴포넌트 테스트 — Phase 16 Sprint 167 (2026-04-28)
+// Purpose: Recent Connections UI component tests — Phase 16 (2026-04-28)
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -75,28 +75,28 @@ function makeConnection(
 // ---------------------------------------------------------------------------
 
 describe("relativeTime", () => {
-  // Reason: AC-167-02 — relativeTime이 1분 미만은 "just now" 반환 (2026-04-28)
+  // Reason: AC-167-02 — relativeTime: under 1 minute → "just now" (2026-04-28)
   it('returns "just now" for timestamps less than 1 minute ago', () => {
     const now = Date.now();
     expect(relativeTime(now)).toBe("just now");
     expect(relativeTime(now - 30000)).toBe("just now");
   });
 
-  // Reason: AC-167-02 — relativeTime이 1~59분은 "Xm ago" 반환 (2026-04-28)
+  // Reason: AC-167-02 — relativeTime: 1-59 minutes → "Xm ago" (2026-04-28)
   it('returns "Xm ago" for timestamps between 1 and 59 minutes ago', () => {
     const now = Date.now();
     expect(relativeTime(now - 5 * 60 * 1000)).toBe("5m ago");
     expect(relativeTime(now - 59 * 60 * 1000)).toBe("59m ago");
   });
 
-  // Reason: AC-167-02 — relativeTime이 1~23시간은 "Xh ago" 반환 (2026-04-28)
+  // Reason: AC-167-02 — relativeTime: 1-23 hours → "Xh ago" (2026-04-28)
   it('returns "Xh ago" for timestamps between 1 and 23 hours ago', () => {
     const now = Date.now();
     expect(relativeTime(now - 2 * 60 * 60 * 1000)).toBe("2h ago");
     expect(relativeTime(now - 23 * 60 * 60 * 1000)).toBe("23h ago");
   });
 
-  // Reason: AC-167-02 — relativeTime이 24시간 이상은 "Xd ago" 반환 (2026-04-28)
+  // Reason: AC-167-02 — relativeTime: 24 hours or more → "Xd ago" (2026-04-28)
   it('returns "Xd ago" for timestamps 24 hours or more ago', () => {
     const now = Date.now();
     expect(relativeTime(now - 3 * 24 * 60 * 60 * 1000)).toBe("3d ago");
@@ -118,15 +118,17 @@ describe("RecentConnections", () => {
     mockConnState.connections = [];
   });
 
-  // 작성 이유 (2026-08-18, #2433): remove 가 잘 안 눌리고 「전체 지우기」가
-  // launcher action bar 맨 앞에 있어 목록을 겨냥한 파괴적 동작이 목록보다
-  // 먼저 눌렸다. 아래 케이스가 이 PR 의 수용 기준이고 이름의 `[recent]`
-  // 토큰으로 센다.
+  // Reason (2026-08-18, #2433): remove was hard to hit, and "Clear all" sat
+  // at the very front of the launcher action bar, so a destructive action
+  // aimed at the list got pressed before the list itself. The cases below are
+  // this PR's acceptance criteria, counted by the `[recent]` token in their
+  // names.
   //
-  // jsdom 은 Tailwind 를 계산하지 않아 "얼마나 큰가 / 언제 보이는가" 를
-  // computed style 로 못 잰다. 크기와 등장 조건은 className 단언이 유일한
-  // 기계 검사이고, 같은 대체 수단을 이 feature 가 이미 쓴다
-  // (ConnectionGroup.test.tsx 의 `py-1` / `select-none` 단언).
+  // jsdom does not compute Tailwind, so "how big / when visible" cannot be
+  // measured through computed style. className assertions are the only
+  // machine check for size and visibility conditions, and this feature
+  // already uses the same substitute (the `py-1` / `select-none` assertions
+  // in ConnectionGroup.test.tsx).
   describe("#2433 — remove 과녁 · 목록 끝의 전체 지우기", () => {
     function renderOne(name = "Prod DB") {
       mockMruState.recentConnections = [
@@ -141,7 +143,7 @@ describe("RecentConnections", () => {
       const btn = screen.getByRole("button", {
         name: /Remove Big DB from recent connections/,
       });
-      // 회귀 대상은 p-0.5 + 12px 아이콘 = 16px 이던 옛 과녁이다.
+      // The regression target is the old p-0.5 + 12px icon = 16px hit area.
       expect(btn.className).toMatch(/\bh-6\b/);
       expect(btn.className).toMatch(/\bw-6\b/);
       expect(btn.className).not.toMatch(/\bp-0\.5\b/);
@@ -152,7 +154,7 @@ describe("RecentConnections", () => {
       const btn = screen.getByRole("button", {
         name: /Remove Focus DB from recent connections/,
       });
-      // 평소엔 숨고, 행 hover 와 행 focus-within 양쪽에서 켜진다.
+      // Hidden by default; shown on both row hover and row focus-within.
       expect(btn.className).toMatch(/\bopacity-0\b/);
       expect(btn.className).toContain("group-hover:opacity-100");
       expect(btn.className).toContain("group-focus-within:opacity-100");
@@ -160,8 +162,8 @@ describe("RecentConnections", () => {
 
     it("[recent] remove 가 드러나면 같은 슬롯의 시간이 hover·focus 양쪽에서 물러난다", () => {
       renderOne();
-      // 시간과 X 는 같은 grid cell 을 점유한다 — 한쪽만 focus 조건을 타면
-      // 키보드로 왔을 때 둘이 겹쳐 보인다.
+      // The time and the X occupy the same grid cell — if only one of them
+      // follows the focus condition, the two overlap when reached by keyboard.
       const timeSlot = screen.getByText("5m ago").parentElement;
       expect(timeSlot?.className).toContain("group-hover:opacity-0");
       expect(timeSlot?.className).toContain("group-focus-within:opacity-0");
@@ -176,7 +178,7 @@ describe("RecentConnections", () => {
 
       render(<RecentConnections onActivate={onActivate} />);
 
-      // 목록을 도는 수단: 행마다 tabIndex=0 이라 Tab 이 순서대로 닿는다.
+      // List traversal: each row has tabIndex=0, so Tab reaches them in order.
       expect(screen.getByRole("listitem")).toHaveAttribute("tabindex", "0");
 
       const btn = screen.getByRole("button", {
@@ -185,9 +187,9 @@ describe("RecentConnections", () => {
       btn.focus();
       expect(document.activeElement).toBe(btn);
 
-      // jsdom 은 Enter 의 native button activation 을 실행하지 않으므로 두
-      // 축을 나눠 단언한다: 활성화는 click 으로, Enter 가 행의 connect 로
-      // 새지 않는 것은 keyDown 으로.
+      // jsdom does not run native button activation for Enter, so the two
+      // axes are asserted separately: activation via click, and Enter not
+      // leaking into the row's connect via keyDown.
       fireEvent.keyDown(btn, { key: "Enter" });
       expect(onActivate).not.toHaveBeenCalled();
 
@@ -200,11 +202,12 @@ describe("RecentConnections", () => {
       renderOne();
       const list = screen.getByRole("list", { name: "Recent connections" });
       const clear = screen.getByTestId("recent-clear-all");
-      // 옛 자리는 목록 위(launcher action bar)였다. 4 = FOLLOWING.
+      // It used to sit above the list (launcher action bar). 4 = FOLLOWING.
       expect(
         list.compareDocumentPosition(clear) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
-      // 목록 안에 들어가면 listitem 아닌 자식이 접근성 트리에 섞인다.
+      // Placed inside the list, it would mix a non-listitem child into the
+      // accessibility tree.
       expect(list.contains(clear)).toBe(false);
     });
 
@@ -240,13 +243,13 @@ describe("RecentConnections", () => {
     });
   });
 
-  // Reason: AC-167-01 — 빈 MRU 목록 시 hint 표시 (2026-04-28)
+  // Reason: AC-167-01 — show the hint when the MRU list is empty (2026-04-28)
   it("shows empty hint when no recent connections", () => {
     render(<RecentConnections />);
     expect(screen.getByText("No recent connections")).toBeInTheDocument();
   });
 
-  // Reason: AC-167-01 — MRU 항목이 connection 이름과 함께 렌더링됨 (2026-04-28)
+  // Reason: AC-167-01 — MRU entries render with connection names (2026-04-28)
   it("renders connection names from MRU entries", () => {
     mockMruState.recentConnections = [
       { connectionId: "c1", lastUsed: now - 60000 },
@@ -263,7 +266,7 @@ describe("RecentConnections", () => {
     expect(screen.getByText("Dev DB")).toBeInTheDocument();
   });
 
-  // Reason: AC-167-02 — 각 항목에 DB type 뱃지 표시 (2026-04-28)
+  // Reason: AC-167-02 — show a DB type badge on each entry (2026-04-28)
   it("shows DB type badge for each connection", () => {
     mockMruState.recentConnections = [
       { connectionId: "c1", lastUsed: now - 60000 },
@@ -280,7 +283,7 @@ describe("RecentConnections", () => {
     expect(screen.getByText("MY")).toBeInTheDocument();
   });
 
-  // Reason: AC-167-02 — 상대 시간 표시 (2026-04-28)
+  // Reason: AC-167-02 — show the relative time (2026-04-28)
   it("shows relative time for each entry", () => {
     const fiveMinAgo = now - 5 * 60 * 1000;
     mockMruState.recentConnections = [
@@ -293,7 +296,7 @@ describe("RecentConnections", () => {
     expect(screen.getByText("5m ago")).toBeInTheDocument();
   });
 
-  // Reason: AC-167-03 — 더블클릭 시 onActivate 호출 (2026-04-28)
+  // Reason: AC-167-03 — double-click calls onActivate (2026-04-28)
   it("calls onActivate on double-click", () => {
     const onActivate = vi.fn();
     mockMruState.recentConnections = [{ connectionId: "c1", lastUsed: now }];
@@ -309,7 +312,7 @@ describe("RecentConnections", () => {
     expect(onActivate).toHaveBeenCalledWith("c1");
   });
 
-  // Reason: AC-167-03 — Enter 키로 onActivate 호출 (2026-04-28)
+  // Reason: AC-167-03 — the Enter key calls onActivate (2026-04-28)
   it("calls onActivate on Enter key", () => {
     const onActivate = vi.fn();
     mockMruState.recentConnections = [{ connectionId: "c1", lastUsed: now }];
@@ -325,7 +328,7 @@ describe("RecentConnections", () => {
     expect(onActivate).toHaveBeenCalledWith("c1");
   });
 
-  // Reason: AC-167-04 — 최대 5개까지만 표시 (2026-04-28)
+  // Reason: AC-167-04 — show at most 5 entries (2026-04-28)
   it("shows at most 5 recent connections", () => {
     mockMruState.recentConnections = Array.from({ length: 7 }, (_, i) => ({
       connectionId: `c${i}`,
@@ -341,7 +344,7 @@ describe("RecentConnections", () => {
     expect(items).toHaveLength(5);
   });
 
-  // Reason: AC-167-01 — 삭제된 connection은 MRU에서 필터링됨 (2026-04-28)
+  // Reason: AC-167-01 — the MRU filters out deleted connections (2026-04-28)
   it("filters out entries for deleted connections", () => {
     mockMruState.recentConnections = [
       { connectionId: "c1", lastUsed: now },
@@ -357,7 +360,8 @@ describe("RecentConnections", () => {
     expect(items).toHaveLength(1);
   });
 
-  // Reason: AC-167-01 — role=list 접근성 속성 확인 (2026-04-28)
+  // Reason: AC-167-01 — check the role=list accessibility attributes
+  // (2026-04-28)
   it("has role=list container with aria-label", () => {
     mockMruState.recentConnections = [{ connectionId: "c1", lastUsed: now }];
     mockConnState.connections = [makeConnection({ id: "c1" })];
@@ -368,7 +372,8 @@ describe("RecentConnections", () => {
     expect(list).toBeInTheDocument();
   });
 
-  // Reason: AC-167-03 — onActivate가 제공되지 않아도 에러 없이 렌더링 (2026-04-28)
+  // Reason: AC-167-03 — renders without errors even when onActivate is not
+  // provided (2026-04-28)
   it("renders without onActivate prop without errors", () => {
     mockMruState.recentConnections = [{ connectionId: "c1", lastUsed: now }];
     mockConnState.connections = [makeConnection({ id: "c1" })];
@@ -376,18 +381,19 @@ describe("RecentConnections", () => {
     expect(() => render(<RecentConnections />)).not.toThrow();
   });
 
-  // 작성 이유 (2026-05-13, Sprint 290): 사용자가 recent 항목을 개별 삭제할
-  // 수 있어야 한다는 요청. mruStore 의 removeRecentConnection 액션을 호출
-  // 하는 X 버튼이 실제로 wire 되어 있는지 회귀 가드.
-  // 갱신 (2026-05-13, Sprint 296): collapse 책임이 HomePage 의 home-recent
-  // footer wrapper 로 이관됨. RecentConnections 는 더 이상 자체 collapse
-  // chevron 을 갖지 않는다 — 관련 it 들은 HomePage.test.tsx 의 Sprint 296
-  // 회귀 가드로 이동.
-  // 작성 이유 (2026-05-13, Sprint 297): trailing 슬롯의 시간 ↔ X swap
-  // 패턴 회귀 가드. X 가 호버 시에만 등장하며 시간 텍스트와 같은 슬롯을
-  // 점유하므로, 시간 정보는 hover state 와 무관하게 row 의 aria-label
-  // 로 보존되어야 한다. X 버튼은 DOM 에 늘 존재해야 (opacity 토글 only)
-  // 키보드 사용자도 :focus-visible 로 도달 가능.
+  // Reason (2026-05-13): user request to remove recent entries one by one.
+  // Regression guard that the X button calling the mruStore
+  // removeRecentConnection action is actually wired.
+  // Updated (2026-05-13): the collapse responsibility moved to HomePage's
+  // home-recent footer wrapper. RecentConnections no longer has its own
+  // collapse chevron — the related cases moved to the regression guards in
+  // HomePage.test.tsx (#2440 later removed that footer and those cases).
+  // Reason (2026-05-13): regression guard for the time ↔ X swap pattern in
+  // the trailing slot. The X appears on hover and occupies the same slot as
+  // the time text, so the time must be preserved in the row's aria-label
+  // regardless of hover state. The X button must always be in the DOM
+  // (opacity toggle only) so keyboard users can also reach it via
+  // :focus-visible.
   describe("Sprint 297 — trailing slot swap (시간 ↔ X)", () => {
     it("row 의 aria-label 에 relative time 이 포함되어 정보 손실 없음", () => {
       mockMruState.recentConnections = [
@@ -411,8 +417,8 @@ describe("RecentConnections", () => {
       mockConnState.connections = [makeConnection({ id: "c1", name: "Q DB" })];
 
       render(<RecentConnections />);
-      // 호버 이벤트 발사 없이도 X 버튼이 query 가능해야 한다 — opacity 만
-      // 토글되고 mount 는 항상.
+      // The X button must be queryable without firing a hover event — only
+      // the opacity toggles; it is always mounted.
       expect(
         screen.getByRole("button", {
           name: /Remove Q DB from recent connections/,
@@ -451,12 +457,14 @@ describe("RecentConnections", () => {
     });
   });
 
-  // 작성 이유 (2026-09-05, #2457): `최근` 이 footer 에서 rail view 로 옮겨진
-  // 뒤에도 행 activate 는 `onActivate`(store side) 만 태우고 workspace 창을
-  // 열지 않았다. `전체`·그룹 뷰는 ConnectionList 의 activate wrap 이
-  // openWorkspaceWindow 를 태우니 같은 조작이 창을 열었다. 사용자가 본 증상
-  // 그대로를 최근 행 둘레에서 lock 한다 — 더블클릭과 Enter 각각, IPC 는
-  // 1회(이중 발화 회귀도 같이 잠근다)와 store side 콜백까지.
+  // Reason (2026-09-05, #2457): even after Recent moved from the footer to a
+  // rail view, activating a row fired only `onActivate` (store side) and
+  // never opened the workspace window. In the All and group views,
+  // ConnectionList's activate wrap fires openWorkspaceWindow, so the same
+  // action opened the window there. These cases lock the exact symptom the
+  // user saw, around the Recent rows — double-click and Enter each, with one
+  // IPC call (which also locks against a double-fire regression) plus the
+  // store-side callback.
   describe("#2457 — 최근 행 activate 가 workspace 창을 연다", () => {
     beforeEach(() => {
       openWorkspaceWindowMock.mockClear();

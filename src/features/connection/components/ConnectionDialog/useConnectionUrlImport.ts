@@ -8,9 +8,9 @@ import {
   unreflectedTlsParam,
 } from "../../model";
 
-// Sprint 276 — URL parser 가 인식한 scheme 의 DBMS 가 아직 wire-up 되지
-// 않았을 때 사용자에게 보여줄 거부 메시지. Sprint 447 이후 profile
-// connection support 와 동기화한다.
+// Rejection message shown to the user when the URL parser recognises a scheme
+// whose DBMS is not wired up yet. The supported list follows the profile
+// connection support.
 const unsupportedDbTypeMessage = (dbType: DatabaseType): string => {
   const supportedLabels = dataSourceProfiles
     .getConnectionSupportedDatabaseTypes()
@@ -20,20 +20,20 @@ const unsupportedDbTypeMessage = (dbType: DatabaseType): string => {
 };
 
 /**
- * Sprint 213 (post-209 P6) — URL parse + form-mode host-paste detection +
- * host:port blur split extracted from `ConnectionDialog.tsx`. Owns:
+ * URL parse + form-mode host-paste detection + host:port blur split
+ * extracted from `ConnectionDialog.tsx`. Owns:
  *
  *   - `urlValue` / `urlError` (URL-mode input + parse failure message).
- *   - `detectedScheme` (Sprint 178 form-mode advisory affordance).
+ *   - `detectedScheme` (form-mode advisory affordance).
  *   - `parseAndApply` — URL-mode `Parse & Continue` orchestration: try
  *     `parseConnectionUrl`, fall back to a file path when the currently
  *     selected DBMS is file-backed. Sets `urlError` on failure.
- *   - `handleHostPaste` — Sprint 178 AC-178-01: detect a recognised URL
+ *   - `handleHostPaste` — AC-178-01: detect a recognised URL
  *     scheme pasted into `#conn-host`, parse, prevent the literal paste
  *     from landing in the field, and merge the parsed result via the
  *     draft hook's `applyParsedConnection`. Malformed URLs fail silently
  *     per AC-178-04.
- *   - `handleHostBlur` — Sprint 178 AC-178-03: split a single-`:`-then-
+ *   - `handleHostBlur` — AC-178-03: split a single-`:`-then-
  *     digits suffix into the port. Bracketed IPv6 / multi-colon IPv6 /
  *     non-digit ports all unchanged.
  *
@@ -123,7 +123,7 @@ export function useConnectionUrlImport({
 }: UseConnectionUrlImportArgs): UseConnectionUrlImportReturn {
   const [urlValue, setUrlValue] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
-  // Sprint 178 (Postel's Law): when the form-mode host paste is recognised
+  // Postel's Law: when the form-mode host paste is recognised
   // as a connection URL, we render a calm inline note next to the host
   // field announcing what was detected. The note is non-modal, advisory,
   // never role="alert"/"status" — that contract is enforced by AC-178-04
@@ -134,9 +134,9 @@ export function useConnectionUrlImport({
   const [tlsNotice, setTlsNotice] = useState<string | null>(null);
 
   const parseAndApply = (): boolean => {
-    // Sprint 138 — try URL parse first; if a file-backed DBMS is currently
-    // selected or the URL doesn't look like a recognised scheme, fall back to
-    // treating the input as that DBMS' local file path.
+    // Try URL parse first; when that fails while a file-backed DBMS is
+    // selected, fall back to treating the input as that DBMS' local file
+    // path.
     const parsed =
       parseConnectionUrl(urlValue) ??
       (dbType === "sqlite" || dbType === "duckdb"
@@ -148,9 +148,10 @@ export function useConnectionUrlImport({
       );
       return false;
     }
-    // Sprint 276 — parser 가 인식한 DBMS 가 아직 wire-up 되지 않았다면
-    // 명시적으로 거부. URL 모드는 의도된 사용자 액션이므로 silent 가 아니라
-    // urlError 로 알린다 (form-mode paste 는 AC-178-04 에 따라 silent).
+    // If the parser recognised a DBMS that is not wired up yet, reject it
+    // explicitly. URL mode is a deliberate user action, so it reports through
+    // `urlError` instead of staying silent (form-mode paste stays silent per
+    // AC-178-04).
     if (
       parsed.dbType &&
       !dataSourceProfiles.isConnectionSupportedDatabaseType(parsed.dbType)
@@ -180,10 +181,10 @@ export function useConnectionUrlImport({
       // behaviour. No alert region added.
       return;
     }
-    // Sprint 276 — parser 가 unsupported DBMS scheme 을 인식한 경우. AC-178-04
-    // 의 silent 룰을 따라 form 을 건드리지 않고 paste 만 흘려보낸다 (사용자가
-    // 직접 host 에 텍스트가 들어가는 걸 보면 인식 자체가 안 됐다고 자연스레
-    // 깨닫는다). URL 모드 (Parse & Continue) 에서는 명시 거부.
+    // The parser recognised an unsupported DBMS scheme. Following the
+    // AC-178-04 silent rule, leave the form alone and let the paste through
+    // (seeing the raw text land in the host field tells the user the URL was
+    // not recognised). URL mode (Parse & Continue) rejects it explicitly.
     if (
       parsed.dbType &&
       !dataSourceProfiles.isConnectionSupportedDatabaseType(parsed.dbType)
