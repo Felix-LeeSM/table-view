@@ -4,9 +4,9 @@
 // `foo` within 100ms after a DDL, `clearForConnection(connId)` must empty
 // **every** cache slot of that conn (databases / schemas / tables / views /
 // functions / postgresExtensions / sqliteCapabilities / tableColumnsCache /
-// tableIndexesCache / tableConstraintsCache / triggers) in one go to
-// guarantee a wide drop. This file re-pins the existing behavior in the
-// contract terms AC-360-01 / AC-360-05.
+// tableIndexesCache / tableConstraintsCache / triggers /
+// fileAnalyticsSources) in one go to guarantee a wide drop. This file
+// re-pins the existing behavior in the contract terms AC-360-01 / AC-360-05.
 //
 // SOT consolidation (2026-07-22, issue #1631 test-audit): the remaining
 // clearForConnection cases scattered across schemaStore.test.ts

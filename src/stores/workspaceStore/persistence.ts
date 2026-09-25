@@ -1,6 +1,6 @@
 /**
  * `workspaceStore` persistence helpers — ADR 0027 + state-management-strategy
- * W1 dual-write.
+ * W1 SQLite-only.
  *
  *   - `STORAGE_KEY = "table-view-workspaces"` — **read-only**.
  *     The fossil key remains for the legacy LS read in

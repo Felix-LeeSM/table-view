@@ -23,8 +23,7 @@ export interface SafeModeState {
  * The `view-table.safeMode` LS key is no longer written. The constant
  * survives so existing tests that explicitly clear / inspect it (e.g.
  * `SafeModeToggle.test.tsx`) compile, but the runtime path never touches
- * it. The state-management-strategy Phase 6 cleanup removes the constant
- * + any remaining read sites.
+ * it.
  */
 export const SAFE_MODE_STORAGE_KEY = "view-table.safeMode";
 

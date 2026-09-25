@@ -1,5 +1,5 @@
 /**
- * `persistWorkspaces` — state-management-strategy W1 dual-write.
+ * `persistWorkspaces` — state-management-strategy W1 SQLite-only.
  *
  * Written 2026-05-16.
  *

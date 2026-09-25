@@ -76,8 +76,7 @@ interface QueryHistoryState {
    * state-management-strategy F.5 — thin-wrapper field. History rows written
    * by `addOptimisticEntry` (optimistic prepend, then the committed row).
    * The `useQueryHistory` hook keeps its own `list_history` rows and does
-   * not write this slot. The store itself only holds the slot so consumers
-   * that still read off zustand can subscribe to it.
+   * not write this slot. The store itself only holds the slot.
    */
   recentVisible: HistoryListRow[];
 
