@@ -1,9 +1,9 @@
-// Sprint 321 (2026-05-15) — Slice F.1: nested expansion utility.
+// Phase 28 Slice F.1 (2026-05-15): nested expansion utility.
 //
-// 작성 이유: sentinel cell expand popover 의 단위 함수가 (a) 1-depth
-// 만 추출하고 (b) nested-of-nested 는 `isNested === true` 로 표시
-// 하며 (c) BSON canonical singleton (`$oid` 등) 은 composite 으로
-// 취급하지 않고 (d) scalar 는 null 반환 하는지 회귀 가드.
+// Reason: regression guard that the unit function behind the sentinel cell
+// expand popover (a) extracts one level only, (b) marks nested-of-nested
+// entries with `isNested === true`, (c) does not treat BSON canonical
+// singletons (`$oid` etc.) as composites, and (d) returns null for scalars.
 
 import { describe, expect, it } from "vitest";
 import { getNestedExpansion } from "./nestedExpansion";

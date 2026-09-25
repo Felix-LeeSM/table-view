@@ -1,21 +1,24 @@
 /**
- * 작성 2026-05-16 (Phase 4 sprint-368, AC-368-05)
+ * Written 2026-05-16 (AC-368-05)
  *
- * 사유: Q12 FOUC 0 invariant — boot 시 LS `table-view-theme` cache 가
- * SQLite truth 와 일시 불일치할 수 있다 (e.g. 다른 window 에서 변경 후 본
- * window 가 아직 listener 통해 못 받음). 첫 paint 는 반드시 LS cache 값으로
- * 즉시 적용돼야 visible flash 가 없다. SQLite truth 는 snapshot IPC 응답 후
- * silent 갱신.
+ * Reason: state-management-strategy Q12 FOUC-0 invariant — at boot the LS
+ * `table-view-theme` cache can briefly disagree with the SQLite truth (e.g.
+ * another window changed it and this window has not received it through the
+ * listener yet). The first paint must apply the LS cache value immediately so
+ * no flash is visible. The SQLite truth updates silently after the snapshot
+ * IPC responds.
  *
- * 본 jsdom 테스트는 다음 시퀀스를 검증한다:
- *   1. LS 에 `{themeId:"github", mode:"light"}` 가 적힘 (이전 boot 의 마지막 success)
- *   2. `bootTheme()` 호출 직후 (sync) document.documentElement 의 `data-mode`
- *      가 "light" 로 설정됨 — IPC 응답 미수신
- *   3. 향후 sprint-367 snapshot 이 `mode:"dark"` 를 가져오면 silent 갱신
- *      (시뮬은 `useThemeStore.setState` 호출)
+ * This jsdom test checks the following sequence:
+ *   1. LS holds `{themeId:"github", mode:"light"}` (the previous boot's last
+ *      success)
+ *   2. Right after `bootTheme()` (sync), document.documentElement's `data-mode`
+ *      is "light" — no IPC response received yet
+ *   3. When the boot snapshot later brings `mode:"dark"`, it updates silently
+ *      (simulated with a `useThemeStore.setState` call)
  *
- * 회귀 시: LS read 사이트가 사라져 첫 paint 가 default (system) 으로 시작 →
- * dark 모드 사용자 화면이 light flash → 즉시 dark 로 바뀜.
+ * On regression: the LS read site disappears, so the first paint starts from
+ * the default (system) → a dark-mode user's screen flashes light → then turns
+ * dark right away.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";

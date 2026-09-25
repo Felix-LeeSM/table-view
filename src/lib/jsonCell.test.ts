@@ -1,8 +1,8 @@
-// Sprint 238 — AC-238-07: JSON / object cell 1줄 표현 + circular/BigInt 가드.
-// 작성일 2026-05-10 / TDD slice #2.
-// Sprint 261 (ADR 0026) 2026-05-11 — BigInt / Decimal 셀이 digit string 으로
-// 직렬화되도록 replacer 보강. "unserializable" 컨트랙트는 circular reference /
-// undefined / Symbol 에만 유지.
+// AC-238-07: one-line rendering of JSON / object cells + circular/BigInt guard.
+// Written 2026-05-10.
+// ADR 0026 (2026-05-11) — the replacer now serializes BigInt / Decimal cells
+// as digit strings. The "unserializable" contract remains only for circular
+// references / undefined / Symbol.
 
 import Decimal from "decimal.js";
 import { describe, expect, it } from "vitest";
@@ -34,8 +34,8 @@ describe("safeStringifyCell", () => {
     expect(safeStringifyCell(obj)).toBe('"[unserializable]"');
   });
 
-  // Sprint 261 (ADR 0026) — BigInt cells now serialize as a quoted digit
-  // string so CSV / JSON exports and history snapshots preserve precision.
+  // ADR 0026 — BigInt cells now serialize as a quoted digit string so
+  // CSV / JSON exports and history snapshots preserve precision.
   it("serializes BigInt as a quoted digit string", () => {
     expect(safeStringifyCell(BigInt("9007199254740993"))).toBe(
       '"9007199254740993"',
@@ -48,7 +48,7 @@ describe("safeStringifyCell", () => {
     );
   });
 
-  // Sprint 261 (ADR 0026) — Decimal cells round-trip via `.toString()`.
+  // ADR 0026 — Decimal cells round-trip via `.toString()`.
   it("serializes Decimal as a quoted base-10 string", () => {
     expect(safeStringifyCell(new Decimal("123456789.12345678901234"))).toBe(
       '"123456789.12345678901234"',
@@ -70,15 +70,15 @@ describe("safeStringifyCell", () => {
   });
 
   it("drops Symbol values (native JSON.stringify behaviour)", () => {
-    // Symbol 은 JSON.stringify 가 throw 하지 않고 undefined 로 처리.
-    // top-level Symbol → undefined; object 내 Symbol property → 무시.
+    // JSON.stringify does not throw on a Symbol; it treats it as undefined.
+    // top-level Symbol → undefined; a Symbol property in an object → dropped.
     expect(safeStringifyCell({ a: 1, b: Symbol("x") })).toBe('{"a":1}');
   });
 
-  // Sprint 305 — indent 옵션. DataGrid tooltip / Cell detail dialog 가
-  // pretty-print 한 multi-line JSON 으로 렌더하므로 두 번째 인자가 native
-  // `JSON.stringify` 의 indent 의미를 그대로 가져야 한다 (BigInt/Decimal
-  // 셀이 들어와도 throw 없이).
+  // indent option. The DataGrid tooltip / Cell detail dialog render
+  // pretty-printed multi-line JSON, so the second argument must keep the
+  // native `JSON.stringify` indent meaning (without throwing on BigInt/Decimal
+  // cells).
   it("honours the indent argument with BigInt-safe replacer", () => {
     expect(safeStringifyCell({ id: BigInt("123"), name: "x" }, 2)).toBe(
       ["{", '  "id": "123",', '  "name": "x"', "}"].join("\n"),

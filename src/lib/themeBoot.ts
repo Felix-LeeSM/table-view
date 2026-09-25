@@ -93,18 +93,19 @@ export function bootTheme(): void {
 }
 
 /**
- * Wave 9.5 회귀 7 (2026-05-17) — backend 가 theme 의 authoritative SOT 다.
- * Tauri 2 의 각 webview 는 별도의 `localStorage` 를 갖기 때문에 launcher 의
- * LS write 가 새로 열리는 workspace 의 LS 에 보이지 않는다. 그래서 새 창의
- * 첫 paint 는 자기 LS 값 (대부분 비어있어서 `DEFAULT_THEME_ID = "slate"`) 으로
- * 떨어지고, snapshot async hydrate 가 뒤늦게 도착해도 사용자가 짧은 slate flash
- * 를 본다.
+ * The backend is the authoritative source of truth for the theme
+ * (2026-05-17). Each Tauri 2 webview has its own `localStorage`, so the
+ * launcher's LS write is not visible in a newly opened workspace's LS. A new
+ * window's first paint therefore falls back to its own LS value (usually
+ * empty, so `DEFAULT_THEME_ID = "slate"`), and although the async snapshot
+ * hydrate arrives later, the user sees a short slate flash.
  *
- * 본 함수는 backend `get_setting("theme")` 으로 SQLite truth 를 읽고
- * 1차 LS-fast-paint 와 다르면 DOM + LS 를 갱신한다. main.tsx 의 boot 가
- * `bootTheme()` (LS fast paint) 직후 await 하여 새 webview 의 첫 render
- * 전에 SQLite 값을 적용. Tauri 가 없는 환경 (vitest jsdom) 에서는 IPC 가
- * throw → null 로 graceful fallback.
+ * This function reads the SQLite truth through backend `get_setting("theme")`
+ * and updates the DOM + LS when it differs from the first LS fast paint. The
+ * boot in main.tsx awaits it after `bootTheme()` (LS fast paint), so the
+ * SQLite value applies before the new webview's first render. Without Tauri
+ * (vitest jsdom) the IPC throws and the function returns early, a graceful
+ * fallback that leaves the fast-paint values in place.
  */
 export async function reconcileThemeFromBackend(): Promise<void> {
   let raw: string | null;

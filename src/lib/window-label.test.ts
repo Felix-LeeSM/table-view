@@ -1,18 +1,19 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the one `${string}` is inside a test name and spells a TypeScript template-literal type, not an interpolation.
 
-// 작성 2026-05-16 (Phase 3 sprint-361)
+// Written 2026-05-16
 //
-// 사유: sprint-361 의 per-conn 윈도우 라벨 (`workspace-{connection_id}`)
-// 마이그를 위한 `parseWorkspaceLabel(label)` 헬퍼의 round-trip 계약 잠금.
-// 본 helper 는 sprint-365 (cross-window event routing) 및 sprint-366
-// (`useCurrentWindowConnectionId`) 의 의존성으로, label string 에서
-// connection_id 를 안전하게 derive 하는 책임을 가진다.
+// Reason: locks the round-trip contract of the `parseWorkspaceLabel(label)`
+// helper for the migration to per-connection window labels
+// (`workspace-{connection_id}`). Callers such as
+// `useCurrentWindowConnectionId` and the workspace store's cross-window IPC
+// bridge attach depend on it to derive connection_id safely from a label
+// string.
 //
-// AC-361-04 라운드트립:
+// AC-361-04 round-trip:
 //   - `parseWorkspaceLabel("workspace-abc-123")` → `"abc-123"`
 //   - `parseWorkspaceLabel("launcher")` → `null`
 //
-// AC-361-05 KnownWindowLabel exhaustiveness 도 본 파일에서 type-check 한다.
+// This file also type-checks AC-361-05 KnownWindowLabel exhaustiveness.
 import { describe, expect, it } from "vitest";
 import {
   formatWorkspaceLabel,
@@ -34,9 +35,11 @@ describe("parseWorkspaceLabel — AC-361-04 round-trip", () => {
   });
 
   it("returns null for the legacy single 'workspace' label", () => {
-    // 사유: legacy single-workspace label 은 sprint-361 이후 deprecated.
-    // 패턴 매치에 prefix 만 검사하지 않고 `workspace-` 접두 (separator 포함)
-    // 를 요구해 빈 conn_id (=`workspace`) 와 정상 conn_id 가 충돌하지 않게.
+    // Reason: the legacy single-workspace label is deprecated since the
+    // move to per-connection labels. The match requires the full
+    // `workspace-` prefix, separator included, rather than a bare prefix
+    // check, so an empty conn_id (=`workspace`) cannot collide with a real
+    // conn_id.
     expect(parseWorkspaceLabel("workspace")).toBeNull();
   });
 
@@ -59,19 +62,20 @@ describe("parseWorkspaceLabel — AC-361-04 round-trip", () => {
 
 describe("KnownWindowLabel — AC-361-05 type exhaustiveness", () => {
   it("narrows to launcher | workspace-${string} in a switch", () => {
-    // 사유: union exhaustiveness 는 type-check 시점의 보증.
-    // `never` branch 가 컴파일 시 잡혀야 (default arm 도달 불가) 한다.
-    // 본 테스트는 type narrow 가 동작함을 runtime assertion 으로 잠근다.
+    // Reason: union exhaustiveness is a type-check-time guarantee. The
+    // `never` branch must be caught at compile time (the default arm is
+    // unreachable). This test locks the working type narrowing with a
+    // runtime assertion.
     function classify(label: KnownWindowLabel): "launcher" | "workspace" {
       switch (label) {
         case "launcher":
           return "launcher";
         default: {
-          // narrowed to `workspace-${string}` 여기서 conn id 추출.
+          // narrowed to `workspace-${string}`; extract the conn id here.
           const id = parseWorkspaceLabel(label);
           if (id === null) {
-            // unreachable — type system 이 launcher 만 빼고 모두
-            // `workspace-${string}` 로 좁혀줘야 함.
+            // unreachable — the type system must narrow everything except
+            // launcher to `workspace-${string}`.
             throw new Error("exhaustiveness check broken");
           }
           return "workspace";

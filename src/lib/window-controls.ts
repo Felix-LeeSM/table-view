@@ -103,22 +103,23 @@ export async function closeWindow(label: WindowLabel): Promise<void> {
 }
 
 /**
- * Wave 9.5 (2026-05-16) — destroy the current window via backend IPC.
+ * Destroy the current window via backend IPC (2026-05-16).
  *
  * **Why `invoke("workspace_close")` and not `getCurrentWebviewWindow().destroy()`?**
- * 회귀 보고 후 진단 결과: JS-side `WebviewWindow.destroy()` 가 일부 환경에서
- * silent no-op 으로 떨어진다 (Tauri 2.10.1 macOS 관찰). frontend test 는
- * `vi.mock` 으로 binding layer 를 stub 하기 때문에 이 silent failure 를
- * 잡지 못한다 — jsdom 에는 Tauri webview API 가 없고, mock 은 항상 resolve
- * 한다.
+ * Diagnosing a regression report showed that JS-side `WebviewWindow.destroy()`
+ * silently no-ops in some environments (observed on Tauri 2.10.1, macOS).
+ * Frontend tests stub the binding layer with `vi.mock`, so they cannot catch
+ * this silent failure — jsdom has no Tauri webview API, and the mock always
+ * resolves.
  *
- * Backend `workspace_close` (launcher.rs) 는 `tauri::WebviewWindow` 매개변수로
- * 호출 webview 의 핸들을 자동 inject 받아 `Window::destroy()` 를 직접 호출한다.
- * JS↔Rust binding 의 모든 quirk 가 우회되고, `tracing::info!` 로 호출 흔적이
- * 남아 silent failure 도 디버그 가능하다. backend 의 `Window::destroy()` 는
- * close-requested 라이프사이클을 우회 + `WindowEvent::Destroyed` 만 발사 →
- * `handle_workspace_destroyed_safety_net` 의 launcher show + focus 로직도 정상
- * dispatch.
+ * Backend `workspace_close` (launcher.rs) gets the calling webview's handle
+ * injected automatically through its `tauri::WebviewWindow` parameter and
+ * calls `Window::destroy()` directly. That bypasses every quirk of the JS↔Rust
+ * binding, and `tracing::info!` leaves a trace of the call, so a silent
+ * failure can be debugged too. The backend `Window::destroy()` skips the
+ * close-requested lifecycle and fires only `WindowEvent::Destroyed`, so the
+ * launcher show + focus logic in `handle_workspace_destroyed_safety_net` still
+ * dispatches normally.
  */
 export async function destroyCurrentWindow(): Promise<void> {
   try {

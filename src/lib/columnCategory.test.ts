@@ -1,6 +1,6 @@
-// Sprint 238 / 258 — DataGrid cell layout 정책 lock.
-// AC-258-03: column 별 default rem * rootFontSize → px (컨테이너 fit 폐기).
-// 작성일 2026-05-10, 갱신 2026-05-11 (sprint-258 (c) 산식 단순화).
+// Locks the DataGrid cell layout policy.
+// AC-258-03: per-column default rem * rootFontSize → px (no container fit).
+// Written 2026-05-10, updated 2026-05-11 (formula simplified).
 
 import { describe, expect, it } from "vitest";
 
@@ -12,7 +12,7 @@ import {
 } from "./columnCategory";
 
 describe("getDefaultRem", () => {
-  // AC-238-03 의 rem 테이블 + sprint-258 uuid 추가 (18rem — 36자 고정).
+  // The AC-238-03 rem table, plus uuid (18rem — a fixed 36 characters).
   it.each<[ColumnCategory, number]>([
     ["bool", 4],
     ["int", 6],
@@ -36,7 +36,7 @@ describe("computeInitialWidths (AC-258-03 — default rem * rootFontSize)", () =
       { name: "label", category: "text" },
     ];
     const widths = computeInitialWidths(cols, 16);
-    // bool 4rem = 64px, text 15rem = 240px. container 폭과 무관.
+    // bool 4rem = 64px, text 15rem = 240px, regardless of container width.
     expect(widths).toEqual({ active: 64, label: 240 });
   });
 
@@ -44,7 +44,7 @@ describe("computeInitialWidths (AC-258-03 — default rem * rootFontSize)", () =
     const cols: Array<{ name: string; category: ColumnCategory }> = [
       { name: "active", category: "bool" },
     ];
-    // 18px 기준 font: bool 4rem = 72px.
+    // With an 18px root font: bool 4rem = 72px.
     expect(computeInitialWidths(cols, 18)).toEqual({ active: 72 });
   });
 
@@ -54,7 +54,7 @@ describe("computeInitialWidths (AC-258-03 — default rem * rootFontSize)", () =
 });
 
 describe("getTextAlign", () => {
-  // AC-238-08: int/float 우편향, bool 가운데, 그 외 좌편향.
+  // AC-238-08: int/float align right, bool centered, the rest left.
   it.each<[ColumnCategory, "left" | "center" | "right"]>([
     ["int", "right"],
     ["float", "right"],

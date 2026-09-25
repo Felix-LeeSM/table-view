@@ -1,21 +1,24 @@
-// 2026-05-14 — ParadigmEditAdapter 단위 테스트. RDB / Document
-// adapter 가 각자 paradigm 의 preview 생성 + 위험 분석 + execute
-// closure 를 캡슐화하는지 확인. hook (useDataGridPreviewCommit) 의
-// 통합 테스트와 분리해서 adapter 자체의 표면만 verify.
+// 2026-05-14 — ParadigmEditAdapter unit tests. Checks that the RDB /
+// Document adapters each encapsulate their paradigm's preview generation +
+// risk analysis + execute closure. Kept apart from the hook's
+// (useDataGridPreviewCommit) integration tests to verify only the adapter's
+// own surface.
 //
-// 시나리오 묶음:
+// Scenario groups:
 //   - rdbEditAdapter:
-//     1. preparePreview happy path → session.items 에 risk:"safe"
-//     2. preparePreview destructive 분석 → items 에 risk:"destructive"
-//     3. preparePreview coerceError → coerceErrors map 채워짐
-//     4. preparePreview 비어 있음 → session: null
-//     5. execute happy → ok:true, executeQueryBatch 단일 호출
-//     6. execute failure + "statement K of N failed" → failedIndex / failedKey 추출
+//     1. preparePreview happy path → an rdb session with the generated UPDATE
+//     2. preparePreview with a danger-blocking gate → a bounded DELETE WHERE
+//        stays risk:"safe"
+//     3. preparePreview coerceError → coerceErrors map populated
+//     4. preparePreview with nothing pending → session: null
+//     5. execute happy → ok:true, a single executeQueryBatch call
+//     6. execute failure + "statement K of N failed" → failedIndex /
+//        failedKey extracted
 //   - documentEditAdapter:
-//     1. preparePreview happy path → kind:"document", mqlPreview 첨부
-//     2. preparePreview 빈 commands → session: null
-//     3. execute → 명령 N개 순차 dispatch
-//     4. execute failure → ok:false (failedIndex 미정)
+//     1. preparePreview happy path → kind:"document", mqlPreview attached
+//     2. preparePreview with no commands → session: null
+//     3. execute → the batch goes out in one bulkWriteDocuments call
+//     4. execute failure → ok:false (failedIndex undefined)
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SafeModeGate } from "@/hooks/useSafeModeGate";
 import { setupTauriMock } from "@/test-utils/tauriMock";
@@ -44,9 +47,9 @@ vi.mock("@/lib/runtime/toast", () => ({
 const insertDocument = vi.fn();
 const updateDocument = vi.fn();
 const deleteDocument = vi.fn();
-// Sprint 326 — Slice I.1: commit path 가 bulkWriteDocuments 로 통합.
-// 기존 insert/update/deleteDocument mock 은 호출되지 않지만 type-mock
-// 호환을 위해 유지.
+// The commit path goes through bulkWriteDocuments. The older
+// insert/update/deleteDocument mocks are not called but stay for
+// type-mock compatibility.
 const bulkWriteDocuments = vi.fn();
 beforeEach(() => {
   setupTauriMock({
@@ -308,7 +311,7 @@ describe("rdbEditAdapter.preparePreview", () => {
       data: makeRdbData(),
       schema: "public",
       table: "users",
-      // id 컬럼 (integer) 에 "not-a-number" — coerce 실패
+      // "not-a-number" in the id column (integer) — coercion fails
       pendingEdits: new Map([["0-0", "not-a-number"]]),
       pendingNewRows: [],
       pendingDeletedRowKeys: new Set(),
@@ -356,8 +359,8 @@ describe("rdbEditAdapter.preparePreview", () => {
       pendingDeletedRowKeys: new Set(["row-1-0"]),
     });
     expect(session).not.toBeNull();
-    // DELETE WHERE pk = "warn" 으로 분류되는데, 우리 gate 는 danger 만 block.
-    // bounded DELETE WHERE 는 severity:"warn" 이고 gate 가 allow → safe.
+    // DELETE WHERE pk classifies as "warn", and this gate blocks only danger.
+    // A bounded DELETE WHERE is severity:"warn" and the gate allows it → safe.
     expect(session!.items[0]!.risk).toBe("safe");
   });
 
@@ -454,7 +457,8 @@ describe("documentEditAdapter.preparePreview + execute", () => {
       expect(session.mqlPreview.commands).toHaveLength(1);
       expect(session.mqlPreview.commands[0]!.kind).toBe("updateOne");
       expect(session.items).toHaveLength(1);
-      // Document grid 의 Safe Mode 는 현재 항상 "safe" (Phase 28+ 에서 확장).
+      // Document grid Safe Mode is currently always "safe" (to be extended
+      // in Phase 28+).
       expect(session.items[0]!.risk).toBe("safe");
     } else {
       throw new Error("session must be a document preview");
@@ -539,7 +543,7 @@ describe("documentEditAdapter.preparePreview + execute", () => {
     });
     const result = await session!.execute();
     expect(result.ok).toBe(true);
-    // Single bulkWrite IPC for the whole batch (Sprint 326 I.1).
+    // Single bulkWrite IPC for the whole batch.
     expect(bulkWriteDocuments).toHaveBeenCalledTimes(1);
     expect(toastSuccess).toHaveBeenCalledWith("1 document change committed.");
     expect(history.recordSuccess).toHaveBeenCalledTimes(1);
