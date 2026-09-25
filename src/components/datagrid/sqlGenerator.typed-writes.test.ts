@@ -4,9 +4,9 @@ import { type CoerceError, generateSql } from "./sqlGenerator";
 import { BASE_DATA, TYPED_DATA } from "./sqlGenerator.fixtures";
 
 // ---------------------------------------------------------------------------
-// Sprint 75 — generateSql integration: UPDATE emits type-aware literals and
-// exposes coercion failures via onCoerceError. Valid edits in the same batch
-// are unaffected by sibling failures.
+// generateSql integration: UPDATE emits type-aware literals and exposes
+// coercion failures via onCoerceError. Valid edits in the same batch are
+// unaffected by sibling failures.
 // ---------------------------------------------------------------------------
 
 describe("generateSql — Sprint 75 type-aware UPDATE literals", () => {
@@ -140,12 +140,12 @@ describe("generateSql — Sprint 75 type-aware UPDATE literals", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Sprint 75 attempt 2 — INSERT coercion. Closes the gap where new-row cells
-// bypassed `coerceToSqlLiteral` and emitted `'42'` on integer columns or
-// `''` on integer columns instead of `42` / `NULL`. Mirrors the UPDATE-side
-// coercion contract: empty string on non-textual → NULL, typed strings →
-// unquoted numbers / TRUE/FALSE / quoted dates, and coercion failure skips
-// the INSERT entirely with a per-cell error report.
+// INSERT coercion. Closes the gap where new-row cells bypassed
+// `coerceToSqlLiteral` and emitted `'42'` on integer columns or `''` on
+// integer columns instead of `42` / `NULL`. Mirrors the UPDATE-side coercion
+// contract: empty string on non-textual → NULL, typed strings → unquoted
+// numbers / TRUE/FALSE / quoted dates, and coercion failure skips the INSERT
+// entirely with a per-cell error report.
 // ---------------------------------------------------------------------------
 
 describe("generateSql — Sprint 75 attempt 2 INSERT coercion", () => {
@@ -317,10 +317,10 @@ describe("generateSql — Sprint 75 attempt 2 INSERT coercion", () => {
     expect(keys).toEqual(["new-0-1", "new-0-2"]);
   });
 
-  // Sprint 306 (2026-05-14) — BigInt freeze 회귀 가드. normalizeNewRowCell
-  // 의 typeof === "object" 분기가 raw JSON.stringify 였을 때 nested BigInt
-  // 입력에서 throw. 또한 buildWhereClause 가 Decimal 을 만나면 [object
-  // Object] 로 떨어졌던 sprint-305 회귀.
+  // BigInt freeze regression guard. When `normalizeNewRowCell`'s
+  // typeof === "object" branch was raw JSON.stringify it threw on nested
+  // BigInt input. Also guards the regression where `buildWhereClause` fell
+  // through to [object Object] when it met a Decimal.
   it("nested BigInt 가 들어있는 new-row object 도 throw 없이 INSERT", () => {
     const DATA: TableData = {
       ...BASE_DATA,

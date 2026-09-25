@@ -80,10 +80,10 @@ function makeConn(
   };
 }
 
-// Sprint 263 — `tables` / `views` / `functions` are nested by `(connId, db,
-// schema)`. The test helper still accepts the legacy flat key shape
-// (`"connId:schema"`) and translates internally to nested form so callsites
-// stay terse, defaulting the db dimension to `db1`.
+// `tables` / `views` / `functions` are nested by `(connId, db, schema)`. The
+// test helper still accepts the legacy flat key shape (`"connId:schema"`) and
+// translates internally to nested form so callsites stay terse, defaulting the
+// db dimension to `db1`.
 function expandFlat<V>(
   flat: Record<string, V[]>,
   db: string,

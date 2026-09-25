@@ -1,11 +1,9 @@
-// Sprint 218 — `dialect` axis split from `QueryTab.test.tsx` (P11
-// step 2). Covers Sprint 82 provider-aware SQL dialect prop (Postgres /
-// MySQL / SQLite mapping, missing-connection / non-RDB StandardSQL
-// fallback, dbType flip) and Sprint 83 Mongo autocomplete + operator
-// highlight wiring (no mongoExtensions on RDB tabs, 2-entry array on
-// document tabs, queryMode-driven identity rebuild, fieldsCache feed,
-// fieldsCache isolation from RDB tabs). Cases are byte-equivalent to
-// the originals — no behaviour change.
+// `dialect` axis split from `QueryTab.test.tsx`. Covers the provider-aware
+// SQL dialect prop (Postgres / MySQL / SQLite mapping, missing-connection /
+// non-RDB StandardSQL fallback, dbType flip) and the Mongo autocomplete +
+// operator highlight wiring (no mongoExtensions on RDB tabs, 2-entry array
+// on document tabs, fieldsCache feed, fieldsCache isolation from RDB tabs).
+// Cases are byte-equivalent to the originals — no behaviour change.
 
 import {
   MySQL,
@@ -64,19 +62,19 @@ beforeEach(() => {
   });
 });
 
-// Sprint 132 — the QueryTab raw-query hook calls `verifyActiveDb` after
-// optimistic `setActiveDb`. The wrapper itself is unit-tested in
+// The QueryTab raw-query hook calls `verifyActiveDb` after optimistic
+// `setActiveDb`. The wrapper itself is unit-tested in
 // `verifyActiveDb.test.ts`; here we mock it so the test can fix the
 // "backend says X" return value per scenario.
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: (...args: unknown[]) => mockVerifyActiveDb(...args),
 }));
 
-// Sprint 139 — QueryTab now routes directly to SqlQueryEditor /
-// MongoQueryEditor based on `tab.paradigm`. Both editors are mocked to a
-// shared DOM testbed (`data-testid="mock-editor"`) so the existing
-// fixtures keep working — the mock records `paradigm` from a synthesised
-// prop so the dialect / mongo / paradigm assertions stay meaningful.
+// QueryTab routes directly to SqlQueryEditor / MongoQueryEditor based on
+// `tab.paradigm`. Both editors are mocked to a shared DOM testbed
+// (`data-testid="mock-editor"`) so the existing fixtures keep working — the
+// mock records `paradigm` from a synthesised prop so the dialect / mongo /
+// paradigm assertions stay meaningful.
 vi.mock("./SqlQueryEditor", async () => {
   const React = await import("react");
   const MockSqlQueryEditor = React.forwardRef<
@@ -222,7 +220,7 @@ describe("QueryTab — dialect", () => {
     resetQueryTabStores();
   });
 
-  // ── Sprint 82: provider-aware SQL dialect prop ──────────────────────────
+  // ── Provider-aware SQL dialect prop ─────────────────────────────────────
 
   // AC-01: Postgres connection → QueryEditor receives the Postgres dialect.
   it("passes the PostgreSQL dialect when the active connection is postgres", () => {
@@ -303,7 +301,7 @@ describe("QueryTab — dialect", () => {
 
   // AC-07: Missing connection (deleted mid-session) → silent StandardSQL
   // fallback. Users see the editor keep working with generic highlighting
-  // instead of an error, matching the existing pre-Sprint-82 contract.
+  // instead of an error, matching the pre-existing contract.
   it("falls back to StandardSQL when the tab's connection is missing from the store", () => {
     // Store is empty — connection was deleted between render cycles.
     useConnectionStore.setState({ connections: [] });
@@ -343,10 +341,10 @@ describe("QueryTab — dialect", () => {
     expect(mockEditorProps.lastDialect).toBe(MySQL);
   });
 
-  // ── Sprint 83: Mongo autocomplete + operator highlight wiring ─────────────
+  // ── Mongo autocomplete + operator highlight wiring ────────────────────────
 
-  // AC-S139-04: Sprint 139 split the editor by paradigm. RDB tabs route
-  // to SqlQueryEditor which does NOT accept mongoExtensions; the mock
+  // AC-S139-04: the editor is split by paradigm. RDB tabs route to
+  // SqlQueryEditor which does NOT accept mongoExtensions; the mock
   // therefore records `lastMongoExtensions === undefined`. Document tabs
   // route to MongoQueryEditor and forward the hook's 2-entry extension
   // array. The earlier "always passes" assertion no longer applies after
@@ -379,12 +377,12 @@ describe("QueryTab — dialect", () => {
     expect(listMongoIndexes).not.toHaveBeenCalled();
   });
 
-  // Sprint 309 — the "queryMode flip rebuilds mongoExtensions" assertion
-  // (AC-10 Sprint 83 era) is intentionally deleted. The Find/Aggregate
-  // toggle is gone and `useMongoAutocomplete` no longer takes a
-  // queryMode argument, so a tab.queryMode change can no longer drive a
-  // memo recompute through this prop. The fieldNames-driven rebuild
-  // below remains the live regression guard for the hook's memo key.
+  // The "queryMode flip rebuilds mongoExtensions" assertion (AC-10) is
+  // intentionally deleted. The Find/Aggregate toggle is gone and
+  // `useMongoAutocomplete` no longer takes a queryMode argument, so a
+  // tab.queryMode change can no longer drive a memo recompute through this
+  // prop. The fieldNames-driven rebuild below remains the live regression
+  // guard for the hook's memo key.
 
   // AC-11: Document-paradigm tabs surface cached field names from the
   // documentStore through the mongoExtensions prop. Populating
@@ -402,7 +400,7 @@ describe("QueryTab — dialect", () => {
     // Populate fieldsCache with the tab's nested (conn, db, collection)
     // path. The memo dep is the whole `fieldsCache` object so the identity
     // change triggers a recompute and produces a new mongoExtensions array.
-    // Sprint 265 — cache lifted from flat colon-keys to nested maps.
+    // The cache was lifted from flat colon-keys to nested maps.
     await act(async () => {
       useDocumentStore.setState({
         fieldsCache: {
@@ -444,9 +442,9 @@ describe("QueryTab — dialect", () => {
 
   // AC-S139-04 regression: RDB tabs route to SqlQueryEditor which never
   // receives mongoExtensions in the first place — fieldsCache mutations
-  // can never bleed into the SQL editor. After the Sprint 139 split this
-  // is structurally enforced (the editor doesn't even accept the prop)
-  // rather than gated behind a `paradigm` check inside the editor.
+  // can never bleed into the SQL editor. After the paradigm split this is
+  // structurally enforced (the editor doesn't even accept the prop) rather
+  // than gated behind a `paradigm` check inside the editor.
   it("does not pull fieldsCache into the SQL editor for RDB tabs", async () => {
     const rdbTab = makeQueryTab();
     useWorkspaceStore.setState(seedWorkspace([rdbTab], "query-1"));

@@ -34,17 +34,19 @@ interface FilterBarProps {
   onFilterModeChange: (mode: FilterMode) => void;
   onRawSqlChange: (sql: string) => void;
   /**
-   * 연결된 DBMS. 연산자 목록이 이 방언의 capability 를 따라간다 (#2430).
-   * 없으면(연결을 아직 못 읽었을 때) 방언 고유 연산자는 안 뜬다.
+   * Connected DBMS. The operator list follows this dialect's
+   * capabilities (#2430). When absent (the connection is not readable
+   * yet), dialect-only operators do not appear.
    */
   dbType?: DatabaseType;
 }
 
 /**
- * 연산자 표기(라벨 · 값 입력 필요 여부)의 SOT. `capability` 가 붙은 줄은 그
- * 이름의 `SqlDialectCapabilities` 플래그가 참인 방언에서만 목록에 뜬다 —
- * 어느 방언이 무엇을 갖는지의 SOT 는 `src/lib/sql/sqlDialectProfile.ts` 이고
- * 여기 복제하지 않는다 (#2430).
+ * SOT for operator presentation (label, and whether a value input is
+ * needed). A row carrying `capability` appears in the list only for
+ * dialects whose `SqlDialectCapabilities` flag of that name is true —
+ * the SOT for which dialect has what is
+ * `src/lib/sql/sqlDialectProfile.ts` and is not duplicated here (#2430).
  */
 const OPERATORS: {
   value: FilterOperator;
@@ -81,11 +83,12 @@ export default function FilterBar({
   const [rawSqlError, setRawSqlError] = useState<string | null>(null);
   const rawSqlErrorId = useId();
 
-  // #2430 — 고를 수 있는 목록을 방언으로 좁힌다. `opInfo` 는 전체 `OPERATORS`
-  // 를 계속 보므로, 이미 걸려 있던 조건은 방언이 그 연산자를 잃어도 값 입력
-  // 여부를 그대로 찾는다. 트리거에 뜨는 표기는 여기서 안 나온다 — `SelectValue`
-  // 가 마운트된 `SelectItem` 에서 읽으므로 아래 `SelectContent` 가 목록 밖
-  // 항목을 따로 그린다.
+  // #2430 — narrows the choosable list by dialect. `opInfo` keeps
+  // looking at the whole `OPERATORS`, so an already-set condition still
+  // resolves whether it needs a value input even when the dialect loses
+  // that operator. The label shown on the trigger does not come from
+  // here — `SelectValue` reads it from a mounted `SelectItem`, so the
+  // `SelectContent` below draws the out-of-list item separately.
   const visibleOperators = useMemo(() => {
     const capabilities =
       getSqlDialectProfileForDatabaseType(dbType)?.capabilities;
@@ -296,11 +299,12 @@ export default function FilterBar({
                       {op.label}
                     </SelectItem>
                   ))}
-                  {/* 연결의 DBMS 종류가 바뀌어 지금 걸린 연산자가 위 목록에서
-                      빠지면 그 항목도 예외적으로 추가해 트리거가 빈값으로
-                      보이지 않게 한다 — `SelectValue` 는 마운트된 항목에서
-                      표기를 읽는다. `ConnectionDialogBody` 의 dbType Select 가
-                      쓰는 갈래와 같다 (#2430). */}
+                  {/* When the connection's DBMS type changes and the
+                      currently set operator drops out of the list above,
+                      add that item too so the trigger does not look
+                      empty — `SelectValue` reads the label from a
+                      mounted item. Same branch as the dbType Select in
+                      `ConnectionDialogBody` (#2430). */}
                   {!visibleOperators.some(
                     (op) => op.value === filter.operator,
                   ) && (

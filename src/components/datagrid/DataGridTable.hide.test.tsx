@@ -1,10 +1,10 @@
-// Sprint 318 (2026-05-15) — Slice D.2: DataGridTable hide column.
+// DataGridTable hide column.
 //
-// 작성 이유: paradigm-shared `DataGridTable` 의 `hiddenColumnNames` +
-// `onHideColumn` prop 도입이 (a) hidden column 의 header / row /
-// pendingNewRows / aria-colcount 를 모두 drop 하고 (b) 미제공 시
-// 기존 동작이 바뀌지 않는지 회귀 가드. RDB DataGrid 차원의 wire-up
-// (배지 + persist) 은 `rdb/DataGrid.hide.test.tsx` 가 검증.
+// Reason: regression guard that the paradigm-shared `DataGridTable`'s
+// `hiddenColumnNames` + `onHideColumn` props (a) drop a hidden column's
+// header / row / pendingNewRows / aria-colcount and (b) leave existing
+// behaviour unchanged when not provided. The RDB DataGrid wire-up
+// (badge + persist) is covered by `rdb/DataGrid.hide.test.tsx`.
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";

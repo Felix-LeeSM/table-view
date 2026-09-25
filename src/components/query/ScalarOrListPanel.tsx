@@ -1,6 +1,6 @@
-// Sprint 312 (Phase 28 Slice A6, 2026-05-14) — Mongo scalar/list panel.
+// Mongo scalar/list panel.
 //
-// Renders three modes that A5 introduced via `resultKind` on `QueryResult`:
+// Renders three modes driven by `resultKind` on `QueryResult`:
 //   - "count"          → big numeric (countDocuments / estimatedDocumentCount)
 //   - "list"           → vertical list (distinct)
 //   - "findOne-empty"  → "No matching document" centered placeholder

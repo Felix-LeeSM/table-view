@@ -1,18 +1,17 @@
-// Sprint 216 — shared helpers extracted from `SchemaTree.test.tsx` (P11
-// step 1) so the behaviour-axis test files can reuse the same `vi.fn()`
-// instances + store seed pattern. The 5 `mockLoad*` functions, the
-// `setSchemaStoreState` overlay, and the `resetStores` cleaner mirror
-// the original mega-test verbatim — no behaviour change. Each axis file
-// imports these and re-applies them in its own `beforeEach` so worker
-// isolation + `vi.clearAllMocks()` keep state from leaking across cases.
+// Shared helpers for the `SchemaTree.*.test.tsx` behaviour-axis files so
+// they reuse the same `vi.fn()` instances + store seed pattern: the
+// `mockLoad*` functions, the `setSchemaStoreState` overlay, and the
+// `resetStores` cleaner. Each axis file imports these and re-applies
+// them in its own `beforeEach` so worker isolation +
+// `vi.clearAllMocks()` keep state from leaking across cases.
 //
-// Sprint 263 (2026-05-12) — schemaStore cache shape changed from
-// flat `{ "conn:schema": [...] }` to nested `{ conn: { db: { schema: [...] } } }`
-// per ADR 0027. To keep the existing axis tests untouched, the helper
-// auto-translates the legacy seed shapes (e.g. `schemas: { conn1: [...] }`
-// or `tables: { "conn1:public": [...] }`) into the new nested form under
-// the default db sentinel `"db1"`. New tests can pass the nested shape
-// directly — passthrough leaves it intact.
+// The schemaStore cache shape is nested
+// `{ conn: { db: { schema: [...] } } }` rather than flat
+// `{ "conn:schema": [...] }`, per ADR 0027. To keep the axis tests
+// untouched, the helper auto-translates the legacy seed shapes (e.g.
+// `schemas: { conn1: [...] }` or `tables: { "conn1:public": [...] }`)
+// into the nested form under the default db sentinel `"db1"`. New tests
+// can pass the nested shape directly — passthrough leaves it intact.
 
 import { formatWorkspaceLabel, getCurrentWindowLabel } from "@lib/window-label";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -28,9 +27,9 @@ import type {
 } from "@/types/schema";
 
 /**
- * sprint-366 (2026-05-16) — best-effort setter for the fake Tauri window
- * label. `useCurrentWorkspaceKey()` (and therefore `useActiveTab()`) now
- * resolves `connId` from the window label. SchemaTree tests rely on the
+ * Best-effort setter for the fake Tauri window label.
+ * `useCurrentWorkspaceKey()` (and therefore `useActiveTab()`) resolves
+ * `connId` from the window label. SchemaTree tests rely on the
  * active-tab highlight which goes through that chain. Mirrors the
  * `trySetWindowLabel` in `workspaceStoreTestHelpers.ts`; both safely
  * no-op when the importer didn't declare `vi.mock("@lib/window-label",
@@ -206,7 +205,7 @@ export function resetStores() {
     focusedConnId: "conn1",
     activeStatuses: { conn1: { type: "connected", activeDb: "db1" } },
   });
-  // sprint-366 — also seed the fake window label so `useActiveTab()` /
+  // Also seed the fake window label so `useActiveTab()` /
   // `useCurrentWorkspaceKey()` resolve to (`conn1`, `db1`).
   trySetWindowLabel("conn1");
 }

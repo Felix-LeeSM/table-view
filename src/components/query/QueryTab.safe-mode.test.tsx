@@ -1,9 +1,9 @@
 // QueryTab raw RDB Safe Mode gate — SURFACE WIRING contract only.
 //
-// Sprint 231 originally enumerated the full env×mode×severity matrix
-// (prod/strict|warn|off × destructive/safe) here, duplicating the same matrix
+// This file originally enumerated the full env×mode×severity matrix
+// (prod/strict|warn|off × destructive/safe), duplicating the same matrix
 // already verified on `EditableQueryResultGrid.safe-mode.test.tsx`. Issue #1623
-// (2026-07-24) dedups to the unit SOT:
+// dedups to the unit SOT:
 //   - `src/lib/safeMode.test.ts` (`decideSafeModeAction` L1..L8 + reason copy)
 //   - `src/hooks/useSafeModeGate.test.ts` (store/env wiring, incl. #1114
 //     env-unset=allow and #1125 non-canonical tag)
@@ -21,8 +21,6 @@
 // Plus [AC-906-01] Oracle PL/SQL package hard-block — an orthogonal
 // dialect-specific analyzer block (not the env×mode matrix), kept as its own
 // error/history contract.
-//
-// date 2026-05-07 (initial), 2026-07-24 (#1623 matrix dedup).
 
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
@@ -56,7 +54,7 @@ beforeEach(() => {
     cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
     findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
     aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
-    // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+    // `<DryRunPreview>` IPC stub for confirm dialog.
     executeQueryDryRun: vi.fn(() => Promise.resolve([])),
   });
 });
@@ -174,8 +172,8 @@ describe("QueryTab — Safe Mode gate → executeQuery wiring", () => {
   });
 
   // ── Representative: prod+strict destructive → confirm dialog ──
-  // TDD canary (AC-231-06): Sprint 230 dispatched executeQuery
-  // unconditionally, so `not.toHaveBeenCalled` captured the red state.
+  // TDD canary (AC-231-06): executeQuery was dispatched unconditionally,
+  // so `not.toHaveBeenCalled` captured the red state.
   it("[AC-231-01a] production + strict + WHERE-less DELETE → confirm dialog, executeQuery NOT called", async () => {
     seedConnection("production");
     useSafeModeStore.setState({ mode: "strict" });
@@ -260,7 +258,7 @@ describe("QueryTab — Safe Mode gate → executeQuery wiring", () => {
     });
 
     expect(mockExecuteQuery).not.toHaveBeenCalled();
-    // Sprint 246 — Confirm is a single-click button; the full batch preview
+    // Confirm is a single-click button; the full batch preview
     // still surfaces verbatim so the user can review.
     const confirmBtn = await screen.findByTestId("confirm-destructive-confirm");
     const preview = await screen.findByLabelText("Statement preview");
@@ -278,7 +276,7 @@ describe("QueryTab — Safe Mode gate → executeQuery wiring", () => {
     await waitFor(() => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(2);
     });
-    // Sprint 266 — 4th arg is `expectedDatabase` (opt-in db mismatch guard).
+    // 4th arg is `expectedDatabase` (opt-in db mismatch guard).
     expect(mockExecuteQuery).toHaveBeenNthCalledWith(
       1,
       "conn1",

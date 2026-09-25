@@ -23,23 +23,25 @@ import type { TableData } from "@/types/schema";
 import { cellToEditValue } from "../dataGridEditFsm";
 
 /**
- * `DataGridTable` 의 context menu 분리.
+ * `DataGridTable`'s context menu, split out.
  *
- * 두 export:
- *   - `useContextMenu` — open/close state + `handleContextMenu` (cell /
- *     row 우클릭 시 호출). 우클릭 위치의 row 가 아직 선택되지 않았으면
- *     먼저 single-select 한 뒤 메뉴를 띄움 (TablePlus 와 동일).
- *   - `buildContextMenuItems` — 우클릭이 열려 있을 때 `<ContextMenu>` 에
- *     넘길 10 항목 배열을 빌드하는 pure 함수. Show Cell Details · Edit
- *     Cell · Set to NULL · Delete Row · Duplicate Row · separator · Copy
- *     as Plain Text · JSON · CSV · SQL Insert.
+ * Two exports:
+ *   - `useContextMenu` — open/close state + `handleContextMenu` (called on
+ *     a cell / row right-click). If the row under the right-click is not
+ *     selected yet, it single-selects first and then opens the menu (same
+ *     as TablePlus).
+ *   - `buildContextMenuItems` — pure function building the 10-item array
+ *     handed to `<ContextMenu>` while the right-click menu is open. Show
+ *     Cell Details · Edit Cell · Set to NULL · Delete Row · Duplicate
+ *     Row · separator · Copy as Plain Text · JSON · CSV · SQL Insert.
  *
  * Invariants:
- * - 빈 그리드 (`data.rows.length === 0`) 에서는 우클릭 무시 — 메뉴 자체가
- *   안 떠야 함. `DataGridTable.context-menu.test.tsx` 가 이 동작을 고정.
- * - "Set to NULL" 은 `onStartEdit(row, col, null)` + `onSetEditNull()`
- *   순서로 호출 — `onStartEdit` 의 in-flight commit 을 먼저 흘려보낸 뒤
- *   editor 를 NULL chip 으로 flip.
+ * - On an empty grid (`data.rows.length === 0`) the right-click is ignored
+ *   — no menu appears at all. `DataGridTable.context-menu.test.tsx` pins
+ *   this behaviour.
+ * - "Set to NULL" calls `onStartEdit(row, col, null)` then
+ *   `onSetEditNull()`, in that order — `onStartEdit`'s in-flight commit is
+ *   flushed first, then the editor flips to a NULL chip.
  */
 
 export interface ContextMenuPos {

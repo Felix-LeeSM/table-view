@@ -184,8 +184,9 @@ describe("executeRdbQuery single-statement routing (#1223)", () => {
     dispatchDbMutationHintMock.mockReset();
   });
 
-  // Reason: 사용자 보고 (2026-07-03) — RAW Query 밑에 주석 추가 시 syntax error.
-  // 원인: 단일 경로가 정제된 statements[0] 대신 원본 sql 재주입 (#1223).
+  // Reason: user report — adding a comment under a RAW Query produced a
+  // syntax error. Cause: the single-statement path re-injected the raw
+  // sql instead of the cleaned `statements[0]` (#1223).
   it("sends the comment-stripped statement to executeQuery when a single statement has a trailing comment", async () => {
     await runSinglePath("SELECT * FROM users;\n-- trailing comment");
 
@@ -199,8 +200,9 @@ describe("executeRdbQuery single-statement routing (#1223)", () => {
     );
   });
 
-  // Reason: #1223 GREEN 불변 — inline 주석은 statements[0] 안에 보존되어야 하므로
-  // 단일 stmt `SELECT 1 -- x` 는 fix 전후 동일하게 주석 포함 전문이 전달된다.
+  // Reason: #1223 GREEN invariant — an inline comment must survive inside
+  // `statements[0]`, so the single statement `SELECT 1 -- x` is passed
+  // through in full, comment included, the same before and after the fix.
   it("preserves an inline trailing comment inside a single statement", async () => {
     await runSinglePath("SELECT 1 -- keep me");
 

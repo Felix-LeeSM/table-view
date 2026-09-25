@@ -1,11 +1,10 @@
-// Sprint 320 (2026-05-15) — Slice E.2: DocumentDataGrid schema
-// accumulator wire-up.
+// DocumentDataGrid schema accumulator wire-up.
 //
-// 작성 이유: schemaless collection 에서 페이지/필터/소트 가 바뀌어도
-// grid 의 column 헤더가 흔들리지 않고, 새 field 가 등장하면 누적되며,
-// 누락된 field 의 cell 은 NULL chip 으로 표시되는지를 회귀 가드. 또
-// collection 전환시 accumulator 가 자동 reset (sprint 319 D-43) 하여
-// 다른 collection 의 schema 가 leak 되지 않는지 단언.
+// Reason: regression guard that on a schemaless collection the grid's
+// column headers stay stable across page/filter/sort changes, that new
+// fields accumulate, and that a cell for a missing field renders a NULL
+// chip. Also asserts the accumulator auto-resets on a collection switch
+// (D-43) so another collection's schema cannot leak.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -158,8 +157,8 @@ describe("DocumentDataGrid — schema accumulator (Sprint 320 E.2)", () => {
     expect(screen.getByTitle("Sort by name")).toBeInTheDocument();
 
     // Switch to a different collection. The accumulator's auto-reset
-    // (sprint 319 D-43) must wipe `name` so it doesn't leak. Use a
-    // backend that only returns `_id` + `email` for the new collection.
+    // (D-43) must wipe `name` so it doesn't leak. Use a backend that
+    // only returns `_id` + `email` for the new collection.
     findMock.mockResolvedValue({
       columns: [
         { name: "_id", dataType: "ObjectId", category: "unknown" },
@@ -189,7 +188,7 @@ describe("DocumentDataGrid — schema accumulator (Sprint 320 E.2)", () => {
 
   it("keeps the first-seen type for a field even when a later page disagrees", async () => {
     // Page 1 reports `score` as int; page 2 reports it as string. The
-    // accumulator must keep `int` (sprint 319 D-45 first-wins).
+    // accumulator must keep `int` (D-45 first-wins).
     const page1WithScore: DocumentQueryResult = {
       ...buildPage1(),
       columns: [

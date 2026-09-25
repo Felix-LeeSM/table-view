@@ -1,9 +1,8 @@
-// Sprint 220 — `overview` axis split from `StructurePanel.test.tsx` (P11
-// step 3). Covers read-only display + tab switching + error / empty /
-// spinner + refresh-structure event + table headers + em-dash null
-// handling + clear-error-on-tab-switch (25 cases) plus the nested
-// Sprint 179 paradigm-aware vocabulary describe (3 cases). Cases are
-// byte-equivalent to the originals — no behaviour change.
+// `overview` axis of the StructurePanel suite. Covers read-only display
+// + tab switching + error / empty / spinner + refresh-structure
+// event + table headers + em-dash null handling +
+// clear-error-on-tab-switch, plus the nested paradigm-aware vocabulary
+// describe.
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -281,10 +280,10 @@ describe("StructurePanel", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Loading state — Sprint 180 (AC-180-01) shifted the spinner to the
-  // threshold-gated `AsyncProgressOverlay`. The fetch must remain
-  // pending across the 1s threshold for the spinner to materialise; we
-  // use fake timers to advance past the threshold deterministically.
+  // Loading state — AC-180-01 shifted the spinner to the threshold-gated
+  // `AsyncProgressOverlay`. The fetch must remain pending across the 1s
+  // threshold for the spinner to materialise; we use fake timers to
+  // advance past the threshold deterministically.
   // -----------------------------------------------------------------------
   it("shows spinner while loading (after 1s threshold)", () => {
     vi.useFakeTimers();
@@ -293,7 +292,7 @@ describe("StructurePanel", () => {
       renderPanel();
 
       // Pre-threshold: spinner is absent (the overlay only paints after
-      // `loading` has been continuously true for 1s — Sprint 180 AC-180-01).
+      // `loading` has been continuously true for 1s — AC-180-01).
       expect(document.querySelector(".animate-spin")).not.toBeInTheDocument();
 
       act(() => {
@@ -439,7 +438,7 @@ describe("StructurePanel", () => {
   });
 
   // =========================================================================
-  // SPRINT 179 — Paradigm-aware vocabulary (AC-179-02 / AC-179-03 / AC-179-04)
+  // Paradigm-aware vocabulary (AC-179-02 / AC-179-03 / AC-179-04)
   // =========================================================================
   describe("paradigm-aware vocabulary (Sprint 179)", () => {
     // Reason: AC-179-02a — paradigm="document" renders the Mongo tab

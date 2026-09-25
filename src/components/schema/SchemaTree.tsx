@@ -109,8 +109,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const { setExpandedSchemas, refreshConnection, workspaceKey } = actions;
 
   // Read-only selectors for tree body rendering; writes live in the hook.
-  // Sprint 263 — pre-slice the per-`(connId, db)` portion of each cache
-  // so downstream `treeRows` / `body` can index by bare schema name.
+  // Pre-slice the per-`(connId, db)` portion of each cache so downstream
+  // `treeRows` / `body` can index by bare schema name.
   const db = workspaceKey?.db ?? "";
   const tables = useSchemaStore(
     (s) => s.tables[connectionId]?.[db] ?? EMPTY_BY_SCHEMA,
@@ -183,10 +183,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     }
   }, [activeSchema, setExpandedSchemas]);
 
-  // Sprint 262 Slice B: 첫 방문 워크스페이스에 "모든 스키마 expanded" 시드는
-  // `useSchemaTreeActions` 내부의 session-scoped ref 가 처리한다. 여기에
-  // 중복 효과를 두면 user 의 collapse 가 매 store 업데이트마다 다시 덮이는
-  // 회귀가 발생.
+  // The fresh-workspace expansion seed is handled by the session-scoped ref
+  // inside `useSchemaTreeActions`. A duplicate effect here regresses to
+  // overwriting the user's collapse on every store update.
 
   // #1217 — top-level global filter. `applyGlobalFilter` narrows schemas +
   // objects to the matches (or returns the inputs by reference when the box
@@ -269,10 +268,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     scrollMargin,
   });
 
-  // Sprint 262 Slice B — sidebar scrollTop persistence per `(connId, db)`.
-  // The hook handles one-shot restore on workspace key change + write-back
-  // on every scroll event. `.ts` seam, see `useSidebarScrollPersistence`
-  // for rationale.
+  // Sidebar scrollTop persistence per `(connId, db)`. The hook handles
+  // one-shot restore on workspace key change + write-back on every scroll
+  // event. `.ts` seam, see `useSidebarScrollPersistence` for rationale.
   const handleScroll = useSidebarScrollPersistence(
     scrollContainerRef,
     actions.workspaceKey,
@@ -393,10 +391,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           catches the filter / pinned sections appearing or reflowing. */}
       <div ref={headerRef}>
         {/* "Schemas" header label + action buttons (export, refresh).
-            Sprint 380 — only PG (`with-schema`) shows the "Schemas" header
-            text. MySQL (`no-schema`) and SQLite (`flat`) hide the label
-            because schema == database in their model. Action buttons row
-            stays visible for all RDB shapes. */}
+            Only PG (`with-schema`) shows the "Schemas" header text. MySQL
+            (`no-schema`) and SQLite (`flat`) hide the label because schema ==
+            database in their model. Action buttons row stays visible for all
+            RDB shapes. */}
         <div className="flex items-center justify-between px-3 py-1">
           {treeShape === "with-schema" ? (
             <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -420,10 +418,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               </Button>
             )}
             {/* RDB export Popover — three modes (DDL / DML / Full) ×
-              two scopes (single schema / all schemas). Gated to engines with
-              a real `stream_table_rows` backend (PG / MySQL / MariaDB) via
-              `supportsMigrationExport` so unsupported engines don't surface an
-              error-on-click control (#1048). */}
+              two scopes (single schema / all schemas). Gated by
+              `supportsMigrationExport` so engines without a real
+              `stream_table_rows` backend don't surface an error-on-click
+              control (#1048). */}
             {canExportMigration && actions.schemas.length > 0 && (
               <Popover>
                 <PopoverTrigger asChild>
@@ -716,10 +714,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         />
       )}
 
-      {/* Sprint 235 — Phase 27 Rename / Drop modal slots replacing the
-          legacy minimal confirm-dialog versions. The slot wrappers
-          delegate to `RenameTableDialog` / `DropTableDialog` (inline
-          DDL preview + Safe Mode dispatch via `useDdlPreviewExecution`). */}
+      {/* Rename / Drop modal slots replacing the legacy minimal
+          confirm-dialog versions. The slot wrappers delegate to
+          `RenameTableDialog` / `DropTableDialog` (inline DDL preview + Safe
+          Mode dispatch via `useDdlPreviewExecution`). */}
       <RenameTableDialogSlot
         connectionId={connectionId}
         database={db}

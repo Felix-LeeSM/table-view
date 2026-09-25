@@ -1,11 +1,12 @@
-// Sprint 381 (2026-05-17) — Mongo db-contract α: runCommand IPC dispatch.
+// Mongo db-contract α: runCommand IPC dispatch.
 //
-// 작성 이유: db-contract α 가 `db.runCommand({...})` / `db.adminCommand({...})`
-// 입력을 generic `run_mongo_command` IPC 로 dispatch 해야 한다. Phase 28
-// mongosh AST 파서는 method whitelist 에 묶여 있어 admin command 를
-// 받아주지 않으므로, 본 sprint 의 정규식 기반 statement-kind judge 가
-// 정확히 admin path 로 흐르는지를 lock. sprint-382 의 AST 가 본 분기를
-// promote 한 뒤에도 이 케이스들은 dispatch 단언 부분이 그대로 lock 유지.
+// Reason: db-contract α has to dispatch `db.runCommand({...})` /
+// `db.adminCommand({...})` input to the generic `run_mongo_command` IPC.
+// The mongosh AST parser is bound to a method whitelist and refuses
+// admin commands, so this locks that the regex-based statement-kind
+// judge routes exactly down the admin path. Once the AST promotes this
+// branch, these cases keep their dispatch assertions locked as they
+// are.
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
@@ -120,8 +121,8 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     useSafeModeStore.setState({ mode: "warn" });
   });
 
-  // AC-381-06: chip 미선택 (tab.database === undefined) 상태에서
-  // `db.runCommand({ping: 1})` → IPC 호출 (database arg = null).
+  // AC-381-06: with no chip selection (tab.database === undefined),
+  // `db.runCommand({ping: 1})` → IPC call (database arg = null).
   it("[AC-381-06] db.runCommand({ping: 1}) without database binding → runMongoCommand(database=null)", async () => {
     runMongoCommandMock.mockResolvedValueOnce({ ok: 1 });
     const tab = seedDocTab("db.runCommand({ping: 1})", {
@@ -185,9 +186,9 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     });
   });
 
-  // AC-381-07: chip = "myapp" 상태에서 `db.adminCommand({serverStatus: 1})`
-  // → adminCommand 는 항상 admin DB context 라 backend 가 받는 database
-  // arg 는 `null` 이어야 한다 (chip 값 무시).
+  // AC-381-07: with chip = "myapp", `db.adminCommand({serverStatus: 1})`
+  // → adminCommand always runs in the admin DB context, so the database
+  // arg the backend receives must be `null` (the chip value is ignored).
   it("[AC-381-07] db.adminCommand always routes with database=null (admin context)", async () => {
     runMongoCommandMock.mockResolvedValueOnce({ ok: 1 });
     const tab = seedDocTab("db.adminCommand({serverStatus: 1})", {
@@ -214,8 +215,8 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     );
   });
 
-  // AC-381-08: chip = "myapp" 상태에서 `db.runCommand({dbStats: 1})`
-  // → backend 가 받는 database arg = "myapp".
+  // AC-381-08: with chip = "myapp", `db.runCommand({dbStats: 1})`
+  // → the database arg the backend receives = "myapp".
   it("[AC-381-08] db.runCommand with chip='myapp' → runMongoCommand(database='myapp')", async () => {
     runMongoCommandMock.mockResolvedValueOnce({ ok: 1, db: "myapp" });
     const tab = seedDocTab("db.runCommand({dbStats: 1})", {
@@ -242,10 +243,10 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     );
   });
 
-  // Sprint 381 hardening (2026-05-18) — destructive runCommand 5-keyword
-  // gate. autocomplete (`mongoAutocomplete.ts`) 가 `drop` / `dropDatabase`
-  // / `dropIndexes` / `killOp` / `renameCollection` 를 1-click 추천하므로
-  // dispatch 가 `safeModeGate.decide` 를 통과해야 한다.
+  // Destructive runCommand 5-keyword gate. Autocomplete
+  // (`mongoAutocomplete.ts`) suggests `drop` / `dropDatabase` /
+  // `dropIndexes` / `killOp` / `renameCollection` in one click, so the
+  // dispatch has to pass `safeModeGate.decide`.
   it("[AC-381-S9] strict mode + non-prod + dropDatabase → confirm (IPC blocked, pendingMongoConfirm set)", async () => {
     useSafeModeStore.setState({ mode: "strict" });
     const tab = seedDocTab("db.runCommand({dropDatabase: 1})", {

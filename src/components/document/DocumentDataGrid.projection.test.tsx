@@ -1,9 +1,9 @@
-// Sprint 325 (2026-05-15) — Slice H: DocumentDataGrid wire-up 통합.
+// DocumentDataGrid projection wire-up integration.
 //
-// 작성 이유: ProjectionDialog 의 Apply 가 (a) `findDocuments` body 의
-// `projection` 으로 흘러가고 (b) Clear / 빈 projection 은 body 에서
-// 제거되는지를 회귀 가드. dialog 자체 동작은 ProjectionDialog.test.tsx
-// 가 가드.
+// Reason: regression guard that ProjectionDialog's Apply (a) flows into
+// the `projection` of the `findDocuments` body, and (b) Clear / an empty
+// projection is dropped from the body. ProjectionDialog.test.tsx guards
+// the dialog's own behaviour.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";

@@ -1,16 +1,18 @@
-// Sprint 233 — DataGrid bottom executed-query strip syntax highlighting.
-// 작성 일자: 2026-05-07. 작성 이유: 사용자 보고 (2026-05-07) — `SELECT * FROM
-// "public"."brief_news_tasks" LIMIT 300 OFFSET 0` 같은 query 가 하단 strip
-// 에 plain `<code>` 로 떠서 색상이 전혀 없음. `<SqlSyntax>` 컴포넌트가 이미
-// 존재 (Sprint 227 CreateTableDialog 인라인 preview 에서 사용중). 한 element
-// 교체로 keyword (SELECT/FROM/LIMIT/OFFSET) 색상 적용 + `"public"`,
-// `"brief_news_tasks"` 가 identifier 로 분류 (string 으로 오인되지 않음).
+// DataGrid bottom executed-query strip syntax highlighting.
+// Reason: user report — a query like `SELECT * FROM
+// "public"."brief_news_tasks" LIMIT 300 OFFSET 0` rendered in the bottom
+// strip as a plain `<code>` with no colour at all. The `<SqlSyntax>`
+// component already exists (the CreateTableDialog inline preview uses it).
+// Swapping one element applies keyword colour (SELECT/FROM/LIMIT/OFFSET) and
+// classifies `"public"` and `"brief_news_tasks"` as identifiers (not mistaken
+// for strings).
 //
-// 본 테스트는 (a) bottom strip 이 SqlSyntax 가 emit 하는 token span 구조를
-// 실제로 갖는지, (b) keyword 색상 클래스가 SELECT/FROM/LIMIT/OFFSET 모두에
-// 적용되는지, (c) PG double-quoted identifier 가 `text-syntax-string` 이 아닌
-// `text-foreground` (identifier) 로 분류되는지 (sqlTokenize.ts:213-220 분기)
-// 를 확인한다.
+// This test checks (a) that the bottom strip really carries the token span
+// structure SqlSyntax emits, (b) that the keyword colour class applies to
+// SELECT, FROM, LIMIT and OFFSET alike, and (c) that a PG double-quoted
+// identifier is classified as `text-foreground` (identifier) rather than
+// `text-syntax-string` (the `ch === '"'` branch in
+// `src/lib/sql/sqlTokenize.ts`).
 
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";

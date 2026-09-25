@@ -1,8 +1,9 @@
-// Purpose: RDB DataGrid data-cell roving tabindex + 방향키 2D nav (Design-swarm
-// #4 Phase 2, non-virtualized 경로). 정확히 한 data cell 만 tab stop 이고
-// Arrow/Home/End 가 focus + tabIndex=0 anchor 를 옮긴다. focus-steal 회귀
-// (SchemaTree) 와 "편집 중 방향키 무시" 가드도 확인한다. virtualization sync
-// 는 useGridRoving.test.tsx 가 결정적으로 커버, 실제 render 는 E2E 담당. (2026-07-01)
+// Purpose: RDB DataGrid data-cell roving tabindex + arrow-key 2D nav
+// (non-virtualized path). Exactly one data cell is a tab stop and
+// Arrow/Home/End move focus plus the tabIndex=0 anchor. Also checks the
+// focus-steal regression (SchemaTree) and the "ignore arrows while editing"
+// guard. Virtualization sync is covered deterministically by
+// useGridRoving.test.tsx; the real render belongs to E2E.
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -82,14 +83,14 @@ function makeProps(overrides: Record<string, unknown> = {}) {
   };
 }
 
-// rAF flush — useGridRoving.onKeyDown 이 `.focus()` 를 프레임 단위로 defer 한다.
+// rAF flush — useGridRoving.onKeyDown defers `.focus()` by one frame.
 function flushRaf() {
   return act(async () => {
     await new Promise((r) => requestAnimationFrame(() => r(null)));
   });
 }
 
-/** data cell (row, visualCol) 의 gridcell div. */
+/** The gridcell div of data cell (row, visualCol). */
 function cell(row: number, col: number): HTMLElement {
   const el = document.querySelector<HTMLElement>(
     `[data-grid-row="${row}"][data-grid-col="${col}"]`,
@@ -99,7 +100,8 @@ function cell(row: number, col: number): HTMLElement {
 }
 
 describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
-  // Reason: 초기엔 첫 data cell (0,0) 만 tab stop, 나머지는 -1. (2026-07-01)
+  // Reason: initially only the first data cell (0,0) is a tab stop, the
+  // rest are -1.
   it("initially only the first data cell is a tab stop", () => {
     render(<DataGridTable {...makeProps()} />);
     expect(cell(0, 0)).toHaveAttribute("tabindex", "0");
@@ -113,7 +115,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     }
   });
 
-  // Reason: ArrowRight → (0,1), ArrowDown → (1,1) focus + tabIndex 이동. (2026-07-01)
+  // Reason: ArrowRight → (0,1), ArrowDown → (1,1) moves focus + tabIndex.
   it("ArrowRight then ArrowDown move focus + tabIndex", async () => {
     render(<DataGridTable {...makeProps()} />);
     act(() => cell(0, 0).focus());
@@ -130,8 +132,9 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(cell(1, 1)).toHaveFocus();
   });
 
-  // Reason: ArrowLeft 는 left edge 에서 clamp (no wrap). ArrowUp at row 0 은
-  // 더 이상 clamp 하지 않고 header 로 진입한다 (#1127; 별도 케이스에서 검증). (2026-07-05)
+  // Reason: ArrowLeft clamps at the left edge (no wrap). ArrowUp at row 0
+  // no longer clamps — it enters the header (#1127; a separate case checks
+  // that).
   it("ArrowLeft clamps at the left edge", async () => {
     render(<DataGridTable {...makeProps()} />);
     act(() => cell(0, 0).focus());
@@ -142,7 +145,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(cell(0, 0)).toHaveFocus();
   });
 
-  // Reason: Home → row 첫 col, End → 마지막 col. (2026-07-01)
+  // Reason: Home → first col of the row, End → last col.
   it("Home/End jump to first/last column of the row", async () => {
     render(<DataGridTable {...makeProps()} />);
     act(() => cell(1, 1).focus());
@@ -158,34 +161,37 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(cell(1, 0)).toHaveFocus();
   });
 
-  // Reason: focus-steal 회귀 가드 — cell onFocus 는 state 만 갱신하고 `.focus()`
-  // 를 부르지 않아야 한다. 사용자가 cell 후 외부 input 으로 이동하면 stale rAF
-  // 가 focus 를 도로 낚아채선 안 된다 (SchemaTree mariadb E2E 회귀). (2026-07-01)
+  // Reason: focus-steal regression guard — cell onFocus must only update
+  // state and never call `.focus()`. When the user moves from a cell to an
+  // outside input, a stale rAF must not grab focus back (the SchemaTree
+  // mariadb E2E regression).
   it("cell onFocus does not steal focus back on the next frame", async () => {
     render(<DataGridTable {...makeProps()} />);
     const external = document.createElement("input");
     document.body.appendChild(external);
 
     act(() => cell(0, 0).focus()); // onFocus → syncFocus (state only)
-    act(() => external.focus()); // 외부 컨트롤로 이동
-    await flushRaf(); // stale rAF 가 grid 를 re-focus 하면 안 됨
+    act(() => external.focus()); // move to an outside control
+    await flushRaf(); // a stale rAF must not re-focus the grid
 
     expect(external).toHaveFocus();
     expect(cell(0, 0)).not.toHaveFocus();
     external.remove();
   });
 
-  // Reason: 편집 중 방향키 무시. 편집 <input> 이 focus 를 쥐면 keydown 의
-  // e.target 은 input 이고 input 엔 [data-grid-row] 가 없다 → onKeyDown 가드가
-  // bail, roving 이 아래 row 로 이동하지 않고 편집 셀에 머문다 (input focus
-  // 버블링이 gridcell onFocus 를 발동해 anchor 는 편집 셀 (1,1) 로 sync 됨). (2026-07-01)
+  // Reason: arrows are ignored while editing. When the editing <input>
+  // holds focus, keydown's e.target is the input and the input has no
+  // [data-grid-row] → the onKeyDown guard bails, so roving stays on the
+  // editing cell instead of moving to the row below (the input's focus
+  // bubbles into the gridcell onFocus, syncing the anchor to the editing
+  // cell (1,1)).
   it("arrows are ignored while editing (guard bails on non-cell target)", async () => {
     render(
       <DataGridTable
         {...makeProps({ editingCell: { row: 1, col: 1 }, editValue: "Bob" })}
       />,
     );
-    // 편집 input 이 focus 를 쥔다 (버블링으로 anchor → (1,1)).
+    // The editing input takes focus (bubbling moves the anchor → (1,1)).
     const input = screen.getByDisplayValue("Bob");
     act(() => input.focus());
     expect(input).toHaveFocus();
@@ -194,14 +200,15 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     fireEvent.keyDown(input, { key: "ArrowDown" });
     await flushRaf();
 
-    // 가드 bail: roving 은 (2,1) 로 내려가지 않고 (1,1) 유지, input 도 focus 유지.
+    // Guard bails: roving stays at (1,1) instead of dropping to (2,1), and
+    // the input keeps focus.
     expect(cell(1, 1)).toHaveAttribute("tabindex", "0");
     expect(cell(2, 1)).toHaveAttribute("tabindex", "-1");
     expect(input).toHaveFocus();
   });
 
-  // Reason: Phase 3 — Enter 로 focus 된 cell 편집 진입 (double-click 과 동일
-  // 경로, onStartEdit(row, dataCol, value)). (2026-07-01)
+  // Reason: Enter starts editing the focused cell (same path as
+  // double-click, onStartEdit(row, dataCol, value)).
   it("Enter on a focused cell starts editing", () => {
     const onStartEdit = vi.fn();
     render(<DataGridTable {...makeProps({ onStartEdit })} />);
@@ -210,7 +217,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(onStartEdit).toHaveBeenCalledWith(0, 1, "Alice");
   });
 
-  // Reason: Phase 3 — F2 도 편집 진입 (스프레드시트 표준 키). (2026-07-01)
+  // Reason: F2 also starts editing (the spreadsheet-standard key).
   it("F2 on a focused cell starts editing", () => {
     const onStartEdit = vi.fn();
     render(<DataGridTable {...makeProps({ onStartEdit })} />);
@@ -219,7 +226,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(onStartEdit).toHaveBeenCalledWith(2, 2, "carol@example.com");
   });
 
-  // Reason: Phase 3 — canEditRows=false 면 Enter/F2 편집 진입 안 함. (2026-07-01)
+  // Reason: with canEditRows=false, Enter/F2 do not start editing.
   it("Enter does not start editing when rows are not editable", () => {
     const onStartEdit = vi.fn();
     render(
@@ -230,8 +237,9 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(onStartEdit).not.toHaveBeenCalled();
   });
 
-  // Reason: #1127 AC1 — 최상단 data row 에서 ArrowUp → 대응 컬럼 header 진입.
-  // 헤더행/body 를 잇는 유일한 크로스-바운더리 이동 (roving anchor 유지). (2026-07-05)
+  // Reason: #1127 AC1 — ArrowUp from the top data row enters the matching
+  // column's header. The only cross-boundary move joining the header row
+  // and the body (the roving anchor is kept).
   it("ArrowUp from the top data row enters the header cell of the same column (#1127)", async () => {
     render(<DataGridTable {...makeProps()} />);
     act(() => cell(0, 1).focus());
@@ -241,8 +249,9 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(headers[1]).toHaveFocus();
   });
 
-  // Reason: #1127 AC1 — header 셀에서 ArrowDown → 대응 컬럼의 최상단 data cell
-  // 복귀. header ArrowUp→body ArrowDown round-trip 이 컬럼을 보존한다. (2026-07-05)
+  // Reason: #1127 AC1 — ArrowDown from a header cell returns to the top
+  // data cell of the matching column. The header ArrowUp → body ArrowDown
+  // round-trip preserves the column.
   it("ArrowDown from a header cell returns to the top data row of the same column (#1127)", async () => {
     render(<DataGridTable {...makeProps()} />);
     const headers = screen.getAllByRole("columnheader");
@@ -252,9 +261,10 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(cell(0, 2)).toHaveFocus();
   });
 
-  // Reason: #1127 AC3 — pending-new-rows 도 방향키 nav 로 도달 가능해야 한다.
-  // roving rowCount 가 pendingNewRows 를 포함하고 셀에 data-grid-* + tabIndex +
-  // onFocus 가 붙어 last data row 에서 ArrowDown 으로 내려간다. (2026-07-05)
+  // Reason: #1127 AC3 — pending-new-rows must be reachable by arrow-key nav
+  // too. The roving rowCount includes pendingNewRows and the cells carry
+  // data-grid-* + tabIndex + onFocus, so ArrowDown from the last data row
+  // descends into them.
   it("pending new rows are reachable by ArrowDown (#1127)", async () => {
     const pendingNewRows = [[99, "New", "new@example.com"]];
     render(<DataGridTable {...makeProps({ pendingNewRows })} />);

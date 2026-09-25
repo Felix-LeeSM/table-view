@@ -21,27 +21,24 @@ import {
   setDevConnection,
 } from "./__tests__/createTableDialogTestHelpers";
 
-// ── Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional ─────────
-//
-// Date: 2026-05-07.
+// ── Foreign Keys + CHECK + UNIQUE tab functional ──────────────────────
 //
 // Why this block exists:
 //
-// Sprint 228 left the Foreign Keys tab as a stale Sprint 229
-// placeholder. Sprint 229 closes that loop: replace the placeholder with
-// an interactive editor housing **three** constraint families on a
-// single tab — Foreign Keys + CHECK + UNIQUE — sharing the same
-// `tauri.addConstraint` chain target after the Sprint 228 createIndex
-// chain. Atomic policy C — table+COMMENT in one transaction, indexes
-// then constraints sequentially each in its own transaction; failures
-// do NOT roll back earlier-applied work. The failing constraint name
-// surfaces verbatim in the inline preview pane error slot.
+// The Foreign Keys tab is an interactive editor housing **three**
+// constraint families on a single tab — Foreign Keys + CHECK + UNIQUE —
+// sharing the same `tauri.addConstraint` chain target after the
+// createIndex chain. Atomic policy C — table+COMMENT in one
+// transaction, indexes then constraints sequentially each in its own
+// transaction; failures do NOT roll back earlier-applied work. The
+// failing constraint name surfaces verbatim in the inline preview pane
+// error slot.
 //
-// Path A backend extension landed: `ConstraintDefinition::ForeignKey`
-// gains `on_delete` / `on_update` (`#[serde(default)]`), whitelist
-// `{NO ACTION | RESTRICT | CASCADE | SET NULL | SET DEFAULT}`.
+// `ConstraintDefinition::ForeignKey` carries `on_delete` / `on_update`
+// (`#[serde(default)]`), whitelist `{NO ACTION | RESTRICT | CASCADE |
+// SET NULL | SET DEFAULT}`.
 //
-// Source: Sprint 229 contract AC-229-01..AC-229-12.
+// Source: AC-229-01..AC-229-12.
 
 describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
   beforeEach(resetCreateTableDialogConstraintState);
@@ -53,8 +50,8 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
     activateTab("Constraints");
     const panel = getForeignKeysPanel();
     expect(panel.textContent).not.toContain(STALE_CONSTRAINTS_PLACEHOLDER);
-    // Sprint 241 — FK is the default sub-tab; CHECK / UNIQUE add
-    // buttons live behind their respective sub-tab triggers.
+    // FK is the default sub-tab; CHECK / UNIQUE add buttons live behind
+    // their respective sub-tab triggers.
     expect(
       within(panel).getByRole("button", { name: /Add foreign key/i }),
     ).toBeInTheDocument();
@@ -232,7 +229,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
         ),
       );
 
-      // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+      // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
       await waitFor(() => expect(mockAddConstraint).toHaveBeenCalledTimes(1));
       const call = mockAddConstraint.mock.calls[0]![0] as {
         definition: {
@@ -280,7 +277,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       target: { value: "age >= 0" },
     });
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockAddConstraint).toHaveBeenCalledTimes(1));
     const call = mockAddConstraint.mock.calls[0]![0] as {
       definition: { type: string; expression: string };
@@ -316,7 +313,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       target: { value: "   " },
     });
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     expect(mockAddConstraint).not.toHaveBeenCalled();
   });
@@ -342,7 +339,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
     });
     fireEvent.click(within(panel).getByLabelText("Unique column: user_id"));
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockAddConstraint).toHaveBeenCalledTimes(1));
     const call = mockAddConstraint.mock.calls[0]![0] as {
       definition: { type: string; columns: string[] };

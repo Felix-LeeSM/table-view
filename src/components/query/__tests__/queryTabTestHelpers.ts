@@ -1,11 +1,11 @@
-// Sprint 218 — shared helpers extracted from `QueryTab.test.tsx` (P11
-// step 2) so the behaviour-axis test files can reuse the same `vi.fn()`
-// instances + `mockEditorProps` snapshot + fixture builders + store seed
-// pattern. The 5 mock functions, the `mockEditorProps` ref, the fixture
-// builders, and the `resetQueryTabStores` cleaner mirror the original
-// mega-test verbatim — no behaviour change. Each axis file imports these
-// and re-applies them in its own `beforeEach` so worker isolation +
-// `mockReset()` keep state from leaking across cases.
+// Shared helpers extracted from `QueryTab.test.tsx` so the behaviour-axis
+// test files can reuse the same `vi.fn()` instances + `mockEditorProps`
+// snapshot + fixture builders + store seed pattern. The 5 mock functions,
+// the `mockEditorProps` ref, the fixture builders, and the
+// `resetQueryTabStores` cleaner mirror the original mega-test verbatim — no
+// behaviour change. Each axis file imports these and re-applies them in its
+// own `beforeEach` so worker isolation + `mockReset()` keep state from
+// leaking across cases.
 //
 // `vi.mock(...)` factories cannot live here because ES module hoisting
 // pulls them above any import; each axis file declares the 7 factories at
@@ -74,9 +74,9 @@ export const mockVerifyActiveDb = vi.fn();
  * a DOM attribute) keeps the dialect object reference intact so the test
  * can compare with `toBe(MySQL)` etc.
  *
- * Sprint 83 — also records the `mongoExtensions` prop so tests can assert
- * on the extension array identity, length, and hook-provided structure
- * without constructing a real CodeMirror view.
+ * Also records the `mongoExtensions` prop so tests can assert on the
+ * extension array identity, length, and hook-provided structure without
+ * constructing a real CodeMirror view.
  */
 export const mockEditorProps: {
   lastDialect: SQLDialect | undefined;
@@ -172,22 +172,21 @@ export function makeDocTab(
 
 export function resetQueryTabStores(): void {
   useWorkspaceStore.setState({ workspaces: {} });
-  // sprint-373 (2026-05-17) — entries/globalLog retired. `recentVisible` 가
-  // 유일한 store slot.
+  // entries/globalLog retired. `recentVisible` is the only store slot.
   useQueryHistoryStore.setState({ recentVisible: [] });
   useConnectionStore.setState({ connections: [] });
-  // Sprint 231 — reset Safe Mode mode so the persisted localStorage state
-  // (or a previous case's `setMode` mutation) cannot leak between tests.
-  // `strict` is the production default + matches existing fixture
-  // expectations for the (rare) tests that don't set it explicitly.
+  // Reset Safe Mode mode so the persisted localStorage state (or a previous
+  // case's `setMode` mutation) cannot leak between tests. `strict` is the
+  // production default + matches existing fixture expectations for the (rare)
+  // tests that don't set it explicitly.
   useSafeModeStore.setState({ mode: "strict" });
   mockExecuteQuery.mockReset();
   mockCancelQuery.mockReset();
   mockFindDocuments.mockReset();
   mockAggregateDocuments.mockReset();
   mockVerifyActiveDb.mockReset();
-  // Sprint 132 — reset toast queue so the warning-mismatch test can
-  // assert on its own toast without contamination from earlier tests.
+  // Reset the toast queue so the warning-mismatch test can assert on its own
+  // toast without contamination from earlier tests.
   useToastStore.setState({ toasts: [] });
   mockEditorProps.lastDialect = undefined;
   mockEditorProps.dialectHistory = [];

@@ -1,8 +1,7 @@
-// Sprint 218 — `lifecycle` axis split from `QueryTab.test.tsx` (P11
-// step 2). Covers idle render, execute happy/error transitions,
-// empty-SQL guard, cancel-query event handling, the result-area flex
-// column shape, and the resize-handle layout. Cases are byte-equivalent
-// to the originals — no behaviour change.
+// `lifecycle` axis split from `QueryTab.test.tsx`. Covers idle render,
+// execute happy/error transitions, empty-SQL guard, cancel-query event
+// handling, the result-area flex column shape, and the resize-handle
+// layout.
 
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
@@ -40,19 +39,12 @@ beforeEach(() => {
   });
 });
 
-// Sprint 132 — the QueryTab raw-query hook calls `verifyActiveDb` after
-// optimistic `setActiveDb`. The wrapper itself is unit-tested in
-// `verifyActiveDb.test.ts`; here we mock it so the test can fix the
-// "backend says X" return value per scenario.
+// See the `verifyActiveDb` mock note in `QueryTab.document.test.tsx`.
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: (...args: unknown[]) => mockVerifyActiveDb(...args),
 }));
 
-// Sprint 139 — QueryTab now routes directly to SqlQueryEditor /
-// MongoQueryEditor based on `tab.paradigm`. Both editors are mocked to a
-// shared DOM testbed (`data-testid="mock-editor"`) so the existing
-// fixtures keep working — the mock records `paradigm` from a synthesised
-// prop so the dialect / mongo / paradigm assertions stay meaningful.
+// See the editor-mock note in `QueryTab.document.test.tsx`.
 vi.mock("./SqlQueryEditor", async () => {
   const React = await import("react");
   const MockSqlQueryEditor = React.forwardRef<
@@ -347,7 +339,7 @@ describe("QueryTab — lifecycle", () => {
     });
 
     // Should call executeQuery with correct args.
-    // Sprint 266 — 4th arg is `expectedDatabase` (opt-in db mismatch guard).
+    // 4th arg is `expectedDatabase` (opt-in db mismatch guard).
     expect(mockExecuteQuery).toHaveBeenCalledWith(
       "conn1",
       "SELECT 1",

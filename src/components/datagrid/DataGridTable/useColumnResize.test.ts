@@ -1,7 +1,8 @@
-// Purpose: column-resize drag lifecycle — Esc-revert + commit semantics (2026-07-18)
-// 사용자 요구: 모든 draggable 은 드래그 중 Esc 로 시작 크기 복원. 이 파일은
-// 리사이즈 드래그 한정 요구를 useColumnResize 레이어에서 고정한다.
-// 컴포넌트 wiring (HeaderRow grip → hook) 은 DataGridTable.column-resize.test.tsx 담당.
+// Purpose: column-resize drag lifecycle — Esc-revert + commit semantics.
+// User requirement: every draggable restores its start size when Esc is
+// pressed during the drag. This file pins the resize-drag half of that
+// requirement at the useColumnResize layer. Component wiring (HeaderRow grip
+// → hook) belongs to DataGridTable.column-resize.test.tsx.
 
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -38,7 +39,8 @@ describe("useColumnResize", () => {
     document.body.style.userSelect = "";
   });
 
-  // Reason: 정상 리사이즈는 기존대로 새 폭을 커밋 — Esc 추가가 회귀시키지 않음 (2026-07-18)
+  // Reason: a normal resize still commits the new width — adding Esc does
+  // not regress it.
   it("commits the dragged width on mouseup", () => {
     const { outer, onCommitWidth, result } = setup([100, 150]);
 
@@ -55,7 +57,8 @@ describe("useColumnResize", () => {
     expect(onCommitWidth).toHaveBeenCalledWith("id", 150);
   });
 
-  // Reason: 드래그 중 Esc → --cols 를 시작 폭으로 복원 + 커밋 취소 (2026-07-18)
+  // Reason: Esc during the drag restores --cols to the start width and
+  // cancels the commit.
   it("Esc reverts --cols to the start width and cancels the commit", () => {
     const { outer, onCommitWidth, result } = setup([100, 150]);
 
@@ -76,7 +79,8 @@ describe("useColumnResize", () => {
     expect(document.body.style.userSelect).toBe("");
   });
 
-  // Reason: Esc 이후 trailing mouseup 이 커밋하지 않고, 리스너가 누수 없이 해제됨 (2026-07-18)
+  // Reason: a trailing mouseup after Esc does not commit, and the listeners
+  // are detached without leaking.
   it("does not commit or react to further events after Esc", () => {
     const { outer, onCommitWidth, result } = setup([100, 150]);
 

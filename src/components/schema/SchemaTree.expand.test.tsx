@@ -1,8 +1,7 @@
-// Sprint 216 — `expand` axis split from `SchemaTree.test.tsx`. Covers
-// schema expand/collapse mechanics, category headers (Tables/Views/
-// Functions/Procedures), keyboard toggling, schema/category loading
-// spinners, auto-expand on mount, and rendering of view/function/
-// procedure rows. Cases are byte-equivalent to the originals.
+// `expand` axis split from `SchemaTree.test.tsx`. Covers schema
+// expand/collapse mechanics, category headers (Tables/Views/Functions/
+// Procedures), keyboard toggling, schema/category loading spinners,
+// auto-expand on mount, and rendering of view/function/procedure rows.
 
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -38,9 +37,9 @@ describe("SchemaTree — expand", () => {
   // AC-03: Schema expand/collapse toggle
   // -----------------------------------------------------------------------
   it("toggles schema expanded state on click (sprint 144 — auto-expanded on mount)", async () => {
-    // Sprint 144 (AC-145-1): all schemas paint expanded on first mount, so
-    // the first click now COLLAPSES rather than expands. The toggle still
-    // works — second click re-expands — which we cover in the next test.
+    // AC-145-1: the schema paints expanded on first mount, so the first
+    // click COLLAPSES rather than expands. The toggle still works — second
+    // click re-expands — which we cover in the next test.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {},
@@ -61,9 +60,9 @@ describe("SchemaTree — expand", () => {
   });
 
   it("collapses then re-expands schema across two clicks (sprint 144 — auto-expanded on mount)", async () => {
-    // Sprint 144 (AC-145-1): initial state is expanded, so first click
-    // collapses, second click re-expands. Test still covers both edges
-    // of the toggle, just from the new starting state.
+    // AC-145-1: initial state is expanded, so first click collapses,
+    // second click re-expands. The test still covers both edges of the
+    // toggle.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {},
@@ -145,8 +144,8 @@ describe("SchemaTree — expand", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144 (AC-145-1): schema is auto-expanded on mount; tables are
-    // visible without an explicit click.
+    // AC-145-1: schema is auto-expanded on mount; tables are visible
+    // without an explicit click.
     expect(screen.getByText("users")).toBeInTheDocument();
     expect(screen.getByText("orders")).toBeInTheDocument();
   });
@@ -164,7 +163,7 @@ describe("SchemaTree — expand", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144: schema is auto-expanded on mount.
+    // Schema is auto-expanded on mount.
     expect(screen.getByText("No tables")).toBeInTheDocument();
   });
 
@@ -172,7 +171,7 @@ describe("SchemaTree — expand", () => {
   // Keyboard interactions
   // -----------------------------------------------------------------------
   it("toggles schema (collapse) on Enter key (sprint 144 — auto-expanded on mount)", async () => {
-    // Sprint 144 (AC-145-1): schemas paint expanded; Enter now collapses.
+    // AC-145-1: the schema paints expanded; Enter collapses.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {},
@@ -193,7 +192,7 @@ describe("SchemaTree — expand", () => {
   });
 
   it("toggles schema (collapse) on Space key (sprint 144 — auto-expanded on mount)", async () => {
-    // Sprint 144 (AC-145-1): schemas paint expanded; Space now collapses.
+    // AC-145-1: the schema paints expanded; Space collapses.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {},
@@ -263,8 +262,8 @@ describe("SchemaTree — expand", () => {
   });
 
   it("shows loading spinner next to schema name while tables are loading", async () => {
-    // Sprint 144 (AC-145-1): mount-time auto-expand prefetches loadTables
-    // as fire-and-forget — the per-schema spinner is set only inside
+    // AC-145-1: mount-time auto-expand prefetches loadTables as
+    // fire-and-forget — the per-schema spinner is set only inside
     // `handleExpandSchema`. To exercise the spinner path we collapse the
     // auto-expanded schema and re-expand it; the second click goes
     // through `handleExpandSchema` and toggles `loadingTables`.
@@ -535,7 +534,7 @@ describe("SchemaTree — expand", () => {
   });
 
   // =========================================================================
-  // NEW: Schema auto-expand on active tab (Sprint 54)
+  // Schema auto-expand on active tab
   // =========================================================================
 
   // AC-EXPAND-01: Schema auto-expands when active tab targets it
@@ -735,13 +734,13 @@ describe("SchemaTree — expand", () => {
   });
 
   it("loads views and functions when schema is expanded via click", async () => {
-    // Sprint 144: schemas paint expanded on mount, but `handleExpandSchema`
-    // (the click handler) is the entry point that triggers loadViews /
+    // The schema paints expanded on mount, but `handleExpandSchema` (the
+    // click handler) is the entry point that triggers loadViews /
     // loadFunctions. Mount-time auto-expand only seeds the expanded *state*
     // and fires loadTables; views/functions are still lazy-loaded on the
     // first user expand action. We exercise that by clicking once to
     // collapse, then clicking again to re-expand — the re-expand call
-    // now triggers loadViews + loadFunctions.
+    // triggers loadViews + loadFunctions.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {},

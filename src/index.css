@@ -87,38 +87,40 @@
   --spacing-scroll-sm: 7.5rem; /* 120px */
   --spacing-scroll-md: 12.5rem; /* 200px */
   --spacing-scroll-lg: 18.75rem; /* 300px */
-  /* Sprint 256 (ADR 0023, AC-256-05) — composed `<ExecuteButton>` truncates
+  /* ADR 0023, AC-256-05 — composed `<ExecuteButton>` truncates
    * its target label at 260px so a long connection name ("Execute on
    * <conn>") never bloats a tight footer. Named `execute-label` to
    * confine the token to the button's responsibility. */
   --spacing-execute-label: 16.25rem; /* 260px */
 }
 
-/* Sprint 345 (ADR 0031) + Wave 9.5 (2026-05-16, 회귀 2/3) — theme-agnostic
- * baseline.
+/* ADR 0031 — theme-agnostic baseline.
  *
- * 새 테마가 토큰 정의를 잊거나 `data-theme` 가 unknown id 일 때 cascade 로
- * slate 값을 발동시킨다. **specificity (0,0,0)** — `:where()` 로 감싸 모든
- * `[data-theme="X"][data-mode="Y"]` 테마 블록 (specificity (0,2,0)) 이
- * cascade 에서 항상 이긴다. 누락 시 시각 깨짐 (transparent 색) 없이 slate
- * placeholder 가 보인다.
+ * When a theme forgets a token definition, or `data-theme` holds an unknown
+ * id, the cascade falls back to the slate values. Specificity is (0,0,0):
+ * the `:where()` wrapper keeps every `[data-theme="X"][data-mode="Y"]` theme
+ * block (specificity (0,2,0)) winning the cascade. A missing token then
+ * shows the slate placeholder instead of a visual break (a transparent
+ * color).
  *
- * 회귀 3 (2026-05-16): 이전엔 `:root[data-mode="X"]` 그대로 사용 → 실제
- * specificity 가 (0,2,0) 으로 테마 블록과 동률이라 cascade order (fallback 이
- * `@import "./themes.css"` 뒤에 정의됨) 로 fallback 이 모든 테마를 덮어써
- * "모든 테마가 slate 로 고정" 회귀 발생. `:where()` wrapping 으로 fix.
+ * A bare `:root[data-mode="X"]` does not work: its specificity is (0,2,0),
+ * tied with the theme blocks, so cascade order (this fallback is defined
+ * after `@import "./themes.css"`) lets the fallback override every theme and
+ * pins them all to slate. The `:where()` wrapping is what prevents that.
  * Regression guard: `index-css.theme-cascade.test.ts`.
  *
- * 범위 — Wave 9.5 이전엔 `--tv-syntax-*` 12 토큰만 fallback 이었다. 사용자
- * SQLite tamper / 첫 부팅 + 빈 LS / 신규 테마 incomplete 정의 등 모든 시각
- * 깨짐 경로를 막기 위해 일반 UI 토큰까지 확장 (background / foreground /
- * card / popover / primary / secondary / muted / accent / border / input /
- * ring / primary-tint / status-*).
+ * Scope — the fallback covers the general UI tokens (background /
+ * foreground / card / popover / primary / secondary / muted / accent /
+ * border / input / ring / primary-tint / status-*) on top of the
+ * `--tv-syntax-*` ones, so SQLite tampering by the user, a first boot with
+ * empty local storage, and an incomplete new theme definition all stay
+ * visually intact.
  *
- * 위치 — index.css: fallback 은 *theme-agnostic baseline* 이므로
- * themes.css (theme-specific values 단일 책임) 가 아니라 base layer 에
- * 둔다. mode 분기는 light/dark 별 적절 톤 보장 (dark bg 에 light syntax
- * 가 들어가 대비가 깨지는 일 방지).
+ * Placement — the fallback is a theme-agnostic baseline, so it belongs in
+ * index.css's base layer rather than in themes.css, whose single
+ * responsibility is theme-specific values. The mode split keeps the tone
+ * right per light / dark (a light syntax color on a dark background would
+ * break contrast).
  */
 :where(:root[data-mode="light"]) {
   /* UI base (slate light mirror) */
@@ -144,7 +146,7 @@
   --tv-status-connecting: #f59e0b;
   --tv-status-error: #ef4444;
   --tv-status-idle: #94a3b8;
-  /* Syntax base (Sprint 345) */
+  /* Syntax base */
   --tv-syntax-keyword: #7c3aed;
   --tv-syntax-operator: #475569;
   --tv-syntax-punct: #64748b;
@@ -203,7 +205,7 @@
   --tv-status-connecting: #f59e0b;
   --tv-status-error: #ef4444;
   --tv-status-idle: #64748b;
-  /* Syntax base (Sprint 345) */
+  /* Syntax base */
   --tv-syntax-keyword: #c4b5fd;
   --tv-syntax-operator: #cbd5e1;
   --tv-syntax-punct: #94a3b8;

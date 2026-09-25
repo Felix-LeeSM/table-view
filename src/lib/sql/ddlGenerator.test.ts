@@ -1,7 +1,8 @@
-// AC-192-01 — `generateMigrationDDL` 단위 테스트. dialect 별 quoting,
-// PK inline / 복합, secondary index, FK constraint 의 4 축을 커버.
-// Sprint 192 의 lib pure 책임을 격리해 회귀 가드 — useMigrationExport
-// hook 이나 SchemaTree 진입점이 변해도 본 lib 의 출력은 안정.
+// AC-192-01 — unit tests for `generateMigrationDDL`. Covers 4 axes: per-
+// dialect quoting, PK inline / composite, secondary index, FK constraint.
+// Isolates the lib's pure responsibility as a regression guard — the
+// useMigrationExport hook or the SchemaTree entry point can
+// change while this lib's output stays stable.
 // date 2026-05-02.
 import { describe, expect, it } from "vitest";
 import type { ColumnInfo, ConstraintInfo, IndexInfo } from "@/types/schema";
@@ -41,8 +42,8 @@ function table(
 }
 
 describe("generateMigrationDDL", () => {
-  // [AC-192-01-1] PG, 단일 테이블, PK 없음. 헤더 + 컬럼 NOT NULL /
-  // DEFAULT 가 정확히 emit 되는지.
+  // [AC-192-01-1] PG, single table, no PK. Header + column NOT NULL /
+  // DEFAULT emit exactly.
   // date 2026-05-02
   it("[AC-192-01-1] PG single table without PK", () => {
     const sql = generateMigrationDDL({
@@ -71,8 +72,8 @@ describe("generateMigrationDDL", () => {
     expect(sql).not.toContain("PRIMARY KEY");
   });
 
-  // [AC-192-01-2] PG, inline PK + nullable 컬럼 + DEFAULT. 단일 PK 컬럼은
-  // column line 안에 PRIMARY KEY 가 inline 되어야 한다.
+  // [AC-192-01-2] PG, inline PK + nullable column + DEFAULT. A single PK
+  // column must have PRIMARY KEY inlined in its column line.
   // date 2026-05-02
   it("[AC-192-01-2] PG inline PK with nullable + default columns", () => {
     const sql = generateMigrationDDL({
@@ -104,12 +105,12 @@ describe("generateMigrationDDL", () => {
     expect(sql).toContain('"id" uuid NOT NULL PRIMARY KEY');
     expect(sql).toContain('"email" text NOT NULL');
     expect(sql).toContain(`"nickname" text DEFAULT 'anon'`);
-    // 복합 PK line 은 없어야 한다.
+    // No composite PK line.
     expect(sql).not.toContain("PRIMARY KEY (");
   });
 
-  // [AC-192-01-3] PG, 복합 PK. 단일 PK 컬럼이 둘이면 column line 의
-  // inline PRIMARY KEY 대신 테이블 라인으로 emit 되어야 한다.
+  // [AC-192-01-3] PG, composite PK. With two single PK columns, emit a
+  // table-level line instead of the column line's inline PRIMARY KEY.
   // date 2026-05-02
   it("[AC-192-01-3] PG composite PK uses table-level PRIMARY KEY line", () => {
     const sql = generateMigrationDDL({
@@ -134,12 +135,12 @@ describe("generateMigrationDDL", () => {
       generatedAt: FIXED_DATE,
     });
     expect(sql).toContain('PRIMARY KEY ("user_id", "role_id")');
-    // inline PRIMARY KEY 은 사용하지 않는다.
+    // No inline PRIMARY KEY.
     expect(sql).not.toMatch(/"user_id" uuid NOT NULL PRIMARY KEY/);
   });
 
-  // [AC-192-01-4] secondary unique index — primary 인덱스는 skip,
-  // is_unique 면 CREATE UNIQUE INDEX 로 emit.
+  // [AC-192-01-4] secondary unique index — the primary index is skipped,
+  // and is_unique emits CREATE UNIQUE INDEX.
   // date 2026-05-02
   it("[AC-192-01-4] secondary unique index emits CREATE UNIQUE INDEX, primary index skipped", () => {
     const sql = generateMigrationDDL({
@@ -182,13 +183,14 @@ describe("generateMigrationDDL", () => {
     expect(sql).toContain(
       'CREATE UNIQUE INDEX "users_email_uniq" ON "public"."users" ("email");',
     );
-    // primary index 는 emit 되지 않는다.
+    // The primary index is not emitted.
     expect(sql).not.toContain("users_pkey");
   });
 
-  // [AC-192-01-5] FK constraint — CREATE TABLE 에는 FK 가 없고, 모든
-  // 테이블 정의 뒤 ALTER TABLE ADD CONSTRAINT 로 emit. 두 테이블 정의
-  // 순서가 어떻든 동작 (FK 가 마지막 단계라 forward reference 무관).
+  // [AC-192-01-5] FK constraint — no FK inside CREATE TABLE; every FK emits
+  // as ALTER TABLE ADD CONSTRAINT after all table definitions. Works
+  // regardless of the two tables' definition order (FKs are the last stage,
+  // so forward references do not matter).
   // date 2026-05-02
   it("[AC-192-01-5] FK constraint emits at end via ALTER TABLE", () => {
     const sql = generateMigrationDDL({
@@ -235,13 +237,13 @@ describe("generateMigrationDDL", () => {
       ],
       generatedAt: FIXED_DATE,
     });
-    // CREATE TABLE 안에는 FK 표현이 없다.
+    // No FK expression inside CREATE TABLE.
     const createTablePosts = sql.slice(
       sql.indexOf('CREATE TABLE "public"."posts"'),
       sql.indexOf("CREATE TABLE", sql.indexOf("posts") + 10),
     );
     expect(createTablePosts).not.toContain("FOREIGN KEY");
-    // 마지막 단계의 ALTER TABLE 이 존재.
+    // The last-stage ALTER TABLE exists.
     expect(sql).toContain("-- Foreign keys");
     expect(sql).toContain('ALTER TABLE "public"."posts"');
     expect(sql).toContain('ADD CONSTRAINT "posts_author_fk"');
@@ -250,8 +252,8 @@ describe("generateMigrationDDL", () => {
     );
   });
 
-  // [AC-192-01-6] MySQL identifier quoting (backtick). schema = database
-  // 으로 취급, qualified name 도 backtick.
+  // [AC-192-01-6] MySQL identifier quoting (backtick). schema is treated as
+  // the database, and qualified names are backticked too.
   // date 2026-05-02
   it("[AC-192-01-6] MySQL uses backtick quoting", () => {
     const sql = generateMigrationDDL({
@@ -276,7 +278,7 @@ describe("generateMigrationDDL", () => {
     });
     expect(sql).toContain("CREATE TABLE `shop`.`orders`");
     expect(sql).toContain("`id` BIGINT NOT NULL PRIMARY KEY");
-    // identifier 안의 공백도 그대로 quoted.
+    // Spaces inside an identifier are quoted as-is.
     expect(sql).toContain("`customer name` VARCHAR(255) NOT NULL");
   });
 
@@ -360,8 +362,8 @@ describe("generateMigrationDDL", () => {
     );
   });
 
-  // [AC-192-01-7] SQLite 은 schema 개념 없이 unqualified table 이름.
-  // identifier 는 PG 와 동일 ANSI double-quote.
+  // [AC-192-01-7] SQLite has no schema concept, so table names are
+  // unqualified. Identifiers use the same ANSI double-quote as PG.
   // date 2026-05-02
   it("[AC-192-01-7] SQLite uses unqualified ANSI quoting", () => {
     const sql = generateMigrationDDL({
@@ -381,7 +383,7 @@ describe("generateMigrationDDL", () => {
       generatedAt: FIXED_DATE,
     });
     expect(sql).toContain('CREATE TABLE "notes"');
-    // schema name 은 헤더에는 적히지만 statement 에는 없다.
+    // The schema name appears in the header but not in the statement.
     expect(sql).toContain("-- schema:  main");
     expect(sql).not.toContain('"main"."notes"');
   });
@@ -455,8 +457,8 @@ describe("generateMigrationDDL", () => {
     expect(sql).not.toContain("`HR`.`ORDERS`");
   });
 
-  // [AC-192-01-8] embedded quote 가 들어간 identifier 도 안전하게 escape.
-  // " 는 "" 로, ` 는 `` 로. SQL injection 회귀 방지 가드.
+  // [AC-192-01-8] identifiers containing embedded quotes are escaped safely.
+  // " → "", ` → ``. Guards against a SQL injection regression.
   // date 2026-05-02
   it("[AC-192-01-8] embedded quote characters in identifiers are escaped", () => {
     const pg = generateMigrationDDL({
@@ -476,10 +478,11 @@ describe("generateMigrationDDL", () => {
     expect(my).toContain("`weird``name`");
   });
 
-  // [AC-192-09] PG `nextval(...)` default 는 BIGSERIAL/SERIAL/SMALLSERIAL
-  // syntactic sugar 로 정규화한다. 이 변환이 없으면 import 시 referenced
-  // sequence 가 미생성이라 fail. 정규화 후 PG 가 sequence + nextval
-  // default 를 자동 emit. NOT NULL/PK 도 같이 보존되는지 확인.
+  // [AC-192-09] PG `nextval(...)` defaults normalize to the
+  // BIGSERIAL/SERIAL/SMALLSERIAL syntactic sugar. Without this transform the
+  // import fails because the referenced sequence does not exist yet. After
+  // normalization PG emits the sequence + nextval default automatically.
+  // Also checks that NOT NULL/PK are preserved alongside.
   // date 2026-05-02
   it("[AC-192-09-1] PG bigint + nextval default → BIGSERIAL", () => {
     const sql = generateMigrationDDL({
@@ -499,10 +502,11 @@ describe("generateMigrationDDL", () => {
       ],
       generatedAt: FIXED_DATE,
     });
-    // BIGSERIAL + PRIMARY KEY 만 — DEFAULT 라인 / NOT NULL 모두 제거.
+    // BIGSERIAL + PRIMARY KEY only — both the DEFAULT line and NOT NULL are
+    // dropped.
     expect(sql).toContain('"id" BIGSERIAL PRIMARY KEY');
     expect(sql).not.toContain("nextval(");
-    // 비-serial column 은 그대로.
+    // A non-serial column passes through unchanged.
     expect(sql).toContain('"name" text NOT NULL');
   });
 
@@ -546,9 +550,9 @@ describe("generateMigrationDDL", () => {
     expect(sql).toContain('"id" SMALLSERIAL PRIMARY KEY');
   });
 
-  // [AC-192-09-4] 비-nextval default 는 정상 보존 — 회귀 가드. 가령
-  // CURRENT_TIMESTAMP 같은 일반 default 가 SERIAL 로 잘못 변환되지
-  // 않는지.
+  // [AC-192-09-4] non-nextval defaults are preserved verbatim — regression
+  // guard. E.g. an ordinary default like CURRENT_TIMESTAMP must not be
+  // wrongly converted to SERIAL.
   it("[AC-192-09-4] non-nextval bigint default is preserved verbatim", () => {
     const sql = generateMigrationDDL({
       dialect: "postgresql",
@@ -569,8 +573,9 @@ describe("generateMigrationDDL", () => {
     expect(sql).not.toContain("BIGSERIAL");
   });
 
-  // [AC-192-09-5] buildSequenceResets — BIGSERIAL 화된 column 마다
-  // setval 줄 emit. table 이 비어있어도 COALESCE 로 idempotent.
+  // [AC-192-09-5] buildSequenceResets — emits a setval line for every
+  // BIGSERIAL-ized column. COALESCE keeps it idempotent even for an empty
+  // table.
   it("[AC-192-09-5] buildSequenceResets emits setval for nextval columns", () => {
     const lines = buildSequenceResets("postgresql", "public", [
       table("payment_accounts", [
@@ -591,8 +596,8 @@ describe("generateMigrationDDL", () => {
     expect(lines[0]).toContain('SELECT MAX("id")');
   });
 
-  // [AC-192-09-6] 다른 dialect (mysql/mariadb/sqlite) 는 setval 발생 안 함.
-  // 미래에 dialect 별 reset semantics 가 추가되면 본 케이스 갱신.
+  // [AC-192-09-6] other dialects (mysql/mariadb/sqlite) emit no setval.
+  // Update this case when per-dialect reset semantics are added.
   it("[AC-192-09-6] buildSequenceResets returns empty for non-PG dialects", () => {
     const cols = [
       col({

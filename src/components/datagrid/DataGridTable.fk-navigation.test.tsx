@@ -1,5 +1,5 @@
 /**
- * Sprint-89 (#FK-1) AC-04 — FK navigation integration test.
+ * #FK-1 AC-04 — FK navigation integration test.
  *
  * Renders `DataGridTable` with a column that carries
  * `is_foreign_key: true` + `fk_reference: "<schema>.<table>(<column>)"` and
@@ -204,7 +204,7 @@ describe("DataGridTable — FK navigation (sprint-89 #FK-1 AC-04)", () => {
   });
 
   it("renders the FK icon at minimum visibility (opacity-40) on every FK + non-null cell", () => {
-    // Sprint-89 (#FK-3): the icon should be discoverable without hover.
+    // #FK-3: the icon should be discoverable without hover.
     // We assert on the className contract because jsdom does not run
     // Tailwind, so computed style would not reflect group-hover state.
     const onNavigateToFk = vi.fn();
@@ -216,8 +216,8 @@ describe("DataGridTable — FK navigation (sprint-89 #FK-1 AC-04)", () => {
     });
     expect(fkButton.className).toContain("opacity-40");
     expect(fkButton.className).toContain("group-hover/cell:opacity-100");
-    // Pre-sprint-89 the icon was hidden by `invisible` until hover —
-    // make sure we did not regress to that.
+    // The icon used to be hidden by `invisible` until hover — make sure we
+    // did not regress to that.
     expect(fkButton.className).not.toContain("invisible");
   });
 });

@@ -1,13 +1,13 @@
-// Sprint 271b (2026-05-13) — DataGrid 의 DbMismatch end-to-end recovery.
+// DataGrid DbMismatch end-to-end recovery.
 //
-// 작성 이유: backend Sprint 266 가드가 DataGrid 의 row-fetch 를
-// `AppError::DbMismatch` 로 reject 할 때
-//   (1) typed/legacy DbMismatch normalizer 가 envelope 를 감지하고
-//   (2) syncMismatchedActiveDb 가 verifyActiveDb 의 새 db 로 sync 하며
-//   (3) user-initiated (DataGrid 는 사용자가 클릭한 그리드) 이므로
-//       Sprint 269 Retry toast 가 표면화된다.
-// 를 한꺼번에 단언. typed envelope 의 `message` 가 inline error 박스에
-// 그대로 보임을 함께 검증.
+// Reason: when the backend guard rejects the DataGrid row-fetch with
+// `AppError::DbMismatch`, assert in one go that
+//   (1) the typed/legacy DbMismatch normalizer detects the envelope,
+//   (2) `syncMismatchedActiveDb` syncs to the new db from `verifyActiveDb`,
+//   (3) the Retry toast surfaces because this is user-initiated (the
+//       DataGrid is the grid the user clicked).
+// Also verifies that the typed envelope's `message` shows up verbatim in the
+// inline error box.
 
 import { screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,8 +26,9 @@ import {
   resetDataGridMocks,
 } from "./__tests__/dataGridTestHelpers";
 
-// Hoisted hooks 가 vi.mock factory 안에서 참조될 수 있도록 vi.hoisted 로
-// 선언. 대표 mismatch mock 은 #744 typed envelope 형식.
+// Declared with vi.hoisted so the hooks can be referenced inside the vi.mock
+// factory. The representative mismatch mock uses the #744 typed envelope
+// shape.
 const verifyActiveDbMock = vi.hoisted(() => vi.fn());
 const setActiveDbMock = vi.hoisted(() => vi.fn());
 const clearForConnectionMock = vi.hoisted(() => vi.fn());
@@ -190,8 +191,8 @@ describe("DataGrid — DbMismatch routing (Sprint 271b)", () => {
 
     renderDataGrid();
 
-    // (1) inline error surface — DataGrid still routes the message
-    // through setError so the alert box matches Sprint 222 behaviour.
+    // (1) inline error surface — DataGrid still routes the message through
+    // setError so the alert box matches the existing behaviour.
     await screen.findByRole("alert");
 
     // (2) verify helper fired against the workspace connId; setActiveDb

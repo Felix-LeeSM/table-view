@@ -1,7 +1,7 @@
-// Sprint 258 (2026-05-11) — DataGrid 가 `<table>` 폐기 + CSS Grid 로 전환.
-// drag-resize 의 결과는 outer container 의 `--cols` CSS variable 갱신.
-// 본 테스트는 drag → mouseup 시 `--cols` 의 첫 column px 가 증가했고
-// 두 번째 column px 는 변하지 않았다는 사실을 잡는다.
+// DataGrid dropped `<table>` for CSS Grid, so a drag-resize shows up as an
+// update to the outer container's `--cols` CSS variable. This test catches
+// that on drag → mouseup the first column px in `--cols` grew while the
+// second column px did not change.
 
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -131,13 +131,13 @@ describe("DataGridTable — Column Resize (Sprint 258 CSS Grid)", () => {
     expect(after.length).toBe(2);
     // id column +100px (drag delta).
     expect(after[0]!).toBeGreaterThan(idBefore);
-    // 인접 column 의 px 는 변하지 않는다 (column 독립성).
+    // The neighbouring column's px does not change (column independence).
     expect(after[1]!).toBe(nameBefore);
   });
 
-  // Sprint 259 — sprint-258 follow-up #6: drag *중* mousemove 단계에서도
-  // 다른 column 의 --cols px 가 변하지 않는다 (mouseup 전 imperative
-  // setProperty 가 자기 column 의 token 만 mutate).
+  // Mid-drag, at the mousemove stage, the other column's --cols px still
+  // does not change (the imperative setProperty before mouseup mutates only
+  // its own column's token).
   it("drag 중 (mousemove) 에 자기 column 의 --cols px 만 갱신, 다른 column 은 불변 (AC-258-02 mid-drag)", () => {
     render(<DataGridTable {...defaultProps} />);
 
@@ -161,7 +161,7 @@ describe("DataGridTable — Column Resize (Sprint 258 CSS Grid)", () => {
       );
     });
 
-    // mouseup 전 시점의 --cols 단언.
+    // Assert --cols at the point before mouseup.
     const mid = parseColsPx(getOuterGrid());
     expect(mid.length).toBe(2);
     expect(mid[0]!).toBeGreaterThan(before[0]!);
@@ -175,9 +175,8 @@ describe("DataGridTable — Column Resize (Sprint 258 CSS Grid)", () => {
     });
   });
 
-  // Sprint 259 — sprint-258 follow-up #6: 3+ 컬럼 케이스에서도 single
-  // column drag 가 나머지 모든 column 의 px 를 변경하지 않는다 (column
-  // 독립성이 컬럼 수 무관함).
+  // With 3+ columns a single column drag still changes no other column's px
+  // (column independence does not depend on the column count).
   it("3 컬럼 케이스에서 single column drag 가 나머지 두 column 의 --cols 를 변경하지 않는다", () => {
     const threeColData: TableData = {
       ...MOCK_DATA,
@@ -231,7 +230,7 @@ describe("DataGridTable — Column Resize (Sprint 258 CSS Grid)", () => {
 
     const after = parseColsPx(getOuterGrid());
     expect(after.length).toBe(3);
-    // 인접한 두 column 은 모두 불변.
+    // Both neighbouring columns stay unchanged.
     expect(after[0]!).toBe(before[0]!);
     expect(after[1]!).toBeGreaterThan(before[1]!);
     expect(after[2]!).toBe(before[2]!);

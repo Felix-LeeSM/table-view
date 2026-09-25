@@ -28,16 +28,17 @@ import { supportsNativeCancel } from "./useQueryContext";
 import type { QueryFavoritesState } from "./useQueryFavorites";
 
 /**
- * `QueryTab` 의 toolbar 컴포넌트.
+ * The toolbar component of `QueryTab`.
  *
- * 책임: Run/Cancel + Format + Save/Favorites buttons + 2 popover
- * (Save 폼 / `<FavoritesPanel>` mount). Save 와 Favorites popover 는
- * 상호 배타 — 한 쪽 열 때 다른 쪽 close.
+ * Responsibility: Run/Cancel + Format + Save/Favorites buttons + 2
+ * popovers (the Save form / `<FavoritesPanel>` mount). The Save and
+ * Favorites popovers are mutually exclusive — opening one closes the
+ * other.
  *
- * Sprint 309 — Find/Aggregate `ToggleGroup` removed. The mongosh parser
- * (A1) infers the method from the editor text, so the toggle no longer
- * carries information. `onSetQueryMode` is gone from this surface; the
- * store action stays exported for `loadQueryIntoTab` backward-compat.
+ * The Find/Aggregate `ToggleGroup` is removed. The mongosh parser infers
+ * the method from the editor text, so the toggle carries no information.
+ * `onSetQueryMode` is gone from this surface; the store action stays
+ * exported for `loadQueryIntoTab` backward-compat.
  *
  * Invariants:
  * - The Save button is disabled iff `tab.sql` is empty. The save form's
@@ -109,10 +110,10 @@ export default function QueryTabToolbar({
   } = favorites;
   const snippetCount = useSnippetsStore((s) => s.snippets.length);
 
-  // Sprint 381 (2026-05-17) — Mongo db-contract α. The Run button used
-  // to be disabled whenever Mongo's `tab.database` was empty, which
-  // blocked admin commands (`db.runCommand({ping: 1})`) that don't need
-  // a bound database. The new gate splits two axes:
+  // Mongo db-contract α. The Run button used to be disabled whenever
+  // Mongo's `tab.database` was empty, which blocked admin commands
+  // (`db.runCommand({ping: 1})`) that don't need a bound database. The
+  // gate splits two axes:
   //   - statement is *non-empty* (`tab.sql.trim()` — unchanged check)
   //   - statement is *runnable* — for document paradigm, classify into
   //     admin-command (DB-less OK) vs collection-command (DB required)
@@ -146,9 +147,9 @@ export default function QueryTabToolbar({
 
   return (
     <div className="flex items-center gap-2 border-b border-border bg-secondary px-2 py-1">
-      {/* 2026-05-15 — Sprint 329 의 display-only chip 을 interactive
-          selector 로 교체. tab-local 시맨틱은 유지 (`tab.database` 만
-          갱신; connection.activeDb 는 그대로). */}
+      {/* The display-only chip was replaced by an interactive selector.
+          The tab-local semantics are kept (it updates only
+          `tab.database`; connection.activeDb is left as is). */}
       {isDocument && (
         <TabDbChip
           tabId={tab.id}

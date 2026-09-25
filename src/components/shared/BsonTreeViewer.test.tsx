@@ -328,8 +328,8 @@ describe("BsonTreeViewer", () => {
     ).toBeInTheDocument();
   });
 
-  // Sprint 306 (2026-05-14) — BigInt freeze 회귀 가드. canonicalStringify
-  // 가 raw JSON.stringify 였을 때 nested BigInt 입력에서 throw.
+  // BigInt freeze regression guard. When `canonicalStringify` was a raw
+  // `JSON.stringify`, nested BigInt input threw.
   it("[Sprint 306] BigInt leaf 가 있어도 throw 없이 render", () => {
     expect(() =>
       render(

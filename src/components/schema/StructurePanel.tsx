@@ -41,19 +41,16 @@ interface StructurePanelProps {
    */
   paradigm?: Paradigm;
   /**
-   * Sprint 272 — initial sub-tab to render on mount. `undefined` falls
-   * back to "columns" (pre-Sprint-272 default). Sprint 275 — the
-   * Sidebar "View Triggers" entry was retired (sidebar trigger surface
-   * removed); the prop remains so future external entry points can
-   * deep-link to the Triggers sub-tab.
+   * Initial sub-tab to render on mount. `undefined` falls back to
+   * "columns". The Sidebar "View Triggers" entry no longer exists; the
+   * prop remains so future external entry points can deep-link to the
+   * Triggers sub-tab.
    */
   initialSubTab?: SubTab;
 }
 
-// Sprint 272 — `SubTab` enum extended with `"triggers"`. Existing
-// `"columns" | "indexes" | "constraints"` consumers are byte-equivalent.
-// Sprint 275 — `"triggers"` is now the single entry point for trigger
-// CRUD (sidebar Triggers child group retired).
+// `"triggers"` is the single entry point for trigger CRUD; there is no
+// sidebar Triggers child group.
 type SubTab = "columns" | "indexes" | "constraints" | "triggers";
 
 export default function StructurePanel({
@@ -81,13 +78,13 @@ export default function StructurePanel({
   const [hasFetchedColumns, setHasFetchedColumns] = useState(false);
   const [hasFetchedIndexes, setHasFetchedIndexes] = useState(false);
   const [hasFetchedConstraints, setHasFetchedConstraints] = useState(false);
-  // Sprint 272 — Triggers tab "has-fetched" gate. Mirrors the same gate
-  // pattern as Columns / Indexes / Constraints to prevent a misleading
-  // "No triggers" flash before the first fetch settles.
+  // Triggers tab "has-fetched" gate. Mirrors the same gate pattern as
+  // Columns / Indexes / Constraints to prevent a misleading "No triggers"
+  // flash before the first fetch settles.
   const [hasFetchedTriggers, setHasFetchedTriggers] = useState(false);
-  // Sprint 275 — trigger CRUD now lives entirely on this surface (the
-  // SchemaTree sidebar Triggers child group was retired). Local dialog
-  // slots: `createTriggerDialog` opens the +Create Trigger modal,
+  // Trigger CRUD lives entirely on this surface; the SchemaTree sidebar
+  // has no Triggers child group. Local dialog slots:
+  // `createTriggerDialog` opens the +Create Trigger modal,
   // `dropTriggerDialog` opens the per-trigger trash modal. Both `null`
   // when closed. The success path closes the slot AND calls
   // `refreshTableTriggers` to invalidate the schemaStore cache so the
@@ -196,9 +193,9 @@ export default function StructurePanel({
         setConstraints(cons);
         setHasFetchedConstraints(true);
       } else {
-        // Sprint 272 — Triggers tab. Cache-first store action; second
-        // call with identical `(connId, db, schema, table)` returns the
-        // cached array without re-invoking the IPC.
+        // Triggers tab. Cache-first store action; second call with
+        // identical `(connId, db, schema, table)` returns the cached array
+        // without re-invoking the IPC.
         const trigs = await getTableTriggers(
           connectionId,
           database as DatabaseName,
@@ -277,8 +274,8 @@ export default function StructurePanel({
     ...(showConstraintsTab
       ? [{ key: "constraints" as const, label: t("constraintsTab") }]
       : []),
-    // Sprint 272 — read-only Triggers tab. Order is fixed (after
-    // Constraints) per master spec § 2 and contract § In Scope.
+    // Read-only Triggers tab. Order is fixed (after Constraints) per
+    // master spec § 2 and contract § In Scope.
     { key: "triggers", label: t("triggersTab") },
   ];
 
@@ -383,12 +380,12 @@ export default function StructurePanel({
           />
         )}
 
-      {/* Sprint 272 — Triggers viewer. Sprint 275 — full CRUD now lives
-          on this surface (sidebar Triggers child group retired): the
-          `+ Create Trigger` button opens `CreateTriggerDialog`; each
-          trigger row carries a per-row trash icon that opens
-          `DropTriggerDialog`. The `hasFetchedTriggers` gate prevents an
-          "No triggers" flash on first paint. */}
+      {/* Triggers viewer. Full CRUD lives on this surface, with no
+          sidebar Triggers child group: the `+ Create Trigger` button
+          opens `CreateTriggerDialog`; each trigger row carries a per-row
+          trash icon that opens `DropTriggerDialog`. The
+          `hasFetchedTriggers` gate prevents an "No triggers" flash on
+          first paint. */}
       {!loading &&
         !error &&
         effectiveSubTab === "triggers" &&
@@ -401,11 +398,11 @@ export default function StructurePanel({
           />
         )}
 
-      {/* Sprint 275 — CreateTriggerDialog mount. Moved here from
-          SchemaTree (Sprint 273) so the trigger CRUD surface is
-          consolidated. `onRefresh` invalidates the schemaStore cache for
-          `(connId, db, schema, table)` so the new trigger appears in
-          the list without a sidebar/tree reload. */}
+      {/* CreateTriggerDialog mount, kept here rather than in SchemaTree
+          so the trigger CRUD surface stays consolidated. `onRefresh`
+          invalidates the schemaStore cache for
+          `(connId, db, schema, table)` so the new trigger appears in the
+          list without a sidebar/tree reload. */}
       {createTriggerDialog && (
         <CreateTriggerDialog
           connectionId={connectionId}
@@ -429,7 +426,7 @@ export default function StructurePanel({
         />
       )}
 
-      {/* Sprint 275 — DropTriggerDialog mount. Same wiring as Create;
+      {/* DropTriggerDialog mount. Same wiring as Create;
           carries the per-row trigger name into the typing-confirm
           input. */}
       {dropTriggerDialog && (
@@ -464,9 +461,8 @@ interface TriggersListProps {
 }
 
 /**
- * Sprint 272 — viewer for the Triggers sub-tab. Sprint 275 — now the
- * single entry point for trigger CRUD (sidebar Triggers child group was
- * retired). Surfaces:
+ * Viewer for the Triggers sub-tab and the single entry point for trigger
+ * CRUD. Surfaces:
  *   - Header toolbar with `+ Create Trigger` button (opens
  *     `CreateTriggerDialog` via `onCreate`).
  *   - One card per trigger with structured metadata + the canonical

@@ -1,7 +1,7 @@
-// Sprint 341 (2026-05-15) — Option D: inline tree row.
+// Option D: inline tree row.
 //
-// Replaces the Sprint 321/322 NestedExpandPopover regression guards with
-// the equivalent contract on the inline tree:
+// Replaces the NestedExpandPopover regression guards with the equivalent
+// contract on the inline tree:
 //   - sentinel cell mounts an in-cell toggle (the `...` or `N items`
 //     middle button); scalar cells do not.
 //   - clicking the toggle does not propagate row selection.
@@ -114,12 +114,11 @@ describe("DocumentDataGrid — nested inline tree (Sprint 341 Option D)", () => 
     expect(screen.queryByTestId("nested-detail-row-0")).not.toBeInTheDocument();
   });
 
-  // Sprint 342 V2 feedback (2026-05-15) — sort/filter/refetch must
-  // auto-close the inline tree panel. Without this, the panel either
-  // dangles where the row used to be, or silently re-attaches to a
-  // DIFFERENT doc that has slid into the same rowIdx — both are
-  // confusing edits-go-to-the-wrong-row bugs. We snapshot `_id` at
-  // expand-time and an effect compares it against `rows[rowIdx]._id`
+  // Sort/filter/refetch must auto-close the inline tree panel. Without
+  // this, the panel either dangles where the row used to be, or silently
+  // re-attaches to a DIFFERENT doc that has slid into the same rowIdx —
+  // both are confusing edits-go-to-the-wrong-row bugs. We snapshot `_id`
+  // at expand-time and an effect compares it against `rows[rowIdx]._id`
   // whenever the query result changes.
   it("auto-closes the inline tree when the underlying row at rowIdx changes (e.g. sort)", async () => {
     const A = buildResult();
@@ -226,17 +225,17 @@ describe("DocumentDataGrid — nested inline tree (Sprint 341 Option D)", () => 
   });
 
   // -----------------------------------------------------------------
-  // Sprint 344 Slice F (2026-05-15) — end-to-end `+ key` add through
-  // the Mongo grid: open the inline tree on an object cell, click the
-  // `+ key` affordance, type a key/value pair, Enter, and assert that
-  // (a) the ghost row appears with a NEW badge in the panel, and
-  // (b) the MQL preview line emits `$set: { "<col>.<newkey>": <v> }`.
+  // End-to-end `+ key` add through the Mongo grid: open the inline tree
+  // on an object cell, click the `+ key` affordance, type a key/value
+  // pair, Enter, and assert that (a) the ghost row appears with a NEW
+  // badge in the panel, and (b) the MQL preview line emits
+  // `$set: { "<col>.<newkey>": <v> }`.
   //
-  // Locks Slice E's central assumption: the panel's
-  // `onCommitEdit("role", v)` for `meta` (col idx 2) materialises a
-  // pendingEdit at key `"0-2:role"` (NOT `"0-2:meta.role"`), and the
-  // mqlGenerator joins `col.name` with the per-cell path at emit time
-  // to produce the `"meta.role"` dotted field.
+  // Locks the central assumption: the panel's `onCommitEdit("role", v)`
+  // for `meta` (col idx 2) materialises a pendingEdit at key `"0-2:role"`
+  // (NOT `"0-2:meta.role"`), and the mqlGenerator joins `col.name` with
+  // the per-cell path at emit time to produce the `"meta.role"` dotted
+  // field.
   // -----------------------------------------------------------------
   describe("inline `+ key` add on tree object (AC-344-F-01)", () => {
     it("AC-344-F-01: `+ key` add on `meta` shows a NEW ghost row + MQL preview emits `$set: { 'meta.role': 'owner' }`", async () => {
@@ -249,25 +248,25 @@ describe("DocumentDataGrid — nested inline tree (Sprint 341 Option D)", () => 
       fireEvent.click(screen.getByRole("button", { name: "Expand meta" }));
       expect(screen.getByTestId("nested-detail-row-0")).toBeInTheDocument();
 
-      // Click `+ key` on the root of the cell's tree (Slice B affordance).
-      // The fixture's `meta` is `{ verified: true, role: "admin" }` — the
-      // existing `role` would collide, so this test uses a non-colliding
-      // key. The grid mounts the tree against a fresh `meta` whose
-      // pre-existing keys are `verified` and `role` — we add a brand-new
-      // key `team` here.
+      // Click `+ key` on the root of the cell's tree. The fixture's
+      // `meta` is `{ verified: true, role: "admin" }` — the existing
+      // `role` would collide, so this test uses a non-colliding key. The
+      // grid mounts the tree against a fresh `meta` whose pre-existing
+      // keys are `verified` and `role` — we add a brand-new key `team`
+      // here.
       fireEvent.click(screen.getByTestId("tree-add-key-__root"));
 
-      // Type the key + value. Outer-quoted value → Slice D coerces to
-      // string; bare value would coerce to a number/bool/null. Mongo
-      // grid forwards the typed value through `tagBsonWrapper`-or-string
-      // — string `"owner"` stays a plain pendingEdit string.
+      // Type the key + value. Outer-quoted value coerces to a string;
+      // bare value would coerce to a number/bool/null. Mongo grid
+      // forwards the typed value through `tagBsonWrapper`-or-string —
+      // string `"owner"` stays a plain pendingEdit string.
       const keyInput = screen.getByTestId("tree-add-key-input-__root");
       const valueInput = screen.getByTestId("tree-add-value-input-__root");
       fireEvent.change(keyInput, { target: { value: "team" } });
       fireEvent.change(valueInput, { target: { value: '"owner"' } });
       fireEvent.keyDown(valueInput, { key: "Enter" });
 
-      // (a) Ghost row appears with NEW badge — Slice A's ghost render.
+      // (a) Ghost row appears with NEW badge via the ghost render.
       await waitFor(() => {
         expect(screen.getByTestId("tree-node-team")).toBeInTheDocument();
       });
@@ -289,13 +288,13 @@ describe("DocumentDataGrid — nested inline tree (Sprint 341 Option D)", () => 
       expect(preview).toHaveTextContent(/"owner"/);
     });
 
-    // AC-344-F-04 (2026-05-15) — root-level `_id` add is rejected by
-    // the Mongo grid's `forbiddenRootKeys` prop. Verifies the wire-up
-    // by mounting the Mongo grid (not the panel alone) and confirming
-    // (a) the inline rejection UX surfaces, (b) the pending pill does
-    // not increment, and (c) no Commit button appears (no pending
-    // edits were recorded). The same prop is omitted for the RDB grid
-    // (see DataGrid.lifecycle.test.tsx) so DocumentTreePanel stays
+    // AC-344-F-04 — root-level `_id` add is rejected by the Mongo grid's
+    // `forbiddenRootKeys` prop. Verifies the wire-up by mounting the
+    // Mongo grid (not the panel alone) and confirming (a) the inline
+    // rejection UX surfaces, (b) the pending pill does not increment,
+    // and (c) no Commit button appears (no pending edits were recorded).
+    // The same prop is omitted for the RDB grid (see
+    // DataGrid.lifecycle.test.tsx) so DocumentTreePanel stays
     // paradigm-agnostic.
     it("AC-344-F-04: Mongo grid rejects `_id` root add via forbiddenRootKeys", async () => {
       renderGrid();

@@ -1,9 +1,7 @@
-// Sprint 216 — `lifecycle` axis split from `SchemaTree.test.tsx`. Covers
-// mount auto-load, re-render skip, connectionId change, edge cases
-// (undefined schemas, table-key format), connection-header verbatim/
-// fallback, the static `Schemas` header, and the root `select-none`
-// class. Cases are byte-equivalent to the originals — no behaviour
-// change.
+// `lifecycle` axis split from `SchemaTree.test.tsx`. Covers mount
+// auto-load, re-render skip, connectionId change, edge cases (undefined
+// schemas, table-key format), connection-header verbatim/fallback, the
+// static `Schemas` header, and the root `select-none` class.
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { act, render, screen } from "@testing-library/react";
@@ -109,7 +107,7 @@ describe("SchemaTree — lifecycle", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Sprint 144: schema is auto-expanded on mount; tables visible immediately.
+    // Schema is auto-expanded on mount; tables visible immediately.
     // Tables should appear since they are pre-cached under the correct key
     expect(screen.getByText("t1")).toBeInTheDocument();
     // loadTables should NOT be called since tables are already cached
@@ -126,9 +124,9 @@ describe("SchemaTree — lifecycle", () => {
         conn2: [{ name: "dbo" }],
       },
     });
-    // Sprint 263 — `useWorkspaceKeyForConnection` resolves the db
-    // dimension from `activeStatuses[connectionId].activeDb`, so a
-    // connection switch needs both connections seeded with a status.
+    // `useWorkspaceKeyForConnection` resolves the db dimension from
+    // `activeStatuses[connectionId].activeDb`, so a connection switch
+    // needs both connections seeded with a status.
     useConnectionStore.setState((s) => ({
       activeStatuses: {
         ...s.activeStatuses,

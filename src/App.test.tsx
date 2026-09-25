@@ -17,9 +17,9 @@ import {
 } from "./stores/workspaceStore";
 
 // Mock page components to isolate shortcut testing — App.tsx now mounts only
-// `WorkspacePage` (Sprint 154 — `AppRouter` picks the per-window shell at
-// boot), but the global shortcuts under test are wired at the App level and
-// don't depend on which page is mounted.
+// `WorkspacePage` (`AppRouter` picks the per-window shell at boot), but the
+// global shortcuts under test are wired at the App level and don't depend on
+// which page is mounted.
 vi.mock("./pages/WorkspacePage", () => ({
   default: () => <div data-testid="workspace-page" />,
 }));
@@ -42,22 +42,22 @@ vi.mock("./lib/tauri", () => ({
   moveConnectionToGroup: vi.fn(() => Promise.resolve()),
 }));
 
-// Sprint 153: stores now opt into the cross-window bridge at module load
-// (mruStore, themeStore, favoritesStore unconditionally; tabStore when
+// Stores now opt into the cross-window bridge at module load (mruStore,
+// themeStore, favoritesStore unconditionally; tabStore when
 // `getCurrentWindowLabel() === "workspace"`). The bridge subscribes to each
 // store and calls `emit(channel, envelope)` on every state change. Without
 // an `emit` stub here, the first synchronous setState during AppRouter boot
-// throws TypeError("emit is not a function"). Sprint 152 set the precedent
-// with the same one-line addition in connectionStore.test.ts.
+// throws TypeError("emit is not a function"). connectionStore.test.ts set
+// the precedent with the same one-line addition.
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
   emit: vi.fn(() => Promise.resolve()),
 }));
 
-// Sprint 368 (Phase 4 Q12) — theme / safe-mode actions issue
-// `persist_setting` IPC. The App keyboard cycle (`Cmd+Shift+L`) calls
-// `setMode` and intentionally does not await the promise. Mock invoke
-// so the unawaited promise resolves silently.
+// Phase 4 Q12 — theme / safe-mode actions issue the `persist_setting` IPC.
+// The App keyboard cycle (`Cmd+Shift+L`) calls `setMode` and intentionally
+// does not await the promise. Mock invoke so the unawaited promise resolves
+// silently.
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.resolve()),
 }));
@@ -114,7 +114,7 @@ function fireShortcut(key: string, metaKey = true) {
 describe("App global shortcuts", () => {
   beforeEach(() => {
     useWorkspaceStore.setState({ workspaces: {} });
-    // Sprint 155 — `App` is only mounted under the workspace `WebviewWindow`
+    // `App` is only mounted under the workspace `WebviewWindow`
     // (per `AppRouter.tsx`), so the workspace context is implied by the
     // file-under-test rendering `<App />`. The legacy app-shell screen seed
     // is no longer needed.
@@ -308,11 +308,11 @@ describe("App global shortcuts", () => {
     expect(getTestWorkspace().tabs).toHaveLength(0);
   });
 
-  // 2026-05-01 회귀 — 쿼리 실행 후 SQL 에디터(contenteditable)에 포커스가
-  // 있는 상태에서 Cmd+W를 누르면 macOS WebView가 native Close-Window를
-  // 발동시켜 창 자체가 닫혀버렸다. 다른 단축키와 달리 Cmd+W는
-  // editable surface 안에서도 항상 가로채 preventDefault + 탭 닫기로
-  // 처리해야 한다.
+  // 2026-05-01 regression — after running a query, pressing Cmd+W while the
+  // SQL editor (contenteditable) held focus triggered the macOS WebView's
+  // native Close-Window and closed the whole window. Unlike the other
+  // shortcuts, Cmd+W must always be intercepted even inside an editable
+  // surface, with preventDefault + tab close.
   it("Cmd+W intercepts even when focus is in a contenteditable target", () => {
     const tab = makeTableTab();
     useWorkspaceStore.setState(seedWorkspace([tab], "tab-1"));
@@ -400,12 +400,13 @@ describe("App global shortcuts", () => {
     window.removeEventListener("refresh-schema", handler);
   });
 
-  // ── Sprint 33: Extended Keyboard Shortcuts ──
+  // ── Extended Keyboard Shortcuts ──
 
-  // 작성 이유 (2026-05-13, Sprint 291): 사용자 요구 — workspace 윈도우의
-  // Cmd+N 은 connection-create dialog 대신 raw query tab 을 연다. 기존
-  // 테스트가 검증하던 "new-connection" DOM 이벤트는 더 이상 발생하지 않고,
-  // 대신 활성 connection 의 워크스페이스에 query tab 이 추가되어야 한다.
+  // Reason (2026-05-13): user request — in a workspace window Cmd+N opens a
+  // raw query tab instead of the connection-create dialog. The
+  // "new-connection" DOM event the earlier test verified is no longer
+  // emitted; instead a query tab must be added to the active connection's
+  // workspace.
   it("Sprint 291 — Cmd+N 은 활성 connection 에 raw query tab 을 추가한다", () => {
     const tab = makeTableTab();
     useWorkspaceStore.setState(seedWorkspace([tab], "tab-1"));
@@ -415,9 +416,9 @@ describe("App global shortcuts", () => {
 
     fireShortcut("n");
 
-    // 종전과 달리 new-connection 이벤트는 발생하지 않음.
+    // Unlike before, the new-connection event is not emitted.
     expect(handler).not.toHaveBeenCalled();
-    // 활성 connection 의 workspace tabs 가 1 → 2 로 늘어남.
+    // The active connection's workspace tabs grow from 1 → 2.
     const tabsAfter = getTestWorkspace().tabs;
     expect(tabsAfter.length).toBeGreaterThan(1);
     const newTab = tabsAfter[tabsAfter.length - 1];
@@ -426,64 +427,69 @@ describe("App global shortcuts", () => {
     window.removeEventListener("new-connection", handler);
   });
 
-  // Wave 9.5 회귀 5 (2026-05-16) — 빈 워크스페이스 시나리오들.
+  // Wave 9.5 regression 5 (2026-05-16) — empty workspace scenarios.
   //
-  // 본 두 테스트는 새 feedback rule (`feedback_test_scenarios_user_journey.md`)
-  // 의 첫 적용 — user 의 행위 시퀀스 끝까지 path 를 따라가 user-facing
-  // invariant (store state / IPC 발사) 를 lock.
+  // These two tests are the first application of the new feedback rule
+  // (`feedback_test_scenarios_user_journey.md`) — follow the path all the way
+  // through the user's action sequence and lock the user-facing invariant
+  // (store state / IPC dispatch).
   //
-  // user journey 1: workspace 마운트 (탭 0개) → Cmd+W keydown → window 닫힘
-  //   - 사용자 보고 (2026-05-16): "아무런 탭도 없는 상태의 connection
-  //     window에서 cmd + w를 누르면 connection window가 꺼져야 하고"
-  //   - 이전 핸들러는 `if (activeTabId && workspaceKey)` 체크 후 빈 탭일 때
-  //     `preventDefault()` 만 호출 → OS default close 도 막아 no-op.
+  // user journey 1: mount workspace (0 tabs) → Cmd+W keydown → window closes
+  //   - user report (2026-05-16, translated): "with no tabs at all, pressing
+  //     cmd + w in the connection window should turn the connection window
+  //     off"
+  //   - the previous handler checked `if (activeTabId && workspaceKey)` and,
+  //     with no tabs, only called `preventDefault()` → it also blocked the OS
+  //     default close, making it a no-op.
   it("Wave 9.5 회귀 5 — 빈 워크스페이스에서 Cmd+W 는 workspace_close IPC 를 발사한다", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     const invokeMock = invoke as ReturnType<typeof vi.fn>;
     invokeMock.mockClear();
 
-    // user journey 의 시작: workspace 마운트, 탭 0개.
+    // Start of the user journey: mount workspace, 0 tabs.
     useWorkspaceStore.setState({ workspaces: {} });
     render(<App />);
 
-    // user 행위: Cmd+W.
+    // User action: Cmd+W.
     fireShortcut("w");
 
-    // 마지막 outcome (user-facing invariant): backend workspace_close IPC 호출.
-    // 이 IPC 가 Rust 측에서 caller webview 의 Window::destroy() 를 실행 →
-    // user 가 보는 window 가 사라짐. backend 동작은 본 unit 의 cover 범위
-    // 밖이지만 (jsdom 영역 한계), IPC 발사 자체는 우리 own 코드의 의도이고
-    // backend test 가 그 다음 path 를 받는다.
+    // Final outcome (user-facing invariant): the backend workspace_close IPC
+    // is called. On the Rust side that IPC runs Window::destroy() on the
+    // caller webview → the window the user sees disappears. The backend
+    // behavior is outside this unit's coverage (jsdom boundary), but firing
+    // the IPC is our own code's intent, and the backend test picks up the
+    // next leg of the path.
     await act(async () => {
       await Promise.resolve();
     });
     expect(invokeMock).toHaveBeenCalledWith("workspace_close");
   });
 
-  // user journey 2: workspace 마운트 (탭 0개) + connectionStore.focusedConnId
-  //   가 set 됨 (useWindowFocusHydration 의 결과) → Cmd+N keydown →
-  //   focusedConnId fallback 으로 conn 결정 → raw query tab 1개 생김
-  //   - 사용자 보고 (2026-05-16): "같은 환경에서 cmd + n을 누르면 raw query
-  //     창이 열려야 해"
-  //   - 이전 핸들러는 activeTab.connectionId 가 비어있으면 no-op. fallback
-  //     없음.
+  // user journey 2: mount workspace (0 tabs) + connectionStore.focusedConnId
+  //   set (the result of useWindowFocusHydration) → Cmd+N keydown →
+  //   conn resolved through the focusedConnId fallback → 1 raw query tab
+  //   - user report (2026-05-16, translated): "in the same situation,
+  //     pressing cmd + n should open a raw query window"
+  //   - the previous handler was a no-op when activeTab.connectionId was
+  //     empty. No fallback.
   //
-  //   본 테스트는 focusedConnId fallback path 만 검증. window label fallback
-  //   (App.tsx 의 1순위) 은 jsdom 에서 mock 복잡 — 같은 store state outcome
-  //   이라 cover 됐다고 본다.
+  //   This test covers only the focusedConnId fallback path. The window label
+  //   fallback (App.tsx's first priority) is complex to mock in jsdom — the
+  //   store state outcome is the same, so we consider it covered.
   it("Wave 9.5 회귀 5 — 빈 워크스페이스에서 Cmd+N 은 focusedConnId fallback 으로 raw query tab 1개 추가", async () => {
-    // user journey 의 시작: 탭 0개 + workspace 마운트 후의 store state.
+    // Start of the user journey: 0 tabs + the store state after mounting the
+    // workspace.
     useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({ focusedConnId: "conn1" });
 
     render(<App />);
 
-    // user 행위: Cmd+N.
+    // User action: Cmd+N.
     fireShortcut("n");
 
-    // 마지막 outcome (user-facing invariant): workspace 의 tab 이 1개 생김.
-    // mock 단언 ("addQueryTab 가 호출됨") 이 아니라 store state — user 가
-    // 보는 tab bar 의 실제 상태.
+    // Final outcome (user-facing invariant): the workspace gains 1 tab.
+    // Store state, not a mock assertion ("addQueryTab was called") — the
+    // real state of the tab bar the user sees.
     await act(async () => {
       await Promise.resolve();
     });
@@ -515,11 +521,10 @@ describe("App global shortcuts", () => {
     window.removeEventListener("quick-open", handler);
   });
 
-  // ── Sprint 154: Cmd+, no longer toggles Home/Workspace ──
-  // Phase 12's real-window split made Home / Workspace separate Tauri
-  // windows. The Sprint 133 toggle is now a no-op until a future sprint
-  // reclaims the chord. The legacy `open-settings` event must still NOT
-  // dispatch (regression guard).
+  // ── Cmd+, no longer toggles Home/Workspace ──
+  // The real-window split made Home / Workspace separate Tauri windows, so
+  // the old toggle is a no-op and nothing else claims the chord. The legacy
+  // `open-settings` event must still NOT dispatch (regression guard).
 
   it("Cmd+, is a no-op (Sprint 154 — Home/Workspace are separate Tauri windows)", () => {
     // Cmd+, used to dispatch `open-settings` and toggle the legacy app-shell
@@ -594,7 +599,7 @@ describe("App global shortcuts", () => {
     window.removeEventListener("commit-changes", handler);
   });
 
-  // -- Sprint 40: SQL Formatting shortcut --
+  // -- SQL Formatting shortcut --
 
   it("Cmd+I dispatches format-sql event", () => {
     const handler = vi.fn();
@@ -607,7 +612,7 @@ describe("App global shortcuts", () => {
     window.removeEventListener("format-sql", handler);
   });
 
-  // -- Sprint 60: navigate-table objectKind / quickopen-function --
+  // -- navigate-table objectKind / quickopen-function --
 
   it("navigate-table opens a table tab with default objectKind=table", () => {
     render(<App />);
@@ -677,7 +682,7 @@ describe("App global shortcuts", () => {
     useWorkspaceStore.setState({ workspaces: {} });
   });
 
-  // ── Sprint 133: Cmd+1..9 → workspace tab switch ──
+  // ── Cmd+1..9 → workspace tab switch ──
 
   it("Cmd+1 activates the first tab in the workspace", () => {
     const t1 = makeTableTab({ id: "tab-1", table: "alpha" });
@@ -712,7 +717,7 @@ describe("App global shortcuts", () => {
   });
 
   it("Cmd+1 in home is a no-op (Sprint 154 — App only mounts in workspace window; legacy regression guard)", () => {
-    // Sprint 154 — `App` is only rendered inside the workspace Tauri
+    // `App` is only rendered inside the workspace Tauri
     // window per `AppRouter.tsx`. The legacy launcher/home gate is gone,
     // but the user-observable invariant ("Cmd+1 in home doesn't touch
     // tabs") remains true because home is a different window — the JS
@@ -733,10 +738,10 @@ describe("App global shortcuts", () => {
     expect(getTestWorkspace().activeTabId).toBe("tab-1");
   });
 
-  // 2026-05-11 회귀 — Cmd+1..9 는 SQL 에디터(CodeMirror contenteditable)나
-  // DataGrid 셀 편집 중에도 작동해야 한다. Cmd+W 와 마찬가지로 단축키 자체가
-  // 에디터 내에서 보존해야 할 의미가 없고, 편집 중 빠르게 탭을 전환하는 것이
-  // 핵심 use case 다.
+  // 2026-05-11 regression — Cmd+1..9 must work even while the SQL editor
+  // (CodeMirror contenteditable) or a DataGrid cell is being edited. As with
+  // Cmd+W, the shortcut has no meaning of its own to preserve inside an
+  // editor, and switching tabs quickly mid-edit is the core use case.
   it("Cmd+1 switches tabs even when focus is inside an input", () => {
     const t1 = makeTableTab({ id: "tab-1" });
     const t2 = makeTableTab({ id: "tab-2", table: "two" });
@@ -788,8 +793,8 @@ describe("App global shortcuts", () => {
     document.body.removeChild(editor);
   });
 
-  // ── Sprint 134: Cmd+K is now a no-op ──
-  // The Sprint 133 `open-connection-switcher` event + handler were removed
+  // ── Cmd+K is now a no-op ──
+  // The old `open-connection-switcher` event + handler were removed
   // alongside the `<ConnectionSwitcher>` component. Connection swap is a
   // single-path flow: Home → double-click. These tests guard against the
   // event being accidentally re-dispatched.
@@ -840,10 +845,12 @@ describe("App global shortcuts", () => {
     window.removeEventListener("open-connection-switcher", handler);
   });
 
-  // ── Sprint 162: Cmd+Shift+L / Ctrl+Shift+L — cycle theme mode ──
+  // ── Cmd+Shift+L / Ctrl+Shift+L — cycle theme mode ──
 
-  // Reason: Phase 14 AC-14-03 — Cmd+Shift+L 키보드 단축키로 theme mode 순환 (2026-04-28)
-  // 2026-05-16: setMode 가 async IPC 가 된 후 await + microtask flush 추가.
+  // Reason: Phase 14 AC-14-03 — cycle theme mode with the Cmd+Shift+L
+  // keyboard shortcut (2026-04-28)
+  // 2026-05-16: added await + microtask flush after setMode became an async
+  // IPC.
   it("Cmd+Shift+L cycles theme mode dark → light → system → dark", async () => {
     await useThemeStore.getState().setMode("dark");
     render(<App />);
@@ -900,7 +907,8 @@ describe("App global shortcuts", () => {
     expect(useThemeStore.getState().mode).toBe("dark");
   });
 
-  // Reason: Phase 14 AC-14-03 — Ctrl+Shift+L 단축키 호환성 (Windows/Linux) (2026-04-28)
+  // Reason: Phase 14 AC-14-03 — Ctrl+Shift+L shortcut compatibility
+  // (Windows/Linux) (2026-04-28)
   it("Ctrl+Shift+L cycles theme mode", async () => {
     await useThemeStore.getState().setMode("dark");
     render(<App />);
@@ -922,7 +930,8 @@ describe("App global shortcuts", () => {
     expect(useThemeStore.getState().mode).toBe("light");
   });
 
-  // Reason: Phase 14 AC-14-03 — theme toggle 단축키가 기존 단축키를 방해하지 않는지 회귀 테스트 (2026-04-28)
+  // Reason: Phase 14 AC-14-03 — regression test that the theme toggle
+  // shortcut does not interfere with existing shortcuts (2026-04-28)
   it("Cmd+Shift+L does not interfere with existing Cmd+S shortcut", async () => {
     await useThemeStore.getState().setMode("dark");
     const handler = vi.fn();
@@ -939,22 +948,26 @@ describe("App global shortcuts", () => {
     window.removeEventListener("commit-changes", handler);
   });
 
-  // ── 2026-05-11: 단축키 focus 정책 매트릭스 ──
+  // ── 2026-05-11: shortcut focus policy matrix ──
   //
-  // 2026-05-11 버그 회귀의 교훈: Cmd+1..9 가 contenteditable (CodeMirror /
-  // 인라인 셀) 안에서 안 먹히던 이유는 *구현* 에 맞춰 "editable 안에서는
-  // no-op" 단언이 잠겨있었기 때문이다. 의도 단위 매트릭스를 한 군데
-  // 모아두면 새 단축키 추가 시 행 하나만 채우면 회귀가 자동으로 잡힌다.
+  // Lesson from the 2026-05-11 bug regression: Cmd+1..9 failed inside
+  // contenteditable (CodeMirror / inline cells) because the "no-op inside
+  // editable" assertions were locked to the *implementation*. Keeping an
+  // intent-level matrix in one place means a new shortcut only fills one row
+  // and the regression is caught automatically.
   //
-  // 각 행:
-  //   - key           : 단축키 (e.g. "w", "1", "i")
-  //   - shift / alt   : modifier (Cmd/Ctrl 는 항상 포함)
+  // Each row:
+  //   - key           : the shortcut (e.g. "w", "1", "i")
+  //   - shift / alt   : modifiers (Cmd/Ctrl always included)
   //   - focusPolicy
-  //       "always"           — editable 안에서도 가로채야 함 (preventDefault).
-  //       "skip-in-editable" — editable 안에서는 흘려보내야 함 (no preventDefault).
+  //       "always"           — must be intercepted even inside editable
+  //                            (preventDefault).
+  //       "skip-in-editable" — must pass through inside editable (no
+  //                            preventDefault).
   //
-  // 단언은 *preventDefault 호출 여부* 만 본다 (side effect 는 개별 기존
-  // 테스트가 이미 커버). 그래서 "interception 계약" 만 매트릭스로 잠금.
+  // The assertion checks only *whether preventDefault was called* (side
+  // effects are already covered by the individual tests). So only the
+  // "interception contract" is locked by the matrix.
   type FocusPolicy = "always" | "skip-in-editable";
   interface ShortcutCase {
     label: string;
@@ -965,28 +978,29 @@ describe("App global shortcuts", () => {
   }
 
   const SHORTCUTS: ShortcutCase[] = [
-    // Cmd+W — 항상 가로채야 함 (macOS native Close-Window 차단).
+    // Cmd+W — always intercepted (blocks macOS native Close-Window).
     { label: "Cmd+W (close tab)", key: "w", focusPolicy: "always" },
-    // Cmd+1..9 — 2026-05-11 회귀: editable 안에서도 가로채야 함.
+    // Cmd+1..9 — 2026-05-11 regression: intercepted even inside editable.
     { label: "Cmd+1 (tab switch)", key: "1", focusPolicy: "always" },
     { label: "Cmd+9 (tab switch)", key: "9", focusPolicy: "always" },
-    // Cmd+T — editable 안에서는 흘려보냄 (에디터에 "t" 가 입력되게).
+    // Cmd+T — passes through inside editable (lets "t" be typed into the
+    // editor).
     {
       label: "Cmd+T (new query tab)",
       key: "t",
       focusPolicy: "skip-in-editable",
     },
-    // Cmd+. — editable 안에서는 흘려보냄.
+    // Cmd+. — passes through inside editable.
     {
       label: "Cmd+. (cancel query)",
       key: ".",
       focusPolicy: "skip-in-editable",
     },
-    // Cmd+R — editable 안에서는 흘려보냄.
+    // Cmd+R — passes through inside editable.
     { label: "Cmd+R (refresh)", key: "r", focusPolicy: "skip-in-editable" },
-    // Cmd+I — editable 안에서는 흘려보냄.
+    // Cmd+I — passes through inside editable.
     { label: "Cmd+I (format SQL)", key: "i", focusPolicy: "skip-in-editable" },
-    // Cmd+N / S / P — editable 안에서는 흘려보냄.
+    // Cmd+N / S / P — pass through inside editable.
     {
       label: "Cmd+N (new query tab)",
       key: "n",
@@ -998,24 +1012,27 @@ describe("App global shortcuts", () => {
       focusPolicy: "skip-in-editable",
     },
     { label: "Cmd+P (quick open)", key: "p", focusPolicy: "skip-in-editable" },
-    // Cmd+L — #2426 이전 grid 바인딩이 editable 검사 없이 걸려 있었고, 셀
-    // 인라인 편집 중에 눌러 상세를 여는 것이 실제 사용이라 "always" 를
-    // 그대로 유지한다. `l` 은 편집기에 글자를 넣는 조합이 아니다.
+    // Cmd+L — before #2426 the grid binding was registered without an
+    // editable check, and pressing it mid-cell-edit to open details is real
+    // usage, so "always" stays as-is. `l` does not type a character into the
+    // editor.
     { label: "Cmd+L (row details)", key: "l", focusPolicy: "always" },
-    // #2428 결정 2 — 두 키의 정책이 갈리고, 갈린 사유는 글자마다 다르다.
-    // `b` 는 흘려보낸다: CodeMirror `standardKeymap` 이 `emacsStyleKeymap`
-    // 을 mac 전용으로 접어 넣어 `Ctrl-b` 가 `cursorCharLeft` 이고, 이 앱의
-    // 편집기가 전부 `defaultKeymap` 을 깐다. CodeMirror 는 preventDefault
-    // 만 하고 전파를 안 막으므로(#1224) 가로채면 캐럿이 한 글자 왼쪽으로
-    // 가는 것과 사이드바 접힘이 같이 일어난다.
+    // #2428 decision 2 — the two keys split, and the reason differs per key.
+    // `b` passes through: CodeMirror's `standardKeymap` folds
+    // `emacsStyleKeymap` in mac-only, where `Ctrl-b` is `cursorCharLeft`, and
+    // every editor in this app lays `defaultKeymap` on top. CodeMirror only
+    // calls preventDefault and does not stop propagation (#1224), so
+    // intercepting would move the caret one character left and collapse the
+    // sidebar at the same time.
     {
       label: "[hotkey] Cmd+B (toggle sidebar)",
       key: "b",
       focusPolicy: "skip-in-editable",
     },
-    // `j` 는 가로챈다: `standardKeymap` 에도 이 저장소 어느 편집기에도
-    // `Ctrl-j` / `Mod-j` 바인딩이 없어 뺏기는 키 입력이 없고, 그리드를 다시
-    // 넓히고 싶은 순간이 편집기에 포커스가 있을 때다.
+    // `j` is intercepted: neither `standardKeymap` nor any editor in this
+    // repo binds `Ctrl-j` / `Mod-j`, so no keypress gets stolen, and the
+    // moment you want the grid wider again is exactly when the editor has
+    // focus.
     {
       label: "[hotkey] Cmd+J (toggle bottom panel)",
       key: "j",

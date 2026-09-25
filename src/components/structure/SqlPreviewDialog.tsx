@@ -51,10 +51,10 @@ export interface SqlPreviewDialogProps {
    */
   environment?: string | null;
   /**
-   * Sprint 256 (ADR 0023, AC-256-05) — display name of the connection
-   * backing this commit. Drives the env-aware "Execute on <conn>"
-   * label on the footer's `<ExecuteButton>`. Optional so legacy callers
-   * (no env plumbed) keep the plain "Execute" label.
+   * ADR 0023, AC-256-05 — display name of the connection backing this
+   * commit. Drives the env-aware "Execute on <conn>" label on the footer's
+   * `<ExecuteButton>`. Optional so legacy callers (no env plumbed) keep the
+   * plain "Execute" label.
    */
   connectionLabel?: string | null;
   migrationImpact?: MigrationImpactSummary | null;
@@ -79,9 +79,9 @@ export default function SqlPreviewDialog({
       title={t("sqlPreview.title")}
       description={t("sqlPreview.description")}
       className="w-dialog-md bg-secondary"
-      // Sprint 252: Surface header Copy button. PreviewCopyButton self-
-      // suppresses on empty/whitespace, so a stub `sql=""` keeps the
-      // button hidden and existing AC-109 markup unchanged.
+      // Surface header Copy button. PreviewCopyButton self-suppresses on
+      // empty/whitespace, so a stub `sql=""` keeps the button hidden and
+      // existing AC-109 markup unchanged.
       copyText={sql}
       copyAriaLabel={t("sqlPreview.copyAria")}
       preview={

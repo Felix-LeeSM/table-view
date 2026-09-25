@@ -15,45 +15,44 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 /**
- * Sprint 321 — Slice F.1: sentinel cell 의 1-depth 내용을 popover 로
- * 빠르게 inspect. Edit 흐름은 Sprint 322 (F.2) 가 도입한다.
+ * Quick 1-depth inspect of a sentinel cell's contents in a popover.
  *
  * Invariants:
- * - trigger 클릭은 row selection 으로 propagate 되지 않는다 (popover
- *   본체의 stopPropagation). 사용자가 inspect 만 의도해도 selection
- *   토글 부작용 없음.
- * - nested-of-nested entry 는 sentinel 표기로 유지. 깊은 inspect 는
- *   Quick Look 패널.
+ * - A trigger click does not propagate into row selection (the popover
+ *   body stops propagation), so inspecting never toggles selection as a
+ *   side effect.
+ * - A nested-of-nested entry stays in sentinel notation; deep inspect
+ *   belongs to the Quick Look panel.
  */
 
 interface NestedExpandPopoverProps {
   /**
-   * Raw nested value (object 또는 array). `raw_documents` 의 cell 또는
-   * 그 자식. sentinel string 은 caller 가 raw 로 swap 후 전달.
+   * Raw nested value (object or array): a `raw_documents` cell or one of
+   * its children. The caller swaps a sentinel string back to raw before
+   * passing it in.
    */
   value: unknown;
-  /** 사용자가 inspect 중인 field name (object key) 또는 column name. */
+  /** Field name (object key) or column name the user is inspecting. */
   fieldName: string;
   /**
-   * Sprint 322 — Slice F.2: scalar entry 의 인라인 edit commit
-   * callback. 미제공 시 popover 는 read-only (Sprint 321 F.1
-   * 동작). path 는 dot-notation (object → `"key"`, array → `"0"`,
-   * 깊은 entry → `"key.subkey"`). value 는 사용자가 입력한 문자열을
-   * 1차 raw 로 전달 — 캐스팅은 호출자 책임 (Slice G BSON editor 가
-   * 별도 처리).
+   * Inline edit commit callback for a scalar entry. When omitted the
+   * popover is read-only. `path` is dot-notation (object → `"key"`,
+   * array → `"0"`, deep entry → `"key.subkey"`). `value` is passed as the
+   * raw string the user typed; casting is the caller's responsibility (the
+   * BSON editor handles it separately).
    *
-   * Sprint 324 — Slice G.2: BSON wrapper (`{ $oid: ... }` etc.) entry 의
-   * 경우 value 는 raw string 이 아니라 canonical EJSON object 가 전달
-   * 된다. caller 는 둘을 동일하게 pendingEdits 에 보관 — mqlGenerator 가
-   * mongosh literal (`ObjectId("...")`) 로 풀어 표시.
+   * For a BSON wrapper entry (`{ $oid: ... }` etc.) `value` is a canonical
+   * EJSON object rather than a raw string. The caller keeps both in
+   * `pendingEdits` the same way — `mqlGenerator` expands them into a
+   * mongosh literal (`ObjectId("...")`) for display.
    */
   onCommitEdit?: (
     path: string,
     value: string | Record<string, unknown>,
   ) => void;
   /**
-   * 현재 path 의 pending value (있다면). 표시 시 시각 cue 와 input
-   * 의 초기값으로 사용.
+   * Pending value for the current path, if any. Used as the visual cue on
+   * display and as the input's initial value.
    */
   pendingByPath?: ReadonlyMap<string, string | Record<string, unknown>>;
 }
@@ -131,10 +130,9 @@ export default function NestedExpandPopover({
     setDraft("");
   };
 
-  // Sprint 324 — Slice G.2: per-entry pending display 가 string 또는
-  // EJSON wrapper 둘 다 수용. wrapper 는 사용자 친화 표기 (ObjectId 의
-  // hex / Date 의 ISO / NumberDecimal 의 string / BinData 의 base64) 로
-  // surface.
+  // Per-entry pending display accepts both a string and an EJSON wrapper.
+  // A wrapper surfaces in user-friendly notation (ObjectId's hex, Date's
+  // ISO, NumberDecimal's string, BinData's base64).
   const pendingDisplayText = (
     pending: string | Record<string, unknown>,
   ): string => {
@@ -204,9 +202,9 @@ export default function NestedExpandPopover({
                 const hasPending = pendingValue !== undefined;
                 const isEditing = editingPath === path;
                 const canEdit = !entry.isNested && onCommitEdit !== undefined;
-                // Sprint 324 — Slice G.2: BSON wrapper 인지 (raw value OR
-                // pending value 가 wrapper) 판단. 둘 중 하나라도 wrapper
-                // 면 BsonTypeEditor 사용.
+                // Decide whether this is a BSON wrapper (raw value OR
+                // pending value is a wrapper). If either one is, use the
+                // BsonTypeEditor.
                 const bsonType =
                   detectBsonType(entry.value) ??
                   (typeof pendingValue === "object" && pendingValue !== null

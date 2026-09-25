@@ -593,7 +593,7 @@ function ErdCanvasSurface({
  *
  * `strokeDasharray` comes from the shared encoding table rather than from a
  * local branch, so the dashed line here and the dashed swatch in
- * `SchemaErdLegend` cannot drift apart (ADR 0055 "색 단독 인코딩 금지").
+ * `SchemaErdLegend` cannot drift apart (ADR 0055 — no colour-alone encoding).
  */
 function SchemaErdRelationshipEdge({
   sourceX,

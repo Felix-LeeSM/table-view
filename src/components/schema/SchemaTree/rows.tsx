@@ -52,11 +52,13 @@ import {
   type VisibleRow,
 } from "./treeRows";
 
-// Sprint 301 — schema / table 컨텍스트 메뉴의 Export sub-menu 가 사용하는
-// 세 가지 export include 모드. DDL / Data (DML) / Full (DDL + Data).
-// #1048 — Export sub-menu 는 `stream_table_rows` 백엔드가 구현된 엔진
-// (PG / MySQL / MariaDB) 에서만 노출한다. SQLite / DuckDB / MSSQL / Oracle
-// 은 DML/Full 을 Unsupported 로 reject 하므로 노출 시 error-on-click.
+// The three export include modes the Export sub-menu of the schema / table
+// context menu uses: DDL / Data (DML) / Full (DDL + Data).
+// #1048 — the sub-menu only surfaces on engines whose `stream_table_rows`
+// backend is implemented; `supportsMigrationExport` is the gate. The other
+// engines reject DML/Full as Unsupported, so surfacing it there would be
+// error-on-click. The engine list lives on `MIGRATION_EXPORT_DBTYPES` in
+// `src/hooks/useMigrationExport.ts`.
 const EXPORT_MODES: ReadonlyArray<{
   include: ExportInclude;
   labelKey: string;
@@ -92,9 +94,9 @@ export interface SchemaTreeRowsContext {
   // sync so a click moves the roving anchor.
   rovingFocusKey: string | null;
   onFocusRow: (key: string) => void;
-  // Sprint 380 — needed by category/item row renderers to choose a
-  // 3-way indent class (PG `with-schema` → deepest, MySQL `no-schema`
-  // → one step less, SQLite `flat` → root level).
+  // Needed by category/item row renderers to choose a 3-way indent class (PG
+  // `with-schema` → deepest, MySQL `no-schema` → one step less, SQLite `flat`
+  // → root level).
   treeShape: RdbTreeShape;
   // #1217 — true while the top-level global filter is active. The eager
   // renderer uses it to drop the per-schema search input and empty
@@ -284,9 +286,9 @@ export function renderCategoryRow(
         type="button"
         className={cn(
           "flex flex-1 cursor-pointer items-center gap-1.5 py-0.5 pr-1 text-2xs font-medium",
-          // Sprint 380 — MySQL (`no-schema`) drops the schema-level
-          // indent step because there is no schema row above; PG
-          // (`with-schema`) keeps the deeper indent.
+          // MySQL (`no-schema`) drops the schema-level indent step because
+          // there is no schema row above; PG (`with-schema`) keeps the deeper
+          // indent.
           ctx.treeShape === "no-schema" ? "pl-3" : "pl-6",
           row.isSelected ? "text-foreground" : "text-secondary-foreground",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
@@ -425,10 +427,10 @@ export function renderFileAnalyticsSourceRow(
 }
 
 /**
- * Item row renderer. `flat=true` 면 SQLite-style flat branch — `pl-3`
- * 이고 view/function 가 아예 안 들어옴 (caller 가 보장). 일반 모드는
- * `pl-10` 이고 view/function 분기 모두 처리. ContextMenu 항목도 모드별
- * 분기.
+ * Item row renderer. `flat=true` takes the SQLite-style flat branch — `pl-3`,
+ * and views/functions never arrive there (the caller guarantees it). Normal
+ * mode is `pl-10` and handles both the view and function branches. The
+ * ContextMenu entries branch per mode too.
  */
 export function renderItemRow(
   row: Extract<VisibleRow, { kind: "item" }>,
@@ -472,11 +474,10 @@ export function renderItemRow(
     if (isTableItem) ctx.handleTableDoubleClick(item.name, row.schemaName);
   };
 
-  // Sprint 380 — 3-way indent. `flat` (SQLite) is the legacy root-level
-  // path that doesn't go through categories. For the categorical path,
-  // MySQL (`no-schema`) drops one indent step (pl-7 vs PG's pl-10) so
-  // the table list visually nests under the category, not under a
-  // missing schema row.
+  // 3-way indent. `flat` (SQLite) is the legacy root-level path that doesn't
+  // go through categories. For the categorical path, MySQL (`no-schema`)
+  // drops one indent step (pl-7 vs PG's pl-10) so the table list visually
+  // nests under the category, not under a missing schema row.
   const indentClass = flat
     ? "pl-3"
     : ctx.treeShape === "no-schema"
@@ -624,11 +625,11 @@ export function renderItemRow(
             >
               <Table2 size={14} /> {ctx.t("data")}
             </ContextMenuItem>
-            {/* Sprint 275 — trigger entries removed from the Table row
-                context menu. Trigger CRUD now lives entirely on the
-                StructurePanel Triggers tab (consolidated single entry
-                point). Column/Index/Constraint surfaces don't carry
-                table-row shortcuts either, so this restores consistency. */}
+            {/* Trigger entries were removed from the Table row context
+                menu. Trigger CRUD now lives entirely on the StructurePanel
+                Triggers tab (consolidated single entry point).
+                Column/Index/Constraint surfaces don't carry table-row
+                shortcuts either, so this restores consistency. */}
             {supportsMigrationExport(ctx.dbType) && (
               <ContextMenuSub>
                 <ContextMenuSubTrigger>

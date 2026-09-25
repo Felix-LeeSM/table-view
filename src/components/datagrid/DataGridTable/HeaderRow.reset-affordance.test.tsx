@@ -1,22 +1,24 @@
 /**
- * 작성 2026-05-17 (Phase 6 sprint-376 Q21 affordance #5 + #6).
+ * Q21 affordance #5 + #6.
  *
- * 사유: DataGrid column header 우클릭 context menu 에
- *   (5) "Reset column widths" → `onResetColumnWidths` callback 1회.
- *   (6) "Show all columns" → `onShowAllColumns` callback 1회.
+ * Reason: in the DataGrid column header's right-click context menu,
+ *   (5) "Reset column widths" → one `onResetColumnWidths` callback.
+ *   (6) "Show all columns" → one `onShowAllColumns` callback.
  *
- * 본 spec 은 callback 단위 contract — `DataGridTable.tsx` 가 위 두
- * callback 을 각각 `useColumnWidths.reset` (이미 `resetDatagridPrefs
- * field=widths` IPC 발사) / `useHiddenColumns.clear` (이미 `setDatagridPrefs
- * hiddenColumns=[]` 발사) 로 연결. 따라서 callback 호출만 lock 하면 IPC
- * 까지 자동 흐름. Q21 contract — confirm dialog 없음.
+ * This spec is a callback-level contract — `DataGridTable.tsx` wires those
+ * two callbacks to `useColumnWidths.reset` (which already fires the
+ * `resetDatagridPrefs field=widths` IPC) and `useHiddenColumns.clear` (which
+ * already fires `setDatagridPrefs hiddenColumns=[]`). Locking the callback
+ * calls therefore carries through to the IPC. Q21 contract — no confirm
+ * dialog.
  *
- * #1733 (2026-07-24): 중복이던 열 너비 초기화 툴바 버튼을 제거했으므로 초기화의
- * 사용자 가시 계약(컨텍스트 메뉴 + grip 더블클릭)이 이 파일에 온전히 남아야
- * 한다 (P1 lowest layer). 더불어 grip hover `title` 힌트("double-click to
- * reset")로 발견성을 보완했고 아래 신규 test 가 이를 lock 한다. grip 조회는
- * CSS class(`.cursor-col-resize`, P9 change-detector) 대신 `role="separator"`
- * 접근성 계약으로 쿼리한다.
+ * #1733 (2026-07-24): the duplicate column-width reset toolbar button was
+ * removed, so the user-visible reset contract (context menu + grip
+ * double-click) must survive in this file in full (P1 lowest layer). A grip
+ * hover `title` hint ("double-click to reset") was added for
+ * discoverability and the new test below locks it. The grip is queried
+ * through the `role="separator"` accessibility contract instead of the CSS
+ * class (`.cursor-col-resize`, a P9 change-detector).
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -120,12 +122,12 @@ describe("HeaderRow reset affordances (Q21 #5 + #6)", () => {
     expect(onShowAllColumns).not.toHaveBeenCalled();
   });
 
-  // 작성 2026-05-17 (sprint-378). 사유: 사용자가 column width drag 후
-  // 기본값 복귀를 위해 호버 시 노출되는 보라색 drag handle 을 더블클릭
-  // 으로 즉시 reset 할 수 있어야 한다 (이미지 #7). column-level 이 아닌
-  // *전체 widths reset* — sprint-376 의 IPC `reset_datagrid_prefs
-  // (field=widths)` 재활용. per-column reset 은 별 sprint. #1733: grip 을
-  // role="separator" 접근성 계약으로 쿼리 (기존 CSS class 대체).
+  // Reason: after dragging a column width, the user must be able to
+  // double-click the purple drag handle shown on hover to reset straight
+  // back to the defaults (image #7). This is a *reset of all widths*, not
+  // column-level — it reuses the `reset_datagrid_prefs (field=widths)` IPC.
+  // #1733: the grip is queried through the role="separator" accessibility
+  // contract (replacing the CSS class).
   it("AC-378-03: column resize handle 더블클릭 → onResetColumnWidths 1회 호출", () => {
     const onResetColumnWidths = vi.fn();
     setup({ onResetColumnWidths });
@@ -172,11 +174,12 @@ describe("HeaderRow reset affordances (Q21 #5 + #6)", () => {
     expect(onSort).not.toHaveBeenCalled();
   });
 
-  // 작성 2026-07-24 (#1733). 사유: 중복이던 툴바 초기화 버튼을 제거하면서
-  // 더블클릭이 유일한 grip reset 트리거가 됐다. 마우스 사용자가 이 hidden
-  // affordance 를 발견할 수 있도록 grip 에 hover `title` 힌트를 노출한다.
-  // title 텍스트에서 초기화 힌트가 사라지면 이 test 가 fail 한다 (발견성 회귀
-  // 가드). SR 용 aria-label("Resize column") 과는 별개 계약.
+  // #1733. Reason: removing the duplicate toolbar reset button made the
+  // double-click the only grip reset trigger. The grip exposes a hover
+  // `title` hint so mouse users can discover this hidden affordance. If the
+  // reset hint leaves the title text, this test fails (discoverability
+  // regression guard). A contract separate from the SR-facing aria-label
+  // ("Resize column").
   it("AC-1733-01: resize grip 이 더블클릭 초기화 힌트를 title 로 노출한다", () => {
     setup({ onResetColumnWidths: vi.fn() });
     const handles = screen.getAllByRole("separator", {

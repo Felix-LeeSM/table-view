@@ -7,19 +7,18 @@ import type { ConnectionConfig, DatabaseType } from "@/types/connection";
 import SchemaTree from "./SchemaTree";
 
 /**
- * Sprint 380 — MySQL/SQLite sidebar 의 "Schemas" 헤더 + 잉여 한 단계
- * 들여쓰기 정정.
+ * MySQL/SQLite sidebar: the "Schemas" header and the surplus indent level.
  *
- * 2026-05-17 작성. MySQL 은 schema = database 동일 개념이라 "Schemas"
- * 헤더가 정보 잉여이고, Tables/Views/Functions/Procedures 가 *비어있는
- * schema 단계* 로 인해 root 보다 한 단계 잉여 들여쓰기. SQLite 도 같은
- * 이유로 헤더가 어색 (단, SQLite 는 flat shape 이라 categories 자체가
- * 없음).
+ * In MySQL a schema is the same thing as a database, so the "Schemas" header
+ * carries no information, and the *empty schema level* indents
+ * Tables/Views/Functions/Procedures one step deeper than root. The header is
+ * awkward on SQLite for the same reason (though SQLite is a flat shape, so it
+ * has no categories at all).
  *
- * 결과 ([AC-380-08]):
- *   - PG     (`with-schema`) → 헤더 "Schemas" + category `pl-6` + item `pl-10`.
- *   - MySQL  (`no-schema`)   → 헤더 없음 + category `pl-3` + item `pl-7`.
- *   - SQLite (`flat`)        → 헤더 없음 + item `pl-3` (category 없음).
+ * Result ([AC-380-08]):
+ *   - PG     (`with-schema`) → "Schemas" header, category `pl-6`, item `pl-10`.
+ *   - MySQL  (`no-schema`)   → no header, category `pl-3`, item `pl-7`.
+ *   - SQLite (`flat`)        → no header, item `pl-3` (no categories).
  */
 
 const mockLoadSchemas = vi.fn().mockResolvedValue(undefined);
@@ -132,7 +131,7 @@ describe("SchemaTree — Sprint 380 MySQL/SQLite sidebar naming + indent", () =>
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // AC-380-01 — MySQL: "Schemas" 헤더 label 없음
+  // AC-380-01 — MySQL: no "Schemas" header label
   // ─────────────────────────────────────────────────────────────────────
   it("AC-380-01 — MySQL hides the 'Schemas' header label entirely", async () => {
     useConnectionStore.setState({
@@ -157,7 +156,7 @@ describe("SchemaTree — Sprint 380 MySQL/SQLite sidebar naming + indent", () =>
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // AC-380-02 — SQLite: "Schemas" 헤더 label 없음
+  // AC-380-02 — SQLite: no "Schemas" header label
   // ─────────────────────────────────────────────────────────────────────
   it("AC-380-02 — SQLite hides the 'Schemas' header label entirely", async () => {
     useConnectionStore.setState({
@@ -201,7 +200,7 @@ describe("SchemaTree — Sprint 380 MySQL/SQLite sidebar naming + indent", () =>
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // AC-380-04 — SQLite: item row pl-3 유지
+  // AC-380-04 — SQLite: item row keeps pl-3
   // ─────────────────────────────────────────────────────────────────────
   it("AC-380-04 — SQLite item (table) row keeps pl-3 (flat-shape, unchanged)", async () => {
     useConnectionStore.setState({
@@ -223,7 +222,7 @@ describe("SchemaTree — Sprint 380 MySQL/SQLite sidebar naming + indent", () =>
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // AC-380-05 — PG regression: "Schemas" 헤더 라벨 있음
+  // AC-380-05 — PG regression: "Schemas" header label present
   // ─────────────────────────────────────────────────────────────────────
   it("AC-380-05 — PG keeps the 'Schemas' header label", async () => {
     useConnectionStore.setState({
@@ -269,7 +268,7 @@ describe("SchemaTree — Sprint 380 MySQL/SQLite sidebar naming + indent", () =>
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // AC-380-07 — PG regression: schema row 렌더
+  // AC-380-07 — PG regression: schema row renders
   // ─────────────────────────────────────────────────────────────────────
   it("AC-380-07 — PG keeps the schema row rendered", async () => {
     useConnectionStore.setState({
@@ -290,7 +289,7 @@ describe("SchemaTree — Sprint 380 MySQL/SQLite sidebar naming + indent", () =>
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // AC-380-08 — MySQL indent < PG indent (잉여 들여쓰기 제거 확인)
+  // AC-380-08 — MySQL indent < PG indent (surplus indent removed)
   // ─────────────────────────────────────────────────────────────────────
   it("AC-380-08 — MySQL category indent set differs from PG (less indented)", async () => {
     // Render PG first, capture indent, unmount, then render MySQL.
@@ -335,7 +334,7 @@ describe("SchemaTree — Sprint 380 MySQL/SQLite sidebar naming + indent", () =>
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // AC-380-09 — MySQL: 4 categories 모두 reachable
+  // AC-380-09 — MySQL: all 4 categories reachable
   // ─────────────────────────────────────────────────────────────────────
   it("AC-380-09 — MySQL surfaces all 4 categories (Tables/Views/Functions/Procedures)", async () => {
     useConnectionStore.setState({

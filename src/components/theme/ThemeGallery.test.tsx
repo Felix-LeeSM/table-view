@@ -103,8 +103,8 @@ beforeEach(() => {
 });
 
 describe("ThemeGallery — the whole catalog is reachable", () => {
-  // 수용 기준 1 — counted against THEME_CATALOG itself so a catalog change
-  // (e.g. #2117 adding entries) cannot make this test lie.
+  // Acceptance criterion 1 — counted against THEME_CATALOG itself so a
+  // catalog change (e.g. #2117 adding entries) cannot make this test lie.
   it("renders a card for every catalog entry", () => {
     renderWithGalleryOpen();
 
@@ -183,7 +183,7 @@ describe("ThemeGallery — search and filter", () => {
 });
 
 describe("ThemeGallery — starring", () => {
-  // 수용 기준 2.
+  // Acceptance criterion 2.
   it("starring a theme in the gallery puts it in the picker", async () => {
     expect(DEFAULT_FAVORITE_THEME_IDS).not.toContain("linear");
     renderWithGalleryOpen();
@@ -207,7 +207,7 @@ describe("ThemeGallery — starring", () => {
     expect(pickerIds).toContain("linear");
   });
 
-  // 수용 기준 3.
+  // Acceptance criterion 3.
   it("starring persists the new list through the persist_setting IPC", async () => {
     renderWithGalleryOpen();
 

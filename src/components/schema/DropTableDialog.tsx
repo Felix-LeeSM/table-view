@@ -23,9 +23,8 @@ import type { SchemaName, TableName } from "@/types/branded";
 import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSummary";
 
 /**
- * Sprint 235 — `DropTableDialog`. Typing-confirm input + CASCADE
- * checkbox + inline DDL preview pane + Cancel + Show DDL + Apply
- * buttons.
+ * `DropTableDialog`. Typing-confirm input + CASCADE checkbox + inline DDL
+ * preview pane + Cancel + Show DDL + Apply buttons.
  *
  * Issue #2191 (the split issue #2157 made in `DropColumnDialog`) — the
  * preview gate and the execution gate are separate. The DDL preview loads
@@ -33,21 +32,20 @@ import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSumma
  * first; the typing-confirm input only decides whether it may run.
  *
  * Apply is `disabled` UNTIL the typing-confirm input matches the current
- * table name byte-for-byte (case-sensitive — `Users` ≠ `users`). The
- * typing-confirm pattern is NEW in Sprint 235 (no prior occurrence in
- * the codebase — Mongo `useDocumentDatabaseDrop` uses a regular confirm
- * dialog). Per Sprint 235 contract: NO `onChange` debounce, NO trim
- * (whitespace-only matches stay invalid), every keystroke re-evaluates.
+ * table name byte-for-byte (case-sensitive — `Users` ≠ `users`). Mongo
+ * `useDocumentDatabaseDrop` uses a regular confirm dialog instead. NO
+ * `onChange` debounce, NO trim (whitespace-only matches stay invalid),
+ * every keystroke re-evaluates.
  *
  * CASCADE checkbox defaults to OFF. Toggling it re-fetches the preview by
- * itself (Sprint 238), no `Show DDL` click in between, and the commit runs
- * the form that was previewed (issue #2213).
+ * itself, no `Show DDL` click in between, and the commit runs the form
+ * that was previewed (issue #2213).
  *
  * Safe Mode dispatch is provided by `useDdlPreviewExecution` — `DROP
  * TABLE` is classified as `ddl-drop` / danger by the analyzer. Under the
- * Sprint 245 destructive-only policy (ADR 0022 Phase 1; canonical matrix
- * in `src/lib/safeMode.ts`) every production tier and non-production
- * strict escalate to `pendingConfirm`, mounting an additional
+ * destructive-only policy (ADR 0022; canonical matrix in
+ * `src/lib/safeMode.ts`) every production tier and non-production strict
+ * escalate to `pendingConfirm`, mounting an additional
  * `ConfirmDestructiveDialog` on top of the typing-confirm gate.
  * Non-production warn / off allow. `decideSafeModeAction` never returns
  * `block` for this path.
@@ -58,16 +56,15 @@ import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSumma
  *      Apply → `attemptExecute`.
  *   3. Safe Mode gate decides → confirm (pendingConfirm dialog) | allow
  *      (commit).
- *   4. on confirm, the user answers the single-click Yes/No dialog
- *      (Sprint 246 replaced the earlier type-to-confirm gate) → commit
- *      runs.
+ *   4. on confirm, the user answers the single-click Yes/No dialog →
+ *      commit runs.
  *   5. on commit success, modal closes.
  */
 
 export interface DropTableDialogProps {
   /** Connection id used by the Safe Mode gate + history record. */
   connectionId: string;
-  /** Active database — schemaStore cache key dimension (Sprint 263). */
+  /** Active database — schemaStore cache key dimension. */
   database: string;
   /** Schema name (display + payload). */
   schemaName: string;
@@ -139,8 +136,8 @@ export default function DropTableDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, tableName, schemaName]);
 
-  // Sprint 235 — typing-confirm match is case-sensitive byte-for-byte.
-  // No trim, no debounce — every keystroke re-evaluates.
+  // Typing-confirm match is case-sensitive byte-for-byte. No trim, no
+  // debounce — every keystroke re-evaluates.
   const typingMatches = typingConfirm === tableName;
   // Issue #2191 — the preview has no gate. `previewOnly: true` never
   // executes anything (`gate_destructive_ddl` in
@@ -151,11 +148,10 @@ export default function DropTableDialog({
   // execution alone.
   const canApply = typingMatches && !ddl.previewLoading && !!ddl.previewSql;
 
-  // Sprint 238 — auto-refresh debounced: the preview SQL rebuilds on open
-  // and on every CASCADE toggle. `loadPreview` mints the commit closure
-  // next to the SQL it just fetched, so the committed `cascade` is the one
-  // the rendered preview was built with (issue #2213). Apply stays gated
-  // on `canApply`.
+  // Auto-refresh debounced: the preview SQL rebuilds on open and on every
+  // CASCADE toggle. `loadPreview` mints the commit closure next to the SQL
+  // it just fetched, so the committed `cascade` is the one the rendered
+  // preview was built with (issue #2213). Apply stays gated on `canApply`.
   useEffect(() => {
     if (!open) return;
     const handle = window.setTimeout(() => {
@@ -167,10 +163,10 @@ export default function DropTableDialog({
             table: tableName,
             cascade,
             previewOnly: true,
-            // Sprint 271c — opt-in DbMismatch guard. Forward the
-            // workspace `(connId, db)` coordinate so a swapped pool
-            // rejects with `AppError::DbMismatch` before the table is
-            // dropped against the wrong database.
+            // Opt-in DbMismatch guard. Forward the workspace
+            // `(connId, db)` coordinate so a swapped pool rejects with
+            // `AppError::DbMismatch` before the table is dropped against
+            // the wrong database.
             expectedDatabase: database,
           });
           return { sql: result.sql };

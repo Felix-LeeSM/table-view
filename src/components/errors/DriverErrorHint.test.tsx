@@ -3,11 +3,12 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DriverErrorHint } from "./DriverErrorHint";
 
-// Purpose: 분류된 힌트가 errors namespace 문구(요약 + 행동)로 렌더되고, 미분류
-//          (null)이면 아무것도 렌더하지 않음을 잠근다 (issue #1056)
-//          — Phase 22 milestone 22.30 (2026-07-03).
+// Purpose: locks that a classified hint renders with the errors-namespace
+//          wording (summary + action) and that an unclassified (null) hint
+//          renders nothing (issue #1056).
 describe("DriverErrorHint", () => {
-  // Reason: 분류된 힌트는 en errors 문구로 해석돼 사용자에게 요약+행동을 보인다 (2026-07-03).
+  // Reason: a classified hint resolves to the en errors wording and shows
+  //         the user a summary + action.
   it("renders the summary title and action hint for a classified error", () => {
     render(
       <DriverErrorHint
@@ -22,7 +23,8 @@ describe("DriverErrorHint", () => {
     ).toBeInTheDocument();
   });
 
-  // Reason: label 을 이미 가진 표면(search)은 title 을 숨기고 힌트 문장만 보인다 (2026-07-03).
+  // Reason: a surface that already carries a label (search) hides the title
+  //         and shows only the hint sentence.
   it("omits the title when showTitle is false", () => {
     render(
       <DriverErrorHint
@@ -36,7 +38,7 @@ describe("DriverErrorHint", () => {
     ).toBeInTheDocument();
   });
 
-  // Reason: fail-open — 미분류(null)면 어떤 텍스트도 렌더하지 않는다 (2026-07-03).
+  // Reason: fail-open — an unclassified (null) hint renders no text at all.
   it("renders nothing when the hint is null", () => {
     const { container } = render(<DriverErrorHint hint={null} />);
     expect(container).toBeEmptyDOMElement();

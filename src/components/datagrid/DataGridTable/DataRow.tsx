@@ -23,17 +23,18 @@ import { isBlobColumn, parseFkReference } from "./columnUtils";
 import type { CellNavigationDirection } from "./useCellNavigation";
 
 /**
- * Sprint 261 (ADR 0026) — title (tooltip) rendering matches `renderCellValue`
+ * ADR 0026 — title (tooltip) rendering matches `renderCellValue`
  * but uses pretty-printed JSON for generic objects so the multi-line
  * inspector view stays intact for nested documents.
  */
 function renderCellTitle(cell: unknown): string {
   if (cell == null) return "NULL";
   if (cell instanceof Decimal) return cell.toString();
-  // Sprint 305 — nested BigInt 가 든 object (예: JSONB / Mongo Int64) 가
-  // tooltip 으로 흘러오면 raw `JSON.stringify` 가 throw → DataGrid mount
-  // 시점 freeze. `safeStringifyCell` 은 BigInt/Decimal replacer 가 있어
-  // 안전하고, pretty-print 도 같은 stringify 호출 안에서 처리한다.
+  // When an object holding a nested BigInt (e.g. JSONB / Mongo Int64)
+  // reaches the tooltip, a raw `JSON.stringify` throws → the DataGrid
+  // freezes at mount. `safeStringifyCell` is safe because it carries a
+  // BigInt/Decimal replacer, and it pretty-prints inside the same
+  // stringify call.
   if (typeof cell === "object" && cell !== null)
     return safeStringifyCell(cell, 2);
   if (typeof cell === "bigint") return cell.toString();
@@ -41,10 +42,11 @@ function renderCellTitle(cell: unknown): string {
 }
 
 /**
- * Sprint 258 — `<tr>` / `<td>` 폐기. row 는 `<div role="row">` 자체 grid
- * (`grid-template-columns: var(--cols)`), cell 은 `<div role="gridcell">`.
- * column width 는 outer container 의 `--cols` CSS variable cascade 만으로
- * 결정 — cell 별 explicit width style 없음.
+ * `<tr>` / `<td>` are dropped: a row is a `<div role="row">` that is itself
+ * a grid (`grid-template-columns: var(--cols)`), and a cell is a
+ * `<div role="gridcell">`. Column width comes only from the outer
+ * container's `--cols` CSS variable cascade — no per-cell explicit width
+ * style.
  *
  * Invariants:
  * - row key = `row-${page}-${rowIdx}`. Page change remounts the row so
@@ -105,17 +107,16 @@ export interface DataGridRowContext {
     value: string,
   ) => void;
   /**
-   * Sprint 343 (2026-05-15) — inline JSON tree expand handler.
-   * Mirrors `DocumentDataGrid`. Only the structural sentinel button uses
-   * it; scalar cells ignore it. The expanded *coordinate* is per-row
-   * (`DataRowProps.expandedCol`) so a toggle re-renders only its row.
+   * Inline JSON tree expand handler. Mirrors `DocumentDataGrid`. Only the
+   * structural sentinel button uses it; scalar cells ignore it. The
+   * expanded *coordinate* is per-row (`DataRowProps.expandedCol`) so a
+   * toggle re-renders only its row.
    */
   onToggleNested?: (rowIdx: number, colIdx: number) => void;
   /**
-   * Design-swarm #4 Phase 2 — `onFocusCell` is the cell `onFocus` handler:
-   * it updates the roving anchor STATE only (`.focus()` 호출 안 함 —
-   * focus-steal 방지). The tab-stop column itself is per-row
-   * (`DataRowProps.tabCol`).
+   * `onFocusCell` is the cell `onFocus` handler: it updates the roving
+   * anchor STATE only (it never calls `.focus()`, which would steal focus).
+   * The tab-stop column itself is per-row (`DataRowProps.tabCol`).
    */
   onFocusCell: (row: number, col: number) => void;
 }
@@ -124,9 +125,9 @@ export interface DataRowProps {
   rowIdx: number;
   ctx: DataGridRowContext;
   /**
-   * Sprint 258 — virtualizer가 absolute positioning을 적용할 때 주입한다.
-   * 비-virtualized branch에서는 omit. Issue #1446 — kept as primitives (not
-   * an object) so the memoized row's shallow prop compare stays stable
+   * Injected when the virtualizer applies absolute positioning; omitted on
+   * the non-virtualized branch. Issue #1446 — kept as primitives (not an
+   * object) so the memoized row's shallow prop compare stays stable
    * across renders where its absolute position didn't change.
    */
   rowTop?: number;
@@ -202,8 +203,8 @@ function DataRow({
   const mergedStyle: CSSProperties = {
     display: "grid",
     gridTemplateColumns: "var(--cols)",
-    // Sprint 261 — sum-of-cols > parent width 시 row 박스가 grid tracks 합만큼
-    // 늘어나야 border-b / hover:bg-muted 가 끝까지 그려진다.
+    // When sum-of-cols > parent width, the row box must stretch to the sum
+    // of the grid tracks so border-b / hover:bg-muted paint all the way.
     minWidth: "max-content",
     // Issue #1446 — virtualized rows position absolutely (primitives, not a
     // per-render object, so the memo compare stays stable).
@@ -259,11 +260,10 @@ function DataRow({
         ? parseFkReference(col.fk_reference)
         : null;
 
-    // Sprint 343 (2026-05-15) — inline JSON tree entry-point for
-    // jsonb / Postgres ARRAY columns. Only non-null object / array
-    // cells get the sentinel (scalar jsonb values like `42` /
-    // `"foo"` / null stay editable through the regular cell path
-    // so the user can author an initial value).
+    // Inline JSON tree entry-point for jsonb / Postgres ARRAY columns.
+    // Only non-null object / array cells get the sentinel (scalar jsonb
+    // values like `42` / `"foo"` / null stay editable through the regular
+    // cell path so the user can author an initial value).
     const isNestedCapable =
       (isJsonbColumn(col.data_type) || isArrayColumn(col.data_type)) &&
       cell != null &&
@@ -302,18 +302,19 @@ function DataRow({
         tabIndex={visualIdx === tabCol ? 0 : -1}
         onFocus={() => onFocusCell(rowIdx, visualIdx)}
         onKeyDown={(e) => {
-          // issue #1130 (N1) — cell 내부 native 컨트롤(nested toggle / FK /
-          // BLOB 버튼) focus 시 Space/Enter 를 셀 키맵이 가로채지 않도록
-          // 자기 셀 focus 일 때만 동작. HeaderRow 와 동일 가드. 편집 중엔
-          // editor input 이 target 이라 이 가드에서 먼저 bail.
+          // issue #1130 (N1) — act only when the cell itself has focus, so
+          // the cell keymap does not intercept Space/Enter while a native
+          // control inside the cell (nested toggle / FK / BLOB button) is
+          // focused. Same guard as HeaderRow. While editing, the editor
+          // input is the target, so this guard bails first.
           if (e.target !== e.currentTarget) return;
-          // Design-swarm #4 Phase 3 — Enter/F2 로 focus 된 cell 편집 진입
-          // (double-click 과 동일 가드/경로). 편집 중엔 editor input 이
-          // focus 를 쥐고 Enter/Escape 를 stopPropagation 하므로 여기 안 옴.
+          // Enter/F2 start editing the focused cell (same guard and path as
+          // double-click). While editing, the editor input holds focus and
+          // stopPropagates Enter/Escape, so control never reaches here.
           if (isEditing) return;
-          // issue #1130 AC2 — Space 로 행 선택 (onClick 과 동일 modifier
-          // 시맨틱). 편집 가능 여부와 무관 — 읽기 전용 그리드도 선택은 허용.
-          // preventDefault 로 page scroll 억제.
+          // issue #1130 AC2 — Space selects the row (same modifier semantics
+          // as onClick). Independent of editability — a read-only grid still
+          // allows selection. preventDefault suppresses page scroll.
           if (e.key === " ") {
             e.preventDefault();
             e.stopPropagation();

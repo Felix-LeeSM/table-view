@@ -27,10 +27,10 @@ vi.mock("./BottomPanel", () => ({
 
 import MainArea from "./MainArea";
 
-// Sprint 142 (AC-147-4) — mount counter so tests can assert that
-// `<TableTabView>` is remounted (not just re-rendered with new props)
-// when the active tab swaps. Each useEffect with an empty dep array
-// fires exactly once per mounted instance.
+// AC-147-4 — mount counter so tests can assert that `<TableTabView>` is
+// remounted (not just re-rendered with new props) when the active tab
+// swaps. Each useEffect with an empty dep array fires exactly once per
+// mounted instance.
 const datagridMountLog: { connectionId: string; table: string }[] = [];
 
 // Mock child components to isolate MainArea routing logic
@@ -153,10 +153,10 @@ vi.mock("@components/workspace/KvKeyDetailPanel", () => ({
   ),
 }));
 
-// Sprint 350 (2026-05-15) — Mongo document-paradigm branch now renders a
-// Records/Structure sub-tab bar that mounts `DocumentDataGrid` (Records)
-// or `MongoStructurePanel` (Structure). Both are mocked so this suite
-// focuses on the routing logic in `MainArea`, not the panels' bodies.
+// The Mongo document-paradigm branch renders a Records/Structure sub-tab
+// bar that mounts `DocumentDataGrid` (Records) or `MongoStructurePanel`
+// (Structure). Both are mocked so this suite focuses on the routing logic
+// in `MainArea`, not the panels' bodies.
 vi.mock("@components/document/DocumentDataGrid", () => ({
   default: ({
     connectionId,
@@ -176,12 +176,11 @@ vi.mock("@components/document/DocumentDataGrid", () => ({
   ),
 }));
 
-// Sprint 350 (2026-05-15) — the mock renders the controlled `active` prop
-// and exposes a button that calls `onActiveChange`. AC-350-02 requires the
-// inner Indexes/Validator pick to survive an outer Records ↔ Structure
-// remount, so the mock must let the test (a) read whatever value the
-// parent passes down and (b) drive a change without depending on the real
-// `MongoIndexesPanel` body.
+// The mock renders the controlled `active` prop and exposes a button that
+// calls `onActiveChange`. AC-350-02 requires the inner Indexes/Validator
+// pick to survive an outer Records ↔ Structure remount, so the mock must
+// let the test (a) read whatever value the parent passes down and (b) drive
+// a change without depending on the real `MongoIndexesPanel` body.
 type MockMongoStructurePanelProps = {
   connectionId: string;
   database: string;
@@ -243,9 +242,8 @@ function makeTableTab({
   };
 }
 
-// Sprint 350 (2026-05-15) — document-paradigm tab fixture. The document
-// branch keys on `database` / `collection` (mongo names) rather than
-// `schema` / `table`.
+// Document-paradigm tab fixture. The document branch keys on `database` /
+// `collection` (mongo names) rather than `schema` / `table`.
 function makeDocumentTab({
   id = "doc-tab-1",
   connectionId = "mongo1",
@@ -329,9 +327,9 @@ function makeConnection(id: string): ConnectionConfig {
 function setConnections(opts: {
   connections?: ConnectionConfig[];
   active?: string[];
-  // Sprint 270 — defaults to `true` because every legacy test in this file
-  // asserts post-hydrate behaviour (EmptyState, DataGrid, sub-tab routing).
-  // The pre-hydrate skeleton path is exercised explicitly in
+  // Defaults to `true` because every legacy test in this file asserts
+  // post-hydrate behaviour (EmptyState, DataGrid, sub-tab routing). The
+  // pre-hydrate skeleton path is exercised explicitly in
   // `firstPaintSkeleton.test.tsx` with `hasLoadedOnce: false`.
   hasLoadedOnce?: boolean;
 }) {
@@ -357,11 +355,11 @@ describe("MainArea", () => {
   beforeEach(() => {
     useWorkspaceStore.setState({ workspaces: {} });
     setConnections({});
-    // Sprint 119 (#SHELL-1) — reset MRU before each test so a stale MRU
-    // from a prior test cannot leak into the EmptyState fallback chain.
+    // #SHELL-1 — reset MRU before each test so a stale MRU from a prior
+    // test cannot leak into the EmptyState fallback chain.
     __resetMruStoreForTests();
-    // Sprint 142 (AC-147-4) — clear the mount log so each test asserts a
-    // clean lifecycle.
+    // AC-147-4 — clear the mount log so each test asserts a clean
+    // lifecycle.
     datagridMountLog.length = 0;
     // #1407 — EmptyState now targets the window-pinned connection. Reset the
     // fake Tauri window label to null so a connId set by one test can't leak
@@ -389,10 +387,9 @@ describe("MainArea", () => {
   });
 
   // ------------------------------------------------------------------
-  // Sprint 270 — first-paint skeleton (AC-270-02, post-hydrate parity)
+  // First-paint skeleton (AC-270-02, post-hydrate parity)
   // ------------------------------------------------------------------
 
-  // Sprint 270 (2026-05-13)
   // AC-270-02 — pre-hydrate the main area must show the welcome-shaped
   // skeleton, not the `EmptyState`. Same rationale as sidebar: avoid the
   // empty-state flash during the IPC round-trip.
@@ -414,7 +411,6 @@ describe("MainArea", () => {
     ).toBeNull();
   });
 
-  // Sprint 270 (2026-05-13)
   // AC-270-04 (post-hydrate parity) — once hasLoadedOnce flips to true, the
   // skeleton stays unmounted and the legacy `EmptyState` renders even on a
   // remount (e.g. user navigates between layouts).
@@ -817,12 +813,12 @@ describe("MainArea", () => {
     expect(screen.queryByTestId("mock-view-structure")).toBeNull();
   });
 
-  // Sprint 142 (AC-147-4) — when the user swaps the active tab between two
-  // table tabs, the DataGrid for the previously active tab must unmount and
-  // a fresh DataGrid must mount for the new tab. Without per-tab remount,
+  // AC-147-4 — when the user swaps the active tab between two table tabs,
+  // the DataGrid for the previously active tab must unmount and a fresh
+  // DataGrid must mount for the new tab. Without per-tab remount,
   // `useDataGridEdit`'s `pendingEdits` state survives the prop change and
   // `setTabDirty` ends up flipping the marker onto the newly focused tab,
-  // which is exactly the user-reported bug we are closing.
+  // which is exactly the user-reported bug this guards against.
   describe("Sprint 142 — table tab remount on activeTab swap (AC-147-4)", () => {
     it("remounts DataGrid when activeTabId switches between two table tabs", () => {
       const tabA = makeTableTab({
@@ -936,10 +932,11 @@ describe("MainArea", () => {
   // ------------------------------------------------------------------
   // WAI-ARIA tabpanel wiring (a11y): tab ↔ panel association.
   // ------------------------------------------------------------------
-  // 작성 이유: 커스텀 tablist 5곳의 tabpanel gap 을 닫는 additive ARIA
-  // 배선. 여기서는 (a) main editor tab (TabItem) 이 MainArea content
-  // panel 과 id 로 연결되는지, (b) RDB Records/Structure 서브탭이 각
-  // panel 과 연결되고 서브탭 전환 시 id 가 갱신되는지 (link 검증) 를 가드.
+  // Reason: additive ARIA wiring that closes the tabpanel gap in the custom
+  // tablists. Here it guards (a) that the main editor tab (TabItem) links by
+  // id to the MainArea content panel, and (b) that the RDB
+  // Records/Structure sub-tabs link to their panels and the id updates when
+  // the sub-tab changes (link check).
   describe("tabpanel ARIA wiring", () => {
     it("wires the active editor tab to the MainArea content panel", () => {
       const tab = makeTableTab({ id: "tab-77", subView: "records" });
@@ -1053,8 +1050,8 @@ describe("MainArea", () => {
       expect(state.tabs[0]!.type).toBe("query");
       expect(state.tabs[0]!.connectionId).toBe("c1");
       // The CTA still records the window connection as MRU (carry-over of
-      // the retired sprint-119 AC-04 signal; MRU marking survives even
-      // though target selection no longer reads MRU).
+      // the retired AC-04 signal; MRU marking survives even though target
+      // selection no longer reads MRU).
       expect(useMruStore.getState().lastUsedConnectionId).toBe("c1");
     });
 
@@ -1107,14 +1104,13 @@ describe("MainArea", () => {
   });
 
   // ------------------------------------------------------------------
-  // Sprint 350 (2026-05-15) — Mongo Records/Structure sub-tab bar.
+  // Mongo Records/Structure sub-tab bar.
   // ------------------------------------------------------------------
-  // 작성 이유: 본 sprint 가 document-paradigm tab 의 "render
-  // DocumentDataGrid directly" 패턴을 Records/Structure sub-tab bar 로
-  // 교체한다. AC-350-01 (sub-tab bar shape + Records 기본 선택),
-  // AC-350-02 (Structure 활성화 시 MongoStructurePanel 마운트), 그리고
-  // AC-350-05 (RDB regression guard — mongo testids 가 RDB tab 에서
-  // 노출되지 않음) 을 한 describe 에 묶어 가드한다.
+  // Reason: the document-paradigm tab renders a Records/Structure sub-tab
+  // bar instead of mounting DocumentDataGrid directly. One describe guards
+  // AC-350-01 (sub-tab bar shape + Records selected by default), AC-350-02
+  // (activating Structure mounts MongoStructurePanel) and AC-350-05 (RDB
+  // regression guard — mongo testids are not exposed on an RDB tab).
   describe("Sprint 350 — Mongo Records/Structure sub-tab bar", () => {
     it("AC-350-01 — renders Records/Structure sub-tab bar with Records selected by default for document paradigm", () => {
       const tab = makeDocumentTab({ subView: "records" });
@@ -1178,11 +1174,11 @@ describe("MainArea", () => {
       );
     });
 
-    // Sprint 350 (2026-05-15) — AC-350-02 literal wording: "the inner
-    // selection survives Structure-tab re-activation". Toggling outer
-    // Records → Structure → Records → Structure must NOT reset the
-    // user's Indexes/Validator pick. Owned by `TableTabView` so the
-    // state outlives the conditional remount of `MongoStructurePanel`.
+    // AC-350-02 literal wording: "the inner selection survives
+    // Structure-tab re-activation". Toggling outer Records → Structure →
+    // Records → Structure must NOT reset the user's Indexes/Validator pick.
+    // Owned by `TableTabView` so the state outlives the conditional remount
+    // of `MongoStructurePanel`.
     it("AC-350-02 — inner selection survives outer Records → Structure → Records → Structure cycle", () => {
       const tab = makeDocumentTab({ subView: "structure" });
       useWorkspaceStore.setState(seedWorkspace([tab], tab.id));

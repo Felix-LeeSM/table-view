@@ -1,7 +1,6 @@
-// Sprint 311 (Phase 28 Slice A5, 2026-05-14) — parser-driven document Run
-// dispatch. The hook now routes the editor text through
-// `parseMongoshExpression` and dispatches to one of 6 read-path IPC
-// wrappers in `@lib/tauri/document`, replacing the prior
+// Parser-driven document Run dispatch. The hook routes the editor text
+// through `parseMongoshExpression` and dispatches to one of the read-path
+// IPC wrappers in `@lib/tauri/document`, replacing the prior
 // `JSON.parse` + `tab.queryMode === "aggregate"` branch.
 //
 // Test axes (TDD vertical slice — written in order):
@@ -18,7 +17,7 @@
 //      stored in `pendingMongoConfirm`, NOT re-parsed on confirm click).
 //  10. Query history records raw mongosh + parsed method name.
 //
-// Mock surface mirrors `useQueryExecution.ts` imports: 8 IPC wrappers
+// Mock surface mirrors `useQueryExecution.ts` imports: the IPC wrappers
 // from `@lib/tauri` (executeQuery, executeQueryDryRun, cancelQuery,
 // findDocuments, aggregateDocuments, findOneDocument, countDocuments,
 // estimatedDocumentCount, distinctDocuments) + verifyActiveDb stub +
@@ -791,10 +790,10 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
     await waitFor(() => {
       expect(useQueryHistoryStore.getState().recentVisible.length).toBe(1);
     });
-    // sprint-373 (2026-05-17) — backend wire `DocumentQueryMode` 는
-    // `"count"` 만 허용 (legacy `"countDocuments"` 는 record-history input
-    // 타입에는 살아있지만 `recordHistoryEntry` 의 매핑이 backend wire 로
-    // narrow 함). 사용자가 history panel 에서 보는 표기도 `"count"`.
+    // The backend wire `DocumentQueryMode` only allows `"count"` (the
+    // legacy `"countDocuments"` is still alive in the record-history
+    // input type, but `recordHistoryEntry`'s mapping narrows it to the
+    // backend wire). The history panel shows `"count"` to the user too.
     expect(useQueryHistoryStore.getState().recentVisible[0]!.queryMode).toBe(
       "count",
     );

@@ -1,12 +1,12 @@
-// Sprint 350 (2026-05-15) — Tracer: MongoStructurePanel sub-sub-tab bar.
+// MongoStructurePanel sub-sub-tab bar.
 //
-// 작성 이유: 본 sprint 가 Mongo Structure pane 의 sub-sub-tab bar
-// (Indexes / Validator) 를 도입한다. 본 spec 의 AC-350-02 / 04 를 가드:
-// (a) `role="tablist"` + 두 개의 `role="tab"`, (b) Indexes 가 기본 선택,
-// (c) 마우스 클릭과 ArrowLeft/Right keyboard 으로 토글, (d) 토글 후 inner
-// selection 이 Structure tab 재활성화 후에도 유지되는지 (Validator panel
-// state 보존은 sprint scope 외이므로 component 가 unmount 되지 않는지로
-// 가드), (e) Validator sub-sub-tab 이 `validator-panel` testid 를 mount.
+// Reason: guards AC-350-02 / 04 for the Mongo Structure pane's sub-sub-tab
+// bar (Indexes / Validator) — (a) `role="tablist"` plus two `role="tab"`,
+// (b) Indexes selected by default, (c) toggling by mouse click and by
+// ArrowLeft/Right, (d) the inner selection survives re-activating the
+// Structure tab (preserving the Validator panel's own state is out of
+// scope, so the guard is that the component does not unmount),
+// (e) the Validator sub-sub-tab mounts the `validator-panel` testid.
 
 import {
   act,
@@ -85,8 +85,7 @@ describe("MongoStructurePanel (Sprint 350 — tracer Indexes/Validator shell)", 
       "aria-selected",
       "false",
     );
-    // Validator surface mounts via its existing testid (component body
-    // unchanged this sprint).
+    // Validator surface mounts via its existing testid.
     expect(screen.getByTestId("validator-panel")).toBeInTheDocument();
     expect(screen.queryByTestId("mongo-indexes-panel")).toBeNull();
   });

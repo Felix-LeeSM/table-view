@@ -1,9 +1,9 @@
-// Sprint 325 (2026-05-15) — Slice H: field projection dialog.
+// Field projection dialog.
 //
-// 작성 이유: server-side projection 의 (a) include / exclude 모드,
-// (b) per-column checkbox, (c) Apply / Clear / Cancel 의 콜백 호출
-// 시나리오를 회귀 가드. Mongo find body 의 `projection` shape (`{
-// field: 1 }` / `{ field: 0 }`) 으로 정확히 변환되어야 한다.
+// Reason: regression guard for server-side projection — (a) include /
+// exclude mode, (b) per-column checkbox, (c) the Apply / Clear / Cancel
+// callback scenarios. The result must convert exactly into the Mongo find
+// body's `projection` shape (`{ field: 1 }` / `{ field: 0 }`).
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";

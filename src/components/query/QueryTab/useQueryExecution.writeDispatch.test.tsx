@@ -1,15 +1,13 @@
-// Sprint 312 (Phase 28 Slice A6, 2026-05-14) — RTL coverage of the 7
-// write-method dispatch table. Each test mocks the relevant
-// `@lib/tauri/document` wrapper and asserts:
+// RTL coverage of the write-method dispatch table. Each test mocks the
+// relevant `@lib/tauri/document` wrapper and asserts:
 //   - the IPC was called with the parser-extracted payload,
 //   - the resulting QueryResult carries `resultKind: "writeSummary"` +
 //     a populated `writeSummary` shape,
 //   - history records the parsed method name (D-13) as `queryMode`.
 //
-// Tests are written before / alongside the implementation in vertical
-// slices — one write method per `describe`. D-16 (autonomous):
-// Sprint 475 tightens single-document writes: `updateOne` / `deleteOne` /
-// `replaceOne` require `_id`-only filters for deterministic identity.
+// One write method per `describe`. D-16 (autonomous): single-document
+// writes `updateOne` / `deleteOne` / `replaceOne` require `_id`-only filters
+// for deterministic identity.
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
@@ -259,14 +257,14 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     expect(deleteManyMock).not.toHaveBeenCalled();
   });
 
-  // ── 이슈 #2375 — 비프로덕션 + `warn` 에서 danger 도 미리보기를 받는다 ──
+  // ── Issue #2375 — non-production + `warn` gives danger a preview too ──
   //
-  // `seedDocTab` 이 심는 연결 환경은 `development` 이고 위 beforeEach 가
-  // `mode` 를 `warn` 으로 둔다 — 출하 기본 설정이다. 그 조합에서
-  // `decideSafeModeAction` 은 파괴적 문장에도 `allow` 를 주므로, 회귀 전에는
-  // `preview[danger]` 로 시작하는 이 파일의 케이스들이 창 하나 없이 IPC 로
-  // 나갔다. `pendingMongoConfirm` 이 대신 서면 안 된다 —
-  // 그건 ADR 0022 의 매트릭스를 고쳤다는 뜻이다.
+  // `seedDocTab` seeds a `development` connection environment and the
+  // beforeEach above sets `mode` to `warn` — the shipping default. In that
+  // combination `decideSafeModeAction` returns `allow` even for destructive
+  // statements, so before this regression test the `preview[danger]` cases in
+  // this file went out over IPC without a single dialog. `pendingMongoConfirm`
+  // must not stand in for it — that would mean the ADR 0022 matrix changed.
 
   it("preview[danger] empty-filter deleteMany → 미리보기 pending; confirm 후에야 IPC", async () => {
     deleteManyMock.mockResolvedValueOnce(9);

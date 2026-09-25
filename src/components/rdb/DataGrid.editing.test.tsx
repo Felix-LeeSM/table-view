@@ -1,10 +1,7 @@
-// Sprint 222 — `editing` axis split from `DataGrid.test.tsx` (P11
-// step 5, last). Covers Sprint 30 inline cell editing (5) + Sprint 31
-// commit & SQL preview (5) + Sprint 32 row operations (5) + Sprint 43
-// promoteTab triggers (4) + Sprint 44 Data Grid UX (3) + Sprint 50
-// multi-row selection (5) + [AC-186-06] warn+production+dangerous
-// ConfirmDestructiveDialog. (AC-185-06 env color stripe removed in
-// Sprint 256.)
+// `editing` axis split from `DataGrid.test.tsx`. Covers inline cell editing
+// + commit & SQL preview + row operations + promoteTab triggers + Data Grid
+// UX + multi-row selection + [AC-186-06] warn+production+dangerous
+// ConfirmDestructiveDialog. (The AC-185-06 env color stripe was removed.)
 // Cases are byte-equivalent to the originals — no behaviour change.
 //
 // Inline `vi.spyOn(sqlGen, "generateSqlWithKeys")` survives in the
@@ -66,11 +63,11 @@ beforeEach(() => {
   });
 });
 
-// Sprint 76 — a minimal reactive mock that mirrors zustand's hook + getState
-// shape. The component subscribes through the selector; `updateTabSorts`
-// mutates the tab entry and bumps `version` so every selector re-runs on
-// the next render. `forceRerender` via `useTabStoreBump` keeps React in
-// sync without dragging the real zustand library into the mock.
+// A minimal reactive mock that mirrors zustand's hook + getState shape. The
+// component subscribes through the selector; `updateTabSorts` mutates the tab
+// entry and bumps `version` so every selector re-runs on the next render.
+// `forceRerender` via `useTabStoreBump` keeps React in sync without dragging
+// the real zustand library into the mock.
 interface MockTabShape {
   id: string;
   type: "table";
@@ -151,7 +148,7 @@ describe("DataGrid", () => {
     resetMockTabStore();
   });
 
-  // ── Sprint 30: Inline Cell Editing ──
+  // ── Inline Cell Editing ──
 
   // 35. Double-clicking a cell enters edit mode
   it("double-clicking a cell enters edit mode", async () => {
@@ -727,7 +724,7 @@ describe("DataGrid", () => {
     });
   });
 
-  // ── Sprint 31: Commit & SQL Preview ──
+  // ── Commit & SQL Preview ──
 
   // Helper: make a pending edit
   async function makePendingEdit() {
@@ -819,9 +816,9 @@ describe("DataGrid", () => {
   });
 
   // 44. Commit executes SQL and refreshes data
-  // Sprint 183 — assertion updated from `mockExecuteQuery` to
-  // `mockExecuteQueryBatch` because the commit pipeline now wraps the
-  // pending edits in a single transaction batch. 2026-05-01.
+  // Asserts on `mockExecuteQueryBatch` rather than `mockExecuteQuery`
+  // because the commit pipeline wraps the pending edits in a single
+  // transaction batch.
   it("Commit executes SQL and refreshes data", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
@@ -850,7 +847,7 @@ describe("DataGrid", () => {
     expect(screen.queryByText(/edit/)).not.toBeInTheDocument();
   });
 
-  // ── Sprint 32: Row Operations (Add/Delete) ──
+  // ── Row Operations (Add/Delete) ──
 
   // 45. Add Row button adds an empty row at the bottom
   it("Add Row button adds an empty row at the bottom", async () => {
@@ -969,12 +966,12 @@ describe("DataGrid", () => {
     }
   });
 
-  // ── Sprint 43: promoteTab triggers ──
+  // ── promoteTab triggers ──
 
   // Reason: sorting no longer promotes preview tabs — the promoteTab
   // useEffect was removed from DataGrid so that preview tabs stay as
   // previews until an explicit user action (double-click, edit, TabBar
-  // click) promotes them. (2026-04-29)
+  // click) promotes them.
   it("does NOT call promoteTab when sorting changes", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
@@ -1033,10 +1030,11 @@ describe("DataGrid", () => {
     expect(mockPromoteTab).toHaveBeenCalledWith("conn1", "db1", "tab-1");
   });
 
-  // ── Sprint 44: Data Grid UX (Sprint 238 으로 char-truncate 폐기) ──
+  // ── Data Grid UX (char-truncate retired) ──
 
-  // 54. Sprint 238 — long cell 은 full text 를 DOM 에 보존, CSS ellipsis 로
-  // 시각적 cap 처리. char-truncate(200) 와 line-clamp-3 모두 제거 (AC-238-05/06).
+  // 54. A long cell keeps its full text in the DOM and CSS ellipsis caps it
+  // visually. Both char-truncate(200) and line-clamp-3 are gone
+  // (AC-238-05/06).
   it("preserves full cell text in DOM and exposes via title (CSS ellipsis handles overflow)", async () => {
     const longText = "A".repeat(250);
     mockQueryTableData.mockResolvedValue({
@@ -1053,7 +1051,7 @@ describe("DataGrid", () => {
     expect(nameCell.textContent).toContain(longText);
     // Title still carries full value for hover.
     expect(nameCell).toHaveAttribute("title", longText);
-    // line-clamp-3 마커 부재 — Sprint 238 로 폐기됨.
+    // No line-clamp-3 marker — it was retired.
     expect(nameCell.querySelector(".line-clamp-3")).toBeNull();
   });
 
@@ -1101,7 +1099,7 @@ describe("DataGrid", () => {
     expect((input as HTMLInputElement).type).toBe("datetime-local");
   });
 
-  // ── Sprint 50: Multi-row Selection ──
+  // ── Multi-row Selection ──
 
   // 57. Cmd+Click toggles row selection
   it("toggles row selection with Cmd+Click", async () => {
@@ -1242,21 +1240,20 @@ describe("DataGrid", () => {
     expect(rows[2]!.className).not.toContain(SELECTED_ROW_FILL);
   });
 
-  // Sprint 256 (2026-05-09): the AC-185-06 1px env color stripe above the
-  // DataGrid Preview Dialog header was removed per user feedback
-  // ("datagrid 에서 수정할 때 SQL preview 뜨는 것 상단에 한줄 그어놓은
-  // 것도 ... 그냥 제거해"). The env signal flows through the footer
+  // The AC-185-06 1px env color stripe above the DataGrid Preview Dialog
+  // header was removed per user feedback ("the line drawn across the top of
+  // the SQL preview that shows up when editing in the datagrid ... just
+  // remove that too"). The env signal flows through the footer
   // ExecuteButton's color × env matrix and the ConfirmDestructiveDialog
   // header tokens instead. The regression guard for the stripe is
   // intentionally dropped.
 
   it("[AC-186-06] warn + production + dangerous → ConfirmDestructiveDialog rendered with reason", async () => {
-    // AC-186-06 — Sprint 186 mounts ConfirmDestructiveDialog when the
-    // useDataGridEdit hook surfaces pendingConfirm. The generator is
-    // PK-bounded so it never emits a WHERE-less DELETE on its own; we
-    // mock generateSqlWithKeys to inject a danger shape and verify the
-    // warn handoff renders the dialog with the analyzer's reason text.
-    // date 2026-05-01.
+    // AC-186-06 — ConfirmDestructiveDialog mounts when the useDataGridEdit
+    // hook surfaces pendingConfirm. The generator is PK-bounded so it never
+    // emits a WHERE-less DELETE on its own; we mock generateSqlWithKeys to
+    // inject a danger shape and verify the warn handoff renders the dialog
+    // with the analyzer's reason text.
     const { useConnectionStore } = await import("@stores/connectionStore");
     const { useSafeModeStore } = await import("@stores/safeModeStore");
     const sqlGen = await import("@components/datagrid/sqlGenerator");
@@ -1285,8 +1282,8 @@ describe("DataGrid", () => {
       renderDataGrid();
       await screen.findByText("3 rows");
       // Edit a cell so the toolbar Commit button has something to commit.
-      // Sprint 343 — `meta` (index 2) is now a JSONB sentinel and no
-      // longer responds to double-click; switch to `name` (index 1).
+      // `meta` (index 2) is a JSONB sentinel and no longer responds to
+      // double-click; switch to `name` (index 1).
       const tds = document.querySelectorAll(
         '[role="row"][aria-rowindex="2"] [role="gridcell"]',
       );

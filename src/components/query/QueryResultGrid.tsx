@@ -58,11 +58,11 @@ export interface QueryResultGridProps {
   /** Called after a raw-result edit is committed so the parent can refresh. */
   onAfterCommit?: () => void;
   /**
-   * Sprint 248 (ADR 0022 Phase 4) — when true, mounts a "Dry Run —
-   * rolled back. No data was changed." banner above the result body so
-   * users immediately understand the rows / counts they see were rolled
-   * back. Derived from `queryState.completed.isDryRun` upstream so the
-   * grid stays paradigm-agnostic.
+   * ADR 0022 — when true, mounts a "Dry Run — rolled back. No data was
+   * changed." banner above the result body so users immediately understand
+   * the rows / counts they see were rolled back. Derived from
+   * `queryState.completed.isDryRun` upstream so the grid stays
+   * paradigm-agnostic.
    */
   isDryRun?: boolean;
 }
@@ -431,12 +431,12 @@ function CompletedSingleResult({
     return { mode, text: formatNonGridCopyText(result, mode) };
   }, [result]);
 
-  // Sprint 312 (Phase 28 Slice A6, 2026-05-14) — `resultKind` discriminator
-  // router. Mongo paradigms set `"scalar"` / `"list"` / `"writeSummary"`;
-  // RDB + Mongo find / aggregate / findOne(matched) leave it undefined or
-  // `"grid"` and hit the legacy DataGrid path. The dispatch happens at the
-  // top of the function so the status-bar + DataGrid scaffolding stays
-  // unchanged for the grid path (zero RDB regression risk).
+  // `resultKind` discriminator router. Mongo paradigms set `"scalar"` /
+  // `"list"` / `"writeSummary"`; RDB + Mongo find / aggregate /
+  // findOne(matched) leave it undefined or `"grid"` and hit the legacy
+  // DataGrid path. The dispatch happens at the top of the function so the
+  // status-bar + DataGrid scaffolding stays unchanged for the grid path
+  // (zero RDB regression risk).
   if (result.resultKind === "writeSummary" && result.writeSummary) {
     const summaryText = formatCopyJson(result.writeSummary);
     return (
@@ -778,10 +778,10 @@ export default function QueryResultGrid({
 
   // Completed state
   if (queryState.status === "completed") {
-    // Sprint 248 — explicit `isDryRun` prop wins over the queryState
-    // flag (so callers wrapping the grid in a custom shell can force
-    // the banner), but defaults to the queryState payload so QueryTab
-    // doesn't need a derive step.
+    // The explicit `isDryRun` prop wins over the queryState flag (so
+    // callers wrapping the grid in a custom shell can force the banner),
+    // but defaults to the queryState payload so QueryTab doesn't need a
+    // derive step.
     const isDryRun = isDryRunProp ?? queryState.isDryRun === true;
 
     // Multi-statement runs render one tab per statement; single-statement
@@ -813,9 +813,9 @@ export default function QueryResultGrid({
     if (isDryRun) {
       return (
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Sprint 248 (ADR 0022 Phase 4) — dry-run rolled-back banner.
-              Mounted above both single + multi result bodies so the
-              user can see at a glance that nothing was committed. */}
+          {/* ADR 0022 — dry-run rolled-back banner. Mounted above both
+              single + multi result bodies so the user can see at a glance
+              that nothing was committed. */}
           <div
             role="status"
             data-testid="dry-run-banner"

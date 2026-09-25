@@ -1,8 +1,9 @@
-// Purpose: HeaderRow 정렬 헤더 키보드 도달 가드 (issue #1130 AC3). 헤더행은
-// 단일 roving tab stop(첫 columnheader tabindex 0, 나머지 -1)이고 ArrowLeft/
-// Right 로 이동, Enter/Space 로 onSort 를 부른다 (Shift 는 multi-sort append).
-// aria-sort 노출도 회귀 가드. HeaderRow 는 RDB + Document 그리드 공유
-// (DataGridHeaderRow)라 한 곳 고치면 둘 다 커버. (2026-07-03)
+// Purpose: keyboard-reachability guard for HeaderRow's sort headers (issue
+// #1130 AC3). The header row is a single roving tab stop (the first
+// columnheader is tabindex 0, the rest -1), ArrowLeft/Right move it, and
+// Enter/Space call onSort (Shift appends to the multi-sort). aria-sort
+// exposure is guarded too. HeaderRow is shared by the RDB and Document grids
+// (DataGridHeaderRow), so one fix covers both.
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";

@@ -1,18 +1,18 @@
-// Sprint 274 (2026-05-13) — DropTriggerDialog component test suite.
+// DropTriggerDialog component test suite.
 //
-// 작성 이유: trigger DROP 다이얼로그가 처음 도입된 surface 이므로 다음을
-// 고정한다 — (1) form mount + Apply 비활성 초기 상태, (2) typing-confirm
-// 게이트가 byte-for-byte (empty / partial / case-mismatched / whitespace
-// 모두 disabled), (3) 250 ms 디바운스 preview fetch + expectedDatabase
-// 페이로드 전파, (4) CASCADE 토글이 두 번째 debounce fetch 를 일으키고
-// cascade:true 로 emit, (5) Safe-Mode warn 티어 confirm 흐름
-// (`ConfirmDestructiveDialog` 마운트 후 confirm → drop_trigger 호출),
-// (6) commit 성공 시 onRefresh + onClose 가 정확히 1 회 호출,
-// (7) DbMismatch (Sprint 271c wire format) 에 대해 syncMismatchedActiveDb
-// + Sprint 269 passive Retry toast 가 emit.
+// Reason: pins (1) the initial form mount with Apply disabled, (2) the
+// byte-for-byte typing-confirm gate (empty / partial / case-mismatched /
+// whitespace all disabled), (3) the 250 ms debounced preview fetch +
+// expectedDatabase payload propagation, (4) a CASCADE toggle firing a
+// second debounced fetch that emits cascade:true, (5) the Safe-Mode warn
+// tier confirm flow (`ConfirmDestructiveDialog` mounts, confirm →
+// drop_trigger call), (6) onRefresh + onClose called exactly once on
+// commit success, (7) syncMismatchedActiveDb + a passive Retry toast on
+// DbMismatch.
 //
-// 이슈 #2191 — 미리보기 게이트와 실행 게이트가 갈렸다. DROP SQL 은 확인
-// 타이핑 전에 렌더되고, 확인 타이핑은 실행 여부만 쥔다.
+// Issue #2191 — the preview gate and the execution gate are separate. The
+// DROP SQL renders before the typing-confirm input matches; the
+// typing-confirm input still owns whether the DROP may run.
 
 import {
   act,
@@ -286,7 +286,7 @@ describe("DropTriggerDialog — Sprint 274", () => {
     expect(firstCall?.triggerName).toBe("tg_audit");
     expect(firstCall?.cascade).toBe(false);
     expect(firstCall?.previewOnly).toBe(true);
-    // Sprint 271c — opt-in DbMismatch guard.
+    // Opt-in DbMismatch guard.
     expect(firstCall?.expectedDatabase).toBe("db-1");
   });
 
@@ -344,9 +344,9 @@ describe("DropTriggerDialog — Sprint 274", () => {
       expect(commitCalls()).toHaveLength(1);
     });
 
-    // Post-commit refresh invalidates the triggers cache (Sprint 274
-    // AC-274-04) — onRefresh is wired to
-    // `schemaStore.refreshTableTriggers` by the SchemaTree slot.
+    // Post-commit refresh invalidates the triggers cache (AC-274-04) —
+    // onRefresh is wired to `schemaStore.refreshTableTriggers` by the
+    // SchemaTree slot.
     await waitFor(() => {
       expect(onRefresh).toHaveBeenCalledTimes(1);
     });

@@ -1,34 +1,31 @@
 /**
- * Reason: Sprint-176 / RISK-009 — selective-attention overlay hardening.
- * The refetch loading overlay must swallow pointer events that the user
- * directs at the cells underneath, so a mid-flight refetch can't be
- * hijacked into selecting a row, opening cell-edit mode, or surfacing
- * the context menu. Also locks AC-176-04: spinner DOM (classes / size /
- * position) is unchanged from the pre-176 implementation.
+ * Reason: RISK-009 — selective-attention overlay hardening. The refetch
+ * loading overlay must swallow pointer events that the user directs at
+ * the cells underneath, so a mid-flight refetch can't be hijacked into
+ * selecting a row, opening cell-edit mode, or surfacing the context menu.
+ * Also locks AC-176-04: spinner DOM (classes / size / position) is
+ * unchanged from the earlier implementation.
  *
- * NOTE on test mechanism (sprint-176 attempt 2 — Evaluator finding F-1):
+ * NOTE on test mechanism (Evaluator finding F-1):
  * In jsdom the overlay <div> is a sibling of <table> in the DOM, so a
  * `fireEvent.click(overlay)` does NOT bubble to <tr> regardless of
  * `stopPropagation`. Asserting `expect(spy).not.toHaveBeenCalled()` on
  * the row handler is therefore vacuous — it would pass even if the
- * sprint-176 production handlers were removed. The load-bearing
- * assertion in this file is `event.defaultPrevented === true`, which
- * proves `e.preventDefault()` actually executed inside the overlay's
- * onClick / onMouseDown / onDoubleClick / onContextMenu handlers. The
+ * production handlers were removed. The load-bearing assertion in this
+ * file is `event.defaultPrevented === true`, which proves
+ * `e.preventDefault()` actually executed inside the overlay's onClick /
+ * onMouseDown / onDoubleClick / onContextMenu handlers. The
  * `expect(spy).not.toHaveBeenCalled()` lines remain as secondary
  * checks documenting the user-visible invariant, but the
  * `defaultPrevented` assertions are what actually catch a regression.
  *
- * Date: 2026-04-30 (sprint-176, generator phase — attempt 2)
- *
- * Sprint-180 update (2026-04-30): the overlay is now threshold-gated
- * by `useDelayedFlag(loading, 1000)` (AC-180-01). Each test wraps its
- * setup with `vi.useFakeTimers()` and advances 1100ms before asserting
- * the overlay's presence so the Sprint 176 invariants still apply
- * post-threshold. Without this gate, sub-second fetches no longer
- * paint the overlay — but Sprint 176's hardening is still in scope
- * for queries that DO cross the 1s threshold, so the assertions below
- * remain load-bearing.
+ * The overlay is threshold-gated by `useDelayedFlag(loading, 1000)`
+ * (AC-180-01). Each test wraps its setup with `vi.useFakeTimers()` and
+ * advances 1100ms before asserting the overlay's presence so the AC-176-*
+ * invariants still apply post-threshold. Without this gate, sub-second
+ * fetches no longer paint the overlay — but the hardening is still in
+ * scope for queries that DO cross the 1s threshold, so the assertions
+ * below remain load-bearing.
  */
 
 import {
@@ -105,11 +102,11 @@ function makeProps(overrides: Record<string, unknown> = {}) {
   };
 }
 
-// Sprint-180 (2026-04-30) — the shared `AsyncProgressOverlay` only paints
-// after the host's threshold gate flips visible to true (1s). All Sprint
-// 176 invariants below now run after the timer has been advanced past the
-// threshold; without `vi.useFakeTimers` here, the overlay would never
-// appear and `getByRole("status", { name: "Loading" })` would throw.
+// The shared `AsyncProgressOverlay` only paints after the host's threshold
+// gate flips visible to true (1s). Every invariant below runs after the
+// timer has been advanced past the threshold; without `vi.useFakeTimers`
+// here, the overlay would never appear and
+// `getByRole("status", { name: "Loading" })` would throw.
 beforeEach(() => {
   vi.useFakeTimers();
 });
@@ -121,7 +118,7 @@ afterEach(() => {
 /**
  * Helper: render `DataGridTable` with `loading=true`, then advance fake
  * timers past the 1s threshold so the shared overlay materialises. Returns
- * the rendered overlay element. Sprint 180 gate-aware adapter.
+ * the rendered overlay element. Gate-aware adapter.
  */
 function renderAndCrossThreshold(props: ReturnType<typeof makeProps>) {
   const utils = render(<DataGridTable {...props} />);
@@ -137,8 +134,6 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
   // `e.preventDefault()`. Selection in DataGridTable is sometimes started
   // on mousedown (drag-select), so blocking only `click` is insufficient.
   // Load-bearing assertion: `event.defaultPrevented === true`.
-  // Date: 2026-04-30 (sprint-176 attempt 2 — F-1, F-3 split; sprint-180
-  // gate-aware adaptation)
   it("[AC-176-01] overlay calls preventDefault on mouseDown", () => {
     const onSelectRow = vi.fn();
     const { overlay } = renderAndCrossThreshold(makeProps({ onSelectRow }));
@@ -158,8 +153,6 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
 
   // Reason: AC-176-01 — same shape as the mouseDown test above but for
   // the click gesture (the row-selection toggle on RDB grids).
-  // Date: 2026-04-30 (sprint-176 attempt 2 — F-1, F-3 split; sprint-180
-  // gate-aware adaptation)
   it("[AC-176-01] overlay calls preventDefault on click", () => {
     const onSelectRow = vi.fn();
     const { overlay } = renderAndCrossThreshold(makeProps({ onSelectRow }));
@@ -173,10 +166,9 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
 
   // Reason: AC-176-01 — confirm doubleClick (the cell-edit entry gesture)
   // also fires preventDefault. onStartEdit is the user-visible secondary
-  // assertion: in pre-sprint-176 code a double-click on the overlay
-  // region directly above a cell would bubble to the cell's
-  // `onDoubleClick` and open the inline editor mid-refetch.
-  // Date: 2026-04-30 (sprint-176 attempt 2 — F-1; sprint-180 gate)
+  // assertion: without the hardening, a double-click on the overlay region
+  // directly above a cell would bubble to the cell's `onDoubleClick` and
+  // open the inline editor mid-refetch.
   it("[AC-176-01] overlay calls preventDefault on doubleClick", () => {
     const onStartEdit = vi.fn();
     const { overlay } = renderAndCrossThreshold(makeProps({ onStartEdit }));
@@ -192,7 +184,6 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
   // ContextMenu mid-refetch. The overlay must absorb the gesture so the
   // user can't trigger Edit/Delete/Copy actions before the refresh has
   // settled. Load-bearing assertion: `event.defaultPrevented === true`.
-  // Date: 2026-04-30 (sprint-176 attempt 2 — F-1; sprint-180 gate)
   it("[AC-176-01] overlay calls preventDefault on contextmenu", () => {
     const onSelectRow = vi.fn();
     const { overlay } = renderAndCrossThreshold(makeProps({ onSelectRow }));
@@ -210,16 +201,15 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
   // class chain still includes the original `absolute inset-0 z-20 flex
   // items-center justify-center bg-background/60` invariants; the shared
   // `AsyncProgressOverlay` adds `flex-col gap-3` to slot the Cancel
-  // button below the spinner (Sprint 180), but the original class names
-  // remain — `toHaveClass` matches a subset. The Loader2 child still
-  // carries `animate-spin text-muted-foreground` with width/height "24"
-  // and `aria-hidden="true"`.
-  // Date: 2026-04-30 (sprint-176 attempt 2 — F-5; sprint-180 gate)
+  // button below the spinner, but the original class names remain —
+  // `toHaveClass` matches a subset. The Loader2 child still carries
+  // `animate-spin text-muted-foreground` with width/height "24" and
+  // `aria-hidden="true"`.
   it("[AC-176-04] spinner DOM (classes, size, position) is unchanged", () => {
     const { overlay } = renderAndCrossThreshold(makeProps());
 
-    // Wrapper class chain (locked by AC-176-04). The shared Sprint 180
-    // overlay extends but does not break this invariant.
+    // Wrapper class chain (locked by AC-176-04). The shared overlay
+    // extends but does not break this invariant.
     expect(overlay).toHaveClass(
       "absolute",
       "inset-0",
@@ -238,15 +228,14 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
     expect(spinner).toHaveAttribute("width", "24");
     expect(spinner).toHaveAttribute("height", "24");
     // a11y polish: SVG is decorative — assistive tech should ignore it
-    // and read the parent's aria-label instead. Attempt-2 addition.
+    // and read the parent's aria-label instead.
     expect(spinner).toHaveAttribute("aria-hidden", "true");
   });
 
   // Reason: regression guard — when loading=false, the overlay is gone
   // and pointer events on the rows reach their handlers as before.
-  // Without this, sprint-176 could over-correct and break the normal
+  // Without this, the hardening could over-correct and break the normal
   // (non-loading) path.
-  // Date: 2026-04-30
   it("regression: with loading=false overlay is absent and clicks reach the row", () => {
     const onSelectRow = vi.fn();
     render(<DataGridTable {...makeProps({ loading: false, onSelectRow })} />);
@@ -264,9 +253,8 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
     expect(onSelectRow).toHaveBeenCalled();
   });
 
-  // Sprint 180 (AC-180-01) — sub-second refetches must NOT paint the
-  // overlay. Pre-threshold the overlay element is absent entirely.
-  // Date: 2026-04-30 (sprint-180)
+  // AC-180-01 — sub-second refetches must NOT paint the overlay.
+  // Pre-threshold the overlay element is absent entirely.
   it("[AC-180-01] does not paint overlay before 1s threshold elapses", () => {
     render(<DataGridTable {...makeProps()} />);
     // 500ms < 1000ms → still pre-threshold.
@@ -278,12 +266,10 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
     ).not.toBeInTheDocument();
   });
 
-  // Sprint 180 (AC-180-02 / AC-180-06) — Cancel button surfaces with
-  // the canonical accessible name "Cancel" and clicking it invokes the
-  // host-supplied `onCancelRefetch`. The host then clears `loading`,
-  // which (via `useDelayedFlag`) flips the overlay back off within one
-  // frame.
-  // Date: 2026-04-30 (sprint-180)
+  // AC-180-02 / AC-180-06 — Cancel button surfaces with the canonical
+  // accessible name "Cancel" and clicking it invokes the host-supplied
+  // `onCancelRefetch`. The host then clears `loading`, which (via
+  // `useDelayedFlag`) flips the overlay back off within one frame.
   it("[AC-180-02] Cancel button click invokes onCancelRefetch", () => {
     const onCancelRefetch = vi.fn();
     renderAndCrossThreshold(makeProps({ onCancelRefetch }));
@@ -294,17 +280,17 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
     expect(onCancelRefetch).toHaveBeenCalledTimes(1);
   });
 
-  // Sprint 180 (AC-180-05) — per-vector retry guarantee for DataGridTable.
+  // AC-180-05 — per-vector retry guarantee for DataGridTable.
   //
-  // Reason (2026-04-30): the contract requires "trigger → cancel →
-  // re-trigger" to land cleanly: (a) overlay disappears when loading
-  // flips to false post-cancel, (b) second attempt's data renders, (c)
-  // no stuck overlay. We simulate the host by re-rendering with a
-  // controlled `loading` flag and a fresh `data` payload. This pins the
-  // pure presentational contract of `DataGridTable` — host wiring
-  // (`fetchIdRef`, `cancelQuery`) is exercised by host-level tests at
-  // `rdb/DataGrid.test.tsx`. The two layers together cover Sprint 180
-  // AC-180-05 for the RDB DataGrid surface.
+  // Reason: the contract requires "trigger → cancel → re-trigger" to land
+  // cleanly: (a) overlay disappears when loading flips to false
+  // post-cancel, (b) second attempt's data renders, (c) no stuck overlay.
+  // We simulate the host by re-rendering with a controlled `loading` flag
+  // and a fresh `data` payload. This pins the pure presentational contract
+  // of `DataGridTable` — host wiring (`fetchIdRef`, `cancelQuery`) is
+  // exercised by `rdb/DataGrid.refetch-overlay.test.tsx` and
+  // `rdb/DataGrid/useRdbTableData.cancel.test.ts`. The two layers together
+  // cover AC-180-05 for the RDB DataGrid surface.
   it("[AC-180-05-DataGridTable] cancel → re-trigger paints second attempt's data", () => {
     const onCancelRefetch = vi.fn();
     const { rerender } = render(

@@ -5,8 +5,8 @@
 // User journey (RDB + Mongo):
 //   1. Open a paginated table on page 1.
 //   2. Edit (or mark-delete) the 3rd/2nd visible row on page 1.
-//   3. Navigate to page 2 — the pending buffer survives (Sprint 251), but
-//      `data.rows` now holds page 2's rows.
+//   3. Navigate to page 2 — the pending buffer survives, but `data.rows` now
+//      holds page 2's rows.
 //   4. Cmd+S commit.
 //
 // Before the fix, the commit builder read the WHERE-clause PK / `_id` from

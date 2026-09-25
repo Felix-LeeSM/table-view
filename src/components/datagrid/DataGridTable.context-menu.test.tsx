@@ -378,7 +378,7 @@ describe("DataGridTable — context menu", () => {
     renderTable({ data: emptyData });
 
     // With no data rows, there should be a "Table is empty" cell but no context menu
-    // (Sprint 99 — empty state without filters reads "Table is empty".)
+    // (The empty state without filters reads "Table is empty".)
     expect(screen.getByText("Table is empty")).toBeInTheDocument();
 
     // Try right-clicking the empty-state row — no menu should appear

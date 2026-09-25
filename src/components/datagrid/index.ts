@@ -5,8 +5,9 @@ export { default as CellDetailDialog } from "./CellDetailDialog";
 export { default as DataGridSkeleton } from "./DataGridSkeleton";
 export type { DataGridTableProps } from "./DataGridTable";
 export { default as DataGridTable } from "./DataGridTable";
-// Issue #1442 — 결과 그리드(read-only / editable raw query)가 DataGridTable
-// 과 같은 가상화 경계/행높이를 재사용하도록 barrel 로 노출.
+// Issue #1442 — exposed on the barrel so the result grid (read-only /
+// editable raw query) reuses the same virtualization threshold and row height
+// as `DataGridTable`.
 export {
   ROW_HEIGHT_ESTIMATE,
   VIRTUALIZE_THRESHOLD,

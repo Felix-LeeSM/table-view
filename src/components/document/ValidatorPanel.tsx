@@ -1,10 +1,9 @@
-// Sprint 333/352 (2026-05-15) — Mongo paradigm 의 collection validator
-// + validationLevel + validationAction 를 `collMod` IPC 로 read / apply /
-// clear 한다. v0 는 raw JSON textarea + Save / Clear 버튼이었고, Sprint
-// 352 에서 level (`off|strict|moderate`) + action (`error|warn`) 의
-// select 컨트롤이 추가됐다. `level === "off"` 이면 action select 는
-// 비활성 — MongoDB 가 level off 일 때 action 을 무시하므로 hint 와 함께
-// 시각적으로 차단한다.
+// Reads / applies / clears the Mongo paradigm's collection validator plus
+// validationLevel and validationAction over the `collMod` IPC. The panel is
+// a raw JSON textarea with Save / Clear buttons, a level
+// (`off|strict|moderate`) select and an action (`error|warn`) select. When
+// `level === "off"` the action select is disabled — MongoDB ignores the
+// action at level off, so it is blocked visually with a hint.
 
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -33,9 +32,9 @@ export interface ValidatorPanelProps {
   collection: string;
 }
 
-// MongoDB 의 서버 측 기본값. read response 에서 해당 필드가 null 이면
-// (e.g. 백워드 컴팻 envelope 또는 collection 이 collMod 를 받은 적 없음)
-// 이 값을 select 의 초기값으로 사용한다.
+// MongoDB's server-side defaults. When the matching field is null in the
+// read response (e.g. a backward-compat envelope, or a collection that has
+// never received a collMod), these are used as the select's initial value.
 const DEFAULT_LEVEL: MongoValidationLevel = "strict";
 const DEFAULT_ACTION: MongoValidationAction = "error";
 
@@ -47,8 +46,8 @@ const LEVEL_OPTIONS: ReadonlyArray<MongoValidationLevel> = [
 const ACTION_OPTIONS: ReadonlyArray<MongoValidationAction> = ["error", "warn"];
 
 /** Narrow an `unknown` IPC payload to {@link MongoValidatorRead}. Tolerates
- * the pre-Sprint-352 envelope shapes (`null`, `{ validator } | null`)
- * so a stale backend / stubbed test fixture keeps the panel functional. */
+ * the legacy envelope shapes (`null`, `{ validator } | null`) so a stale
+ * backend / stubbed test fixture keeps the panel functional. */
 function normaliseReadResponse(raw: unknown): MongoValidatorRead {
   if (raw === null || raw === undefined) {
     return { validator: null, validationLevel: null, validationAction: null };

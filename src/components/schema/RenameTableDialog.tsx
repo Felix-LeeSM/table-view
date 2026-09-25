@@ -19,11 +19,10 @@ import { useSchemaTableMutations } from "@/hooks/useSchemaTableMutations";
 import { validateIdentifier } from "./identifier";
 
 /**
- * Sprint 235 — `RenameTableDialog`. Single text input + Cancel + Show DDL +
- * Apply buttons + inline DDL preview pane. Reuses
- * `useDdlPreviewExecution` (Sprint 214) for the preview/execute lifecycle
- * and `useSchemaTableMutations` (Sprint 223) for the post-commit cache
- * refresh.
+ * `RenameTableDialog`. Single text input + Cancel + Show DDL + Apply
+ * buttons + inline DDL preview pane. Reuses `useDdlPreviewExecution` for
+ * the preview/execute lifecycle and `useSchemaTableMutations` for the
+ * post-commit cache refresh.
  *
  * Apply is disabled when:
  *   - input is empty / whitespace-only,
@@ -33,21 +32,20 @@ import { validateIdentifier } from "./identifier";
  *     pre-check; the backend stays permissive but the modal saves the
  *     pointless round-trip).
  *
- * Sprint 238 — preview pane updates live (debounced) while the user
- * types; the pane no longer auto-collapses on form edit and Apply no
- * longer gates on a stale flag. Show DDL is purely a visibility toggle.
+ * The preview pane updates live (debounced) while the user types; it does
+ * not auto-collapse on form edit and Apply does not gate on a stale flag.
+ * Show DDL is purely a visibility toggle.
  *
  * No Safe Mode UX path — `useDdlPreviewExecution` already routes preview
  * SQL through `analyzeStatement` + `useSafeModeGate`; rename SQL emits
  * `ALTER TABLE … RENAME TO …` which the analyzer classifies as `ddl-other`
- * (safe), so the gate always allows. The wiring stays uniform with the
- * rest of Phase 24-26.
+ * (safe), so the gate always allows.
  */
 
 export interface RenameTableDialogProps {
   /** Connection id used by the Safe Mode gate + history record. */
   connectionId: string;
-  /** Active database — schemaStore cache key dimension (Sprint 263). */
+  /** Active database — schemaStore cache key dimension. */
   database: string;
   /** Schema name (display + payload). */
   schemaName: string;
@@ -108,12 +106,12 @@ export default function RenameTableDialog({
   const canPreview = !validationError && !isRenameToSelf;
   const canApply = canPreview && !ddl.previewLoading && !!ddl.previewSql;
 
-  // Sprint 238 — auto-refresh the preview pane (debounced 250 ms) so
-  // the SQL the user sees stays in sync with the form, and the commit
-  // closure registered with `loadPreview` always reflects the latest
-  // form state. Without this, every keystroke either invalidated and
-  // collapsed the pane (forcing the user to click Show DDL again) or
-  // left a stale closure registered.
+  // Auto-refresh the preview pane (debounced 250 ms) so the SQL the user
+  // sees stays in sync with the form, and the commit closure registered
+  // with `loadPreview` always reflects the latest form state. Without
+  // this, every keystroke either invalidated and collapsed the pane
+  // (forcing the user to click Show DDL again) or left a stale closure
+  // registered.
   useEffect(() => {
     if (!open) return;
     if (!canPreview) return;
@@ -127,7 +125,7 @@ export default function RenameTableDialog({
             table: tableName,
             newName: trimmed,
             previewOnly: true,
-            // Sprint 271c — forward workspace db as the DbMismatch guard.
+            // Forward workspace db as the DbMismatch guard.
             expectedDatabase: database,
           });
           return { sql: result.sql };

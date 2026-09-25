@@ -1,13 +1,13 @@
-// Sprint 236 (AC-236-02, AC-236-03, AC-236-05, AC-236-06, AC-236-09) —
-// DropColumnDialog test suite. Date: 2026-05-07.
+// AC-236-02, AC-236-03, AC-236-05, AC-236-06, AC-236-09 — DropColumnDialog
+// test suite.
 //
 // Why this file exists:
 // - AC-236-05: typing-confirm enable/disable, case-sensitive
 //   byte-for-byte match (`Email` ≠ `email`), CASCADE toggle invalidates
 //   preview + emits ` CASCADE` in next request, commit-success closes
 //   modal + onColumnDropped called.
-// - AC-236-06: Safe Mode confirm / warn-cancel / safe matrix (Sprint 245
-//   retired the block tier — see the case at "production × strict").
+// - AC-236-06: Safe Mode confirm / warn-cancel / safe matrix (the block
+//   tier is retired — see the case at "production × strict").
 //   `ALTER TABLE … DROP COLUMN` is classified `ddl-drop`/danger so the
 //   gate fires on production environments.
 // - AC-236-02 / AC-236-03: IPC payload shape (camelCase) + sequence
@@ -35,7 +35,7 @@ const { mockDropColumnRequest } = vi.hoisted(() => ({
 beforeEach(() => {
   setupTauriMock({
     dropColumnRequest: mockDropColumnRequest,
-    // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+    // `<DryRunPreview>` IPC stub for confirm dialog.
     executeQueryDryRun: vi.fn(() => Promise.resolve([])),
     cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
   });
@@ -246,7 +246,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
   });
 
-  // AC-236-05 — CASCADE checkbox label per Sprint 236 spec.
+  // AC-236-05 — CASCADE checkbox label.
   it("[AC-236-05] CASCADE checkbox label is 'Drop dependent objects (CASCADE)'", () => {
     renderDialog({ columnName: "email" });
     expect(
@@ -270,7 +270,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email" });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalled();
     });
@@ -280,8 +280,8 @@ describe("DropColumnDialog (Sprint 236)", () => {
   });
 
   // AC-236-05 — CASCADE toggled on → preview auto-refetches with CASCADE.
-  // Sprint 238: 자동 refresh — CASCADE 토글만으로 새 preview 가 fetch 된다
-  // (이전 Sprint 236 의 "Show DDL 재클릭 필요" friction 해소).
+  // Auto-refresh: toggling CASCADE alone fetches a new preview, which
+  // removes the earlier "re-click Show DDL" friction.
   it("[AC-236-05] CASCADE toggle auto-refetches preview with cascade:true", async () => {
     mockDropColumnRequest
       .mockResolvedValueOnce({
@@ -320,7 +320,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
     });
@@ -350,7 +350,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email", onClose, onColumnDropped });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalled();
     });
@@ -363,11 +363,10 @@ describe("DropColumnDialog (Sprint 236)", () => {
     expect(onColumnDropped).toHaveBeenCalledTimes(1);
   });
 
-  // AC-236-06 — Safe Mode confirm dialog on production×strict (was
-  // block under Sprint 236/244). Sprint 245 (ADR 0022 Phase 1) —
-  // destructive-only policy raises the confirm dialog instead. The
-  // commit closure (previewOnly:false) still must NOT run until the
-  // user confirms.
+  // AC-236-06 — Safe Mode confirm dialog on production×strict (this was
+  // block under the earlier policy). ADR 0022's destructive-only policy
+  // raises the confirm dialog instead. The commit closure
+  // (previewOnly:false) still must NOT run until the user confirms.
   it("[AC-236-06] production × strict + DROP COLUMN → confirm dialog opens, commit closure deferred", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
@@ -377,7 +376,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email" });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalled();
     });
@@ -404,7 +403,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email" });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalled();
     });
@@ -441,7 +440,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email" });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalled();
     });
@@ -465,7 +464,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email", onClose });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       const errorEls = document.querySelectorAll('[role="alert"]');
       const messages = Array.from(errorEls).map((e) => e.textContent ?? "");

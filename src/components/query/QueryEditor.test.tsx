@@ -332,7 +332,7 @@ describe("QueryEditor", () => {
     expect(typeof modEnterBinding!.run).toBe("function");
   });
 
-  // ── Sprint 73: paradigm-aware language extension ─────────────────────────
+  // ── paradigm-aware language extension ────────────────────────────────────
 
   /** Pull the active `Language` out of the editor state via the language
    * facet. CodeMirror stores the top-level Language instance here once a
@@ -349,11 +349,11 @@ describe("QueryEditor", () => {
     expect(activeLanguageName(getEditorView())).toBe("sql");
   });
 
-  // Sprint 309 — `queryMode` prop removed from `MongoQueryEditor` (and
-  // therefore from `QueryEditor`'s document branch). Single mongosh
-  // surface: aria-label is `"MongoDB Query Editor"`, the wrapper carries
-  // no `data-query-mode`. The previous find/aggregate aria-label flip
-  // suite collapses into one assertion below.
+  // The `queryMode` prop is removed from `MongoQueryEditor` (and therefore
+  // from `QueryEditor`'s document branch). Single mongosh surface:
+  // aria-label is `"MongoDB Query Editor"`, the wrapper carries no
+  // `data-query-mode`. The previous find/aggregate aria-label flip suite
+  // collapses into one assertion below.
   it("uses JSON when paradigm=document with the unified mongosh aria-label (Sprint 309)", () => {
     render(
       <QueryEditor
@@ -408,14 +408,14 @@ describe("QueryEditor", () => {
     expect(activeLanguageName(view)).toBe("json");
   });
 
-  // Sprint 139 — paradigm-aware split. Flipping the paradigm now swaps
-  // the underlying editor component (SqlQueryEditor ↔ MongoQueryEditor),
-  // so the previous "same EditorView instance" contract no longer holds.
-  // We assert the new contract: the language identity reflects the new
-  // paradigm, the aria-label flips, and the swap completes without
-  // throwing. Identity preservation across non-paradigm changes (schema,
-  // dialect, mongoExtensions) is exercised by the per-editor tests.
-  // Sprint 309 — `queryMode` no longer passed (single Mongo surface).
+  // Paradigm-aware split. Flipping the paradigm swaps the underlying editor
+  // component (SqlQueryEditor ↔ MongoQueryEditor), so the previous "same
+  // EditorView instance" contract no longer holds. We assert the current
+  // contract: the language identity reflects the new paradigm, the
+  // aria-label flips, and the swap completes without throwing. Identity
+  // preservation across non-paradigm changes (schema, dialect,
+  // mongoExtensions) is exercised by the per-editor tests.
+  // `queryMode` is no longer passed (single Mongo surface).
   it("swaps the language extension when paradigm flips rdb → document", async () => {
     const { rerender } = render(
       <QueryEditor
@@ -446,7 +446,7 @@ describe("QueryEditor", () => {
     });
   });
 
-  // ── Sprint 82: provider-aware SQL dialect ────────────────────────────────
+  // ── provider-aware SQL dialect ───────────────────────────────────────────
 
   /**
    * Collect every identifier in the SQL source that the parser tagged with
@@ -519,8 +519,8 @@ describe("QueryEditor", () => {
 
   // AC-07: default (sqlDialect undefined) falls back to StandardSQL behaviour.
   // `RETURNING` is Postgres-only so the standard dialect must NOT flag it as
-  // a keyword — this guards the fallback path and keeps the pre-Sprint-82
-  // contract intact for callers that never pass the new prop.
+  // a keyword — this guards the fallback path and keeps the contract that
+  // predates the `sqlDialect` prop intact for callers that never pass it.
   it("falls back to StandardSQL when sqlDialect is omitted", () => {
     render(
       <QueryEditor
@@ -601,7 +601,7 @@ describe("QueryEditor", () => {
 
   // AC-06: Document paradigm is unaffected by the dialect prop — the editor
   // must still load the JSON language extension and keep its aria-label.
-  // Sprint 309 — single mongosh aria-label, no `queryMode` prop threaded.
+  // Single mongosh aria-label, no `queryMode` prop threaded.
   it("keeps JSON language when paradigm=document even if sqlDialect is passed", () => {
     render(
       <QueryEditor
@@ -619,7 +619,7 @@ describe("QueryEditor", () => {
     expect(view.state.facet(language)?.name).toBe("json");
   });
 
-  // ── Sprint 83: MQL autocomplete + operator highlight ────────────────────
+  // ── MQL autocomplete + operator highlight ───────────────────────────────
 
   /** Collect every element inside the editor carrying the
    * `cm-mql-operator` class, and return their trimmed text content. */
@@ -629,7 +629,7 @@ describe("QueryEditor", () => {
   }
 
   // AC-06: Operator tokens receive the `cm-mql-operator` class.
-  // Sprint 309 — single mongosh aria-label.
+  // Single mongosh aria-label.
   it("decorates MQL operator strings with cm-mql-operator when the highlight extension is loaded", async () => {
     render(
       <QueryEditor
@@ -659,7 +659,7 @@ describe("QueryEditor", () => {
   });
 
   // AC-06: ordinary JSON strings do NOT receive the operator class.
-  // Sprint 309 — single mongosh aria-label.
+  // Single mongosh aria-label.
   it("does not decorate non-operator JSON strings with cm-mql-operator", async () => {
     render(
       <QueryEditor
@@ -684,13 +684,12 @@ describe("QueryEditor", () => {
     });
   });
 
-  // Sprint 139 — paradigm-aware split. Flipping rdb → document with
-  // mongoExtensions threaded through the prop now mounts a fresh
-  // MongoQueryEditor (the previous SqlQueryEditor unmounts). The new
-  // contract: the JSON language is active in the new editor and the
-  // mongoExtensions reach the document editor without leaking back into
-  // any SQL editor.
-  // Sprint 309 — no `queryMode` prop threaded; single mongosh aria-label.
+  // Paradigm-aware split. Flipping rdb → document with mongoExtensions
+  // threaded through the prop mounts a fresh MongoQueryEditor (the previous
+  // SqlQueryEditor unmounts). The contract: the JSON language is active in
+  // the new editor and the mongoExtensions reach the document editor without
+  // leaking back into any SQL editor.
+  // No `queryMode` prop threaded; single mongosh aria-label.
   it("mounts the document editor with mongoExtensions when paradigm flips rdb → document", async () => {
     const mongoExts = [createMongoOperatorHighlight()];
     const { rerender } = render(

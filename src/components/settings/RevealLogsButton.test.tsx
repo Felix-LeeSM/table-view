@@ -1,9 +1,10 @@
 /**
- * 작성 2026-07-17 (#1566 — Reveal Logs).
+ * #1566 — Reveal Logs.
  *
- * 사유: 사용자 user flow path 의 마지막 outcome (버튼 클릭 → `open_log_dir`
- * IPC 1회 발사 → 실패 시 error toast) 까지 lock. backend wire shape 은
- * `src-tauri/src/commands/open_log_dir.rs` 단위 테스트가 책임.
+ * Reason: locks the last outcome of the user flow path (button click →
+ * one `open_log_dir` IPC → error toast on failure). The backend wire
+ * shape is the job of the `src-tauri/src/commands/open_log_dir.rs` unit
+ * tests.
  */
 
 import { act, render, screen, waitFor } from "@testing-library/react";
@@ -38,7 +39,8 @@ describe("RevealLogsButton (#1566)", () => {
     expect(invokeMock).toHaveBeenCalledTimes(1);
   });
 
-  // 에러 복구 — backend reject (no file explorer / IO) surfaces as a toast
+  // Error recovery — backend reject (no file explorer / IO) surfaces as
+  // a toast
   // instead of a silent failure.
   it("surfaces backend reject as an error toast", async () => {
     invokeMock.mockRejectedValueOnce(new Error("no file explorer"));

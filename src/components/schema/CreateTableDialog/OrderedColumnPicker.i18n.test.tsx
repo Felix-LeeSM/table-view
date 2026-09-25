@@ -29,7 +29,7 @@ describe("OrderedColumnPicker (ko locale — #1581)", () => {
       />,
     );
 
-    // Container wrapper aria = "{{prefix}} 선택기".
+    // Container wrapper aria = ko `orderedColumnPicker.pickerAria`.
     expect(screen.getByLabelText("인덱스 컬럼 선택기")).toBeInTheDocument();
     // Reorder button native titles.
     expect(screen.getByTitle("앞으로 이동")).toBeInTheDocument();
@@ -37,7 +37,7 @@ describe("OrderedColumnPicker (ko locale — #1581)", () => {
     expect(screen.getByTitle("제거")).toBeInTheDocument();
     // Available chip add-button aria = "{{prefix}}: {{name}}".
     expect(screen.getByLabelText("인덱스 컬럼: id")).toBeInTheDocument();
-    // Selected pill remove aria = "{{prefix}} 제거: {{name}}".
+    // Selected pill remove aria = ko `orderedColumnPicker.removeAria`.
     expect(
       screen.getByLabelText("인덱스 컬럼 제거: email"),
     ).toBeInTheDocument();

@@ -3,8 +3,8 @@
 //   Consolidates the byte-identical QueryResultGrid.aria-grid + EditableQueryResultGrid
 //   .aria-grid copies (issue #1622, P9 subset duplication) into one describe.each over
 //   both mounts. DataGridTable.aria-grid.test.tsx keeps its RDB-only cases (column
-//   reorder, pendingNewRows) and stays separate. (2026-07-22)
-// Reason: Sprint 260 AC-260-03 — grid ARIA integrity (aria-rowcount/colcount,
+//   reorder, pendingNewRows) and stays separate.
+// Reason: AC-260-03 — grid ARIA integrity (aria-rowcount/colcount,
 //   aria-rowindex, aria-colindex in visual order, min-width max-content overflow
 //   guard, empty-state single gridcell). Read-only + editable share visual==data
 //   order (no reorder), so a single parametrized contract covers both.
@@ -82,7 +82,7 @@ describe.each(QUERY_GRID_VARIANTS)(
       expect(cells[2]).toHaveTextContent("alice@example.com");
     });
 
-    // Sprint 261 — horizontal overflow: row box must span the grid tracks
+    // Horizontal overflow: row box must span the grid tracks
     // (min-width: max-content) so hover:bg-muted / border-b draw to the end.
     it("every row has min-width: max-content (overflow bg regression guard)", () => {
       render(element(RESULT));

@@ -1,8 +1,8 @@
 // Purpose: #1734 (3) — the selected data row must actually be *visible*, and it
 // must stay visible in every theme the app ships. The owner's report was
-// "`bg-accent/20` 은 실측상 거의 안 보인다", so asserting that the row carries
-// some selection class would pass on exactly the bug being fixed. This test
-// measures instead.
+// "`bg-accent/20` is nearly invisible when measured", so asserting that the
+// row carries some selection class would pass on exactly the bug being
+// fixed. This test measures instead.
 //
 // PR #2115 first shipped `bg-primary/15`, which improved the default
 // palette (1.018 -> 1.255) while making six `theme x mode` combinations WORSE

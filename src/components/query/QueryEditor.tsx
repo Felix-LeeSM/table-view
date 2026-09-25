@@ -20,10 +20,9 @@ import SqlQueryEditor from "./SqlQueryEditor";
  * `QueryEditor.test.tsx` paradigm-flip suite still asserts against a
  * stable surface.
  *
- * Sprint 309 — `queryMode` prop removed. The Mongo branch passes nothing
- * extra to `MongoQueryEditor` (single mongosh surface); placeholder
- * paradigms drop the `data-query-mode` attribute since no toggle drives
- * it anymore.
+ * The `queryMode` prop is removed. The Mongo branch passes nothing extra to
+ * `MongoQueryEditor` (single mongosh surface); placeholder paradigms drop the
+ * `data-query-mode` attribute since no toggle drives it anymore.
  */
 
 interface QueryEditorProps {
@@ -31,7 +30,7 @@ interface QueryEditorProps {
   onSqlChange: (sql: string) => void;
   onExecute: () => void;
   /**
-   * Sprint 248 (ADR 0022 Phase 4) — `Cmd+Shift+Enter` dry-run handler.
+   * ADR 0022 — `Cmd+Shift+Enter` dry-run handler.
    * Forwarded to `SqlQueryEditor` (rdb) where the keymap binding lives;
    * `MongoQueryEditor` accepts the prop but does not bind any keymap
    * because the dry-run IPC is rdb-only.
