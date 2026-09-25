@@ -1,19 +1,22 @@
 /**
- * 작성 2026-05-16 (Phase 4 W2→W3 sprint-370, AC-370-04)
+ * Written 2026-05-16 (state-management-strategy Phase 4 W2→W3, AC-370-04)
  *
- * 사유: W3 진입 — favoritesStore 의 LS `table-view-favorites` read 사이트 0.
- * boot 후 hydrate 는 IPC `list_favorites` 만 사용. 본 테스트는 두 layer 에서
- * regression 을 잠근다:
+ * Reason: entering W3 — favoritesStore has zero read sites for the LS key
+ * `table-view-favorites`. Hydration after boot uses only the IPC
+ * `list_favorites`. This test locks the regression at two layers:
  *
- *   1. **Static guard** — favoritesStore.ts 의 module body 소스에 `getItem(`
- *      / `localStorage.` 가 등장하지 않음을 직접 확인. sprint-368 의 sweep
- *      이후 한 줄도 남아있지 않아야 한다. write 쪽도 같은 잣대.
- *   2. **Runtime guard** — `loadPersistedFavorites` 가 LS 를 만지지 않고 IPC
- *      `list_favorites` 1회만 호출. addFavorite 후 persist 도 IPC 1회 +
- *      LS write 0.
+ *   1. **Static guard** — checks directly that `localStorage.getItem` /
+ *      `getItem(STORAGE_KEY` do not appear in the favoritesStore.ts source.
+ *      Not a single line may remain after the LS sweep. The write side
+ *      (`localStorage.setItem` / `setItem(STORAGE_KEY`) is held to the same
+ *      bar.
+ *   2. **Runtime guard** — `loadPersistedFavorites` reads through the IPC
+ *      `list_favorites` without touching LS. Persisting after addFavorite
+ *      also goes through the IPC, with zero LS writes.
  *
- * 회귀 시: (a) hand-rolled LS persistence 가 부활해 cross-window drift 발생,
- * (b) IPC reject 시 store 가 partial hydrate 로 stale 값을 유지.
+ * On regression: (a) hand-rolled LS persistence comes back and causes
+ * cross-window drift, (b) on an IPC reject the store keeps stale values
+ * through a partial hydrate.
  */
 
 import { readFileSync } from "node:fs";
@@ -59,7 +62,7 @@ beforeEach(() => {
 describe("AC-370-04 favoritesStore LS read site 0", () => {
   it("source of favoritesStore.ts has zero localStorage.getItem call", () => {
     // Static guard — read the file from disk and assert the substring is
-    // gone. Lock-in pattern from sprint-369 datagrid LS retire.
+    // gone. Lock-in pattern from the datagrid LS retirement.
     const src = readFileSync(resolve(__dirname, "favoritesStore.ts"), "utf-8");
     expect(src.includes("localStorage.getItem")).toBe(false);
     expect(src.includes("getItem(STORAGE_KEY")).toBe(false);

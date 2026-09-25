@@ -33,9 +33,9 @@ import {
 } from "./schemaStoreMaps";
 
 /**
- * Sprint 263 (ADR 0027 extension) — schemaStore 의 캐시 차원을
- * `(connId, db)` 별로 분리한다. 같은 connection 의 db1 ↔ db2 toggle 시
- * 캐시가 재사용되어 reload wait 가 사라진다.
+ * ADR 0027 extension — schemaStore splits its cache by `(connId, db)`.
+ * Toggling db1 ↔ db2 on the same connection reuses the cache, so there is
+ * no reload wait.
  *
  * Cache key shape:
  *   schemas:           Record<connId, Record<db, SchemaInfo[]>>
@@ -48,18 +48,18 @@ import {
  *   tableIndexesCache: Record<connId, Record<db, Record<schema, Record<table, IndexInfo[]>>>>
  *   tableConstraintsCache: Record<connId, Record<db, Record<schema, Record<table, ConstraintInfo[]>>>>
  *
- * Sprint 262 의 workspaceStore `Record<conn, Record<db, ...>>` 패턴과
- * 동일. flat `"conn:db:schema"` 문자열 키 회피 — separator 충돌 없음.
+ * Same `Record<conn, Record<db, ...>>` pattern as workspaceStore. It avoids
+ * a flat `"conn:db:schema"` string key, so separators cannot collide.
  *
- * Backend tauri command 시그니처는 변경 없음. backend connection pool 의
- * active DB 를 사용하며, 프론트엔드는 fetch 시점의 activeDb 를 캐시 키로
- * 잠는다. activeDb 와 backend pool 의 동기성은 DbSwitcher 의
- * `await switchActiveDb()` → `setActiveDb()` 순서가 보장.
+ * The backend runs against the connection pool's active DB, and the frontend
+ * locks the fetch-time activeDb into the cache key. DbSwitcher's
+ * `await switchActiveDb()` → `setActiveDb()` ordering keeps activeDb and the
+ * backend pool in sync.
  *
- * Sprint 271a (2026-05-13) — 모든 read-only 호출이 backend 가드에 의해
- * AppError::DbMismatch 로 short-circuit 될 수 있도록 캐시 키로 잠근
- * `db` 를 `expectedDatabase` 로 forwarding. mismatch 가 surface 되면
- * 백그라운드 introspection 이므로 silent sync (no toast) 로 처리.
+ * Every read-only call keyed by `db` forwards that cache-key `db` as
+ * `expectedDatabase`, so the backend guard can short-circuit it with
+ * `AppError::DbMismatch`. Introspection runs in the background, so a
+ * surfaced mismatch is handled as a silent sync (no toast).
  */
 
 export type SchemaDbMismatchRecoveryHandler = (
@@ -88,7 +88,7 @@ export interface SchemaState {
   tableConstraintsCache: ByConn<BySchema<ByTable<ConstraintInfo[]>>>;
   fileAnalyticsSources: Record<string, FileAnalyticsSourceMetadata[]>;
   /**
-   * Sprint 272 — per-`(connId, db, schema, table)` trigger cache.
+   * Per-`(connId, db, schema, table)` trigger cache.
    * Populated lazily by `getTableTriggers`. Mirrors the
    * `tableColumnsCache` shape so the same eviction helpers
    * (`deleteConn` / `deleteConnDb` / `deleteConnDbSchema`) apply.
@@ -164,12 +164,11 @@ export interface SchemaState {
     table: TableName,
   ) => Promise<TriggerInfo[]>;
   /**
-   * Sprint 273 — invalidate the cached entry for `(connId, db, schema,
-   * table)` and re-fetch via `listTriggers`. Used by
-   * `CreateTriggerDialog` after a successful commit so the new trigger
-   * appears under the Triggers child group without a tree-wide reload.
-   * Throws on IPC error; the dialog's `useDdlPreviewExecution.runCommit`
-   * catch wraps it.
+   * Invalidate the cached entry for `(connId, db, schema, table)` and
+   * re-fetch via `listTriggers`. Used by `CreateTriggerDialog` and
+   * `DropTriggerDialog` after a successful commit so the `StructurePanel`
+   * Triggers tab shows the change without a tree-wide reload. Throws on IPC
+   * error; the dialog's `useDdlPreviewExecution.runCommit` catch wraps it.
    */
   refreshTableTriggers: (
     connId: string,
@@ -192,7 +191,7 @@ export interface SchemaState {
   /** Drop every cached entry keyed under `connId` across all DBs. */
   clearForConnection: (connId: string) => void;
   /**
-   * Sprint 263 — evict a single `(connId, db)` slot. DbSwitcher does NOT
+   * Evict a single `(connId, db)` slot. DbSwitcher does NOT
    * call this on a normal DB toggle (caches survive for toggle re-use);
    * this is reserved for paths that need explicit per-db invalidation.
    */
@@ -546,9 +545,9 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     }
   },
 
-  // Sprint 263 — frontend cache key takes `(connId, db, schema, table)`.
-  // Sprint 271a — forwards `db` as `expectedDatabase` so the backend guard
-  // rejects a swapped pool BEFORE the trait dispatches.
+  // The frontend cache key is `(connId, db, schema, table)`. `db` is
+  // forwarded as `expectedDatabase` so the backend guard rejects a swapped
+  // pool BEFORE the trait dispatches.
   getTableIndexes: async (connId, db, schema, table) => {
     try {
       return await writeIfCurrent(
@@ -595,7 +594,7 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     }
   },
 
-  // Sprint 272 — cache-first triggers fetcher. Mirrors `tableColumnsCache`
+  // Cache-first triggers fetcher. Mirrors `tableColumnsCache`
   // shape (`(connId, db, schema, table)` → `TriggerInfo[]`). Second call
   // with identical key short-circuits to the cached array without hitting
   // IPC. Mismatch path is silent (passive prefetch — no toast).
@@ -624,10 +623,10 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
     }
   },
 
-  // Sprint 273 — bypass-cache refresh used post-CREATE TRIGGER. Same
+  // Bypass-cache refresh used post-CREATE / DROP TRIGGER. Same
   // `setConnDbSchemaTable` write as `getTableTriggers` but skips the
   // cache short-circuit so the dialog's commit-success path sees the
-  // new trigger. Throws on IPC error.
+  // changed trigger list. Throws on IPC error.
   refreshTableTriggers: async (connId, db, schema, table) => {
     try {
       return await writeIfCurrent(
@@ -763,9 +762,9 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
         },
       );
     } catch (e) {
-      // best-effort prefetch — silently ignore failures. Sprint 271a — still
-      // surface a DbMismatch via the sync helper so the next dispatch uses
-      // the corrected activeDb. No toast (background path).
+      // best-effort prefetch — silently ignore failures, but still surface a
+      // DbMismatch via the sync helper so the next dispatch uses the
+      // corrected activeDb. No toast (background path).
       handleDbMismatch(connId, e);
     }
   },

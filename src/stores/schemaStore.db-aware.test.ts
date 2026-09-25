@@ -1,10 +1,10 @@
-// Sprint 263 (2026-05-12) — schemaStore 의 `(connId, db)` per-workspace
-// 캐시 격리. AC-263-01 의 7 TDD 케이스를 트레이서 불릿 → 증분 순서로
-// 실행해 store 자료구조와 액션 시그니처를 잠근다.
+// schemaStore's `(connId, db)` per-workspace cache isolation (2026-05-12).
+// Runs the seven AC-263-01 TDD cases in tracer bullet → increment order to
+// lock the store data structure and action signatures.
 //
-// 본 파일은 신규 db-aware 동작에만 집중. 기존 schemaStore.test.ts 는 같은
-// 인덱싱 컨벤션 (connId-only → (connId, db) 네스트) 마이그레이션 후
-// 동등한 케이스가 그곳에서 다시 검증된다.
+// This file focuses only on the db-aware behavior. schemaStore.test.ts was
+// migrated to the same indexing convention (connId-only → (connId, db)
+// nesting), and the equivalent cases are verified again there.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
@@ -56,7 +56,7 @@ describe("schemaStore — db-aware caching (Sprint 263)", () => {
 
     const state = useSchemaStore.getState();
     expect(state.schemas.conn1?.db1).toEqual([{ name: "public" }]);
-    // db2 자리는 lazy — 미생성.
+    // The db2 slot is lazy — not created.
     expect(state.schemas.conn1?.db2).toBeUndefined();
   });
 
@@ -69,7 +69,7 @@ describe("schemaStore — db-aware caching (Sprint 263)", () => {
     const state = useSchemaStore.getState();
     expect(state.schemas.conn1?.db1).toEqual([{ name: "public" }]);
     expect(state.schemas.conn1?.db2).toEqual([{ name: "public" }]);
-    // 두 자리는 서로 다른 reference (격리 보증).
+    // The two slots are different references (isolation guarantee).
     expect(state.schemas.conn1!.db1).not.toBe(state.schemas.conn1!.db2);
   });
 
@@ -178,15 +178,15 @@ describe("schemaStore — db-aware caching (Sprint 263)", () => {
   // -- toggle round-trip cache preservation ---------------------------------
 
   it("DB toggle round-trip preserves db1 cache when no clearForWorkspace is called", async () => {
-    // Sprint 263 의 raison d'être — DbSwitcher 가 더 이상
-    // clearForConnection 을 호출하지 않을 때, db1 → db2 → db1 round-trip
-    // 후 db1 캐시가 손실 없이 그대로여야 한다.
+    // The reason the cache is split by db — now that DbSwitcher no longer
+    // calls clearForConnection, the db1 cache must survive a
+    // db1 → db2 → db1 round-trip intact.
     await useSchemaStore.getState().loadSchemas("conn1", "db1");
     const db1Snap = useSchemaStore.getState().schemas.conn1!.db1;
 
     await useSchemaStore.getState().loadSchemas("conn1", "db2");
 
-    // db1 자리는 reference 동일 — toggle 이 캐시를 잃지 않았다.
+    // The db1 slot keeps its reference — the toggle did not lose the cache.
     expect(useSchemaStore.getState().schemas.conn1!.db1).toBe(db1Snap);
   });
 });

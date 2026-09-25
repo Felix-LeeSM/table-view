@@ -1,17 +1,18 @@
-// 작성 2026-05-16 (Phase 2 sprint-360).
+// Written 2026-05-16 (state-management-strategy Phase 2).
 //
-// 사유: Q23 self-window schemaCache invalidate — DDL 후 사이드바가 100ms 안에
-// `foo` 를 표시하려면 `clearForConnection(connId)` 가 그 conn 의 **모든** 캐시
-// 슬롯(databases / schemas / tables / views / functions / postgresExtensions /
-// sqliteCapabilities / tableColumnsCache / tableIndexesCache /
-// tableConstraintsCache / triggers)을
-// 한 번에 비워 wide drop 을 보장해야 한다. Sprint 130/263 의 기존 행동을
-// sprint-360 의 contract 어휘 (AC-360-01 / AC-360-05) 로 다시 고정한다.
+// Reason: Q23 self-window schemaCache invalidate — for the sidebar to show
+// `foo` within 100ms after a DDL, `clearForConnection(connId)` must empty
+// **every** cache slot of that conn (databases / schemas / tables / views /
+// functions / postgresExtensions / sqliteCapabilities / tableColumnsCache /
+// tableIndexesCache / tableConstraintsCache / triggers) in one go to
+// guarantee a wide drop. This file re-pins the existing behavior in the
+// contract terms AC-360-01 / AC-360-05.
 //
-// SOT 통합 (2026-07-22, issue #1631 test-audit Wave 2): schemaStore.test.ts
-// 에 흩어져 있던 clearForConnection 잔여 케이스(triggers/views/functions
-// sibling, drops-every, no-op)를 이 canonical 11-slot suite 로 이관.
-// schemaStore.test.ts 는 fetch/delegate 전용으로 슬림화.
+// SOT consolidation (2026-07-22, issue #1631 test-audit): the remaining
+// clearForConnection cases scattered across schemaStore.test.ts
+// (triggers/views/functions siblings, drops-every, no-op) moved into this
+// canonical 11-slot suite. schemaStore.test.ts keeps no clearForConnection
+// case.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
@@ -174,8 +175,8 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
     });
   });
 
-  // AC-360-01 — `clearForConnection(connId)` 호출 후 그 conn 의 모든 캐시
-  // 슬롯이 완전히 비워진다 (`byConnection[connId]` 전체 빈 상태).
+  // AC-360-01 — after `clearForConnection(connId)`, every cache slot of that
+  // conn is fully emptied (`byConnection[connId]` entirely empty).
   it("AC-360-01: drops every cached slot for the connection (wide)", () => {
     useSchemaStore.setState(SEEDED_CACHE);
 
@@ -195,9 +196,9 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
     expect(state.triggers.conn1).toBeUndefined();
   });
 
-  // AC-360-05 — narrow drop 안 함. `foo` table 만 추가했어도 views /
-  // functions / triggers / tableColumnsCache 등 전부 wide drop 후 mount
-  // 시점에 refetch 한다. 다른 conn 은 손대지 않는다.
+  // AC-360-05 — no narrow drop. Even when only the `foo` table was added,
+  // views / functions / triggers / tableColumnsCache and the rest all get the
+  // wide drop and are refetched at mount time. Other conns are left untouched.
   it("AC-360-05: leaves other connections' caches intact (no narrow scope)", () => {
     useSchemaStore.setState(SEEDED_CACHE);
 
@@ -216,16 +217,17 @@ describe("schemaStore.clearForConnection (sprint-360 Phase 2 Q23)", () => {
     expect(state.tableColumnsCache.conn2?.db1?.public?.users).toEqual([]);
     expect(state.tableIndexesCache.conn2?.db1?.public?.users).toEqual([]);
     expect(state.tableConstraintsCache.conn2?.db1?.public?.users).toEqual([]);
-    // views / functions / triggers sibling preservation — issue #1631 이관
-    // (schemaStore.test.ts:741,354 의 conn2 sibling 단언을 이 SOT 로 흡수).
+    // views / functions / triggers sibling preservation — moved here by
+    // issue #1631 (absorbs into this SOT the conn2 sibling assertions that
+    // were at schemaStore.test.ts:741,354).
     expect(state.views.conn2?.db1?.public).toHaveLength(1);
     expect(state.functions.conn2?.db1?.public).toHaveLength(1);
     expect(state.triggers.conn2?.db1?.public?.items).toEqual([]);
   });
 
-  // no-op edge — clearForConnection 대상 conn 에 캐시가 전혀 없어도 throw
-  // 없이 sibling conn 은 그대로 둔다. schemaStore.test.ts:898 에서 이관
-  // (sprint-360 SOT 통합, issue #1631).
+  // no-op edge — even when the target conn has no cache at all,
+  // clearForConnection does not throw and leaves the sibling conn as is.
+  // Moved from schemaStore.test.ts:898 (SOT consolidation, issue #1631).
   it("is a no-op when the connection has no cached entries", () => {
     useSchemaStore.setState({
       schemas: { conn2: { db1: [{ name: "public" }] } },
