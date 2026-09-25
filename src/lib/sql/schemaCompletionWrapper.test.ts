@@ -21,13 +21,14 @@ async function resolveResult(
   return value as CompletionResult;
 }
 
-// Sprint 304 (2026-05-14) — column = table dup 해소 회귀 가드. lang-sql
-// 의 schemaCompletionSource 는 ns top-level (= table) 을 모든 컨텍스트에서
-// emit. 사용자 보고: column 이 두 번씩 popup 에 노출 (t / □ 아이콘). 본
-// wrapper 가 cursor 가 column-only 자리이면 type === "type" 후보를 제거.
+// Regression guard for the fix for column labels duplicated as table
+// candidates (2026-05-14). For the background, see
+// `wrappedSchemaCompletionSource` in `src/lib/sql/schemaCompletionWrapper.ts`.
+// The wrapper removes type === "type" candidates when the cursor is at a
+// column-only position.
 
 const SCHEMA: SQLNamespace = {
-  // bare table name. lang-sql 이 emit 할 때 `type: "type"`.
+  // Bare table name. lang-sql emits it with `type: "type"`.
   users: { id: {}, name: {}, email: {} },
   orders: { id: {}, user_id: {}, total: {} },
   // schema-qualified.
@@ -69,7 +70,7 @@ describe("wrappedSchemaCompletionSource", () => {
     const result = await resolveResult(source(ctx));
     expect(result).not.toBeNull();
     const labels = result!.options.map((o) => o.label);
-    // table 후보가 그대로 surface
+    // Table candidates surface unchanged
     expect(labels).toEqual(expect.arrayContaining(["users", "orders"]));
   });
 

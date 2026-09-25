@@ -1,19 +1,19 @@
 /**
- * Sprint 321 — Slice F.1: sentinel cell 의 1-depth nested field 추출.
+ * Phase 28 Slice F.1: extract a sentinel cell's nested fields one level deep.
  *
- * 문제: DocumentDataGrid 의 nested object / array cell 은 `{...}` /
- * `[N items]` sentinel 으로 flatten 되어 read-only. 사용자가 그 안의
- * field 를 보려면 Quick Look 패널을 열어야 — cell context 안에서 빠른
- * inspect 어려움.
+ * Problem: DocumentDataGrid flattens nested object / array cells into the
+ * `{...}` / `[N items]` sentinels, which are read-only. Without this utility,
+ * seeing a field inside meant opening the Quick Look panel — no quick inspect
+ * within the cell context.
  *
- * 해결: 이 utility 가 nested 값을 1-depth 표현으로 변환한다.
+ * Solution: this utility turns a nested value into a one-level representation.
  * - object → `{ key, value, isNested }[]`
  * - array → `{ index, value, isNested }[]`
- * - nested-of-nested 는 다시 sentinel 으로 표시 (`isNested === true`).
- *   사용자가 깊은 inspect 가 필요하면 Quick Look 활용.
+ * - nested-of-nested values show as sentinels again (`isNested === true`).
+ *   A user who needs a deeper inspect uses Quick Look.
  *
- * Sprint 322 (F.2) 가 같은 함수를 inline edit (dot-notation $set)
- * 진입점으로 재사용.
+ * Phase 28 Slice F.2 reuses the same function as the inline-edit
+ * (dot-notation $set) entry point.
  */
 
 import { isDocumentSentinel } from "@/types/document";

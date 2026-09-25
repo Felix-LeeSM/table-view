@@ -216,7 +216,8 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
   // Section headers are depth-0 collapsible treeitems (aria-expanded); a
   // section's entries are their depth-1 leaf children. A COLLAPSED section
   // contributes only its header — its hidden rows are excluded from the roving
-  // order so Arrow keys never land on invisible rows (#1716 정합).
+  // order so Arrow keys never land on invisible rows (#1716 consistency
+  // caveat).
   const rovingRows: TreeRovingRow[] = sections.flatMap((section) => {
     const open = !collapsed.has(section.key);
     const header: TreeRovingRow = {
@@ -298,7 +299,7 @@ export default function SearchSidebar({ connectionId }: SearchSidebarProps) {
         className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 text-3xs text-muted-foreground"
         data-testid="search-catalog-status"
       >
-        {/* eslint-disable-next-line no-restricted-syntax -- "search-native": 검색 카탈로그 소스 타입 라벨. 이 컴포넌트의 catalog summary(summaryText/identity)는 template literal 이라 가드 selector 밖에서 전량 미번역 — 단독 번역은 부조화라 컴포넌트 전체 번역(Slice 2, #1074)에서 함께 처리 */}
+        {/* eslint-disable-next-line no-restricted-syntax -- "search-native": the search catalog's source-type label. This component's catalog summary (summaryText/identity) is a template literal, so it sits outside the guard selector and is entirely untranslated — translating this label alone would be inconsistent, so it will be handled together with the whole-component translation (Slice 2, #1074) */}
         <span className="shrink-0">search-native</span>
         <span className="truncate min-w-0">{summaryText}</span>
       </div>

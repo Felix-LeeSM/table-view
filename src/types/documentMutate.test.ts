@@ -118,13 +118,13 @@ describe("wire-format roundtrip sanity", () => {
   });
 });
 
-// ── Sprint 308 (2026-05-14) — BulkWriteOp / BulkWriteResult ────────────
+// ── 2026-05-14 — BulkWriteOp / BulkWriteResult ─────────────────────────
 //
-// 작성 이유: Rust `enum BulkWriteOp` 는 serde `tag = "op", rename_all =
-// "camelCase"` 로 emit 한다 — wire shape 의 변경은 frontend dispatch 가
-// silently fall-through 하는 회귀를 일으키므로 6 variant + 결과 카운터
-// 의 round-trip 을 명시적으로 단언한다. fixture 는 Rust 측이 emit 할
-// JSON 을 그대로 적어 type-guard + JSON.parse 통과 여부를 확인.
+// Reason: Rust `enum BulkWriteOp` emits with serde `tag = "op", rename_all =
+// "camelCase"` — a wire-shape change would make the frontend dispatch
+// silently fall through, so this explicitly asserts the round-trip of the six
+// variants + the result counters. The fixtures spell out the JSON the Rust
+// side emits and check that it passes the type-guard + JSON.parse.
 
 describe("BulkWriteOp wire shape (Sprint 308)", () => {
   it("recognises insertOne variant", () => {

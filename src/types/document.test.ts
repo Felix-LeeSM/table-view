@@ -1,17 +1,18 @@
-// Sprint 308 (2026-05-14) — DocumentRow wire shape round-trip.
+// 2026-05-14 — DocumentRow wire shape.
 //
-// 작성 이유: A1 mongosh 파서가 `db.coll.findOne()` 을 dispatch 했을 때
-// Rust 측 `DocumentRow { columns, row, raw }` 가 frontend 의 DataGrid /
-// Quick Look 으로 도달하는 직렬화 경로를 명시적으로 단언한다. 컨트랙트가
-// 변경되면 즉시 회귀.
+// Reason: when the A1 mongosh parser dispatches `db.coll.findOne()`, the
+// Rust-side `DocumentRow { columns, row, raw }` reaches the frontend DataGrid
+// / Quick Look. These cases pin the frontend's reading of that shape (the
+// composite-cell sentinels), so a contract change fails at once.
 
 import { describe, expect, it } from "vitest";
 import { type DocumentRow, isDocumentSentinel } from "./document";
 
 describe("DocumentRow wire shape (Sprint 308)", () => {
-  // Reason: P4 에러분기 — isDocumentSentinel 의 false 경로(non-string /
-  // 비-sentinel 문자열 / 잘못된 "[N items]" 형태)와 "[0 items]" 경계가
-  // 미검증이었다. JSON.parse 왕복만 확인하던 tautology 를 대체 (2026-07-17).
+  // Reason: P4 error branches — isDocumentSentinel's false paths (non-string /
+  // non-sentinel string / malformed "[N items]" shape) and the "[0 items]"
+  // boundary were unverified. Replaces a tautology that only checked a
+  // JSON.parse round-trip (2026-07-17).
   it("classifies non-sentinels as false and accepts the [0 items] boundary", () => {
     expect(isDocumentSentinel(42)).toBe(false);
     expect(isDocumentSentinel("plain")).toBe(false);

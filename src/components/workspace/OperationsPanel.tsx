@@ -1,20 +1,17 @@
-// Issue #1054 — workspace operations flyout. Mounts the connection-level
+// Issue #1054 — workspace operations panel. Mounts the connection-level
 // ops panels (U1 ServerActivity / U4 ServerInfo / U5 SlowQuery, plus the
 // #1462 Users tab = the previously-orphan DatabaseUsersPanel) behind
-// `operations.*` capability gates. Entry point =
-// the workspace toolbar "Operations" button (see WorkspaceToolbar),
-// which dispatches the same `toggle-operations-panel` custom event this
-// component's parent (`MainArea`) listens for — mirroring the
-// `GlobalQueryLogPanel` toggle channel so there is one consistent
-// workspace-level flyout pattern.
+// `operations.*` capability gates. Entry point = the Operations tab of the
+// bottom dock (`BottomPanel`, #2426), next to the `GlobalQueryLogPanel`
+// History tab, so there is one consistent workspace-level pattern.
 //
 // The driving connection (id / dbType / ops flags) is resolved via
 // `useOperationsConnection`. When null the panel renders nothing; the
-// toolbar button is also hidden in that case so the entry point and the
-// surface stay in sync.
+// dock's Operations tab is also hidden in that case so the entry point and
+// the surface stay in sync.
 //
-// ui-parity §1 (같은 작업 = 같은 진입점): server-admin views are a new
-// action category that the §2 reference table did not cover; this flyout
+// ui-parity §1 (same task = same entry point): server-admin views are a new
+// action category that the §2 reference table did not cover; this panel
 // is the single registered entry point across paradigms, gated only by
 // capability. The kill action inside `ServerActivityPanel` routes through
 // `ConfirmDestructiveDialog` per AC.

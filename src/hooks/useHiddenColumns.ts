@@ -7,17 +7,18 @@ import {
 } from "@/lib/tauri/datagrid_prefs";
 
 /**
- * Sprint 317 — DataGrid column hide / show 상태 관리 훅.
- * Sprint 369 (Phase 4) — 영속 매체 localStorage → SQLite SOT 전환.
+ * Manages DataGrid column hide / show state.
+ * The persistence medium moved from localStorage to the SQLite SOT.
  *
- * - `pk` 가 주어지면 mount 시 `get_datagrid_prefs` IPC 1회로 hydrate,
- *   hide/show/toggle/clear 호출 시 `set_datagrid_prefs` 의 hiddenColumns
- *   patch 전송 (widths 는 미포함 → backend 가 보존).
- * - `pk` 미제공 (ad-hoc / 임시 grid) 은 in-memory only — IPC / LS 접근 모두 0.
+ * - With a `pk`, the hook hydrates with one `get_datagrid_prefs` IPC on
+ *   mount, and hide/show/toggle/clear send a `set_datagrid_prefs`
+ *   hiddenColumns patch (widths omitted → the backend keeps them).
+ * - Without a `pk` (ad-hoc / temporary grid): in-memory only, with no IPC
+ *   or localStorage access.
  *
- * codex 7차 #1 — hidden 변경이 widths 를 건드리지 않는 invariant 는 backend 가
- * partial patch 로 보장. 본 hook 은 `widths` 필드를 patch 에 미포함시킴으로써
- * 그 보장을 호출 시점에 갖춘다.
+ * The backend guarantees, through the partial patch, the invariant that a
+ * hidden change does not touch widths. This hook upholds that guarantee at
+ * call time by leaving the `widths` field out of the patch.
  */
 
 export interface UseHiddenColumnsResult {
@@ -38,7 +39,7 @@ export function useHiddenColumns(pk?: ColumnPrefsPk): UseHiddenColumnsResult {
   // Mount + pk swap: hydrate from SQLite.
   useEffect(() => {
     if (!pk) {
-      // pk 가 사라지면 (in-memory mode 로 전환) hidden 도 초기화.
+      // When pk goes away (switch to in-memory mode), reset hidden too.
       setHidden(new Set());
       return;
     }
@@ -49,7 +50,8 @@ export function useHiddenColumns(pk?: ColumnPrefsPk): UseHiddenColumnsResult {
         if (cancelled) return;
         setHidden(new Set(resp.hiddenColumns));
       } catch {
-        // best-effort hydrate. 실패 시 빈 set 유지.
+        // best-effort hydrate. On failure the current set is kept (empty
+        // on mount).
       }
     })();
     return () => {
@@ -61,8 +63,8 @@ export function useHiddenColumns(pk?: ColumnPrefsPk): UseHiddenColumnsResult {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pkKey]);
 
-  // hidden 변경을 backend 로 전송. 인자는 *다음* set — react state 의 stale
-  // closure 위험을 피하기 위해 호출자가 직접 넘긴다.
+  // Sends a hidden change to the backend. The argument is the *next* set —
+  // the caller passes it directly to avoid a stale closure over React state.
   const persist = useCallback(
     (next: Set<string>) => {
       if (!pk) return;

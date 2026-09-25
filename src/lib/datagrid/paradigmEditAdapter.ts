@@ -189,10 +189,10 @@ export interface RdbAdapterDeps {
   history: HistoryRecorder;
   canEditRows?: boolean;
   /**
-   * Sprint 347 — DBMS dialect for the SQL generator. Postgres jsonb edits
-   * stay on `jsonb_set`; MySQL JSON edits route through `JSON_SET` /
-   * `JSON_REMOVE`. Defaults to `"postgresql"` when callers haven't been
-   * plumbed yet (preserves Sprint 343/344 behaviour).
+   * DBMS dialect for the SQL generator. Postgres jsonb edits stay on
+   * `jsonb_set`; MySQL JSON edits route through `JSON_SET` /
+   * `JSON_REMOVE`. Optional: the generator falls back to `"postgresql"`
+   * when it is undefined (the legacy jsonb-only behaviour).
    */
   dialect?: SqlDialect;
 }
@@ -344,9 +344,9 @@ export function rdbEditAdapter(deps: RdbAdapterDeps): ParadigmEditAdapter {
           onArrayWholeReassign: () => {
             arrayWholeReassign = true;
           },
-          // Sprint 347 — forward the dialect so JSON dispatch knows which
-          // emit (jsonb_set / JSON_SET) to use. Undefined falls back to
-          // postgresql inside the generator for Sprint 343/344 callers.
+          // Forward the dialect so JSON dispatch knows which emit
+          // (jsonb_set / JSON_SET) to use. Undefined falls back to
+          // postgresql inside the generator.
           dialect: deps.dialect,
           allowRowWrites: deps.canEditRows ?? true,
           // Issue #1081 — row-identity anchors for the WHERE clause.
@@ -371,9 +371,9 @@ export function rdbEditAdapter(deps: RdbAdapterDeps): ParadigmEditAdapter {
 }
 
 /**
- * Sprint 326 — Slice I.1: per-command IPC roundtrip 을 단일
- * `bulk_write_documents` 호출로 묶는다. 동일 collection 내의 모든 op 가
- * 같은 (db, collection) 을 가짐을 generator 가 보장한다.
+ * Bundle the per-command IPC roundtrips into one `bulk_write_documents`
+ * call. The generator guarantees that all ops share the same
+ * (db, collection).
  */
 async function dispatchMqlBatch(
   connectionId: string,

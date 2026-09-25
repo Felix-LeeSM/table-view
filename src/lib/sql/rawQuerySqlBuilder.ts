@@ -41,9 +41,9 @@ function literal(value: unknown, dialect: SqlDialect): string {
   if (value == null) return "NULL";
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
   if (typeof value === "number") return String(value);
-  // Sprint 306 — cell 값이 nested BigInt / Decimal 일 때 raw JSON.stringify
-  // 가 throw 했던 회귀. safeStringifyCell 은 BigInt/Decimal 을 string 으로
-  // emit 하므로 raw query edit literal 이 안전하게 round-trip.
+  // Regression: a cell value holding a nested BigInt / Decimal made the raw
+  // JSON.stringify throw. safeStringifyCell emits BigInt/Decimal as strings,
+  // so the raw query edit literal round-trips safely.
   if (typeof value === "object") {
     return quoteString(safeStringifyCell(value), dialect);
   }

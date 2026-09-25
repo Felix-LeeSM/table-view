@@ -1,26 +1,28 @@
 /**
- * 작성 2026-05-17 (Wave 9.5 회귀 7 진짜 fix — boot-time backend reconcile)
+ * Written 2026-05-17 (the real fix for the per-window theme regression —
+ * boot-time backend reconcile)
  *
- * 사용자 시나리오 (회귀 7 의 두 번째 root cause):
- *   1. launcher 에서 theme="github" 으로 변경 → SQLite write (optimistic IPC)
- *   2. workspace-{conn_id} 가 새로 열림 — Tauri 2 webview 는 각자 별도의
- *      localStorage. workspace 의 LS 는 비어있음.
- *   3. workspace 의 `bootTheme()` (LS fast path) → DEFAULT_THEME_ID ("slate")
- *      로 첫 paint = "slate flash"
- *   4. snapshot async hydrate 가 도착하면 update 되지만 그 사이 사용자가
- *      슬레이트 색을 본다 → "창 단위로 적용된다" 보고
+ * User scenario (the regression's second root cause):
+ *   1. The launcher changes theme to "github" → SQLite write (optimistic IPC)
+ *   2. workspace-{conn_id} opens fresh — each Tauri 2 webview has its own
+ *      localStorage, so the workspace's LS is empty.
+ *   3. The workspace's `bootTheme()` (LS fast path) → first paint with
+ *      DEFAULT_THEME_ID ("slate") = "slate flash"
+ *   4. The async snapshot hydrate updates it on arrival, but meanwhile the
+ *      user sees the slate colors → reported as "the theme applies per window"
  *
- * fix: `reconcileThemeFromBackend()` 가 backend `get_setting("theme")` 으로
- * SQLite truth 를 읽고 LS / DOM 을 갱신. main.tsx 의 boot 가 await 하여 첫
- * React render 전에 정답값 도달. 본 test 는 그 invariant 들을 lock:
+ * Fix: `reconcileThemeFromBackend()` applies the SQLite truth before the first
+ * React render (see its JSDoc in `src/lib/themeBoot.ts`). This test locks its
+ * invariants:
  *
- *   - SQLite 가 LS 와 다른 값 보유 → DOM data-theme 가 SQLite 값으로 변경.
- *   - SQLite 가 LS 와 다른 값 보유 → LS 가 SQLite 값으로 덮어쓰임 (다음 boot 의
- *     FOUC 캐시 일관성).
- *   - SQLite 와 LS 가 일치 → DOM/LS no-op (불필요 write 없음).
- *   - get_setting 이 null (첫 boot, 아직 settings 없음) → no-op.
- *   - IPC throw (Tauri 없는 환경) → graceful fallback, throw 안 함.
- *   - SQLite 값 malformed → no-op, throw 안 함.
+ *   - SQLite holds a value different from LS → DOM data-theme changes to the
+ *     SQLite value.
+ *   - SQLite holds a value different from LS → LS is overwritten with the
+ *     SQLite value (FOUC cache consistency for the next boot).
+ *   - SQLite and LS agree → DOM/LS no-op (no needless write).
+ *   - get_setting returns null (first boot, no settings yet) → no-op.
+ *   - IPC throws (no Tauri) → graceful fallback, no throw.
+ *   - SQLite value malformed → no-op, no throw.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -65,8 +67,8 @@ beforeEach(() => {
 
 describe("reconcileThemeFromBackend — Wave 9.5 회귀 7 boot reconcile", () => {
   it("SQLite truth 가 LS 와 다르면 DOM 의 data-theme 가 SQLite 값으로 변경", async () => {
-    // 새 webview boot 시뮬레이션: LS 비어있어서 DEFAULT (slate) 로 페인트됨.
-    // 그 사이 SQLite 에는 launcher 에서 저장한 "github" 가 있음.
+    // Simulates a new webview boot: LS is empty, so it painted DEFAULT (slate).
+    // Meanwhile SQLite holds "github", saved from the launcher.
     invokeMock.mockResolvedValueOnce(
       JSON.stringify({ themeId: "github", mode: "dark" }),
     );
@@ -89,7 +91,7 @@ describe("reconcileThemeFromBackend — Wave 9.5 회귀 7 boot reconcile", () =>
   });
 
   it("SQLite 와 LS 가 일치하면 LS write / DOM 변경 둘 다 no-op", async () => {
-    // LS 에 이미 "vercel/dark" 가 있음 (이전 boot 이 저장).
+    // LS already holds "vercel/dark" (saved by the previous boot).
     localStorageMock.setItem(
       THEME_STORAGE_KEY,
       JSON.stringify({ themeId: "vercel", mode: "dark" }),
@@ -101,7 +103,7 @@ describe("reconcileThemeFromBackend — Wave 9.5 회귀 7 boot reconcile", () =>
 
     await reconcileThemeFromBackend();
 
-    // LS 의 raw string 자체가 그대로 (불필요한 re-stringify write 없음 보장).
+    // The raw LS string itself is unchanged (no needless re-stringify write).
     expect(localStorageMock.getItem(THEME_STORAGE_KEY)).toBe(lsBefore);
   });
 
@@ -112,7 +114,7 @@ describe("reconcileThemeFromBackend — Wave 9.5 회귀 7 boot reconcile", () =>
 
     await reconcileThemeFromBackend();
 
-    // DOM 그대로 — bootTheme 가 적용한 fast-path 값 유지.
+    // DOM unchanged — keeps the fast-path values bootTheme applied.
     expect(document.documentElement.getAttribute("data-theme")).toBe(
       DEFAULT_THEME_ID,
     );
@@ -129,7 +131,7 @@ describe("reconcileThemeFromBackend — Wave 9.5 회귀 7 boot reconcile", () =>
     invokeMock.mockResolvedValueOnce("not-a-json-{");
 
     await expect(reconcileThemeFromBackend()).resolves.toBeUndefined();
-    // LS 변경 없음.
+    // LS unchanged.
     expect(localStorageMock.getItem(THEME_STORAGE_KEY)).toBeNull();
   });
 
@@ -140,7 +142,7 @@ describe("reconcileThemeFromBackend — Wave 9.5 회귀 7 boot reconcile", () =>
 
     await reconcileThemeFromBackend();
 
-    // unknown id 로 DOM 오염 안 됨.
+    // The unknown id does not pollute the DOM.
     expect(document.documentElement.getAttribute("data-theme")).not.toBe(
       "no-such-theme",
     );

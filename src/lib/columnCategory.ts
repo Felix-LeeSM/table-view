@@ -20,7 +20,7 @@ const DEFAULT_REM: Record<ColumnCategory, number> = {
   unknown: 12.5,
   text: 15,
   object: 15,
-  // UUID 36자 고정 (8-4-4-4-12 + 4 dashes). text 보다 더 넓게.
+  // UUIDs are a fixed 36 characters (8-4-4-4-12 + 4 dashes); wider than text.
   uuid: 18,
 };
 
@@ -37,12 +37,13 @@ export function getTextAlign(category: ColumnCategory): TextAlign {
 }
 
 /**
- * Sprint 258 — column 별 default rem 을 rootFontSize 로 px 변환.
+ * Convert each column's default rem to px with rootFontSize.
  *
- * Sprint 238 의 컨테이너 fit (sum < containerPx 일 때 비례 확대) 폐기.
- * `<table>` → CSS Grid 전환 (sprint-258) 후에는 columns 합 < container
- * 면 우측 잔여 공간 (사용자 의도), 합 > container 면 horizontal scroll.
- * Stretch redistribution 의 _근거 자체_ 가 사라졌다.
+ * The earlier container fit (proportional stretch when sum < containerPx) was
+ * dropped. Since the `<table>` → CSS Grid switch, a column sum below the
+ * container leaves free space on the right (intended), and a sum above it
+ * scrolls horizontally. Stretch redistribution _no longer has a reason_ to
+ * exist.
  */
 export function computeInitialWidths(
   columns: ReadonlyArray<{ name: string; category: ColumnCategory }>,

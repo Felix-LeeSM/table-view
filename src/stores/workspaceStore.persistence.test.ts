@@ -1,20 +1,22 @@
 /**
- * `workspaceStore` persistence axis. Sprint 262 (ADR 0027) TDD slice.
+ * `workspaceStore` persistence axis (ADR 0027).
  *
- * Behaviors (updated 2026-05-16, sprint-358):
- *   - LS write 사이트는 W1 시작 시점부터 0 (codex 6차 #5). 본 store 의 mutation
- *     은 더 이상 `table-view-workspaces` 키에 write 하지 않는다 — backend
- *     `persist_workspace` IPC 의 SQLite UPSERT 가 SOT.
- *   - `loadPersistedWorkspaces()` 는 legacy LS read 만 유지 (boot 시 import
- *     fallback) — 본 테스트는 그 read path 를 seed 된 LS entry 로부터 검증.
+ * Behaviors (updated 2026-05-16):
+ *   - Zero LS write sites from the start of state-management-strategy W1.
+ *     This store's mutations no longer write to the `table-view-workspaces`
+ *     key — the SQLite UPSERT of the backend `persist_workspace` IPC is the
+ *     SOT.
+ *   - `loadPersistedWorkspaces()` keeps only the legacy LS read — this test
+ *     verifies that read path from a seeded LS entry.
  *
- * Author intent (2026-05-12): vertical-slice persistence smoke. Sprint 358
- * 에서 write path 를 read-only-from-legacy 로 좁힘.
+ * Author intent (2026-05-12): vertical-slice persistence smoke. The
+ * 2026-05-16 update narrowed the write path to read-only-from-legacy.
  *
- * 2026-07-22 (issue #1631 test-audit Wave 2) — "store mutation 이 LS 에
- * 안 쓴다"는 no-LS-write invariant 는 workspaceStore/persistence.no-ls-write.test.ts
- * 를 단일 SOT 로 삼는다. 본 파일의 중복 재검증은 제거하고, 여기서는 legacy
- * LS seed 로부터의 read/rehydrate 경로만 검증한다.
+ * 2026-07-22 (issue #1631 test-audit) — the no-LS-write invariant ("a store
+ * mutation does not write LS") has its single SOT in
+ * workspaceStore/persistence.no-ls-write.test.ts. The duplicate re-check in
+ * this file was removed; here only the read/rehydrate path from a legacy LS
+ * seed is verified.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -33,13 +35,13 @@ describe("workspaceStore — persistence", () => {
     restoreLocalStorage();
   });
 
-  // no-LS-write invariant (store mutation → LS write 0) 는
-  // workspaceStore/persistence.no-ls-write.test.ts 가 단일 SOT — issue #1631
-  // (2026-07-22). 여기서의 중복 재검증은 제거.
+  // The no-LS-write invariant (store mutation → zero LS writes) has its
+  // single SOT in workspaceStore/persistence.no-ls-write.test.ts — issue
+  // #1631 (2026-07-22). The duplicate re-check here was removed.
 
   it("loadPersistedWorkspaces still rehydrates from legacy LS seed (boot import fallback)", () => {
-    // Pre-seed LS as if a previous app version had written it. boot 시점의
-    // import path 가 본 entry 를 read 해서 hydration 한다.
+    // Pre-seed LS as if a previous app version had written it.
+    // `loadPersistedWorkspaces` reads this entry and hydrates from it.
     const seeded = {
       workspaces: {
         conn1: {
@@ -80,8 +82,8 @@ describe("workspaceStore — persistence", () => {
 
   it("[RISK-039] legacy RDB table tabs without database inherit the workspace db on rehydrate", () => {
     // Older persisted table tabs were keyed under workspaces[connId][db] but
-    // did not always carry `tab.database`. Sprint 433 needs that identity for
-    // pending edit keys and RDB commit `expectedDatabase`.
+    // did not always carry `tab.database`. Pending edit keys and the RDB
+    // commit `expectedDatabase` need that identity.
     window.localStorage.setItem(
       "table-view-workspaces",
       JSON.stringify({

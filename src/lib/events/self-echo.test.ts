@@ -1,11 +1,13 @@
 /**
- * 작성 2026-05-16 (Phase 3 sprint-365, AC-365-03)
+ * Written 2026-05-16 (AC-365-03)
  *
- * 사유: F.4 invariant — `originWindow === currentWindowLabel` 인 event 는
- * 원인 window 가 자기 action 의 응답 (optimistic) 으로 이미 store 를
- * 갱신했기에 mutate 를 skip 한다. 단 lastApplied version 은 갱신 (이후
- * stale detection 정확성). 회귀 시 origin window 가 자기 mutate 의 두 번째
- * 적용으로 UI flicker / count 두 배 / scroll position 리셋 등을 겪는다.
+ * Reason: F.4 invariant — an event with
+ * `originWindow === currentWindowLabel` skips the mutate, because the origin
+ * window already updated its store from its own action's (optimistic)
+ * response. The lastApplied version is still updated (so later stale
+ * detection stays accurate). On regression the origin window applies its
+ * own mutate a second time and sees UI flicker, a doubled count, a reset
+ * scroll position, and so on.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";

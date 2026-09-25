@@ -1,10 +1,9 @@
-// Sprint 326 (2026-05-15) — Slice I.1: MqlCommand[] → BulkWriteOp[]
-// 매핑 helper.
+// 2026-05-15 — MqlCommand[] → BulkWriteOp[] mapping helper.
 //
-// 작성 이유: commit path 가 단일 bulkWrite 호출로 묶이려면 generator
-// 가 만든 `MqlCommand` 형식을 wire `BulkWriteOp` 로 정확히 변환해야
-// 한다. _id filter / $set update / insertOne document 의 3 카드를
-// 가드.
+// Reason: for the commit path to batch into a single bulkWrite call, the
+// `MqlCommand` shape the generator builds must convert exactly into the wire
+// `BulkWriteOp`. Guards three cases: the _id filter, the $set update, and
+// the insertOne document.
 
 import { describe, expect, it } from "vitest";
 import type { MqlCommand } from "./mqlGenerator";
@@ -28,11 +27,11 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
     ]);
   });
 
-  // Sprint 342 V2 (2026-05-15) — `cmd.patch` now carries the full update
-  // operator (`{ $set, $unset }`) instead of the raw $set body, so a
-  // single row can mix overwrite + structural delete. mqlToBulk just
-  // forwards the operator object unchanged. 작성 이유: tree-panel delete
-  // 가 $unset 을 같은 row 의 patch 에 묶을 수 있어야 했다.
+  // 2026-05-15 — `cmd.patch` now carries the full update operator
+  // (`{ $set, $unset }`) instead of the raw $set body, so a single row can
+  // mix overwrite + structural delete. mqlToBulk just forwards the operator
+  // object unchanged. Reason: the tree-panel delete had to bundle $unset
+  // into the same row's patch.
   it("maps updateOne command — patch already wraps $set/$unset operators", () => {
     const cmds: MqlCommand[] = [
       {

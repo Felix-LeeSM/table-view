@@ -8,8 +8,8 @@ import {
   rowsToSqlInsert,
 } from "./format";
 
-// Sprint 238 — `truncateCell` / `CELL_DISPLAY_LIMIT` 테스트 폐기 (AC-238-05).
-// CSS ellipsis 로 대체됨.
+// The `truncateCell` / `CELL_DISPLAY_LIMIT` tests were removed (AC-238-05);
+// CSS ellipsis took over.
 
 // ── Copy format utilities ─────────────────────────────────────────────
 
@@ -165,10 +165,10 @@ describe("rowsToSqlInsert", () => {
   });
 });
 
-// Sprint 306 (2026-05-14) — BigInt freeze 회귀 가드. 사용자 보고: DataGrid
-// 가 mount 직후 굳었고 stacktrace 가 raw `JSON.stringify` 였다 (sprint-305
-// 핫픽스). copy/export 경로의 4 함수 모두 cell 값을 직접 만지므로 BigInt /
-// Decimal 가 nested 로 들어오는 케이스를 fix.
+// 2026-05-14 — BigInt freeze regression guard. User report: the DataGrid
+// froze right after mount, with raw `JSON.stringify` in the stack trace
+// (fixed by a hotfix). All four copy/export functions touch cell values
+// directly, so these tests pin the case where BigInt / Decimal arrive nested.
 const BIG = BigInt("9223372036854775807");
 
 describe("rowsToPlainText — BigInt/Decimal (Sprint 306)", () => {

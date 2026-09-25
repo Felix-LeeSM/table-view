@@ -1,24 +1,17 @@
-// AC-246-D1..D7 — ConfirmDestructiveDialog component tests. 7 cases per
-// Sprint 246 (ADR 0022 Phase 2) contract.
-// AC-247-D8..D11 — Sprint 247 dry-run preview integration. 4 new cases.
+// AC-246-D1..D7 — ConfirmDestructiveDialog component tests per the
+// ADR 0022 Phase 2 contract.
+// AC-247-D8..D11 — dry-run preview integration (ADR 0022 Phase 3).
 // date 2026-05-08 / 2026-05-09.
 //
-// The dialog replaces Sprint 186's `prior dialog` (type-to-
-// confirm + `Run anyway`). Phase 2 collapses the warn-tier verbatim-
-// typing gate into a simple Yes/No — the destructive-only policy
-// matrix in `decideSafeModeAction` already filters non-destructive
-// statements upstream, so verbatim typing added friction without a
-// measurable safety bar. The header is environment-aware (production
-// shouts "PRODUCTION DATABASE"; non-production reads as "Destructive
-// statement" over a "Non-production connection" subcaption) so the user
-// instantly sees which environment the statement is about to run against.
+// The Yes/No gate (in place of verbatim typing) and the environment-aware
+// header are explained in the `ConfirmDestructiveDialog` TSDoc
+// (`ConfirmDestructiveDialog.tsx`).
 //
-// Sprint 247 (ADR 0022 Phase 3) — the placeholder slot is replaced by
-// `<DryRunPreview>` which calls `executeQueryDryRun`. The dialog
-// itself remains UI-only; the dry-run lifecycle tests live in
-// useDryRun.test.ts. Here we verify the dialog wires the IPC mock
-// correctly: success row, error message, document disclaimer, and
-// IPC-not-called when `open=false`.
+// ADR 0022 Phase 3 — the dry-run slot renders `<DryRunPreview>`, which
+// calls `executeQueryDryRun`. The dialog itself remains UI-only; the
+// dry-run lifecycle tests live in useDryRun.test.ts. Here we verify the
+// dialog wires the IPC mock correctly: success row, error message,
+// document disclaimer, and IPC-not-called when `open=false`.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
@@ -250,11 +243,10 @@ describe("ConfirmDestructiveDialog", () => {
   });
 
   it("[AC-246-D7] dry-run preview section is rendered (Phase 3 mounts <DryRunPreview>)", () => {
-    // Sprint 247 — placeholder testid is gone; the slot now renders
-    // `<DryRunPreview>` with `data-testid="dry-run-status"`. With
-    // `statements=[]` the hook surfaces an `error` status (programmer
-    // error guard), but the section itself is still present and
-    // labeled.
+    // The placeholder testid is gone; the slot renders `<DryRunPreview>`
+    // with `data-testid="dry-run-status"`. With `statements=[]` the hook
+    // surfaces an `error` status (programmer error guard), but the section
+    // itself is still present and labeled.
     render(
       <ConfirmDestructiveDialog
         open={true}
@@ -273,7 +265,7 @@ describe("ConfirmDestructiveDialog", () => {
     expect(preview).toHaveAccessibleName("Dry-run preview");
   });
 
-  // ── Sprint 247 (ADR 0022 Phase 3) — dry-run preview integration ──
+  // ── ADR 0022 Phase 3 — dry-run preview integration ──
 
   it('[AC-247-D8] paradigm="rdb" + dry-run success → dry-run-result-row-0 shows rows_affected', async () => {
     executeQueryDryRunMock.mockResolvedValueOnce([
@@ -375,11 +367,11 @@ describe("ConfirmDestructiveDialog", () => {
     expect(executeQueryDryRunMock).not.toHaveBeenCalled();
   });
 
-  // Sprint 256 (2026-05-09, AC-256-06) — production header binds to the
-  // chrome-stripe env token (`--tv-env-prod` / `--tv-env-prod-text`) so
-  // the dialog reads as the same visual surface as the persistent
-  // chrome above. Non-production header preserves the prior style
-  // (no env background) per the "비-prod 헤더는 회귀 0" invariant.
+  // AC-256-06 (2026-05-09) — production header binds to the chrome-stripe
+  // env token (`--tv-env-prod` / `--tv-env-prod-text`) so the dialog reads
+  // as the same visual surface as the persistent chrome above.
+  // Non-production header preserves the prior style (no env background) per
+  // the "no regression in the non-prod header" invariant.
   it("[AC-256-06] production header uses --tv-env-prod / --tv-env-prod-text tokens", () => {
     render(
       <ConfirmDestructiveDialog
@@ -426,11 +418,11 @@ describe("ConfirmDestructiveDialog", () => {
     expect(header.getAttribute("style") ?? "").not.toMatch(/--tv-env-prod\)/);
   });
 
-  // Sprint 256 (2026-05-09, AC-256-05) — footer Confirm replaced by
-  // ExecuteButton (severity=danger, env-aware). Visible label still
-  // reads "Execute" but ariaLabel preserves "Confirm" for the existing
-  // a11y contract; data-severity-env="danger" carries the STOP-tier
-  // colour invariant.
+  // AC-256-05 (2026-05-09) — footer Confirm replaced by ExecuteButton
+  // (severity=danger, env-aware). The visible label reads "Execute" /
+  // "Execute on <conn>" but ariaLabel preserves "Confirm" for the existing
+  // a11y contract; data-severity-env="danger" carries the STOP-tier colour
+  // invariant.
   it("[AC-256-05] footer uses ExecuteButton with data-severity-env=danger", () => {
     render(
       <ConfirmDestructiveDialog

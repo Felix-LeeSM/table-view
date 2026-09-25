@@ -15,7 +15,7 @@
 // dialect. The 2026-07-02 decision (memory/product/memory.md §2) re-anchors
 // parity on a single axis:
 //
-//   TIER = f(영향 범위 × 손실성)  — impact scope × loss, NOT syntax shape.
+//   TIER = f(impact scope × loss)  — NOT syntax shape.
 //
 //   - read / metadata ...................................... info
 //   - single row/doc, targeted columns .................... info

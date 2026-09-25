@@ -51,22 +51,24 @@ vi.mock("@components/layout/MainArea", async (importOriginal) => {
   };
 });
 
-// Sprint 161 — isolate from the full ThemePicker rendering (72 cards + radix
-// portals) so we can assert the trigger contract without visual noise.
+// Isolate from the full ThemePicker rendering (theme cards + radix portals)
+// so we can assert the trigger contract without visual noise.
 vi.mock("@components/theme/ThemePicker", () => ({
   default: () => <div data-testid="theme-picker-mock" />,
 }));
 
-// #1738 (2026-07-25) — 테마/언어를 사이드바 상단 단일 영역(theme 팝오버)으로
-// 통합. LanguageSwitcher 도 같은 방식으로 격리해 상단 배치만 검증한다.
+// #1738 (2026-07-25) merged theme and language into one place at the top of
+// the sidebar (the theme popover); #2431 moved that popover into
+// `WorkspaceToolbar`. LanguageSwitcher is isolated the same way.
 vi.mock("@components/theme/LanguageSwitcher", () => ({
   default: () => <div data-testid="language-switcher-mock" />,
 }));
 
-// Sprint 154 — `WorkspacePage` registers a `tauri://close-requested`
-// listener at mount and routes Back through the `@lib/window-controls`
-// seam. Stub the seam so the assertions can observe call shape directly
-// (no real Tauri runtime under jsdom).
+// `WorkspacePage` registers no `tauri://close-requested` listener (asserted
+// below), and Back goes through the `@lib/window-controls` seam from
+// `BackToConnectionsButton` in `WorkspaceToolbar`. Stub the seam so the
+// assertions can observe call shape directly (no real Tauri runtime under
+// jsdom).
 vi.mock("@lib/window-controls", () => ({
   showWindow: vi.fn(() => Promise.resolve()),
   hideWindow: vi.fn(() => Promise.resolve()),
@@ -253,32 +255,16 @@ describe("WorkspacePage", () => {
     expect(screen.queryByRole("radio", { name: /schemas mode/i })).toBeNull();
   });
 
-  // Wave 9.5 회귀 4 (2026-05-16) — `close-requested` listener trap.
-  //
-  // 회귀 증상: Back 클릭 시 launcher focus 는 가지만 workspace 창이 닫히지 않음.
-  //
-  // 근본 원인: WorkspacePage 가 `onCurrentWindowCloseRequested` 리스너를
-  // 등록 + 그 안에서 `preventDefault()` + `handleBackToConnections()` 호출
-  // 했다. 회귀 시점의 Back 핸들러가 `closeCurrentWindow()` (= `win.close()`)
-  // 를 부르면 Tauri 가 `tauri://close-requested` 이벤트를 다시 발사 → 같은
-  // 리스너가 `preventDefault()` → 재호출 → **무한 루프 + window destroy 안 됨**.
-  // 현재 fix 는 (1) listener 제거 + (2) `destroyCurrentWindow()` 사용으로
-  // close-requested 라이프사이클 자체 우회.
-  //
-  // 진짜 fix: 리스너 자체 제거. 이 리스너의 존재 이유는 sprint-154 의
-  // launcher-hide UX (OS close 가 process kill 처럼 보이지 않게 가로채기)
-  // 였는데, Wave 9.5 에서 desired UX 가 "launcher 항상 visible" 로 바뀌면서
-  // OS-level close 는 default destroy 가 자연스럽다 (launcher 가 이미
-  // visible 이므로 자동으로 활성). 리스너 = dead code.
-  //
-  // 본 테스트는 WorkspacePage 가 더 이상 close-requested 리스너를 등록하지
-  // 않음을 lock — 다시 추가하면 같은 trap 이 부활.
+  // `close-requested` listener trap (2026-05-16): this locks that
+  // WorkspacePage no longer registers a close-requested listener — such a
+  // listener once looped forever on Back. See the Lifecycle note in
+  // `WorkspacePage.tsx`.
   it("does NOT register a close-requested listener (Wave 9.5 회귀 4 — listener was the infinite loop trap)", () => {
     render(<WorkspacePage />);
     expect(windowControls.onCurrentWindowCloseRequested).not.toHaveBeenCalled();
   });
 
-  // --- Sprint 161 / #1738: the appearance popover ---
+  // --- #1738: the appearance popover ---
   //
   // #2431 moved the trigger, the popover and the back button into
   // `WorkspaceToolbar`. `MainArea` is mocked here, so what those cases used to

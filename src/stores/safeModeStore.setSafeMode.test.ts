@@ -1,16 +1,18 @@
 /**
- * 작성 2026-05-16 (Phase 4 sprint-368, AC-368-02 + AC-368-06)
+ * Written 2026-05-16 (AC-368-02 + AC-368-06)
  *
- * 사유: Q12 Theme/SafeMode SQLite SOT 전환 — safeMode 는 boot FOUC critical
- * 이 아니므로 LS read/write 0. `setMode` / `toggle` 액션은 IPC
- * `persist_setting("safe_mode", JSON)` 만 호출하고 LS 는 손대지 않는다.
+ * Reason: state-management-strategy Q12 moves Theme/SafeMode to a SQLite
+ * SOT — safeMode is not boot FOUC critical, so it does zero LS reads/writes.
+ * The `setMode` / `toggle` actions only call the IPC
+ * `persist_setting("safe_mode", JSON)` and leave LS alone.
  *
- *   1. IPC `persist_setting({key:"safe_mode", valueJson: …})` 1회
- *   2. 응답 후 store mutate
- *   3. LS write 0 (`view-table.safeMode` key retire)
+ *   1. IPC `persist_setting({key:"safe_mode", valueJson: …})` once
+ *   2. Store mutate after the response
+ *   3. Zero LS writes (`view-table.safeMode` key retired)
  *
- * 회귀 시: (a) persist middleware 가 다시 활성화돼 LS 에 stale 값이 박힘,
- * (b) IPC reject 시 store 가 optimistic 으로 갱신돼 SQLite 와 불일치.
+ * On regression: (a) the persist middleware comes back and writes a stale
+ * value into LS, (b) on IPC reject the store updates optimistically and
+ * diverges from SQLite.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -92,11 +94,11 @@ describe("AC-368-02 setSafeMode backend-first, LS 0", () => {
     expect(JSON.parse(req.req.valueJson)).toBe("warn");
   });
 
-  // 각 toggle 후 state transition 을 개별 단언 (strict→warn→off→strict) +
-  // 3-toggle reversibility (시작값 복귀). safeModeStore.test.ts 의 per-step
-  // (strict→warn / warn→off / off→strict) + reversible 케이스를 이 SOT 로
-  // 흡수 — issue #1631 (2026-07-22). safeMode 는 safety feature 이므로
-  // 전이/가역성 단언을 강하게 유지한다.
+  // Asserts each state transition after a toggle (strict→warn→off→strict)
+  // plus 3-toggle reversibility (back to the start value). This SOT absorbed
+  // the per-step (strict→warn / warn→off / off→strict) and reversible cases
+  // of safeModeStore.test.ts — issue #1631 (2026-07-22). safeMode is a
+  // safety feature, so the transition/reversibility assertions stay strong.
   it("toggle cycles full strict → warn → off → strict via three IPC calls", async () => {
     await useSafeModeStore.getState().toggle();
     expect(useSafeModeStore.getState().mode).toBe("warn"); // strict → warn

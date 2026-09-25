@@ -1,5 +1,5 @@
 /**
- * Sprint 251 — In-memory store for the four DataGrid pending-edit slices.
+ * In-memory store for the DataGrid pending-edit slices.
  *
  * Lifts `pendingEdits` / `pendingNewRows` / `pendingDeletedRowKeys` /
  * `undoStack` out of `useDataGridEdit`'s `useState` so a tab switch
@@ -15,22 +15,23 @@
  *   freshly-allocated Map / Set / Array so React selector equality detects
  *   the change.
  * - `setSlice(key, slice, value)` updates exactly one slice on `key`,
- *   leaving the other three intact. Lazily creates the entry from
- *   `EMPTY_ENTRY` if missing.
- * - `clearEntry(key)` resets all four slices on `key` to empty (used by
- *   `clearAllPending` after a successful commit / explicit discard).
+ *   leaving the other slices intact. Lazily creates a fresh entry (not
+ *   `EMPTY_ENTRY`) if missing.
+ * - `clearEntry(key)` resets all slices on `key` to empty (used by
+ *   `clearAllPending` on an explicit discard or when the grid stops being
+ *   editable, and by `useDataGridEditPendingState`'s `restageAfterCommit`
+ *   after a successful commit, which then seeds `undoStack` with the
+ *   reversal snapshot when there is one — ADR 0048).
  * - `purgeKey(key)` removes the entry from the map entirely (used by
- *   `tabStore.removeTab` when the closing tab was the last consumer of
- *   that key).
+ *   `workspaceStore.removeTab` when the closing tab was the last consumer
+ *   of that key).
  * - `purgeForConnection(connectionId)` deletes every entry whose key
  *   starts with `${connectionId}::` (used by
- *   `tabStore.clearTabsForConnection` when a connection is dropped).
+ *   `workspaceStore.clearForConnection` when a connection is dropped).
  *
- * Out of scope for Sprint 251 (intentional):
+ * Out of scope (intentional):
  * - localStorage persistence — the entry buffer is window-local.
  * - Cross-window broadcast — pending state is per-workspace, not synced.
- * - Mongo grid (read-only paradigm) reads but never writes pending state;
- *   keeping it on the store is harmless (entry stays empty).
  */
 import { create } from "zustand";
 import type {
@@ -42,9 +43,9 @@ import type {
 
 /**
  * Snapshot of the three diff slices captured BEFORE a mutating handler
- * runs (Sprint 249, ADR 0022 Phase 5). Stored on `undoStack`. Must mirror
- * the type that lives in `useDataGridEdit.ts` exactly — re-exported here
- * so the store interface stays self-contained without a circular import.
+ * runs (ADR 0022 Phase 5). Stored on `undoStack`. Must mirror the type in
+ * `dataGridEditFsm.ts` exactly — duplicated here so the store interface
+ * stays self-contained without a circular import.
  */
 export interface EditSnapshot {
   pendingEdits: ReadonlyMap<string, string | null>;
@@ -278,13 +279,14 @@ export const useDataGridEditStore = create<DataGridEditStore>((set, get) => ({
   },
 
   setSlice: (key, slice, value) => {
-    // #1616 (B4, PR #1503) — "slice 통째 교체만 허용" invariant. The undo/redo
-    // snapshots retain the live slice references (structural sharing, #1444),
-    // so a slice MUST be replaced with a freshly-allocated Map/Set/Array, never
-    // mutated in place. Receiving back the reference already stored means a
-    // caller mutated it in place and re-set it — that silently corrupts every
-    // snapshot sharing it AND the reference-compare selectors miss the change.
-    // Reject instead of writing the poisoned reference.
+    // #1616 (B4, PR #1503) — "whole-slice replacement only" invariant. The
+    // undo/redo snapshots retain the live slice references (structural
+    // sharing, #1444), so a slice MUST be replaced with a freshly-allocated
+    // Map/Set/Array, never mutated in place. Receiving back the reference
+    // already stored means a caller mutated it in place and re-set it — that
+    // silently corrupts every snapshot sharing it AND the reference-compare
+    // selectors miss the change. Reject instead of writing the poisoned
+    // reference.
     const current = get().entries.get(key);
     if (current && current[slice] === value) {
       throw new TypeError(

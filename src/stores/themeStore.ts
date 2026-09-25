@@ -20,19 +20,21 @@ interface ThemeStoreState {
   mode: ThemeMode;
   resolvedMode: "light" | "dark";
 
-  // Wave 9.5 회귀 6 / 7 (2026-05-17) — optimistic UI. sprint-368 의
-  // backend-first contract (IPC 응답 후 store mutate) 는 backend reject /
-  // dev rebuild miss 시 사용자가 click 후 silent stuck — "테마 선택이 안 됨"
-  // 으로 보임. theme 같은 user preference 는 강한 일관성 불필요; 사용자가 보는
-  // 즉각적 시각 변화 (DOM data-theme) 가 우선. 액션은 (1) 먼저 store mutate
-  // (즉시 subscriber → DOM/LS FOUC 캐시/cross-window broadcast), (2) 그 다음
-  // fire-and-forget 으로 `persist_setting` IPC.
+  // 2026-05-17 — optimistic UI. The earlier backend-first contract (store
+  // mutate after the IPC response) left the user silently stuck after a
+  // click on a backend reject / dev rebuild miss — it looked like "picking
+  // a theme does nothing". A user preference like theme does not need strong
+  // consistency; the immediate visual change the user sees (DOM data-theme)
+  // comes first. The actions (1) mutate the store first (the subscriber
+  // fires at once → DOM / LS FOUC cache / cross-window broadcast), then (2)
+  // send the `persist_setting` IPC fire-and-forget.
   //
-  // #1092 — 이전 주석은 IPC reject 를 "다음 boot 의 reconcile path 가 회복"
-  // 한다고 했으나 그 reconcile 은 배선된 적이 없다. SQLite write 가 실패하면
-  // boot snapshot 이 stale SQLite 값으로 LS FOUC 캐시를 덮어 사용자 선택이
-  // 소실될 수 있으므로, IPC reject 는 logger.warn + error toast 로 표면화한다
-  // (store 는 re-throw 하지 않는다 — UI 는 이미 시각 적용됨).
+  // #1092 — an earlier comment said the next boot's reconcile path recovers
+  // an IPC reject, but that reconcile was never wired. When the SQLite write
+  // fails, the boot snapshot can overwrite the LS FOUC cache with the stale
+  // SQLite value and lose the user's pick, so an IPC reject surfaces as
+  // logger.warn + an error toast (the store does not re-throw — the UI is
+  // already applied).
   setTheme: (themeId: ThemeId) => Promise<void>;
   setMode: (mode: ThemeMode) => Promise<void>;
   setState: (state: ThemeState) => Promise<void>;
@@ -48,14 +50,15 @@ function computeResolved(mode: ThemeMode): "light" | "dark" {
 const initial = readStoredState();
 
 /**
- * Sprint 368 (Phase 4 Q12) — backend-first theme persistence helper.
+ * state-management-strategy Q12 — theme persistence helper.
  *
  * Wraps `persist_setting("theme", JSON)` so the three actions
  * (`setTheme` / `setMode` / `setState`) all funnel through the same IPC
  * call site. The `valueJson` field is the strategy F.4 wire shape
- * (`{themeId, mode}`); store mutate + LS sync are deferred to the
- * action's `await` continuation so a rejected IPC leaves the store at
- * its previous value (strategy line 1282 — "LS 는 마지막 성공값 유지").
+ * (`{themeId, mode}`). The actions mutate the store before awaiting this
+ * helper (see the note on `setTheme` in `ThemeStoreState`), so a rejected
+ * IPC leaves the new value in the store and LS — unlike strategy doc line
+ * 1285, which keeps the store unchanged and LS at the last successful value.
  */
 async function persistThemeSetting(value: ThemeState): Promise<void> {
   await persistSettingValue("theme", value);
@@ -157,7 +160,7 @@ export const SYNCED_KEYS: ReadonlyArray<keyof ThemeStoreState> = [
  * attributes track the synced state AND writes the FOUC cache to LS so
  * the next boot's first paint matches SQLite truth.
  *
- * Sprint 368 (Phase 4 Q12) — the action funnel itself does NOT call
+ * state-management-strategy Q12 — the action funnel itself does NOT call
  * `writeStoredState`; it relies on this subscriber to perform the single
  * LS write per state change. This keeps the action path and the
  * cross-window receiver path symmetric (both end in `set({...})`) and
@@ -166,7 +169,7 @@ export const SYNCED_KEYS: ReadonlyArray<keyof ThemeStoreState> = [
 let lastApplied = `${initial.themeId}|${initial.mode}`;
 
 /**
- * Sprint 375 (Phase 6 cleanup, 2026-05-17) — test-only escape hatch for
+ * 2026-05-17 — test-only escape hatch for
  * the module-scope `lastApplied` dedup key. The subscriber short-circuits
  * on `themeId|mode` equality to avoid double LS writes; vitest, however,
  * runs multiple theme-change cases inside one process and would otherwise
@@ -204,19 +207,20 @@ void attachZustandIpcBridge<ThemeStoreState>(useThemeStore, {
 });
 
 /**
- * Sprint 368 (Phase 4 Q12) — `state-changed` setting domain receiver.
+ * state-management-strategy Q12 — `state-changed` setting domain receiver.
  *
  * Backend `persist_setting("theme", …)` emits `{domain:"setting",
- * op:"update", entityId:"theme"}`. The sprint-365 dispatcher routes the
+ * op:"update", entityId:"theme"}`. `dispatchStateChangedPayload` routes the
  * non-self-echo branch here. Refetch the canonical SQLite value via
  * `get_setting("theme")` and apply it through the underlying setter so
  * the LS-sync subscriber writes the FOUC cache.
  *
- * The refetch (rather than trusting the event payload) is the strategy
- * F.4 line 1388 contract — "event 는 알림, 실제 값은 수신자가 refetch".
- * It also keeps the receiver shape uniform across all `setting` keys
- * (theme / safe_mode / sidebar_width / …): the dispatcher dispatches one
- * `onUpdated`, the handler dispatches per-key.
+ * The refetch (rather than trusting the event payload) is the strategy doc
+ * F.4 contract (lines 1391 and 1400): the event only notifies, and the
+ * receiver refetches the actual value. It also keeps the receiver shape
+ * uniform across all `setting` keys (theme / safe_mode / sidebar_width /
+ * …): the dispatcher dispatches one `onUpdated`, the handler dispatches
+ * per-key.
  */
 /**
  * Per-entity `setting.update` refetch for the `theme` key. Exported so

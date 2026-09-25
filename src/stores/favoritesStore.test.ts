@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// 작성 2026-05-16 (Phase 4 W2→W3 sprint-370)
+// Written 2026-05-16 (state-management-strategy Phase 4 W2→W3)
 //
-// 사유: favoritesStore 의 LS retire 후 영속 채널이 SQLite IPC 로 이동했다.
-// 본 파일은 Sprint 119 / 153 / 290 시점의 행동 contract — CRUD / scope
-// 필터링 / SYNCED_KEYS 노출 — 을 보존하면서 영속 단언만 IPC 로 옮긴다.
-// LS 단언은 `favoritesStore.no-file-read.test.ts` 가 별도로 잠근다.
+// Reason: after favoritesStore's LS retirement, the persistence channel moved
+// to the SQLite IPC. This file keeps the behavior contract — CRUD / scope
+// filtering / SYNCED_KEYS exposure — and moves only the persistence
+// assertions to the IPC. `favoritesStore.no-file-read.test.ts` locks the LS
+// assertions separately.
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -181,7 +182,7 @@ describe("favoritesStore", () => {
     });
   });
 
-  // -- Persistence (Sprint 370 — SQLite via persist_favorites IPC) --
+  // -- Persistence (SQLite via persist_favorites IPC) --
 
   describe("persistence (sprint-370 SQLite SOT)", () => {
     it("keeps store IPC behind the typed Tauri wrapper", () => {
@@ -322,7 +323,7 @@ describe("favoritesStore", () => {
     });
   });
 
-  // -- Sprint 153 (AC-153-06) — cross-window broadcast allowlist regression --
+  // -- AC-153-06 — cross-window broadcast allowlist regression --
   //
   // `SYNCED_KEYS` pins which top-level state keys ride the `favorites-sync`
   // channel. The `favorites` array is the only piece of shared state in the

@@ -1,25 +1,26 @@
 /**
- * 작성 2026-05-16 (Phase 4 sprint-368, AC-368-03)
+ * Written 2026-05-16 (AC-368-03)
  *
- * 사유: Q12 Theme/SafeMode SQLite SOT 전환 — `state-changed` event (setting
- * domain, op=update, entityId=theme|safe_mode) 수신 시 receiver 는
- * `get_setting(key)` IPC 로 refetch 한 뒤 store 를 mutate 한다. Self-echo 는
- * sprint-365 의 dispatcher 가 이미 skip 하므로 본 테스트는 non-self-echo
- * 경로만 단언.
+ * Reason: state-management-strategy Q12 moves Theme/SafeMode to a SQLite
+ * SOT — on a `state-changed` event (setting domain, op=update,
+ * entityId=theme|safe_mode) the receiver refetches with the
+ * `get_setting(key)` IPC and then mutates the store.
+ * `dispatchStateChangedPayload` already skips self-echo, so the cases below
+ * assert the non-self-echo path, plus one case that checks a self-echo
+ * triggers no refetch.
  *
- *   1. dispatcher → setting.onUpdated 호출
- *   2. handler → `invoke("get_setting", { key })` 1회
- *   3. 응답 후 store mutate + (theme 만) LS sync
+ *   1. dispatcher → calls setting.onUpdated
+ *   2. handler → `invoke("get_setting", { key })` once
+ *   3. store mutate after the response + LS sync (theme only)
  *
- * 회귀 시: (a) event 수신 시 mutate 0 → 다른 window 의 theme/safeMode 변경이
- * 본 window 에 안 전파, (b) self-echo 가 handler 까지 도달해 두 번 mutate
- * (UI flicker / 무한 loop), (c) safeMode 가 LS sync 를 도로 시작.
+ * On regression: (a) no mutate on event receipt → another window's
+ * theme/safeMode change never reaches this window, (b) a self-echo reaches
+ * the handler and mutates twice (UI flicker / infinite loop), (c) safeMode
+ * starts syncing LS again.
  *
- * 본 테스트는 module-load 시점에 themeStore / safeModeStore 가 등록한
- * `setting.onUpdated` 핸들러를 그대로 사용한다 — registry reset 후 다시
- * import 해도 module side-effect 가 한 번 더 안 돌기 때문에 (vitest 의
- * module cache), 테스트 사이에 registry 를 reset 하지 않고 self-echo 와
- * non-self-echo 의 origin 만 바꿔 검증한다.
+ * The `setting.onUpdated` handler comes from `registerSettingReceiver()`
+ * (`src/lib/runtime/settings/settingsReceiver.ts`); `beforeEach` resets the
+ * `state-changed` registry and registers the receiver again.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";

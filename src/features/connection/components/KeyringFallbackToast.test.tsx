@@ -1,18 +1,22 @@
 /**
- * 작성 2026-05-16 (Phase 1 sprint-356) — AC-356-05 / AC-356-06.
+ * Written 2026-05-16 — AC-356-05 / AC-356-06.
  *
- * Linux Secret Service / kwallet 미가용 환경에서 backend 가 `Path C` 로 떨어졌을 때
- * 사용자에게 한 번만 "디스크 암호화 권장" 안내 toast 를 띄우는 컴포넌트. Sentinel 은
- * file sidecar (`.keyring-fallback-dismissed`) — SQLite migration 전 단계라 SQLite
- * meta 미존재. 본 컴포넌트는 backend 와 통신해 `dismissed` 여부를 IPC 로 묻고
- * 사용자가 dismiss 했을 때 그 sentinel 을 set 한다.
+ * The component shows the user a one-time notice recommending disk
+ * encryption when the backend falls back to `Path C` because the Linux Secret
+ * Service / kwallet is unavailable. The sentinel is a file sidecar
+ * (`.keyring-fallback-dismissed`): this stage precedes the SQLite migration,
+ * so the SQLite `meta` table is not there to use. The component takes
+ * `dismissed` as a prop and sets that sentinel over IPC when the user
+ * dismisses.
  *
- * 시나리오:
- *   1. fallbackActive == false → toast 표시 0.
- *   2. fallbackActive == true + dismissed == false → 1회 toast, role="alert".
- *   3. 사용자 Dismiss 버튼 클릭 → sentinel 쓰기 호출 + toast 즉시 사라짐.
- *   4. dismissed == true (이전 boot 에서 set 됨) → toast 표시 0.
- *   5. dismiss IPC 실패해도 UI 는 hide (다음 boot 에서 재시도 — best-effort).
+ * Scenarios:
+ *   1. fallbackActive == false → no toast.
+ *   2. fallbackActive == true + dismissed == false → one toast, role="alert".
+ *   3. The user clicks the Dismiss button → the sentinel write is called and
+ *      the toast disappears immediately.
+ *   4. dismissed == true (set on an earlier boot) → no toast.
+ *   5. The UI hides even if the dismiss IPC fails (retried on the next boot —
+ *      best-effort).
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -20,7 +24,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { KeyringFallbackToast } from "./KeyringFallbackToast";
 
-// IPC mock — backend tauri invoke 는 vitest 환경에서 호출 불가.
+// IPC mock — the backend tauri invoke cannot run in the vitest environment.
 const mockSetDismissed = vi.fn();
 
 vi.mock("@/lib/keyringFallback", () => ({

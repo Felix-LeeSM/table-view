@@ -21,19 +21,15 @@ import { type CategoryKey, DEFAULT_EXPANDED, nodeIdToString } from "./treeRows";
 const EMPTY_EXPANDED: readonly string[] = Object.freeze([]);
 
 /**
- * Handlers + dialog state for `SchemaTree`. Sprint 235 collapses the
- * legacy `confirmDialog` / `renameDialog` / `renameInput` / `renameError`
- * / `isOperating` / `renameInputRef` slots into two simple state slots:
- * `renameTableDialog` and `dropTableDialog`. The 3 handlers
- * `handleDropTable` / `handleStartRename` / `handleConfirmRename`
- * collapse into 2 simple openers (`handleStartRename` + `handleStartDrop`)
- * — both just set the dialog state. The previously inline Safe Mode +
- * history-record + toast paths now live INSIDE the new
+ * Handlers + dialog state for `SchemaTree`. Rename and drop each use one
+ * simple state slot (`renameTableDialog`, `dropTableDialog`), and their
+ * openers (`handleStartRename`, `handleDropTable`) just set that slot. The
+ * Safe Mode + history-record + toast paths live INSIDE the
  * `RenameTableDialog` / `DropTableDialog` modals (which delegate to
  * `useDdlPreviewExecution` for the lifecycle).
  *
- * Stores are read via selector subscription, never `getState()`, so the
- * hook stays test-mockable.
+ * Render-time store reads go through selector subscriptions; callbacks and
+ * effects that need the latest value at call time use `getState()`.
  */
 
 interface UseSchemaTreeActionsArgs {
@@ -44,10 +40,10 @@ interface UseSchemaTreeActionsArgs {
 }
 
 export interface SchemaTreeActions {
-  // Sprint 262 Slice B — derived `(connId, db)` for the connection this
-  // hook is wired to. Exposed so callers (SchemaTree mount effects) can
-  // depend on it without re-deriving the connectionStore selectors.
-  // `null` when no activeDb is resolvable (focused conn isn't connected).
+  // Derived `(connId, db)` for the connection this hook is wired to.
+  // Exposed so callers (SchemaTree mount effects) can depend on it without
+  // re-deriving the connectionStore selectors. `null` when no db is
+  // resolvable (no connected activeDb and no stored default `database`).
   workspaceKey: WorkspaceKey | null;
 
   // Selection state
@@ -75,11 +71,11 @@ export interface SchemaTreeActions {
   globalFilter: string;
   setGlobalFilter: (value: string) => void;
 
-  // Sprint 235 — modal slots. Each slot's null state keeps the modal
-  // closed; setting `{ schemaName, tableName }` opens the matching
-  // dialog. The modal's own commit-success path closes itself by
-  // calling `setRenameTableDialog(null)` / `setDropTableDialog(null)`
-  // through the slot wrapper.
+  // Modal slots. Each slot's null state keeps the modal closed; setting
+  // `{ schemaName, tableName }` opens the matching dialog. The modal's own
+  // commit-success path closes itself by calling
+  // `setRenameTableDialog(null)` / `setDropTableDialog(null)` through the
+  // slot wrapper.
   renameTableDialog: { schemaName: string; tableName: string } | null;
   setRenameTableDialog: (
     state: { schemaName: string; tableName: string } | null,
@@ -94,7 +90,7 @@ export interface SchemaTreeActions {
   setImportCsvDialog: (
     state: { schemaName: string; tableName: string } | null,
   ) => void;
-  // Sprint 226 — create-table modal state (unchanged).
+  // Create-table modal state.
   createTableDialog: { schemaName: string } | null;
   setCreateTableDialog: (state: { schemaName: string } | null) => void;
 
@@ -112,10 +108,9 @@ export interface SchemaTreeActions {
   handleTableClick: (tableName: string, schemaName: string) => void;
   handleTableDoubleClick: (tableName: string, schemaName: string) => void;
   handleOpenStructure: (tableName: string, schemaName: string) => void;
-  // Sprint 235 — both handlers are simple openers. Behavioural diff
-  // from the pre-Sprint 235 versions: the inline rename validation,
-  // tauri call, history record, and toast paths now run inside the
-  // modal (delegated to `useDdlPreviewExecution`).
+  // Both handlers are simple openers. The rename validation, tauri call,
+  // history record, and toast paths run inside the modal (delegated to
+  // `useDdlPreviewExecution`).
   handleDropTable: (tableName: string, schemaName: string) => void;
   handleStartRename: (tableName: string, schemaName: string) => void;
   // #1639 — open the read-only CSV import wizard for a table.
@@ -127,8 +122,8 @@ export interface SchemaTreeActions {
   handleOpenViewStructure: (viewName: string, schemaName: string) => void;
   handleFunctionClick: (funcName: string, schemaName: string) => void;
   handleCreateTable: (schemaName: string) => void;
-  // Sprint 301 — schema / table 컨텍스트 메뉴 export 진입점. 헤더의
-  // Download Popover 와 동일한 useMigrationExport 경로를 재사용.
+  // Export entry points for the schema / table context menu. Reuses the
+  // same useMigrationExport path as the header's Download Popover.
   handleExportSchema: (schemaName: string, include: ExportInclude) => void;
   handleExportTable: (
     tableName: string,
@@ -143,20 +138,20 @@ export function useSchemaTreeActions({
   autoLoadFileAnalyticsSources = false,
   clearFileAnalyticsSourcesOnRefresh = false,
 }: UseSchemaTreeActionsArgs): SchemaTreeActions {
-  // Sprint 262 Slice B — per-workspace sidebar state. Sprint 263 — schema
-  // cache 도 같은 `(connId, db)` 키로 분리됐으므로, workspaceKey 해석은
-  // useSchemaCache 호출 *이전* 으로 끈다. `workspaceKey` 가 null 인
-  // transient 구간 (focused connection 의 activeDb 가 아직 미해석) 에는
-  // db slot 으로 `""` 를 흘려보낸다 — useSchemaCache 의 auto-load 가 이
-  // sentinel 을 보면 fetch 를 건너뛴다. activeDb 가 해석되면 effect 가
-  // 재실행되며 정상 load 가 트리거된다.
+  // Per-workspace sidebar state. The schema cache is also split by the same
+  // `(connId, db)` key, so workspaceKey is resolved *before* the
+  // useSchemaCache call. In the transient window where `workspaceKey` is
+  // null (the focused connection has no resolved activeDb yet and no stored
+  // default `database`), `""` flows in as the db slot — useSchemaCache's
+  // auto-load skips the fetch when it sees this sentinel. Once activeDb
+  // resolves, the effect re-runs and triggers the normal load.
   //
-  // `workspaceKey` 는 ref 에 미러링한다. 그 결과 `setExpandedSchemas` /
-  // `setSelectedNodeId` 가 key 변동에 영향받지 않는 **stable callback** 이
-  // 된다 — SchemaTree 의 auto-expand 효과들이 deps 로 이걸 받기 때문에,
-  // setter 가 key 마다 새 identity 를 가지면 (db1 → db2 → db1 라운드트립에
-  // 효과가 재실행되며 collapse 가 매번 덮어써짐) AC-262-05 의 보존 조건이
-  // 깨진다. ref 패턴이 그 경로를 차단한다.
+  // `workspaceKey` is mirrored into a ref, which makes `setExpandedSchemas`
+  // / `setSelectedNodeId` **stable callbacks** unaffected by key changes.
+  // SchemaTree's auto-expand effects take them as deps, so if a setter got
+  // a new identity per key (the effects re-run on a db1 → db2 → db1
+  // round trip and overwrite the collapse each time), the AC-262-05
+  // preservation condition would break. The ref pattern blocks that path.
   const workspaceKey = useWorkspaceKeyForConnection(connectionId);
   const workspaceKeyRef = useRef(workspaceKey);
   useEffect(() => {
@@ -233,7 +228,7 @@ export function useSchemaTreeActions({
     [setSelectedNodeStore],
   );
 
-  // Sprint 262 Slice B — fresh-workspace seed. #1217 changed the seed from
+  // Fresh-workspace seed. #1217 changed the seed from
   // "all schemas expanded" to "only the first schema expanded" (the product
   // rule for long collapsible lists). Two guards keep it non-destructive:
   //   - session-scoped ref: one seed per `(connId, db)` per component
@@ -280,11 +275,10 @@ export function useSchemaTreeActions({
     Record<string, Set<CategoryKey>>
   >({});
 
-  // Sprint 235 — collapsed dialog state. Each modal owns its own form
-  // state internally; this hook only tracks "which row was right-
-  // clicked" so the slot wrappers can mount the right modal.
-  // Sprint 275 — trigger CRUD moved entirely to StructurePanel; the
-  // sidebar no longer owns CreateTrigger / DropTrigger slots.
+  // Dialog slots. Each modal owns its own form state internally; this hook
+  // only tracks "which row was right-clicked" so the slot wrappers can
+  // mount the right modal. Trigger CRUD lives entirely in StructurePanel;
+  // the sidebar owns no CreateTrigger / DropTrigger slots.
   const [renameTableDialog, setRenameTableDialog] = useState<{
     schemaName: string;
     tableName: string;
@@ -459,9 +453,8 @@ export function useSchemaTreeActions({
     [tableActivityEntries, connectionId, workspaceKey],
   );
 
-  // Sprint 235 — opener for the new DropTableDialog. The legacy version
-  // built a `confirmDialog` state with an inline tauri.dropTable
-  // closure; the Phase 27 modal owns the entire commit lifecycle.
+  // Opener for DropTableDialog. The Phase 27 modal owns the entire commit
+  // lifecycle.
   const handleDropTable = useCallback(
     (tableName: string, schemaName: string) => {
       setDropTableDialog({ schemaName, tableName });
@@ -469,8 +462,7 @@ export function useSchemaTreeActions({
     [],
   );
 
-  // Sprint 235 — opener for the new RenameTableDialog. Same shape as
-  // handleDropTable.
+  // Opener for RenameTableDialog. Same shape as handleDropTable.
   const handleStartRename = useCallback(
     (tableName: string, schemaName: string) => {
       setRenameTableDialog({ schemaName, tableName });
@@ -559,10 +551,11 @@ export function useSchemaTreeActions({
     setCreateTableDialog({ schemaName });
   }, []);
 
-  // Sprint 301 — useMigrationExport 를 직접 import 해 schema / table
-  // 컨텍스트 메뉴 진입점을 wire. 헤더 Download Popover 가 사용하는
-  // hook 인스턴스와는 별개 — `isExporting` lock 도 분리되지만, 사용자
-  // 흐름상 두 진입점에서 동시 export 가 일어날 시나리오는 없다.
+  // Imports useMigrationExport directly to wire the schema / table
+  // context-menu entry points. This hook instance is separate from the one
+  // the header Download Popover uses, so the `isExporting` lock is separate
+  // too, but in the user flow no scenario exports from both entry points at
+  // the same time.
   const { exportSchema, exportTable } = useMigrationExport();
   const handleExportSchema = useCallback(
     (schemaName: string, include: ExportInclude) => {
@@ -613,7 +606,7 @@ export function useSchemaTreeActions({
   );
 
   return {
-    // Slice B — derived workspace identity for the wired connection.
+    // Derived workspace identity for the wired connection.
     workspaceKey,
 
     // Selection

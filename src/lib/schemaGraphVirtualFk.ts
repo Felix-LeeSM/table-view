@@ -43,7 +43,8 @@ export interface VirtualForeignKeyLink {
  * Relationship kinds an ERD edge can have. The kind must be readable without
  * colour vision, so {@link ERD_RELATIONSHIP_ENCODINGS} carries no colour: the
  * canvas keeps its own palette and this table decides line pattern, arrow head
- * and legend wording on top of it (issue #1663, ADR 0055 "색 단독 인코딩 금지").
+ * and legend wording on top of it (issue #1663; ADR 0055: no colour-only
+ * encoding).
  */
 export type ErdRelationshipKind = "foreign-key" | "virtual-foreign-key";
 

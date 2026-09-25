@@ -119,11 +119,12 @@ export async function importConnections(json: string): Promise<ImportResult> {
 }
 
 /**
- * Encrypted export. 2026-05-05 — backend는 12-word BIP39 mnemonic을 자동
- * 생성하여 envelope과 함께 단일 응답으로 돌려준다. 사용자 입력 master
- * password는 폐기 — 약한 password가 envelope 강도의 floor가 되는 시나리오
- * 자체를 제거한다. 호출자는 `password`를 화면에 단 한 번 표시하고
- * dialog 닫힐 때 메모리에서 지운다.
+ * Encrypted export. 2026-05-05 — the backend auto-generates a 12-word BIP39
+ * mnemonic and returns it with the envelope in a single response. The
+ * user-entered master password was dropped, which removes the scenario where
+ * a weak password becomes the floor of the envelope's strength. The caller
+ * shows `password` on screen only once and clears it from memory when the
+ * dialog closes.
  */
 export interface EncryptedExportResult {
   password: string;

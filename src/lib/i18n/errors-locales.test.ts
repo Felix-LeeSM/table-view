@@ -2,17 +2,17 @@ import { DRIVER_ERROR_CATEGORIES } from "@lib/errors/driverErrorHints";
 import { describe, expect, it } from "vitest";
 import i18n from "./index";
 
-// Purpose: en/ko 로케일 드리프트를 잠그는 두 가드를 둔다.
-//   1) errors ns 의 classifyDriverError 파생 키가 en/ko 양쪽에 존재하고
-//      실제 문구로 resolve 되는지 (issue #1056, #1227).
-//   2) 전 네임스페이스에서 flatten(en) 키 집합 == flatten(ko) 키 집합 (issue #1582).
-//      #1604 가 en+ko 쌍으로 잔여 영문을 번역해 base 는 drift 0 이어야 한다.
+// Purpose: two guards that lock en/ko locale drift.
+//   1) The errors-ns keys derived from classifyDriverError exist in both en
+//      and ko and resolve to real text (issue #1056, #1227).
+//   2) Across all namespaces, the flatten(en) key set == the flatten(ko) key
+//      set (issue #1582). #1604 translated the remaining English as en+ko
+//      pairs, so the base must show zero drift.
 //
-// 위치 주의: 이 파일은 `locales/` **밖**에 둔다. `index.ts` 의
-// `import.meta.glob("./locales/*.ts")` 는 파일명=네임스페이스 계약이라
-// locales/ 안의 test 파일까지 네임스페이스로 import 해 앱 부팅/빌드를 깬다 (#1227).
+// Location: keep this file **outside** `locales/` — see the
+// `import.meta.glob` note in `src/lib/i18n/index.ts` (#1227).
 
-/** 중첩 리소스를 leaf path -> value 로 평탄화한다. 배열은 leaf 로 취급. */
+/** Flattens nested resources to leaf path -> value; arrays count as leaves. */
 function flattenLeaves(obj: unknown, prefix = ""): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (obj == null || typeof obj !== "object") return out;
@@ -27,7 +27,7 @@ function flattenLeaves(obj: unknown, prefix = ""): Record<string, unknown> {
   return out;
 }
 
-/** init 된 인스턴스에서 등록된 네임스페이스 목록을 정렬해 얻는다. */
+/** Sorted list of the namespaces registered on the initialized instance. */
 const namespaces = (
   Array.isArray(i18n.options.ns)
     ? i18n.options.ns
@@ -37,12 +37,14 @@ const namespaces = (
   .sort();
 
 describe("errors namespace", () => {
-  // 카테고리 SOT(union 파생 배열)에서 그대로 순회 — 하드코딩 없음. 카테고리를
-  // 추가하면 이 테스트가 자동으로 새 카테고리의 en/ko 문구를 요구한다 (#1227).
+  // Iterate the category SOT (the array derived from the union) as is — no
+  // hard-coding. Adding a category makes this test demand en/ko text for the
+  // new category automatically (#1227).
   const categories = DRIVER_ERROR_CATEGORIES;
 
-  // Reason: 카테고리를 추가하고 문구를 빠뜨리면 사용자에게 raw 키가 노출된다.
-  //         en/ko 모두 title+hint 를 강제해 #1074 이전에도 미완성 문구를 막는다 (2026-07-03).
+  // Reason: adding a category without its text exposes the raw key to users.
+  //         Requiring title+hint in both en and ko blocks incomplete text even
+  //         before #1074 (2026-07-03).
   for (const locale of ["en", "ko"] as const) {
     for (const category of categories) {
       it(`resolves ${locale} title+hint for ${category}`, () => {
@@ -58,8 +60,9 @@ describe("errors namespace", () => {
   }
 });
 
-// issue #1582: parity 강제를 errors ns 한정에서 전 네임스페이스로 확대. 한쪽
-// 로케일에만 키가 추가/삭제되면 사용자에게 raw 키(또는 fallback 언어)가 노출된다.
+// issue #1582: parity enforcement widened from the errors ns to all
+// namespaces. A key added to or removed from only one locale exposes the raw
+// key (or the fallback language) to users.
 describe("en/ko key parity (all namespaces)", () => {
   for (const ns of namespaces) {
     it(`en and ko expose identical keys for "${ns}"`, () => {
@@ -81,8 +84,9 @@ describe("en/ko key parity (all namespaces)", () => {
   }
 });
 
-// 보간 변수 parity(placeholder 집합 일치)는 의도적으로 두지 않는다: en 은
-// `"{{total}} change{{plural}} pending"` 처럼 영어 복수화용 `{{plural}}` 변수를
-// 쓰지만 한국어는 복수 표지가 없어 이를 생략한다(query.pendingChanges.summary,
-// query.resultGrid.rowsAffected). 이는 드리프트가 아니라 언어별 정당한 차이라
-// placeholder 집합 동일성을 강제하면 false positive 가 된다 (#1582).
+// Interpolation-variable parity (matching placeholder sets) is deliberately
+// not enforced: en uses a `{{plural}}` variable for English plurals, as in
+// `"{{total}} change{{plural}} pending"`, but Korean has no plural marker and
+// omits it (query.pendingChanges.summary, query.resultGrid.rowsAffected).
+// That is a legitimate per-language difference, not drift, so enforcing equal
+// placeholder sets would produce false positives (#1582).

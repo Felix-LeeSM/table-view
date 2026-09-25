@@ -7,11 +7,11 @@ import {
 
 describe("sqlSafety.analyzeStatement — AST destructive and write contracts", () => {
   // -------------------------------------------------------------------------
-  // Sprint 391 (2026-05-17) — AST-based DDL destructive classifier callsite.
-  // 본 블록은 *WASM 모듈을 명시적으로 preload* 한 뒤 `analyzeStatement` 가
-  // `parseSqlPreloaded` 경로를 거치는 것을 가정한다. 모든 case 의 반환 shape
-  // (`kind` / `severity` / `reasons`) 는 정규식 fallback 과 *동일* — 호출자
-  // 영향 0 임을 입증.
+  // AST-based DDL destructive classifier callsite (2026-05-17).
+  // This block *explicitly preloads the WASM module* and assumes
+  // `analyzeStatement` then goes through the `parseSqlPreloaded` path. The
+  // return shape of every case (the `kind` / `severity` / `reasons` keys) is
+  // *identical* to the regex fallback, which proves callers are unaffected.
   // -------------------------------------------------------------------------
   describe("Sprint 391 — AST-based DDL destructive classifier (AC-391-X)", () => {
     usePreloadedSqlAst();
@@ -38,11 +38,11 @@ describe("sqlSafety.analyzeStatement — AST destructive and write contracts", (
     });
 
     it("[AC-391-X02c] DROP SEQUENCE my_seq → ddl-drop / danger via AST (new variant)", () => {
-      // Pre-sprint-391 regex did NOT match SEQUENCE — it fell through to
-      // the `^DROP\b/^ALTER\b/^CREATE\b` catch-all (`ddl-other` / WARN).
-      // The AST path correctly classifies it as `ddl-drop` / DANGER.
-      // This is the *only* case where AST vs regex differ; sqlSafety
-      // test suite previously had no SEQUENCE coverage so no regression.
+      // Before the AST path, the regex did NOT match SEQUENCE — it fell
+      // through to the `^DROP\b/^ALTER\b/^CREATE\b` catch-all
+      // (`ddl-other` / WARN). The AST path correctly classifies it as
+      // `ddl-drop` / DANGER. The sqlSafety test suite previously had no
+      // SEQUENCE coverage, so no regression.
       const a = analyzeStatement("DROP SEQUENCE my_seq");
       expect(a.kind).toBe("ddl-drop");
       expect(a.severity).toBe("danger");
@@ -87,10 +87,10 @@ describe("sqlSafety.analyzeStatement — AST destructive and write contracts", (
     });
 
     it("[AC-391-X06b] ALTER TABLE users DROP INDEX idx → ddl-alter-drop / danger via AST (MySQL-style)", () => {
-      // Pre-sprint-391 regex matched COLUMN/CONSTRAINT only — `DROP INDEX`
-      // on ALTER TABLE fell through to `ddl-other` / WARN. AST correctly
-      // classifies it as `ddl-alter-drop` / DANGER. Existing sqlSafety
-      // tests do not cover this so no regression.
+      // Before the AST path, the regex matched COLUMN/CONSTRAINT only —
+      // `DROP INDEX` on ALTER TABLE fell through to `ddl-other` / WARN. AST
+      // correctly classifies it as `ddl-alter-drop` / DANGER. Existing
+      // sqlSafety tests do not cover this so no regression.
       const a = analyzeStatement("ALTER TABLE users DROP INDEX idx");
       expect(a.kind).toBe("ddl-alter-drop");
       expect(a.severity).toBe("danger");
@@ -98,17 +98,18 @@ describe("sqlSafety.analyzeStatement — AST destructive and write contracts", (
     });
 
     it("[AC-391-X07] SELECT regression — AST path classifies SELECT as info (sprint-393a)", () => {
-      // Sprint-393a — SELECT routes through the AST. The widened shape
-      // (FROM list, etc.) maps to `kind:'select'` / `severity:'info'` —
-      // same result as the pre-sprint-393a regex path.
+      // SELECT routes through the AST. The widened shape (FROM list, etc.)
+      // maps to `kind:'select'` / `severity:'info'` — same result as the
+      // earlier regex path.
       const a = analyzeStatement("SELECT * FROM users");
       expect(a.kind).toBe("select");
       expect(a.severity).toBe("info");
     });
 
     it("[AC-391-X07b] DELETE regression — DML still routes through regex (AST scope is DDL only)", () => {
-      // Sprint-391 AST does NOT cover DML. The DELETE branch fires
-      // before the DDL preload-AST branch, so this case is unaffected.
+      // The test title predates AST coverage of DML: DML now routes through
+      // the AST as well (see the DML write triad block below), and a
+      // WHERE-less DELETE still classifies as `dml-delete` / danger.
       const a = analyzeStatement("DELETE FROM users");
       expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("danger");
@@ -125,11 +126,12 @@ describe("sqlSafety.analyzeStatement — AST destructive and write contracts", (
   });
 
   // -------------------------------------------------------------------------
-  // Sprint 392 (2026-05-18) — AST-based DML write triad classifier callsite.
-  // Mirrors the sprint-391 block: preload the WASM module so
-  // `parseSqlPreloaded` resolves to a real AST shape (the mock above
-  // implements an inline mini-parser), then assert every DML case routes
-  // through the AST without changing the return shape contract.
+  // AST-based DML write triad classifier callsite (2026-05-18).
+  // Mirrors the DDL destructive block above: preload the WASM module so
+  // `parseSqlPreloaded` resolves to a real AST shape (the mock in
+  // `sqlSafetyTestHarness.ts` implements an inline mini-parser), then
+  // assert every DML case routes through the AST without changing the
+  // return shape contract.
   // -------------------------------------------------------------------------
   describe("Sprint 392 — AST-based DML write triad classifier (AC-392-X)", () => {
     usePreloadedSqlAst();

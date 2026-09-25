@@ -1,7 +1,7 @@
 /**
- * Sprint 147 — AC-149-* regression tests.
+ * AC-149-* regression tests.
  *
- * Sprint 140 shipped the SelectionTree + encrypted-only export pane;
+ * The export pane is the SelectionTree plus an encrypted-only export; on
  * 2026-05-05 the master-password input was replaced by an auto-generated
  * BIP39 mnemonic. This file locks the AC-149-* invariants so a future
  * change that
@@ -105,7 +105,7 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
     const [ids] = firstCall;
     expect(ids).toEqual(["c2"]);
     expect(ids).toHaveLength(1);
-    // 자동 생성으로 전환 — 백엔드는 password 인자를 받지 않는다.
+    // Switched to auto-generation — the backend takes no password argument.
     expect(firstCall).toHaveLength(1);
     // Plaintext path must never be wired up.
     expect(exportConnections).not.toHaveBeenCalled();
@@ -213,8 +213,8 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
     const ids = callArgs[0] as string[];
     expect(new Set(ids)).toEqual(new Set(["plain-1", "secret-1", "secret-2"]));
     expect(ids).toHaveLength(3);
-    // Plaintext command must remain unwired — Sprint 140 removed the
-    // plaintext button and AC-149-5 keeps it removed.
+    // Plaintext command must remain unwired — the plaintext button was
+    // removed and AC-149-5 keeps it removed.
     expect(exportConnections).not.toHaveBeenCalled();
   });
 

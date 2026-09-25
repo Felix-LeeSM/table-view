@@ -60,8 +60,8 @@ describe("MongoFormFields", () => {
     renderAllSections();
     expect(screen.getByLabelText("User (optional)")).toBeInTheDocument();
     expect(screen.getByLabelText("Password (optional)")).toBeInTheDocument();
-    // Sprint 381 (2026-05-17) — Mongo db-contract α: database 의 required
-    // 가 풀린다. label = "Database (optional)" 로 affordance 명시.
+    // 2026-05-17 — Mongo db-contract α: `database` is no longer required.
+    // The label "Database (optional)" makes that affordance explicit.
     expect(screen.getByLabelText("Database (optional)")).toBeInTheDocument();
     expect(screen.getByLabelText("Auth Source")).toBeInTheDocument();
     expect(screen.getByLabelText("Replica Set")).toBeInTheDocument();

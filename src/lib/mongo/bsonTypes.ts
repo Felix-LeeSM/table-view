@@ -1,25 +1,28 @@
 /**
- * Sprint 323 — Slice G.1: canonical EJSON BSON wrapper helpers.
+ * Canonical EJSON BSON wrapper helpers.
  *
- * 사용처:
- * - `BsonTypeEditor` 가 사용자 raw-string 을 type-aware 로 검증/패키징.
- * - F.2 nested edit / top-level cell edit 의 commit path 가 wrapper 를
- *   유지한 채 mqlGenerator 로 흘려보낸다 (Sprint 324, G.2 wire-up).
+ * Used by:
+ * - `BsonTypeEditor`, which validates and packages the user's raw string
+ *   type-aware.
+ * - The commit path of F.2 nested edits / top-level cell edits, which keeps
+ *   the wrapper intact on its way to mqlGenerator.
  *
  * Invariants:
- * - canonical EJSON shape 만 인식. `{ $oid: x, extra: y }` 같은 multi-key
- *   object 는 plain object 로 취급 (BSON wrapper 가 아님).
- * - 표현 precision 보존 — Decimal128 은 string 유지 (float 캐스팅 금지).
+ * - Recognizes only the canonical EJSON shape. A multi-key object such as
+ *   `{ $oid: x, extra: y }` is treated as a plain object (not a BSON
+ *   wrapper).
+ * - Preserves representation precision — Decimal128 stays a string (no
+ *   float casting).
  */
 
 export type BsonType = "objectId" | "date" | "decimal128" | "binData";
 
-/** ObjectId — 24-hex 소문자/대문자 모두 허용 (mongo canonical 은 소문자
- *  이지만 사용자 input 은 대문자도 흔하다). */
+/** ObjectId — 24 hex chars, lowercase or uppercase (Mongo's canonical form
+ *  is lowercase, but uppercase user input is common). */
 const OID_REGEX = /^[0-9a-fA-F]{24}$/;
-/** Base64 strict — `=` padding 까지 허용. 1자~수천자 길이. */
+/** Base64 strict — allows `=` padding. 1 to several thousand chars long. */
 const BASE64_REGEX = /^[A-Za-z0-9+/]+={0,2}$/;
-/** Decimal — 사용자 입력 numeric string. 부호, 소수점, 지수 허용. */
+/** Decimal — user-typed numeric string. Sign, decimal point, exponent OK. */
 const DECIMAL_REGEX = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -31,8 +34,8 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   );
 }
 
-/** canonical EJSON wrapper 면 그 type, 아니면 null. multi-key object 는
- *  wrapper 가 아니므로 null. */
+/** The wrapper type for a canonical EJSON wrapper, otherwise null. A
+ *  multi-key object is not a wrapper, so it yields null. */
 export function detectBsonType(value: unknown): BsonType | null {
   if (!isPlainRecord(value)) return null;
   const keys = Object.keys(value);
@@ -55,7 +58,7 @@ export type CoerceResult =
   | { value: Record<string, unknown> }
   | { error: string };
 
-/** raw user input → canonical EJSON object, 또는 검증 실패 메시지. */
+/** Raw user input → canonical EJSON object, or a validation error message. */
 export function coerceToEjson(type: BsonType, rawInput: string): CoerceResult {
   switch (type) {
     case "objectId":
@@ -94,8 +97,9 @@ export function coerceToEjson(type: BsonType, rawInput: string): CoerceResult {
   }
 }
 
-/** canonical EJSON wrapper → 사용자가 편집할 raw string. detect 미스매치
- *  시에도 best-effort 반환 (호출자 책임으로 검증). */
+/** Canonical EJSON wrapper → raw string for the user to edit. Returns a
+ *  best-effort value even on a detect mismatch (validation is the caller's
+ *  job). */
 export function ejsonToEditableString(type: BsonType, value: unknown): string {
   if (!isPlainRecord(value)) return "";
   switch (type) {

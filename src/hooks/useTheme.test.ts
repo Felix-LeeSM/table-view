@@ -1,7 +1,8 @@
-// 작성 (legacy) — `useTheme` hook 의 backwards-compat 검증.
-// 2026-05-16 update (Phase 4 sprint-368) — `setMode` 가 IPC 호출이 된 후
-// `@tauri-apps/api/core` 를 mock 해 jsdom 에서 await 가능. `setTheme` 호출
-// 후 LS write 단언은 subscriber 의 sync write 를 기다리도록 await 추가.
+// Written (legacy) — backwards-compat checks for the `useTheme` hook.
+// 2026-05-16 update (state-management-strategy Phase 4) — since `setMode`
+// became an IPC call, the tests mock `@tauri-apps/api/core` so it can be
+// awaited under jsdom. LS-write assertions after a `setTheme` call await it
+// so the subscriber's sync write has run.
 
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";

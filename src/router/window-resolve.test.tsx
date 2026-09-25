@@ -1,20 +1,21 @@
 /**
- * 작성 2026-05-16 (Phase 3 sprint-361)
+ * Written 2026-05-16 (state-management-strategy Phase 3)
  *
- * 사유: sprint-361 — per-conn workspace 윈도우 라벨 (`workspace-{conn_id}`)
- * 마이그. AppRouter 가 새 패턴을 인식해 `WorkspacePage` 를 렌더하는지 확인.
+ * Reason: migration to the per-conn workspace window label
+ * (`workspace-{conn_id}`). Checks that AppRouter recognizes the new pattern
+ * and renders `WorkspacePage`.
  *
- * AC-361-06 라우터 인식 매트릭스:
+ * AC-361-06 router recognition matrix:
  *   - `"launcher"`              → `HomePage` (`LauncherPage`)
  *   - `"workspace-conn-1"`      → `WorkspacePage`
  *   - `"workspace-<UUID>"`      → `WorkspacePage`
- *   - 알려지지 않은 label       → launcher fallback + warn
- *   - 레거시 단일 `"workspace"` → launcher fallback (sprint-361 이후
- *     bare workspace label 은 더 이상 발급되지 않으므로 미인식 처리)
+ *   - unknown label             → launcher fallback + warn
+ *   - legacy bare `"workspace"` → launcher fallback (the app no longer
+ *     issues the bare workspace label, so it is treated as unrecognized)
  *
- * 기존 `__tests__/window-bootstrap.test.tsx` 의 `"workspace"` 단독 라벨
- * 경로는 sprint-361 이후 deprecated. 본 파일은 새 라벨 패턴에 대한
- * 회귀 가드.
+ * The bare `"workspace"` label case was retired from
+ * `__tests__/window-bootstrap.test.tsx`; this file is the regression guard
+ * for the new label pattern.
  */
 
 import { cleanup, render, screen } from "@testing-library/react";
@@ -122,10 +123,12 @@ describe("AC-361-06: AppRouter window-label resolution", () => {
   });
 
   it("falls back to LauncherPage + warns for the legacy bare 'workspace' label", () => {
-    // 사유: sprint-361 이후 backend 는 더 이상 bare `"workspace"` label 로
-    // window 를 만들지 않는다 (`launcher.rs`/`open_workspace_window.rs` 가
-    // `workspace-{conn_id}` 만 emit). 만약 외부 도구나 잔존 path 가 그
-    // label 을 surface 하면 unknown 으로 처리 — fallback + warn.
+    // Reason: the app no longer opens a window with the bare `"workspace"`
+    // label — `open_workspace_window.rs` builds `workspace-{conn_id}`, and
+    // the bare-label builder left in `launcher.rs` is reached only through
+    // `showWindow("workspace")`, which no production code calls. If an
+    // external tool or a leftover path surfaces that label, treat it as
+    // unknown — fallback + warn.
     mockedGetLabel.mockReturnValue("workspace");
     render(<AppRouter />);
     expect(screen.getByTestId("launcher-page")).toBeInTheDocument();
@@ -160,9 +163,9 @@ describe("AC-361-06: AppRouter window-label resolution", () => {
   });
 
   it("rejects empty workspace label 'workspace-' as unknown (fallback to launcher)", () => {
-    // 사유: `parseWorkspaceLabel("workspace-")` 가 null 을 반환해야 함을
-    // window-label.test.ts 에서 잠갔지만, AppRouter 가 그 결정에 맞춰
-    // fallback 도 거치는지 별도로 검증.
+    // Reason: window-label.test.ts locks that
+    // `parseWorkspaceLabel("workspace-")` returns null; this separately checks
+    // that AppRouter also takes the fallback for it.
     mockedGetLabel.mockReturnValue("workspace-");
     render(<AppRouter />);
     expect(screen.getByTestId("launcher-page")).toBeInTheDocument();

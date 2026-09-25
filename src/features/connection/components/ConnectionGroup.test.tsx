@@ -511,7 +511,7 @@ describe("ConnectionGroup", () => {
   });
 
   // -----------------------------------------------------------------------
-  // AC-10 / Sprint 78 AC-05: Delete Group shows confirmation dialog first
+  // AC-10: Delete Group shows confirmation dialog first
   // -----------------------------------------------------------------------
   it("shows confirmation dialog (not immediate delete) when Delete Group menu item is clicked", () => {
     render(<ConnectionGroup group={makeGroup()} connections={[]} />);
@@ -526,7 +526,7 @@ describe("ConnectionGroup", () => {
       fireEvent.click(deleteBtn);
     });
 
-    // Sprint 78 AC-05: removeGroup must NOT fire until the user confirms.
+    // removeGroup must NOT fire until the user confirms.
     expect(mockRemoveGroup).not.toHaveBeenCalled();
 
     // The alert dialog should be visible with the explanation text.
@@ -937,7 +937,7 @@ describe("ConnectionGroup", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 78 AC-02 — Color accent visible in header
+  // Color accent visible in header
   // -----------------------------------------------------------------------
   it("renders the color accent swatch with the group color as background", () => {
     render(
@@ -969,7 +969,7 @@ describe("ConnectionGroup", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 78 — "Change Color" menu opens the edit dialog
+  // "Change Color" menu opens the edit dialog
   // -----------------------------------------------------------------------
   it("opens the GroupDialog when 'Change Color' is chosen", () => {
     render(<ConnectionGroup group={makeGroup()} connections={[]} />);
@@ -984,7 +984,7 @@ describe("ConnectionGroup", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 78 AC-05 — Delete dialog mentions ungrouped behaviour and
+  // Delete dialog mentions ungrouped behaviour and
   // connection count copy changes with pluralization
   // -----------------------------------------------------------------------
   it("uses singular copy when the group contains exactly one connection", () => {
@@ -1035,7 +1035,8 @@ describe("ConnectionGroup", () => {
   // -----------------------------------------------------------------------
   // Phase 15 AC-15-03 — inGroup prop passed to ConnectionItem
   // -----------------------------------------------------------------------
-  // Reason: Phase 15 AC-15-03 — group 내 connection이 inGroup prop을 받음 (2026-04-28)
+  // Reason: Phase 15 AC-15-03 — a connection inside a group receives the
+  // inGroup prop (2026-04-28)
   it("passes inGroup to ConnectionItem when rendering connections inside a group", () => {
     render(
       <ConnectionGroup
@@ -1049,13 +1050,13 @@ describe("ConnectionGroup", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 369 (Phase 4, Q20.3) — Collapse persistence migrated LS → SQLite.
+  // Q20.3 — Collapse persistence migrated LS → SQLite.
   // -----------------------------------------------------------------------
-  // 작성 이유 (2026-05-16): `table-view-group-collapsed` localStorage map 폐기.
-  // `set_group_collapsed(groupId, collapsed)` IPC 가 SQLite SOT 에 commit.
-  // 본 컴포넌트는 group.collapsed prop 으로 mount → 그 값이 SQLite hydrate
-  // 결과를 반영 (snapshot 가 hydrate 하는 후속 sprint 에서 보장). 본 sprint
-  // 의 invariant 는 (1) LS getItem/setItem 0회, (2) toggle 시 IPC 1회.
+  // Reason (2026-05-16): the `table-view-group-collapsed` localStorage map is
+  // retired. The `set_group_collapsed(groupId, collapsed)` IPC commits to the
+  // SQLite SOT. This component mounts from the group.collapsed prop.
+  // Invariants: (1) zero LS getItem/setItem calls, (2) one IPC call per
+  // toggle.
   it("Sprint 369: toggle dispatches setGroupCollapsed IPC and never touches the legacy LS key", () => {
     const getSpy = vi.spyOn(window.localStorage, "getItem");
     const setSpy = vi.spyOn(window.localStorage, "setItem");
@@ -1182,7 +1183,7 @@ describe("ConnectionGroup", () => {
 
   // Reason: 2026-05-05 — wrapper has top/bottom padding so dropping into the
   // gap above/below the visible header or member rows still hits the group.
-  // This is the "각 그룹의 영역을 넓혀줘" UX request — no visual indicator,
+  // This is the "widen each group's area" UX request — no visual indicator,
   // just a more forgiving hit area.
   it("renders the wrapper with vertical padding so the drop hit area extends beyond the header", () => {
     const { container } = render(
@@ -1201,7 +1202,8 @@ describe("ConnectionGroup", () => {
   // stays removed.
   // -----------------------------------------------------------------------
   describe("drop-target preview", () => {
-    // Reason: 드래그 UX 통일 요구 — drop 전 대상 그룹 하이라이트 (2026-07-18)
+    // Reason: unify the drag UX — highlight the target group before the
+    // drop (2026-07-18)
     it("marks the wrapper as a drop target when isDropTarget is set", () => {
       render(
         <ConnectionGroup group={makeGroup()} connections={[]} isDropTarget />,
@@ -1212,7 +1214,8 @@ describe("ConnectionGroup", () => {
       );
     });
 
-    // Reason: 하이라이트 상태 누수 방지 — 비드래그 기본 상태엔 표시 없음 (2026-07-18)
+    // Reason: prevent a leaked highlight — nothing is marked in the default
+    // non-drag state (2026-07-18)
     it("does not mark the wrapper as a drop target by default", () => {
       render(<ConnectionGroup group={makeGroup()} connections={[]} />);
       expect(
@@ -1220,7 +1223,8 @@ describe("ConnectionGroup", () => {
       ).not.toHaveAttribute("data-drop-target");
     });
 
-    // Reason: dragover 시 부모가 drop 대상 그룹을 추적하도록 id 보고 (2026-07-18)
+    // Reason: on dragover, report the id so the parent can track the
+    // drop-target group (2026-07-18)
     it("reports its id via onDragOverGroup while a connection is dragged over it", () => {
       _draggedConnectionId = "conn-42";
       const onDragOverGroup = vi.fn();
@@ -1239,7 +1243,8 @@ describe("ConnectionGroup", () => {
       expect(onDragOverGroup).toHaveBeenCalledWith("g1");
     });
 
-    // Reason: 활성 드래그가 아닐 때 헛 하이라이트 방지 — early return (2026-07-18)
+    // Reason: prevent a false highlight when no drag is active — early
+    // return (2026-07-18)
     it("does not report onDragOverGroup when no connection is being dragged", () => {
       _draggedConnectionId = null;
       const onDragOverGroup = vi.fn();
@@ -1258,7 +1263,8 @@ describe("ConnectionGroup", () => {
       expect(onDragOverGroup).not.toHaveBeenCalled();
     });
 
-    // Reason: 하이라이트 추가가 기존 drop→moveConnectionToGroup 을 깨지 않음 (2026-07-18)
+    // Reason: adding the highlight does not break the existing
+    // drop→moveConnectionToGroup (2026-07-18)
     it("still moves the connection into the group on drop when highlighted", async () => {
       _draggedConnectionId = "conn-42";
       render(

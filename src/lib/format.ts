@@ -1,12 +1,13 @@
-// Sprint 238 — `CELL_DISPLAY_LIMIT` + `truncateCell` 폐기 (AC-238-05).
-// 가로 폭 통제는 `useColumnWidths` + CSS ellipsis 가 담당.
+// `CELL_DISPLAY_LIMIT` + `truncateCell` were removed (AC-238-05).
+// `useColumnWidths` + CSS ellipsis handle horizontal width.
 
 import { safeStringifyCell } from "@lib/jsonCell";
 import Decimal from "decimal.js";
 
-// Sprint 305 — copy format 의 cell rendering 헬퍼. ADR 0026 의 BigInt /
-// Decimal cell 이 raw `JSON.stringify` 를 만나면 throw / `{}` 로 망가지므로
-// 명시 분기. tab/csv/sql 세 갈래가 동일 로직.
+// Cell rendering helper for the copy formats. ADR 0026 BigInt / Decimal
+// cells throw or collapse to `{}` under raw `JSON.stringify`, so they get
+// explicit branches. The tab and csv paths share this helper; the sql path
+// repeats the same branches in `escapeSqlValue`.
 function cellToFlatString(value: unknown): string {
   if (value == null) return "";
   if (value instanceof Decimal) return value.toString();
@@ -50,7 +51,7 @@ export function rowsToJson(data: CopyRowData): string {
     });
     return obj;
   });
-  // Sprint 305 — replacer 가 BigInt/Decimal 을 digit string 으로 emit.
+  // The replacer emits BigInt/Decimal as digit strings.
   return safeStringifyCell(objects, 2);
 }
 
@@ -87,9 +88,9 @@ function escapeSqlValue(value: unknown): string {
   if (typeof value === "number" || typeof value === "boolean") {
     return String(value);
   }
-  // Sprint 305 — BigInt / Decimal 은 unquoted numeric literal 로 emit.
-  // INSERT 회수 시 numeric column 에 string literal 로 넣으면 PG cast 오류
-  // 발생 — 원본 디지트를 그대로 보존.
+  // BigInt / Decimal are emitted as unquoted numeric literals: running the
+  // INSERT with a string literal in a numeric column raises a PG cast error,
+  // so the original digits are kept as they are.
   if (value instanceof Decimal) return value.toString();
   if (typeof value === "bigint") return value.toString();
   const str =

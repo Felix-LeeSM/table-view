@@ -1,10 +1,10 @@
-// Sprint 401 (2026-05-17) — public types for the mongosh AST.
+// 2026-05-17 — public types for the mongosh AST.
 //
-// 작성 이유: sprint-384 의 4-file split 에서 본 타입들이 `lexer.ts` 에 있었으나,
-// sprint-401 가 lexer / parser / argList 를 Rust+WASM 로 옮기면서 TS-side
-// 타입만 따로 분리. WASM module 의 `parse_mongosh` 반환 shape 와 1:1
-// 매칭되며, Rust crate (`src-tauri/mongosh-parser-core/src/ast.rs`) 의
-// `MongoshStatement` 와 `MongoshErrorKind` enum 을 mirror 한다.
+// Reason: these types used to live in `lexer.ts`; when the lexer / parser /
+// argList moved to Rust+WASM, only the TS-side types were split out. They
+// match the shape that `parse_mongosh` in the WASM module returns 1:1 and
+// mirror the `MongoshStatement` and `MongoshErrorKind` enums of the Rust
+// crate (`src-tauri/mongosh-parser-core/src/ast.rs`).
 
 export type MongoshErrorKind =
   | "unsupported-syntax"
@@ -16,9 +16,9 @@ export type MongoshErrorKind =
 
 export interface MongoshAdminCommand {
   readonly kind: "admin-command";
-  /** `runCommand` 또는 `adminCommand`. caller 가 dispatch 분기에 사용. */
+  /** `runCommand` or `adminCommand`. */
   readonly commandName: "runCommand" | "adminCommand";
-  /** 본문 (`{<command>: <arg>, ...options}`). JSON-compatible. */
+  /** The body (`{<command>: <arg>, ...options}`). JSON-compatible. */
   readonly body: Record<string, unknown>;
 }
 

@@ -1,21 +1,23 @@
-// Sprint 252 (2026-05-09) — PreviewDialog Copy 버튼 신규.
+// 2026-05-09 — new PreviewDialog Copy button.
 //
-// Why: ADR 0022 Phase 5 / Sprint 250-251 polish 시리즈의 마지막 이음매 —
-// 사용자가 commit 직전 SQL/MQL 본문을 외부로 가져갈 수 있도록 하는
-// affordance. Copy 버튼은 header 우측에 위치 (footer 가 없는 read-only
-// viewer 도 활용 가능), `data-testid="preview-dialog-copy"` 통일,
-// `navigator.clipboard.writeText` carrier 호출, transient "Copied" /
-// "Copy failed" dialog-local 피드백, unmount 시 timer cleanup.
+// Why: the last seam of the ADR 0022 Phase 5 polish series — an affordance
+// that lets the user copy the SQL/MQL body out right before commit. The
+// Copy button sits at the right of the header (so read-only viewers without
+// a footer can use it too), uses `data-testid="preview-dialog-copy"`, calls
+// the `navigator.clipboard.writeText` carrier, shows transient "Copied" /
+// "Copy failed" dialog-local feedback, and clears its timer on unmount.
 //
-// /tdd 흐름: 본 파일은 구현보다 먼저 작성됨 (red), 그 후 PreviewDialog
-// 의 `copyText` / `copyAriaLabel` props + 내부 상태기계 구현 (green).
+// /tdd flow: this file was written before the implementation (red), then
+// PreviewDialog's `copyText` / `copyAriaLabel` props + internal state
+// machine were implemented (green).
 //
 // Maps:
-// - AC-252-01 → "Copy 버튼 렌더링 + testid + aria-label"
-// - AC-252-02 → "carrier 1회 호출 + arg 일치"
-// - AC-252-03 → "성공 path → Copied 라벨", "실패 path → Copy failed 라벨"
-// - AC-252-04 → "trim → 빈 문자열 → 미렌더"
-// - 추가 회귀 → "unmount 시 setTimeout cleanup (warning 미발생)"
+// - AC-252-01 → "Copy button render + testid + aria-label"
+// - AC-252-02 → "carrier called once + arg matches"
+// - AC-252-03 → "success path → Copied label",
+//   "failure path → Copy failed label"
+// - AC-252-04 → "trim → empty string → not rendered"
+// - extra regression → "setTimeout cleanup on unmount (no warning)"
 
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
 import { act, fireEvent, render, screen } from "@testing-library/react";

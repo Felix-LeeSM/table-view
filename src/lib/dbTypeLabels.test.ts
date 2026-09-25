@@ -1,11 +1,11 @@
 /**
- * 작성 2026-05-17 (sprint-379 collapse/expand all toggle).
+ * Written 2026-05-17 (collapse/expand all toggle).
  *
- * 사유: Sidebar header 의 "Collapse all *" / "Expand all *" 버튼이 DB type 별
- * 적절한 객체 이름을 노출해야 한다. PG/MSSQL/Oracle → schemas,
+ * Reason: the Sidebar header's "Collapse all *" / "Expand all *" button must
+ * show the right object name per DB type. PG/MSSQL/Oracle → schemas,
  * MySQL/MariaDB/SQLite → tables, Mongo → collections, Redis/Valkey → keys.
- * 매핑 dictionary 는 sprint-380
- * (mysql-sidebar-naming) 과 공유되므로 *단일 모듈* + *순수 함수* 로 격리한다.
+ * The mapping dictionary is isolated as a *single module* + *pure function*
+ * so other surfaces can share it.
  */
 
 import { describe, expect, it } from "vitest";
@@ -69,8 +69,8 @@ describe("getSidebarObjectLabel", () => {
   });
 
   it("redis → key/keys", () => {
-    // Redis 는 supported connection profile 이면서 non-RDBMS sidebar label 을
-    // 별도로 유지해야 한다.
+    // Redis is a supported connection profile and must keep its own
+    // non-RDBMS sidebar label.
     expect(getSidebarObjectLabel("redis")).toEqual({
       single: "key",
       plural: "keys",

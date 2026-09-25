@@ -31,26 +31,27 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 /**
- * HomePage — paradigm-agnostic connection management screen (sprint 125).
+ * HomePage — paradigm-agnostic connection management screen.
  *
  * Renders `ConnectionBrowser` — the group rail plus the connections it filters
  * to (which transitively includes `ConnectionGroup` headers + drag/drop).
  *
  * "Open" semantics: a single click selects (focuses) a connection; a double
- * click (or Enter) on a connected row activates it and swaps the app shell
- * to the Workspace screen. The activation itself flows through
+ * click (or Enter) on a connected row activates it, and `ConnectionList`
+ * opens or focuses that connection's workspace window
+ * (`activateConnection`). The activation itself flows through
  * `connectionStore.connectToDatabase` exactly as the previous Sidebar did —
- * we only intercept the post-connect callback so that the full-screen swap
- * happens at the right moment.
+ * we only intercept the post-connect callback to update the store side.
  *
- * Reaching here when nothing is connected: the user gets the empty-state
+ * Reaching here with no connections at all: the user gets the empty-state
  * card from `ConnectionList` directing them to add a connection. The
  * `[+ Connection]` / `[+ Group]` / `[Import / Export]` buttons live in the
  * top header strip.
  */
-// #2440 — Recent 는 footer 가 아니라 group rail 의 한 view 다. footer 를
-// 접던 `settings.home_recent_collapsed` 는 접을 대상이 없어져 이 컴포넌트에서
-// 빠졌다 (SQLite key 자체는 backend 에 남아 있고 쓰는 쪽이 없다).
+// #2440 — Recent is a view in the group rail, not a footer. With nothing left
+// to collapse, `settings.home_recent_collapsed` (which collapsed the footer)
+// left this component (the SQLite key itself remains in the backend, with no
+// writer).
 
 export default function HomePage() {
   const { t } = useTranslation("pages");
@@ -125,15 +126,15 @@ export default function HomePage() {
       }
       setFocusedConn(id);
       activatingRef.current = true;
-      // Wave 9.5 회귀 1 (2026-05-16) — 사용자 desired UX 정정:
-      // "connection 을 열어도 connections 창이 안 닫혀야 해". launcher 는
-      // 항상 visible 로 유지. workspace 윈도우 build/focus 는 ConnectionList
-      // 의 `openWorkspaceWindow(id)` 책임. HomePage 의 handleActivate 는
-      // store side (focusedConn / stale cleanup) 만 책임.
-      // (이전 sprint-175 single-workspace 모델의 showWindow / focusWindow /
-      // hideWindow 호출은 모두 제거 — 두 창 공존 회귀의 원천.)
-      // microtask 한 번 양보해 activatingRef 의 lifecycle 을 일관되게 유지
-      // (rapid double-click guard 의 비동기 release 시점).
+      // 2026-05-16 — opening a connection must not close the connections
+      // window: the launcher remains visible. Building / focusing the
+      // workspace window is the job of `openWorkspaceWindow(id)` in
+      // ConnectionList; HomePage's handleActivate owns only the store side
+      // (focusedConn / stale cleanup). (The showWindow / focusWindow /
+      // hideWindow calls of the earlier single-workspace model were all
+      // removed — they caused the two-window regression.)
+      // Yield one microtask so the activatingRef lifecycle stays consistent
+      // (the async release point of the rapid double-click guard).
       void Promise.resolve().finally(() => {
         activatingRef.current = false;
       });
@@ -209,11 +210,12 @@ export default function HomePage() {
         onActivate={handleActivate}
       />
 
-      {/* Sprint 377 (2026-05-17) — sprint-376 의 Settings panel reset
-          버튼 strip 제거. 사용자 직접 요청; Q21 9 affordance contract
-          의 #1 / #3-b 는 sidebar handle 우클릭 (#3-a) + 나머지 affordance
-          로 충분. #2440 에서 home-recent footer reset (#2) 은 접을 footer
-          자체가 없어져 같이 빠졌다. */}
+      {/* 2026-05-17 — the Settings panel's reset-button strip was removed.
+          Of the state-management-strategy Q21 nine-affordance contract,
+          Q21 #1 / #3-b are covered by the sidebar's "Reset width" (Q21
+          #3-a) and the other affordances. #2440 dropped the home-recent
+          footer reset (Q21 #2) as well, since the footer it collapsed is
+          gone. */}
 
       {/* Diagnostics footer — reveal the rotating log folder (#1566 / #1599)
           so a user can attach logs to a bug report without hunting the

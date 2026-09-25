@@ -159,7 +159,7 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
       "/* block comment */ DELETE FROM users WHERE id = 1",
     );
     expect(b.kind).toBe("dml-delete");
-    // Sprint 254 — bounded DELETE WHERE is now WARN (was safe).
+    // Bounded DELETE WHERE is now WARN (was safe).
     expect(b.severity).toBe("warn");
   });
 
@@ -168,24 +168,23 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
       "DELETE FROM t WHERE id IN (SELECT id FROM u WHERE flag = 1)",
     );
     expect(a.kind).toBe("dml-delete");
-    // Sprint 254 — bounded DELETE WHERE = WARN.
+    // Bounded DELETE WHERE = WARN.
     expect(a.severity).toBe("warn");
   });
 
   it("empty SQL → other / info (graceful, Sprint 254)", () => {
     const a = analyzeStatement("");
     expect(a.kind).toBe("other");
-    // Sprint 254 — empty / unknown statements default to INFO so the
-    // SafeMode matrix never escalates an unrecognised input. WARN is
-    // reserved for *known* write surfaces.
+    // Empty / unknown statements default to INFO so the SafeMode matrix
+    // never escalates an unrecognised input. WARN is reserved for *known*
+    // write surfaces.
     expect(a.severity).toBe("info");
   });
 
   it("ALTER additive / CREATE → sprint-394 classifications (was ddl-other / warn before sprint-394)", () => {
-    // Sprint-394 — ALTER ADD COLUMN is now `ddl-alter-add` / warn with
-    // a pinned reason (D2). CREATE INDEX is `ddl-create` / info / no
-    // reasons. The pre-sprint-394 baseline classified both as
-    // `ddl-other` / warn / no reasons.
+    // ALTER ADD COLUMN is now `ddl-alter-add` / warn with a pinned reason
+    // (D2). CREATE INDEX is `ddl-create` / info / no reasons. The earlier
+    // baseline classified both as `ddl-other` / warn / no reasons.
     const a = analyzeStatement("ALTER TABLE users ADD COLUMN x int");
     expect(a.kind).toBe("ddl-alter-add");
     expect(a.severity).toBe("warn");
@@ -195,7 +194,7 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
     expect(b.severity).toBe("info");
     expect(b.reasons).toEqual([]);
     // #1624 dedup — CREATE TABLE → ddl-create / info hoisted here from the
-    // former Sprint-254 severity-only case (AC-254-02d) so the regex-path
+    // former severity-only case (AC-254-02d) so the regex-path
     // classification stays pinned once the weaker subset is removed.
     const c = analyzeStatement("CREATE TABLE foo (id int)");
     expect(c.kind).toBe("ddl-create");
@@ -203,7 +202,7 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   });
 
   // -------------------------------------------------------------------------
-  // Sprint 187 — analyzer extension for structure-surface DDL.
+  // Analyzer extension for structure-surface DDL.
   // -------------------------------------------------------------------------
 
   it("[AC-187-01a] DROP INDEX → danger / ddl-drop", () => {
@@ -238,9 +237,9 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   });
 
   it("[AC-187-01e] ALTER TABLE … ADD COLUMN is ddl-alter-add / warn / pinned reason (Sprint 394)", () => {
-    // Sprint 187: classified as `ddl-other` / warn / [].
-    // Sprint 394 (D2): kind moves to `ddl-alter-add`, severity stays
-    // `warn`, and the reasons list now carries the pinned D2 string.
+    // Originally classified as `ddl-other` / warn / [].
+    // Under D2 the kind moves to `ddl-alter-add`, severity stays `warn`,
+    // and the reasons list now carries the pinned D2 string.
     const a = analyzeStatement("ALTER TABLE users ADD COLUMN nickname text");
     expect(a.kind).toBe("ddl-alter-add");
     expect(a.severity).toBe("warn");
@@ -249,14 +248,15 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   });
 
   // -------------------------------------------------------------------------
-  // Sprint 254 (2026-05-09) — 3-tier classifier corpus. ADR 0023 grill Q2-(a)
-  // "3-tier severity 채택" 의 정식 분류:
+  // 3-tier classifier corpus (2026-05-09). The canonical classification of
+  // ADR 0023 grill Q2-(a) "adopt 3-tier severity":
   //   - INFO: SELECT / WITH …SELECT (no DML CTE) / EXPLAIN / SHOW / DESCRIBE / DESC.
   //   - WARN: UPDATE WHERE / DELETE WHERE / ALTER additive.
   //   - STOP (danger): DROP / TRUNCATE / WHERE-less DELETE·UPDATE / ALTER DROP /
   //     GRANT / REVOKE.
-  // DML CTE (`WITH x AS (UPDATE …) SELECT *`) 는 INFO 가 아니어야 한다 — wrapped
-  // statement 의 first keyword (UPDATE/DELETE/INSERT) 에 따라 severity 결정.
+  // A DML CTE (`WITH x AS (UPDATE …) SELECT *`) must not be INFO — the first
+  // keyword of the wrapped statement (UPDATE/DELETE/INSERT) decides the
+  // severity.
   // -------------------------------------------------------------------------
 
   describe("Sprint 254 — 3-tier severity classifier", () => {
@@ -278,8 +278,8 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
     });
 
     it("[AC-254-01d] SHOW TABLES → config-read / info (sprint-395 update)", () => {
-      // Pre-sprint-395: kind="info" (legacy regex bucket).
-      // Sprint-395 (X06 / D4): SHOW classifies as `config-read` with
+      // Previously: kind="info" (legacy regex bucket).
+      // AC-395-X06 / D4: SHOW classifies as `config-read` with
       // severity:"info" — separate metadata-read kind from EXPLAIN/DESC.
       // `isInfoStatement` continues to return true (severity-based).
       const a = analyzeStatement("SHOW TABLES");
@@ -301,8 +301,8 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
 
     // ── permission-change (unique — GRANT/REVOKE) ─────────────────────────
     it("[AC-254-03f] GRANT → permission-change / warn (sprint-395 update)", () => {
-      // Pre-sprint-395: ddl-other / danger.
-      // Sprint-395 (X01 / D5): permission-change / warn / pinned reason.
+      // Previously: ddl-other / danger.
+      // AC-395-X01 / D5: permission-change / warn / pinned reason.
       const a = analyzeStatement("GRANT SELECT ON users TO bob");
       expect(a.kind).toBe("permission-change");
       expect(a.severity).toBe("warn");
@@ -310,8 +310,8 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
     });
 
     it("[AC-254-03g] REVOKE → permission-change / warn (sprint-395 update)", () => {
-      // Pre-sprint-395: ddl-other / danger.
-      // Sprint-395 (X02 / D5): permission-change / warn / pinned reason.
+      // Previously: ddl-other / danger.
+      // AC-395-X02 / D5: permission-change / warn / pinned reason.
       const a = analyzeStatement("REVOKE SELECT ON users FROM bob");
       expect(a.kind).toBe("permission-change");
       expect(a.severity).toBe("warn");
@@ -488,10 +488,10 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   // upsert (DELETE conflicting row, then INSERT). It was absent from both the
   // gate regex alternation and the per-keyword branches, so it fell through
   // to the `{ kind: "other", severity: "info" }` fail-open default and ran
-  // with no dialog in any mode. Per the 2026-07-02 user decision ("구문 that
+  // with no dialog in any mode. Per the 2026-07-02 user decision ("syntax that
   // can silently lose existing data is always confirm"), REPLACE classifies
   // as `danger`. The Rust `sql-parser-core` returns `unsupported-statement`
-  // for REPLACE (sql-parser-core/src/lib.rs:158), so the AST path cannot
+  // for REPLACE (sql-parser-core/src/lib.rs:160), so the AST path cannot
   // classify it — the regex branch is the source of truth here.
   // -------------------------------------------------------------------------
   describe("Issue #1115 — REPLACE INTO destructive upsert → danger", () => {
@@ -717,13 +717,15 @@ describe("sqlSafety.analyzeStatement — fallback and severity contracts", () =>
   });
 
   // -------------------------------------------------------------------------
-  // Sprint 255 (2026-05-09) — `isInfoStatement` 휴리스틱은 raw editor 의 WARN
-  // dialog mount 직전에 INFO (read-only / metadata) statement 을 식별해
-  // dialog skip → 직접 IPC 로 우회하는 분기를 위해 신설. INFO corpus =
-  // SELECT / WITH …SELECT / EXPLAIN / SHOW / DESCRIBE / DESC.
+  // `isInfoStatement` heuristic (2026-05-09): added for the branch that
+  // identifies INFO (read-only / metadata) statements right before the raw
+  // editor mounts the WARN dialog, skipping the dialog and going straight
+  // to IPC. INFO corpus = SELECT / WITH …SELECT / EXPLAIN / SHOW /
+  // DESCRIBE / DESC.
   //
-  // Sprint 254 (2026-05-09) — 본문 단순화 (severity === "info" 직접 비교)
-  // 후에도 매핑 동일 (kind="select" / kind="info" 모두 severity:"info").
+  // After the body was simplified to a direct `severity === "info"`
+  // comparison (2026-05-09), the mapping is unchanged (kind="select" and
+  // kind="info" both have severity:"info").
   // -------------------------------------------------------------------------
 
   describe("isInfoStatement (Sprint 255)", () => {

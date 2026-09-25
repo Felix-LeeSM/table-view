@@ -1,9 +1,10 @@
 /**
- * Sprint 326 — Slice I.1: `MqlCommand[]` → `BulkWriteOp[]` mapper.
+ * `MqlCommand[]` → `BulkWriteOp[]` mapper.
  *
- * commit path 가 N 번의 IPC roundtrip 대신 단일 `bulk_write_documents`
- * 호출로 묶일 수 있도록 변환. `_id` filter 는 canonical extended JSON
- * 형태로 보내 backend 가 실제 BSON ObjectId 로 복원할 수 있게 한다.
+ * Converts the commands so the commit path can batch them into a single
+ * `bulk_write_documents` call instead of N IPC round-trips. The `_id` filter
+ * is sent in canonical extended JSON form so the backend can restore a real
+ * BSON ObjectId.
  */
 
 import type { BulkWriteOp, DocumentId } from "@/types/documentMutate";
@@ -25,12 +26,11 @@ export function mqlCommandsToBulkOps(
       case "insertOne":
         return { op: "insertOne", document: cmd.document };
       case "updateOne":
-        // Sprint 342 V2 — `cmd.patch` is already the full update operator
+        // `cmd.patch` is already the full update operator
         // (`{ $set: {...}, $unset: {...} }`) so that mqlGenerator can mix
-        // overwrite + structural delete in a single round-trip. Earlier
-        // sprints emitted the raw `$set` body here, but with structural
-        // edits joining the same per-row patch we move the operator
-        // wrapping up into the generator.
+        // overwrite + structural delete in a single round-trip. Structural
+        // edits join the same per-row patch, so the operator wrapping lives
+        // in the generator rather than here.
         return {
           op: "updateOne",
           filter: { _id: documentIdToFilterValue(cmd.documentId) },

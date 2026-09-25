@@ -118,7 +118,7 @@ INSERT INTO t (col) VALUES ('a;b')`;
 // Purpose: #1223 comment/split edge-case coverage — the single-statement RAW
 // path bug traced to trailing `;`+comment fragments; these lock split behaviour
 // across the comment, string-literal, and dollar-quote surfaces the #1118 /
-// #1223 pipeline depends on (2026-07-03, user directive: bulk test 보충).
+// #1223 pipeline depends on (2026-07-03, user directive: add tests in bulk).
 describe("splitSqlStatements — #1223 comment & literal edge cases", () => {
   it("keeps a pure trailing line comment as its own fragment", () => {
     // Reason: #1223 root case — `SELECT 1;\n-- c` split to [stmt, comment];
@@ -288,7 +288,7 @@ describe("splitSqlStatements — #2554 MySQL backslash escapes & # comments", ()
   });
 });
 
-// Purpose: #2582 축 2 (PR #2575 NB4) — the execution path now passes
+// Purpose: #2582 axis 2 (PR #2575 NB4) — the execution path now passes
 // "oracle" into this splitter (rdbQueryExecution), so a q-quote body is
 // opaque *there* too: the `;` inside `q'{…}'` is literal text and the
 // boundary stays at the top-level semicolon. The Rust twin had committed
@@ -316,7 +316,7 @@ describe("splitSqlStatements — Oracle q-quote reaches the execution path (#258
   });
 });
 
-// -- Sprint 40: SQL Formatting --
+// -- SQL Formatting --
 
 describe("formatSql", () => {
   it("formats simple SELECT query", () => {
@@ -372,7 +372,7 @@ describe("formatSql", () => {
   });
 });
 
-// -- Sprint 53: SQL Uglify --
+// -- SQL Uglify --
 
 describe("uglifySql", () => {
   it("collapses multi-line SQL to single line", () => {

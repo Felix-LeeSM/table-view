@@ -1,10 +1,12 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// 2026-05-05 — AC-148-4 retire sprint. connect/disconnect 시 schema/document
-// cache가 함께 invalidate되어야 재진입 화면에서 stale schema가 "초기 DB"로
-// 잘못 노출되지 않는다 (plan: connections-window-connection-nifty-meerkat.md).
-// Hook은 store action 호출 직후 같은 connectionId로 두 cache clear를 부른다.
+// 2026-05-05 — AC-148-4 retirement. connect/disconnect must invalidate the
+// schema/document caches together, or the re-entered screen wrongly shows a
+// stale schema as the "initial DB" (plan:
+// connections-window-connection-nifty-meerkat.md). Right after the connect
+// store action, the hook clears the schema and document caches with the same
+// connectionId.
 
 const {
   mockConnect,
@@ -81,9 +83,10 @@ describe("useConnectionLifecycle", () => {
   });
 
   it("connect: backend가 error status를 기록하면 false를 반환한다", async () => {
-    // 2026-05-05 — connectionStore.connectToDatabase는 throw 대신 status를
-    // error 변형에 기록한다. 호출자가 await만으로는 성공 여부를 알 수 없어
-    // hook이 fresh status를 읽어 boolean으로 환산한다.
+    // 2026-05-05 — connectionStore.connectToDatabase records the status as
+    // the error variant instead of throwing. A caller cannot tell success
+    // from the await alone, so the hook reads the fresh status and turns it
+    // into a boolean.
     mockGetState.mockReturnValue({
       activeStatuses: { c1: { type: "error" } },
     });
@@ -104,8 +107,9 @@ describe("useConnectionLifecycle", () => {
   });
 
   it("connect: backend가 reject하면 cache clear를 부르지 않는다", async () => {
-    // stale state 보존이 안전 — 실패한 connect는 backend pool도 안 만들었으므로
-    // 새로 fetch할 source 자체가 없다. 기존 cache가 사용자에게 남는 게 옳다.
+    // Keeping the stale state is safe — a failed connect did not create a
+    // backend pool, so there is no source to fetch fresh data from. The
+    // existing cache should stay in front of the user.
     mockConnect.mockRejectedValueOnce(new Error("boom"));
     const { result } = renderHook(() => useConnectionLifecycle());
     await act(async () => {

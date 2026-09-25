@@ -1,25 +1,28 @@
-// Sprint 254 (2026-05-09) — WARN-tier dry-run row-count escalation helper.
-// ADR 0023 grill Q2-(a) 의 "WARN 인 줄 알았는데 실제로 100 만 row update"
-// 사고 방지. bounded UPDATE WHERE / DELETE WHERE 의 dry-run 결과가 100+
-// row 면 STOP (`danger`) 로 escalate.
+// WARN-tier dry-run row-count escalation helper (2026-05-09).
+// Prevents the incident from ADR 0023 grill Q2-(a): "I thought it was WARN,
+// but it actually updated 1 million rows". When the dry-run of a bounded
+// UPDATE WHERE / DELETE WHERE reports 100+ rows, escalate to STOP
+// (`danger`).
 //
-// 정책:
-//   - WARN bounded UPDATE/DELETE 만 escalation 대상
-//     (kind === "dml-update" | "dml-delete"). CREATE / ALTER additive 는
-//     dry-run 조회 비용 대비 ROI 가 낮으므로 본 sprint 에서는 제외.
-//   - dry-run IPC 2s timeout. timeout 시 STOP fallback.
-//   - IPC unsupported (MySQL / SQLite — adapter 가 Unsupported error) →
-//     STOP fallback (보수적).
-//   - `totalCount` 가 100 이상이면 STOP escalate.
-//   - DML rows-affected 정보는 `queryType === { dml: { rows_affected } }`
-//     로 제공되므로 그것을 우선 본다. SELECT 가 dry-run 결과로 오면
-//     `totalCount` 를 사용.
-//   - Mongo paradigm 은 caller 가 escalate skip — 본 helper 는 호출 자체가
-//     안 되도록 상위 routing 에서 가드.
+// Policy:
+//   - Only WARN bounded UPDATE/DELETE/MERGE are escalation targets
+//     (kind === "dml-update" | "dml-delete" | "dml-merge"; MERGE per
+//     #1116). CREATE / ALTER additive are excluded because their ROI is low
+//     relative to the cost of the dry-run query.
+//   - The dry-run IPC has a 2s timeout. On timeout, fall back to STOP.
+//   - IPC unsupported (the adapter returns an Unsupported error) → STOP
+//     fallback (conservative).
+//   - A `totalCount` of 100 or more escalates to STOP.
+//   - DML rows-affected arrives as `queryType === { dml: { rows_affected } }`,
+//     so that value is checked first. When a SELECT comes back as the
+//     dry-run result, `totalCount` is used.
+//   - For the Mongo paradigm the caller skips escalation — upper-level
+//     routing guards so this helper is not called at all.
 //
-// 시그니처: caller (`useQueryExecution.handleExecute`) 가 batch level 에서
-// 호출. 단일 statement 가 WARN bounded write 일 때만 본 helper 가
-// dispatch 된다.
+// Signature: the caller (`executeRdbQuery` in `rdbQueryExecution.ts`, run
+// from `useQueryExecution.handleExecute`) calls it at batch level. This
+// helper is dispatched only for an individual statement that is a WARN
+// bounded write.
 
 import { executeQueryDryRun } from "@lib/tauri";
 import type { Severity } from "@/lib/sql/sqlSafety";
@@ -114,9 +117,10 @@ export async function escalateWarnIfLargeImpact(
 }
 
 /**
- * DML 결과의 rows-affected 추출. backend 의 `QueryResult.queryType` 은
- * `"select" | "ddl" | { dml: { rows_affected: number } }` union 이므로
- * DML 인 경우 우선 그 값을, 아니면 `totalCount` 를 사용한다.
+ * Extract rows-affected from a DML result. The backend's
+ * `QueryResult.queryType` is the union
+ * `"select" | "ddl" | { dml: { rows_affected: number } }`, so for DML use
+ * that value first, otherwise use `totalCount`.
  */
 function extractRowsAffected(result: QueryResult): number {
   const qt = result.queryType;

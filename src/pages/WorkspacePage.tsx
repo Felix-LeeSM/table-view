@@ -22,15 +22,18 @@ import { useTranslation } from "react-i18next";
  *
  * Lifecycle:
  *
- *   - **No** `tauri://close-requested` listener (Wave 9.5 회귀 4,
- *     2026-05-16). OS-level close (Cmd+W, traffic light) 는 launcher 가
- *     항상 visible 이므로 default destroy 만으로 desired UX 가 자연스레
- *     성립 — workspace 사라지면 launcher 가 자동 활성. 회귀 4 의 history:
- *     이전에는 `closeCurrentWindow()` (= `win.close()`) 가 close-requested
- *     를 발사 → 리스너가 `preventDefault()` + back 핸들러 재호출 → **무한 루프**.
- *     현재는 listener 자체 제거 + `destroyCurrentWindow()` (= `win.destroy()`)
- *     로 close-requested 라이프사이클 자체를 우회한다 (두 layer 의 layered
- *     defense). 그 back 핸들러는 이제 `BackToConnectionsButton` 이 갖는다.
+ *   - **No** `tauri://close-requested` listener (2026-05-16). An OS-level
+ *     close (Cmd+W, traffic light) needs none here: the backend intercepts
+ *     it and emits `window:close-requested`, which `App.tsx` answers with
+ *     the discard guard and then a destroy (#1101), and once the last
+ *     workspace is gone the backend shows and focuses the launcher.
+ *     History: `closeCurrentWindow()` (= `win.close()`) fired
+ *     close-requested → the listener called `preventDefault()` and re-ran
+ *     the back handler → **infinite loop**, and the window never closed.
+ *     Now the listener itself is gone and `destroyCurrentWindow()` (backend
+ *     `workspace_close` → `Window::destroy()`) bypasses the close-requested
+ *     lifecycle entirely (two layers of defense). That back handler now
+ *     lives in `BackToConnectionsButton`.
  *
  * Disconnect (which DOES tear down the pool) is owned by the
  * `DisconnectButton` in `WorkspaceToolbar` and is intentionally NOT a

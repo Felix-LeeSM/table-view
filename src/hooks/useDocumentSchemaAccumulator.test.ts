@@ -1,9 +1,9 @@
-// Sprint 319 (2026-05-15) — Slice E.1: schemaless schema accumulator hook.
+// 2026-05-15 — Slice E.1: schemaless schema accumulator hook.
 //
-// 작성 이유: schemaless collection 의 페이지 간 column 변동을
-// 흡수하는 hook 의 (a) union 누적, (b) `_id` first + 알파벳 정렬,
-// (c) type first-wins, (d) `(connId, db, coll)` 변경시 auto-reset
-// 회귀를 lock.
+// Reason: locks regressions in the hook that absorbs column changes across
+// pages of a schemaless collection: (a) union accumulation, (b) `_id` first
+// + alphabetical order, (c) type first-wins, (d) auto-reset when
+// `(connId, db, coll)` changes.
 
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";

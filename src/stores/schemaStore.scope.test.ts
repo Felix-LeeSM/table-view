@@ -1,19 +1,20 @@
 /**
- * `schemaStore` scope axis — L2 책임 누수 정리. 작성 2026-05-16 (Phase 0
- * sprint-354).
+ * `schemaStore` scope axis — cleanup of the L2 responsibility leak. Written
+ * 2026-05-16 (state-management-strategy Phase 0).
  *
- * 사유: state-management-strategy L2 (Part B) — `schemaStore` 는 schema
- * introspection 캐시 책임에 한정한다. `queryTableData`/`executeQuery`/
- * `executeQueryBatch`/`dropTable`/`renameTable` 5 메서드는 캐시 write 가
- * 0 인 thin pass-through 라 store interface 에서 제거하고 caller 가
- * `@lib/tauri/*` 직접 호출하도록 옮긴다.
+ * Reason: state-management-strategy L2 (Part B) — `schemaStore` is limited
+ * to the schema introspection cache. The five methods `queryTableData` /
+ * `executeQuery` / `executeQueryBatch` / `dropTable` / `renameTable` are thin
+ * pass-throughs with zero cache writes, so they leave the store interface
+ * and callers call `@lib/tauri/*` directly.
  *
- * Public-surface 검증:
- *   (1) store 의 5 메서드가 `undefined` (제거 확인).
- *   (2) 기존 schema-fetching 메서드 (loadSchemas / loadTables / ...) 는
- *       그대로 정의되어 있음.
+ * Public-surface checks:
+ *   (1) the five store methods are `undefined` (removal confirmed).
+ *   (2) the existing schema-fetching methods (loadSchemas / loadTables / ...)
+ *       remain defined.
  *
- * grep CI (AC-354-05) 는 별도 test (scope-grep) 으로 호출 사이트 0 검증.
+ * The grep CI (AC-354-05) is a separate test case below that checks for
+ * zero call sites.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";

@@ -1,19 +1,23 @@
 /**
- * `dehydrate(workspace)` — Sprint 353 (Phase 0 dehydration pipeline,
- * memory/engineering/architecture/state-management/memory.md).
+ * `dehydrate(workspace)` — dehydration pipeline
+ * (memory/engineering/architecture/state-management/memory.md).
  *
- * 작성 2026-05-16 (Phase 0 sprint-353).
+ * Written 2026-05-16.
  *
- * 이 함수는 in-memory `WorkspaceState` 를 LS blob 으로 write 하기 직전
- * 통과시키는 순수 변환이다. invariant:
- *   - `dirtyTabIds` 는 빈 배열 (M-1, in-flight dirty 표식은 메모리만).
- *   - `sidebar.selectedNode` / `sidebar.scrollTop` 은 default (Q17/Q18).
- *   - `tabs[].queryState.status === "idle"` + rows/columns 폐기, sql 보존.
- *   - `closedTabHistory[].queryState` 도 같은 strip.
+ * This function is the pure transform an in-memory `WorkspaceState` passes
+ * through right before it is persisted. Invariants (IDs from
+ * state-management-strategy):
+ *   - `dirtyTabIds` is an empty array (M-1; in-flight dirty markers live in
+ *     memory only).
+ *   - `sidebar.selectedNode` / `sidebar.scrollTop` are defaults (Q17/Q18).
+ *   - `tabs[].queryState.status === "idle"` + rows/columns dropped, sql kept.
+ *   - `closedTabHistory[].queryState` gets the same strip.
  *   - `closedTabHistory.length <= 25` (Q19 LRU cap).
  *
- * 호출자는 `WorkspacesShape` 를 순회하면서 각 `WorkspaceState` 에 대해
- * `dehydrate()` 를 호출하고, 결과를 `JSON.stringify` 해서 LS 에 write 한다.
+ * The caller (`dehydrateAll` in `persistence.ts`) walks `WorkspacesShape`
+ * and calls `dehydrate()` for each `WorkspaceState`; `persistWorkspaces`
+ * then `JSON.stringify`s the parts and sends them through the
+ * `persist_workspace` IPC.
  */
 import { describe, expect, it } from "vitest";
 import type { ConnectionId, TabId } from "@/types/branded";
@@ -54,10 +58,11 @@ function makeWorkspace(
   };
 }
 
-// persistWorkspaces 가 LS 에 쓰지 않는다(no-LS-write)는 invariant 는
-// workspaceStore/persistence.no-ls-write.test.ts 가 단일 SOT, dehydrate 의
-// strip 의미는 아래 개별 describe 들이 SOT — 둘을 한 test 로 묶었던 통합
-// 케이스는 순수 중복이라 제거 (issue #1631, 2026-07-22).
+// The invariant that persistWorkspaces does not write LS (no-LS-write) has
+// its single SOT in workspaceStore/persistence.no-ls-write.test.ts, and the
+// describes below are the SOT for dehydrate's strip semantics — the combined
+// case that bundled both into one test was pure duplication and was removed
+// (issue #1631, 2026-07-22).
 
 describe("dehydrate — Sprint 353 (Q16/M-1 dirtyTabIds strip)", () => {
   it("strips dirtyTabIds to an empty array even when memory carries dirty markers", () => {
@@ -191,7 +196,7 @@ describe("dehydrate — Sprint 353 (AC-353-06 LS payload budget < 50KB)", () => 
     //     rows × ~200 byte each (≈ 1MB raw per tab, 5MB total raw).
     //   - 25-deep closedTabHistory of query tabs holding a single SELECT.
     // The strip must drop the heavy rows/columns so the on-disk blob
-    // fits the LS budget agreed in Q19 / Phase 0.
+    // fits the LS budget agreed in Q19 / state-management-strategy Phase 0.
     const heavyRow = Array.from(
       { length: 10 },
       (_, c) => `value-${c}-${"x".repeat(18)}`,

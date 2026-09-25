@@ -48,21 +48,24 @@ function mergeStoredWidths(
 }
 
 /**
- * Sprint 258 — DataGrid column widths 관리 훅.
- * Sprint 369 (Phase 4) — 영속 매체를 localStorage → SQLite (`datagrid_column_prefs`)
- * 로 전환. `pk` 가 제공되면 mount 시 `get_datagrid_prefs` IPC 1회로 hydrate,
- * setWidth 호출 시 `set_datagrid_prefs` widths-only partial patch, reset 시
- * `reset_datagrid_prefs(field="widths")` 를 디스패치.
+ * Manages DataGrid column widths.
+ * The persistence medium moved from localStorage to SQLite
+ * (`datagrid_column_prefs`). With a `pk`, the hook hydrates with one
+ * `get_datagrid_prefs` IPC on mount, sends a widths-only partial patch via
+ * `set_datagrid_prefs` on setWidth, and dispatches
+ * `reset_datagrid_prefs(field="widths")` on reset.
  *
- * - mount 1회: column 별 default rem * rootFontSize.
- * - `pk` 부재: in-memory only (ad-hoc query grid). IPC / LS 접근 모두 0.
- * - drag-resize 시 자기 column 만 변경 (AC-258-04). 결과 즉시 IPC 로 전송.
- * - `reset()` → 초기 widths 재계산 + IPC reset (codex 7차 #1 — widths reset 이
- *   hidden 을 풀거나 그 반대는 0).
+ * - On mount: per-column default rem * rootFontSize.
+ * - No `pk`: in-memory only (ad-hoc query grid), with no IPC or localStorage
+ *   access.
+ * - Drag-resize changes only its own column (AC-258-04). The result goes
+ *   over IPC right away.
+ * - `reset()` → recompute the initial widths + IPC reset. A widths reset
+ *   does not unhide columns, and vice versa.
  *
- * Sprint 238 의 컨테이너 fit (sum < containerPx 일 때 비례 확대) 폐기.
- * `<table>` → CSS Grid 전환 (sprint-258) 후에는 stretch 의 _근거 자체_ 가
- * 사라졌으므로 (c) 산식이 단순 default-rem * px 로 환원된다.
+ * The container fit (proportional stretch when sum < containerPx) was
+ * dropped. After the `<table>` → CSS Grid switch the very _reason_ to
+ * stretch is gone, so the width formula reduces to plain default-rem * px.
  */
 export function useColumnWidths(
   columns: ReadonlyArray<ColumnLike>,

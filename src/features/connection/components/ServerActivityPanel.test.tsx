@@ -1,7 +1,7 @@
-// Sprint 336 (2026-05-15) — U1 live wire guard. ServerActivityPanel 가
-// `listServerActivity` / `killServerActivity` 를 호출하고 grid + Kill
-// 버튼을 paradigm-neutral 로 렌더한다. (a) initial fetch + row 렌더,
-// (b) refresh 클릭, (c) Kill 클릭 → kill + re-fetch, (d) empty state,
+// 2026-05-15 — U1 live wire guard. ServerActivityPanel calls
+// `listServerActivity` / `killServerActivity` and renders the grid + Kill
+// button paradigm-neutrally. Covers (a) initial fetch + row render,
+// (b) refresh click, (c) Kill click → kill + re-fetch, (d) empty state,
 // (e) error state.
 
 import {

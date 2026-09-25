@@ -59,8 +59,9 @@ function LayoutCluster() {
       className="flex items-center gap-0.5 rounded-md border border-border px-0.5"
     >
       {/* Icon + tooltip, no text label — the repo's toolbar convention for a
-          state toggle (frontend guidance: "버튼은 가능한 lucide icon +
-          tooltip"), and it keeps the toolbar from growing a third caption. */}
+          state toggle (frontend guidance in
+          `memory/engineering/conventions/frontend/memory.md`: "buttons are a
+          lucide icon + tooltip where possible"). */}
       <Button
         variant="ghost"
         size="icon-sm"
@@ -109,9 +110,10 @@ export default function WorkspaceToolbar() {
       onKeyDown={onKeyDown}
       className="flex h-9 items-center gap-2 border-b border-border bg-secondary px-2"
     >
-      {/* Panel toggles lead the toolbar (owner: "툴바 왼쪽"). They act on the
-          window chrome that frames everything else, so they sit outside the
-          connection-scoped controls rather than in the trailing group. */}
+      {/* Panel toggles lead the toolbar (owner: "left side of the toolbar").
+          They act on the window chrome that frames everything else, so they
+          sit outside the connection-scoped controls rather than in the
+          trailing group. */}
       <LayoutCluster />
       <DbSwitcher />
       {/* Trailing group, in two tiers. The connection-scoped controls come

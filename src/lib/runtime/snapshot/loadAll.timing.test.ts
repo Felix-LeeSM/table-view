@@ -1,12 +1,12 @@
-// 작성 2026-05-16 (Phase 4 sprint-367) — AC-367-01 + AC-367-02.
+// Written 2026-05-16 — AC-367-01 + AC-367-02.
 //
-// AC-367-01: `loadAllFromSnapshot()` 호출 후 5 boot-critical store
-// (connections + groups / workspaces / mru / theme / safeMode) + runtime.activeStatuses
-// mirror 만 hydrate. favorites / queryHistory / datagrid_prefs 는 hydrate 안 됨
-// (lazy — mount 시점에 도메인별 IPC).
+// AC-367-01: after `loadAllFromSnapshot()`, only the 5 boot-critical stores
+// (connections + groups / workspaces / mru / theme / safeMode) + the
+// runtime.activeStatuses mirror are hydrated. favorites / queryHistory /
+// datagrid_prefs are not hydrated (lazy — per-domain IPC at mount time).
 //
-// AC-367-02: fake 50ms IPC 응답 + store mutate < 50ms total — 전체 hydrate
-// duration < 100ms. p50/p95 측정에 충분한 budget.
+// AC-367-02: fake 50ms IPC response + store mutate < 50ms total — overall
+// hydrate duration < 100ms. Enough budget for p50/p95 measurement.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -62,9 +62,9 @@ function makeSnapshot(): InitialAppState {
       workspaces: {
         byConnectionId: {
           c1: {
-            // sprint-353 dehydrate output shape — opaque per-cell unknown.
-            // 실제 hydrate 는 sprint-368/369 등에서 더 깊게 다루지만 이 sprint 는
-            // shape pass-through 만 검증한다.
+            // Workspace dehydrate output shape — opaque per-cell unknown.
+            // Deeper hydrate behavior is covered elsewhere; this fixture
+            // checks only the shape pass-through.
             d: {
               tabs: [],
               activeTabId: null,
@@ -79,9 +79,10 @@ function makeSnapshot(): InitialAppState {
         recentConnections: ["c1"],
         lastUsedConnectionId: "c1",
       },
-      // Wave 9.5 (2026-05-16) — "default" 는 frontend catalog 에 없는 invalid
-      // id. boundary fallback 이 catalog 에 있는 valid id 로 좁히므로 fixture
-      // 도 valid id 로 변경 ("github" — slate 가 아니면서 catalog 안에 있음).
+      // 2026-05-16 — "default" is an invalid id absent from the frontend
+      // catalog. The boundary fallback narrows to a valid catalog id, so the
+      // fixture was switched to a valid id too ("github" — in the catalog,
+      // and not slate).
       theme: { themeId: "github", mode: "dark" },
       safeMode: { mode: "warn" },
     },
@@ -94,8 +95,8 @@ function makeSnapshot(): InitialAppState {
 }
 
 function freshStoresForTest(): void {
-  // 각 store 를 default initial state 로 reset — vitest module isolation 만으로는
-  // singleton store 사이 cross-test leak 가 발생할 수 있어 명시적으로 reset.
+  // Reset each store to its default initial state explicitly — vitest module
+  // isolation alone can let singleton stores leak across tests.
   useConnectionStore.setState({
     connections: [],
     groups: [],
@@ -107,7 +108,7 @@ function freshStoresForTest(): void {
   });
   useWorkspaceStore.setState({ workspaces: {} });
   useMruStore.setState({ recentConnections: [], lastUsedConnectionId: null });
-  // theme/safeMode 는 도메인 default 가 있음 — 검증 시점 비교만 한다.
+  // theme/safeMode have domain defaults — only compared at assertion time.
   useFavoritesStore.setState({ favorites: [] });
   useQueryHistoryStore.setState({ recentVisible: [] });
 }
@@ -132,7 +133,7 @@ describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
     expect(conn.activeStatuses).toEqual({ c1: { type: "connected" } });
 
     const ws = useWorkspaceStore.getState();
-    // (connId, db) 두 단계 키 — sprint-353 의 wire shape 와 byte-equivalent.
+    // Two-level (connId, db) key — byte-equivalent to the dehydrate wire shape.
     expect(ws.workspaces.c1?.d).toBeDefined();
 
     const mru = useMruStore.getState();
@@ -321,10 +322,10 @@ describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
       throw new Error("expected closed query tab");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt
     expect(activeTab.queryMode).toBe("sql");
     expect(activeTab.queryLanguage).toBe("sql");
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt
     expect(closedTab.queryMode).toBe("sql");
     expect(closedTab.queryLanguage).toBe("sql");
 
@@ -392,8 +393,8 @@ describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
 
     await loadAllFromSnapshot();
 
-    // favorites / queryHistory 는 snapshot 응답에 없고 store 도 default 그대로.
-    // dataGrid prefs 는 본 sprint 범위 밖.
+    // favorites / queryHistory are absent from the snapshot response, and
+    // their stores stay at default. dataGrid prefs are out of scope here.
     expect(useFavoritesStore.getState().favorites).toEqual([]);
     expect(useQueryHistoryStore.getState().recentVisible).toEqual([]);
     expect(useQueryHistoryStore.getState().recentVisible).toEqual([]);
@@ -433,24 +434,27 @@ describe("AC-367-02 boot hydrate timing < 100ms (fake 50ms IPC)", () => {
     await result;
     const elapsed = performance.now() - t0;
 
-    // 50ms IPC + < 50ms mutate ≤ 100ms total — strategy doc Phase 4 의 boot
-    // budget. Fake timers keep the IPC delay deterministic under CI load.
+    // 50ms IPC + < 50ms mutate ≤ 100ms total — the boot budget in the
+    // strategy doc's Phase 4. Fake timers keep the IPC delay deterministic
+    // under CI load.
     expect(elapsed).toBeLessThan(100);
   });
 
   it("hydrate path is Promise.all (parallel) not serial — 5 simulated 20ms hydrate < ~30ms", async () => {
-    // 직접 serial vs parallel 식별은 어렵지만 5 단계가 모두 sync (microtask
-    // tick 한 번) 인지 검증. 만약 await 가 5 번 직렬이라면 5 * (small) latency
-    // 가 쌓여 성능 회귀 → Sprint 367 의 invariant: store mutate 는 await
-    // Promise.all([…]) 패턴이어야 한다.
+    // Telling serial and parallel apart directly is hard, so this checks
+    // that the 5 steps are all sync (one microtask tick). If the awaits ran
+    // serially 5 times, 5 * (small) latency would pile up into a performance
+    // regression → invariant: the store mutate must use the await
+    // Promise.all([…]) pattern.
     invokeMock.mockResolvedValueOnce(makeSnapshot());
 
     const t0 = performance.now();
     await loadAllFromSnapshot();
     const elapsed = performance.now() - t0;
 
-    // IPC mock 이 microtask resolve — store mutate 5 개가 같은 tick 에서
-    // sync 로 끝나야 < 30ms. 매우 느슨한 boundary 라 CI noise 흡수 가능.
+    // The IPC mock resolves in a microtask — the 5 store mutates must finish
+    // synchronously in the same tick to stay < 30ms. The asserted < 50ms
+    // bound is very loose, so it absorbs CI noise.
     expect(elapsed).toBeLessThan(50);
   });
 });

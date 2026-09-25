@@ -1,21 +1,22 @@
-// Sprint 245 (ADR 0022 Phase 1) — `decideSafeModeAction` matrix tests.
-// Sprint 244's "production+strict|off = read-only" policy was reverted;
+// ADR 0022 Phase 1 — `decideSafeModeAction` matrix tests.
+// The earlier "production+strict|off = read-only" policy was reverted;
 // the new matrix is destructive-only with a non-production strict mode
 // destructive-dialog flow (M.1).
 //
-// Original Sprint 189 (`AC-189-06a-*`) coverage of the read / safe-write
-// pass-through is preserved + extended; Sprint 244's `[AC-244-01..08]`
+// The original `AC-189-06a-*` coverage of the read / safe-write
+// pass-through is preserved + extended; the `[AC-244-01..08]`
 // read-only assertions were removed because they no longer match the
 // policy. The 8 representative matrix cases below (`L1..L8`) cover every
 // branch of `decideSafeModeAction`.
 //
-// date 2026-05-08 (Sprint 245 — ADR 0022 Phase 1).
+// date 2026-05-08 (ADR 0022 Phase 1).
 //
-// Sprint 254 (2026-05-09) — `Severity` union 3-tier split. Sprint 403 기준
-// SELECT / INSERT / UPDATE WHERE / CREATE 는 각각 INFO / INFO /
-// WARN / WARN 으로 매핑. 매트릭스 *결과* 회귀 0 — INFO 는 allow, WARN 는 raw
-// editor WARN dialog 가 QueryTab-level 에서 처리하므로 `decideSafeModeAction`
-// 은 여전히 allow 반환. DANGER 는 기존 confirm 분기 그대로.
+// 2026-05-09 — `Severity` union split into 3 tiers. The fixtures below map
+// SELECT / INSERT / UPDATE WHERE / CREATE to INFO / INFO / WARN / WARN.
+// No regression in the matrix *results* — INFO is allowed, and WARN is
+// handled by the raw editor WARN dialog at the QueryTab level
+// (`pendingRdbWarn`), so `decideSafeModeAction` still returns allow. DANGER
+// keeps the existing confirm branch.
 import { describe, expect, it } from "vitest";
 import { decideSafeModeAction } from "./safeMode";
 import type { StatementAnalysis } from "./sql/sqlSafety";
@@ -149,12 +150,9 @@ describe("decideSafeModeAction — Sprint 245 destructive-only matrix (Sprint 25
 
   // ── L7: production + (strict|warn|off) + safe write → allow ──
   it("[AC-245-L7] production + (strict | warn | off) + safe write → allow", () => {
-    // Sprint 403 — INSERT 는 severity:"info"; UPDATE_WHERE / CREATE 는
-    // severity:"warn".
-    // SafeMode 매트릭스 결과는 회귀 0 — WARN tier 의 raw editor 표시 처리는
-    // QueryTab-level (`pendingRdbWarn`) 의 책임이고, `decideSafeModeAction`
-    // 은 여전히 allow 반환. ADR 0022 의 "safe writes 는 production 에서도
-    // 통과" invariant 가 그대로 유지된다.
+    // ADR 0022 invariant: safe writes pass even in production, including the
+    // "warn" UPDATE_WHERE / CREATE fixtures (see the tier note in the file
+    // header).
     expect(decideSafeModeAction("strict", "production", INSERT)).toEqual({
       action: "allow",
     });
@@ -185,7 +183,7 @@ describe("decideSafeModeAction — Sprint 245 destructive-only matrix (Sprint 25
     });
   });
 
-  // ── Sprint 254 — explicit INFO/WARN tier coverage ──
+  // ── Explicit INFO/WARN tier coverage ──
   it("[AC-254-05a] INFO tier (severity 'info') → allow regardless of mode/env", () => {
     expect(
       decideSafeModeAction("strict", "production", SELECT_ANALYSIS),

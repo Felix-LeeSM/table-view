@@ -1,14 +1,13 @@
 /**
- * Sprint 256 (ADR 0023, AC-256-05) — `ExecuteButton`.
+ * `ExecuteButton` (ADR 0023, AC-256-05).
  *
  * Composed Execute affordance applied to every confirm-write surface
  * (Q5-(b) decision: colour × env + target label, NO verb extraction).
- * Five callsites swap their hand-rolled buttons for this single
- * component:
+ * Callsites:
  *   - `<SqlPreviewDialog>`            (RDB structure preview)
  *   - `<MqlPreviewModal>`             (Mongo preview)
  *   - `<DataGrid>`                     (inline edit preview footer)
- *   - `<EditableQueryResultGrid>`     (raw query toolbar Execute)
+ *   - `<EditableQueryResultGrid>`     (SQL preview footer Execute)
  *   - `<ConfirmDestructiveDialog>`    (footer Confirm / Execute)
  *
  *   severity × environment matrix — the cells are named by token, not by
@@ -29,9 +28,10 @@
  *   - env null/dev (local/testing/development) → "Execute"
  *   - env staging/production                   → "Execute on <conn>"
  *   - tooltip (`title`) always carries the full label so a truncated
- *     long connection name remains discoverable (Q5 "폭 압박" mitigation).
- *   - `max-w-[260px] truncate` ensures the visible label never blows up
- *     a tight footer.
+ *     long connection name remains discoverable (Q5 "width pressure"
+ *     mitigation).
+ *   - `truncate max-w-execute-label` (260px) ensures the visible label
+ *     never blows up a tight footer.
  */
 
 import { Button } from "@components/ui/button";

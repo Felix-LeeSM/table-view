@@ -1,5 +1,5 @@
 /**
- * Sprint 204 — `makeLogger` DEV / prod gate behaviour.
+ * `makeLogger` DEV / prod gate behaviour.
  *
  * The contract is asymmetric: in DEV (`isDev=true`) the helpers forward
  * the spread args to the matching `console.*` channel verbatim; in prod
@@ -13,7 +13,7 @@
  * is the seam — the same builder produces the production binding too,
  * so covering both modes covers the behaviour of `logger` as well.
  *
- * Written 2026-05-05 (Sprint 204 — logger 중앙화 + DEV-only gate).
+ * Written 2026-05-05 (logger centralization + DEV-only gate).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeLogger } from "./logger";
