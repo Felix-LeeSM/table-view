@@ -322,10 +322,10 @@ describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
       throw new Error("expected closed query tab");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when Phase 28 Slice A5 lands
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt
     expect(activeTab.queryMode).toBe("sql");
     expect(activeTab.queryLanguage).toBe("sql");
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when Phase 28 Slice A5 lands
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt
     expect(closedTab.queryMode).toBe("sql");
     expect(closedTab.queryLanguage).toBe("sql");
 
