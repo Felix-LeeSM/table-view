@@ -41,10 +41,10 @@ automatic import/export workflow, structured DDL/write UI, or admin parity.
 **Follow-up**: The RDBMS DataGrid filter reads its operator list from the
 connected dialect's `SqlDialectCapabilities`
 (`src/lib/sql/sqlDialectProfile.ts`), and #2430 wired PostgreSQL through it with
-`ILIKE`. The other RDBMS lanes are untouched: DuckDB, MySQL/MariaDB, SQLite,
-MSSQL and Oracle still declare `ilike: false`, so the operator is not offered
-and no adapter emits it. Each lane is its own slice because the
-case-insensitive story differs per engine:
+`ILIKE`. DuckDB, MySQL/MariaDB, SQLite, MSSQL and Oracle have no `ILIKE` wiring:
+their profiles inherit `ilike: false` from `COMMON_CAPABILITIES`, so the
+operator is not offered, and their adapters do not emit it. Each lane is its
+own slice because the case-insensitive story differs per engine:
 DuckDB spells the same `ILIKE` keyword, while the others reach case-insensitive
 matching through collation or a functional predicate, which is a different
 product decision from adding a dropdown row. A slice lands the capability flag,
