@@ -1271,7 +1271,7 @@ describe("ConnectionItem", () => {
   });
 
   // -----------------------------------------------------------------------
-  // AC-03 — "Move to group" context-menu submenu
+  // "Move to group" context-menu submenu
   // -----------------------------------------------------------------------
   describe("Move to group submenu", () => {
     it("exposes a 'Move to group' submenu trigger in the context menu", () => {

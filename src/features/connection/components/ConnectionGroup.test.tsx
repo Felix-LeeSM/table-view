@@ -511,7 +511,7 @@ describe("ConnectionGroup", () => {
   });
 
   // -----------------------------------------------------------------------
-  // AC-10 / AC-05: Delete Group shows confirmation dialog first
+  // AC-10: Delete Group shows confirmation dialog first
   // -----------------------------------------------------------------------
   it("shows confirmation dialog (not immediate delete) when Delete Group menu item is clicked", () => {
     render(<ConnectionGroup group={makeGroup()} connections={[]} />);
@@ -526,7 +526,7 @@ describe("ConnectionGroup", () => {
       fireEvent.click(deleteBtn);
     });
 
-    // AC-05: removeGroup must NOT fire until the user confirms.
+    // removeGroup must NOT fire until the user confirms.
     expect(mockRemoveGroup).not.toHaveBeenCalled();
 
     // The alert dialog should be visible with the explanation text.
@@ -937,7 +937,7 @@ describe("ConnectionGroup", () => {
   });
 
   // -----------------------------------------------------------------------
-  // AC-02 — Color accent visible in header
+  // Color accent visible in header
   // -----------------------------------------------------------------------
   it("renders the color accent swatch with the group color as background", () => {
     render(
@@ -984,7 +984,7 @@ describe("ConnectionGroup", () => {
   });
 
   // -----------------------------------------------------------------------
-  // AC-05 — Delete dialog mentions ungrouped behaviour and
+  // Delete dialog mentions ungrouped behaviour and
   // connection count copy changes with pluralization
   // -----------------------------------------------------------------------
   it("uses singular copy when the group contains exactly one connection", () => {
