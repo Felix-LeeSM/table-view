@@ -1,5 +1,5 @@
 /**
- * Sprint 178 (AC-178-05): sanitise an error message before surfacing it
+ * AC-178-05: sanitise an error message before surfacing it
  * in any user-visible region (`role="alert"`, `role="status"`, the
  * `<DialogFeedback>` slot's `aria-live="polite"` body, etc.). Backends
  * sometimes echo the connection string (including the password) in
@@ -13,12 +13,7 @@
  * treated as no-op so legitimate error copy isn't mutated for users
  * with no password set.
  *
- * Sprint 213 — body relocated from `ConnectionDialog.tsx` into
- * `ConnectionDialog/sanitize.ts`. The entry re-exports the same
- * identifier so `import { sanitizeMessage } from
- * "@components/connection/ConnectionDialog"` continues to work for
- * external callers. Function body is byte-identical to the pre-split
- * version (replaceAll + URL-encoded variant masking) — refactor only.
+ * `ConnectionDialog.tsx` re-exports it for the public import paths.
  */
 /**
  * Issue #1453 — pattern-based masks that need no known secret. The sidebar

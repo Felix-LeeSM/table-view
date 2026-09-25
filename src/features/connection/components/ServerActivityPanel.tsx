@@ -1,4 +1,4 @@
-// Sprint 336 (2026-05-15) — U1 live wire. Server activity (PG
+// U1 live wire. Server activity (PG
 // pg_stat_activity / Mongo db.currentOp) + Kill action. Wire shape is
 // paradigm-neutral so the grid renders both sides identically.
 //

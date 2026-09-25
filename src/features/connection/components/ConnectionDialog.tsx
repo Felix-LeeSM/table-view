@@ -1,30 +1,30 @@
 // ---------------------------------------------------------------------------
-// Sprint-96 escape hatch — Layer-1 primitives only (no Layer-2 preset).
+// Escape hatch — Layer-1 primitives only (no Layer-2 preset).
 //
-// The other 7 dialogs (`GroupDialog`, `ImportExportDialog`, `BlobViewerDialog`,
+// Other dialogs (`GroupDialog`, `ImportExportDialog`, `BlobViewerDialog`,
 // `CellDetailDialog`, `SqlPreviewDialog`, `MqlPreviewModal`,
-// `AddDocumentModal`) are wrapped by the new `ConfirmDialog` / `FormDialog` /
+// `AddDocumentModal`) are wrapped by the `ConfirmDialog` / `FormDialog` /
 // `PreviewDialog` / `TabsDialog` presets. ConnectionDialog stays on the raw
 // Layer-1 primitives (`<Dialog*>` + `<DialogFeedback>` from
 // `@components/ui/dialog`) because it has bespoke needs that no preset
 // captures cleanly:
 //   1. Custom footer split (Test Connection on the left, Cancel + Save on the
 //      right) with `justify-between`.
-//   2. The sprint-92 `expectNodeStable` contract on the
+//   2. The `expectNodeStable` contract on the
 //      `data-slot="test-feedback"` slot — driven by `DialogFeedback`'s
 //      `slotName` override that callers other than this file don't need.
 //   3. URL-mode toggle + scrollable inner column with `max-h-[60vh]`.
 //   4. Save error rendered alongside (not inside) the test-feedback slot.
 //
-// Sprint 138 (#4 — DBMS-aware connection form): the inner network/auth/db
-// row(s) are no longer rendered inline. `dbType` switches into DBMS-aware
-// sub-components (Pg/Mysql/Oracle/Sqlite/Mongo/Redis/Search) so the form shape and
-// defaults match each DBMS. The `assertNever` exhaustive check in the
-// switch statement guarantees a new `DatabaseType` variant breaks the
-// build instead of silently falling through to the PG layout.
+// The inner network/auth/db row(s) are no longer rendered inline. `dbType`
+// switches into DBMS-aware sub-components
+// (Pg/Mysql/Mssql/Oracle/Sqlite/Mongo/Redis/Search) so the form shape and
+// defaults match each DBMS. The `assertNever` exhaustive check in the switch
+// statement (`renderDbmsFields` in `ConnectionDialogBody`) guarantees a new
+// `DatabaseType` variant breaks the build instead of silently falling through
+// to the PG layout.
 //
-// Sprint 213 (post-209 P6) — entry-pattern split. The 829-line god file
-// has been decomposed into:
+// Entry-pattern split — the dialog is decomposed into:
 //   - `ConnectionDialog.tsx`             (this entry, thin orchestration)
 //   - `ConnectionDialog/useConnectionDraftForm`  (draft + DB type confirm
 //                                                 + password resolve + trim
@@ -39,12 +39,6 @@
 //                                                 error + Test/Cancel/Save)
 //   - `ConnectionDialog/sanitize`                (`sanitizeMessage` body;
 //                                                 entry re-exports below)
-//
-// External callers (`Sidebar.tsx`, `HomePage.tsx`, `dialog.test.tsx`) keep
-// importing from `@components/connection/ConnectionDialog` exactly as
-// before; sub-files are entry-internal. Behaviour change 0 — every
-// regression test in `ConnectionDialog.test.tsx` (1362 lines) +
-// `ConnectionDialog.urlInput.test.tsx` (697 lines) keeps passing.
 // ---------------------------------------------------------------------------
 
 import { Button } from "@components/ui/button";
@@ -76,12 +70,9 @@ import {
 } from "./forms/fieldValidation";
 import type { ConnFormSection } from "./forms/formSection";
 
-// Sprint 213 — re-export the (relocated) `sanitizeMessage` helper so
-// external callers keep using `import { sanitizeMessage } from
-// "@components/connection/ConnectionDialog"`. Body lives in
-// `ConnectionDialog/sanitize.ts`; refactor only — replaceAll +
-// URL-encoded variant masking are byte-identical to the pre-split
-// implementation.
+// Re-export `sanitizeMessage` for the public import paths
+// (`@features/connection` and the `@components/connection/ConnectionDialog`
+// shim). Body lives in `ConnectionDialog/sanitize.ts`.
 export { sanitizeMessage };
 
 interface ConnectionDialogProps {
@@ -90,13 +81,13 @@ interface ConnectionDialogProps {
 }
 
 /**
- * Sprint-92 (#CONN-DIALOG-6): Test Connection result state is modelled as a
+ * #CONN-DIALOG-6: Test Connection result state is modelled as a
  * discriminated union over four explicit states. Previously this was a
  * combination of `testing: boolean` + `testResult: {success, message} | null`,
  * which left the (testing=true, testResult=non-null) corner ambiguous and
  * caused the alert slot to unmount/remount between clicks. The slot is now
- * always mounted (see `data-slot="test-feedback"` below) and only its content
- * varies with `status`.
+ * always mounted (see `data-slot="test-feedback"` in `ConnectionDialogFooter`)
+ * and only its content varies with `status`.
  *
  * Issue #2437 — the Test Connection button carries this status itself (a
  * distinct glyph per state), and the slot is `sr-only` until the user opens
@@ -172,7 +163,7 @@ export default function ConnectionDialog({
     setHostPort: (host, port) => setForm((f) => ({ ...f, host, port })),
   });
 
-  // Sprint-95 Layer-1 migration: project the local 4-state union onto the
+  // Project the local 4-state union onto the
   // generic DialogFeedback contract. `pending` → `loading` is the only naming
   // delta; messages flow through unchanged.
   const feedbackState: DialogFeedbackState =
@@ -201,7 +192,7 @@ export default function ConnectionDialog({
       setTestResult({ status: "idle" });
       return;
     }
-    // Sprint-92: publish pending first so the alert slot shows the spinner +
+    // Publish pending first so the alert slot shows the spinner +
     // "Testing..." while the request is in flight; the slot itself stays
     // mounted across this transition.
     setTestResult({ status: "pending" });
@@ -209,7 +200,7 @@ export default function ConnectionDialog({
       const msg = await testConnection(draft, connection?.id ?? null);
       setTestResult({ status: "success", message: msg });
     } catch (e) {
-      // Sprint 178 (AC-178-05): the backend's error message can naively
+      // AC-178-05: the backend's error message can naively
       // echo the connection string (including the password). Sanitise
       // the rendered message so no password substring lands in any
       // role="alert"/role="status"/aria-live region.
@@ -261,7 +252,7 @@ export default function ConnectionDialog({
    * trimmed draft to dispatch, or `null` when validation failed (the banner,
    * the `aria-invalid` flag and the focus move are already published).
    *
-   * Sprint 178: validation reads trimmed values so a user typing only
+   * Validation reads trimmed values so a user typing only
    * whitespace into Name/Host gets the same "required" error a blank input
    * would give. Password is left verbatim per ADR-0005 — `trimDraft` only
    * trims non-password keys.
@@ -292,7 +283,7 @@ export default function ConnectionDialog({
 
     setSaving(true);
     try {
-      // Sprint 178 (AC-178-02): outgoing payload uses trimmed values.
+      // AC-178-02: outgoing payload uses trimmed values.
       // Password (resolvePassword()) is set on the trimmed copy
       // verbatim — `trimDraft` only trims non-password keys.
       if (isEditing) {
@@ -305,7 +296,7 @@ export default function ConnectionDialog({
       }
       onClose();
     } catch (e) {
-      // Sprint 178 (AC-178-05): sanitise error text so a backend that
+      // AC-178-05: sanitise error text so a backend that
       // echoes the connection string does not surface the password.
       setError(sanitizeMessage(String(e), passwordInput, form.password));
     }
@@ -343,7 +334,7 @@ export default function ConnectionDialog({
         className="flex w-dialog-sm flex-col gap-0 bg-secondary p-0"
         showCloseButton={false}
       >
-        {/* Header — DialogHeader's row-based default (sprint-91) puts the X
+        {/* Header — DialogHeader's row-based default puts the X
             inline with the title without any extra override. */}
         <DialogHeader className="border-b border-border px-4 py-3">
           <DialogTitle

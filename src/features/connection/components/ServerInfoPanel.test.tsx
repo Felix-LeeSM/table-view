@@ -1,4 +1,4 @@
-// Sprint 339 (2026-05-15) — U4 live wire. Verifies ServerInfoPanel
+// U4 live wire. Verifies ServerInfoPanel
 // dispatches the paradigm-neutral `server_info` IPC through
 // `@/lib/api/serverInfo` and renders the result grid.
 

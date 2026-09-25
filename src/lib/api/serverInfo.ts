@@ -1,4 +1,4 @@
-// Sprint 339 (U4 live wire) — paradigm-neutral server identity panel.
+// U4 live wire — paradigm-neutral server identity panel.
 // RDB → version() + pg_settings whitelist. Mongo → buildInfo + serverStatus.
 // Both flatten into ServerInfoRow with paradigm-specific keys in extras.
 

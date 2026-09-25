@@ -61,7 +61,7 @@ export interface ConnDraftValidationFailure {
  *
  * @param trimmed already trimmed via `trimDraft` — the checks below must see
  *                the same values the backend would, so a whitespace-only
- *                Name/Host reads as blank (Sprint 178).
+ *                Name/Host reads as blank.
  */
 export function validateConnectionDraft(
   trimmed: ConnectionDraft,
@@ -87,18 +87,17 @@ export function validateConnectionDraft(
       message: t("dialog.errorDatabaseFileRequired"),
     };
   }
-  // Sprint 345 — non-SQLite DBMSes also require a database name.
-  // Empty submit used to silently default to the server-side fallback
-  // (Postgres → `postgres`, Mongo → no DB at all) which surprised users
-  // who expected the form's intent to round-trip. The form now seeds
-  // a paradigm-appropriate default at draft init, so blank here means
-  // the user deleted it on purpose — reject explicitly.
+  // Network DBMSes also require a database name, except MongoDB (below) and
+  // the search family. Empty submit used to silently default to the
+  // server-side fallback (Postgres → `postgres`) which surprised users who
+  // expected the form's intent to round-trip. The form now seeds a
+  // paradigm-appropriate default at draft init, so blank here means the user
+  // deleted it on purpose — reject explicitly.
   //
-  // Sprint 381 (2026-05-17) — Mongo db-contract α: MongoDB connections
-  // do *not* require a default database. The toolbar chip picks the
-  // per-tab database at runtime, and admin commands
-  // (`db.runCommand({...})`) target the admin DB context regardless of
-  // any pre-bound default. RDB connections still require it.
+  // Mongo db-contract α: MongoDB connections do *not* require a default
+  // database. The toolbar chip picks the per-tab database at runtime, and
+  // admin commands (`db.runCommand({...})`) target the admin DB context
+  // regardless of any pre-bound default.
   if (!isFileConnection && !isMongo && !isSearch && !trimmed.database) {
     return {
       field: "database",

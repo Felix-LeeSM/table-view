@@ -31,11 +31,11 @@ export interface ConnectionDialogFooterProps {
 }
 
 /**
- * Sprint 213 — presentational footer of `ConnectionDialog`.
+ * Presentational footer of `ConnectionDialog`.
  *
- *   - `<DialogFeedback slotName="test-feedback" />` (sprint-95 layer-1
- *     migration, sprint-92 `data-slot` selector contract preserved).
- *   - `error` save-error region (`role="alert"`, sprint-178 sanitised).
+ *   - `<DialogFeedback slotName="test-feedback" />` (`data-slot` selector
+ *     contract — see the comment at its render site).
+ *   - `error` save-error region (`role="alert"`, sanitised).
  *   - Footer with Test Connection (left) + Cancel/Save (right) — the
  *     dialog-level escape-hatch split documented at the top of
  *     `ConnectionDialog.tsx`.
@@ -74,11 +74,10 @@ export default function ConnectionDialogFooter({
           reachable regardless of scroll position or which form segment
           (#2436) is open.
 
-          Sprint-95 Layer-1 migration: this slot is rendered by the base
-          `<DialogFeedback>` primitive. The `slotName` override keeps the
-          sprint-92 `data-slot="test-feedback"` selector contract intact so
-          `expectNodeStable` continues to track the same DOM node across
-          state transitions.
+          This slot is rendered by the base `<DialogFeedback>` primitive.
+          The `slotName` override keeps the `data-slot="test-feedback"`
+          selector contract (#CONN-DIALOG-6) intact so `expectNodeStable`
+          continues to track the same DOM node across state transitions.
 
           #2437: `sr-only` while collapsed. That keeps the node mounted with
           its `role="status"` / `role="alert"` / `aria-live` semantics — a

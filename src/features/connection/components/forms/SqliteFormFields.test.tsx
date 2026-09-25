@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionDraft } from "@/types/connection";
 import SqliteFormFields from "./SqliteFormFields";
 
-// Sprint 146 (AC-143-3) — the Browse button calls into
+// AC-143-3 — the Browse button calls into
 // `@tauri-apps/plugin-dialog`. We mock the module so jsdom tests don't
 // reach into Tauri. The default mock resolves to a fixed file path; tests
 // that need a different return value reset the mock per-case.
