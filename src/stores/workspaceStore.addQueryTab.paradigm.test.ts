@@ -2,7 +2,7 @@
  * `addQueryTab` paradigm auto-detection (2026-05-15).
  *
  * Why these tests exist:
- *   Before this slice the store hard-coded the paradigm fallback to
+ *   Before the fix the store hard-coded the paradigm fallback to
  *   `"rdb"` when the caller omitted `opts.paradigm`. The sidebar
  *   "+ Query" button and the global Cmd+N shortcut both omit it, so
  *   opening a query tab against a Mongo connection produced an RDB tab.
@@ -82,8 +82,8 @@ describe("workspaceStore.addQueryTab — paradigm auto-detection", () => {
     const tab = getQueryTab(getTestWorkspace("conn-mongo", "appdb"), 0);
     expect(tab.paradigm).toBe("document");
     // Document tabs must not carry the legacy `sql` queryMode — the
-    // editor surface is mongosh-flavoured (Sprint 309 lock).
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
+    // editor surface is mongosh-flavoured.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt
     expect(tab.queryMode).toBeUndefined();
     expect(tab.queryLanguage).toBe("mongosh");
     expect(tab.database).toBe("appdb");
@@ -98,7 +98,7 @@ describe("workspaceStore.addQueryTab — paradigm auto-detection", () => {
 
     const tab = getQueryTab(getTestWorkspace("conn-pg", "appdb"), 0);
     expect(tab.paradigm).toBe("rdb");
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt, removed when sprint-311 A5 lands
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- #1403: QueryTab.queryMode is intentional migration debt
     expect(tab.queryMode).toBe("sql");
     expect(tab.queryLanguage).toBe("sql");
   });

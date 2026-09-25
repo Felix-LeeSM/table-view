@@ -1,10 +1,8 @@
-// Sprint 307: mongosh expression parser foundation for Phase 28 Slice A1.
+// mongosh expression parser.
 // The parser turns `db.<coll>.<method>(<args>).<chain>` strings into a
-// discriminated-union result so later sub-slices (A2 backend dispatch, A3
-// editor surface, A4 snippet menu, A5 read dispatch, A6 write dispatch) can
-// route mongosh expressions without invoking a JS evaluator. Tests cover the
-// AC matrix from Sprint 307 contract: 13 happy-path methods,
-// 6 BSON literal reifications, and 13 refusal kinds. (2026-05-14)
+// discriminated-union result so callers can route mongosh expressions
+// without invoking a JS evaluator. Tests cover happy-path methods, BSON
+// literal reifications, and refusal kinds.
 
 import {
   MONGOSH_METHOD_WHITELIST,

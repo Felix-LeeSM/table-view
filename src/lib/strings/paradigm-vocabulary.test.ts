@@ -1,8 +1,8 @@
-// Reason: Sprint 179 (AC-179-01 / AC-179-04) introduces the typed paradigm
+// Reason: AC-179-01 / AC-179-04 — the typed paradigm
 // vocabulary dictionary. These tests anchor (a) every Paradigm key gets a
 // complete entry across the seven required vocabulary keys, (b) the rdb
 // entry equals the legacy English copy already asserted by the existing
-// component tests so Sprint 179 doesn't regress them, and (c) the
+// component tests so the dictionary doesn't regress them, and (c) the
 // `getParadigmVocabulary(undefined)` fallback returns the rdb entry.
 // Date: 2026-04-30.
 import { describe, expect, it } from "vitest";
