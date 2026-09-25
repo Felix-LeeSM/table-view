@@ -14,8 +14,8 @@ import SchemaTree from "./SchemaTree";
 import { resolveRdbTreeProfile, resolveRdbTreeShape } from "./treeShape";
 
 /**
- * Sprint 135 — AC-S135-02 / 03 / 04 / 07: SchemaTree must render at
- * different depths depending on `connection.dbType`.
+ * AC-S135-02 / 03 / 04 / 07: SchemaTree must render at different depths
+ * depending on `connection.dbType`.
  *
  *   - `postgresql` → `database → schema → table` (3-level, schema row
  *     visible).
@@ -54,10 +54,10 @@ function makeConnection(id: string, dbType: DatabaseType): ConnectionConfig {
   };
 }
 
-// Sprint 263 — flat-key seeds are translated into the new
-// `(connId, db)`-nested cache shape under the `db1` sentinel. Active
-// connection statuses are auto-seeded for every conn id mentioned in
-// the schemas overlay so `useWorkspaceKeyForConnection` resolves.
+// Flat-key seeds are translated into the `(connId, db)`-nested cache
+// shape under the `db1` sentinel. Active connection statuses are
+// auto-seeded for every conn id mentioned in the schemas overlay so
+// `useWorkspaceKeyForConnection` resolves.
 const DEFAULT_DB = "db1";
 function translateFlatSeeds(
   overrides: Record<string, unknown>,
@@ -167,8 +167,8 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     });
 
     // The schema row IS rendered for PG (the schema button is the
-    // "level 2" of the 3-level tree). Sprint 144 (AC-145-1) — every PG
-    // schema now auto-expands on first paint, so the existing schema is
+    // "level 2" of the 3-level tree). The first PG schema auto-expands on
+    // first paint (AC-145-1, narrowed by #1217), so the existing schema is
     // already aria-expanded="true" without a user click.
     expect(screen.getByLabelText("public schema")).toBeInTheDocument();
     expect(screen.getByLabelText("public schema")).toHaveAttribute(
@@ -181,7 +181,7 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
   // #1217 — PG: only the FIRST schema seeds expanded (supersedes AC-145-1).
   // ─────────────────────────────────────────────────────────────────────
   it("PG seeds only the first schema expanded on first paint (#1217 supersedes AC-145-1)", async () => {
-    // #1217 reversed the sprint-144 "expand every schema" seed: a
+    // #1217 reversed the earlier "expand every schema" seed: a
     // connection with hundreds of schemas × tables produced a ~9,000-row
     // wall. The product rule now seeds only the first schema open; the rest
     // stay collapsed (but still carry a table-count badge for overview).
@@ -773,8 +773,8 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────
-  // Sprint 144 (AC-145-3) — Functions category does not push the sidebar
-  // wider when expanded.
+  // AC-145-3 — Functions category does not push the sidebar wider when
+  // expanded.
   //
   // jsdom doesn't run real layout, so a literal getBoundingClientRect()
   // delta-check would assert nothing meaningful. Instead, this test pins
@@ -827,8 +827,8 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
       render(<SchemaTree connectionId="pg-fn" />);
     });
 
-    // Schema is auto-expanded (sprint 144 contract); click Functions to
-    // expand the category and surface the function rows.
+    // Schema is auto-expanded; click Functions to expand the category and
+    // surface the function rows.
     const fnCategoryBtn = screen.getByLabelText("Functions in public");
     await act(async () => {
       fnCategoryBtn.click();

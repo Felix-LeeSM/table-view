@@ -1,8 +1,8 @@
-// AC-196-06 — source badge surface tests. Sprint 196 (FB-5b) introduces a
-// per-row `source` indicator on the global query log so users can tell
-// editor-driven runs apart from grid commits / DDL ops / Mongo direct ops.
-// `raw` is suppressed (the default for editor execution) to keep the row
-// visually quiet — only non-default sources light up. 2026-05-02.
+// AC-196-06 — source badge surface tests. The global query log carries a
+// per-row `source` indicator (FB-5b) so users can tell editor-driven runs
+// apart from grid commits / DDL ops / Mongo direct ops. `raw` is
+// suppressed (the default for editor execution) to keep the row visually
+// quiet — only non-default sources light up.
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";

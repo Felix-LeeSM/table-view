@@ -99,9 +99,9 @@ export default function QuickOpen() {
   const sidebarConnId = useCurrentWindowConnectionId();
 
   // Build the searchable inventory from every connected schema's cached objects.
-  // Sprint 263 — schemaStore is now `(connId, db, schema)` nested. QuickOpen
-  // surfaces objects from each connection's *activeDb* only (cross-db search
-  // would need parallel pre-fetch and is out of scope for this sprint).
+  // schemaStore is `(connId, db, schema)` nested. QuickOpen surfaces objects
+  // from each connection's *activeDb* only (cross-db search would need
+  // parallel pre-fetch and is out of scope).
   const items = useMemo<QuickOpenItem[]>(() => {
     const result: QuickOpenItem[] = [];
 

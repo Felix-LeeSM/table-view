@@ -56,8 +56,8 @@ export async function fillTwoColumnFormAndOpenForeignKeysTab() {
   activateTab("Constraints");
 }
 
-// Sprint 241 — Constraints panel has nested sub-tabs; each `+ Add`
-// button is hidden behind its family's sub-tab.
+// The Constraints panel has nested sub-tabs; each `+ Add` button is
+// hidden behind its family's sub-tab.
 export function addFkRow() {
   fireEvent.click(screen.getByRole("button", { name: /Add foreign key/i }));
 }

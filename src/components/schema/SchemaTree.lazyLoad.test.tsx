@@ -1,11 +1,15 @@
-// #1219 — 접속 시 전 스키마 eager N+1 로드를 lazy 로 전환. 4개 AC 의
-// user-journey 검증:
-//   1. 접속 시 스키마 목록만 로드; 테이블은 펼친 스키마만 (seed 첫 스키마 포함).
-//   3. 소규모 DB (스키마 수 <= 임계) 는 기존처럼 즉시 전체 로드.
-//   4. 재접속 시 persist 된 펼친 스키마는 내용 로드, 접힌 스키마는 안 가져옴.
-// mock 은 lib boundary (schema store actions) 만; 렌더는 실제 SchemaTree.
-// (AC-2 자동완성 회귀 방지 = expandSchema 의 컬럼 prefetch → useSchemaCache
-//  단위 테스트 [AC-1219-3] 에서 lock.)
+// #1219 — the eager N+1 load of every schema on connect becomes lazy.
+// User-journey checks for the 4 ACs:
+//   1. On connect only the schema list loads; tables load for expanded
+//      schemas only (the seeded first schema included).
+//   3. A small DB (schema count <= threshold) still loads everything at
+//      once.
+//   4. On reconnect the persisted expanded schemas load their content;
+//      collapsed schemas are not fetched.
+// Only the lib boundary (schema store actions) is mocked; the render uses
+// the real SchemaTree.
+// (AC-2, the autocomplete regression guard = the column prefetch in
+//  expandSchema → locked by the `useSchemaCache` unit test [AC-1219-3].)
 
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -27,7 +31,7 @@ describe("SchemaTree — lazy schema load (#1219)", () => {
     resetStores();
   });
 
-  // ── AC1 — 큰 DB: 접속 시 seed 된 첫 스키마 내용만 로드 ────────────────────
+  // ── AC1 — large DB: only the seeded first schema's content loads on connect ─
   it("large DB: loads only the seeded first schema's tables at mount", async () => {
     setSchemaStoreState({ schemas: { conn1: manySchemas(6) }, tables: {} });
 
@@ -50,7 +54,7 @@ describe("SchemaTree — lazy schema load (#1219)", () => {
     );
   });
 
-  // ── AC3 — 소규모 DB: 임계 이하면 기존처럼 전체 즉시 로드 ──────────────────
+  // ── AC3 — small DB: at or below the threshold, everything loads at once ───
   it("small DB: eager-loads every schema's tables at mount (<= threshold)", async () => {
     setSchemaStoreState({ schemas: { conn1: manySchemas(3) }, tables: {} });
 
@@ -63,7 +67,7 @@ describe("SchemaTree — lazy schema load (#1219)", () => {
     expect(mockLoadTables).toHaveBeenCalledWith("conn1", "db1", "s2");
   });
 
-  // ── AC3 — 시스템 스키마가 raw count 를 부풀려도 소규모면 eager (PR #1263 회귀) ─
+  // ── AC3 — system schemas inflate raw count; small DB stays eager (PR #1263) ─
   it("small DB with system schemas: user-schema count keeps it eager, all schemas visible", async () => {
     // DuckDB-shaped: `main`/`temp` (system) + 4 user schemas. Raw length 6
     // must not tip the DB lazy — the threshold counts only user schemas (4).
@@ -90,10 +94,10 @@ describe("SchemaTree — lazy schema load (#1219)", () => {
     expect(mockLoadTables).toHaveBeenCalledWith("conn1", "db1", "support");
   });
 
-  // ── AC4 — 재접속: persist 된 펼친 스키마만 내용 로드, 접힌 건 안 가져옴 ────
+  // ── AC4 — reconnect: persisted expanded schemas load, collapsed ones do not ─
   it("reconnect: persisted expanded schema loads its tables; collapsed ones stay unfetched", async () => {
     setSchemaStoreState({ schemas: { conn1: manySchemas(6) }, tables: {} });
-    // 이전 세션에서 사용자가 s3 만 펼쳐둔 상태 (나머지 접힘).
+    // The user left only s3 expanded in the previous session (rest collapsed).
     useWorkspaceStore.getState().setExpanded("conn1", "db1", ["s3"]);
 
     await act(async () => {
@@ -113,7 +117,7 @@ describe("SchemaTree — lazy schema load (#1219)", () => {
     );
   });
 
-  // ── AC1 — 큰 DB 에서 수동 펼침 = 로드 1회 (reconcile ↔ click 중복 방지) ──
+  // ── AC1 — large DB manual expand = 1 load (no reconcile ↔ click repeat) ───
   it("large DB: manually expanding a collapsed schema fetches its tables exactly once", async () => {
     setSchemaStoreState({ schemas: { conn1: manySchemas(6) }, tables: {} });
 

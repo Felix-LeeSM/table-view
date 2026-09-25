@@ -1,11 +1,12 @@
-// Purpose: SchemaTree의 모든 preview tab entry point 진단 — Phase 13 Sprint 156 (2026-04-28)
+// Purpose: diagnose every preview tab entry point in SchemaTree
 //
-// 사용자 보고 버그:
-//   Bug 2: PG sidebar table click 시 preview tab이 swap되지 않고 누적됨
+// User-reported bug:
+//   Bug 2: clicking a PG sidebar table accumulates preview tabs instead of
+//   swapping them
 //
-// SchemaTree.preview.test.tsx는 기본 click/double-click만 커버하므로,
-// 여기서는 context menu, search filter, view 항목, promote 후 재클릭 등
-// 모든 entry point를 진단한다.
+// SchemaTree.preview.test.tsx covers only the basic click/double-click, so
+// this file diagnoses every entry point: context menu, search filter, view
+// items, re-click after promote.
 //
 // AC IDs:
 //   AC-156-04a  Context menu "Data" on table → preview tab (isPreview: true)
@@ -30,7 +31,7 @@ const mockLoadViews = vi.fn().mockResolvedValue(undefined);
 const mockLoadFunctions = vi.fn().mockResolvedValue(undefined);
 const mockPrefetchSchemaColumns = vi.fn().mockResolvedValue(undefined);
 
-// Sprint 263 — translate legacy flat-key seeds into the new
+// Translate legacy flat-key seeds into the new
 // `(connId, db)`-nested cache shape under `db1` so existing test seeds
 // continue to work against the db-aware schemaStore.
 const DEFAULT_DB = "db1";
@@ -146,8 +147,9 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     seedRelationalSchema();
   });
 
-  // Reason: Context menu "Data" 클릭 시 handleTableClick이 호출되어 preview tab이
-  //         생성되어야 함. 사용자 보고 — context menu로 열었을 때 누적되는지 확인 (2026-04-28)
+  // Reason: clicking context menu "Data" must call `handleTableClick` and
+  //         create a preview tab. User report — check whether opening from
+  //         the context menu accumulates tabs.
   it("AC-156-04a: context menu 'Data' on a table opens a preview tab (isPreview: true)", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -172,8 +174,9 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     expect(getTableTab().subView).toBe("records");
   });
 
-  // Reason: Context menu "Structure" 클릭 시 subView가 "structure"인 tab이 열려야 함.
-  //         preview 여부와 subView 값을 모두 검증 (2026-04-28)
+  // Reason: clicking context menu "Structure" must open a tab whose subView
+  //         is "structure". Checks both the preview flag and the subView
+  //         value.
   it("AC-156-04b: context menu 'Structure' on a table opens a structure tab with subView='structure'", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -199,8 +202,9 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     expect(getTableTab().isPreview).toBe(true);
   });
 
-  // Reason: 검색 필터가 활성화된 상태에서 클릭해도 preview swap이 동작해야 함.
-  //         search filter가 addTab 분기를 변경하지 않는지 확인 (2026-04-28)
+  // Reason: preview swap must still work when the search filter is active.
+  //         Checks that the search filter does not change the `addTab`
+  //         branch.
   it("AC-156-04c: clicking a filtered table (search active) opens a preview tab and swap still works", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -237,10 +241,11 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     expect(getTableTab().isPreview).toBe(true);
   });
 
-  // Reason: promote 후 다른 테이블 클릭 시 permanent + preview 2개 탭이 있어야 함.
-  //         기존 테스트(SchemaTree.preview.test.tsx AC-S136-02)에서 후속 클릭을
-  //         검증하지만, 여기서는 promote → 다른 테이블 → 또 다른 테이블 순서로
-  //         3-step 진단 (2026-04-28)
+  // Reason: after a promote, clicking another table must leave 2 tabs —
+  //         permanent + preview. The existing test
+  //         (SchemaTree.preview.test.tsx AC-S136-02) checks the follow-up
+  //         click; here the diagnosis runs 3 steps: promote → another table →
+  //         yet another table.
   it("AC-156-04d: clicking a different table after promoting one → 2 tabs (1 permanent + 1 preview)", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -302,8 +307,9 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     expect(permanentStill).toBeDefined();
   });
 
-  // Reason: view 클릭 시 tab 생성 방식 확인. views는 handleViewClick을 사용하며
-  //         objectKind: "view"가 설정됨. view는 preview slot에 참여하는지 진단 (2026-04-28)
+  // Reason: check how a tab is created on a view click. Views go through
+  //         `handleViewClick` and set objectKind: "view". Diagnoses whether a
+  //         view takes part in the preview slot.
   it("AC-156-04e: clicking a view opens a tab with objectKind='view'", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -331,8 +337,9 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     expect(tab.isPreview).toBe(true);
   });
 
-  // Reason: view 클릭 후 다른 view 클릭 시 preview swap이 동작하는지 확인.
-  //         handleViewClick이 addTab을 호출하므로 같은 swap 로직을 타야 함 (2026-04-28)
+  // Reason: check that preview swap works when one view click follows
+  //         another. `handleViewClick` calls `addTab`, so it must take the
+  //         same swap path.
   it("AC-156-04e (extended): clicking a second view swaps the preview slot", async () => {
     // Seed two views.
     setSchemaStoreState({
@@ -378,8 +385,9 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     expect(getTableTab().table).toBe("recent_orders");
   });
 
-  // Reason: context menu "Data" 후 다른 테이블 클릭 시 preview swap이 정상 동작하는지
-  //         진단. context menu 경로와 일반 click 경로가 같은 addTab 분기를 타는지 확인 (2026-04-28)
+  // Reason: diagnose whether preview swap works when another table is
+  //         clicked after context menu "Data". Checks that the context-menu
+  //         path and the plain click path take the same `addTab` branch.
   it("AC-156-04a (swap): context menu 'Data' then clicking a different table swaps the preview slot", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -408,8 +416,9 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     expect(getTableTab().isPreview).toBe(true);
   });
 
-  // Reason: 테이블 promote 후 view 클릭 시 permanent 테이블 + preview view 2개 탭이
-  //         있어야 함. cross-objectKind preview slot 독립성 진단 (2026-04-28)
+  // Reason: after promoting a table, clicking a view must leave 2 tabs — the
+  //         permanent table + the preview view. Diagnoses cross-objectKind
+  //         preview slot independence.
   it("AC-156-04d (cross-kind): after promoting a table, clicking a view creates a new preview alongside permanent", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -440,9 +449,10 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     expect(state.tabs).toHaveLength(2);
   });
 
-  // Reason: context menu "Structure"이 기존 preview tab을 대체하는지 진단.
-  //         handleOpenStructure이 addTab을 호출하므로 preview swap이 일어나야 하지만
-  //         subView가 다르면 exact-match가 실패할 수 있음 (2026-04-28)
+  // Reason: diagnose whether context menu "Structure" replaces the existing
+  //         preview tab. `handleOpenStructure` calls `addTab`, so a preview
+  //         swap should happen, but a different subView can fail the
+  //         exact-match.
   it("AC-156-04b (swap): context menu 'Structure' after a preview 'Data' tab → replaces the preview slot", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -466,7 +476,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     });
 
     const state = getTestWorkspace();
-    // Sprint 158 fix: addTab now includes subView in the exact-match and
+    // addTab now includes subView in the exact-match and
     // preview-swap checks. A Data preview (records) and Structure tab are
     // treated as separate tabs, so clicking "Structure" after a Data preview
     // creates a second tab instead of activating/replacing the Data preview.

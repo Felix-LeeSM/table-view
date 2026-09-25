@@ -1,7 +1,7 @@
-// Sprint 327 (2026-05-15) — Smoke for the shared deferred-backend placeholder
-// used by 9 scaffolding panels (J~M + U1~U5). Sprint 327 contract D-73:
-// placeholder must surface (a) a title, (b) a sprint pointer, (c) a stable
-// testid so wire-up sprints can target it.
+// Smoke for the shared deferred-backend placeholder used by the
+// scaffolding panels. Contract D-73: the placeholder must surface (a) a
+// title, (b) the `pendingSprint` pointer, (c) a stable testid so the
+// wire-up can target it.
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";

@@ -6,10 +6,10 @@ import { useToastStore } from "@/stores/toastStore";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import { ExportButton } from "./ExportButton";
 
-// Sprint 181 — ExportButton dispatches into `@tauri-apps/plugin-dialog`
-// (`save`) and `@tauri-apps/api/core` (`invoke`). Both are unavailable in
-// jsdom, so we mock them at module level. Each test resets the mocks
-// through `beforeEach` so the queue stays deterministic.
+// ExportButton dispatches into `@tauri-apps/plugin-dialog` (`save`) and
+// `@tauri-apps/api/core` (`invoke`). Both are unavailable in jsdom, so we
+// mock them at module level. Each test resets the mocks through
+// `beforeEach` so the queue stays deterministic.
 const mockSave = vi.fn();
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   save: (opts: unknown) => mockSave(opts),
@@ -306,9 +306,8 @@ describe("ExportButton", () => {
     expect(toasts.some((toast) => toast.variant === "info")).toBe(true);
   });
 
-  // [Invariant — Sprint 181] ExportButton's IPC payload never includes
-  // password fields. 2026-05-01 — guards ADR-0005 plaintext password
-  // boundary.
+  // [Invariant] ExportButton's IPC payload never includes password
+  // fields. Guards the ADR-0005 plaintext password boundary.
   it("never sends a password field in the invoke payload", async () => {
     const user = userEvent.setup();
     mockSave.mockResolvedValueOnce("/tmp/out.csv");

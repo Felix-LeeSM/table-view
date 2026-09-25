@@ -317,7 +317,7 @@ export default function IndexesEditor({
           index_type: params.indexType,
           is_unique: params.isUnique,
           preview_only: true,
-          // Sprint 271c — opt-in DbMismatch guard. snake_case wire form.
+          // Opt-in DbMismatch guard. snake_case wire form.
           expected_database: database,
         }),
       () => async () => {
@@ -330,7 +330,7 @@ export default function IndexesEditor({
           index_type: params.indexType,
           is_unique: params.isUnique,
           preview_only: false,
-          // Sprint 271c — opt-in DbMismatch guard.
+          // Opt-in DbMismatch guard.
           expected_database: database,
         });
         setShowPreviewModal(false);
@@ -370,7 +370,7 @@ export default function IndexesEditor({
           table,
           index_name: indexName,
           preview_only: true,
-          // Sprint 271c — opt-in DbMismatch guard.
+          // Opt-in DbMismatch guard.
           expected_database: database,
         }),
       () => async () => {
@@ -381,7 +381,7 @@ export default function IndexesEditor({
             table,
             index_name: indexName,
             preview_only: false,
-            // Sprint 271c — opt-in DbMismatch guard.
+            // Opt-in DbMismatch guard.
             expected_database: database,
           },
           // Issue #1112 — commit runs only after the Safe Mode gate + preview
@@ -529,7 +529,7 @@ export default function IndexesEditor({
         />
       )}
 
-      {/* Warn-tier destructive confirmation dialog (Sprint 246). */}
+      {/* Warn-tier destructive confirmation dialog. */}
       {ddl.pendingConfirm && (
         <ConfirmDestructiveDialog
           open

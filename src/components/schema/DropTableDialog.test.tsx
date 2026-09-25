@@ -1,13 +1,13 @@
-// Sprint 235 (AC-235-02, AC-235-03, AC-235-05, AC-235-06, AC-235-09)
-// — DropTableDialog test suite. Date: 2026-05-07.
+// AC-235-02, AC-235-03, AC-235-05, AC-235-06, AC-235-09 — DropTableDialog
+// test suite.
 //
 // Why this file exists:
 // - AC-235-05: typing-confirm enable/disable, CASCADE toggle → debounced
-//   preview re-fetch with no `Show DDL` click in between (Sprint 238),
-//   CASCADE checked emits SQL with `... CASCADE`, case-sensitive typing
-//   match (`Users` ≠ `users`), Apply disabled before typing match.
-// - AC-235-06: Safe Mode confirm / warn-cancel / safe matrix (Sprint 245
-//   retired the block tier — see the case at "production × strict").
+//   preview re-fetch with no `Show DDL` click in between, CASCADE checked
+//   emits SQL with `... CASCADE`, case-sensitive typing match
+//   (`Users` ≠ `users`), Apply disabled before typing match.
+// - AC-235-06: Safe Mode confirm / warn-cancel / safe matrix (the block
+//   tier is retired — see the case at "production × strict").
 //   `DROP TABLE` is classified `ddl-drop`/danger so the gate fires on
 //   production environments.
 // - AC-235-02 / AC-235-03: IPC payload shape (camelCase) + call sequence
@@ -19,8 +19,7 @@
 //   typing-confirm input still owns whether the DROP may run.
 //
 // Mock pattern: `vi.hoisted` for `@lib/tauri.dropTableRequest`,
-// `tauri.dropTable` (compat), and `tauri.listTables` (Sprint 223
-// reload path).
+// `tauri.dropTable` (compat), and `tauri.listTables` (reload path).
 
 import {
   act,
@@ -45,7 +44,7 @@ beforeEach(() => {
     dropTableRequest: mockDropTableRequest,
     dropTable: mockDropTable,
     listTables: mockListTables,
-    // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+    // `<DryRunPreview>` IPC stub for confirm dialog.
     executeQueryDryRun: vi.fn(() => Promise.resolve([])),
     cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
   });
@@ -251,7 +250,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });
@@ -261,8 +260,8 @@ describe("DropTableDialog (Sprint 235)", () => {
   });
 
   // AC-235-05 — CASCADE toggled on → preview auto-refetches with CASCADE.
-  // Sprint 238: 자동 refresh — CASCADE 토글만으로 새 preview 가 fetch 된다
-  // (이전 Sprint 235 의 "Show DDL 재클릭 필요" friction 해소).
+  // Auto-refresh: toggling CASCADE alone fetches a new preview, which
+  // removes the earlier "re-click Show DDL" friction.
   it("[AC-235-05] CASCADE toggle auto-refetches preview with cascade:true", async () => {
     mockDropTableRequest
       .mockResolvedValueOnce({ sql: 'DROP TABLE "public"."users"' })
@@ -272,15 +271,15 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    // 자동 fetch (cascade:false) 는 다이얼로그가 열릴 때 debounce 후 한 번
-    // 난다 — 타이핑과 무관하다 (이슈 #2191).
+    // The auto fetch (cascade:false) fires once after the debounce when
+    // the dialog opens — it is independent of typing (issue #2191).
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
     });
     expect(mockDropTableRequest.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({ cascade: false, previewOnly: true }),
     );
-    // CASCADE 토글 → 두 번째 자동 fetch (cascade:true).
+    // CASCADE toggle → second auto fetch (cascade:true).
     await act(async () => {
       fireEvent.click(screen.getByLabelText("CASCADE"));
     });
@@ -333,7 +332,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users", onClose });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });
@@ -343,8 +342,8 @@ describe("DropTableDialog (Sprint 235)", () => {
     await waitFor(() => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
-    // Sprint 223 useSchemaTableMutations chained the compat wrapper.
-    // Sprint 271c — `expectedDatabase` last-positional propagated.
+    // useSchemaTableMutations chains the compat wrapper.
+    // `expectedDatabase` propagated as the 4th positional argument.
     expect(mockDropTable).toHaveBeenCalledWith(
       "conn-1",
       "users",
@@ -362,7 +361,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ schemaName: "public", tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
     });
@@ -372,7 +371,7 @@ describe("DropTableDialog (Sprint 235)", () => {
       table: "users",
       cascade: false,
       previewOnly: true,
-      // Sprint 271c — opt-in DbMismatch guard forwards workspace db.
+      // Opt-in DbMismatch guard forwards workspace db.
       expectedDatabase: "db-1",
     });
     await act(async () => {
@@ -384,7 +383,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     // Compat wrapper bridges to the request call. Each commit call goes
     // through `tauri.dropTable` positional → `dropTableRequest` with
     // previewOnly:false.
-    // Sprint 271c — `expectedDatabase` last-positional propagated.
+    // `expectedDatabase` propagated as the 4th positional argument.
     expect(mockDropTable).toHaveBeenCalledWith(
       "conn-1",
       "users",
@@ -394,10 +393,10 @@ describe("DropTableDialog (Sprint 235)", () => {
     );
   });
 
-  // AC-235-06 — Safe Mode confirm dialog on production×strict (was
-  // block under Sprint 235/244). Sprint 245 (ADR 0022 Phase 1) —
-  // destructive-only policy raises the confirm dialog instead. The
-  // commit closure still must NOT run until the user confirms.
+  // AC-235-06 — Safe Mode confirm dialog on production×strict (this was
+  // block under the earlier policy). ADR 0022's destructive-only policy
+  // raises the confirm dialog instead. The commit closure still must NOT
+  // run until the user confirms.
   it("[AC-235-06] production × strict + DROP TABLE → confirm dialog opens, commit closure deferred", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
@@ -407,7 +406,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });
@@ -415,9 +414,9 @@ describe("DropTableDialog (Sprint 235)", () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     });
     // Confirm dialog mounts; commit closure (tauri.dropTable compat)
-    // does NOT run until the user answers it. Sprint 246 replaced the
-    // earlier type-to-confirm gate with the single-click Yes/No dialog —
-    // `ConfirmDestructiveDialog` has no text input.
+    // does NOT run until the user answers it. The gate is a single-click
+    // Yes/No dialog, not a type-to-confirm one — `ConfirmDestructiveDialog`
+    // has no text input.
     await screen.findByText("PRODUCTION DATABASE");
     expect(mockDropTable).not.toHaveBeenCalled();
   });
@@ -432,7 +431,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });
@@ -470,7 +469,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });
