@@ -67,7 +67,7 @@ function setupStore(opts: {
   active?: string[];
   errored?: Record<string, string>;
   connecting?: string[];
-  // Sprint 270 — defaults to `true`; legacy tests in this file all
+  // Defaults to `true`; legacy tests in this file all
   // exercise post-hydrate branches (empty card, paradigm sidebars, active-
   // tab priority). The pre-hydrate skeleton path is exercised by
   // `firstPaintSkeleton.test.tsx`.
@@ -139,10 +139,9 @@ describe("WorkspaceSidebar", () => {
   });
 
   // ------------------------------------------------------------------
-  // Sprint 270 — first-paint skeleton (AC-270-01, AC-270-04)
+  // First-paint skeleton (AC-270-01, AC-270-04)
   // ------------------------------------------------------------------
 
-  // Sprint 270 (2026-05-13)
   // AC-270-01 — pre-hydrate the sidebar must show the shimmer skeleton, not
   // the "No connections yet" card. Otherwise on cold boot the user sees the
   // empty card for ~1.4 s and panics that their connections were deleted.
@@ -154,15 +153,14 @@ describe("WorkspaceSidebar", () => {
     expect(skeleton).toBeInTheDocument();
     expect(skeleton).toHaveAttribute("role", "status");
     expect(skeleton).toHaveAttribute("aria-busy", "true");
-    // Four stacked rows per the spec's "Visual Direction".
+    // Four stacked rows.
     const rows = skeleton.querySelectorAll(".animate-pulse");
     expect(rows).toHaveLength(4);
     // The post-hydrate empty card must NOT be in the DOM during the
-    // shimmer window — that's the visual flash this sprint is killing.
+    // shimmer window — that's the visual flash this test guards against.
     expect(screen.queryByText(/no connections yet/i)).toBeNull();
   });
 
-  // Sprint 270 (2026-05-13)
   // AC-270-04 — once hydration has completed, even with zero connections,
   // the skeleton must NOT re-render. The user has been told "0 connections,
   // add one" and the sidebar must stay on that surface.
@@ -174,7 +172,6 @@ describe("WorkspaceSidebar", () => {
     expect(screen.getByText(/no connections yet/i)).toBeInTheDocument();
   });
 
-  // Sprint 270 (2026-05-13)
   // AC-270-04 (remount) — flipping the flag to true and forcing a remount
   // by unmount/render must not revert to the skeleton. Verifies the
   // selector reads the live flag, not a captured-at-mount snapshot.
@@ -257,7 +254,7 @@ describe("WorkspaceSidebar", () => {
   });
 
   // ------------------------------------------------------------------
-  // Paradigm branches (the core sprint 126 contract)
+  // Paradigm branches
   // ------------------------------------------------------------------
 
   it("renders RdbSidebar -> SchemaTree for paradigm 'rdb'", () => {

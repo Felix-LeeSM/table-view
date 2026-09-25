@@ -52,7 +52,7 @@ export default function WorkspaceSidebar({
   const activeTabConnId = activeTab?.connectionId ?? null;
 
   if (connections.length === 0) {
-    // Sprint 270 — pre-hydrate window: `loadConnections` hasn't resolved
+    // Pre-hydrate window: `loadConnections` hasn't resolved
     // yet, so we don't know whether the user actually has zero connections
     // or we just haven't fetched them. Show a skeleton instead of the
     // "No connections yet" card to avoid the empty-card flash on cold
@@ -158,7 +158,7 @@ export default function WorkspaceSidebar({
 }
 
 /**
- * Sprint 270 — first-paint skeleton for the sidebar. Renders four stacked
+ * First-paint skeleton for the sidebar. Renders four stacked
  * `Skeleton` rows roughly the height of a connection-list row. `role="status"`
  * + `aria-busy="true"` mirror the rest of the sidebar's empty / error cards
  * so screen readers know the surface is loading rather than empty. The

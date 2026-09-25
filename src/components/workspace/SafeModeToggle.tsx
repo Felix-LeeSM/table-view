@@ -11,18 +11,12 @@ import { useTranslation } from "react-i18next";
  * guard; the destructive confirm dialog opens at commit time on
  * production regardless of mode (see `ConfirmDestructiveDialog`).
  *
- * Sprint 245 (ADR 0022 Phase 1) — mode 3-tier semantic redefined to a
+ * ADR 0022 Phase 1 — mode 3-tier semantic redefined to a
  * destructive-only policy. The store enum / icons / cycle order are
  * preserved; only the tooltip copy and the underlying decision matrix
- * (`decideSafeModeAction`) changed:
- *
- *   - strict: destructive confirm in *all* environments (production +
- *     non-production). Useful for shared-staging / learning DBs where a
- *     dev wants the same dialog gate as production.
- *   - warn (default): destructive confirm in production only.
- *     Non-production is unguarded.
- *   - off: prod-auto — production still confirms (the toolbar toggle
- *     can't bypass the prod safety net); non-prod is fully unguarded.
+ * (`decideSafeModeAction`) changed. Strict confirms destructive statements
+ * in all environments, warn in production only, and off is prod-auto
+ * (production still confirms); see `decideSafeModeAction` for the matrix.
  *
  * Visuals use icon-shape-only differentiation (ShieldCheck / ShieldAlert /
  * ShieldOff carry distinct silhouettes). Verbose mode-by-mode description
@@ -49,7 +43,7 @@ export default function SafeModeToggle() {
   const label = t(`safeMode.${mode}.label`);
   const tooltip = t(`safeMode.${mode}.tooltip`);
 
-  // #1123 — backend-first toggle (sprint-368): the store only advances the
+  // #1123 — backend-first toggle: the store only advances the
   // mode after `persist_setting` resolves, so on IPC failure the displayed
   // mode is already correct (unchanged). Awaiting + catching here surfaces
   // that silent divergence as an error toast instead of an unhandled

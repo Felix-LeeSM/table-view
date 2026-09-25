@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 /**
- * Sprint 247 (ADR 0022 Phase 3) — preview pane mounted inside
+ * ADR 0022 Phase 3 — preview pane mounted inside
  * `<ConfirmDestructiveDialog>`. Shows the result of a dry-run
  * (`BEGIN; <statements>; ROLLBACK;`) so the user sees per-statement
  * `rows_affected` BEFORE approving the actual commit.

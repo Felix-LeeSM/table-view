@@ -1,20 +1,12 @@
-// Sprint 189 (D-4) — `useSafeModeGate` is now pure store wiring around
+// D-4 — `useSafeModeGate` is pure store wiring around
 // `decideSafeModeAction` (covered by `src/lib/safeMode.test.ts`). These
 // tests assert that the hook reads from `useSafeModeStore` and
 // `useConnectionStore` correctly; the decision matrix itself is not
-// re-tested here to avoid duplicate coverage.
+// re-tested here to avoid duplicate coverage. date 2026-05-02.
 //
-// Sprint 188 baseline (AC-188-02) lived here as a 6-case matrix — the
-// canonical-block-reason verbatim assertion was migrated to the lib test
-// (AC-189-06a-3). date 2026-05-02.
-//
-// Sprint 245 (ADR 0022 Phase 1) — `useSafeModeReadOnly` (Sprint 243)
-// removed. Its describe block (5 cases) was deleted because the
-// destructive-only policy no longer needs a UI-level read-only gate;
-// the per-statement `useSafeModeGate.decide` covers the destructive
-// dialog. Cmd+Z undoes uncommitted grid edits only; committed safe
-// writes are not recoverable yet (Phase 5 compensating-commit undo
-// pending, #1126). date 2026-05-08.
+// ADR 0022 Phase 1 — the destructive-only policy needs no UI-level
+// read-only gate; the per-statement `useSafeModeGate.decide` covers the
+// destructive dialog. date 2026-05-08.
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { SAFE_MODE_STORAGE_KEY, useSafeModeStore } from "@stores/safeModeStore";
@@ -65,10 +57,10 @@ describe("useSafeModeGate (store wiring)", () => {
   });
 
   it("[AC-245-H2] reads `environment` from useConnectionStore via connectionId", () => {
-    // Sprint 245 — staging + warn + danger → allow (non-production warn
-    // is unguarded under the destructive-only policy). Strict on
-    // staging would `confirm` (M.1 new flow); we use warn here so the
-    // delta vs the previous Sprint 243 wiring is the *value* (allow),
+    // staging + warn + danger → allow (non-production warn is unguarded
+    // under the destructive-only policy). Strict on staging would
+    // `confirm` (M.1 new flow); we use warn here so the result differs
+    // from the production + warn case above (confirm) only by environment,
     // proving environment propagation independently of mode.
     useConnectionStore.setState({
       connections: [makeConn({ environment: "staging" })],

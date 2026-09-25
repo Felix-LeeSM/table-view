@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { QueryResult } from "@/types/query";
 
 /**
- * Sprint 247 (ADR 0022 Phase 3) — `useDryRun` powers the destructive-
+ * ADR 0022 Phase 3 — `useDryRun` powers the destructive-
  * statement confirm dialog's preview pane. When `enabled` flips true
  * (dialog mounts), the hook calls `execute_query_dry_run` so the user
  * sees per-statement `rows_affected` / `execution_time_ms` BEFORE

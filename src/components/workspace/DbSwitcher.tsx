@@ -249,13 +249,10 @@ export default function DbSwitcher() {
       //   1. backend swaps the active sub-pool (PG)
       //   2. `setActiveDb` flips the trigger label
       //   3. close popover + success toast
-      // Sprint 263 — schemaStore caches are now `(connId, db)` keyed, so a
-      // DB toggle no longer needs to wipe the whole connection's cache.
-      // The sidebar re-subscribes to the new slot via the workspace key;
-      // an already-populated slot is reused instantly. Document store
-      // still uses a connection-scoped cache, so its clear-on-switch path
-      // remains (until Mongo migrates to the same shape — see Sprint 263
-      // Out of Scope).
+      // schemaStore caches are `(connId, db)` keyed, so a DB toggle need
+      // not wipe the whole connection's cache. The sidebar re-subscribes to
+      // the new slot via the workspace key; an already-populated slot is
+      // reused instantly.
       // Failure path: leave the popover open so the inline error chip can
       // render alongside the toast — the user may want to re-try a
       // different db without losing the list.

@@ -102,7 +102,7 @@ describe("WorkspaceToolbar", () => {
     expect(
       screen.getByRole("button", { name: /active database \(read-only\)/i }),
     ).toBeInTheDocument();
-    // Sprint 134 — DisconnectButton mounts adjacent to the (keyboard-only)
+    // DisconnectButton mounts adjacent to the (keyboard-only)
     // refresh control. It exists regardless of connection state; disabled
     // when no focused connection is currently connected.
     expect(
@@ -110,7 +110,7 @@ describe("WorkspaceToolbar", () => {
     ).toBeInTheDocument();
   });
 
-  // Sprint 134 — ConnectionSwitcher was removed. Guard against a
+  // ConnectionSwitcher was removed. Guard against a
   // regression accidentally re-mounting it by asserting the combobox
   // role/name is gone.
   it("does NOT render the legacy ConnectionSwitcher combobox", () => {
@@ -120,7 +120,7 @@ describe("WorkspaceToolbar", () => {
     ).toBeNull();
   });
 
-  // Sprint 135 — SchemaSwitcher was removed. Schema selection lives in the
+  // SchemaSwitcher was removed. Schema selection lives in the
   // sidebar tree only. Guard the toolbar against a regression that would
   // re-mount the (now deleted) read-only schema chip.
   it("does NOT render the legacy SchemaSwitcher chip (AC-S135-01)", () => {
@@ -154,7 +154,7 @@ describe("WorkspaceToolbar", () => {
 
     render(<WorkspaceToolbar />);
 
-    // Sprint 130+ — the DB switcher label tracks `activeDb` (or schema as a
+    // The DB switcher label tracks `activeDb` (or schema as a
     // legacy fallback). With no `activeDb` set, the schema name doubles as
     // the DB hint until the tab is reopened.
     const db = screen.getByRole("button", {
@@ -193,7 +193,7 @@ describe("WorkspaceToolbar", () => {
     ).toBeInTheDocument();
   });
 
-  // Post-Sprint-187 hotfix [HF-187-A3] put a History button here so the query
+  // Hotfix [HF-187-A3] put a History button here so the query
   // log was discoverable without Cmd+Shift+C. #2426 moved that discovery to
   // the bottom dock's tab strip and deleted the button; the
   // `toggle-global-query-log` channel it dispatched survives in `App.tsx`

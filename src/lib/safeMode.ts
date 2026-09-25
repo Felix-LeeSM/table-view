@@ -4,8 +4,8 @@ import type { Severity, StatementAnalysis } from "@/lib/sql/sqlSafety";
 /**
  * Paradigm-agnostic Safe Mode decision matrix as a pure function.
  *
- * Sprint 245 (ADR 0022 Phase 1) — destructive-only policy. Sprint 244's
- * "production+strict|off = read-only" was reverted because production
+ * ADR 0022 Phase 1 — destructive-only policy. The
+ * "production+strict|off = read-only" policy was reverted because production
  * INSERT / UPDATE WHERE / CREATE / ALTER additive flow blocked too much
  * day-to-day work and the dialog surface fragmented (block / confirm /
  * read-only-toast). The new matrix:
@@ -14,21 +14,19 @@ import type { Severity, StatementAnalysis } from "@/lib/sql/sqlSafety";
  *     and Mongo $out / $merge / drop / *-all variants — anything the
  *     analyzer marks `severity === "danger"`):
  *       * production + strict / warn → confirm with bare analyzer reason
- *         (rendered verbatim by the single-click Yes/No confirm dialog —
- *         Sprint 246, Phase 2 replaced the earlier type-to-confirm gate)
+ *         (rendered verbatim by the single-click Yes/No confirm dialog)
  *       * production + off            → confirm with prod-auto copy
- *         (preserves the distinguishing "off can't bypass production"
- *         hint inherited from Sprint 190's hard-auto policy)
+ *         (preserves the distinguishing "off can't bypass production" hint)
  *       * non-prod + strict           → confirm with strict-mode copy
  *         (M.1 NEW flow — shared-staging / learning environments)
  *       * non-prod + warn / off       → allow
  *
  *   - non-destructive writes (INSERT / UPDATE WHERE / DELETE WHERE /
  *     CREATE / ALTER additive / Mongo *-many): always allow, no dialog.
- *     Cmd+Z undoes *uncommitted* grid edits only
- *     (`dataGridEditStore.undoStack`, Sprint 249); once committed, a safe
- *     write is not recoverable. Phase 5 compensating-commit undo is not
- *     yet implemented (#1126) — do not claim commits can be reverted.
+ *     Cmd+Z undoes *uncommitted* grid edits (`dataGridEditStore.undoStack`);
+ *     after a grid commit it can only re-stage the previous values as a
+ *     new pending edit (`restageAfterCommit`, ADR 0048, #1126). Nothing
+ *     reverts a commit by itself.
  *
  *   - read (SELECT / WITH / Mongo read pipeline): always allow.
  *
@@ -92,21 +90,20 @@ export function decideSafeModeAction(
   analysis: StatementAnalysis,
 ): SafeModeDecision {
   const isProduction = environment === "production";
-  // Sprint 254 (2026-05-09) — `severity` union split to 3-tier:
-  // `info` (read / metadata) / `warn` (bounded write surface) / `danger`
-  // (STOP). The matrix *result* is regression-zero — INFO and WARN both
-  // pass through here (`action: "allow"`); the raw editor SqlPreviewDialog
-  // mount is QueryTab-level (Sprint 255) so the decision function only
-  // differentiates STOP. ADR 0023 grill Q2-(a). Issue #2375 widened that
-  // QueryTab-level mount from WARN-tier to every non-INFO tier
-  // (`requiresPreviewDialog` below) without touching this matrix.
+  // `severity` is 3-tier: `info` (read / metadata) / `warn` (bounded write
+  // surface) / `danger` (STOP). INFO and WARN both pass through here
+  // (`action: "allow"`); the raw editor SqlPreviewDialog mount is
+  // QueryTab-level so the decision function only differentiates STOP.
+  // ADR 0023 grill Q2-(a). Issue #2375 widened that QueryTab-level mount
+  // from WARN-tier to every non-INFO tier (`requiresPreviewDialog` below)
+  // without touching this matrix.
   const isDanger = analysis.severity === "danger";
 
   // Read / WARN write are never gated at the `decideSafeModeAction` layer.
   // Pass-through everywhere — the QueryTab's `pendingRdbWarn` /
-  // `pendingMongoWarn` (Sprint 255) catches them at a higher surface; since
-  // #2375 that surface gates on `requiresPreviewDialog` (below) rather than
-  // on the WARN tier.
+  // `pendingMongoWarn` catches them at a higher surface; since #2375 that
+  // surface gates on `requiresPreviewDialog` (below) rather than on the
+  // WARN tier.
   if (!isDanger) return { action: "allow" };
 
   // From here on: destructive (`severity === "danger"`).
@@ -123,8 +120,7 @@ export function decideSafeModeAction(
       };
     }
     // strict / warn on production share the analyzer's bare reason — the
-    // single-click Yes/No confirm dialog (Sprint 246, Phase 2) renders it
-    // verbatim.
+    // single-click Yes/No confirm dialog renders it verbatim.
     return { action: "confirm", reason };
   }
 
