@@ -227,6 +227,28 @@ describe("GroupDialog", () => {
     expect(screen.getByTestId("group-dialog-preview")).toHaveTextContent("(1)");
   });
 
+  // Reason: #2500 — GroupColorDot's testId is optional. The header renders the
+  // dot without one and the preview passes its own; once the dialog opens from
+  // the header both dots are on screen, and each id must still name exactly
+  // one of them (2026-09-26)
+  it("[group-preview-count] header and preview dots stay queryable apart while the dialog is open", () => {
+    setStoreState(
+      [],
+      [{ id: "g1", name: "Prod", color: null, collapsed: false }],
+    );
+    render(<ConnectionList />);
+
+    const header = screen.getByRole("button", { name: /^Prod group/ });
+    fireEvent.contextMenu(header);
+    fireEvent.click(screen.getByRole("menuitem", { name: /change color/i }));
+
+    // getByTestId throws on a second match, so each id resolves to one dot.
+    expect(header).toContainElement(screen.getByTestId("group-color-accent"));
+    expect(screen.getByTestId("group-dialog-preview")).toContainElement(
+      screen.getByTestId("group-preview-color-accent"),
+    );
+  });
+
   it("disables the Create button when the name is blank", () => {
     render(<GroupDialog onClose={() => {}} />);
     const createBtn = screen.getByRole("button", { name: /create group/i });

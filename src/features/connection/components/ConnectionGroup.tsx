@@ -205,7 +205,7 @@ export default function ConnectionGroup({
               )}
               {/* Color accent dot. Shared with the GroupDialog preview via
                   `GroupColorDot` so both render a color the same way. */}
-              <GroupColorDot color={group.color} testId="group-color-accent" />
+              <GroupColorDot color={group.color} />
               {renaming ? (
                 <Input
                   ref={renameRef}
