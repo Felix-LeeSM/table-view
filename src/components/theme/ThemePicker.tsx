@@ -22,10 +22,10 @@ export default function ThemePicker() {
   const hydrateFavorites = useThemeFavoritesStore((s) => s.hydrateFavorites);
   const setGalleryOpen = useThemeFavoritesStore((s) => s.setGalleryOpen);
   const [previewId, setPreviewId] = useState<ThemeId | null>(null);
-  // 2026-05-16 — light/dark/system 토글 hover 시 DOM 의 `data-mode` 만
-  // 일시 변경 (store 는 그대로). 카드 hover preview 와 동일 패턴이지만
-  // mode 축으로 분리된 state — preview 두 축 (theme/mode) 이 독립적으로
-  // overlay 될 수 있도록.
+  // 2026-05-16 — hovering the light/dark/system toggle temporarily changes
+  // only the DOM's `data-mode` (the store is untouched). Same pattern as the
+  // card hover preview, but a separate state for the mode axis so the two
+  // preview axes (theme/mode) can overlay independently.
   const [previewMode, setPreviewMode] = useState<ThemeMode | null>(null);
 
   // Preview wins over the stored theme — applyTheme only touches DOM attrs,

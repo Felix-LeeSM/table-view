@@ -26,11 +26,11 @@ export interface DatabaseInfo {
 }
 
 /**
- * Sprint 346 — MongoDB 의 시스템 데이터베이스 (사용자가 평소 안 건드림).
- * `admin` 은 인증 / role / runCommand 의 출입구, `config` 는 sharded
- * cluster metadata (단일 노드에선 거의 비어있음), `local` 은 replication
- * oplog. sidebar 에선 사용자 DB 와 시각 구분 (italic + muted) 하고 정렬
- * 시 맨 아래로.
+ * MongoDB's system databases (users do not usually touch them). `admin` is
+ * the gateway for auth / roles / runCommand, `config` holds sharded cluster
+ * metadata (almost empty on a single node), and `local` holds the
+ * replication oplog. The sidebar sets them apart visually from user DBs
+ * (italic + muted) and sorts them to the bottom.
  */
 export const MONGO_SYSTEM_DATABASES = ["admin", "config", "local"] as const;
 
@@ -56,7 +56,7 @@ export interface CollectionInfo {
 
 /**
  * A single DataGrid column description surfaced by the document read-path.
- * Mirrors the Rust `QueryColumn` struct (Sprint 238 added `category`).
+ * Mirrors the Rust `QueryColumn` struct, including `category`.
  */
 export interface DocumentColumn {
   name: string;
@@ -102,13 +102,13 @@ export interface DocumentQueryResult {
 }
 
 /**
- * Sprint 308 (2026-05-14) — single-document projection.
+ * 2026-05-14 — single-document projection.
  *
- * 작성 이유: A1 mongosh 파서가 `db.coll.findOne(<filter>)` 을 dispatch 했을
- * 때 Rust 측 `DocumentRow` 가 grid (단일 row 모드) 또는 scalar panel 로
- * 렌더링 가능한 wire shape. `columns` 는 `DocumentQueryResult` 와 동일하게
- * BFS-ordered `_id` first, `row` 는 sentinel-flattened 셀 배열, `raw` 는
- * 원본 BSON (Quick Look 트리 뷰어가 그대로 consumed).
+ * Reason: the wire shape the Rust side returns when the A1 mongosh parser
+ * dispatches `db.coll.findOne(<filter>)`; the result renders as a single-row
+ * grid. `columns` is BFS-ordered with `_id` first, same as
+ * `DocumentQueryResult`; `row` is the sentinel-flattened cell array; `raw`
+ * is the original BSON.
  */
 export interface DocumentRow {
   columns: DocumentColumn[];
