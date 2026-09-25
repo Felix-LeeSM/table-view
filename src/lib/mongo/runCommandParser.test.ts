@@ -1,12 +1,12 @@
-// Sprint 381 (2026-05-17) — statement-kind classifier tests.
-// Sprint 382 (2026-05-17) — promoted to AST-backed classifier; all
-// sprint-381 cases preserved verbatim + AC-382-R additions for behavior
-// that the AST now handles correctly (comments anywhere, nested body,
-// multi-statement reject).
+// 2026-05-17 — statement-kind classifier tests. When the classifier moved to
+// the AST, all cases from the regex-based version were preserved verbatim,
+// plus AC-382-R additions for behavior that the AST now handles correctly
+// (comments anywhere, nested body, multi-statement reject).
 //
-// 작성 이유: db-contract α 의 chip 미선택 Run gating 은 `classifyMongoStatement`
-// 정확도에 직접 의존한다. 본 파일은 sprint-381 baseline 13 case + sprint-382
-// 의 AST promotion 이 신규로 lock 하는 시나리오를 함께 검증한다.
+// Reason: db-contract α's Run gating with no chip selected depends directly
+// on `classifyMongoStatement` accuracy. This file verifies the baseline
+// cases from the regex-based version together with the scenarios the AST
+// promotion newly locks.
 
 import { describe, expect, it } from "vitest";
 import {
@@ -111,8 +111,8 @@ describe("sprint-382 AST promotion — new behavior locked by the AST", () => {
     );
   });
 
-  // Sprint 383 (2026-05-17) — BSON literals are now normalised to
-  // extended-JSON placeholders so the body parses successfully.
+  // 2026-05-17 — BSON literals are now normalised to extended-JSON
+  // placeholders so the body parses successfully.
   it("AC-383-B-R — extractAdminCommandBody normalises BSON literals to extended-JSON placeholders", () => {
     expect(
       extractAdminCommandBody(

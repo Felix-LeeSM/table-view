@@ -1,10 +1,9 @@
-// Sprint 323 (2026-05-15) — Slice G.1: BSON canonical type detection
-// + coercion helpers.
+// 2026-05-15 — BSON canonical type detection + coercion helpers.
 //
-// 작성 이유: Pencil edit 의 raw-string input 을 ObjectId / ISODate /
-// Decimal128 / BinData canonical EJSON 형태로 자동 패키징하는 경로의
-// happy path + invalid input 케이스를 회귀 가드. F.2 의 plain-string
-// commit 흐름과 분리된 path 임.
+// Reason: regression guard for the happy path + invalid-input cases of the
+// path that auto-packages Pencil-edit raw-string input into canonical EJSON
+// (ObjectId / ISODate / Decimal128 / BinData). This path is separate from
+// the F.2 plain-string commit flow.
 
 import { describe, expect, it } from "vitest";
 import {

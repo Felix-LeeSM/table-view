@@ -1,23 +1,25 @@
-// Sprint 382 (2026-05-17) — AST-backed statement classifier.
+// 2026-05-17 — AST-backed statement classifier.
 //
-// 작성 이유: sprint-381 의 정규식 기반 분류를 typed AST
-// (`./mongoshAst/index`) 위에서 통합한다. 호출부 (`useQueryExecution.ts`,
-// `Toolbar.tsx`) 가 의존하는 export signature 는 변하지 않는다.
+// Reason: reimplements the earlier regex-based classification on top of the
+// typed AST (`./mongoshAst/index`). The export signatures that callers
+// (`mongoQueryExecution.ts`, `Toolbar.tsx`) depend on do not change.
 //
-// 본 모듈은 statement classifier 책임만 갖고, expression parser 는
-// `@features/query` public API 뒤에 둔다.
+// This module owns only statement classification; the expression parser
+// sits behind the `@features/query` public API.
 
 import { parseMongoshStatement } from "./mongoshAst/index";
 
 /**
  * Statement kind for the MongoDB query tab Run gate.
  *
- * - `admin-command` — `db.runCommand({...})` 또는 `db.adminCommand({...})`.
- *   chip 미선택 OK. backend 는 `database = null` 일 때 admin DB context.
- * - `collection-command` — `db.<coll>.<method>(...)`. chip 필수
- *   (sprint-309 의 Phase 28 method whitelist 와 동일 시맨틱).
- * - `unknown` — 빈 입력 / 공백만 / 파싱 실패 / 다중 statement / BSON
- *   literal 등. Toolbar 는 일반적 "empty sql" 경로로 처리 (Run disabled).
+ * - `admin-command` — `db.runCommand({...})` or `db.adminCommand({...})`.
+ *   Allowed with no chip selected; the backend uses the admin DB context
+ *   when `database = null`.
+ * - `collection-command` — `db.<coll>.<method>(...)`. Requires a chip (same
+ *   semantics as the Phase 28 method whitelist).
+ * - `unknown` — empty / whitespace-only input, parse failure, multiple
+ *   statements, BSON literal, etc. The Toolbar gates it like
+ *   `collection-command` (a chip is required).
  */
 export type MongoStatementKind =
   | "admin-command"
@@ -39,12 +41,11 @@ export function classifyMongoStatement(sql: string): MongoStatementKind {
  * expression doesn't match the admin command shape or the body cannot be
  * parsed.
  *
- * Sprint 382 (2026-05-17) — backed by the AST.
- * Sprint 383 — BSON literals (`ObjectId` / `ISODate` / `NumberLong` /
- * `Decimal128` / `UUID`) accepted as extended-JSON placeholders inside
- * the body; sprint-384 — backend converts those placeholders to real BSON
- * variants via `bson::Bson::try_from(serde_json::Value)` before dispatching
- * to the driver.
+ * 2026-05-17 — backed by the AST. BSON literals (`ObjectId` / `ISODate` /
+ * `NumberLong` / `Decimal128` / `UUID`) are accepted as extended-JSON
+ * placeholders inside the body; the backend converts those placeholders to
+ * real BSON variants via `bson::Bson::try_from(serde_json::Value)` before
+ * dispatching to the driver.
  */
 export function extractAdminCommandBody(
   sql: string,

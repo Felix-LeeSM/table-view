@@ -15,13 +15,12 @@ import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
  * On multiple violations, only the first stage's reason is surfaced;
  * resolving it lets the next violation re-block on the same path.
  *
- * Sprint 254 (2026-05-09) — read-only pipeline 은 `severity: "info"` (was
- * "safe"). 3-tier union split. ADR 0023 grill Q2-(a).
+ * 2026-05-09 — a read-only pipeline is `severity: "info"` (was "safe"):
+ * the 3-tier union split. ADR 0023 grill Q2-(a).
  *
- * Sprint 383 (2026-05-17) — depth-1 nested detect for `$facet` /
- * `$lookup.pipeline`.
+ * 2026-05-17 — depth-1 nested detect for `$facet` / `$lookup.pipeline`.
  *
- * Sprint 1120 (2026-07-02, issue #1120 symptom 4) — depth-1 limit lifted.
+ * 2026-07-02 (issue #1120 symptom 4) — depth-1 limit lifted.
  * The nested scan now recurses to any depth (`$facet > $facet > $out`,
  * `$facet > $lookup.pipeline > $merge`, …) through the shared `scanPipeline`
  * walk. A depth cap guards pathological nesting — real pipelines are shallow.
@@ -109,11 +108,11 @@ function isPipelineStage(value: unknown): value is Record<string, unknown> {
  * `analyzeMongoPipeline`). Returns the same `StatementAnalysis` shape
  * so `useSafeModeGate.decide` stays paradigm-agnostic.
  *
- * Sprint 254 (2026-05-09) — non-empty filter `*-many` 는 `severity: "warn"`
- * (was "safe"). 빈 filter `*-all` + dropCollection 은 `severity: "danger"`
- * 그대로.
+ * 2026-05-09 — a non-empty-filter `*-many` is `severity: "warn"` (was
+ * "safe"). An empty-filter `*-all` and dropCollection stay
+ * `severity: "danger"`.
  */
-// Sprint 312 (Phase 28 Slice A6, 2026-05-14) — `MongoOperation` union
+// Phase 28 Slice A6 (2026-05-14) — `MongoOperation` union
 // widened to cover every mongosh write the parser-driven dispatch table
 // emits. `insertOne` / `insertMany` / `updateOne` / `deleteOne` carry
 // `severity: "info"` because each touches at most a single document —
@@ -153,7 +152,7 @@ export function analyzeMongoOperation(op: MongoOperation): StatementAnalysis {
         reasons: ["MongoDB deleteMany without filter"],
       };
     }
-    // Sprint 254 — bounded *-many = WARN tier.
+    // Bounded *-many = WARN tier.
     return { kind: "mongo-delete-many", severity: "warn", reasons: [] };
   }
   if (op.kind === "updateMany") {
@@ -164,10 +163,10 @@ export function analyzeMongoOperation(op: MongoOperation): StatementAnalysis {
         reasons: ["MongoDB updateMany without filter"],
       };
     }
-    // Sprint 254 — bounded *-many = WARN tier.
+    // Bounded *-many = WARN tier.
     return { kind: "mongo-update-many", severity: "warn", reasons: [] };
   }
-  // Sprint 312 — single-document writes (`insertOne` / `insertMany` /
+  // Single-document writes (`insertOne` / `insertMany` /
   // `updateOne` / `deleteOne`) are INFO. The user types the filter
   // explicitly; impact ≤ 1 doc per op so no warn-tier preview is needed.
   if (
@@ -220,12 +219,12 @@ function analyzeBulkSubOp(sub: BulkWriteOp): StatementAnalysis {
 }
 
 /**
- * Sprint 381/475 — `db.runCommand({...})` / `db.adminCommand({...})`
- * classifier. Only read-only command names are INFO; write-capable and
- * unknown command names are DANGER so the frontend passes an explicit
- * backend safety acknowledgment. `body` 의 first key 만 검사한다 — mongosh
- * runCommand convention 은 `{ <command>: <arg>, ...options }` 이므로 두
- * 번째 key 부터는 옵션이다.
+ * `db.runCommand({...})` / `db.adminCommand({...})` classifier. Only
+ * read-only command names are INFO; write-capable and unknown command names
+ * are DANGER so the frontend passes an explicit backend safety
+ * acknowledgment. Only the first key of `body` is inspected — the mongosh
+ * runCommand convention is `{ <command>: <arg>, ...options }`, so the keys
+ * after the first are options.
  */
 export const READ_ONLY_RUN_COMMAND_ALLOWLIST = [
   "buildInfo",
@@ -286,19 +285,20 @@ function isEmptyFilter(filter: Record<string, unknown>): boolean {
 }
 
 /**
- * Sprint 255 — Mongo paradigm 의 INFO tier 식별 휴리스틱. raw MQL editor 의
- * WARN dialog mount 분기에서 호출되어 read-only aggregate pipeline (find /
- * pure-read pipeline) 만 dialog skip → 직접 IPC 발동.
+ * INFO-tier identification heuristic for the Mongo paradigm: a read-only
+ * aggregate pipeline (find / pure-read pipeline) skips the WARN dialog and
+ * the IPC fires directly.
  *
- * Sprint 254 — `severity === "info"` 직접 비교로 단순화. 기존 매핑
- * (`mongo-other` + safe) 동일 의미 보존: read-only pipeline 만 severity:"info"
- * 로 분류된다.
+ * 2026-05-09 — simplified to a direct `severity === "info"` comparison,
+ * keeping the meaning of the earlier mapping (`mongo-other` + safe): only a
+ * read-only pipeline is classified as severity "info".
  *
- * Issue #2375 — 같은 INFO 경계를 두 벌 두지 않으려고 QueryTab 게이트가 쓰는
- * `requiresPreviewDialog` 의 부정으로 위임한다. 지금 이 함수의 production
- * 호출자는 없고 (`git grep isInfoMongoOperation -- src/`) 남은 것은
- * `mongoSafety.test.ts` 의 단언뿐이지만, 정의가 갈라지면 그 단언이 게이트와
- * 다른 것을 지키게 된다.
+ * Issue #2375 — delegates to the negation of `requiresPreviewDialog`, which
+ * the QueryTab gate uses, so the same INFO boundary is not defined twice.
+ * This function has no production caller now
+ * (`git grep isInfoMongoOperation -- src/`); only the assertions in
+ * `mongoSafety.test.ts` remain, but if the definitions diverged those
+ * assertions would guard something other than the gate.
  */
 export function isInfoMongoOperation(analysis: StatementAnalysis): boolean {
   return !requiresPreviewDialog(analysis.severity);

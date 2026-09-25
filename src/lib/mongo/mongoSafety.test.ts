@@ -1,11 +1,11 @@
 // AC-188-01 — `analyzeMongoPipeline` unit tests. Pin the cases that the
-// Sprint 188 contract enumerates so the danger taxonomy stays in sync with
-// what `useSafeModeGate` will block / confirm. date 2026-05-01.
+// contract enumerates so the danger taxonomy stays in sync with what
+// `useSafeModeGate` will block / confirm. date 2026-05-01.
 //
-// Sprint 254 (2026-05-09) — Mongo classifier 도 SQL paradigm 과 동일한 3-tier
-// severity (`info` / `warn` / `danger`) 로 split. read-only aggregate /
-// find → INFO, write *-many (non-empty filter) → WARN, *-all / $out / $merge /
-// drop → DANGER. ADR 0023 grill Q2-(a).
+// 2026-05-09 — the Mongo classifier also splits into the same 3-tier
+// severity as the SQL paradigm (`info` / `warn` / `danger`): read-only
+// aggregate / find → INFO, write *-many (non-empty filter) → WARN, *-all /
+// $out / $merge / drop → DANGER. ADR 0023 grill Q2-(a).
 import { describe, expect, it } from "vitest";
 import {
   analyzeMongoOperation,
@@ -88,9 +88,9 @@ describe("analyzeMongoPipeline", () => {
     expect(a.severity).toBe("info");
   });
 
-  // Sprint 383 (2026-05-17) — depth-1 nested $out/$merge detection inside
-  // $facet sub-pipelines and $lookup.pipeline. (Deeper nesting is covered by
-  // the AC-1120 cases below since Sprint 1120 lifted the depth-1 limit.)
+  // 2026-05-17 — depth-1 nested $out/$merge detection inside $facet
+  // sub-pipelines and $lookup.pipeline. (Deeper nesting is covered by the
+  // AC-1120 cases below since issue #1120 lifted the depth-1 limit.)
   it("[AC-383-P1] $facet sub-pipeline contains $out → danger / mongo-out", () => {
     const a = analyzeMongoPipeline([
       { $facet: { alpha: [{ $match: {} }, { $out: "x" }] } },
@@ -135,7 +135,7 @@ describe("analyzeMongoPipeline", () => {
     expect(a.kind).toBe("mongo-merge");
   });
 
-  // Sprint 1120 (2026-07-02) — depth-1 limit lifted; nested scan now fully
+  // 2026-07-02 — depth-1 limit lifted; nested scan now fully
   // recurses (issue #1120 symptom 4). Deep `$facet > $facet > $out` and
   // `$facet > $lookup.pipeline > $merge` no longer slip through.
   it("[AC-1120-01] $facet > $facet > $out (depth 2) → danger / mongo-out", () => {
@@ -221,8 +221,8 @@ describe("analyzeMongoPipeline", () => {
 
 // AC-198-03 — `analyzeMongoOperation` unit tests. date 2026-05-02.
 //
-// Sprint 254 (2026-05-09) — non-empty filter `*-many` 는 WARN (was safe).
-// 빈 filter `*-all` 은 DANGER 그대로.
+// 2026-05-09 — `*-many` / `*-all` severity tiers: see the write-op
+// classifier TSDoc above `MongoOperation` in `src/lib/mongo/mongoSafety.ts`.
 describe("analyzeMongoOperation", () => {
   it("[AC-198-03a] dropCollection → danger / mongo-drop", () => {
     const a = analyzeMongoOperation({ kind: "dropCollection" });
@@ -254,7 +254,7 @@ describe("analyzeMongoOperation", () => {
       kind: "deleteMany",
       filter: { _id: "abc" },
     });
-    // Sprint 254 — bounded *-many is WARN (was safe).
+    // Bounded *-many is WARN (was safe).
     expect(a.severity).toBe("warn");
     expect(a.kind).toBe("mongo-delete-many");
     expect(a.reasons).toEqual([]);
@@ -270,7 +270,7 @@ describe("analyzeMongoOperation", () => {
     expect(a.kind).toBe("mongo-update-many");
   });
 
-  // Sprint 312 (Phase 28 Slice A6) — `MongoOperation` widened with the 5
+  // Phase 28 Slice A6 — `MongoOperation` widened with the 5
   // remaining write methods so the Run-dispatch table can classify every
   // mongosh write. Single-doc methods are INFO; bulkWrite escalates to
   // the worst sub-op severity (empty-filter *-many wins).
@@ -369,11 +369,8 @@ describe("analyzeMongoOperation", () => {
   });
 });
 
-// Sprint 255 (2026-05-09) — `isInfoMongoOperation` 휴리스틱은 raw editor 의
-// WARN dialog mount 직전에 read-only Mongo aggregate 을 식별해 dialog skip.
-//
-// Sprint 254 (2026-05-09) — 본문이 `severity === "info"` 단일 비교로 단순화
-// 됐지만 매핑은 동일.
+// `isInfoMongoOperation` — the Mongo INFO-tier heuristic; see its TSDoc in
+// `src/lib/mongo/mongoSafety.ts`.
 describe("isInfoMongoOperation (Sprint 255)", () => {
   it("[AC-255-02a] empty pipeline → INFO (no stages = read-only)", () => {
     expect(isInfoMongoOperation(analyzeMongoPipeline([]))).toBe(true);
@@ -432,9 +429,8 @@ describe("isInfoMongoOperation (Sprint 255)", () => {
   });
 });
 
-// Sprint 381/475 — `db.runCommand({...})` / `db.adminCommand({...})` safety.
-// Only a small read-only allowlist is INFO; write-capable or unknown commands
-// are danger so the UI sends a backend safety acknowledgment.
+// `db.runCommand({...})` / `db.adminCommand({...})` safety: see the TSDoc
+// above `READ_ONLY_RUN_COMMAND_ALLOWLIST` in `src/lib/mongo/mongoSafety.ts`.
 describe("analyzeMongoRunCommand (sprint-381)", () => {
   it("[AC-381-S1] empty body → info (no command key)", () => {
     const a = analyzeMongoRunCommand({});
@@ -487,9 +483,9 @@ describe("analyzeMongoRunCommand (sprint-381)", () => {
   });
 
   it("[AC-381-S8] classifier is keyed on the FIRST key only (mongosh convention)", () => {
-    // mongosh: `db.runCommand({ <command>: <arg>, ...options })`. 첫 key 가
-    // command 이름. 본 테스트는 destructive keyword 가 *옵션* 위치에 있어도
-    // false-positive 가 나지 않는지 확인.
+    // mongosh: `db.runCommand({ <command>: <arg>, ...options })`. The first
+    // key is the command name. This test checks that a destructive keyword
+    // in an *option* position does not cause a false positive.
     const a = analyzeMongoRunCommand({ ping: 1, drop: "irrelevant" });
     expect(a.severity).toBe("info");
   });
