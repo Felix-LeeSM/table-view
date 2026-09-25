@@ -1,27 +1,32 @@
-# #2161 — 이 저장소의 Rust crate 는 한 Cargo workspace 다. root 는 이 manifest
-# 이고, lock 은 `src-tauri/Cargo.lock` 이다. `table-view-core` / `sql-parser-core`
-# 는 아래 `[dependencies]` 의 path dependency 라 적지 않아도 member 지만,
-# `mongosh-parser-core` 와 `tvw` 는 아무도 의존하지 않아 여기 적어야 들어온다 —
-# 그래서 전부 적는다. CI 가 crate 를 하나씩 호명하는 대신
-# `cargo test --workspace --lib` / `cargo fmt --all` / `cargo clippy --workspace`
-# 로 도는 근거가 이 목록이다.
-# `tvw` 는 #1770 (ADR 0061) 의 CLI 다. 앱이 아니라 `table-view-core` 만 링크하고,
-# 여기 없으면 그 crate 는 fmt · clippy · `--workspace --lib` 밖에 남는다.
+# #2161 — every Rust crate in this repository sits in one Cargo workspace.
+# This manifest is the root and the lock is `src-tauri/Cargo.lock`.
+# `table-view-core` / `sql-parser-core` are path dependencies under
+# `[dependencies]` below, so they would be members without being listed, but
+# nothing depends on `mongosh-parser-core` or `tvw` — those two join only by
+# being listed here, so all four are listed. This list is what lets CI run
+# `cargo test --workspace --lib` / `cargo fmt --all` / `cargo clippy
+# --workspace` instead of naming each crate one by one.
+# `tvw` is the CLI of #1770 (ADR 0061). It links `table-view-core` rather than
+# the app, and without an entry here that crate falls outside fmt, clippy, and
+# `--workspace --lib`.
 [workspace]
 members = ["table-view-core", "sql-parser-core", "mongosh-parser-core", "tvw"]
-# root manifest 가 패키지라 resolver 는 아래 `edition = "2021"` 에서 2 로 풀린다.
-# 그래도 명시하는 이유: 이 manifest 를 virtual manifest 로 바꾸는 리팩토링(앱
-# 패키지를 하위 디렉토리로 빼는 등)은 기본값을 1 로 떨어뜨리고, resolver 1 은
-# dev-dependency 의 feature 를 일반 빌드 그래프로 unify 한다 — `table-view-core` 의
-# `testing` 이 켜진 릴리스 바이너리가 나온다는 뜻이고 그것이 #1454 다.
-# 이 줄이 실제로 뭘 막는지는 `.github/workflows/ci.yml` 의 `Test-only data-dir
-# override stays out of the release graph` 스텝이 잰다.
+# The root manifest is a package, so the resolver already resolves to 2 from
+# `edition = "2021"` below. It is spelled out anyway because a refactor that
+# turns this manifest into a virtual one (moving the app package into a
+# subdirectory, for example) drops the default back to 1, and resolver 1
+# unifies dev-dependency features into the normal build graph — which means a
+# release binary with `table-view-core`'s `testing` turned on, and that is
+# #1454. What this line actually prevents is measured by the `Test-only
+# data-dir override stays out of the release graph` step in
+# `.github/workflows/ci.yml`.
 resolver = "2"
 
-# 앱 릴리스 profile 은 cargo 기본값이다 — 특히 `panic` 을 건드리지 않는다.
-# `src/diagnostics.rs` 의 panic 로그 경로가 unwind 를 전제한다 (#1564).
-# 두 wasm crate 의 크기 profile 은 아래 `[profile.release.package.*]` 로 준다:
-# workspace 에서 member 의 `[profile.*]` 는 무시되므로 root 가 대신 든다.
+# The app's release profile is the cargo default — `panic` in particular is
+# left alone. The panic log path in `src/diagnostics.rs` assumes unwind
+# (#1564). The size profile for the two wasm crates is given below through
+# `[profile.release.package.*]`: cargo ignores a member's `[profile.*]` in a
+# workspace, so the root carries it instead.
 [profile.release.package.sql-parser-core]
 opt-level = "z"
 codegen-units = 1
@@ -37,8 +42,9 @@ name = "table-view"
 version = "0.7.1"
 edition = "2021"
 rust-version = "1.91.0"
-# 데스크톱 앱 — crates.io 에 publish 되지 않음. 표식이 있어야 cargo deny 가
-# `[licenses.private]` 규칙으로 우리 crate 의 license 검사를 건너뛴다.
+# Desktop app — not published to crates.io. The marker is what lets cargo deny
+# skip the license check for our own crates under its `[licenses.private]`
+# rule.
 publish = false
 
 [lib]
@@ -52,29 +58,34 @@ tauri-build = { version = "2", features = [] }
 tempfile = "3"
 serial_test = "3"
 tauri = { version = "2", features = ["test"] }
-# #1769 — command 테스트가 `crate::db::testing::Stub*` 를 쓴다. dev-dep 자체는
-# 해소돼 Cargo.lock 에 들어가지만 `testing` feature 는 `cargo build` 에 안 실린다
-# — resolver v2 가 dev-dep 의 feature 를 일반 빌드 그래프로 unify 하지 않기
-# 때문이다. 재현: `cargo tree -i table-view-core --edges normal --format '{f}'`
-# 가 `default` 만 내고, `--edges dev` 로 바꿔야 `testing` 이 나온다. 위
-# `[workspace] resolver = "2"` 가 그 성질의 전제이고, CI 스텝이 그것을 잰다.
+# #1769 — the command tests use `crate::db::testing::Stub*`. The dev-dep
+# itself resolves and is recorded in Cargo.lock, but the `testing` feature
+# does not ride into `cargo build`, because resolver v2 does not unify dev-dep
+# features into the normal build graph. To reproduce:
+# `cargo tree -i table-view-core --edges normal --format '{f}'` prints only
+# `default`, and `testing` appears only with `--edges dev`. The
+# `[workspace] resolver = "2"` above is the premise for that property, and a
+# CI step measures it.
 table-view-core = { path = "table-view-core", version = "0.1.0", features = ["testing"] }
-# Sprint 237 P5+ (2026-05-08) — DB tier 2 통합 테스트용. cargo test --test
-# pg_integration 호출 시 process 안에서 docker container lifecycle 을
-# 자체 관리. PG_TEST_URL env 가 셋팅돼 있으면 외부 PG 재사용 (빠른
-# iteration). docker daemon 이 없는 환경 (CI sandbox 등) 에서는 즉시
-# 실패하므로, docker 가 있는 CI `Integration Tests (Docker)` job 에서만 돈다.
+# For the DB tier-2 integration tests. The test process manages the docker
+# container lifecycle itself; when `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/
+# `PGDATABASE` are all set it reuses an external PG instead (fast iteration —
+# see the module doc of `tests/common/mod.rs`). Where no docker daemon exists
+# (a CI sandbox, say) it fails immediately, so it runs only in the CI
+# `Integration Tests (Docker)` job, which has docker.
 testcontainers = "0.27"
 testcontainers-modules = { version = "0.15", features = ["postgres", "mongo", "mysql", "mariadb", "mssql_server", "oracle", "redis"] }
 
 [dependencies]
-# #1769 — DB adapter / wire model / 로컬 저장소 본체. `-p table-view-core` 로
-# 단독 빌드하면 Tauri transitive dep 이 0 이다 (ADR 0061 의 `tvw` CLI 선행 조건).
-# `lib.rs` 가 `db` / `error` / `models` 를 crate root 로 re-export 한다.
-# workspace member 가 돼도 커버리지 분모는 안 바뀐다 — 리포트에 들어오는 것은
-# **선택된 패키지**의 소스이고, 커버리지 잡은 `--workspace` 없이 도니 root
-# package 하나만 고른다 (#2161 실측). 그 잡에 `--workspace` 를 붙이면 core 소스가
-# 분모에 합류해 `--fail-under-*` 수치가 다른 모집단에 걸린다.
+# #1769 — the DB adapter / wire model / local storage body. Built alone with
+# `-p table-view-core` it pulls zero Tauri transitive deps (the precondition
+# for ADR 0061's `tvw` CLI). `lib.rs` re-exports `db` / `error` / `models` at
+# the crate root. Becoming a workspace member does not change the coverage
+# denominator — a report covers the sources of the **selected packages**, and
+# the coverage job runs without `--workspace`, so it picks the root package
+# alone (measured in #2161). Adding `--workspace` to that job would pull the
+# core sources into the denominator and put the `--fail-under-*` numbers on a
+# different population.
 table-view-core = { path = "table-view-core", version = "0.1.0" }
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
@@ -104,23 +115,24 @@ tracing-appender = "0.2"
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"
 csv = "1"
-# Sprint 466 — Redis/Valkey KV adapter. `tokio-rustls-comp` gives async
-# command support on the existing Tokio runtime and `rediss://` TLS.
+# Redis/Valkey KV adapter. `tokio-rustls-comp` gives async command support on
+# the existing Tokio runtime and `rediss://` TLS.
 redis = { version = "0.32", features = ["tokio-rustls-comp"] }
 tiberius = { version = "0.12.3", default-features = false, features = ["tds73", "native-tls", "tokio", "chrono", "bigdecimal"] }
 tauri-plugin-single-instance = "2"
-# Sprint 385 (2026-05-17) — pure-Rust SQL parser. The crate lives under
-# `sql-parser-core/` and the same `.rs` sources compile to native (this dep)
-# and to WASM (frontend lazy-load via wasm-pack). `cargo build --target
-# wasm32-unknown-unknown` of the sub-crate pulls in no Tauri transitive deps:
-# the dependency edge runs this way only.
+# Pure-Rust SQL parser. The crate lives under `sql-parser-core/` and the same
+# `.rs` sources compile to native (this dep) and to WASM (frontend lazy-load
+# via wasm-pack). `cargo build --target wasm32-unknown-unknown` of the
+# sub-crate pulls in no Tauri transitive deps: the dependency edge runs this
+# way only.
 sql-parser-core = { path = "sql-parser-core", version = "0.1.0" }
 duckdb = { version = "1.10503.1", features = ["bundled", "json", "parquet"] }
 oracle-rs = "0.1.7"
 
 [profile.dev]
-# llvm-cov source-based coverage 는 DWARF 가 필요 없다 (coverage mapping 은 별도
-# 섹션). CI 러너/로컬 worktree 의 계측 빌드가 duckdb 정적 링크 × debuginfo 로
-# 디스크를 고갈시키던 것을 막는다. panic 위치는 debuginfo 없이도 유지된다.
-# 디버거 세션이 필요하면 일회성 오버라이드: CARGO_PROFILE_DEV_DEBUG=2 cargo build
+# llvm-cov source-based coverage needs no DWARF (coverage mapping is its own
+# section). This stops instrumented builds on the CI runner and in local
+# worktrees from exhausting the disk through duckdb static linking ×
+# debuginfo. Panic locations survive without debuginfo. For a debugger
+# session, override it once: CARGO_PROFILE_DEV_DEBUG=2 cargo build
 debug = 0

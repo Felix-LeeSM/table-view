@@ -1,10 +1,10 @@
-//! Sprint-88 AC-01: Rust-side proof that `tests/fixtures/fk_reference_samples.json`
+//! AC-01: Rust-side proof that `tests/fixtures/fk_reference_samples.json`
 //! is loadable via `include_str!` + `serde_json`.
 //!
 //! The companion vitest test (`tests/fixtures/fk_reference_samples.test.ts`)
-//! proves the same file is also loadable from the TS side. sprint-89 (#FK-1)
-//! will consume the parsed samples to drive parser/serializer round-trips
-//! without duplicating fixture data.
+//! proves the same file is also loadable from the TS side. #FK-1 consumes the
+//! parsed samples to drive parser/serializer round-trips without duplicating
+//! fixture data.
 
 use serde::Deserialize;
 

@@ -35,9 +35,9 @@ import { getDataSourceProfile } from "@/types/dataSource";
 import DuckdbFileAnalyticsDialog from "./DuckdbFileAnalyticsDialog";
 import { ExplainViewer } from "./ExplainViewer";
 import MongoQueryEditor from "./MongoQueryEditor";
-// sprint-373 (2026-05-17) — legacy in-memory HistoryPanel retired. The
-// sprint-372 backend-driven `QueryHistoryPanel` consumes `list_history`
-// IPC via `useQueryHistory` hook + cross-window events.
+// The legacy in-memory HistoryPanel is retired. The backend-driven
+// `QueryHistoryPanel` consumes `list_history` IPC via the
+// `useQueryHistory` hook + cross-window events.
 import QueryHistoryPanel from "./QueryHistoryPanel";
 import QueryResultGrid from "./QueryResultGrid";
 import { deriveMongoExplainSpec } from "./QueryTab/queryHelpers";
@@ -51,19 +51,21 @@ import SearchQueryEditor from "./SearchQueryEditor";
 import SqlQueryEditor from "./SqlQueryEditor";
 
 /**
- * `QueryTab` — RDB / Document paradigm 의 단일 query tab shell. 책임은
+ * `QueryTab` — the single query tab shell for the RDB / Document
+ * paradigms. Responsibility is spread across
  * `QueryTab/{queryHelpers, useQueryExecution, useQueryEvents,
- * useQueryFavorites, Toolbar, HistoryPanel}` 로 분산. 본 entry 는
- * imports + props interface + paradigm 파생 + 4 hook 호출 + return JSX
- * shell.
+ * useQueryFavorites, Toolbar}`. This entry holds imports + props
+ * interface + paradigm derivation + hook calls + the return JSX shell.
  *
- * 외부 invariant:
- * - `<QueryTab tab={...} />` props (`QueryTabProps`) 시그니처 byte-for-byte
- *   동결 — `src/components/layout/MainArea.tsx` 가 직접 import.
- * - default export 위치 동결 (`QueryTab.tsx`).
- * - Editor area (paradigm router) 는 entry inline — sqlDialect /
- *   schemaNamespace / mongoExtensions / editorRef 의존도 많아 분리 시
- *   prop drilling 비용이 가독성 이득보다 큼.
+ * External invariants:
+ * - The `<QueryTab tab={...} />` props (`QueryTabProps`) signature is
+ *   frozen byte-for-byte — `src/components/layout/MainArea.tsx` imports
+ *   it directly.
+ * - The default export stays in `QueryTab.tsx`.
+ * - The editor area (paradigm router) stays inline in this entry — it
+ *   leans on sqlDialect / schemaNamespace / mongoExtensions / editorRef,
+ *   so splitting it costs more in prop drilling than it gains in
+ *   readability.
  */
 
 interface QueryTabProps {
@@ -78,13 +80,13 @@ export default function QueryTab({ tab }: QueryTabProps) {
     if (!workspaceKey) return;
     updateQuerySqlAction(workspaceKey.connId, workspaceKey.db, tabId, sql);
   };
-  // sprint-373 — `clearHistory` (in-memory) + `entries` retired. The
-  // backend-driven `QueryHistoryPanel` (sprint-372) owns clear via the
+  // `clearHistory` (in-memory) + `entries` are retired. The
+  // backend-driven `QueryHistoryPanel` owns clear via the
   // `ClearHistoryButton` it composes (or the global QueryLog dock).
   // `loadQueryIntoTab` + `markConnectionUsed` were only used by the
   // legacy panel's per-entry "Load" button — the new panel routes detail
   // inspection through `QueryHistoryDetailModal` and load-into-tab is
-  // deferred to sprint-376 (UI audit).
+  // deferred to a later UI audit.
   // Active connection's dialect for editor keywords + identifier quoting.
   // Missing connection (e.g. deleted mid-session) falls back to
   // StandardSQL; document tabs receive the dialect but ignore it.
@@ -283,11 +285,11 @@ export default function QueryTab({ tab }: QueryTabProps) {
     tab.collection,
     tab.paradigm,
   ]);
-  // Sprint 309 — `useMongoAutocomplete` no longer branches on the legacy
-  // mode toggle. The unified completion source surfaces both the find
-  // operator set and aggregate stages / accumulators so the user can type
-  // either flavour without flipping a toggle; A4 owns the snippet menu
-  // that distinguishes intent at insertion time.
+  // `useMongoAutocomplete` does not branch on the legacy mode toggle. The
+  // unified completion source surfaces both the find operator set and
+  // aggregate stages / accumulators so the user can type either flavour
+  // without flipping a toggle; the snippet menu distinguishes intent at
+  // insertion time.
   const mongoExtensions = useMongoAutocomplete({
     activeCollectionName: tab.collection,
     fieldNames: mongoFieldNames,
@@ -360,10 +362,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
     [editorRef],
   );
 
-  // #2509 — 실행하면 자동완성 팝업을 닫는다. 툴바 Run 버튼은 에디터 keymap 을
-  // 지나지 않으므로 에디터의 `Mod-Enter` 핸들러에 건 `closeCompletion` 이 이
-  // 경로에는 닿지 않는다. E2E 가 쓰는 경로가 그 클릭이다
-  // (`e2e/smoke/_helpers.ts` 의 `runQuery`).
+  // #2509 — running closes the autocomplete popup. The toolbar Run button
+  // does not go through the editor keymap, so the `closeCompletion` bound
+  // to the editor's `Mod-Enter` handler never reaches this path. That
+  // click is the path E2E uses (`runQuery` in `e2e/smoke/_helpers.ts`).
   const handleExecuteAndShowResults = useCallback(() => {
     const view = editorRef.current;
     if (view) closeCompletion(view);
@@ -558,10 +560,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
               );
             case "document":
               return (
-                // Sprint 309 — the Mongo editor is a single mongosh-flavoured
-                // surface. The legacy mode field remains on the QueryTab type
-                // for backward-compat (deprecated) but is no longer threaded
-                // into the editor.
+                // The Mongo editor is a single mongosh-flavoured
+                // surface. The legacy mode field remains on the QueryTab
+                // type for backward-compat (deprecated) but is not
+                // threaded into the editor.
                 <MongoQueryEditor
                   ref={editorRef}
                   sql={tab.sql}
@@ -660,9 +662,9 @@ export default function QueryTab({ tab }: QueryTabProps) {
             sql={tab.sql}
             tabId={tab.id}
             onAfterCommit={handleExecuteAndShowResults}
-            // Sprint 248 (ADR 0022 Phase 4) — surface the dry-run flag so
-            // the result grid renders the rolled-back banner. Derived
-            // here so the grid stays paradigm-agnostic.
+            // ADR 0022 — surface the dry-run flag so the result grid
+            // renders the rolled-back banner. Derived here so the grid
+            // stays paradigm-agnostic.
             isDryRun={
               tab.queryState.status === "completed" &&
               tab.queryState.isDryRun === true
@@ -686,9 +688,9 @@ export default function QueryTab({ tab }: QueryTabProps) {
         <ConfirmDestructiveDialog
           open
           reason={pendingMongoConfirm.reason}
-          // Sprint 312 — write STOP (drop-equivalent) carries
-          // `previewLines` (formatted mongosh); aggregate STOP keeps the
-          // pipeline-JSON preview from A5. Dialog stays paradigm-agnostic.
+          // Write STOP (drop-equivalent) carries `previewLines`
+          // (formatted mongosh); aggregate STOP keeps the pipeline-JSON
+          // preview. The dialog stays paradigm-agnostic.
           sqlPreview={
             pendingMongoConfirm.previewLines
               ? pendingMongoConfirm.previewLines.join("\n")
@@ -709,12 +711,12 @@ export default function QueryTab({ tab }: QueryTabProps) {
         />
       )}
 
-      {/* Sprint 231 — raw RDB warn-tier confirm dialog. Mirrors the Mongo
-          dialog above but joins the batch verbatim (`;\n`) so the user
-          sees every dangerous statement before approving. Sprint 246
-          (ADR 0022 Phase 2) replaced the type-to-confirm gate with a
-          simple Yes/No + environment-aware header; the dialog mounts
-          via the same `pendingRdbConfirm` shape. */}
+      {/* Raw RDB warn-tier confirm dialog. Mirrors the Mongo dialog
+          above but joins the batch verbatim (`;\n`) so the user sees
+          every dangerous statement before approving. ADR 0022 replaced
+          the type-to-confirm gate with a simple Yes/No + environment-aware
+          header; the dialog mounts via the same `pendingRdbConfirm`
+          shape. */}
       {pendingRdbConfirm && (
         <ConfirmDestructiveDialog
           open
@@ -743,10 +745,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
         />
       )}
 
-      {/* Sprint 255 — raw RDB preview dialog. Mounts when the batch has at
-          least one statement the analyzer puts above the INFO tier, the
-          Safe Mode gate raised no STOP, and the dry-run row-impact probe
-          did not escalate. Both of those exits return before the mount in
+      {/* Raw RDB preview dialog. Mounts when the batch has at least one
+          statement the analyzer puts above the INFO tier, the Safe Mode
+          gate raised no STOP, and the dry-run row-impact probe did not
+          escalate. Both of those exits return before the mount in
           `executeRdbQuery`, so `pendingRdbWarn` is `null` whenever
           `pendingRdbConfirm` is set — the two dialogs never co-mount, and
           an escalated 100+-row DELETE gets the confirm instead of this
@@ -771,12 +773,12 @@ export default function QueryTab({ tab }: QueryTabProps) {
         />
       )}
 
-      {/* Sprint 255 — raw Mongo preview modal, plus the parser-driven
-          write dispatch (Sprint 312). Mounts when the dispatch branch's
-          analysis is above the INFO tier and the Safe Mode gate raised no
-          STOP. The find path never mounts it. `dropIndex` builds its
-          analysis inline rather than through `analyzeMongoOperation`, so
-          the branch — not the analyzer roster — is what decides.
+      {/* Raw Mongo preview modal, plus the parser-driven write dispatch.
+          Mounts when the dispatch branch's analysis is above the INFO
+          tier and the Safe Mode gate raised no STOP. The find path never
+          mounts it. `dropIndex` builds its analysis inline rather than
+          through `analyzeMongoOperation`, so the branch — not the
+          analyzer roster — is what decides.
           `db.runCommand` / `db.adminCommand` never land here: that branch
           routes a non-INFO command to `pendingMongoConfirm`, a stricter
           gate than this preview.
@@ -787,9 +789,9 @@ export default function QueryTab({ tab }: QueryTabProps) {
           `allow` and they now land here instead of executing unannounced. */}
       {pendingMongoWarn && (
         <MqlPreviewModal
-          // Sprint 312 — write WARN cases prefer the parser-formatted
-          // mongosh string; aggregate WARN keeps the pipeline-JSON
-          // preview for backward-compat with sprint 255 tests.
+          // Write WARN cases prefer the parser-formatted mongosh
+          // string; aggregate WARN keeps the pipeline-JSON preview for
+          // backward-compat with the existing preview tests.
           previewLines={
             pendingMongoWarn.previewLines ??
             JSON.stringify(pendingMongoWarn.pipeline, null, 2).split("\n")

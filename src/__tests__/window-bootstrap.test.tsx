@@ -1,9 +1,9 @@
 /**
- * Sprint 150 — AC-150-04 (Two-Window Foundation) label-routing tests.
+ * AC-150-04 (Two-Window Foundation) label-routing tests.
  *
  * **TDD-FIRST**: this file was authored before the production routing change
  * (`src/AppRouter.tsx` + `src/lib/window-label.ts` + `src/pages/LauncherPage.tsx`).
- * Against pre-Sprint-150 code (single-window stub), the imports below fail —
+ * Against the single-window stub that preceded it the imports below fail —
  * `AppRouter` and the `window-label` shim do not yet exist. After the routing
  * change lands, the same file goes green.
  *
@@ -13,9 +13,8 @@
  *  - unknown / missing label → defensive fallback to launcher with a
  *    `console.warn`.
  *
- * Phase 12 keeps this file the gate against any regression in the boot-time
- * label dispatch — Sprint 154 will extend it with real lifecycle wiring, but
- * Sprint 150 only proves the static dispatch.
+ * This file is the gate against any regression in the boot-time label
+ * dispatch; it proves the static dispatch only, not the lifecycle wiring.
  */
 
 import { cleanup, render, screen } from "@testing-library/react";
@@ -35,11 +34,10 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 // launcher / workspace / unknown / missing surfaces without a real Tauri
 // runtime (vitest runs under jsdom).
 //
-// sprint-361 (2026-05-16) — Tauri seam is mocked, but the helpers
-// `parseWorkspaceLabel` / `formatWorkspaceLabel` are pure string utilities
-// that AppRouter calls inline. Spread the actual module first so those
-// helpers remain available; only override the runtime-dependent
-// `getCurrentWindowLabel`.
+// The Tauri seam is mocked, but the helpers `parseWorkspaceLabel` /
+// `formatWorkspaceLabel` are pure string utilities that AppRouter calls
+// inline. Spread the actual module first so those helpers remain available;
+// only override the runtime-dependent `getCurrentWindowLabel`.
 vi.mock("@lib/window-label", async () => {
   const actual =
     await vi.importActual<typeof import("@lib/window-label")>(
@@ -54,11 +52,11 @@ vi.mock("@lib/window-label", async () => {
 // AppRouter's launcher branch boots the connection store via tauri IPC. The
 // router test does NOT exercise that surface — it only asserts the boot
 // dispatcher picks the correct page — so stub the IPC-touching imports.
-// Sprint 153: mruStore/themeStore/favoritesStore now wire the cross-window
-// bridge at module load and subscribe to setState, calling `emit(...)` on
-// every change. AppRouter's launcher branch transitively imports those
-// stores, so a synchronous setState during boot would throw without an
-// `emit` stub. Sprint 152 set the precedent in connectionStore.test.ts.
+// mruStore/themeStore/favoritesStore wire the cross-window bridge at module
+// load and subscribe to setState, calling `emit(...)` on every change.
+// AppRouter's launcher branch transitively imports those stores, so a
+// synchronous setState during boot would throw without an `emit` stub.
+// `connectionStore.test.ts` set the precedent.
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
   emit: vi.fn(() => Promise.resolve()),
@@ -148,8 +146,8 @@ describe("AC-150-*: window-label-driven boot routing", () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  // sprint-173 (2026-04-30) — `document.title` is the only thing webdriver's
-  // `getTitle()` sees, so it must reflect the OS window decoration title for
+  // `document.title` is the only thing webdriver's `getTitle()` sees, so it
+  // must reflect the OS window decoration title for
   // `_helpers.ts:switchToWorkspaceWindow` to identify which window it landed
   // on. Both windows load the same `index.html`, so without this the
   // multi-window e2e suite cannot disambiguate them.
@@ -161,9 +159,9 @@ describe("AC-150-*: window-label-driven boot routing", () => {
     expect(document.title).toBe("Table View");
   });
 
-  // sprint-361 (2026-05-16) — bare `"workspace"` label retired. Workspace
-  // windows are now per-connection (`workspace-{connection_id}`); the
-  // legacy single workspace label is treated as unknown by AppRouter.
+  // The bare `"workspace"` label is retired. Workspace windows are now
+  // per-connection (`workspace-{connection_id}`); the legacy single
+  // workspace label is treated as unknown by AppRouter.
   it("AC-150-04b (sprint-361): per-conn label 'workspace-<id>' mounts the WorkspacePage shell", () => {
     mockedGetLabel.mockReturnValue("workspace-conn-1");
 

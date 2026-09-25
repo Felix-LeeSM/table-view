@@ -3,20 +3,18 @@
 //! Command handlers keep the public Tauri surface thin and delegate the shared
 //! connection lookup / RDB guard / expected-database probe to `dispatch`.
 //!
-//! Sprint 237 P5 (2026-05-08) — handler bodies hoisted into
-//! `_inner(&AppState, &Request)` shape so unit tests can drive prod code
-//! directly without a `tauri::State` mock.
+//! Handler bodies are hoisted into `_inner(&AppState, &Request)` shape so unit
+//! tests can drive prod code directly without a `tauri::State` mock.
 //!
-//! Sprint 271c (2026-05-13) — every `*Request` struct gains an opt-in
-//! `expected_database: Option<String>` field (`#[serde(default)]`). When
-//! the caller passes `Some(expected)`, each `_inner` probes
-//! `adapter.current_database()` under the same `active_connections.lock()`
-//! acquisition that wraps the dispatch (via shared `ensure_expected_db`
-//! helper hoisted from `schema.rs` to `super`) and returns
-//! `AppError::DbMismatch` BEFORE invoking the trait method. The `None`
-//! path is byte-equivalent to pre-Sprint-271 (no probe overhead). Mirrors
-//! the Sprint 266 reference probe inlined in `execute_query_inner`
-//! (`commands/rdb/query.rs`). Named, not line-numbered — line ranges drift.
+//! Every `*Request` struct gains an opt-in `expected_database: Option<String>`
+//! field (`#[serde(default)]`). When the caller passes `Some(expected)`, each
+//! `_inner` probes `adapter.current_database()` under the same
+//! `active_connections.lock()` acquisition that wraps the dispatch (via shared
+//! `ensure_expected_db` helper hoisted from `schema.rs` to `super`) and returns
+//! `AppError::DbMismatch` BEFORE invoking the trait method. The `None` path is
+//! byte-equivalent to before the probe existed (no probe overhead). Mirrors the
+//! reference probe inlined in `execute_query_inner` (`commands/rdb/query.rs`).
+//! Named, not line-numbered — line ranges drift.
 
 use crate::commands::connection::AppState;
 use crate::error::AppError;
@@ -77,7 +75,7 @@ async fn drop_table_inner(
     run_schema_change(state, request).await
 }
 
-/// Sprint 235 — request-shaped DROP TABLE handler. Mirrors `create_table`
+/// Request-shaped DROP TABLE handler. Mirrors `create_table`
 /// / `alter_table`: single `request: DropTableRequest` arg, returns
 /// `SchemaChangeResult { sql }`. Tauri command name unchanged
 /// (`drop_table`); the IPC payload shape changes from positional scalars
@@ -107,7 +105,7 @@ async fn rename_table_inner(
     run_schema_change(state, request).await
 }
 
-/// Sprint 235 — request-shaped RENAME TABLE handler. Same shape as
+/// Request-shaped RENAME TABLE handler. Same shape as
 /// `drop_table` / `create_table`.
 #[tauri::command]
 pub async fn rename_table(
@@ -158,7 +156,7 @@ async fn add_column_inner(
     run_schema_change(state, request).await
 }
 
-/// Sprint 236 — request-shaped ADD COLUMN handler. Mirrors
+/// Request-shaped ADD COLUMN handler. Mirrors
 /// `rename_table` / `drop_table` body shape: lock connections, dispatch
 /// through `as_rdb()`, delegate to the trait method.
 #[tauri::command]
@@ -178,7 +176,7 @@ async fn drop_column_inner(
     run_schema_change(state, request).await
 }
 
-/// Sprint 236 — request-shaped DROP COLUMN handler. Same shape as
+/// Request-shaped DROP COLUMN handler. Same shape as
 /// `add_column`.
 #[tauri::command]
 pub async fn drop_column(
@@ -222,9 +220,9 @@ async fn create_table_plan_inner(
     run_schema_change(state, request).await
 }
 
-/// Sprint 240 — unified `CREATE TABLE + indexes + constraints` handler.
-/// Single round-trip server-side preview (frontend was fanning out
-/// 1+N+M IPC calls per dialog refresh pre-Sprint-240).
+/// Unified `CREATE TABLE + indexes + constraints` handler.
+/// Single round-trip server-side preview (the frontend used to fan out
+/// 1+N+M IPC calls per dialog refresh).
 #[tauri::command]
 pub async fn create_table_plan(
     window: tauri::Window,
@@ -326,7 +324,7 @@ async fn create_trigger_inner(
     run_schema_change(state, request).await
 }
 
-/// Sprint 273 — `CREATE TRIGGER` handler. Mirrors `create_table` /
+/// `CREATE TRIGGER` handler. Mirrors `create_table` /
 /// `drop_table` body shape: lock connections, dispatch through
 /// `as_rdb()`, optional `ensure_expected_db` probe, delegate to the
 /// trait method. PG concrete impl validates identifiers / whitelists,
@@ -350,7 +348,7 @@ async fn drop_trigger_inner(
     run_schema_change(state, request).await
 }
 
-/// Sprint 274 — `DROP TRIGGER` handler. Mirrors `create_trigger` /
+/// `DROP TRIGGER` handler. Mirrors `create_trigger` /
 /// `drop_table` body shape: lock connections, dispatch through
 /// `as_rdb()`, optional `ensure_expected_db` probe, delegate to the
 /// trait method. PG concrete impl validates identifiers, emits canonical
@@ -383,7 +381,7 @@ async fn create_rdb_database_inner(
     run_database_change(state, connection_id, name, DatabaseCommand::Create).await
 }
 
-/// Sprint 335 (Slice M live wire) — `CREATE DATABASE "<name>"`. PG and, since
+/// `CREATE DATABASE "<name>"`. PG and, since
 /// #1067, MySQL/MariaDB override this; other engines inherit the trait default
 /// `Unsupported`.
 #[tauri::command]
@@ -406,7 +404,7 @@ async fn drop_rdb_database_inner(
     run_database_change(state, connection_id, name, DatabaseCommand::Drop).await
 }
 
-/// Sprint 335 (Slice M live wire) — `DROP DATABASE "<name>"`. PG and, since
+/// `DROP DATABASE "<name>"`. PG and, since
 /// #1067, MySQL/MariaDB; the user is responsible for evicting active sessions
 /// first. The read-only + destructive-confirm gates below are dialect-agnostic.
 #[tauri::command]
@@ -428,18 +426,17 @@ pub async fn drop_rdb_database(
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
-    //! 작성 이유 (Sprint 237 P5, 2026-05-08): RDB DDL 10 핸들러를
-    //! `_inner(&AppState, &Request)` 로 추출했으니 테스트가 prod `_inner` 를
-    //! 직접 호출. 4-step contract:
+    //! Reason: the RDB DDL handlers were extracted to
+    //! `_inner(&AppState, &Request)`, so the tests call the prod `_inner`
+    //! directly. 4-step contract:
     //!   1. active_connections lookup → miss → AppError::NotFound
-    //!   2. as_rdb()? → 비-RDB paradigm → AppError::Unsupported(relational)
-    //!   3. trait method 위임 → adapter Err → 변형 없이 propagate
-    //!   4. trait method 위임 → adapter Ok → SchemaChangeResult propagate
+    //!   2. as_rdb()? → non-RDB paradigm → AppError::Unsupported(relational)
+    //!   3. trait method delegation → adapter Err → propagate unchanged
+    //!   4. trait method delegation → adapter Ok → SchemaChangeResult propagate
     //!
-    //! drop_table 을 4-step witness 로 검증, 나머지 9 commands 는 wiring
-    //! (default StubRdbAdapter sentinel sql="<method>") + NotFound +
-    //! Unsupported × 9 = 27 추가. not_connected helper format 1 test 포함.
-    //! 32 tests 전체.
+    //! drop_table is verified as the 4-step witness; the remaining commands get
+    //! wiring (default StubRdbAdapter sentinel sql="<method>") plus NotFound and
+    //! Unsupported cases, and `not_connected` has its own message-format test.
 
     use super::*;
     use crate::commands::test_util::{document_default, rdb_default, state_with};
@@ -456,7 +453,7 @@ mod tests {
         ActiveAdapter::Rdb(Box::new(s))
     }
 
-    // ── Request 빌더 ─────────────────────────────────────────────────────
+    // ── Request builders ─────────────────────────────────────────────────
 
     fn drop_table_req(id: &str) -> DropTableRequest {
         DropTableRequest {
@@ -607,7 +604,8 @@ mod tests {
 
     // ── not_connected helper ────────────────────────────────────────────
 
-    /// S0 — `not_connected(id)` 가 NotFound variant 사용 + id 메시지 포함.
+    /// S0 — `not_connected(id)` uses the NotFound variant and includes the id
+    /// in the message.
     #[test]
     fn not_connected_helper_uses_notfound_with_id_in_message() {
         match not_connected("missing-id-42") {
@@ -620,7 +618,7 @@ mod tests {
 
     // ── drop_table 4-step contract ──────────────────────────────────────
 
-    /// S1 — 등록되지 않은 connection_id → NotFound, id 포함.
+    /// S1 — unregistered connection_id → NotFound, message includes the id.
     #[tokio::test]
     async fn drop_table_unknown_connection_returns_notfound() {
         let state = AppState::new();
@@ -657,7 +655,7 @@ mod tests {
         assert_eq!(result.sql, sql);
     }
 
-    /// S4 — RDB Err → Database/Connection/Validation/... 변형 없이 propagate.
+    /// S4 — RDB Err → Database/Connection/Validation/... propagate unchanged.
     #[tokio::test]
     async fn drop_table_rdb_err_propagates_verbatim() {
         let state = state_with(
@@ -922,15 +920,15 @@ mod tests {
         ));
     }
 
-    // ── Sprint 271c — expected_database guard (2026-05-13) ────────────────
+    // ── expected_database guard (2026-05-13) ─────────────────────────────
     //
-    // 작성 이유: 11 DDL commands 각각의 mismatch 가드 verbatim assertion.
-    // Sprint 266 reference (`query.rs` 의 `execute_query_inner` inline
-    // probe) 와 byte-equivalent — probe 가
-    // trait 호출 *전에* 일어나고 mismatch 시 underlying trait method
-    // (drop_table_sql 등) 가 호출되지 않아야 함. trait closure 가 panic
-    // 하도록 두어 가드가 새면 fail-loud. 슬라이스 271a 의 schema 측
-    // mismatched_adapter / panic-closure 패턴 재사용.
+    // Reason: verbatim assertion of each of the 11 DDL commands' mismatch
+    // guard. Byte-equivalent to the reference probe (the `execute_query_inner`
+    // inline probe in `query.rs`) — the probe runs
+    // *before* the trait call and on mismatch the underlying trait method
+    // (drop_table_sql etc.) must not be invoked. The trait closure is set to
+    // panic so a breached guard fails loudly. Reuses the mismatched_adapter /
+    // panic-closure pattern from the schema-side tests.
 
     fn mismatched_rdb() -> StubRdbAdapter {
         let mut s = StubRdbAdapter::default();
@@ -1044,8 +1042,9 @@ mod tests {
 
     #[tokio::test]
     async fn create_table_plan_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
-        // `create_table_plan` 의 trait 디폴트 구현은 `create_table` 등을 chain
-        // 호출하므로 mismatch 시 어떤 child 도 트리거되면 panic 으로 surface.
+        // The trait default implementation of `create_table_plan` chains calls
+        // like `create_table`, so on a mismatch any triggered child surfaces as
+        // a panic.
         let mut s = mismatched_rdb();
         s.create_table_fn = Some(Box::new(|_| {
             panic!("create_table must not run on mismatch (chained from plan)")
@@ -1148,13 +1147,14 @@ mod tests {
         }
     }
 
-    // ── Sprint 271c — match + None fast-path witness (2026-05-13) ─────────
+    // ── match + None fast-path witness (2026-05-13) ───────────────────────
     //
-    // 작성 이유: mismatch 만 단언하면 happy / None paths 의 byte-equivalence
-    // 가 의심 잔여. 1 happy (Some + match → trait 호출 정상) + 1 none-fast-
-    // path (None → current_database probe 도 skip) 를 witness 로 추가.
-    // drop_table 을 sample 로 채택 — request-shape 의 다른 DDL 와 probe 코드
-    // 가 완전 동일하므로 sample 1 개로 invariant 보존 충분.
+    // Reason: asserting only the mismatch leaves the happy / None paths'
+    // byte-equivalence in doubt. Adds 1 happy witness (Some + match → the trait
+    // call runs normally) + 1 none-fast-path witness (None → even the
+    // current_database probe is skipped). drop_table is adopted as the sample —
+    // its probe code is identical to the other request-shaped DDL, so one
+    // sample is enough to preserve the invariant.
 
     #[tokio::test]
     async fn drop_table_expected_db_match_executes_normally() {
@@ -1194,14 +1194,13 @@ mod tests {
         assert_eq!(result.sql, "DROP TABLE x");
     }
 
-    // ── Sprint 273 — create_trigger 4-step contract ─────────────────
+    // ── create_trigger 4-step contract ──────────────────────────────
     //
-    // 작성 이유 (2026-05-13): trigger CREATE 핸들러도 `_inner` 4-step
-    // contract (NotFound / Unsupported / trait wiring / DbMismatch) 를
-    // 보장한다. mismatch panic-closure 는 Sprint 271c 패턴 재사용 —
-    // current_database 가 `dbA` 인데 expected 가 `dbB` 면 trait 호출
-    // 전에 DbMismatch 가 surface 되고 stub closure 가 panic 하지 않아야
-    // 한다.
+    // Reason (2026-05-13): the trigger CREATE handler also guarantees the
+    // `_inner` 4-step contract (NotFound / Unsupported / trait wiring /
+    // DbMismatch). The mismatch panic-closure reuses the same pattern — when
+    // current_database is `dbA` and expected is `dbB`, DbMismatch must surface
+    // before the trait call and the stub closure must not panic.
 
     #[tokio::test]
     async fn create_trigger_routes_to_create_trigger_trait_method() {
@@ -1248,15 +1247,15 @@ mod tests {
         }
     }
 
-    // ── Sprint 274 — drop_trigger 4-step contract ───────────────────
+    // ── drop_trigger 4-step contract ────────────────────────────────
     //
-    // 작성 이유 (2026-05-13): trigger DROP 핸들러도 `_inner` 4-step
-    // contract (NotFound / Unsupported / trait wiring / DbMismatch) 를
-    // 보장한다. mismatch panic-closure 는 Sprint 271c 패턴 재사용 —
-    // current_database 가 `dbA` 인데 expected 가 `dbB` 면 trait 호출
-    // 전에 DbMismatch 가 surface 되고 stub closure 가 panic 하지 않아야
-    // 한다. 시그니처가 `create_trigger` 와 byte-equivalent 이므로 동일한
-    // 4 cases (wiring / NotFound / Unsupported / mismatch) 로 충분.
+    // Reason (2026-05-13): the trigger DROP handler also guarantees the
+    // `_inner` 4-step contract (NotFound / Unsupported / trait wiring /
+    // DbMismatch). The mismatch panic-closure reuses the same pattern — when
+    // current_database is `dbA` and expected is `dbB`, DbMismatch must surface
+    // before the trait call and the stub closure must not panic. The signature
+    // is byte-equivalent to `create_trigger`, so the same
+    // 4 cases (wiring / NotFound / Unsupported / mismatch) are enough.
 
     #[tokio::test]
     async fn drop_trigger_routes_to_drop_trigger_trait_method() {
@@ -1303,7 +1302,7 @@ mod tests {
         }
     }
 
-    // ── Sprint 335 — create_rdb_database / drop_rdb_database wiring ─────
+    // ── create_rdb_database / drop_rdb_database wiring ──────────────────
 
     #[tokio::test]
     async fn create_rdb_database_unknown_connection_returns_notfound() {
@@ -1347,7 +1346,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_rdb_database_routes_through_trait_default_unsupported() {
-        // Sprint 335 — `StubRdbAdapter` inherits the trait default for
+        // `StubRdbAdapter` inherits the trait default for
         // `create_database` (Unsupported). This case covers the happy
         // wiring path: connection lookup OK, as_rdb() OK, trait dispatch
         // returns the documented `Unsupported` from the trait default.

@@ -11,16 +11,15 @@ import { useTranslation } from "react-i18next";
 import OrderedColumnPicker from "./OrderedColumnPicker";
 
 /**
- * `IndexesTabBody` — Sprint 228 (Phase 27 sprint 3) extraction.
+ * `IndexesTabBody` — extraction out of `CreateTableDialog.tsx`.
  *
  * Why a sub-component:
- *   - Sprint 228's editor body grew the parent `CreateTableDialog.tsx`
- *     past the project's 700-LOC threshold (Sprint 228
- *     contract → "no anticipatory abstraction" + Generator's call
- *     to extract). Pulling the JSX out keeps the parent under that
+ *   - The editor body grew the parent `CreateTableDialog.tsx` past the
+ *     project's LOC threshold (contract → "no anticipatory
+ *     abstraction"). Pulling the JSX out keeps the parent under that
  *     ceiling without changing any state ownership: index drafts +
- *     handlers + dedup logic still live in the parent. This file is
- *     a pure presentational mapper from props → DOM.
+ *     handlers + dedup logic still live in the parent. This file is a
+ *     pure presentational mapper from props → DOM.
  *
  * Shape:
  *   - The parent owns `indexes: IndexDraft[]` and the four mutators
@@ -29,14 +28,14 @@ import OrderedColumnPicker from "./OrderedColumnPicker";
  *     parent (`isPkDuplicate(idx)`) so the dedup rule lives next to
  *     the chain closure that consumes it.
  *
- * Source: parent's prior inline JSX (sprint-228 implementation pass);
- * extraction is mechanical — no behavioural change.
+ * Source: parent's prior inline JSX; the extraction is mechanical —
+ * no behavioural change.
  */
 
 /**
  * The four UI-exposed PostgreSQL index types. Backend's
  * `validate_index_type` accepts `brin` too, but the UI hides it for
- * DataGrip parity (Sprint 228 contract `Out of Scope`).
+ * DataGrip parity (contract `Out of Scope`).
  */
 export type IndexType = "btree" | "hash" | "gin" | "gist";
 
@@ -76,17 +75,17 @@ export interface IndexesTabBodyProps {
   onUpdate: (trackingId: string, updates: Partial<IndexDraft>) => void;
   /**
    * Legacy single-toggle handler — kept on the prop interface for the
-   * Sprint 228 test surface that drove the old checkbox UI. The new
+   * test surface that drove the old checkbox UI. The new
    * `OrderedColumnPicker` calls `onUpdate(trackingId, { columns: next })`
    * with the full ordered array on every mutation, so this prop is no
    * longer wired internally; callers can pass a stub.
    */
   onToggleColumn: (trackingId: string, colName: string) => void;
   /**
-   * Sprint 234 — reorder callback. `direction = -1` moves the row up by
-   * one position; `+1` moves it down. Boundary clicks (top row up,
-   * bottom row down) are no-ops at the parent — buttons render
-   * `disabled` here too as defense-in-depth.
+   * Reorder callback. `direction = -1` moves the row up by one
+   * position; `+1` moves it down. Boundary clicks (top row up, bottom
+   * row down) are no-ops at the parent — buttons render `disabled` here
+   * too as defense-in-depth.
    */
   onMove: (trackingId: string, direction: -1 | 1) => void;
 }
@@ -127,10 +126,10 @@ export default function IndexesTabBody({
         <div className="space-y-2">
           {indexes.map((idx, position) => {
             const dedupe = isPkDuplicate(idx);
-            // Sprint 234 — boundary booleans for the ↑/↓ reorder
-            // buttons: the topmost row's ↑ is disabled, the bottommost
-            // row's ↓ is disabled. Defense-in-depth — the parent
-            // `onMove` handler also no-ops on boundary clicks.
+            // Boundary booleans for the ↑/↓ reorder buttons: the
+            // topmost row's ↑ is disabled, the bottommost row's ↓ is
+            // disabled. Defense-in-depth — the parent `onMove` handler
+            // also no-ops on boundary clicks.
             const isFirst = position === 0;
             const isLast = position === indexes.length - 1;
             return (
@@ -202,7 +201,7 @@ export default function IndexesTabBody({
                     </p>
                   )}
                 </div>
-                {/* Sprint 234 — ↑ / ↓ reorder buttons (left of `−`). */}
+                {/* ↑ / ↓ reorder buttons (left of `−`). */}
                 <Button
                   variant="ghost"
                   size="icon-xs"

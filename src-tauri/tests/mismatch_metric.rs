@@ -1,10 +1,11 @@
-//! 작성 2026-05-16 (Phase 4 W2→W3 sprint-370)
+//! Written 2026-05-16
 //!
-//! 사유: AC-370-01 — boot 시점 4 도메인 비교 모듈의 end-to-end 시나리오 검증.
-//! `measure_all` 이 file/LS SOT 와 SQLite mirror 의 row count + content hash 를
-//! 비교해 drift 시 counter 증가, 일치 시 변경 없음. inline 테스트가 단위 invariant
-//! 을 lock 하고 본 파일이 integration shape — 통합 setup + 4 도메인 round-trip — 을
-//! 확정한다.
+//! Reason: AC-370-01 — end-to-end scenario check of the four-domain comparison
+//! module that runs at boot. `measure_all` compares the row count + content hash
+//! of the file/LS SOT against the SQLite mirror, bumping the counter on drift and
+//! leaving it untouched when they match. Inline tests lock the unit invariants;
+//! this file pins the integration shape — combined setup + a four-domain
+//! round trip.
 
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -163,7 +164,7 @@ async fn ac_370_01_no_drift_when_all_four_domains_match() {
 async fn ac_370_01_drift_in_all_four_domains_triggers_four_increments() {
     let (_dir, pool) = setup().await;
 
-    // file SOT 만 채움. SQLite mirror 는 empty.
+    // Fill the file SOT only; the SQLite mirror stays empty.
     let conn = ConnectionConfig {
         id: "c-drift".into(),
         name: "DriftConn".into(),

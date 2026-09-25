@@ -1,7 +1,8 @@
-// Purpose: RDB DataGrid 행 선택 a11y 가드 (issue #1130 AC2). 선택된 행은
-// aria-selected="true", 그 외 "false". focus 된 셀에서 Space 로 행 선택
-// (onSelectRow) — modifier 는 click 과 동일하게 전달. Document 그리드는 이미
-// aria-selected 를 노출하므로 RDB 를 맞춰 일관성 확보. (2026-07-03)
+// Purpose: RDB DataGrid row-selection a11y guard (issue #1130 AC2). A
+// selected row is aria-selected="true", every other row "false". Space on a
+// focused cell selects the row (onSelectRow) — modifiers are forwarded just
+// as click does. The Document grid already exposes aria-selected, so RDB is
+// matched to it for consistency.
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";

@@ -1,19 +1,21 @@
-// Sprint 254 (2026-05-09) — `useQueryExecution.handleExecute` 의 dry-run
-// row-count escalation 검증. ADR 0023 grill Q2-(a) 의 핵심 보호: WARN-tier
-// bounded UPDATE/DELETE 가 dry-run 결과 100+ row 면 STOP (`pendingRdbConfirm`)
-// 으로 자동 escalate.
+// Verifies the dry-run row-count escalation in
+// `useQueryExecution.handleExecute`. The core protection behind ADR 0023
+// grill Q2-(a): a WARN-tier bounded UPDATE/DELETE whose dry-run reports
+// 100+ rows escalates automatically to STOP (`pendingRdbConfirm`).
 //
-// 시나리오 (TDD red-fail 우선 작성):
+// Scenarios (written red-fail first):
 //   - dry-run 100+ row → STOP escalate (pendingRdbConfirm mount).
 //   - dry-run < 100 row → WARN preserved (pendingRdbWarn mount).
 //   - dry-run timeout (2s) → STOP fallback.
 //   - dry-run IPC unsupported / throws → STOP fallback.
-//   - INSERT (INFO) → 직접 IPC, escalation skip.
-//   - INFO statement (SELECT) → 직접 IPC, escalation skip.
-//   - DANGER statement (DROP) → STOP confirm 그대로, escalation 분기 도달 X.
+//   - INSERT (INFO) → direct IPC, escalation skipped.
+//   - INFO statement (SELECT) → direct IPC, escalation skipped.
+//   - DANGER statement (DROP) → STOP confirm as is, escalation branch
+//     never reached.
 //
-// `useQueryExecution` 직접 mount (renderHook) 가 가능한지는 다른 dry-run.test.ts
-// 의 패턴 (full QueryTab mount 회피) 을 따른다.
+// Whether `useQueryExecution` can be mounted directly (renderHook)
+// follows the pattern of the other dry-run.test.ts (avoid a full
+// QueryTab mount).
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
@@ -185,7 +187,7 @@ describe("useQueryExecution — Sprint 254 dry-run WARN escalation", () => {
     expect(executeQueryMock).not.toHaveBeenCalled();
   });
 
-  // [AC-403-06] INSERT (INFO) → 직접 IPC, warn dialog / dry-run skip.
+  // [AC-403-06] INSERT (INFO) → direct IPC, warn dialog / dry-run skipped.
   it("[AC-403-06] INSERT INTO → INFO direct IPC (no WARN dialog, no dry-run)", async () => {
     executeQueryMock.mockResolvedValueOnce(makeDmlResult(1));
     const tab = seedTab("INSERT INTO users (id) VALUES (1)");
@@ -203,7 +205,8 @@ describe("useQueryExecution — Sprint 254 dry-run WARN escalation", () => {
     expect(executeQueryDryRunMock).not.toHaveBeenCalled();
   });
 
-  // [AC-254-06f] SELECT (INFO) → 직접 IPC, escalation 분기 도달 X.
+  // [AC-254-06f] SELECT (INFO) → direct IPC, escalation branch never
+  // reached.
   it("[AC-254-06f] SELECT → INFO direct IPC (no dry-run probe, no WARN dialog)", async () => {
     executeQueryMock.mockResolvedValueOnce(makeDmlResult(0));
     const tab = seedTab("SELECT * FROM users");
@@ -221,9 +224,9 @@ describe("useQueryExecution — Sprint 254 dry-run WARN escalation", () => {
     expect(result.current.pendingRdbConfirm).toBeNull();
   });
 
-  // [AC-254-06g] WHERE-less DELETE (DANGER) → STOP confirm 그대로, dry-run
-  // 분기 도달 X. SafeMode gate 가 confirm 으로 routing 하므로 escalation
-  // helper 자체가 호출되지 않는다.
+  // [AC-254-06g] WHERE-less DELETE (DANGER) → STOP confirm as is, the
+  // dry-run branch is never reached. The SafeMode gate routes to confirm,
+  // so the escalation helper is not called at all.
   it("[AC-254-06g] DELETE without WHERE → STOP via SafeMode gate (no dry-run probe)", async () => {
     const tab = seedTab("DELETE FROM users");
     // production environment so the SafeMode matrix raises confirm.
@@ -243,13 +246,15 @@ describe("useQueryExecution — Sprint 254 dry-run WARN escalation", () => {
     expect(executeQueryDryRunMock).not.toHaveBeenCalled();
   });
 
-  // ── 이슈 #2375 — 미리보기 게이트를 넓혀도 승격 경로는 그대로다 ────────
+  // ── Issue #2375 — escalation path unchanged by the wider gate ─────────
   //
-  // 미리보기 mount 조건과 dry-run 승격 조건이 `hasWarn` 플래그 하나를
-  // 나눠 쓰고 있었다. 미리보기만 넓히려고 그 한 줄을 고치면 이미 danger 인
-  // 문장이 승격 경로로 들어가, `escalateWarnIfLargeImpact` 가 기준선으로 받는
-  // `"warn"` 이 거짓이 되고 쓸데없는 dry-run 카운트 질의가 붙는다. 아래
-  // `[AC-2375-03]` 과 `[AC-2375-04]` 가 플래그가 실제로 갈라졌는지를 잰다.
+  // The preview mount condition and the dry-run escalation condition
+  // shared a single `hasWarn` flag. Editing that one line just to widen
+  // the preview would push an already-danger statement into the
+  // escalation path, making the `"warn"` baseline that
+  // `escalateWarnIfLargeImpact` receives false and attaching a pointless
+  // dry-run count query. `[AC-2375-03]` and `[AC-2375-04]` below measure
+  // whether the flags really did split.
 
   it("[AC-2375-03] preview[danger] DELETE without WHERE (비프로덕션) → 미리보기, dry-run 프로브 미발동", async () => {
     const tab = seedTab("DELETE FROM users");
@@ -264,8 +269,9 @@ describe("useQueryExecution — Sprint 254 dry-run WARN escalation", () => {
     });
     expect(result.current.pendingRdbConfirm).toBeNull();
     expect(executeQueryMock).not.toHaveBeenCalled();
-    // 핵심: danger 는 승격 후보가 아니다. 프로브가 한 번이라도 나가면
-    // 미리보기 조건과 승격 조건이 아직 한 플래그를 공유하고 있다는 뜻이다.
+    // Key point: danger is not an escalation candidate. If the probe
+    // goes out even once, the preview condition and the escalation
+    // condition still share one flag.
     expect(executeQueryDryRunMock).not.toHaveBeenCalled();
   });
 
@@ -287,9 +293,9 @@ describe("useQueryExecution — Sprint 254 dry-run WARN escalation", () => {
     expect(executeQueryMock).not.toHaveBeenCalled();
   });
 
-  // [AC-254-06h] 다중 statement: INFO + WARN UPDATE escalates → STOP wins.
-  // 다중 statement 의 worst-tier 결정 (STOP > WARN > INFO) 와 escalation 의
-  // 정합성 가드.
+  // [AC-254-06h] multi-statement: INFO + WARN UPDATE escalates → STOP
+  // wins. Guards the consistency between the worst-tier decision across
+  // statements (STOP > WARN > INFO) and escalation.
   it("[AC-254-06h] multi (SELECT + UPDATE WHERE 200 rows) → STOP escalate, batch routed to pendingRdbConfirm", async () => {
     executeQueryDryRunMock.mockResolvedValueOnce([makeDmlResult(200)]);
     const tab = seedTab(

@@ -15,12 +15,12 @@ pub enum ColumnChange {
         new_data_type: Option<String>,
         new_nullable: Option<bool>,
         new_default_value: Option<String>,
-        /// Sprint 237 — optional USING cast expression for
+        /// Optional USING cast expression for
         /// `ALTER COLUMN … TYPE … USING …`. Only emitted when both
         /// `new_data_type` and `using_expression` are `Some(...)`. Free-
         /// text passthrough (PG surfaces parse errors verbatim).
-        /// `#[serde(default)]` keeps pre-Sprint-237 callers byte-equivalent
-        /// — payloads that omit the field deserialize to `None` and the
+        /// `#[serde(default)]` keeps callers that predate the field byte-
+        /// equivalent — payloads that omit it deserialize to `None` and the
         /// emitted SQL is unchanged.
         #[serde(default)]
         using_expression: Option<String>,
@@ -59,11 +59,11 @@ pub struct AlterTableRequest {
     pub changes: Vec<ColumnChange>,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 271c (2026-05-13) — opt-in DbMismatch guard. When set, the
-    /// DDL handler probes `adapter.current_database()` under the
-    /// `active_connections` lock and rejects with `AppError::DbMismatch`
-    /// before invoking the trait method. Omitting the field
-    /// (`#[serde(default)]` → `None`) is byte-equivalent to pre-Sprint-271.
+    /// Opt-in DbMismatch guard. When set, the DDL handler probes
+    /// `adapter.current_database()` under the `active_connections` lock and
+    /// rejects with `AppError::DbMismatch` before invoking the trait method.
+    /// Omitting the field (`#[serde(default)]` → `None`) is byte-equivalent
+    /// to callers that predate the guard.
     #[serde(default)]
     pub expected_database: Option<String>,
 }
@@ -81,7 +81,7 @@ pub struct CreateIndexRequest {
     pub is_unique: bool,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    /// Opt-in DbMismatch guard. See `AlterTableRequest`.
     #[serde(default)]
     pub expected_database: Option<String>,
 }
@@ -92,17 +92,17 @@ pub struct DropIndexRequest {
     pub connection_id: String,
     pub schema: String,
     pub index_name: String,
-    /// Sprint 285 (Phase 17 MySQL Slice E) — MySQL 의 `DROP INDEX` 는
-    /// `ON <table>` 절을 강제한다 (PG 는 schema + index_name 만으로 충분).
-    /// PG 호출자는 `#[serde(default)]` 덕에 필드를 생략 가능하며 emitter
-    /// 가 무시한다. MySQL 어댑터는 빈 문자열 시 `AppError::Validation`.
+    /// MySQL's `DROP INDEX` requires an `ON <table>` clause (PG needs only
+    /// schema + index_name). Thanks to `#[serde(default)]` a PG caller may
+    /// omit the field and the emitter ignores it. The MySQL adapter returns
+    /// `AppError::Validation` on an empty string.
     #[serde(default)]
     pub table: String,
     #[serde(default)]
     pub if_exists: bool,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    /// Opt-in DbMismatch guard. See `AlterTableRequest`.
     #[serde(default)]
     pub expected_database: Option<String>,
 }
@@ -118,17 +118,17 @@ pub enum ConstraintDefinition {
         columns: Vec<String>,
         reference_table: String,
         reference_columns: Vec<String>,
-        /// Sprint 229 — referential action on DELETE of the referenced
-        /// row. Whitelist (case-sensitive, PG canonical uppercase):
+        /// Referential action on DELETE of the referenced row. Whitelist
+        /// (case-sensitive, PG canonical uppercase):
         /// `"NO ACTION"` | `"RESTRICT"` | `"CASCADE"` | `"SET NULL"` |
-        /// `"SET DEFAULT"`. `#[serde(default)]` keeps Sprint 226+227+228
-        /// callers byte-equivalent — those payloads omit the field, it
+        /// `"SET DEFAULT"`. `#[serde(default)]` keeps callers that predate
+        /// the field byte-equivalent — those payloads omit it, it
         /// deserializes to `None`, and the SQL emitter skips the
         /// `ON DELETE …` clause entirely (PG default = NO ACTION).
         #[serde(default)]
         on_delete: Option<String>,
-        /// Sprint 229 — referential action on UPDATE of the referenced
-        /// row. Same whitelist + default-omit semantics as `on_delete`.
+        /// Referential action on UPDATE of the referenced row. Same
+        /// whitelist + default-omit semantics as `on_delete`.
         #[serde(default)]
         on_update: Option<String>,
     },
@@ -150,7 +150,7 @@ pub struct AddConstraintRequest {
     pub definition: ConstraintDefinition,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    /// Opt-in DbMismatch guard. See `AlterTableRequest`.
     #[serde(default)]
     pub expected_database: Option<String>,
 }
@@ -164,12 +164,12 @@ pub struct DropConstraintRequest {
     pub constraint_name: String,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    /// Opt-in DbMismatch guard. See `AlterTableRequest`.
     #[serde(default)]
     pub expected_database: Option<String>,
 }
 
-/// Single column definition for `CREATE TABLE` (Sprint 226).
+/// Single column definition for `CREATE TABLE`.
 ///
 /// A new struct rather than reusing `ColumnChange::Add` because Create
 /// does not need the `Modify` / `Drop` enum variants and a flat shape
@@ -177,10 +177,10 @@ pub struct DropConstraintRequest {
 /// `ColumnChange::Add` later diverges (e.g. ALTER-specific defaults),
 /// the two stay decoupled.
 ///
-/// Sprint 227 adds optional `comment` (`#[serde(default)]` for
-/// back-compat with Sprint 226 callers that omit the field — those
-/// payloads deserialize to `None`). When `Some(...)` and the trimmed
-/// value is non-empty, the PG `create_table` impl emits a
+/// `comment` is optional (`#[serde(default)]` for back-compat with callers
+/// that omit the field — those payloads deserialize to `None`). When
+/// `Some(...)` and the trimmed value is non-empty, the PG `create_table`
+/// impl emits a
 /// `COMMENT ON COLUMN "<schema>"."<table>"."<col>" IS '<escaped>';`
 /// statement inside the same transaction (atomic policy = C,
 /// partial-atomic).
@@ -192,7 +192,7 @@ pub struct ColumnDefinition {
     pub default_value: Option<String>,
     #[serde(default)]
     pub comment: Option<String>,
-    /// Sprint 242 — when `true`, the column is emitted as an
+    /// When `true`, the column is emitted as an
     /// auto-incrementing identity column. PG emits
     /// `GENERATED BY DEFAULT AS IDENTITY` (SQL-standard, PG 10+); the
     /// `BY DEFAULT` variant lets seed/migration scripts override the
@@ -211,9 +211,9 @@ pub struct ColumnDefinition {
     pub is_identity: bool,
 }
 
-/// Request payload for `RENAME TABLE` (Sprint 235).
+/// Request payload for `RENAME TABLE`.
 ///
-/// Mirrors the Sprint 226 `CreateTableRequest` shape: `connection_id`,
+/// Mirrors the `CreateTableRequest` shape: `connection_id`,
 /// `schema`, `table` identify the target; `new_name` is the rename
 /// destination; `preview_only` (default `false`) toggles between SQL
 /// emission and BEGIN/COMMIT execution. `#[serde(rename_all = "camelCase")]`
@@ -228,17 +228,17 @@ pub struct RenameTableRequest {
     pub new_name: String,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    /// Opt-in DbMismatch guard. See `AlterTableRequest`.
     #[serde(default)]
     pub expected_database: Option<String>,
 }
 
-/// Request payload for `DROP TABLE` (Sprint 235).
+/// Request payload for `DROP TABLE`.
 ///
 /// `cascade` is opt-in (default `false` → PG's implicit RESTRICT, byte-
 /// equivalent emission omits the `RESTRICT` keyword). `preview_only`
 /// (default `false`) is the same preview/execute switch the rest of the
-/// Phase 24-26 DDL family already uses.
+/// DDL family already uses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DropTableRequest {
@@ -249,30 +249,28 @@ pub struct DropTableRequest {
     pub cascade: bool,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    /// Opt-in DbMismatch guard. See `AlterTableRequest`.
     #[serde(default)]
     pub expected_database: Option<String>,
 }
 
-/// Request payload for `ADD COLUMN` (Sprint 236).
+/// Request payload for `ADD COLUMN`.
 ///
-/// Mirrors the Sprint 235 `RenameTableRequest` / `DropTableRequest` shape
-/// (camelCase wire form) so the new `AddColumnDialog` can drive a
-/// preview/execute lifecycle through `useDdlPreviewExecution`. The
-/// `column` field reuses the Sprint 226 `ColumnDefinition` struct
-/// verbatim (`name`, `data_type`, `nullable`, `default_value`,
-/// optional `comment`) so the Sprint 226 frontend types stay byte-
-/// equivalent. `check_expression` is request-level (NOT inside
+/// Mirrors the `RenameTableRequest` / `DropTableRequest` shape (camelCase
+/// wire form) so the `AddColumnDialog` can drive a preview/execute
+/// lifecycle through `useDdlPreviewExecution`. The `column` field reuses
+/// the `ColumnDefinition` struct verbatim (`name`, `data_type`,
+/// `nullable`, `default_value`, optional `comment`) so the frontend types
+/// stay byte-equivalent. `check_expression` is request-level (NOT inside
 /// `ColumnDefinition`) so the `CreateTableRequest` payload shape stays
 /// diff = 0; when `Some(...)` and the trimmed expression is non-empty,
 /// the SQL emitter appends `CHECK (<expr>)` after `DEFAULT` (free-text
-/// passthrough — no escaping, no syntax check, mirrors Sprint 229
-/// CHECK constraint contract).
+/// passthrough — no escaping, no syntax check, mirroring the CHECK
+/// constraint contract).
 ///
 /// `preview_only` (default `false`) toggles between SQL emission and
-/// `BEGIN/COMMIT` execution. `comment` on `ColumnDefinition` is
-/// silently ignored by `add_column` this sprint — Sprint 237 polish
-/// adds the `COMMENT ON COLUMN` chain.
+/// `BEGIN/COMMIT` execution. `comment` on `ColumnDefinition` is ignored by
+/// `add_column`: the emitter builds no `COMMENT ON COLUMN` statement.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddColumnRequest {
@@ -284,16 +282,16 @@ pub struct AddColumnRequest {
     pub check_expression: Option<String>,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    /// Opt-in DbMismatch guard. See `AlterTableRequest`.
     #[serde(default)]
     pub expected_database: Option<String>,
 }
 
-/// Request payload for `DROP COLUMN` (Sprint 236).
+/// Request payload for `DROP COLUMN`.
 ///
 /// `cascade` opt-in (default `false` → PG's implicit RESTRICT, byte-
-/// equivalent emission omits the `RESTRICT` keyword — mirrors Sprint
-/// 235 `DropTableRequest` convention). No pre-existence check on the
+/// equivalent emission omits the `RESTRICT` keyword — mirrors the
+/// `DropTableRequest` convention). No pre-existence check on the
 /// backend (let PG surface `column "X" does not exist` verbatim).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -306,12 +304,12 @@ pub struct DropColumnRequest {
     pub cascade: bool,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    /// Opt-in DbMismatch guard. See `AlterTableRequest`.
     #[serde(default)]
     pub expected_database: Option<String>,
 }
 
-/// Request payload for `CREATE TABLE` (Sprint 226).
+/// Request payload for `CREATE TABLE`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTableRequest {
     pub connection_id: String,
@@ -322,14 +320,14 @@ pub struct CreateTableRequest {
     pub primary_key: Option<Vec<String>>,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 234 — table-level COMMENT ON TABLE statement, emitted
-    /// inside the same `create_table` transaction as the per-column
-    /// `COMMENT ON COLUMN` statements (atomic policy = C). When `None`
-    /// or `Some(empty-after-trim)`, no statement is emitted (Sprint
-    /// 226-233 callers stay byte-equivalent).
+    /// Table-level COMMENT ON TABLE statement, emitted inside the same
+    /// `create_table` transaction as the per-column `COMMENT ON COLUMN`
+    /// statements (atomic policy = C). When `None` or
+    /// `Some(empty-after-trim)`, no statement is emitted, so callers that
+    /// predate the field stay byte-equivalent.
     #[serde(default)]
     pub table_comment: Option<String>,
-    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    /// Opt-in DbMismatch guard. See `AlterTableRequest`.
     #[serde(default)]
     pub expected_database: Option<String>,
 }
@@ -342,7 +340,7 @@ pub struct SchemaChangeResult {
     pub sql: String,
 }
 
-/// Sprint 240 — single child index entry inside a `CreateTablePlanRequest`.
+/// Single child index entry inside a `CreateTablePlanRequest`.
 ///
 /// Mirrors `CreateIndexRequest` minus the `connection_id` / `schema` /
 /// `table` / `preview_only` fields (those are inherited from the parent
@@ -358,7 +356,7 @@ pub struct CreateTablePlanIndex {
     pub is_unique: bool,
 }
 
-/// Sprint 240 — single child constraint entry inside a
+/// Single child constraint entry inside a
 /// `CreateTablePlanRequest`. Mirrors `AddConstraintRequest` minus the
 /// connection / schema / table / preview-flag fields. The adapter layer
 /// fans this out into an `AddConstraintRequest` per entry.
@@ -369,14 +367,13 @@ pub struct CreateTablePlanConstraint {
     pub definition: ConstraintDefinition,
 }
 
-/// Sprint 240 — unified `CREATE TABLE + indexes + constraints` request.
+/// Unified `CREATE TABLE + indexes + constraints` request.
 ///
-/// Architecture intent (per user feedback in Sprint 240): the SQL
-/// preview the user sees should come from the same server-side emitter
-/// that ultimately executes. Pre-Sprint-240 the `CreateTableDialog`
-/// fanned out N+1 round-trips during preview (1 `create_table` +
-/// N `create_index` + M `add_constraint`); Sprint 240 collapses this
-/// to a single `create_table_plan` IPC.
+/// Architecture intent: the SQL preview the user sees should come from
+/// the same server-side emitter that ultimately executes. The
+/// `CreateTableDialog` used to fan out N+1 round-trips during preview
+/// (1 `create_table` + N `create_index` + M `add_constraint`); this
+/// request collapses that to a single `create_table_plan` IPC.
 ///
 /// Atomic policy is the adapter's, not this struct's. The default is
 /// C (partial-atomic) — the parent CREATE TABLE statement runs inside
@@ -392,7 +389,7 @@ pub struct CreateTablePlanConstraint {
 /// execution. In preview mode the adapter joins each child's emitted
 /// SQL with `;\n` so the frontend can render the full plan in one
 /// pane. `#[serde(rename_all = "camelCase")]` keeps the wire form
-/// aligned with the rest of the Sprint 235+ `*Request` family.
+/// aligned with the rest of the `*Request` family.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTablePlanRequest {
@@ -410,7 +407,7 @@ pub struct CreateTablePlanRequest {
     pub constraints: Vec<CreateTablePlanConstraint>,
     #[serde(default)]
     pub preview_only: bool,
-    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    /// Opt-in DbMismatch guard. See `AlterTableRequest`.
     #[serde(default)]
     pub expected_database: Option<String>,
 }

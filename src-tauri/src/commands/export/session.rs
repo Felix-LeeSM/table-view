@@ -380,8 +380,9 @@ mod tests {
         export_grid_finish_inner(state, registry, &sid).await
     }
 
-    // [#1443 AC3] 포맷/결과 동일성 — session 경로는 단발 write_export 와
-    // byte-identical 해야 한다 (빈 chunk / 불균등 chunk 포함).
+    // [#1443 AC3] Format/result identity — the session path must be
+    // byte-identical to the single-shot write_export (including empty chunks /
+    // uneven chunks).
     #[tokio::test]
     async fn session_output_is_byte_identical_to_single_shot_per_format() {
         let cases: Vec<(ExportFormat, ExportContext, Vec<Vec<JsonValue>>)> = vec![
@@ -442,8 +443,9 @@ mod tests {
         }
     }
 
-    // [#1443 / #1269] cancel mid-session — chunk 는 에러로 abort 되고 temp
-    // 제거 + token release + 기존 target 파일 보존.
+    // [#1443 / #1269] cancel mid-session — the chunk aborts with an error, and
+    // the temp is removed + the token released + the pre-existing target file
+    // preserved.
     #[tokio::test]
     async fn cancel_between_chunks_cleans_temp_releases_token_and_keeps_target() {
         let state = AppState::new();
@@ -487,7 +489,8 @@ mod tests {
         assert!(matches!(after, Err(AppError::Validation(_))));
     }
 
-    // [#1443] cancel 후 finish — rename 없이 temp 정리, target 보존.
+    // [#1443] finish after a cancel — the temp is cleaned up without a rename,
+    // the target preserved.
     #[tokio::test]
     async fn finish_after_cancel_cleans_temp_and_keeps_target() {
         let state = AppState::new();
@@ -526,7 +529,8 @@ mod tests {
             .contains_key("exp-cancel-finish"));
     }
 
-    // [#1443] abort — temp 제거 + token release, 미지 세션 abort 는 Ok.
+    // [#1443] abort — temp removed + token released; aborting an unknown
+    // session is Ok.
     #[tokio::test]
     async fn abort_cleans_temp_and_token_and_is_idempotent() {
         let state = AppState::new();
@@ -561,8 +565,9 @@ mod tests {
             .unwrap();
     }
 
-    // [#1443 / #1094] begin 은 path 가드를 파일 작업 전에 태운다 — 상대
-    // 경로 reject 시 temp 도 세션도 token 도 없어야 한다.
+    // [#1443 / #1094] begin runs the path guard before any file work — when a
+    // relative path is rejected there must be no temp, no session, and no
+    // token.
     #[tokio::test]
     async fn begin_rejects_relative_path_without_side_effects() {
         let state = AppState::new();
@@ -582,8 +587,9 @@ mod tests {
         assert!(registry.sessions.lock().await.is_empty());
     }
 
-    // [#1638] JSON + Table ctx 는 이제 세션 경로에서도 허용 — begin 이
-    // 세션을 열고 tabular writer 를 준비한다 (구 collection-only reject 폐기).
+    // [#1638] JSON + Table ctx is now allowed on the session path too — begin
+    // opens the session and prepares the tabular writer (the old
+    // collection-only reject is gone).
     #[tokio::test]
     async fn begin_accepts_json_with_table_context_and_writes_tabular() {
         let state = AppState::new();
@@ -612,7 +618,7 @@ mod tests {
         assert_eq!(dir_file_names(dir.path()), vec!["out.json".to_string()]);
     }
 
-    // [#1443] 미지 session id — chunk/finish 는 Validation 에러.
+    // [#1443] Unknown session id — chunk/finish return a Validation error.
     #[tokio::test]
     async fn chunk_and_finish_reject_unknown_session() {
         let state = AppState::new();
@@ -623,7 +629,7 @@ mod tests {
         assert!(matches!(finish, Err(AppError::Validation(_))));
     }
 
-    // [#1443] export_id 없는 세션은 token registry 를 건드리지 않는다.
+    // [#1443] A session without an export_id does not touch the token registry.
     #[tokio::test]
     async fn session_without_export_id_skips_token_registration() {
         let state = AppState::new();

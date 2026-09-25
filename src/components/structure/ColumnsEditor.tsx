@@ -31,10 +31,10 @@ import {
 } from "./shared/structureUI";
 import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 
-// Sprint 237 — debounce window for the SET-NOT-NULL conflict probe. The
-// user toggles the checkbox; we wait 500 ms with no further change
-// before issuing `count_null_rows` to avoid hammering the backend
-// while the user is still deciding.
+// Debounce window for the SET-NOT-NULL conflict probe. The user toggles the
+// checkbox; we wait 500 ms with no further change before issuing
+// `count_null_rows` to avoid hammering the backend while the user is still
+// deciding.
 const NULL_PROBE_DEBOUNCE_MS = 500;
 
 // ---------------------------------------------------------------------------
@@ -70,11 +70,10 @@ interface EditableColumnRowProps {
   onSaveEdit: (change: ColumnChange) => void;
   onDelete: () => void;
   /**
-   * Sprint 237 — context forwarded to the SET-NOT-NULL conflict probe.
-   * The MODIFY editor calls `tauri.countNullRows` 500 ms after the user
-   * toggles a nullable column to NOT NULL; the response drives the
-   * inline warning text. Optional only because the inline-batched
-   * MODIFY surface is the sole caller today.
+   * Context forwarded to the SET-NOT-NULL conflict probe. The MODIFY editor
+   * calls `tauri.countNullRows` 500 ms after the user toggles a nullable
+   * column to NOT NULL; the response drives the inline warning text. Optional
+   * only because the inline-batched MODIFY surface is the sole caller today.
    */
   connectionId?: string;
   database?: string;
@@ -127,36 +126,35 @@ function EditableColumnRow({
   // #1735 — column comment draft. Initialised from the current comment
   // ("" when null) so `hasCommentChange` detects both edits and clears.
   const [comment, setComment] = useState(col.comment ?? "");
-  // Sprint 237 — free-text USING cast expression. Rendered only when the
-  // user has chosen a NEW data type (i.e. `dataType !== col.data_type`).
-  // Cleared when the user reverts to the original type so a stale value
-  // doesn't leak into the eventual `alterTable` payload.
+  // Free-text USING cast expression. Rendered only when the user has chosen a
+  // NEW data type (i.e. `dataType !== col.data_type`). Cleared when the user
+  // reverts to the original type so a stale value doesn't leak into the
+  // eventual `alterTable` payload.
   const [usingExpression, setUsingExpression] = useState("");
-  // Sprint 237 — pre-execution NULL-rows warning. `null` = no probe has
-  // resolved yet (or the toggle is in its default position). `0` is a
-  // valid resolution and renders no warning. `>0` renders the inline
-  // copy.
+  // Pre-execution NULL-rows warning. `null` = no probe has resolved yet (or
+  // the toggle is in its default position). `0` is a valid resolution and
+  // renders no warning. `>0` renders the inline copy.
   const [nullRowCount, setNullRowCount] = useState<number | null>(null);
 
   const hasDataTypeChange = dataType !== col.data_type;
-  // Sprint 237 — SET-NOT-NULL is only meaningful when the column is
-  // currently nullable; we never probe DROP-NOT-NULL or no-change.
+  // SET-NOT-NULL is only meaningful when the column is currently nullable; we
+  // never probe DROP-NOT-NULL or no-change.
   const willSetNotNull = col.nullable && !nullable;
 
-  // Sprint 237 — when the user clears the new data type, the USING
-  // input is hidden; drop any pending value so a re-toggle of the type
-  // doesn't repopulate stale text.
+  // When the user clears the new data type, the USING input is hidden; drop
+  // any pending value so a re-toggle of the type doesn't repopulate stale
+  // text.
   useEffect(() => {
     if (!hasDataTypeChange && usingExpression.length > 0) {
       setUsingExpression("");
     }
   }, [hasDataTypeChange, usingExpression.length]);
 
-  // Sprint 237 — debounced `count_null_rows` probe. Fires only when the
-  // user toggles SET NOT NULL on a column that is currently nullable.
-  // Re-runs on every state flip; the timer is cleared on unmount /
-  // re-toggle so an in-flight debounce is cancelled. Probe errors are
-  // swallowed (best-effort advisory — never blocks preview / commit).
+  // Debounced `count_null_rows` probe. Fires only when the user toggles SET
+  // NOT NULL on a column that is currently nullable. Re-runs on every state
+  // flip; the timer is cleared on unmount / re-toggle so an in-flight debounce
+  // is cancelled. Probe errors are swallowed (best-effort advisory — never
+  // blocks preview / commit).
   useEffect(() => {
     if (!isEditing) {
       setNullRowCount(null);
@@ -172,12 +170,11 @@ function EditableColumnRow({
       // call site shape; the modal-add / drop paths don't need it.
       return;
     }
-    // Sprint 237 Attempt 2 — stale-warning hygiene. When a dep (e.g.
-    // `col.name`, `database`, `tableName`) changes while `willSetNotNull`
-    // stays true, the previously-resolved `nullRowCount` would keep
-    // rendering until the next 500 ms debounce resolves. Clear it now so
-    // the warning vanishes immediately and reappears only when the
-    // fresh probe lands.
+    // Stale-warning hygiene. When a dep (e.g. `col.name`, `database`,
+    // `tableName`) changes while `willSetNotNull` stays true, the
+    // previously-resolved `nullRowCount` would keep rendering until the next
+    // 500 ms debounce resolves. Clear it now so the warning vanishes
+    // immediately and reappears only when the fresh probe lands.
     setNullRowCount(null);
     let cancelled = false;
     const handle = window.setTimeout(() => {
@@ -188,8 +185,7 @@ function EditableColumnRow({
         })
         .catch(() => {
           // Probe is advisory; PG surfaces the real error on commit if the
-          // user proceeds. Silent swallow is intentional — see Sprint 237
-          // contract § Design Bar / Quality Bar.
+          // user proceeds. Silent swallow is intentional.
         });
     }, NULL_PROBE_DEBOUNCE_MS);
     return () => {
@@ -230,10 +226,10 @@ function EditableColumnRow({
       return;
     }
 
-    // Sprint 237 — only emit `using_expression` when a non-empty value is
-    // present alongside a type change. Empty / whitespace-only inputs
-    // pass through as `null` so the backend keeps emitting the pre-
-    // Sprint-237 `ALTER COLUMN "x" TYPE <t>` byte-for-byte.
+    // Only emit `using_expression` when a non-empty value is present
+    // alongside a type change. Empty / whitespace-only inputs pass through as
+    // `null` so the backend keeps emitting the plain
+    // `ALTER COLUMN "x" TYPE <t>` byte-for-byte.
     const trimmedUsing = usingExpression.trim();
     const usingPayload: string | null =
       hasDataTypeChange && trimmedUsing.length > 0 ? trimmedUsing : null;
@@ -296,10 +292,10 @@ function EditableColumnRow({
               onChange={(e) => setDataType(e.target.value)}
               aria-label={t("col.dataTypeAria", { name: col.name })}
             />
-            {/* Sprint 237 — USING cast expression. Conditionally
-                rendered ONLY when the user has chosen a new type so
-                pre-Sprint-237 type-only flow stays diff=0. Free-text
-                input; PG surfaces its parse error if invalid. */}
+            {/* USING cast expression. Conditionally rendered ONLY when
+                the user has chosen a new type so the type-only flow stays
+                diff=0. Free-text input; PG surfaces its parse error if
+                invalid. */}
             {hasDataTypeChange && (
               <input
                 className={inputClass}
@@ -325,10 +321,10 @@ function EditableColumnRow({
               aria-label={t("col.nullableAria", { name: col.name })}
               className="rounded border-border"
             />
-            {/* Sprint 237 — pre-execution conflict warning. Renders
-                only when the user is flipping nullable→NOT NULL AND
-                the debounced probe returned a non-zero count. Purely
-                advisory — preview / commit are not blocked. */}
+            {/* Pre-execution conflict warning. Renders only when the user
+                is flipping nullable→NOT NULL AND the debounced probe
+                returned a non-zero count. Purely advisory — preview /
+                commit are not blocked. */}
             {willSetNotNull && nullRowCount !== null && nullRowCount > 0 && (
               <span
                 role="alert"
@@ -430,8 +426,8 @@ function EditableColumnRow({
                     COLUMN); it reads its own gate so an engine that runs
                     ADD/DROP COLUMN but needs a table rebuild to change one
                     keeps Delete live. Blocked = disabled + a Radix tooltip
-                    naming the reason (2026-07-25 owner grill on #1804), never
-                    a native `title`.
+                    naming the reason (owner grill on #1804), never a native
+                    `title`.
 
                     `aria-disabled` + `preventDefault`, NOT the native
                     `disabled` attribute: a natively disabled button drops out
@@ -491,10 +487,10 @@ function EditableColumnRow({
 }
 
 // ---------------------------------------------------------------------------
-// Sprint 236 \u2014 `NewColumnRow` (inline add) component removed.
-// `+ Column` toolbar button now opens `<AddColumnDialog>`. The inline
-// `NewColumnDraft` interface above is retained as a re-exportable type
-// (zero external callers; kept as historical surface).
+// `NewColumnRow` (inline add) component removed. The `+ Column` toolbar
+// button opens `<AddColumnDialog>`. The inline `NewColumnDraft` interface
+// above is retained as a re-exportable type (zero external callers; kept as
+// historical surface).
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -504,12 +500,12 @@ function EditableColumnRow({
 interface ColumnsEditorProps {
   connectionId: string;
   /**
-   * Sprint 271c — active database (workspace `(connId, db)` coordinate).
-   * Forwarded to `tauri.alterTable` / `addColumnRequest` /
-   * `dropColumnRequest` as `expectedDatabase` so a swapped backend pool
-   * rejects with `AppError::DbMismatch` before any column mutation
-   * lands. Optional only so legacy callers compile unchanged; new
-   * callers should pass the workspace db.
+   * Active database (workspace `(connId, db)` coordinate). Forwarded to
+   * `tauri.alterTable` / `addColumnRequest` / `dropColumnRequest` as
+   * `expectedDatabase` so a swapped backend pool rejects with
+   * `AppError::DbMismatch` before any column mutation lands. Optional only so
+   * legacy callers compile unchanged; new callers should pass the workspace
+   * db.
    */
   database?: string;
   table: string;
@@ -575,17 +571,16 @@ export default function ColumnsEditor({
   const [pendingChanges, setPendingChanges] = useState<PendingColumnChange[]>(
     [],
   );
-  // Sprint 236 — `newColumnDrafts` retained because the inline-add path
-  // is REMOVED but the `NewColumnDraft` type is still re-exported for
-  // back-compat of any external import. Empty array is the locked
-  // surface; `+ Column` toolbar button now opens `AddColumnDialog`.
+  // `newColumnDrafts` retained because the inline-add path is REMOVED but the
+  // `NewColumnDraft` type is still re-exported for back-compat of any external
+  // import. Empty array is the locked surface; the `+ Column` toolbar button
+  // opens `AddColumnDialog`.
   const [newColumnDrafts, setNewColumnDrafts] = useState<NewColumnDraft[]>([]);
   const [droppedColumns, setDroppedColumns] = useState<Set<string>>(new Set());
 
-  // Sprint 236 — modal slots replacing the inline NewColumnDraft +
-  // per-row trash `pendingChanges` drop entries. Both flow through
-  // `onRefresh()` on commit-success (cache invalidation path; see
-  // Sprint 236 contract Decisions §Cache invalidation path).
+  // Modal slots replacing the inline NewColumnDraft + per-row trash
+  // `pendingChanges` drop entries. Both flow through `onRefresh()` on
+  // commit-success (cache invalidation path).
   const [showAddColumnDialog, setShowAddColumnDialog] = useState(false);
   const [dropColumnTarget, setDropColumnTarget] = useState<string | null>(null);
 
@@ -610,11 +605,10 @@ export default function ColumnsEditor({
   // Column editing handlers
   // -------------------------------------------------------------------------
 
-  // Sprint 236 — `+ Column` toolbar button now opens `AddColumnDialog`
-  // instead of pushing an inline `NewColumnDraft` row. The inline-add
-  // path is REMOVED; the modal becomes the sole add-column surface.
-  // The inline-batched MODIFY path (Edit pencil → save → review SQL →
-  // batched `alter_table`) stays UNCHANGED — Sprint 237 polish target.
+  // The `+ Column` toolbar button opens `AddColumnDialog` instead of pushing
+  // an inline `NewColumnDraft` row. The inline-add path is REMOVED; the modal
+  // is the sole add-column surface. The inline-batched MODIFY path (Edit
+  // pencil → save → review SQL → batched `alter_table`) stays UNCHANGED.
   const handleAddColumn = () => {
     setShowAddColumnDialog(true);
   };
@@ -633,11 +627,11 @@ export default function ColumnsEditor({
     setEditingColumn(null);
   };
 
-  // Sprint 236 — per-row trash icon now opens `DropColumnDialog`
-  // pre-filled with the column name instead of pushing a pending drop
-  // entry into `pendingChanges`. The inline-batched MODIFY path stays
-  // intact; the trash icon used to be the only entrypoint to the
-  // batched DROP path, which is now replaced by the dedicated modal.
+  // The per-row trash icon opens `DropColumnDialog` pre-filled with the
+  // column name instead of pushing a pending drop entry into
+  // `pendingChanges`. The inline-batched MODIFY path stays intact; the trash
+  // icon used to be the only entrypoint to the batched DROP path, now
+  // replaced by the dedicated modal.
   const handleDeleteColumn = (columnName: string) => {
     setDropColumnTarget(columnName);
   };
@@ -652,8 +646,8 @@ export default function ColumnsEditor({
     table,
     changes: pendingChanges.map((p) => p.change),
     preview_only: previewOnly,
-    // Sprint 271c — opt-in DbMismatch guard. Wire format is snake_case
-    // (matches Rust struct field name).
+    // Opt-in DbMismatch guard. Wire format is snake_case (matches Rust
+    // struct field name).
     expected_database: database,
   });
 
@@ -785,11 +779,10 @@ export default function ColumnsEditor({
                   canEditColumnComment={canEditColumnComment}
                 />
               ))}
-              {/* Sprint 236 \u2014 inline `NewColumnRow` + pending-add row
-                rendering removed; `+ Column` toolbar now opens
-                `AddColumnDialog`. The inline-batched MODIFY path
-                stays \u2014 it goes through `pendingChanges` /
-                `alter_table` (Sprint 237 polish target). */}
+              {/* Inline `NewColumnRow` + pending-add row rendering
+                removed; the `+ Column` toolbar opens `AddColumnDialog`.
+                The inline-batched MODIFY path stays — it goes through
+                `pendingChanges` / `alter_table`. */}
             </tbody>
           </StructureTable>
         </TooltipProvider>
@@ -835,7 +828,7 @@ export default function ColumnsEditor({
         />
       )}
 
-      {/* Sprint 236 — AddColumnDialog (replaces inline NewColumnDraft). */}
+      {/* AddColumnDialog (replaces inline NewColumnDraft). */}
       <AddColumnDialog
         connectionId={connectionId}
         database={database}
@@ -847,7 +840,7 @@ export default function ColumnsEditor({
         onColumnAdded={onRefresh}
       />
 
-      {/* Sprint 236 — DropColumnDialog (replaces per-row trash pending-drop). */}
+      {/* DropColumnDialog (replaces per-row trash pending-drop). */}
       {dropColumnTarget !== null && (
         <DropColumnDialog
           connectionId={connectionId}

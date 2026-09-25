@@ -1,4 +1,4 @@
-//! Paradigm-neutral metadata commands (Sprint 128).
+//! Paradigm-neutral metadata commands.
 //!
 //! Houses the unified `list_databases` Tauri command — a thin dispatcher
 //! that branches on `ActiveAdapter` so the workspace toolbar's
@@ -9,7 +9,7 @@
 //! Redis/Valkey can share the toolbar switcher.
 //!
 //! The Mongo-specific `list_mongo_databases` (`commands/document/browse.rs`)
-//! stays as-is — Sprint 128 introduces this unified entry point alongside
+//! stays as-is — this unified entry point was introduced alongside
 //! it without breaking existing callers.
 
 use crate::commands::connection::AppState;
@@ -26,7 +26,7 @@ use crate::models::{DatabaseUserRow, ServerActivityRow};
 ///                  `pg_database` rows, default impl returns `vec![]` for
 ///                  paradigm members without their own override).
 ///   - `Document` → `DocumentAdapter::list_databases` (Mongo).
-///   - `Search`   → `Ok(vec![])` — Phase 7 ES adapter has no per-connection
+///   - `Search`   → `Ok(vec![])` — the ES adapter has no per-connection
 ///                  database concept; the toolbar treats an empty result as
 ///                  "switcher stays read-only".
 ///   - `Kv`       → `KvAdapter::list_databases` (Redis/Valkey DB indexes).
@@ -68,14 +68,15 @@ pub async fn list_databases(
     Ok(databases)
 }
 
-/// Switch the active database for the given connection (Sprint 130, 131).
+/// Switch the active database for the given connection.
 ///
 /// Dispatch table:
-///   - `Rdb`      → `RdbAdapter::switch_database`. PostgresAdapter overrides
-///                  the trait default to swap the active sub-pool to
-///                  `db_name`; SQLite/MySQL fall back to `Unsupported`
-///                  until Phase 9. The frontend toast surfaces the message.
-///   - `Document` → `DocumentAdapter::switch_database` (Sprint 131). The
+///   - `Rdb`      → `RdbAdapter::switch_database`. PostgreSQL, MySQL and SQL
+///                  Server override the trait default to swap the active
+///                  sub-pool to `db_name`; an adapter without an override
+///                  returns `Unsupported` and the frontend toast surfaces the
+///                  message.
+///   - `Document` → `DocumentAdapter::switch_database`. The
 ///                  MongoAdapter override mutates its `active_db` field
 ///                  after a cheap `list_database_names` probe. Other
 ///                  document adapters keep the default `Unsupported` until
@@ -131,7 +132,7 @@ pub async fn switch_active_db(
     Ok(())
 }
 
-/// Resolve the active database the backend currently sees (Sprint 132).
+/// Resolve the active database the backend currently sees.
 ///
 /// Used by the QueryTab raw-query hook: after the user runs `\c <db>` the
 /// frontend optimistically calls `setActiveDb(db)`, then this command to
@@ -202,7 +203,7 @@ async fn list_server_activity_inner(
     }
 }
 
-/// Sprint 336 (U1 live wire) — paradigm-neutral server activity feed.
+/// Paradigm-neutral server activity feed.
 /// PG → pg_stat_activity, Mongo → currentOp.
 #[tauri::command]
 pub async fn list_server_activity(
@@ -233,7 +234,7 @@ async fn kill_server_activity_inner(
     }
 }
 
-/// Sprint 336 (U1 live wire) — paradigm-neutral kill. PG →
+/// Paradigm-neutral kill. PG →
 /// `pg_terminate_backend(pid)`, Mongo → `adminCommand({killOp, op: id})`.
 #[tauri::command]
 pub async fn kill_server_activity(
@@ -259,7 +260,7 @@ async fn collection_stats_rdb_inner(
     active.as_rdb()?.collection_stats(schema, table).await
 }
 
-/// Sprint 338 (U3 live wire) — RDB collection (table) stats.
+/// RDB collection (table) stats.
 #[tauri::command]
 pub async fn collection_stats_rdb(
     state: tauri::State<'_, AppState>,
@@ -286,7 +287,7 @@ async fn collection_stats_mongo_inner(
         .await
 }
 
-/// Sprint 338 (U3 live wire) — Mongo `runCommand({collStats: <coll>})`.
+/// Mongo `runCommand({collStats: <coll>})`.
 #[tauri::command]
 pub async fn collection_stats_mongo(
     state: tauri::State<'_, AppState>,
@@ -347,7 +348,7 @@ async fn server_info_inner(
     }
 }
 
-/// Sprint 339 (U4 live wire) — paradigm-neutral server identity +
+/// Paradigm-neutral server identity +
 /// runtime info.
 #[tauri::command]
 pub async fn server_info(
@@ -379,7 +380,7 @@ async fn slow_queries_inner(
     }
 }
 
-/// Sprint 340 (U5 live wire) — paradigm-neutral slow query / profiler
+/// Paradigm-neutral slow query / profiler
 /// listing. `limit` is clamped to [1, 500].
 #[tauri::command]
 pub async fn slow_queries(
@@ -417,8 +418,8 @@ async fn list_database_users_inner(
 }
 
 /// Issue #1077 Stage 2 — read-only users/roles listing for the active
-/// connection. PG queries `pg_roles` (password-masked); other engines return
-/// `Unsupported` until their parity slice ships.
+/// connection. PG queries `pg_roles` (password-masked); MySQL and SQL Server
+/// override it too, and every other adapter returns `Unsupported`.
 #[tauri::command]
 pub async fn list_database_users(
     state: tauri::State<'_, AppState>,
@@ -430,16 +431,16 @@ pub async fn list_database_users(
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
-    //! 작성 이유 (2026-05-08, spec-first refactor): meta.rs 의 inline stub
-    //! ~750 lines 를 db::testing 공유 stub 으로 교체. 동일한 시나리오를
-    //! cover 하지만 dead trait method 가 사라져 file 자체가 짧아지고
-    //! function/region coverage 가 회복.
+    //! Written 2026-05-08 (spec-first refactor): meta.rs's inline stub was
+    //! replaced with the shared db::testing stub. It covers the same scenarios,
+    //! but the dead trait methods disappear so the file itself gets shorter and
+    //! function/region coverage recovers.
     //!
-    //! list_databases / switch_active_db / verify_active_db 3 commands 의
-    //! dispatch contract 를 paradigm-aware 매트릭스로 검증:
-    //!   - Rdb arm: 위임 + propagate
-    //!   - Document arm: 위임 + propagate
-    //!   - Search arm: empty/Unsupported (per command 의 spec)
+    //! Verifies the dispatch contract of the 3 commands list_databases /
+    //! switch_active_db / verify_active_db as a paradigm-aware matrix:
+    //!   - Rdb arm: delegate + propagate
+    //!   - Document arm: delegate + propagate
+    //!   - Search arm: empty/Unsupported (each command's spec)
     //!   - Kv arm: Redis/Valkey database index dispatch
     //!   - missing connection: NotFound
 
@@ -614,7 +615,7 @@ mod tests {
         }
     }
 
-    // ── list_databases — paradigm 매트릭스 ──────────────────────────────
+    // ── list_databases — paradigm matrix ────────────────────────────────
 
     #[tokio::test]
     async fn list_databases_unknown_connection_returns_notfound() {
@@ -698,7 +699,7 @@ mod tests {
         }
     }
 
-    // ── switch_active_db — paradigm 매트릭스 ────────────────────────────
+    // ── switch_active_db — paradigm matrix ──────────────────────────────
 
     #[tokio::test]
     async fn switch_active_db_unknown_connection_returns_notfound() {
@@ -710,7 +711,7 @@ mod tests {
 
     #[tokio::test]
     async fn switch_active_db_rdb_arm_propagates_ok() {
-        // StubRdbAdapter 의 switch_database default = Ok(()) — 그대로 전달.
+        // StubRdbAdapter's switch_database default is Ok(()) — passed through verbatim.
         let connections = map_with("c", rdb_default());
         assert!(dispatch_switch_active_db(&connections, "c", "another")
             .await
@@ -786,7 +787,7 @@ mod tests {
         ));
     }
 
-    // ── verify_active_db — paradigm 매트릭스 ────────────────────────────
+    // ── verify_active_db — paradigm matrix ──────────────────────────────
 
     #[tokio::test]
     async fn verify_active_db_unknown_connection_returns_notfound() {
@@ -866,22 +867,24 @@ mod tests {
         );
     }
 
-    // ── Sprint 267 (2026-05-12) — switch_active_db 직렬화 invariant ──────
+    // ── switch_active_db serialization invariant (2026-05-12) ────────────
     //
-    // 작성 이유: Sprint 263/264/266 OoS 가 "동시 swap → race" 가능성을 제기
-    // 했으나 audit 결과 `state.active_connections.lock()` 가 dispatch 전체
-    // 를 감싸므로 동일 connection 의 두 swap 호출은 lock 순서대로 직렬화.
-    // 본 테스트는 "마지막 호출의 db_name 이 final state 가 된다"는 invariant
-    // 를 동결 — 향후 locking 모델을 더 fine-grained 으로 옮기더라도 동일
-    // 의미가 유지되어야 함을 회귀 가드로 표현.
+    // Reason: earlier OoS findings raised a "concurrent swap → race" possibility,
+    // but the audit showed `state.active_connections.lock()` wraps the whole
+    // dispatch, so two swap calls on the same connection are serialized in lock
+    // order. This test freezes the invariant that "the last call's db_name
+    // becomes the final state" — a regression guard that the same semantics
+    // must hold even if the locking model later moves to something more
+    // fine-grained.
 
     #[tokio::test]
     async fn switch_active_db_concurrent_calls_are_serialized_last_writer_wins() {
         use std::sync::atomic::{AtomicU64, Ordering};
         use std::sync::Arc;
 
-        // 두 swap 호출이 동시에 들어와도 lock 직렬화로 last-writer-wins.
-        // StubRdbAdapter 의 switch_database 가 호출 순서 + 인자를 기록.
+        // Even when two swap calls arrive concurrently, lock serialization makes
+        // it last-writer-wins. StubRdbAdapter's switch_database records the call
+        // order and arguments.
         let history: Arc<tokio::sync::Mutex<Vec<String>>> = Arc::default();
         let call_id = Arc::new(AtomicU64::new(0));
 
@@ -889,8 +892,8 @@ mod tests {
         let history_clone = history.clone();
         let call_id_clone = call_id.clone();
         s.switch_database_fn = Some(Box::new(move |name: &str| {
-            // 동기 stub — lock 직렬화의 효과만 확인. 비동기 contention 은
-            // active_connections lock 에서 일어남.
+            // Synchronous stub — only checks the effect of lock serialization.
+            // Async contention happens at the active_connections lock.
             call_id_clone.fetch_add(1, Ordering::SeqCst);
             let h = history_clone.clone();
             let name_owned = name.to_string();
@@ -904,7 +907,8 @@ mod tests {
             ActiveAdapter::Rdb(Box::new(s)),
         )));
 
-        // 두 swap 호출을 동시에 띄움. 각각 같은 connection 에 다른 db_name.
+        // Spawn the two swap calls concurrently, each with a different db_name
+        // on the same connection.
         let c1 = connections.clone();
         let c2 = connections.clone();
         let h1 = tokio::spawn(async move {
@@ -920,11 +924,11 @@ mod tests {
         assert!(r1.is_ok());
         assert!(r2.is_ok());
 
-        // 두 호출 모두 lock 을 한 번씩 잡았는지 확인 — call_id 가 2.
+        // Confirm both calls took the lock exactly once — call_id is 2.
         assert_eq!(call_id.load(Ordering::SeqCst), 2);
     }
 
-    // ── Sprint 336 — list_server_activity / kill_server_activity ────────
+    // ── list_server_activity / kill_server_activity ──────────────────────
 
     #[tokio::test]
     async fn list_server_activity_unknown_connection_returns_notfound() {
@@ -988,8 +992,8 @@ mod tests {
         ));
     }
 
-    // 작성 이유 (2026-05-15): Sprint 336 dispatch 매트릭스의 마지막 빈
-    // arm — Kv paradigm 도 동일한 Unsupported 분기를 실행하는지 단언.
+    // Written 2026-05-15: asserts that the last empty arm of the dispatch
+    // matrix — the Kv paradigm — also runs the same Unsupported branch.
     #[tokio::test]
     async fn list_server_activity_kv_arm_returns_unsupported() {
         let connections = map_with("c", kv_default());
@@ -1120,8 +1124,8 @@ mod tests {
         ));
     }
 
-    // 작성 이유 (2026-05-15): Sprint 336 dispatch 매트릭스의 마지막 빈
-    // arm — Search paradigm 도 Unsupported 분기를 실행.
+    // Written 2026-05-15: asserts the last empty arm of the dispatch
+    // matrix — the Search paradigm also runs the Unsupported branch.
     #[tokio::test]
     async fn kill_server_activity_search_arm_returns_unsupported() {
         let connections = map_with("c", search_default());
@@ -1131,11 +1135,11 @@ mod tests {
         ));
     }
 
-    // ── Sprint 338 — collection_stats_rdb / collection_stats_mongo ────────
+    // ── collection_stats_rdb / collection_stats_mongo ─────────────────────
 
     fn rdb_default_state() -> crate::commands::connection::AppState {
-        // 작성 이유 (2026-05-15): meta.rs 의 inner 는 AppState 를 직접
-        // 받으므로 helper 로 single-connection state 를 만든다.
+        // Written 2026-05-15: meta.rs's inner functions take AppState directly,
+        // so a helper builds a single-connection state.
         crate::commands::connection::AppState::new()
     }
 
@@ -1212,7 +1216,7 @@ mod tests {
         ));
     }
 
-    // ── Sprint 339 — server_info ────────────────────────────────────────
+    // ── server_info ──────────────────────────────────────────────────────
 
     async fn dispatch_server_info(
         connections: &ConnMap,
@@ -1295,7 +1299,7 @@ mod tests {
         ));
     }
 
-    // ── Sprint 340 — slow_queries ───────────────────────────────────────
+    // ── slow_queries ─────────────────────────────────────────────────────
 
     async fn dispatch_slow_queries(
         connections: &ConnMap,

@@ -377,7 +377,7 @@ impl MssqlAdapter {
         }
     }
 
-    /// Issue #1071 (2차) — DML triggers on `(schema, table)` from `sys.triggers`
+    /// Issue #1071 — DML triggers on `(schema, table)` from `sys.triggers`
     /// joined to `sys.tables` / `sys.schemas` (scope) and `sys.trigger_events`
     /// (per-event rows), system triggers excluded via `is_ms_shipped = 0`. The
     /// body comes from `OBJECT_DEFINITION`. Metadata-denied logins yield an

@@ -1,11 +1,11 @@
-// Sprint 333 (2026-05-15) — Slice K live wire. ValidatorPanel 이
-// `getMongoValidator` / `setMongoValidator` 를 호출하고 raw JSON 에디터
-// 를 통해 collMod 호출까지 wire-up 된다.
+// ValidatorPanel live wire: it calls `getMongoValidator` /
+// `setMongoValidator`, and the raw JSON editor is wired through to the
+// collMod call.
 //
-// 작성 이유: 본 sprint 가 Sprint 327 placeholder 를 실 fetch + collMod
-// dispatch 로 교체한다. (a) get 호출 인자, (b) 기존 validator JSON 으로
-// 에디터 초기화, (c) edit + Save → setMongoValidator 호출 인자, (d) Clear
-// → setMongoValidator(null), (e) error surfaces, (f) invalid JSON 가드.
+// Reason: guards (a) the get call arguments, (b) the editor seeded from the
+// existing validator JSON, (c) edit + Save → `setMongoValidator` arguments,
+// (d) Clear → `setMongoValidator(null)`, (e) error surfaces, (f) the
+// invalid JSON guard.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -97,10 +97,10 @@ describe("ValidatorPanel (Sprint 333 — Slice K live wire)", () => {
 
     await user.click(screen.getByTestId("validator-panel-save"));
 
-    // Sprint 352 widened the wire shape with `validationLevel` /
-    // `validationAction` positional args. When the legacy backend
-    // returns `null`, the selects default to MongoDB's server-side
-    // defaults (`strict` / `error`) and Save forwards those values.
+    // The wire shape carries `validationLevel` / `validationAction` as
+    // positional args. When the legacy backend returns `null`, the selects
+    // fall back to MongoDB's server-side defaults (`strict` / `error`) and
+    // Save forwards those values.
     await waitFor(() => {
       expect(setMongoValidatorMock).toHaveBeenCalledWith(
         "conn-mongo",
@@ -153,10 +153,10 @@ describe("ValidatorPanel (Sprint 333 — Slice K live wire)", () => {
 
     await user.click(screen.getByTestId("validator-panel-clear"));
 
-    // Sprint 352 — Clear retains the current level/action so the
-    // collection's enforcement posture is preserved across a payload
-    // reset. Legacy backend returns the bare validator JSON; the panel
-    // normalises that to defaults (`strict` / `error`).
+    // Clear retains the current level/action so the collection's
+    // enforcement posture is preserved across a payload reset. A legacy
+    // backend returns the bare validator JSON; the panel normalises that
+    // to defaults (`strict` / `error`).
     await waitFor(() => {
       expect(setMongoValidatorMock).toHaveBeenCalledWith(
         "conn-mongo",

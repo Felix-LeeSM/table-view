@@ -367,7 +367,7 @@ async fn a_batch_whose_only_write_is_a_pragma_waits_out_a_concurrent_writer() {
     assert_waited_for_the_lock(result, blocked_for);
 }
 
-/// Regression (#2130 반작용): a statement list of nothing but reads is legal
+/// Regression (#2130 fallout): a statement list of nothing but reads is legal
 /// input, so the batch runner must not take the file's write lock for it. It
 /// used to open deferred and never did; the `BEGIN IMMEDIATE` fix would have,
 /// which just moves the "database is locked" onto whoever wanted to write

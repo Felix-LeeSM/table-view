@@ -118,8 +118,8 @@ mod tests {
     use crate::db::{BoxFuture, KvTtlUpdate, KvWriteSafety};
     use crate::models::{ConnectionConfig, DatabaseType};
 
-    // Purpose: mock conformance for the KV adapter contract before Redis
-    // implementation claims support (sprint 465, 2026-05-24).
+    // Purpose: mock conformance for the KV adapter contract, independent of any
+    // real adapter (2026-05-24).
 
     struct UnsupportedKvAdapter;
 

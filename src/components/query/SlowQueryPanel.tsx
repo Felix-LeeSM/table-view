@@ -1,13 +1,13 @@
-// Sprint 340 (2026-05-15) — U5 live wire. Replaces the
-// BackendPendingPlaceholder with a paradigm-neutral top-N slow query
-// table sourced from `pg_stat_statements` (RDB) or `system.profile`
-// (Mongo). `limit` is fixed at 25 for the initial wire; a follow-up
-// sprint can add a selector once usage tells us what range matters.
+// U5 live wire. Replaces the BackendPendingPlaceholder with a
+// paradigm-neutral top-N slow query table sourced from `pg_stat_statements`
+// (RDB) or `system.profile` (Mongo). `limit` is fixed at 25 for the initial
+// wire; a follow-up can add a selector once usage tells us what range
+// matters.
 //
-// #1077 admin-parity Stage 3 (2026-07-25) — promoted to an auto-polling
-// dashboard: a live-toggle drives periodic refresh and a session-local
-// sparkline tracks the tracked slow-query count over time. Same
-// `slow_queries` IPC on a timer, no new backend.
+// #1077 admin-parity Stage 3 — promoted to an auto-polling dashboard: a
+// live-toggle drives periodic refresh and a session-local sparkline tracks
+// the tracked slow-query count over time. Same `slow_queries` IPC on a
+// timer, no new backend.
 
 import { DataGridSkeleton } from "@components/datagrid";
 import { Loader2, Pause, Play, RefreshCw } from "lucide-react";

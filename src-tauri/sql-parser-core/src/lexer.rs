@@ -1,4 +1,4 @@
-//! Hand-written character-level lexer for the sprint-385 grammar slice.
+//! Hand-written character-level lexer for the SQL grammar slice.
 //!
 //! Design:
 //! - Returns `Vec<Token>` (with positional spans) or a `LexError`. No
@@ -18,17 +18,17 @@ use crate::ast::ParseErrorKind;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-    // --- keywords (sprint-385) ---
+    // --- keywords ---
     Select,
     From,
     Where,
 
-    // --- keywords (sprint-391 DDL destructive verbs) ---
+    // --- keywords (DDL destructive verbs) ---
     Drop,
     Truncate,
     Alter,
 
-    // --- keywords (sprint-391 DDL object types + qualifiers) ---
+    // --- keywords (DDL object types + qualifiers) ---
     Table,
     Database,
     Index,
@@ -46,7 +46,7 @@ pub enum Token {
     Column,
     Constraint,
 
-    // --- keywords (sprint-392 DML write triad) ---
+    // --- keywords (DML write triad) ---
     Insert,
     Into,
     Values,
@@ -69,7 +69,7 @@ pub enum Token {
     True,
     False,
 
-    // --- keywords (sprint-393a SELECT widening) ---
+    // --- keywords (SELECT widening) ---
     Join,
     Inner,
     Left,
@@ -93,9 +93,9 @@ pub enum Token {
     Limit,
     Offset,
 
-    // --- keywords (sprint-393b SELECT widening 2 — CTE / set ops / window
+    // --- keywords (SELECT widening 2 — CTE / set ops / window
     //     / subquery / CASE) ---
-    // Note: `Exists` is already lexed by sprint-391 (DROP IF EXISTS) and
+    // Note: `Exists` is already lexed for DROP IF EXISTS and
     // is reused here for `EXISTS (SELECT ...)`.
     With,
     Recursive,
@@ -118,7 +118,7 @@ pub enum Token {
     Else,
     End,
 
-    // --- keywords (sprint-394 DDL additive — CREATE / ALTER ADD / RENAME) ---
+    // --- keywords (DDL additive — CREATE / ALTER ADD / RENAME) ---
     Create,
     Replace,
     Rename,
@@ -133,10 +133,10 @@ pub enum Token {
     Time,
     Zone,
 
-    // --- keywords (sprint-395 misc grammar — GRANT / REVOKE / EXPLAIN /
+    // --- keywords (misc grammar — GRANT / REVOKE / EXPLAIN /
     //     SHOW / SET / COPY / COMMENT) ---
     //
-    // Design note (sprint-395): only the *top-level dispatch verbs* and the
+    // Design note: only the *top-level dispatch verbs* and the
     // truly-reserved tokens (`STDIN`/`STDOUT` — distinguishing source
     // variants) are lexed as keywords. Words that frequently appear as
     // identifiers in production schemas (`public`, `tables`, `databases`,
@@ -144,7 +144,7 @@ pub enum Token {
     // `option`, `session`, `local`, `comment`, `copy`, `privileges`,
     // `for`, `current_user`, `session_user`) stay as `Token::Ident` and
     // are matched case-insensitively in the parser. This preserves
-    // backward compatibility with sprint-385/391/393a tests that use
+    // backward compatibility with earlier tests that use
     // these strings as plain identifiers (e.g. `DROP SCHEMA public`).
     Grant,
     Revoke,
@@ -221,7 +221,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
         let c = bytes[i];
 
         // Whitespace — fast path. ASCII space / tab / CR / LF only.
-        // (Sprint 385 does not need to grok Unicode whitespace; the SQL
+        // (The lexer does not need to grok Unicode whitespace; the SQL
         // grammar we accept is ASCII anyway.)
         if c == b' ' || c == b'\t' || c == b'\n' || c == b'\r' {
             i += 1;
@@ -229,7 +229,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
         }
 
         // Semicolon. We accept a trailing `;` but never emit a token
-        // for it — sprint-385 is single-statement, multi-statement
+        // for it — the grammar is single-statement, multi-statement
         // parsing is out of scope.
         if c == b';' {
             i += 1;
@@ -271,7 +271,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
             continue;
         }
 
-        // Sprint-392 — parentheses for VALUES / function-style boundaries.
+        // Parentheses for VALUES / function-style boundaries.
         if c == b'(' {
             tokens.push(Spanned {
                 token: Token::LParen,
@@ -289,7 +289,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
             continue;
         }
 
-        // Sprint-392 — `?` anonymous placeholder.
+        // `?` anonymous placeholder.
         if c == b'?' {
             tokens.push(Spanned {
                 token: Token::PlaceholderAnonymous,
@@ -299,7 +299,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
             continue;
         }
 
-        // Sprint-392 — `$<digits>` positional placeholder (PG-style).
+        // `$<digits>` positional placeholder (PG-style).
         if c == b'$' {
             let mut end = i + 1;
             while end < bytes.len() && bytes[end].is_ascii_digit() {
@@ -321,7 +321,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
             continue;
         }
 
-        // Sprint-392 — `:name` named placeholder.
+        // `:name` named placeholder.
         if c == b':' {
             let mut end = i + 1;
             while end < bytes.len() && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_') {
@@ -462,7 +462,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
             continue;
         }
 
-        // Integer or float literal. Sprint-392 adds float support so
+        // Integer or float literal. Float support exists so
         // `INSERT INTO t VALUES (3.14)` lexes cleanly. Integer literal
         // remains the path for plain digit runs (used by SELECT WHERE
         // and DML VALUES alike); a `.` followed by more digits promotes
@@ -474,8 +474,8 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
             }
             // Detect a fractional part — `.<digits>`. A trailing dot
             // without digits (`3.`) is a lex error (we keep the grammar
-            // strict; PG/MySQL accept it but it's a footgun in this slice).
-            // To stay under the sprint-391 ×1.3 gzipped WASM budget we
+            // strict; PG/MySQL accept it but it's a footgun in this grammar slice).
+            // To stay under the ×1.3 gzipped WASM budget we
             // parse the float manually as integer-part + fraction-part
             // accumulation. This avoids pulling rust's `dec2flt` machinery
             // (which contributes ~35KB gzipped in optimized WASM).
@@ -502,7 +502,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 // Build the f64 manually: int + frac / 10^digits. This is
                 // not bit-perfect with `f64::parse` (which uses a precise
                 // round-half-to-even path) but is good enough for the
-                // sprint-392 use case (VALUES literals are forwarded
+                // VALUES-literal use case (VALUES literals are forwarded
                 // verbatim to the DB driver — the AST f64 is for *display*
                 // and equality checks, not arithmetic).
                 let mut divisor: f64 = 1.0;
@@ -531,7 +531,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
             continue;
         }
 
-        // Sprint-392 — `.` qualifier (e.g. `other.id`). Standalone, never
+        // `.` qualifier (e.g. `other.id`). Standalone, never
         // mixed with digit runs because the digit path consumes any
         // trailing `.<digit>` as a Float literal first.
         if c == b'.' {
@@ -568,7 +568,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "select" => Token::Select,
                 "from" => Token::From,
                 "where" => Token::Where,
-                // sprint-391 DDL destructive verbs + qualifiers.
+                // DDL destructive verbs + qualifiers.
                 "drop" => Token::Drop,
                 "truncate" => Token::Truncate,
                 "alter" => Token::Alter,
@@ -588,7 +588,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "identity" => Token::Identity,
                 "column" => Token::Column,
                 "constraint" => Token::Constraint,
-                // sprint-392 DML keywords.
+                // DML keywords.
                 "insert" => Token::Insert,
                 "into" => Token::Into,
                 "values" => Token::Values,
@@ -610,7 +610,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "in" => Token::In,
                 "true" => Token::True,
                 "false" => Token::False,
-                // sprint-393a SELECT widening keywords.
+                // SELECT widening keywords.
                 "join" => Token::Join,
                 "inner" => Token::Inner,
                 "left" => Token::Left,
@@ -633,7 +633,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "last" => Token::Last,
                 "limit" => Token::Limit,
                 "offset" => Token::Offset,
-                // sprint-393b SELECT widening 2 keywords.
+                // SELECT widening 2 keywords.
                 "with" => Token::With,
                 "recursive" => Token::Recursive,
                 "union" => Token::Union,
@@ -654,7 +654,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "then" => Token::Then,
                 "else" => Token::Else,
                 "end" => Token::End,
-                // sprint-394 DDL additive keywords.
+                // DDL additive keywords.
                 "create" => Token::Create,
                 "replace" => Token::Replace,
                 "rename" => Token::Rename,
@@ -678,7 +678,7 @@ pub fn lex(input: &str) -> Result<Vec<Spanned>, ParseError> {
                 "numeric" | "decimal" => Token::KwNumeric,
                 "serial" => Token::KwSerial,
                 "uuid" | "uniqueidentifier" => Token::KwUuid,
-                // sprint-395 misc grammar — only top-level verbs are
+                // Misc grammar — only top-level verbs are
                 // promoted to keywords. STDIN/STDOUT must be keywords so
                 // the COPY source variant is unambiguous (a column named
                 // "stdin" in a SELECT would also be a regression risk, but
@@ -964,7 +964,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // Sprint 391 — DDL destructive keyword recognition.
+    // DDL destructive keyword recognition.
     // -----------------------------------------------------------------
 
     #[test]
@@ -1047,7 +1047,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // Sprint 392 — DML write triad keyword + punctuation lexing.
+    // DML write triad keyword + punctuation lexing.
     // -----------------------------------------------------------------
 
     #[test]
@@ -1207,7 +1207,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // Sprint 393a — SELECT widening keyword lexing.
+    // SELECT widening keyword lexing.
     // -----------------------------------------------------------------
 
     #[test]
@@ -1285,7 +1285,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // Sprint 394 — DDL additive keyword + type-name lexing.
+    // DDL additive keyword + type-name lexing.
     // -----------------------------------------------------------------
 
     #[test]

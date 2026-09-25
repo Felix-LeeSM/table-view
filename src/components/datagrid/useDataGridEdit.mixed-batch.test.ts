@@ -4,12 +4,9 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { TableData } from "@/types/schema";
 import { useDataGridEdit } from "./useDataGridEdit";
 
-// Sprint 184 (Phase 22 closer, 2026-05-01) — gate-consistency regression +
-// performance smoke. Sprint 182 introduced the PendingChangesTray + PK guard
-// and Sprint 183 wrapped the RDB commit in a single executeQueryBatch
-// transaction. This file pins:
+// Gate-consistency regression + performance smoke. This file pins:
 //   1. UPDATE + INSERT + DELETE all leave through a *single* batch call
-//      (executeQueryBatch for RDB; iterative dispatchMqlCommand for Mongo).
+//      (executeQueryBatch for RDB; bulkWriteDocuments for Mongo).
 //   2. handleCommit's SQL/MQL preview build stays under O(N) — verified by a
 //      crude wall-clock budget at N=100. The budget is intentionally loose
 //      (1000ms or 3000ms) so a green-CI run measures well under it (typical
@@ -371,11 +368,10 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
   });
 
   it("[AC-184-01] RDB commit dispatches UPDATE + INSERT + DELETE in a single executeQueryBatch call", async () => {
-    // AC-184-01 — three-mutation gate consistency. Since Sprint 183 the RDB
-    // commit path goes through executeQueryBatch once; this test pins that
-    // all three statement kinds (UPDATE, INSERT, DELETE) end up in the same
-    // batch array — i.e. the gate is unified across mutation kinds.
-    // Date 2026-05-01.
+    // AC-184-01 — three-mutation gate consistency. The RDB commit path goes
+    // through executeQueryBatch once; this test pins that all three statement
+    // kinds (UPDATE, INSERT, DELETE) end up in the same batch array — i.e.
+    // the gate is unified across mutation kinds.
     mockExecuteQueryBatch.mockImplementationOnce((_, stmts: string[]) =>
       happyBatchResolve(stmts),
     );
@@ -448,8 +444,8 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     expect(kinds.filter((k) => k === "INSERT")).toHaveLength(1);
     expect(kinds.filter((k) => k === "DELETE")).toHaveLength(1);
 
-    // Post-commit cleanup (Sprint 183 contract): pending state cleared,
-    // refetch fired once.
+    // Post-commit cleanup contract: pending state cleared, refetch fired
+    // once.
     expect(result.current.sqlPreview).toBeNull();
     expect(result.current.pendingEdits.size).toBe(0);
     expect(result.current.pendingNewRows).toHaveLength(0);
@@ -690,11 +686,9 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
 
   it("[AC-184-02] Mongo commit dispatches insertOne + updateOne + deleteOne via dispatchMqlCommand without touching executeQueryBatch", async () => {
     // AC-184-02 — same three-mutation regression for the document paradigm.
-    // Mongo doesn't have a batch transaction yet (out-of-scope for Phase 22
-    // per Sprint 183 findings §4); this test pins that the iterative
-    // dispatchMqlCommand path still fires all three primitives, and that
-    // the RDB batch helper is never called from the Mongo branch.
-    // Date 2026-05-01.
+    // Mongo has no batch transaction; this test pins that the
+    // `bulkWriteDocuments` path carries all three primitives, and that the
+    // RDB batch helper is never called from the Mongo branch.
     const { result } = renderDocHook();
 
     // 1) Pending UPDATE on row 0 ("Ada").
@@ -735,9 +729,9 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
       await result.current.handleExecuteCommit();
     });
 
-    // Sprint 326 — Slice I.1: per-command insert/update/delete IPC 가
-    // 단일 bulkWrite 호출로 묶임. 호출 자체는 1 회, ops 배열에 3 종이
-    // 모두 들어있는지 확인.
+    // Per-command insert/update/delete IPCs are folded into a single
+    // bulkWrite call. Check that there is exactly one call and that all three
+    // op kinds land in the ops array.
     expect(mockBulkWriteDocuments).toHaveBeenCalledTimes(1);
     const ops = mockBulkWriteDocuments.mock.calls[0]![3] as Array<{
       op: string;

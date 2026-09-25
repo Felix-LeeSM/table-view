@@ -39,13 +39,13 @@ import { useRowPending } from "./DataGridTable/useRowPending";
 import { useGridRoving } from "./useGridRoving";
 
 /**
- * RDB grid + inline edit shell. Sprint 258 — `<table>` 폐기, CSS Grid 로
- * 전환. 단일 `--cols` CSS variable 이 모든 row 의 grid-template-columns
- * 를 통제하므로 column width 의 redistribute 가 layout engine 차원에서
- * 차단된다.
+ * RDB grid + inline edit shell. `<table>` dropped in favour of a CSS Grid
+ * layout: a single `--cols` CSS variable controls every row's
+ * grid-template-columns, so a column-width redistribution is blocked at the
+ * layout-engine level.
  *
- * `parseFkReference` 는 외부 contract test 가 본 entry 에서 import 하므로
- * 경로 안정성을 위해 re-export 만 유지.
+ * `parseFkReference` is kept as a bare re-export for path stability — an
+ * external contract test imports it from this entry.
  */
 
 export { parseFkReference } from "./DataGridTable/columnUtils";
@@ -95,9 +95,9 @@ export interface DataGridTableProps {
   onSelectRow: (rowIdx: number, metaKey: boolean, shiftKey: boolean) => void;
   onSort: (columnName: string, shiftKey: boolean) => void;
   /**
-   * Sprint 316 — header context menu callbacks. Optional so non-sorting
-   * callers stay valid; HeaderRow only mounts the menu when at least
-   * one of these is provided.
+   * Header context menu callbacks. Optional so non-sorting callers stay
+   * valid; HeaderRow only mounts the menu when at least one of these is
+   * provided.
    */
   onSortColumn?: (
     columnName: string,
@@ -107,19 +107,19 @@ export interface DataGridTableProps {
   onClearColumnSort?: (columnName: string) => void;
   onClearAllSorts?: () => void;
   /**
-   * Sprint 318 — Slice D.2: hide column. When `hiddenColumnNames`
-   * carries a column's name, that column drops out of the header
-   * row, body rows, pendingNewRows, the `--cols` template, and the
-   * aria-colcount. `onHideColumn` wires the header context menu's
-   * "Hide column" item to the caller's `useHiddenColumns.hide`.
-   * Both optional → 미제공 caller 의 회귀 0.
+   * Hide column. When `hiddenColumnNames` carries a column's name, that
+   * column drops out of the header row, body rows, pendingNewRows, the
+   * `--cols` template, and the aria-colcount. `onHideColumn` wires the
+   * header context menu's "Hide column" item to the caller's
+   * `useHiddenColumns.hide`. Both optional → callers that omit them see
+   * zero regression.
    */
   hiddenColumnNames?: ReadonlySet<string>;
   onHideColumn?: (columnName: string) => void;
   /**
-   * Sprint 376 (Phase 6 Q21 #6) — "Show all columns" header context-menu
-   * affordance. Parent wires this to `useHiddenColumns.clear` (or the
-   * equivalent backend `resetDatagridPrefs(field="hiddenColumns")`).
+   * Q21 #6 — "Show all columns" header context-menu affordance. Parent
+   * wires this to `useHiddenColumns.clear` (or the equivalent backend
+   * `resetDatagridPrefs(field="hiddenColumns")`).
    */
   onShowAllColumns?: () => void;
   onDeleteRow: () => void;
@@ -131,22 +131,21 @@ export interface DataGridTableProps {
     value: string,
   ) => void;
   /**
-   * Sprint 343 (2026-05-15) — inline JSON tree expand wiring. The
-   * panel commits each leaf edit through `setPendingEdits` against a
-   * dot-path key (`"rowIdx-colIdx:meta.role"`); the SQL generator
-   * dispatches by column.data_type to emit `jsonb_set` for jsonb
-   * columns and a full `ARRAY[...]` reassign for Postgres arrays.
-   * Required for jsonb / ARRAY editing — omit on grids that don't
-   * carry those column types and the sentinel buttons simply won't
-   * commit anything (read-only fallback).
+   * Inline JSON tree expand wiring. The panel commits each leaf edit
+   * through `setPendingEdits` against a dot-path key
+   * (`"rowIdx-colIdx:meta.role"`); the SQL generator dispatches by
+   * column.data_type to emit `jsonb_set` for jsonb columns and a full
+   * `ARRAY[...]` reassign for Postgres arrays. Required for jsonb / ARRAY
+   * editing — omit on grids that don't carry those column types and the
+   * sentinel buttons simply won't commit anything (read-only fallback).
    */
   setPendingEdits?: (next: Map<string, string | null>) => void;
   /**
-   * Sprint 369 (Phase 4, Q20) — 5-tuple PK identifying the
-   * `datagrid_column_prefs` row owning this grid's per-table column
-   * widths. Missing → hook stays in-memory only (used by ad-hoc query
-   * grids that have no stable identity). Present → mount-hydrate via
-   * `get_datagrid_prefs` and drag-end via `set_datagrid_prefs`.
+   * Q20 — 5-tuple PK identifying the `datagrid_column_prefs` row owning
+   * this grid's per-table column widths. Missing → hook stays in-memory
+   * only (used by ad-hoc query grids that have no stable identity).
+   * Present → mount-hydrate via `get_datagrid_prefs` and drag-end via
+   * `set_datagrid_prefs`.
    */
   columnPrefsPk?: ColumnPrefsPk;
   /**
@@ -235,9 +234,9 @@ function DataGridTable({
     dataType: string;
   } | null>(null);
 
-  // Sprint 343 (2026-05-15) — inline JSON tree panel coordinate.
-  // Mirrors `DocumentDataGrid.expandedNested` (Sprint 341/342) so
-  // jsonb / Postgres ARRAY cells can mount the same tree UI.
+  // Inline JSON tree panel coordinate. Mirrors
+  // `DocumentDataGrid.expandedNested` so jsonb / Postgres ARRAY cells can
+  // mount the same tree UI.
   //
   // `pkSnapshot` is the JSON-stringified primary-key tuple captured
   // at expand-time. On every data change an effect compares the
@@ -300,10 +299,10 @@ function DataGridTable({
     columnOrder.length === visualCount
       ? columnOrder
       : data.columns.map((_, i) => i);
-  // Sprint 318 D.2 — hidden columns are dropped from the visible
-  // order before any layout / virtualization / aria-* derivation.
-  // `useMemo` keeps the identity stable across renders so the
-  // virtualizer's `count` and `rowCtx` deps don't churn.
+  // Hidden columns are dropped from the visible order before any layout /
+  // virtualization / aria-* derivation. `useMemo` keeps the identity stable
+  // across renders so the virtualizer's `count` and `rowCtx` deps don't
+  // churn.
   const order = useMemo(() => {
     if (!hiddenColumnNames || hiddenColumnNames.size === 0) return baseOrder;
     return baseOrder.filter(
@@ -312,11 +311,11 @@ function DataGridTable({
   }, [baseOrder, hiddenColumnNames, data.columns]);
 
   // Outer scroll container = `<div role="grid">`. Owns `--cols` CSS
-  // variable. virtualizer 가 scrollElement 로 참조한다.
+  // variable. The virtualizer uses it as its scrollElement.
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Sprint 343 — viewport width tracking for the inline tree panel
-  // (same pattern as `DocumentDataGrid`). Sized via ResizeObserver
+  // Viewport width tracking for the inline tree panel (same pattern as
+  // `DocumentDataGrid`). Sized via ResizeObserver
   // so window resize / sidebar toggle stays in sync. Deps include
   // `data` because the scroll container lives behind a `{data && ...}`
   // guard at first paint.
@@ -336,9 +335,9 @@ function DataGridTable({
   // vertical scroll on the shared container doesn't churn renders here.
   const [scrollLeft, setScrollLeft] = useState(0);
 
-  // Sprint 343 — pendingByPath helper for DocumentTreePanel. Filters
-  // the cell-keyed pendingEdits map down to the (rowIdx, colIdx)
-  // entries that carry a `:dot.path` suffix.
+  // pendingByPath helper for DocumentTreePanel. Filters the cell-keyed
+  // pendingEdits map down to the (rowIdx, colIdx) entries that carry a
+  // `:dot.path` suffix.
   const buildNestedPendingByPath = useCallback(
     (rowIdx: number, colIdx: number) => {
       const prefix = `${rowIdx}-${colIdx}:`;
@@ -361,18 +360,19 @@ function DataGridTable({
       })),
     [data.columns],
   );
-  // Sprint 369 (Phase 4, Q20) — `datagrid_column_prefs` SQLite SOT.
-  // `columnPrefsPk` 가 들어오면 hook 이 mount 시 IPC hydrate + drag 시 IPC
-  // patch. 미제공 (ad-hoc query result grid) 면 in-memory only.
+  // Q20 — `datagrid_column_prefs` SQLite SOT. With `columnPrefsPk` the hook
+  // IPC-hydrates on mount and IPC-patches on drag. Without it (ad-hoc query
+  // result grid) the widths stay in-memory only.
   const {
     widths,
     setWidth,
     reset: resetColumnWidths,
   } = useColumnWidths(widthColumns, columnPrefsPk);
 
-  // Resolve the visual-order width array. New columns (schema 변경 후)
-  // fall back to category default rem — #1733 이후엔 grip 더블클릭 또는 헤더
-  // 컨텍스트 메뉴 "Reset column widths" 로 일괄 재계산 (중복 툴바 버튼 제거).
+  // Resolve the visual-order width array. New columns (after a schema
+  // change) fall back to the category default rem — since #1733 a grip
+  // double-click or the header context menu's "Reset column widths"
+  // recomputes them in bulk (the duplicate toolbar button was removed).
   const visualWidthsPx = useMemo(() => {
     const rootFontSizePx = readRootFontSizePx();
     return order.map((dIdx) => {
@@ -419,8 +419,8 @@ function DataGridTable({
   }, []);
 
   const totalBodyRowCount = data.rows.length + pendingNewRows.length;
-  // Sprint 349 — virtualizer assumes uniform row height; the inline
-  // JSON tree master/detail row breaks that assumption. The cheap fix
+  // The virtualizer assumes uniform row height; the inline JSON tree
+  // master/detail row breaks that assumption. The cheap fix
   // is to disable virtualization while a detail panel is open so the
   // user gets the full master/detail UX without an absolute-position
   // overlay hack. For >200 rows the perf cost is bounded — the user
@@ -456,13 +456,14 @@ function DataGridTable({
 
   const overlayVisible = useDelayedFlag(loading, 1000);
 
-  // Design-swarm #4 Phase 2 — data-cell roving tabindex + 방향키 2D nav.
-  // 좌표계: row=data row index, col=visual column index. virtualized 일 때
-  // target row 가 window 밖이면 scrollToIndex 로 스크롤-인 후 hook 이 재시도해
-  // focus 한다 (useGridRoving 의 bounded rAF retry).
-  // #1127 AC3 — pendingNewRows 도 roving 좌표계에 포함해 방향키 nav 로 도달
-  // 가능하게 한다 (셀 wiring 은 아래 pending rowgroup 참고). virtualizer 는
-  // data.rows 만 세므로 pending row index 는 scrollToIndex 범위 밖 → guard.
+  // Data-cell roving tabindex + arrow-key 2D nav. Coordinates: row = data
+  // row index, col = visual column index. When virtualized and the target
+  // row is outside the window, scrollToIndex scrolls it in and the hook
+  // retries to focus (useGridRoving's bounded rAF retry).
+  // #1127 AC3 — pendingNewRows join the roving coordinate space so arrow-key
+  // nav reaches them (cell wiring: see the pending rowgroup below). The
+  // virtualizer counts data.rows only, so pending row indexes fall outside
+  // scrollToIndex's range → guard.
   const roving = useGridRoving(
     totalBodyRowCount,
     order.length,
@@ -620,10 +621,10 @@ function DataGridTable({
         onClearColumnSort={onClearColumnSort}
         onClearAllSorts={onClearAllSorts}
         onHideColumn={onHideColumn}
-        // Sprint 376 (Phase 6 Q21 #5) — header context menu reset
-        // affordance. #1733 removed the duplicate toolbar button, so the
-        // context menu item + the grip double-click (below) are now the
-        // only reset triggers; both call `useColumnWidths.reset`.
+        // Q21 #5 — header context menu reset affordance. #1733 removed the
+        // duplicate toolbar button, so the context menu item + the grip
+        // double-click (below) are now the only reset triggers; both call
+        // `useColumnWidths.reset`.
         onResetColumnWidths={resetColumnWidths}
         onShowAllColumns={onShowAllColumns}
         anyColumnHidden={(hiddenColumnNames?.size ?? 0) > 0}
@@ -667,10 +668,10 @@ function DataGridTable({
                   {...rowReactiveProps(rowIdx)}
                 />
                 {/*
-                    Sprint 343 (2026-05-15) — inline JSON tree master/
-                    detail row for jsonb / Postgres ARRAY cells. Same
-                    layout contract as DocumentDataGrid: detail row
-                    matches the data row's grid template + minWidth so
+                    Inline JSON tree master/detail row for jsonb /
+                    Postgres ARRAY cells. Same layout contract as
+                    DocumentDataGrid: detail row matches the data
+                    row's grid template + minWidth so
                     `position: sticky; left: 0` on the inner sticks to
                     the visible viewport (not the col-1 left edge).
                     Width pinned to `scrollContainerWidth` so the panel
@@ -809,9 +810,10 @@ function DataGridTable({
               {(visibleColIdxs ?? order.map((_, i) => i)).map((visualIdx) => {
                 const dIdx = order[visualIdx]!;
                 const cell = (newRow as unknown[])[dIdx];
-                // #1127 AC3 — pending row 의 roving index 는 data rows 뒤에
-                // 이어 붙는다 (rowCount = totalBodyRowCount). 셀에 data-grid-*
-                // + tabIndex + onFocus 를 달아 data row 격자와 동일 nav.
+                // #1127 AC3 — a pending row's roving index continues after
+                // the data rows (rowCount = totalBodyRowCount). The cell
+                // carries data-grid-* + tabIndex + onFocus for nav identical
+                // to the data-row grid.
                 const pendingRowIdx = data.rows.length + newIdx;
                 return (
                   <div

@@ -1,14 +1,15 @@
-// Sprint 262 Slice B (2026-05-12) — sidebar wire-up to workspaceStore.
+// Sidebar wire-up to workspaceStore.
 //
-// AC-262-05: SchemaTree 의 `selectedNode` / `expanded` 가 workspaceStore 의
-// `sidebar` axis 에 read/write 된다. DbSwitcher (=> connectionStore 의
-// activeDb) 가 바뀌면 derived workspace key 가 바뀌고, sidebar 가 자동으로
-// 새 workspace 의 상태로 swap, 다시 돌아오면 원래 workspace 의 상태가 그대로
-// 복원되어야 한다.
+// AC-262-05: SchemaTree's `selectedNode` / `expanded` read and write the
+// `sidebar` axis of workspaceStore. When DbSwitcher (=> connectionStore's
+// activeDb) changes, the derived workspace key changes and the sidebar swaps
+// to the new workspace's state; coming back must restore the original
+// workspace's state unchanged.
 //
-// 본 파일은 트레이서 불릿: 단일 통합 테스트가 expansion read/write +
-// 워크스페이스 격리 + 라운드트립 보존을 한 번에 본다. selectedNode 와
-// scrollTop 의 더 좁은 케이스는 후속 RED→GREEN 사이클에서 다룬다.
+// This file is a tracer bullet: one integration test covers expansion
+// read/write + workspace isolation + round-trip preservation at once. The
+// narrower selectedNode and scrollTop cases are left to later RED→GREEN
+// cycles.
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
@@ -27,10 +28,10 @@ describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
   });
 
   it("collapsing a schema in db1 swaps cleanly to db2 and restores on swap back", async () => {
-    // Sprint 263 — schemaStore caches are now `(connId, db)`-keyed, so
-    // seed both db1 and db2 with the same schema list. The activeDb
-    // flip below switches workspaces and the auto-expand effect must
-    // fire against the new db's freshly-keyed cache.
+    // schemaStore caches are now `(connId, db)`-keyed, so seed both db1 and
+    // db2 with the same schema list. The activeDb flip below switches
+    // workspaces and the auto-expand effect must fire against the new db's
+    // freshly-keyed cache.
     setSchemaStoreState({
       schemas: {
         conn1: {
@@ -45,12 +46,13 @@ describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // 1) #1217 — mount 시 첫 스키마만 seed expanded 로 기록.
+    // 1) #1217 — on mount only the first schema is recorded as seed expanded.
     const initialDb1 =
       useWorkspaceStore.getState().workspaces.conn1?.db1?.sidebar.expanded;
     expect(initialDb1).toEqual(["public"]);
 
-    // 2) `public` 스키마를 collapse — store 가 그것만 빼고 유지 (빈 배열).
+    // 2) Collapse the `public` schema — the store drops only that entry
+    //    (empty array).
     await act(async () => {
       fireEvent.click(screen.getByLabelText("public schema"));
     });
@@ -58,7 +60,7 @@ describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
       useWorkspaceStore.getState().workspaces.conn1!.db1!.sidebar.expanded,
     ).toEqual([]);
 
-    // 3) DbSwitcher 가 activeDb 를 db2 로 옮긴 시뮬레이션.
+    // 3) Simulate DbSwitcher moving activeDb to db2.
     await act(async () => {
       useConnectionStore.setState((s) => ({
         activeStatuses: {
@@ -68,18 +70,20 @@ describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
       }));
     });
 
-    // db2 workspace 는 fresh — seed 가 다시 첫 스키마만 expand.
+    // The db2 workspace is fresh — the seed expands only the first schema again.
     const db2Expanded =
       useWorkspaceStore.getState().workspaces.conn1?.db2?.sidebar.expanded;
     expect(db2Expanded).toEqual(["public"]);
 
-    // db1 의 expanded 는 그대로 보존 (다른 workspace 의 변경에 영향 없음).
+    // db1's expanded is preserved (a change in another workspace does not
+    // affect it).
     expect(
       useWorkspaceStore.getState().workspaces.conn1!.db1!.sidebar.expanded,
     ).toEqual([]);
 
-    // 4) db1 으로 복귀 — UI 는 db1 의 collapsed 상태를 다시 보여줘야
-    //    (seed 는 세션 ref 로 한 번만; persist 존중으로 재-seed 안 함).
+    // 4) Back to db1 — the UI must show db1's collapsed state again (the
+    //    seed runs once per session ref; persist is respected, so no
+    //    re-seed).
     await act(async () => {
       useConnectionStore.setState((s) => ({
         activeStatuses: {
@@ -109,17 +113,18 @@ describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
       return render(<SchemaTree connectionId="conn1" />);
     });
 
-    // SchemaTree 의 스크롤 컨테이너 — `useVirtualizer` 의 getScrollElement
-    // 가 가리키는 div. `data-testid` 없이 querySelector 로 잡되, 최상위
-    // outer wrapper (가장 첫 .overflow-y-auto) 가 그것.
+    // SchemaTree's scroll container — the div `useVirtualizer`'s
+    // getScrollElement points at. Grabbed with querySelector, not a
+    // `data-testid`; it is the outermost wrapper (the first
+    // .overflow-y-auto).
     const container = document.querySelector(
       ".flex.flex-col.select-none.overflow-y-auto",
     ) as HTMLDivElement;
     expect(container).not.toBeNull();
 
-    // 스크롤 이벤트 발사. jsdom 은 scrollTop 의 reflow 를 시뮬레이션하지
-    // 않으므로 우리는 직접 scrollTop 을 세팅한 다음 `scroll` 이벤트를
-    // dispatch 해서 production 의 onScroll 경로를 그대로 실행시킨다.
+    // Fire the scroll event. jsdom does not simulate the reflow of scrollTop,
+    // so we set scrollTop directly and then dispatch a `scroll` event to run
+    // production's onScroll path as is.
     container.scrollTop = 142;
     // #1238 — the scroll event arms @tanstack/virtual-core's isScrolling-reset
     // debounce (a 150ms `setTimeout`, see `isScrollingResetDelay`). React's
@@ -144,7 +149,7 @@ describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
       useWorkspaceStore.getState().workspaces.conn1!.db1!.sidebar.scrollTop,
     ).toBe(142);
 
-    // Remount: 새 인스턴스가 stored scrollTop 을 복원.
+    // Remount: the new instance restores the stored scrollTop.
     await act(async () => {
       unmount();
     });
@@ -182,7 +187,8 @@ describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Functions category 는 default collapsed — 열어야 함수 row 가 보임.
+    // The Functions category is collapsed by default — open it to see the
+    // function row.
     await act(async () => {
       fireEvent.click(screen.getByLabelText("Functions in public"));
     });

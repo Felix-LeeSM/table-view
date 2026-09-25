@@ -1,24 +1,26 @@
 /**
- * 사프린트-373 (2026-05-17) — Sprint 5 phase. `useQueryHistoryStore.globalLog`
- * + `clearGlobalLog` + `copyEntry` 의 in-memory mirror 가 retire 됨에 따라
- * 본 컴포넌트는 sprint-372 `useQueryHistory` hook 기반 backend list IPC
- * 로 전환. 외부 API (`visible` / `onClose` props) 는 byte-equivalent —
- * MainArea + WorkspaceToolbar 의 mount 경로는 동결.
+ * `useQueryHistoryStore.globalLog` + `clearGlobalLog` + `copyEntry` retired
+ * their in-memory mirror, so this component runs off the backend list IPC
+ * behind the `useQueryHistory` hook. The external API (`visible` / `onClose`
+ * props) is byte-equivalent — the MainArea + WorkspaceToolbar mount paths
+ * stay frozen.
  *
- * 동작 변경 요약:
- *   - rows source: `globalLog` (in-memory) → `useQueryHistory({}).rows`.
- *   - SQL preview: `sql` 원문 → `sqlRedacted` only. detail dialog 진입은
- *     sprint-372 의 `QueryHistoryDetailModal` 이 책임.
- *   - search: client-side 필터 (`sqlRedacted` substring) 그대로 — backend
- *     검색 wire 는 sprint-374+ 의 future ADR.
- *   - clear: `ClearHistoryButton` (sprint-372) 가 IPC + emit 책임.
- *   - copy: sprint-373 retire — original SQL 은 detail modal 안에서만
- *     redact-only invariant 의 단일 escape hatch 로 노출. (사용자가 detail
- *     dialog 안에서 복사하는 경로는 sprint-376 / UI audit 의 followup.)
- *   - connection filter: 본 sprint 에서는 backend connection scope 가 sprint-372
- *     의 `useQueryHistory({ connectionId })` 인자로 흘러갈 수 있으나, panel
- *     이 "global" 이므로 모든 connection 의 rows 를 보여주는 게 더 자연스러움.
- *     기존 dropdown 의 UX 가 필요해지면 sprint-374 ADR 에서 처리.
+ * Behaviour changes:
+ *   - rows source: `globalLog` (in-memory) →
+ *     `useQueryHistory({ enabled: visible }).rows`.
+ *   - SQL preview: raw `sql` → `sqlRedacted` only. `QueryHistoryDetailModal`
+ *     owns entry into the detail dialog.
+ *   - search: still a client-side filter (`sqlRedacted` substring) — a
+ *     backend search wire is left to a future ADR.
+ *   - clear: `ClearHistoryButton` owns the IPC + emit.
+ *   - copy: retired — the original SQL is exposed only inside the detail
+ *     modal, as the single escape hatch from the redact-only invariant.
+ *     (A copy path for the user inside the detail dialog is a UI-audit
+ *     follow-up.)
+ *   - connection filter: the backend connection scope could flow through the
+ *     `useQueryHistory({ connectionId })` argument, but since the panel is
+ *     "global" it is more natural to show rows from every connection. If the
+ *     UX of the old dropdown is needed, a later ADR handles it.
  */
 
 import ClearHistoryButton from "@components/settings/ClearHistoryButton";

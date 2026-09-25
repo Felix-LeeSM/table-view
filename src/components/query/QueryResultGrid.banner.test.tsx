@@ -1,6 +1,6 @@
-// Sprint 248 (ADR 0022 Phase 4) — `QueryResultGrid` dry-run banner.
+// ADR 0022 — `QueryResultGrid` dry-run banner.
 // Pinned to the contract `[AC-248-B1]` (banner mounts when `isDryRun=true`)
-// and `[AC-248-B2]` (banner absent otherwise). date 2026-05-09.
+// and `[AC-248-B2]` (banner absent otherwise).
 //
 // We assert against the `data-testid="dry-run-banner"` carrier so the
 // test stays resilient to color-token / copy iteration; the user-facing

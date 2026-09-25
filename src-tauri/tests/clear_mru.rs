@@ -1,14 +1,14 @@
-//! 작성 2026-05-17 (Phase 6 sprint-376 Q21 #8) — `clear_mru` IPC 의
-//! backend contract 통합 검증.
+//! Written 2026-05-17 (Q21 #8) — backend contract integration check for the
+//! `clear_mru` IPC.
 //!
 //! Lego invariant:
-//!   1. `mru` table 의 모든 row 가 DELETE.
-//!   2. `state-changed` payload `{domain:"mru", op:"bulk", entityId:null}`
-//!      이 emit (mru 도메인은 frontend dispatcher 의 `routeNormalHandler`
-//!      에서 `Bulk` 만 받음 — stateChanged.ts:301-308).
-//!   3. originWindow 가 caller label 그대로 echo.
-//!   4. 빈 table 에서의 clear 는 no-op + emit 1회 (idempotent / cross-window
-//!      converge).
+//!   1. Every row in the `mru` table is DELETEd.
+//!   2. A `state-changed` payload `{domain:"mru", op:"bulk", entityId:null}` is
+//!      emitted (the frontend dispatcher's `routeNormalHandler` accepts only
+//!      `Bulk` for the mru domain — stateChanged.ts:301-308).
+//!   3. originWindow echoes the caller label verbatim.
+//!   4. Clearing an empty table is a no-op plus one emit (idempotent /
+//!      cross-window converge).
 
 use std::sync::{Arc, Mutex};
 

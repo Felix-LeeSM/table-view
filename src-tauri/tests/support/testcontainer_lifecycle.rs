@@ -2,8 +2,9 @@ use std::sync::{Mutex, Once};
 
 use tokio::sync::OnceCell;
 
-/// 우리 통합 테스트가 띄운 컨테이너를 식별하는 라벨 키. owner-pid 와 함께
-/// 박아 두면 self-sweep 이 "내 컨테이너 / 남의 컨테이너" 를 구분할 수 있다.
+/// Label key that identifies containers started by our integration tests. Stamped
+/// together with owner-pid, it lets the self-sweep tell "my container" from
+/// "somebody else's container".
 pub(crate) const OWNED_LABEL: &str = "table-view.tests";
 pub(crate) const OWNER_PID_LABEL: &str = "table-view.tests.owner-pid";
 
@@ -91,10 +92,10 @@ fn cleanup_registered_containers_sync() {
     });
 }
 
-/// owner PID 가 죽은 우리 컨테이너만 `docker rm -f -v` 로 정리.
-/// 살아있는 PID 의 컨테이너에는 손대지 않으므로 동시 실행 중인 다른
-/// 테스트 binary 와 race-safe. `-v` 는 container-owned anonymous volume
-/// 누적을 같이 막는다.
+/// Removes only our containers whose owner PID is dead, with `docker rm -f -v`.
+/// Containers of a live PID are left alone, so this is race-safe against other
+/// test binaries running concurrently. `-v` also stops container-owned anonymous
+/// volumes from piling up.
 async fn sweep_dead_owners() {
     let listing = match tokio::process::Command::new("docker")
         .args([

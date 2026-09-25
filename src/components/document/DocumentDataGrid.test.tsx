@@ -186,17 +186,17 @@ describe("DocumentDataGrid", () => {
 
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    // Sprint 87: the DataGridToolbar now drives the header row. It surfaces
-    // the row count (e.g. "2 documents") once data is loaded; before data
-    // loads, it falls back to "{schema}.{table}". Bob still renders in the
-    // body. Sprint 118 (#PAR-2) — DocumentDataGrid passes the document
-    // wording overrides so the row label says "documents", not "rows".
+    // The DataGridToolbar drives the header row. It surfaces the row count
+    // (e.g. "2 documents") once data is loaded; before data loads, it falls
+    // back to "{schema}.{table}". Bob still renders in the body. (#PAR-2)
+    // DocumentDataGrid passes the document wording overrides so the row
+    // label says "documents", not "rows".
     // Anchored: #1061 also renders "1–2 of 2 documents" inside the pagination
     // range, so the bare plural needs `^...$` to stay a single match.
     expect(screen.getByText(/^2 documents$/)).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
-    // [AC-181-10] Sprint 181 ExportButton mounted into the toolbar.
-    // 2026-05-01 — regression guard so future toolbar refactors don't drop it.
+    // [AC-181-10] ExportButton mounted into the toolbar. Regression guard
+    // so future toolbar refactors don't drop it.
     expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
   });
 
@@ -370,7 +370,7 @@ describe("DocumentDataGrid", () => {
     renderGrid();
 
     await waitFor(() => {
-      // Sprint 265 — nested `(connId, db, collection)` cache path.
+      // Nested `(connId, db, collection)` cache path.
       expect(
         useDocumentStore.getState().queryResults["conn-mongo"]?.table_view_test
           ?.users,
@@ -378,7 +378,7 @@ describe("DocumentDataGrid", () => {
     });
   });
 
-  // ── Sprint 87 — inline edit + MQL preview + Add Document ──────────────────
+  // ── Inline edit + MQL preview + Add Document ──────────────────────────────
 
   it("double-click on a scalar cell opens the inline editor and records a pending edit", async () => {
     renderGrid();
@@ -405,7 +405,7 @@ describe("DocumentDataGrid", () => {
 
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    // Sprint 341 — the sentinel renders as `{` + toggle button + `}`, so
+    // The sentinel renders as `{` + toggle button + `}`, so
     // double-clicking the toggle (or its wrapper cell) must not start a
     // cell-level edit. The grid panel below handles inline editing.
     const toggle = screen.getAllByRole("button", { name: /Expand .*/ })[0]!;
@@ -456,7 +456,7 @@ describe("DocumentDataGrid", () => {
     const initialFindCalls = findMock.mock.calls.length;
     fireEvent.click(execute);
 
-    // Sprint 326 I.1: commit path uses single bulkWrite IPC.
+    // Commit path uses a single bulkWrite IPC.
     await waitFor(() => {
       expect(bulkWriteDocumentsMock).toHaveBeenCalledTimes(1);
     });
@@ -555,12 +555,11 @@ describe("DocumentDataGrid", () => {
     });
   });
 
-  // AC-196-05-1 — Sprint 196 (FB-5b). The Add Document submit path is the
-  // first non-`raw` Mongo fire point: it bypasses the QueryTab editor and
-  // calls `insertDocument` directly, so the global log would otherwise miss
-  // it. Successful insert must surface a `source: "mongo-op"` history
-  // entry with the synthesised `db.<col>.insertOne(...)` SQL line.
-  // 2026-05-02.
+  // AC-196-05-1 — the Add Document submit path is a non-`raw` Mongo fire
+  // point: it bypasses the QueryTab editor and calls `insertDocument`
+  // directly, so the global log would otherwise miss it. A successful
+  // insert must surface a `source: "mongo-op"` history entry with the
+  // synthesised `db.<col>.insertOne(...)` SQL line.
   it("[AC-196-05-1] Add Document submit records a mongo-op history entry on success", async () => {
     const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
     useQueryHistoryStore.setState({ recentVisible: [] });
@@ -613,9 +612,9 @@ describe("DocumentDataGrid", () => {
     expect(cell!.className).toMatch(/bg-highlight/);
   });
 
-  // Sprint 341 (2026-05-15, Option D) — nested cell toggle ↔ inline
-  // detail row contract. Clicking the in-cell toggle expands the tree
-  // panel beneath that row; toggling again (or another cell) collapses.
+  // Option D — nested cell toggle ↔ inline detail row contract. Clicking
+  // the in-cell toggle expands the tree panel beneath that row; toggling
+  // again (or another cell) collapses.
   it("nested cell toggle expands an inline tree row underneath", async () => {
     renderGrid();
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());

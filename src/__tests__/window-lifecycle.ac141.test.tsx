@@ -1,16 +1,8 @@
 /**
- * Sprint 149/155 — AC-141-* (Launcher/Workspace lifecycle) regression tests.
+ * AC-141-* (Launcher/Workspace lifecycle) regression tests.
  *
- * History: this file was authored in Sprint 149 as a single-window stub
- * locking lifecycle invariants on top of a now-retired vestigial store
- * field. Sprint 154 replaced the screen-toggle with the
- * `@lib/window-controls` seam + cross-window IPC sync. Sprint 155 (Phase 12
- * closure) flips the 5 historically-deferred placeholders into live
- * regression tests against the seam + `tauri.conf.json`, retires the legacy
- * field for good, and supersedes ADR 0011 with ADR 0012.
- *
- * The 5 historically-deferred AC-141-* invariants now run as real `it(...)`
- * checks:
+ * The AC-141-* invariants run as real `it(...)` checks against the
+ * `@lib/window-controls` seam and `tauri.conf.json`:
  *
  *   AC-141-1 (real)  launcher/workspace window dimensions + chrome match the
  *                    spec (720×560 fixed launcher / 1280×800 resizable
@@ -49,8 +41,8 @@ import {
 import HomePage from "@/pages/HomePage";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { ConnectionConfig } from "@/types/connection";
-// Sprint 155 — `tauri.conf.json` is the source of truth for AC-141-1's
-// fixed launcher / resizable workspace dimensions. Vite's JSON import gives
+// `tauri.conf.json` is the source of truth for AC-141-1's fixed launcher /
+// resizable workspace dimensions. Vite's JSON import gives
 // us a synchronous, type-friendly read without dragging `@types/node` into
 // the strict tsconfig just for this assertion.
 import tauriConf from "../../src-tauri/tauri.conf.json";
@@ -66,11 +58,10 @@ beforeEach(() => {
   });
 });
 
-// Sprint 154 — `@lib/window-controls` is the lifecycle seam. WorkspacePage
-// registers a `tauri://close-requested` listener at mount that must be
-// stubbed under jsdom. Activation/Back/close assertions are expressed
-// against the seam mocks — that is the single source of truth for the
-// post-Sprint-154 architecture (ADR 0012 supersedes ADR 0011).
+// `@lib/window-controls` is the lifecycle seam; the whole module is stubbed
+// so nothing reaches Tauri under jsdom. Activation/Back/close assertions are
+// expressed against these seam mocks — the single source of truth for the
+// current architecture (ADR 0012 supersedes ADR 0011).
 vi.mock("@lib/window-controls", () => ({
   showWindow: vi.fn(() => Promise.resolve()),
   hideWindow: vi.fn(() => Promise.resolve()),
@@ -141,7 +132,7 @@ afterEach(() => {
 describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", () => {
   // ---------------------------------------------------------------------------
   // AC-141-1 (real): launcher window 720×560 fixed in `tauri.conf.json`.
-  // Sprint 175 (ADR-0017) — workspace is no longer declared statically; it is
+  // ADR-0017 — workspace is no longer declared statically; it is
   // lazy-built by `src-tauri/src/launcher.rs::build_workspace_window` on the
   // first `workspace_show`/`workspace_ensure` call to skip the WKWebView
   // spawn at boot. The 1280×800 / resizable / born-hidden invariants moved
@@ -184,18 +175,17 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
   });
 
   // ---------------------------------------------------------------------------
-  // AC-141-2 (revised for sprint-361/363 + Wave 9.5 회귀 1, 2026-05-16)
+  // AC-141-2
   //
-  // 이전 contract: HomePage 가 직접 `showWindow("workspace")` →
-  // `focusWindow("workspace")` → `hideWindow("launcher")` 호출. 이는
-  // sprint-175 의 single-workspace label `"workspace"` 모델.
+  // Old contract: HomePage called `showWindow("workspace")` →
+  // `focusWindow("workspace")` → `hideWindow("launcher")` itself, on the
+  // single-workspace `"workspace"` label model.
   //
-  // sprint-361 이후 workspace 윈도우는 `workspace-{conn_id}` per-conn.
-  // ConnectionList 의 `openWorkspaceWindow(id)` 가 build/focus 책임.
-  // HomePage 의 handleActivate 는 store side (focusedConn / stale cleanup)
-  // + `hideWindow("launcher")` 만. `showWindow("workspace")` 가 호출되면
-  // sprint-175 의 옛 single-workspace 윈도우가 추가 생성되어 사용자가 본
-  // 두 창 visible 회귀 발생.
+  // Workspace windows are now per-conn `workspace-{conn_id}` and
+  // ConnectionList's `openWorkspaceWindow(id)` owns build/focus. HomePage's
+  // handleActivate owns the store side only (focusedConn / stale cleanup).
+  // A `showWindow("workspace")` call would spawn the old single-workspace
+  // window on top — the two-windows-visible regression the user reported.
   // ---------------------------------------------------------------------------
   it("AC-141-2 (revised): activating from the launcher 는 window seam 호출 0 — launcher 항상 visible (Wave 9.5)", async () => {
     useConnectionStore.setState({
@@ -209,8 +199,8 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       fireEvent.doubleClick(screen.getByText(/^c1 DB$/));
     });
 
-    // 사용자 desired UX (2026-05-16): launcher 는 항상 visible.
-    // HomePage handleActivate 책임은 store side (focusedConn) 만.
+    // Desired UX: the launcher stays visible. HomePage's handleActivate
+    // owns the store side (focusedConn) only.
     expect(showWindowMock).not.toHaveBeenCalled();
     expect(focusWindowMock).not.toHaveBeenCalled();
     expect(hideWindowMock).not.toHaveBeenCalled();
@@ -218,8 +208,8 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
   });
 
   // ---------------------------------------------------------------------------
-  // AC-141-3 (revised for Wave 9.5, 2026-05-16): Back → focusWindow('launcher')
-  // → destroyCurrentWindow; pool stays alive.
+  // AC-141-3: Back → focusWindow('launcher') → destroyCurrentWindow; pool
+  // stays alive.
   // ---------------------------------------------------------------------------
   it("AC-141-3 (revised): 'Back to connections' emits focusWindow('launcher') → destroyCurrentWindow and does NOT call disconnectFromDatabase", async () => {
     const { disconnectFromDatabase } = await import("@lib/tauri");
@@ -241,8 +231,8 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     expect(focusWindowMock).toHaveBeenCalledWith("launcher");
     expect(destroyCurrentWindowMock).toHaveBeenCalled();
 
-    // focus before close — focus IPC 가 close 후 destroyed process 와 race
-    // 하지 않게.
+    // Focus before close, so the focus IPC does not race the process
+    // destroyed by the close.
     const focusOrder = focusWindowMock.mock.invocationCallOrder[0]!;
     const closeOrder = destroyCurrentWindowMock.mock.invocationCallOrder[0]!;
     expect(focusOrder).toBeLessThan(closeOrder);
@@ -255,14 +245,13 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
   });
 
   // ---------------------------------------------------------------------------
-  // AC-141-4 (sprint-363 update): launcher close → hide (NOT exit);
-  // workspace close behaves like Back (preventDefault + hide+show,
-  // no disconnect).
+  // AC-141-4: launcher close → hide (NOT exit); the workspace registers no
+  // close-requested listener and its mount triggers no disconnect.
   //
-  // Sprint 363 (Phase 3, Q13 / strategy line 773) replaced the launcher's
-  // close-exits-app behavior with close-hides-launcher. Open workspaces
-  // (`workspace-{conn_id}`) stay alive; the launcher can be resurfaced
-  // via the macOS dock icon or 2nd-launch single-instance callback.
+  // Q13 replaced the launcher's close-exits-app behavior with
+  // close-hides-launcher. Open workspaces (`workspace-{conn_id}`) stay
+  // alive; the launcher can be resurfaced via the macOS dock icon or the
+  // 2nd-launch single-instance callback.
   // ---------------------------------------------------------------------------
   it("AC-141-4 (sprint-363): launcher.close → hideWindow('launcher'); workspace.close = Back semantics (no disconnect)", async () => {
     const { disconnectFromDatabase } = await import("@lib/tauri");
@@ -305,19 +294,19 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       await handlers.launcher!();
     });
 
-    // Sprint 363: launcher is hidden, not exited.
+    // The launcher is hidden, not exited.
     expect(hideWindowMock).toHaveBeenCalledWith("launcher");
     expect(exitAppMock).not.toHaveBeenCalled();
     // Workspace must NOT be touched by the launcher-close path.
     expect(showWindowMock).not.toHaveBeenCalledWith("workspace");
     expect(hideWindowMock).not.toHaveBeenCalledWith("workspace");
 
-    // 2. Workspace close path — Wave 9.5 회귀 4 (2026-05-16): listener 자체
-    //    제거. OS-level close 는 default destroy 만으로 desired UX (launcher
-    //    이미 visible 이라 자동 활성) 가 성립. listener 를 두면
-    //    회귀 history: 이전 `closeCurrentWindow()` (= `win.close()`) 가
-    //    close-requested 발사 → preventDefault
-    //    + handler 재진입 → 무한 루프 trap (실제 회귀 증상).
+    // 2. Workspace close path — the listener itself is gone. An OS-level
+    //    close reaches the desired UX through the default destroy alone
+    //    (the launcher is already visible, so it activates). Keeping a
+    //    listener brings the trap back: `closeCurrentWindow()`
+    //    (= `win.close()`) fires close-requested → preventDefault +
+    //    handler re-entry → infinite loop.
     showWindowMock.mockClear();
     hideWindowMock.mockClear();
     render(<WorkspacePage />);
@@ -326,7 +315,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     });
 
     expect(onCurrentWindowCloseRequestedMock).not.toHaveBeenCalled();
-    // Workspace 마운트 자체가 disconnect 를 트리거하지 않는다.
+    // Mounting the workspace does not trigger a disconnect.
     expect(disconnectMock).not.toHaveBeenCalled();
   });
 
@@ -357,9 +346,9 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       focusedConnId: "c1",
     });
 
-    // Stage 2: activate — double-click. Wave 9.5 (2026-05-16): launcher 는
-    // 항상 visible — handleActivate 는 store side 만 책임. per-conn workspace
-    // 윈도우 build 는 ConnectionList 의 `openWorkspaceWindow(id)` 책임.
+    // Stage 2: activate — double-click. The launcher stays visible —
+    // handleActivate owns the store side only. ConnectionList's
+    // `openWorkspaceWindow(id)` owns the per-conn workspace window build.
     const { unmount } = render(<HomePage />);
     await act(async () => {
       fireEvent.doubleClick(screen.getByText(/^c1 DB$/));
@@ -370,7 +359,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     expect(hideWindowMock).not.toHaveBeenCalled();
     unmount();
 
-    // Stage 3 (Wave 9.5): back — pool kept; focusWindow('launcher') → destroyCurrentWindow.
+    // Stage 3: back — pool kept; focusWindow('launcher') → destroyCurrentWindow.
     showWindowMock.mockClear();
     hideWindowMock.mockClear();
     focusWindowMock.mockClear();
@@ -412,17 +401,18 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     expect(hideWindowMock).not.toHaveBeenCalled();
   });
 
-  // Wave 9.5 회귀 4 (2026-05-16) — 본 테스트의 이전 contract 는 sprint-154
-  // 의 launcher-hidden 시대 가정 (OS-level close 가 발생하면 process 가
-  // 죽은 듯 보여, close-requested 를 가로채고 launcher 를 show 해야 했음).
-  // Wave 9.5 에서 launcher 가 항상 visible 인 desired UX 로 바뀌면서 그
-  // listener 자체가 dead code 가 됐고, 게다가 `destroyCurrentWindow()` 가
-  // 다시 close-requested 를 발사 → 같은 리스너가 preventDefault + 재호출
-  // → 무한 루프 + 창이 안 닫히는 회귀 증상의 root cause 였다.
+  // The old contract assumed the launcher-hidden era: an OS-level close made
+  // the process look dead, so the page had to intercept close-requested and
+  // show the launcher. Once the desired UX kept the launcher always visible
+  // that listener became dead code, and worse, `destroyCurrentWindow()`
+  // fired close-requested again → the same listener ran preventDefault and
+  // re-invoked the handler → the root cause of the infinite loop and the
+  // window that would not close.
   //
-  // 새 contract: WorkspacePage 는 close-requested listener 를 **등록하지
-  // 않는다**. OS-level close 는 default destroy 만으로 desired UX 가 성립
-  // (workspace 사라지면 launcher 가 이미 visible 이라 자동 활성).
+  // New contract: WorkspacePage does **not** register a close-requested
+  // listener. An OS-level close reaches the desired UX through the default
+  // destroy alone (once the workspace is gone the launcher is already
+  // visible, so it activates).
   it("AC-141-6 (Wave 9.5 회귀 4): WorkspacePage does NOT register a close-requested listener — listener was the infinite loop trap", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],

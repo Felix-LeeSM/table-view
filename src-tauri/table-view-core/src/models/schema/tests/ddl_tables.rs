@@ -3,11 +3,11 @@ use serde_json;
 
 #[test]
 fn create_table_request_table_comment_serde_roundtrip() {
-    // Sprint 234 — `table_comment: Option<String>` field round-trips
-    // with `#[serde(default)]` semantics:
+    // The `table_comment: Option<String>` field round-trips with
+    // `#[serde(default)]` semantics:
     // - `Some("user accounts")` — stays Some after roundtrip.
-    // - Payload that omits the field (Sprint 226-233 callers) — the
-    //   default `None` is filled in.
+    // - Payload that omits the field (older callers) — the default
+    //   `None` is filled in.
     let req = CreateTableRequest {
         connection_id: "conn1".to_string(),
         schema: "public".to_string(),
@@ -33,7 +33,7 @@ fn create_table_request_table_comment_serde_roundtrip() {
     );
 
     // Back-compat — payload omitting `table_comment` deserializes to
-    // None (Sprint 226-233 caller invariant).
+    // None (older-caller invariant).
     let json_no_comment = r#"{
             "connection_id": "conn1",
             "schema": "public",
@@ -45,14 +45,13 @@ fn create_table_request_table_comment_serde_roundtrip() {
     assert!(parsed.table_comment.is_none());
 }
 
-// ── Sprint 235 — RenameTableRequest / DropTableRequest serde ──────
+// ── RenameTableRequest / DropTableRequest serde ───────────────────
 
 #[test]
 fn rename_table_request_serde_roundtrip() {
-    // Sprint 235 — `preview_only` round-trips with `#[serde(default)]`
-    // semantics. Camel-case wire form mirrors the rest of the
-    // `*Request` family ({ connectionId, schema, table, newName,
-    // previewOnly }).
+    // `preview_only` round-trips with `#[serde(default)]` semantics.
+    // Camel-case wire form mirrors the rest of the `*Request` family
+    // ({ connectionId, schema, table, newName, previewOnly }).
     let req = RenameTableRequest {
         connection_id: "conn1".to_string(),
         schema: "public".to_string(),
@@ -80,7 +79,7 @@ fn rename_table_request_serde_roundtrip() {
     assert!(deserialized.preview_only);
 
     // Back-compat — payload omitting `previewOnly` deserialises to
-    // false (Sprint 235 default-flag invariant).
+    // false (default-flag invariant).
     let no_flag = r#"{"connectionId":"c","schema":"s","table":"t","newName":"n"}"#;
     let parsed: RenameTableRequest = serde_json::from_str(no_flag).unwrap();
     assert!(!parsed.preview_only);
@@ -88,8 +87,8 @@ fn rename_table_request_serde_roundtrip() {
 
 #[test]
 fn drop_table_request_serde_roundtrip() {
-    // Sprint 235 — both flags `#[serde(default)]`-friendly. Wire form
-    // is camelCase.
+    // Both flags are `#[serde(default)]`-friendly. Wire form is
+    // camelCase.
     let req = DropTableRequest {
         connection_id: "conn1".to_string(),
         schema: "public".to_string(),
@@ -117,16 +116,15 @@ fn drop_table_request_serde_roundtrip() {
     assert!(!parsed.preview_only);
 }
 
-// ── Sprint 236 — AddColumnRequest / DropColumnRequest serde ───────
+// ── AddColumnRequest / DropColumnRequest serde ────────────────────
 
 #[test]
 fn add_column_request_serde_camelcase_roundtrip() {
-    // Sprint 236 — wire form is camelCase. `checkExpression` is
-    // optional (`#[serde(default)]`); when `None` the field is
-    // emitted as `null` in the JSON body — both round-trip cleanly.
-    // `column` reuses the Sprint 226 `ColumnDefinition` struct so
-    // its inner field names stay snake_case (matching the
-    // Sprint 226 wire shape).
+    // Wire form is camelCase. `checkExpression` is optional
+    // (`#[serde(default)]`); when `None` the field is emitted as
+    // `null` in the JSON body — both round-trip cleanly. `column`
+    // reuses the `ColumnDefinition` struct so its inner field names
+    // stay snake_case (matching that struct's wire shape).
     let req = AddColumnRequest {
         connection_id: "conn1".to_string(),
         schema: "public".to_string(),
@@ -187,9 +185,9 @@ fn add_column_request_serde_camelcase_roundtrip() {
 
 #[test]
 fn drop_column_request_serde_camelcase_roundtrip() {
-    // Sprint 236 — `cascade` + `previewOnly` both
-    // `#[serde(default)]`-friendly. Wire form is camelCase, with
-    // `columnName` being the column to drop.
+    // `cascade` + `previewOnly` are both `#[serde(default)]`-friendly.
+    // Wire form is camelCase, with `columnName` being the column to
+    // drop.
     let req = DropColumnRequest {
         connection_id: "conn1".to_string(),
         schema: "public".to_string(),
@@ -216,7 +214,7 @@ fn drop_column_request_serde_camelcase_roundtrip() {
     assert!(!deserialized.preview_only);
 
     // Back-compat — payload omitting `cascade` + `previewOnly`
-    // deserialises to false (Sprint 236 default-flag invariant).
+    // deserialises to false (default-flag invariant).
     let minimal = r#"{"connectionId":"c","schema":"s","table":"t","columnName":"col"}"#;
     let parsed: DropColumnRequest = serde_json::from_str(minimal).unwrap();
     assert!(!parsed.cascade);

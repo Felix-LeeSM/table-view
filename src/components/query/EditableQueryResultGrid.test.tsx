@@ -60,8 +60,8 @@ describe("EditableQueryResultGrid", () => {
     mockExecuteQuery.mockReset();
     mockExecuteQuery.mockResolvedValue({});
     mockExecuteQueryBatch.mockReset();
-    // Sprint 183 — default to a happy-path batch resolve so the legacy
-    // tests that don't override the mock still see a successful commit.
+    // Default to a happy-path batch resolve so the legacy tests that don't
+    // override the mock still see a successful commit.
     mockExecuteQueryBatch.mockResolvedValue([]);
   });
 
@@ -200,7 +200,7 @@ describe("EditableQueryResultGrid", () => {
   });
 
   it("[AC-183-08c] Execute calls executeQueryBatch once with all statements and triggers onAfterCommit", async () => {
-    // Sprint 183 — single transaction batch (was: N × executeQuery loop).
+    // Single transaction batch (was: N × executeQuery loop).
     const onAfterCommit = vi.fn();
     renderGrid({ onAfterCommit });
     const tds = document.querySelectorAll(
@@ -228,9 +228,8 @@ describe("EditableQueryResultGrid", () => {
     await waitFor(() => {
       expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
     });
-    // Sprint 183 — single batch call with the connection id, the array
-    // of statements, and a query id. Legacy single-statement helper is
-    // not invoked.
+    // Single batch call with the connection id, the array of statements,
+    // and a query id. Legacy single-statement helper is not invoked.
     expect(mockExecuteQueryBatch).toHaveBeenCalledWith(
       "conn1",
       [expect.stringMatching(/UPDATE/)],
@@ -245,10 +244,9 @@ describe("EditableQueryResultGrid", () => {
     });
   });
 
-  // AC-196-03-3 — Sprint 196 (FB-5b). Successful raw-edit commit appends a
+  // AC-196-03-3 (FB-5b). Successful raw-edit commit appends a
   // queryHistoryStore entry tagged `source: "grid-edit"` so the global log
   // can label commits driven by the editor grid (vs. raw editor execution).
-  // 2026-05-02.
   it("[AC-196-03-3] raw-edit commit records a grid-edit history entry", async () => {
     const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
     useQueryHistoryStore.setState({ recentVisible: [] });
@@ -360,10 +358,10 @@ describe("EditableQueryResultGrid", () => {
     );
   });
 
-  // Sprint 183 — regression that the Cmd+S → SQL preview → Execute path
-  // still flows all the way through to executeQueryBatch. The dialog body
-  // must still render the per-statement SQL list (Sprint 87 contract) so a
-  // user can review individual statements before committing.
+  // Regression that the Cmd+S → SQL preview → Execute path still flows all
+  // the way through to executeQueryBatch. The dialog body must still render
+  // the per-statement SQL list so a user can review individual statements
+  // before committing.
   it("[AC-183-08d] Cmd+S → SQL preview lists each statement; Execute runs the batch", async () => {
     renderGrid();
     const tds = document.querySelectorAll(
@@ -399,7 +397,7 @@ describe("EditableQueryResultGrid", () => {
   });
 
   it("[AC-183-08c] Execute surfaces rolled-back batch failure without clearing the dialog", async () => {
-    // Sprint 183 — backend rolls back atomically; the catch block surfaces
+    // The backend rolls back atomically; the catch block surfaces
     // "Commit failed — all changes rolled back: <message>" and keeps the
     // SQL preview dialog open so the user can re-try without losing the
     // pending edits.
@@ -432,13 +430,12 @@ describe("EditableQueryResultGrid", () => {
     expect(alert.textContent ?? "").not.toMatch(/executed: \d/);
   });
 
-  // Sprint 256 (2026-05-09): the AC-185-06 1px env color stripe above the
-  // SQL preview header was removed per user feedback ("datagrid 에서
-  // 수정할 때 SQL preview 뜨는 것 상단에 한줄 그어놓은 것도 ... 그냥
-  // 제거해"). The env signal flows through the footer ExecuteButton's
-  // color × env matrix and the ConfirmDestructiveDialog header tokens
-  // instead. The regression guard for the stripe is intentionally
-  // dropped.
+  // The AC-185-06 1px env color stripe above the SQL preview header was
+  // removed per user feedback ("that line drawn across the top of the SQL
+  // preview that shows up when I edit in the datagrid ... just remove it
+  // too"). The env signal flows through the footer ExecuteButton's color ×
+  // env matrix and the ConfirmDestructiveDialog header tokens instead. The
+  // regression guard for the stripe is intentionally dropped.
 });
 
 // Issue #1299 — multi-table (JOIN) per-column editing.

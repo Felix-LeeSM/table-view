@@ -1,10 +1,9 @@
 // EditableQueryResultGrid Safe Mode gate — SURFACE WIRING contract only.
 //
-// Sprint 185/186 originally enumerated the full env×mode×severity matrix
-// (prod/strict|warn|off × destructive/safe) here AND in
-// `QueryTab.safe-mode.test.tsx` — the same decision matrix re-verified on two
-// surfaces. Issue #1623 (2026-07-24) dedups: the decision matrix SOT is the
-// unit layer —
+// The full env×mode×severity matrix (prod/strict|warn|off × destructive/safe)
+// was originally enumerated here AND in `QueryTab.safe-mode.test.tsx` — the
+// same decision matrix re-verified on two surfaces. Issue #1623 dedups: the
+// decision matrix SOT is the unit layer —
 //   - `src/lib/safeMode.test.ts` (`decideSafeModeAction`, L1..L8 + reason copy)
 //   - `src/hooks/useSafeModeGate.test.ts` (store/env wiring into that decision)
 // the ConfirmDestructiveDialog rendering (prod vs non-prod header, reason copy,
@@ -42,7 +41,7 @@ beforeEach(() => {
   setupTauriMock({
     executeQuery: vi.fn(),
     executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
-    // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+    // `<DryRunPreview>` IPC stub for the confirm dialog.
     executeQueryDryRun: vi.fn(() => Promise.resolve([])),
     cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
   });
@@ -174,10 +173,10 @@ describe("EditableQueryResultGrid — Safe Mode gate → executeQueryBatch wirin
   });
 
   it("[AC-186-05b] warn dialog Confirm click → executeQueryBatch runs (and NOT before confirm)", async () => {
-    // Representative "confirm → execute" wiring. Sprint 246 — Confirm is a
-    // single click; #1111 — it arms after a short delay to absorb a
-    // reflexive Enter, so we wait for it to enable before asserting the
-    // commit path fires exactly once. (2026-05-01)
+    // Representative "confirm → execute" wiring. Confirm is a single click;
+    // #1111 — it arms after a short delay to absorb a reflexive Enter, so we
+    // wait for it to enable before asserting the commit path fires exactly
+    // once.
     setup("production", "warn");
     await clickExecute(["DELETE FROM users"]);
 

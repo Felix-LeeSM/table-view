@@ -83,8 +83,8 @@ export default function DocumentFilterBar({
   const { t } = useTranslation("document");
   const [mode, setMode] = useState<FilterMode>("structured");
   const [conditions, setConditions] = useState<MqlCondition[]>([]);
-  // Sprint 314 — Slice B.2. ALL = implicit `$and` (default). ANY =
-  // top-level `$or` array. Per-row `$not` lives on each MqlCondition.
+  // ALL = implicit `$and` (default). ANY = top-level `$or` array. Per-row
+  // `$not` lives on each MqlCondition.
   const [matchMode, setMatchMode] = useState<MatchMode>("all");
   const [rawText, setRawText] = useState<string>(RAW_DEFAULT_TEMPLATE);
   const [rawError, setRawError] = useState<string | null>(null);
@@ -248,9 +248,9 @@ export default function DocumentFilterBar({
         </RawMqlEditor>
       ) : (
         <>
-          {/* Sprint 314 — Match ALL/ANY toggle. ALL = implicit $and,
-              ANY = top-level $or. Effective only when ≥ 2 rows; we show
-              it unconditionally so users discover it. */}
+          {/* Match ALL/ANY toggle. ALL = implicit $and, ANY = top-level
+              $or. Effective only when ≥ 2 rows; we show it
+              unconditionally so users discover it. */}
           <div className="mb-1.5 flex items-center gap-2">
             <span className="text-2xs text-muted-foreground">
               {t("filterBar.matchLabel")}
@@ -378,9 +378,9 @@ function StructuredRow({
         </SelectContent>
       </Select>
 
-      {/* Sprint 314 — NOT toggle. Wraps the operator clause in $not.
-          Sits left of the operator dropdown so users decide negation
-          before picking the comparator. */}
+      {/* NOT toggle. Wraps the operator clause in $not. Sits left of the
+          operator dropdown so users decide negation before picking the
+          comparator. */}
       <Button
         variant="ghost"
         size="icon-xs"
@@ -456,10 +456,10 @@ function RawMqlEditor({
   children,
 }: RawMqlEditorProps) {
   const { t } = useTranslation("document");
-  // Sprint 309 — `useMongoAutocomplete` lost its queryMode argument;
-  // the unified completion source covers find operators + aggregate
-  // stages + accumulators + type tags. RawMqlEditor still threads its
-  // collection's fieldNames so key-position autocomplete works.
+  // `useMongoAutocomplete` takes no queryMode argument; the unified
+  // completion source covers find operators + aggregate stages +
+  // accumulators + type tags. RawMqlEditor still threads its collection's
+  // fieldNames so key-position autocomplete works.
   const mongoExtensions = useMongoAutocomplete({ fieldNames });
 
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);

@@ -91,11 +91,11 @@ use crate::models::{ConnectionConfig, SslMode};
 ///   wallet.
 /// * `redis` — `rustls::ClientConfig::builder()`
 ///   (`redis-0.32.7/src/connection.rs:988`), a direct dependency through
-///   `tokio-rustls-comp` (`src-tauri/table-view-core/Cargo.toml:80`).
+///   `tokio-rustls-comp` (`src-tauri/table-view-core/Cargo.toml:86`).
 /// * `reqwest` — `CryptoProvider::get_default()` first, `ring` only as the
 ///   fallback (`reqwest-0.12.28/src/async_impl/client.rs:763-771`), a direct
 ///   dependency through `rustls-tls`
-///   (`src-tauri/table-view-core/Cargo.toml:81`); it carries the Search
+///   (`src-tauri/table-view-core/Cargo.toml:87`); it carries the Search
 ///   adapter's HTTPS (`db::search_http`).
 ///
 /// sqlx is the one rustls user here that does name its provider explicitly

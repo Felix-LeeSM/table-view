@@ -4,14 +4,14 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { TableData } from "@/types/schema";
 import { useDataGridEdit } from "./useDataGridEdit";
 
-// Sprint 75 — validation gate tests. When a pending edit can't be coerced
-// to its column's data_type, it should be excluded from SQL preview and a
+// Validation gate tests. When a pending edit can't be coerced to its
+// column's data_type, it should be excluded from SQL preview and a
 // per-cell error entry should appear in `pendingEditErrors`. Sibling edits
 // in the same batch are validated independently.
 
-// Sprint 354 (L2 fix, 2026-05-16) — `executeQuery` / `executeQueryBatch`
-// moved out of `schemaStore` to `@lib/tauri`. Mocks stay hoisted so the
-// shared Tauri helper can close over them.
+// `executeQuery` / `executeQueryBatch` live in `@lib/tauri`, not in
+// `schemaStore`. Mocks stay hoisted so the shared Tauri helper can close
+// over them.
 const { mockExecuteQuery, mockExecuteQueryBatch } = vi.hoisted(() => ({
   mockExecuteQuery: vi.fn(() =>
     Promise.resolve({
@@ -22,9 +22,9 @@ const { mockExecuteQuery, mockExecuteQueryBatch } = vi.hoisted(() => ({
       query_type: "dml" as const,
     }),
   ),
-  // Sprint 183 — RDB commit pipeline now uses executeQueryBatch instead
-  // of executeQuery N times. Default to a happy-path resolution with one
-  // entry per submitted statement.
+  // The RDB commit pipeline uses executeQueryBatch instead of executeQuery
+  // N times. Default to a happy-path resolution with one entry per
+  // submitted statement.
   mockExecuteQueryBatch: vi.fn((_conn: string, stmts: string[]) =>
     Promise.resolve(
       stmts.map(() => ({

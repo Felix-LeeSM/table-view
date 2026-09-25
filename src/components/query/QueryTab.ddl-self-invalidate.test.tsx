@@ -1,18 +1,17 @@
-// 작성 2026-05-16 (Phase 2 sprint-360).
+// Reason: state-management-strategy Q23 self-window schemaCache invalidate.
+// A DDL (`CREATE TABLE foo ...`) must invalidate that window's sidebar cache
+// within 100ms and force `loadSchemas(connId, db)` to be called again.
+// Cross-window broadcast is owned elsewhere — this slice verifies only the
+// same-window eager refetch.
 //
-// 사유: state-management-strategy Q23 self-window schemaCache invalidate.
-// DDL (`CREATE TABLE foo ...`) 가 그 window 의 sidebar 캐시를 100ms 안에
-// 무효화하고 `loadSchemas(connId, db)` 를 다시 호출하도록 강제한다.
-// Cross-window broadcast 는 sprint-365 의 책임 — 본 sliсe 는 same-window
-// eager refetch 만 검증한다.
-//
-// AC 매핑:
-//   AC-360-02: `runRdbSingleNow` 완료 후 `queryType === "ddl"` 이면
-//              `schemaStore.clearForConnection(connId)` 호출.
-//   AC-360-03: clear 직후 그 conn 의 sidebar 캐시가 비어 있어야 한다.
-//   AC-360-04: completeQuery → clearForConnection 사이의 timing < 100ms.
-//   AC-360-05: wide drop — `views`, `functions`, `triggers`,
-//              `tableColumnsCache` 모두 비워진다 (narrow scope 금지).
+// AC mapping:
+//   AC-360-02: after `runRdbSingleNow` completes, call
+//              `schemaStore.clearForConnection(connId)` if
+//              `queryType === "ddl"`.
+//   AC-360-03: right after the clear, that conn's sidebar cache must be empty.
+//   AC-360-04: timing between completeQuery and clearForConnection < 100ms.
+//   AC-360-05: wide drop — `views`, `functions`, `triggers` and
+//              `tableColumnsCache` are all emptied (no narrow scope).
 
 import { useSchemaCache } from "@hooks/useSchemaCache";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -246,9 +245,9 @@ describe("useQueryExecution — sprint-360 Phase 2 Q23 self-invalidate", () => {
     });
   });
 
-  // AC-360-02 — DDL 결과 (`queryType === "ddl"`) 가 도착하면 hook 이
-  // `schemaStore.clearForConnection(connId)` 를 호출. drop / create 둘 다
-  // 백엔드가 `queryType: "ddl"` 로 분류한다.
+  // AC-360-02 — when a DDL result (`queryType === "ddl"`) arrives the hook
+  // calls `schemaStore.clearForConnection(connId)`. The backend classifies
+  // both drop and create as `queryType: "ddl"`.
   it("AC-360-02: clears schemaStore for the connection after a DDL result", async () => {
     executeQueryMock.mockResolvedValueOnce(DDL_RESULT);
     seedSchemaCache();
@@ -269,8 +268,8 @@ describe("useQueryExecution — sprint-360 Phase 2 Q23 self-invalidate", () => {
     });
   });
 
-  // AC-360-05 — wide drop. views / functions / triggers /
-  // tableColumnsCache 도 함께 비워진다. 다른 conn 의 캐시는 손대지 않는다.
+  // AC-360-05 — wide drop. views / functions / triggers / tableColumnsCache
+  // are emptied too. Caches of other conns are left untouched.
   it("AC-360-05: wide drop — views/functions/triggers/columns cleared, other conn preserved", async () => {
     executeQueryMock.mockResolvedValueOnce(DDL_RESULT);
     seedSchemaCache();
@@ -297,10 +296,11 @@ describe("useQueryExecution — sprint-360 Phase 2 Q23 self-invalidate", () => {
     });
   });
 
-  // AC-360-04 — IPC 응답(`executeQuery` resolves) ~ DOM-equivalent cache
-  // update (`schemaStore.clearForConnection`) 까지 < 100ms. clear 자체는
-  // 동기 setState 이므로 IPC resolves 직후 한 microtask 안에 끝난다.
-  // performance.now() 로 측정해 envelope 안에 들어오는지 확인.
+  // AC-360-04 — < 100ms from the IPC response (`executeQuery` resolves) to
+  // the DOM-equivalent cache update (`schemaStore.clearForConnection`). The
+  // clear itself is a synchronous setState, so it finishes within one
+  // microtask of the IPC resolving. Measured with performance.now() to check
+  // it lands inside the envelope.
   it("AC-360-04: DDL response → schemaStore cache wipe < 100ms", async () => {
     seedSchemaCache();
     let resolveExec: ((value: QueryResult) => void) | null = null;
@@ -405,10 +405,10 @@ describe("useQueryExecution — sprint-360 Phase 2 Q23 self-invalidate", () => {
     execHook.unmount();
   });
 
-  // Test Requirement (d) — Sidebar unmount 시 refetch skip. Once
-  // useSchemaCache unmounts, the wipe must NOT trigger a fresh
-  // listSchemas IPC call. Without this guarantee the autoLoadedRef
-  // would keep firing IPCs for invisible sidebars.
+  // Test Requirement (d) — refetch is skipped when the Sidebar unmounts.
+  // Once useSchemaCache unmounts, the wipe must NOT trigger a fresh
+  // listSchemas IPC call. Without this guarantee the autoLoadedRef would
+  // keep firing IPCs for invisible sidebars.
   it("AC-360-03 (d): refetch is skipped after sidebar unmounts", async () => {
     listSchemasMock.mockResolvedValue([{ name: "public" }]);
     listTablesMock.mockResolvedValue([]);

@@ -265,7 +265,7 @@ async fn sqlite_contract_execute_query_returns_tabular_result_envelope() {
         &adapter,
         "SELECT id, email FROM active_users ORDER BY id",
         &["id", "email"],
-        // id 는 INTEGER 컬럼 — ADR 0026 (issue #1082) 에 따라 string token 으로 wire.
+        // id is an INTEGER column — wired as a string token per ADR 0026 (issue #1082).
         vec![vec![
             serde_json::json!("1"),
             serde_json::json!("ada@example.test"),
@@ -308,7 +308,7 @@ async fn sqlite_contract_probes_capabilities_and_runs_only_read_query_evidence()
             &adapter,
             "SELECT rowid, title FROM docs_fts WHERE docs_fts MATCH 'Ada'",
             &["rowid", "title"],
-            // rowid 는 INTEGER — ADR 0026 (issue #1082) 에 따라 string token 으로 wire.
+            // rowid is an INTEGER — wired as a string token per ADR 0026 (issue #1082).
             vec![vec![serde_json::json!("1"), serde_json::json!("Ada notes")]],
         )
         .await;
@@ -322,7 +322,7 @@ async fn sqlite_contract_probes_capabilities_and_runs_only_read_query_evidence()
             &adapter,
             "SELECT id FROM boxes_rtree WHERE min_x >= 0.0 AND max_x <= 1.0",
             &["id"],
-            // id 는 INTEGER — ADR 0026 (issue #1082) 에 따라 string token 으로 wire.
+            // id is an INTEGER — wired as a string token per ADR 0026 (issue #1082).
             vec![vec![serde_json::json!("1")]],
         )
         .await;
@@ -1164,12 +1164,13 @@ async fn sqlite_contract_rejects_internal_app_state_file_as_user_connection() {
     }
 }
 
-/// Issue #1082 (RED->GREEN) — SQLite 정수 컬럼은 선언 타입과 무관하게 내부적으로
-/// i64 로 저장되므로 (type affinity), 2^53 을 넘는 값을 raw JSON number 로 wire
-/// 하면 프론트의 native JSON.parse 가 f64 로 강등하며 무음 손상시킨다. ADR 0026
-/// 의 정밀-민감 wire-string 계약을 SQLite 정수 계열로 확장 — INTEGER/INT/BIGINT/
-/// SMALLINT/TINYINT 셀은 JSON string token 으로 직렬화되어야 하고, 프론트
-/// `wrapNumericCells` 가 이를 BigInt 로 승격한다.
+/// Issue #1082 (RED->GREEN) — a SQLite integer column is stored internally as an
+/// i64 regardless of its declared type (type affinity), so wiring a value above
+/// 2^53 as a raw JSON number lets the frontend's native JSON.parse demote it to
+/// f64 and corrupt it silently. This extends ADR 0026's precision-sensitive
+/// wire-string contract to the SQLite integer family — INTEGER/INT/BIGINT/
+/// SMALLINT/TINYINT cells must serialize as JSON string tokens, and the
+/// frontend's `wrapNumericCells` promotes them to BigInt.
 #[tokio::test]
 async fn sqlite_big_integers_serialize_as_wire_strings_issue_1082() {
     let dir = TempDir::new().unwrap();
@@ -1231,18 +1232,20 @@ async fn sqlite_big_integers_serialize_as_wire_strings_issue_1082() {
     .unwrap();
 
     let row = &result.rows[0];
-    // 선언 정수 컬럼 (sqlx type_info().name() == "INTEGER") 은 정밀도-보존
-    // string token 으로 wire 되어야 한다.
+    // A declared integer column (sqlx type_info().name() == "INTEGER") must be
+    // wired as a precision-preserving string token.
     assert_eq!(row[0].as_str(), Some("9223372036854775807"), "INTEGER");
     assert_eq!(row[1].as_str(), Some("9007199254740993"), "INT");
     assert_eq!(row[2].as_str(), Some("9223372036854775807"), "BIGINT");
     assert_eq!(row[3].as_str(), Some("9007199254740993"), "SMALLINT");
     assert_eq!(row[4].as_str(), Some("9007199254740993"), "TINYINT");
-    // 타입 정보가 없는 컬럼/표현식 (sqlx type_info().name() == "NULL") 은
-    // frontend 가 data_type 으로 BigInt 승격할 방법이 없다 (wrapperFor 매핑 밖).
-    // 계약 밖 — raw JSON number 로 남긴다. string 화하면 grid 에 raw string 이
-    // 남아 정렬/필터/편집이 회귀하므로 오히려 나쁘다. 극단 경로 (표현식 결과 /
-    // 무-타입 컬럼) 의 2^53 초과 손실은 알려진 한계로 문서화.
+    // A column or expression with no type information (sqlx
+    // type_info().name() == "NULL") gives the frontend no way to promote it to
+    // BigInt from data_type, because it falls outside the `wrapperFor` mapping.
+    // Out of contract — it stays a raw JSON number. Stringifying it would be
+    // worse: a raw string left in the grid regresses sorting, filtering, and
+    // editing. Loss above 2^53 on the extreme path (expression results / untyped
+    // columns) is documented as a known limitation.
     assert!(
         row[5].is_number(),
         "untyped column stays a number (data_type NULL, no frontend promotion path)"

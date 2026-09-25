@@ -1,27 +1,24 @@
-//! 작성 2026-05-16 (Phase 1 sprint-355) — AC-355-07 grep CI.
+//! Written 2026-05-16 — AC-355-07 grep CI.
 //!
-//! Strategy 1222: "backend grep CI: `#[tauri::command]` 함수가 A/C domain
-//! mutate 면 함수 첫줄에 `state.guard_legacy_import_done()?` 있어야 함."
+//! Strategy 1222: "backend grep CI: when a `#[tauri::command]` function mutates
+//! the A/C domain, `state.guard_legacy_import_done()?` must be on the first line
+//! of the function."
 //!
-//! 본 sprint (355) 시점에는 A/C domain mutate IPC 의 실체가 아직 sprint-358+
-//! 에서 도입되므로 현재 grep 결과는 빈 집합 또는 `import_legacy_localstorage`
-//! 한 개 (이 자체는 transition IPC 라 exempt). 따라서 본 grep 은 다음을 동시에
-//! 검증한다:
+//! This grep checks three things:
 //!
-//!   1. `guard::guard_legacy_import_done` 심볼이 src 트리에서 검색 가능 (helper
-//!      자체 사라지면 fail).
-//!   2. 현재 시점의 A/C mutate IPC 후보 목록이 정의된 mute set (sprint-358+
-//!      에서 추가될 때마다 본 목록 확장) 안에 들어있고, 각 후보가 guard 를
-//!      호출.
-//!
-//! 본 sprint 의 mute set 은 비어있다 (`import_legacy_localstorage` 만 신규).
-//! sprint-358 이 `set_setting`/`add_favorite` 등을 추가할 때 본 목록을 갱신하면서
-//! guard 호출도 같이 강제된다.
+//!   1. The `guard::guard_legacy_import_done` symbol is findable in the src tree
+//!      (fails if the helper itself disappears).
+//!   2. The file-based A/C mutate handlers listed below still do not call the
+//!      guard.
+//!   3. The three scanned files (`import_legacy.rs`, `guard.rs`,
+//!      `sqlite_pool.rs`) declare exactly one `#[tauri::command]`,
+//!      `import_legacy_localstorage` — the transition IPC itself, which is
+//!      exempt from the guard.
 
 use std::fs;
 use std::path::PathBuf;
 
-/// `src-tauri/src/commands/` 트리 안의 모든 `.rs` 파일을 재귀적으로 수집.
+/// Recursively collect every `.rs` file under the `src-tauri/src/commands/` tree.
 fn collect_rs_files(root: &PathBuf, acc: &mut Vec<PathBuf>) {
     if let Ok(entries) = fs::read_dir(root) {
         for entry in entries.flatten() {
@@ -40,8 +37,9 @@ fn commands_dir() -> PathBuf {
     PathBuf::from(manifest_dir).join("src/commands")
 }
 
-// AC-355-07: helper symbol 이 src 트리에 export 되어있음. 본 테스트는 helper
-// 가 제거/이름 변경되었을 때 즉시 깨진다 — guard 의 grep CI rule 의 fundament.
+// AC-355-07: the helper symbol is exported from the src tree. This test breaks
+// the moment the helper is removed or renamed — the foundation of the guard's
+// grep CI rule.
 #[test]
 fn test_guard_helper_symbol_exists() {
     let path = commands_dir().join("guard.rs");
@@ -58,25 +56,16 @@ fn test_guard_helper_symbol_exists() {
     );
 }
 
-// AC-355-07 (forward-looking, sprint-355 시점):
+// AC-355-07 — the A/C mutate IPC list is defined at strategy line 1194–1216.
 //
-// A/C mutate IPC 목록은 strategy line 1194–1216 에 정의되어 있다. sprint-355
-// 시점에 그 IPC 들의 실체는 아직 없다 — 본 sprint 의 신규 IPC 는
-// `import_legacy_localstorage` 하나뿐이고 그것은 transition 자체이므로 guard
-// exempt 다. 따라서 현재 단계의 grep 은 "guard 가 정의되어 있으나 호출자는
-// 아직 0" 임을 명시적으로 확인한다. sprint-358 이 첫 A/C mutate IPC 를
-// 도입할 때 본 테스트의 expected set 을 확장하고, 동시에 그 IPC 가 guard 를
-// 호출하지 않으면 fail 하도록 패턴 매칭을 추가한다.
-//
-// **현재 invariant**: `commands/` 트리 어디에도 `guard_legacy_import_done`
-// 호출자가 없거나, 있다면 그건 import_legacy 자체가 아니다. 본 sprint 의
-// 안전한 단언 = "guard.rs 자체 외에서 호출자가 0" 또는 "import_legacy 가
-// 아닌 호출자 0".
+// The handlers checked here are the file-based half of that domain: they keep
+// writing the file store instead of the SQLite one, so they must not call the
+// guard. The assertion fails the moment one of them starts calling it.
 #[test]
 fn test_no_premature_guard_call_in_existing_mutate_ipc() {
-    // Existing A/C mutate IPC (file-based, pre-sprint-358) — these are
-    // expected NOT to call the guard yet, per invariant
-    // "기존 file-based connections.json / LS 동작 회귀 0" (contract Invariants).
+    // Existing A/C mutate IPC (file-based) — these are expected NOT to call
+    // the guard, per the invariant "zero regression in the existing file-based
+    // connections.json / LS behavior" (contract Invariants).
     let existing_ac_mutate_handlers = [
         ("connection/crud.rs", "save_connection"),
         ("connection/crud.rs", "delete_connection"),
@@ -105,8 +94,9 @@ fn test_no_premature_guard_call_in_existing_mutate_ipc() {
 }
 
 // AC-355-07 invariant: collect every #[tauri::command] in commands/ tree.
-// 본 sprint 의 신규 #[tauri::command] = `import_legacy_localstorage` 1 개.
-// 다른 어떤 신규 mutate IPC 도 추가되지 않았음을 확인 — sprint scope 보호.
+// The scanned files declare exactly one #[tauri::command],
+// `import_legacy_localstorage`. Adding any other mutate IPC to them fails this
+// test.
 #[test]
 fn test_only_one_new_tauri_command_in_sprint_355() {
     let mut files = Vec::new();
@@ -115,8 +105,8 @@ fn test_only_one_new_tauri_command_in_sprint_355() {
     let mut found_new_in_355: Vec<String> = Vec::new();
     for path in &files {
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        // sprint-355 added these files; treat their #[tauri::command]
-        // decorators as new-in-sprint-355.
+        // Scan only these files and treat their #[tauri::command] decorators
+        // as the new ones.
         if name == "import_legacy.rs" || name == "guard.rs" || name == "sqlite_pool.rs" {
             let content = fs::read_to_string(path).unwrap();
             for (idx, line) in content.lines().enumerate() {

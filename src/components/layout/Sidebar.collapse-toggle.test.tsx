@@ -1,14 +1,15 @@
 /**
- * 작성 2026-05-17 (sprint-379 collapse/expand all toggle per DB type).
+ * Collapse/expand all toggle per DB type.
  *
- * 사유: Sidebar header 의 "Collapse all" 단일 버튼이 사용자 캡처 (이미지 #4)
- * 처럼 *PG 만 commitment* 되어 있던 것을 4 DB type (PG / MySQL / SQLite /
- * Mongo) 각각 적절한 객체 이름으로 노출하고, *현재 상태가 모두 collapsed*
- * 이면 같은 버튼이 "Expand all *" 로 토글되도록 격상한다.
+ * Reason: the Sidebar header's single "Collapse all" button was committed to
+ * PG only, as the user capture (image #4) shows. It is upgraded to expose the
+ * right object name for each of the 4 DB types (PG / MySQL / SQLite / Mongo),
+ * and to toggle the same button to "Expand all *" when everything is
+ * currently collapsed.
  *
- * 4 DB type × 2 state = 8 RTL.
+ * Matrix: 4 DB types × 2 states.
  *
- * Confirm dialog 없음 (Q21 contract 와 동일 정신).
+ * No confirm dialog (same spirit as the Q21 contract).
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -168,10 +169,10 @@ describe("Sidebar collapse/expand-all toggle per DB type (sprint-379)", () => {
     ).toBeInTheDocument();
   });
 
-  // Reason: #1737 — "전체 펼치기(Expand all)" 버튼이 collapse 분기만 구현된
-  // no-op stub (sprint-379) 이라 클릭해도 라벨만 있고 아무 것도 펼쳐지지
-  // 않던 회귀. 로드된 모든 스키마명이 sidebar.expanded 에 채워져야 한다.
-  // 확장 규칙은 SchemaTree 가 키로 쓰는 bare schema name 과 동일 (2026-07-24)
+  // Reason: #1737 — the "Expand all" button was a no-op stub with only the
+  // collapse branch implemented, so clicking it showed the label and expanded
+  // nothing. Every loaded schema name must be filled into sidebar.expanded.
+  // The expand rule matches the bare schema name SchemaTree uses as its key.
   it("AC-1737: PG + expanded=[] → click 'Expand all schemas' populates every loaded schema name", () => {
     seed({ dbType: "postgresql", paradigm: "rdb", expanded: [] });
     useSchemaStore.setState({
@@ -185,12 +186,13 @@ describe("Sidebar collapse/expand-all toggle per DB type (sprint-379)", () => {
     ).toEqual(["public", "analytics"]);
   });
 
-  // Reason: #1737 후속 — handleExpandAll 의 `focusedSchemas.length === 0 → return`
-  // 가드(스키마 미로드면 no-op)가 단언으로 미검증. 상태 기반 단언(expanded===[])
-  // 은 setExpanded 가 current===nodes 일 때 동일 참조를 돌려주는 idempotent no-op
-  // 이라 가드를 지워도 통과 → RED 불가. 가드가 store action 자체를 막는지
-  // setExpanded 호출 여부로 검증한다: 가드 제거 시 setExpanded 가 호출돼 RED
-  // (2026-07-24)
+  // Reason: follow-up to #1737 — handleExpandAll's
+  // `focusedSchemas.length === 0 → return` guard (a no-op when no schema is
+  // loaded) had no assertion. A state-based assertion (expanded===[]) passes
+  // even with the guard removed, because setExpanded is an idempotent no-op
+  // returning the same reference when current===nodes → no RED. Assert
+  // instead that the guard blocks the store action itself, via whether
+  // setExpanded was called: removing the guard calls setExpanded → RED.
   it("AC-1737: PG + empty schema cache → click 'Expand all schemas' is a no-op (setExpanded not called)", () => {
     seed({ dbType: "postgresql", paradigm: "rdb", expanded: [] });
     // schemaStore intentionally left empty (beforeEach clears it) →

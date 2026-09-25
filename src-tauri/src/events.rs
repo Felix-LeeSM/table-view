@@ -1,4 +1,4 @@
-//! Sprint 365 (Phase 3, F.4) — cross-window `state-changed` event surface.
+//! (F.4) — cross-window `state-changed` event surface.
 //!
 //! Every backend mutation that wants to broadcast a state-changed
 //! notification to all open windows calls [`emit_state_changed`] with a
@@ -77,8 +77,8 @@ pub enum EventOp {
     Clear,
 }
 
-/// `field` discriminator for `datagridColumnPrefs.reset` (codex 7차 #1).
-/// Strategy doc lines 1355–1363 + 1434–1444 lock the three variants:
+/// `field` discriminator for `datagridColumnPrefs.reset`.
+/// Strategy doc locks the three variants:
 ///   - `widths` — reset widths only, hidden_columns preserved.
 ///   - `hiddenColumns` — reset hidden_columns only, widths preserved.
 ///   - `all` — reset both (row DELETE).
@@ -247,12 +247,13 @@ pub fn emit_state_changed<R: Runtime>(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 3 sprint-365)
+    //! Written 2026-05-16
     //!
-    //! 사유: `EventVersionRegistry::bump` 의 단조 증가 / 엔티티 분리 동작은
-    //! integration test (`tests/emit_state_changed_payload.rs`) 가 AppHandle
-    //! 경유로 검증하지만, registry 자체의 카운터 로직 (None vs Some entity_id
-    //! 의 키 동작 포함) 은 unit 단계에서 잠가야 회귀 시 emit 전에 잡힌다.
+    //! Reason: the integration test (`tests/emit_state_changed_payload.rs`)
+    //! verifies `EventVersionRegistry::bump`'s monotonic increment / entity
+    //! partitioning through an AppHandle, but the registry's own counter
+    //! logic (including the None vs Some entity_id keying) must be pinned at
+    //! the unit level so a regression is caught before the emit.
     use super::*;
 
     #[test]

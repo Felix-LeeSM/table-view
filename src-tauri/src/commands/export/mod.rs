@@ -1,8 +1,8 @@
-//! Sprint 181 — Export grid rows to CSV / TSV / SQL `INSERT` / JSON.
+//! Export grid rows to CSV / TSV / SQL `INSERT` / JSON.
 //!
 //! All format conversion lives here so the frontend never makes encoding
 //! decisions (TablePlus-equivalent deterministic output). The handler
-//! streams rows to a `BufWriter<File>` and cooperates with the Sprint 180
+//! streams rows to a `BufWriter<File>` and cooperates with the
 //! cancellation registry through an optional `export_id`.
 
 use std::fs::File;
@@ -96,7 +96,7 @@ pub async fn export_grid_rows(
     .await
 }
 
-/// Sprint 237 P5 (2026-05-08) — handler body hoisted from
+/// Handler body hoisted from
 /// `export_grid_rows` so unit tests can drive the cancel-token register
 /// → spawn_blocking → token release contract via `&AppState` without
 /// needing a `tauri::State`.
@@ -116,9 +116,9 @@ async fn export_grid_rows_inner(
         "export_grid_rows invoked"
     );
 
-    // Sprint 180 — cooperative cancellation. Sprint 237 P5+ hoist 이후
-    // commands/mod.rs 의 공통 헬퍼 사용 — `execute_query` /
-    // `query_table_data` 와 동일 lifecycle.
+    // Cooperative cancellation. Uses the shared helpers in
+    // commands/mod.rs — the same lifecycle as `execute_query` /
+    // `query_table_data`.
     let cancel_handle = register_cancel_token(state, export_id).await;
     let task_token = cancel_handle.as_ref().map(|(_, tok)| tok.clone());
 
@@ -256,17 +256,18 @@ fn temp_sibling_path(target: &Path) -> Result<PathBuf, AppError> {
     Ok(parent.join(format!("{file_name}.tmp.{}.{}", std::process::id(), nanos)))
 }
 
-// =============================================== text file (Sprint 192)
+// =============================================== text file
 
-/// AC-192-02 — Sprint 192. 단순 UTF-8 text content 한 덩어리를
-/// `target_path` 에 기록한다. `export_grid_rows` 의 row-streaming
-/// 인프라가 과한 (DDL string 은 한 string 으로 들어와 streaming /
-/// cancellation 이 의미 없음) 시나리오 — migration export, query
-/// snippet export 등 -를 위한 minimal sibling.
+/// AC-192-02 — writes one UTF-8 text content blob to
+/// `target_path`. A minimal sibling for the scenarios where the
+/// `export_grid_rows` row-streaming
+/// infrastructure is overkill (a DDL string arrives as one string, so streaming /
+/// cancellation mean nothing) — migration export, query
+/// snippet export, and the like.
 ///
-/// 실패 시 부분 파일이 남지 않도록 best-effort cleanup. 반환값은
+/// Best-effort cleanup so a failure leaves no partial file behind. Returns
 /// `ExportSummary { rows_written: 0, bytes_written: <len> }` —
-/// rows_written 은 row-단위가 아니므로 0 sentinel.
+/// `rows_written` is a 0 sentinel because the content is not row-based.
 #[tauri::command]
 pub async fn write_text_file_export(
     window: tauri::Window,
@@ -277,9 +278,9 @@ pub async fn write_text_file_export(
     write_text_file_export_inner(target_path, content).await
 }
 
-/// Sprint 237 P5 (2026-05-08) — handler body hoisted from the Tauri
-/// command wrapper. AppState 의존이 없어 시그니처에 state 파라미터가
-/// 없다 — spawn_blocking + best-effort cleanup 만 단위 테스트로 노출.
+/// Handler body hoisted from the Tauri
+/// command wrapper. It has no AppState dependency, so the signature carries no
+/// state parameter — unit tests cover only spawn_blocking + best-effort cleanup.
 async fn write_text_file_export_inner(
     target_path: PathBuf,
     content: String,
@@ -329,7 +330,7 @@ pub fn write_text_file(target_path: &Path, content: &str) -> Result<ExportSummar
     })
 }
 
-// =============================================== schema dump (Sprint 192)
+// =============================================== schema dump
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -346,9 +347,10 @@ pub enum ExportInclude {
 #[serde(rename_all = "camelCase")]
 pub struct ExportSchemaDumpOptions {
     pub include: ExportInclude,
-    /// PG cursor `FETCH FORWARD N` 의 N. 1차 권장값 1000 (메모리 vs IPC
-    /// trade-off — 너무 작으면 cursor RTT, 너무 크면 batch 한 묶음이
-    /// receiver 에서 tied up).
+    /// The N in the PG cursor's `FETCH FORWARD N`. A first-cut recommendation
+    /// of 1000 (memory vs IPC
+    /// trade-off — too small wastes cursor RTT, too large ties up a whole
+    /// batch at the receiver).
     pub batch_size: u32,
     /// Issue #1641/#1642/#1674 — INSERT-writer dialect. `mysql`/`mariadb` emit
     /// backtick identifiers + backslash-aware MySQL string escaping; `mssql`
@@ -364,9 +366,10 @@ pub struct ExportSchemaDumpOptions {
     pub dialect: DatabaseType,
 }
 
-/// 호출자가 미리 결정한 (schema, table, column_names) entry. column_names
-/// 는 source order — `serde_json::Map` 의 key order 가 alphabetical 일
-/// 수 있으므로 source order 가 별도 입력으로 필요 (`row_to_json` lookup).
+/// A caller-determined (schema, table, column_names) entry. `column_names`
+/// is in source order — since `serde_json::Map` key order can come out
+/// alphabetical, the source order is needed as a separate input (for the
+/// `row_to_json` lookup).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportDumpTable {
@@ -384,24 +387,29 @@ pub struct ExportDumpTable {
     pub column_categories: Vec<ColumnCategory>,
 }
 
-/// AC-192-05 — Sprint 192 통합. Schema/Database dump (DDL + DML) 을
-/// 한 .sql 파일로 streaming 출력. INSERT 직렬화는 `options.dialect` 로
-/// 방언화 (#1641): `mysql`/`mariadb` 는 backtick identifier + MySQL string
-/// escape, 그 외 (`postgresql`/`sqlite`) 는 ANSI 더블쿼트. RDB 가 아닌
-/// adapter 는 `stream_table_rows` default `Unsupported` 로 자동 reject.
+/// AC-192-05 — the integrated schema/database dump. Streams a
+/// Schema/Database dump (DDL + DML) into a
+/// single .sql file. INSERT serialization is dialect-shaped by
+/// `options.dialect` (#1641): `mysql`/`mariadb` use backtick identifiers + MySQL
+/// string escaping, the rest (`postgresql`/`sqlite`) use ANSI double quotes. A
+/// non-RDB
+/// adapter is rejected automatically by the `stream_table_rows` default
+/// `Unsupported`.
 ///
 /// Flow:
-///  1. `query_tokens` 에 `export_id` 등록 (Sprint 180 패턴 reuse).
-///  2. tokio `BufWriter<File>` 으로 target file 생성.
-///  3. `include in {ddl, both}` → `ddl_header` 기록.
-///  4. `include in {dml, both}` → `tables` 순회하며 각 테이블에 대해
-///     `RdbAdapter::stream_table_rows` 발사. mpsc channel 로 batch
-///     수신 → `INSERT INTO "s"."t" (cols) VALUES (...);` 한 줄/row 로
-///     formatting. multi-row VALUES 는 1차 미적용 — restore 분리 가독성.
-///  5. flush + summary 반환. 에러 시 partial file 제거.
+///  1. Register `export_id` in `query_tokens` (the cancellation-registry pattern, reused).
+///  2. Create the target file with a tokio `BufWriter<File>`.
+///  3. `include in {ddl, both}` → write `ddl_header`.
+///  4. `include in {dml, both}` → iterate `tables`, firing
+///     `RdbAdapter::stream_table_rows` per table. Batches arrive over an
+///     mpsc channel → format one
+///     `INSERT INTO "s"."t" (cols) VALUES (...);` line per row. multi-row VALUES
+///     is not applied in this first cut — it keeps restore-side readability.
+///  5. Flush + return the summary. On error the partial file is removed.
 ///
-/// Cancellation: 매 table loop / batch loop 의 시작에서 `token.is_cancelled()`
-/// 체크 + 채널 receiver drop 으로 `stream_table_rows` 도 자동 abort.
+/// Cancellation: `token.is_cancelled()` is checked at the start of each
+/// table loop / batch loop, and dropping the channel receiver aborts
+/// `stream_table_rows` automatically.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn export_schema_dump(
@@ -429,7 +437,7 @@ pub async fn export_schema_dump(
     .await
 }
 
-/// Sprint 237 P5 (2026-05-08) — handler body hoisted from
+/// Handler body hoisted from
 /// `export_schema_dump` so the cancel-token register → run_schema_dump
 /// dispatch → token release contract can be unit-tested without
 /// `tauri::State`.
@@ -452,11 +460,11 @@ async fn export_schema_dump_inner(
         "export_schema_dump invoked"
     );
 
-    // 1. cancel registration — Sprint 237 P5+ 공통 헬퍼.
+    // 1. cancel registration — shared helper.
     let cancel_handle = register_cancel_token(state, export_id).await;
     let cancel_owned: Option<CancellationToken> = cancel_handle.as_ref().map(|(_, t)| t.clone());
 
-    // 2. dump 본체.
+    // 2. The dump body.
     let result = run_schema_dump(
         state,
         connection_id,
@@ -469,7 +477,7 @@ async fn export_schema_dump_inner(
     )
     .await;
 
-    // 3. token cleanup — Sprint 237 P5+ 공통 헬퍼.
+    // 3. token cleanup — shared helper.
     release_cancel_token(state, &cancel_handle).await;
 
     // 4. Issue #1094 — `run_schema_dump` writes to a temp sibling and only
@@ -629,7 +637,7 @@ async fn stream_schema_dump(
                 }
             }
             if entry.column_names.is_empty() {
-                // 빈 테이블 (column 없음) — DDL 만 유효. dump skip.
+                // Empty table (no columns) — valid for DDL only. Skip in the dump.
                 continue;
             }
 
@@ -648,7 +656,7 @@ async fn stream_schema_dump(
                 .map_err(AppError::from)?;
             bytes_written += header.len() as u64;
 
-            // mpsc(2) — sender 가 2 batch 까지 buffer 후 receiver await.
+            // mpsc(2) — the sender buffers up to 2 batches before the receiver awaits.
             let (sender, mut receiver) = tokio::sync::mpsc::channel::<Vec<Vec<JsonValue>>>(2);
 
             let stream_fut = rdb.stream_table_rows(
@@ -699,7 +707,7 @@ async fn stream_schema_dump(
                 Ok::<(u64, u64), AppError>((local_rows, local_bytes))
             };
 
-            // try_join: stream 과 drain 이 concurrent. 한쪽 에러면 모두 abort.
+            // try_join: stream and drain run concurrently. One error aborts both.
             let (_stream_total, (drain_rows, drain_bytes)) =
                 tokio::try_join!(stream_fut, drain_fut)?;
 
@@ -708,10 +716,10 @@ async fn stream_schema_dump(
         }
     }
 
-    // Sprint 192 — DML 끝난 뒤 BIGSERIAL sequence next value 를 row max
-    // 로 reset 하는 setval 줄. include in {dml, both} + footer 비어있지
-    // 않을 때만 의미 있음. include == "ddl" 인 경우 호출자가 빈 string
-    // 을 넘긴다.
+    // After the DML, the setval lines that reset each BIGSERIAL sequence's
+    // next value to the row max. Meaningful only for include in {dml, both}
+    // with a non-empty footer. For include == "ddl" the caller passes an
+    // empty string.
     if !ddl_footer.is_empty() {
         let prefix = b"\n-- ---------- Sequence resets ----------\n";
         writer.write_all(prefix).await.map_err(AppError::from)?;

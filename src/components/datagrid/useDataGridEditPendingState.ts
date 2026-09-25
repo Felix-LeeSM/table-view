@@ -63,8 +63,8 @@ export function useDataGridEditPendingState({
 
   const entry =
     useDataGridEditStore((s) => s.entries.get(storeKey)) ?? EMPTY_ENTRY;
-  // Keep the Sprint 251 hook surface stable for component callers; the
-  // store boundary is readonly and EMPTY_ENTRY mutators are runtime-guarded.
+  // Keep the hook surface stable for component callers; the store boundary
+  // is readonly and EMPTY_ENTRY mutators are runtime-guarded.
   const pendingEdits = entry.pendingEdits as PendingEdits;
   const pendingNewRows = entry.pendingNewRows as PendingNewRows;
   const pendingDeletedRowKeys =

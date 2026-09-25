@@ -1,8 +1,8 @@
-//! 작성 2026-05-16 (Phase 1 sprint-357) — `get_initial_app_state_inner` IPC
-//! 의 wire shape 검증 (AC-357-01 / AC-357-03 / AC-357-04 / AC-357-06 /
-//! AC-357-07).
+//! Written 2026-05-16 — verifies the wire shape of the
+//! `get_initial_app_state_inner` IPC (AC-357-01 / AC-357-03 / AC-357-04 /
+//! AC-357-06 / AC-357-07).
 //!
-//! strategy doc F.2 (line 911–998) 와 byte-equivalent shape:
+//! Byte-equivalent with strategy doc F.2 (line 911–998):
 //!   {
 //!     schemaVersion: 1,
 //!     snapshotVersion: number,
@@ -12,15 +12,17 @@
 //!     runtime: { activeStatuses }
 //!   }
 //!
-//! top-level 키 집합은 아래 `test_snapshot_top_level_key_set_is_closed` 의
-//! `assert_eq!` 가 갖는다 — 여기 개수를 적으면 다음 필드 추가가 이 줄을 낡게
-//! 만든다 (#2183 이 `connectionsRestoredFromBackup` 을 더할 때 이 줄은 이미
-//! 실제 키 수와 어긋나 있었다). boot non-critical (favorites / queryHistory /
-//! schemaCache / datagrid_prefs) 은 미포함 — lazy IPC 로 mount 시 fetch.
+//! The `assert_eq!` in `test_snapshot_top_level_key_set_is_closed` below owns
+//! the top-level key set — writing the count here would let the next added
+//! field make this line stale (when #2183 added
+//! `connectionsRestoredFromBackup`, this line was already out of step with the
+//! real key count). Boot non-critical stores (favorites / queryHistory /
+//! schemaCache / datagrid_prefs) are not included — a lazy IPC fetches them on
+//! mount.
 //!
-//! `_inner` 시그니처: (pool, window_label, status_map) → 직렬화 가능한 JSON value
-//! — Tauri command 의 wrapper 는 `window.label()` + `state.connection_status`
-//! 에서 두 인자를 추출.
+//! `_inner` signature: (pool, window_label, status_map) → a serializable JSON
+//! value — the Tauri command wrapper pulls the two arguments out of
+//! `window.label()` + `state.connection_status`.
 
 use serde_json::Value;
 use serial_test::serial;
@@ -47,8 +49,8 @@ fn empty_status() -> HashMap<String, ConnectionStatus> {
 }
 
 // ----------------------------------------------------------------------
-// AC-357-01 — top-level 키 집합이 닫혀 있는지. Empty DB 시점에도 모든 키가
-// 존재해야 하고, 목록 밖의 키는 없어야 한다.
+// AC-357-01 — is the top-level key set closed? Every key must exist even on an
+// empty DB, and no key outside the list may appear.
 // ----------------------------------------------------------------------
 #[tokio::test]
 #[serial]
@@ -60,14 +62,16 @@ async fn test_snapshot_top_level_key_set_is_closed() {
     let json = serde_json::to_value(&snap).unwrap();
     let obj = json.as_object().expect("top-level must be an object");
 
-    // 집합 비교 하나로 둔다 — 빠진 키와 목록 밖 키를 같은 단언이 잡고, 길이
-    // 리터럴을 따로 두지 않아 필드를 더할 때 갱신할 자리가 하나다.
+    // One set comparison — the same assertion catches a missing key and a key
+    // outside the list, and keeping no separate length literal leaves a single
+    // place to update when a field is added.
     //
-    // `recovered` (v0.3.1) 는 boot 자동 복구(quarantine + fresh) 발생 여부,
-    // `connectionsRestoredFromBackup` (#2183) 은 connections.json 이 없어서
-    // 백업으로 되살렸고 그 백업에 연결이나 그룹이 있었는지다. 두 사건은
-    // 사용자에게 반대되는 말을 하고 다른 파일을 가리켜서 키가 따로다. 둘 다
-    // runtime meta 라 schemaVersion 은 1 유지.
+    // `recovered` (v0.3.1) says whether boot auto-recovery (quarantine + fresh)
+    // happened; `connectionsRestoredFromBackup` (#2183) says whether
+    // connections.json was missing, got restored from the backup, and that
+    // backup held connections or groups. The two events say opposite things to
+    // the user and point at different files, so they are separate keys. Both are
+    // runtime meta, so schemaVersion stays 1.
     let keys: std::collections::BTreeSet<&str> = obj.keys().map(String::as_str).collect();
     assert_eq!(
         keys,
@@ -112,8 +116,9 @@ async fn test_snapshot_top_level_key_set_is_closed() {
     cleanup();
 }
 
-// AC-357-01 — boot non-critical store 미포함 (favorites / queryHistory /
-// schemaCache / datagrid_prefs). lazy IPC 로 mount 시 fetch.
+// AC-357-01 — boot non-critical stores are not included (favorites /
+// queryHistory / schemaCache / datagrid_prefs). A lazy IPC fetches them on
+// mount.
 #[tokio::test]
 #[serial]
 async fn test_snapshot_omits_lazy_loaded_stores() {
@@ -152,7 +157,7 @@ async fn test_snapshot_schema_version_is_one() {
 }
 
 // ----------------------------------------------------------------------
-// AC-357-06 — empty DB 시 default values + partial=false + activeStatuses={}.
+// AC-357-06 — on an empty DB: default values + partial=false + activeStatuses={}.
 // ----------------------------------------------------------------------
 #[tokio::test]
 #[serial]
@@ -186,13 +191,14 @@ async fn test_snapshot_empty_db_defaults_partial_false() {
     assert_eq!(mru["lastUsedConnectionId"], Value::Null);
 
     // theme — default { themeId: "slate", mode: "system" }
-    // Wave 9.5 (2026-05-16) — 회귀 2 contract: backend default 의 theme_id 가
-    // frontend `DEFAULT_THEME_ID` ("slate") 와 일치해야 한다.
+    // Contract: the backend default's theme_id must match the frontend
+    // `DEFAULT_THEME_ID` ("slate").
     let theme = stores["theme"].as_object().unwrap();
     assert_eq!(theme["themeId"], "slate");
     assert_eq!(theme["mode"], "system");
 
-    // safeMode — default { mode: "warn" } (#1113: 신규 설치 실효 기본값).
+    // safeMode — default { mode: "warn" } (#1113: the effective default for a
+    // new install).
     let safe = stores["safeMode"].as_object().unwrap();
     assert_eq!(safe["mode"], "warn");
 
@@ -208,14 +214,14 @@ async fn test_snapshot_empty_db_defaults_partial_false() {
 
 // ----------------------------------------------------------------------
 // AC-357-03 — window scope. launcher → byConnectionId {}; workspace-conn-1 →
-// 그 connection 만 노출.
+// exposes only that connection.
 // ----------------------------------------------------------------------
 #[tokio::test]
 #[serial]
 async fn test_snapshot_launcher_window_scope_returns_empty_workspaces() {
     let (_dir, pool) = setup().await;
 
-    // Seed: 두 connection 의 workspace row 가 존재해도 launcher 에서는 안 보임.
+    // Seed: even with workspace rows for two connections, launcher shows none.
     let now = 1_700_000_000_000i64;
     sqlx::query(
         "INSERT INTO workspaces(connection_id, db_name, active_tab_id, tabs_json, \
@@ -315,8 +321,8 @@ async fn test_snapshot_workspace_window_scope_returns_only_its_connection() {
 }
 
 // ----------------------------------------------------------------------
-// AC-357-04 — `snapshotVersion` 단조 증가. 같은 process 안에서 두 번 호출
-// 시 s2.snapshotVersion > s1.snapshotVersion.
+// AC-357-04 — `snapshotVersion` increases monotonically. Two calls in the same
+// process give s2.snapshotVersion > s1.snapshotVersion.
 // ----------------------------------------------------------------------
 #[tokio::test]
 #[serial]
@@ -360,7 +366,7 @@ async fn test_snapshot_version_is_monotonically_increasing() {
 }
 
 // ----------------------------------------------------------------------
-// AC-357-01 — runtime.activeStatuses 가 in-memory status map 을 그대로 반영.
+// AC-357-01 — runtime.activeStatuses reflects the in-memory status map as-is.
 // ----------------------------------------------------------------------
 #[tokio::test]
 #[serial]
@@ -368,9 +374,9 @@ async fn test_snapshot_runtime_active_statuses_reflects_status_map() {
     let (_dir, pool) = setup().await;
 
     let mut statuses = HashMap::new();
-    // Sprint 364 (2026-05-16) — `Connected` 가 struct variant 로 승격됐다.
-    // `active_db: None` 으로 기록해야 snapshot 안의 wire shape 가
-    // `{type:"connected"}` (필드 부재) 그대로 유지된다.
+    // `Connected` is a struct variant, so it has to be recorded with
+    // `active_db: None` for the wire shape inside the snapshot to stay
+    // `{type:"connected"}` (field absent).
     statuses.insert(
         "conn-1".to_string(),
         ConnectionStatus::Connected { active_db: None },
@@ -385,9 +391,9 @@ async fn test_snapshot_runtime_active_statuses_reflects_status_map() {
     assert_eq!(runtime.len(), 2);
     assert!(runtime.contains_key("conn-1"));
     assert!(runtime.contains_key("conn-2"));
-    // ConnectionStatus 의 serde 형태 (tag="type", content="message") 가 그대로
-    // 전달되어야 함. Phase 1 시점의 enum 은 `{type:"connected"} / {type:"disconnected"} /
-    // {type:"error", message:"..."}` 세 variant.
+    // `ConnectionStatus`'s serde form (tag="type", content="message") must pass
+    // through unchanged: `{type:"connected"}` / `{type:"disconnected"}` /
+    // `{type:"error", message:"..."}`.
     assert_eq!(runtime["conn-1"]["type"], Value::String("connected".into()));
     assert_eq!(
         runtime["conn-2"]["type"],
@@ -398,7 +404,7 @@ async fn test_snapshot_runtime_active_statuses_reflects_status_map() {
 }
 
 // ----------------------------------------------------------------------
-// AC-357-01 — seeded DB → stores 가 실제 SQLite row 를 반영.
+// AC-357-01 — seeded DB → stores reflect the real SQLite rows.
 // ----------------------------------------------------------------------
 #[tokio::test]
 #[serial]
@@ -461,7 +467,8 @@ async fn test_snapshot_returns_seeded_connections_and_groups() {
     assert_eq!(groups.len(), 1, "expected 1 group");
     assert_eq!(items[0]["id"], Value::String("c1".into()));
     assert_eq!(items[0]["name"], Value::String("MyPG".into()));
-    // password 는 has_password boolean 으로만 노출 — plaintext / ciphertext 없음.
+    // password is exposed only as the has_password boolean — no plaintext /
+    // ciphertext.
     assert!(items[0].get("password").is_none());
     assert!(items[0].get("password_enc").is_none());
     // ConnectionConfigPublic wire shape is camelCase.
@@ -473,7 +480,8 @@ async fn test_snapshot_returns_seeded_connections_and_groups() {
 }
 
 // ----------------------------------------------------------------------
-// AC-357-01 — mru 가 last_used DESC 정렬 + lastUsedConnectionId 가 맨 위.
+// AC-357-01 — mru is sorted last_used DESC and lastUsedConnectionId is the top
+// one.
 // ----------------------------------------------------------------------
 #[tokio::test]
 #[serial]
@@ -504,8 +512,8 @@ async fn test_snapshot_mru_orders_recent_descending() {
 }
 
 // ----------------------------------------------------------------------
-// AC-357-01 — settings 의 theme / safe_mode 가 stores.theme / stores.safeMode
-// 로 노출.
+// AC-357-01 — settings' theme / safe_mode are exposed as stores.theme /
+// stores.safeMode.
 // ----------------------------------------------------------------------
 #[tokio::test]
 #[serial]
@@ -534,7 +542,8 @@ async fn test_snapshot_reads_theme_and_safe_mode_from_settings() {
     let json = serde_json::to_value(&snap).unwrap();
     assert_eq!(json["stores"]["theme"]["themeId"], "dracula");
     assert_eq!(json["stores"]["theme"]["mode"], "dark");
-    // 영속된 유효 3-tier 값은 wire 로 그대로 round-trip (#1113 하위 호환).
+    // A persisted valid 3-tier value round-trips over the wire unchanged
+    // (#1113 backward compatibility).
     assert_eq!(json["stores"]["safeMode"]["mode"], "strict");
     cleanup();
 }

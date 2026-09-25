@@ -1,27 +1,33 @@
-//! Sprint 369 (Phase 4) — `datagrid_column_prefs` SQLite SOT IPC.
+//! `datagrid_column_prefs` SQLite SOT IPC.
 //!
-//! 3 IPC, 모두 SQLite-only (legacy LS 는 boot 시 drop, ROI 낮아 import 0):
-//!   - `set_datagrid_prefs` — partial patch. widths 또는 hiddenColumns 중
-//!     하나 이상 필수, 둘 다 None 이면 `AppError::Validation`. 미포함 필드는
-//!     row 의 기존 값 유지. row 가 없으면 INSERT (미포함 필드 default
+//! 3 IPC, all SQLite-only (legacy localStorage is dropped at boot; low ROI
+//! meant no import):
+//!   - `set_datagrid_prefs` — partial patch. At least one of widths or
+//!     hiddenColumns is required; if both are None the call fails with
+//!     `AppError::Validation`. Fields not included keep the row's current
+//!     value. A missing row is INSERTed (absent fields get the default
 //!     `'{}'`/`'[]'`).
-//!   - `get_datagrid_prefs` — row 없음 시
-//!     `{ widths: {}, hiddenColumns: [], updatedAt: null }`. UI 가 exists
-//!     check 불필요.
-//!   - `reset_datagrid_prefs` — field 별 분기:
+//!   - `get_datagrid_prefs` — when the row is missing, returns
+//!     `{ widths: {}, hiddenColumns: [], updatedAt: null }`. The UI needs no
+//!     exists check.
+//!   - `reset_datagrid_prefs` — per-field dispatch:
 //!       * `widths`         → UPDATE widths_json = '{}'
 //!       * `hiddenColumns`  → UPDATE hidden_columns_json = '[]'
 //!       * `all`            → DELETE row
 //!
-//!     codex 7차 #1 — 두 affordance 독립; widths reset 이 hidden 풀거나 반대 0.
+//!     The two affordances are independent; a widths reset never clears
+//!     hidden columns or vice versa.
 //!
-//! `legacy_imported != Done` 이면 모든 IPC 가 `AppError::LegacyImportInProgress`
-//! 로 reject. Strategy 라인 1189.
+//! When `legacy_imported != Done` every IPC is rejected with
+//! `AppError::LegacyImportInProgress`. Strategy line 1189.
 //!
-//! event emit (datagridColumnPrefs / update / reset) 은 Tauri command 의
-//! AppHandle 경유로 후속 sprint 가 wiring — `*_inner` 함수는 SQLite I/O 만
-//! 책임. integration 은 `tests/datagrid_prefs_*` 3 파일이 SQLite 상태를
-//! 직접 검사.
+//! The `*_inner` functions are responsible only for SQLite I/O: this module
+//! never calls `emit_state_changed`, even though
+//! `EventDomain::DatagridColumnPrefs` and `ResetField` exist in
+//! `src/events.rs` — the emitters are `commands/history.rs`,
+//! `commands/persist_mru.rs` and `commands/persist_settings.rs`. Integration
+//! is covered by the three `tests/datagrid_prefs_*` files, which inspect the
+//! SQLite state directly.
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
@@ -34,9 +40,10 @@ use tauri::State;
 // Wire types (strategy doc lines 692–727).
 // ---------------------------------------------------------------------------
 
-/// 5-tuple PK matching `datagrid_column_prefs` schema. `db_name` /
-/// `namespace` 는 RDB 와 Mongo 가 서로 다르게 채움 — codex 7차 #2 동의어 통일
-/// 결정에 따라 paradigm 별 의미가 다르지만 wire 위치는 같다.
+/// 5-tuple PK matching `datagrid_column_prefs` schema. RDB and Mongo fill
+/// `db_name` / `namespace` differently — under the synonym-unification
+/// decision the meaning differs per paradigm, but the wire position is the
+/// same.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ColumnPrefsPk {
@@ -47,26 +54,27 @@ pub struct ColumnPrefsPk {
     pub table_name: String,
 }
 
-/// Partial patch — `widths` 또는 `hidden_columns` 중 하나 이상이 `Some` 이어야
-/// 한다. 둘 다 `None` 이면 `AppError::Validation` 400 (codex 8차 #5).
+/// Partial patch — at least one of `widths` / `hidden_columns` must be `Some`.
+/// If both are `None` the call fails with `AppError::Validation` 400.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetDatagridPrefsRequest {
     #[serde(flatten)]
     pub pk: ColumnPrefsPk,
-    /// `Record<string, number>` — column id → px width. `Some({})` 는 명시적
-    /// 빈 widths (reset 의도). `None` 은 "이 IPC 에선 widths 안 건드림".
+    /// `Record<string, number>` — column id → px width. `Some({})` means
+    /// explicitly empty widths (a reset). `None` means "this IPC does not
+    /// touch widths".
     #[serde(default)]
     pub widths: Option<serde_json::Value>,
-    /// `string[]` — 숨김 column id 목록. `Some([])` 는 명시적 비움. `None` 은
-    /// "이 IPC 에선 hidden 안 건드림".
+    /// `string[]` — list of hidden column ids. `Some([])` means explicitly
+    /// cleared. `None` means "this IPC does not touch hidden".
     #[serde(default)]
     pub hidden_columns: Option<Vec<String>>,
 }
 
-/// `get_datagrid_prefs` 응답. row 가 없으면 `widths = {}`, `hidden_columns = []`,
-/// `updated_at = None` 으로 채워서 반환 — 호출자가 별도의 "exists" check 를
-/// 피할 수 있게 (strategy 720).
+/// `get_datagrid_prefs` response. When the row is missing it returns
+/// `widths = {}`, `hidden_columns = []`, `updated_at = None` so the caller can
+/// skip a separate "exists" check (strategy 720).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GetDatagridPrefsResponse {
@@ -75,7 +83,7 @@ pub struct GetDatagridPrefsResponse {
     pub updated_at: Option<i64>,
 }
 
-/// Field-scoped reset (codex 7차 #1).
+/// Field-scoped reset.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum ResetField {
@@ -173,14 +181,15 @@ pub async fn set_datagrid_prefs(
 }
 
 // ---------------------------------------------------------------------------
-// `get_datagrid_prefs` — row 없음 시 default 응답.
+// `get_datagrid_prefs` — default response when the row is missing.
 // ---------------------------------------------------------------------------
 
 pub async fn get_datagrid_prefs_inner(
     pool: &SqlitePool,
     pk: ColumnPrefsPk,
 ) -> Result<GetDatagridPrefsResponse, AppError> {
-    // read 는 guard 적용하지 않음 — strategy line 1216 ("예외: ... get_* read")
+    // Reads are not guarded — strategy line 1216 lists `get_*` reads as an
+    // exception.
     let row: Option<(String, String, i64)> = sqlx::query_as(
         "SELECT widths_json, hidden_columns_json, updated_at \
          FROM datagrid_column_prefs \
@@ -225,7 +234,7 @@ pub async fn get_datagrid_prefs(
 }
 
 // ---------------------------------------------------------------------------
-// `reset_datagrid_prefs` — field 별 분기.
+// `reset_datagrid_prefs` — per-field dispatch.
 // ---------------------------------------------------------------------------
 
 pub async fn reset_datagrid_prefs_inner(
@@ -242,7 +251,8 @@ pub async fn reset_datagrid_prefs_inner(
     let pk = &req.pk;
     match req.field {
         ResetField::Widths => {
-            // widths_json = '{}', hidden_columns_json 유지. row 가 없으면 no-op.
+            // widths_json = '{}', hidden_columns_json kept. No-op when the
+            // row is missing.
             sqlx::query(
                 "UPDATE datagrid_column_prefs \
                  SET widths_json = '{}', updated_at = ? \
@@ -303,11 +313,12 @@ pub async fn reset_datagrid_prefs(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 4 sprint-369) — `--lib` coverage smoke.
+    //! Written 2026-05-16 — `--lib` coverage smoke.
     //!
-    //! 통합 시나리오 (partial patch / field reset / get default) 는
-    //! `tests/datagrid_prefs_*` 3 파일이 담당. 본 inline 은 wire type 의
-    //! camelCase serde + ResetField rename 만 잠근다.
+    //! The integration scenarios (partial patch / field reset / get default)
+    //! are owned by the three `tests/datagrid_prefs_*` files. This inline
+    //! module locks only the camelCase serde of the wire types and the
+    //! `ResetField` rename.
 
     use super::*;
 
@@ -355,13 +366,14 @@ mod tests {
     }
 
     // ---------------------------------------------------------------------
-    // 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    // Written 2026-05-17 — baseline cleanup.
     //
-    // baseline 측정 set 에 `tests/datagrid_prefs_*` 가 포함되지 않아 본 모듈의
-    // _inner 함수가 22% 만 cover. inline 으로 4 happy + 1 reject path 를
-    // cover 한다. 통합 시나리오 (sprint-369 의 AC 매핑) 는 `tests/datagrid_*`
-    // 가 별도 책임 — 본 inline 은 baseline 측정 set 에서 `--lib` 경로로 직접
-    // 도달.
+    // The baseline measurement set does not include `tests/datagrid_prefs_*`,
+    // so before these inline tests landed it covered only 22% of this
+    // module's `_inner` functions. The tests below cover the happy paths plus
+    // the reject path. The integration scenarios (the AC mapping) stay the
+    // responsibility of `tests/datagrid_*` — this inline module is reached
+    // directly through the `--lib` path of the baseline measurement set.
     // ---------------------------------------------------------------------
     use crate::storage::local;
     use crate::storage::meta::{set_legacy_import_state, LegacyImportState};

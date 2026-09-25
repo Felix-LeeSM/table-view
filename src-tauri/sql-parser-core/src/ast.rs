@@ -1,9 +1,9 @@
-//! AST types for the sprint-385 / sprint-391 grammar slices.
+//! AST types for the SQL grammar slices.
 //!
-//! Grammar (sprint-385):
+//! Grammar (core SELECT):
 //!   `SELECT <columns> FROM <table> [WHERE <ident> <op> <literal>]`
 //!
-//! Grammar (sprint-391 — DDL destructive):
+//! Grammar (DDL destructive):
 //!   `DROP <object-type> [IF EXISTS] <name> [CASCADE|RESTRICT]`
 //!   `TRUNCATE [TABLE] <name> [RESTART|CONTINUE IDENTITY] [CASCADE|RESTRICT]`
 //!   `ALTER TABLE <name> DROP COLUMN [IF EXISTS] <col> [CASCADE|RESTRICT]`
@@ -30,64 +30,62 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "kind", rename_all = "kebab-case")]
 #[allow(clippy::large_enum_variant)]
 pub enum ParseResult {
-    /// A successfully parsed SELECT statement (sprint-385 grammar slice).
+    /// A successfully parsed SELECT statement (core grammar slice).
     Select(SelectStatement),
-    /// `DROP <object-type> …` (sprint-391).
+    /// `DROP <object-type> …`.
     Drop(DropStatement),
-    /// `TRUNCATE [TABLE] …` (sprint-391).
+    /// `TRUNCATE [TABLE] …`.
     Truncate(TruncateStatement),
-    /// `ALTER TABLE <name> <action>` — sprint-391 covers DROP-only
-    /// actions; sprint-394 widens with ADD COLUMN / ADD CONSTRAINT /
-    /// RENAME TO / RENAME COLUMN.
+    /// `ALTER TABLE <name> <action>` — only the DROP actions are covered.
+    /// ADD COLUMN / ADD CONSTRAINT / RENAME TO / RENAME COLUMN are not.
     AlterTable(AlterTableStatement),
-    /// Sprint-394 — `CREATE TABLE [IF NOT EXISTS] <name> (cols, table-
+    /// `CREATE TABLE [IF NOT EXISTS] <name> (cols, table-
     /// constraints)`. TEMPORARY / UNLOGGED / MATERIALIZED variants are
-    /// rejected as `SyntaxError` (out of scope this sprint).
+    /// rejected as `SyntaxError` (out of scope).
     CreateTable(CreateTableStatement),
-    /// Sprint-394 — `CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON
-    /// table (cols)`. Functional / expression indexes are deferred to
-    /// a future sprint.
+    /// `CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON
+    /// table (cols)`. Functional / expression indexes are not supported.
     CreateIndex(CreateIndexStatement),
-    /// Sprint-394 — `CREATE [OR REPLACE] VIEW name AS <select-stmt>`.
+    /// `CREATE [OR REPLACE] VIEW name AS <select-stmt>`.
     /// The view body may be a `SelectStatement` or `WithStatement`.
     CreateView(CreateViewStatement),
-    /// `INSERT INTO <table> …` (sprint-392).
+    /// `INSERT INTO <table> …`.
     Insert(InsertStatement),
     /// MySQL/MariaDB `CALL proc(...)`. Stored routine bodies and
     /// DELIMITER scripting remain out of scope.
     Call(CallStatement),
-    /// `UPDATE <table> SET …` (sprint-392).
+    /// `UPDATE <table> SET …`.
     Update(UpdateStatement),
-    /// `DELETE FROM <table> …` (sprint-392).
+    /// `DELETE FROM <table> …`.
     Delete(DeleteStatement),
-    /// Sprint-484 — narrow PostgreSQL `MERGE INTO ... USING ... ON ...`
+    /// Narrow PostgreSQL `MERGE INTO ... USING ... ON ...`
     /// with UPDATE / INSERT / DO NOTHING actions.
     Merge(MergeStatement),
-    /// Sprint-393b — `WITH [RECURSIVE] cte AS (...) <inner-statement>`. The
+    /// `WITH [RECURSIVE] cte AS (...) <inner-statement>`. The
     /// `inner_statement` slot is one of SELECT / INSERT / UPDATE / DELETE —
-    /// nested `WITH` is rejected at parse time (out of scope this sprint).
+    /// nested `WITH` is rejected at parse time (out of scope).
     With(WithStatement),
-    /// Sprint-395 — `GRANT priv ON object TO role [WITH GRANT OPTION]`. Maps
+    /// `GRANT priv ON object TO role [WITH GRANT OPTION]`. Maps
     /// to the `permission-change` sqlSafety classification.
     Grant(GrantStatement),
-    /// Sprint-395 — `REVOKE [GRANT OPTION FOR] priv ON object FROM role
+    /// `REVOKE [GRANT OPTION FOR] priv ON object FROM role
     /// [CASCADE|RESTRICT]`.
     Revoke(RevokeStatement),
-    /// Sprint-395 — `EXPLAIN [ANALYZE] [VERBOSE] [(option …)] inner-stmt`.
+    /// `EXPLAIN [ANALYZE] [VERBOSE] [(option …)] inner-stmt`.
     /// The `inner_statement` slot carries the wrapped statement; the safety
     /// classifier inherits the inner statement's `kind` / `severity` /
     /// `reasons` (decision D1).
     Explain(ExplainStatement),
-    /// Sprint-395 — `SHOW <variable> | SHOW TABLES [IN schema] | SHOW
+    /// `SHOW <variable> | SHOW TABLES [IN schema] | SHOW
     /// DATABASES | SHOW SCHEMAS`.
     Show(ShowStatement),
-    /// Sprint-395 — `SET [SESSION|LOCAL] <name> {TO|=} <value>` where value
+    /// `SET [SESSION|LOCAL] <name> {TO|=} <value>` where value
     /// is literal / DEFAULT / bare identifier.
     SetStmt(SetStatement),
-    /// Sprint-395 — `COPY {table | (SELECT …)} [(cols)] FROM/TO {file |
+    /// `COPY {table | (SELECT …)} [(cols)] FROM/TO {file |
     /// STDIN | STDOUT} [WITH (option …)]`.
     Copy(CopyStatement),
-    /// Sprint-395 — `COMMENT ON <object-kind> <ident> IS <string-or-NULL>`.
+    /// `COMMENT ON <object-kind> <ident> IS <string-or-NULL>`.
     Comment(CommentStatement),
     /// A parse / lex error. `kind` discriminator is one of:
     /// `"lex-error"`, `"unsupported-statement"`, `"syntax-error"`,
@@ -95,7 +93,7 @@ pub enum ParseResult {
     Error(ParseError),
 }
 
-/// Sprint-393b — `WITH [RECURSIVE] <cte-list> <inner-statement>`. The
+/// `WITH [RECURSIVE] <cte-list> <inner-statement>`. The
 /// inner statement is one of SELECT / INSERT / UPDATE / DELETE; the
 /// `Box` avoids the recursive-size issue without forcing every callsite
 /// into an indirection.
@@ -106,7 +104,7 @@ pub struct WithStatement {
     pub inner_statement: Box<WithInner>,
 }
 
-/// Sprint-393b — the four statement variants accepted as the inner body
+/// The four statement variants accepted as the inner body
 /// of a `WITH`. Nested `WITH` is out of scope (rejected as SyntaxError).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -118,7 +116,7 @@ pub enum WithInner {
     Delete(DeleteStatement),
 }
 
-/// Sprint-393b — a single CTE entry in the `WITH ... AS (...)` list.
+/// A single CTE entry in the `WITH ... AS (...)` list.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CteDefinition {
     pub name: String,
@@ -127,12 +125,12 @@ pub struct CteDefinition {
     pub body: SelectStatement,
 }
 
-/// Sprint-385 narrow SELECT had `table: String` + `where: Option<WhereClause>`.
-/// Sprint-393a widens the shape to support multi-table FROM, JOIN, the
+/// The original narrow SELECT had `table: String` + `where: Option<WhereClause>`.
+/// The widened shape supports multi-table FROM, JOIN, the
 /// widened WHERE expression (column-column / BETWEEN / LIKE / ILIKE),
 /// GROUP BY, HAVING, ORDER BY, and LIMIT/OFFSET. The top-level `kind`
 /// discriminator stays `"select"` so existing callers that only branch on
-/// `kind` need no change. New fields are additive: sprint-385 inputs
+/// `kind` need no change. New fields are additive: narrow-grammar inputs
 /// continue to parse — their FROM is a single-item list, their other new
 /// slots are absent / empty.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -150,7 +148,7 @@ pub struct SelectStatement {
     /// `ORDER BY` items. Empty when the clause is absent.
     pub order_by: Vec<OrderingItem>,
     pub limit: Option<LimitClause>,
-    /// Sprint-393b — chained set operations (`UNION` / `INTERSECT` /
+    /// Chained set operations (`UNION` / `INTERSECT` /
     /// `EXCEPT`). Empty when the SELECT is not part of a set-operation
     /// chain. Entries are stored in left-to-right input order; the
     /// serializer/parser MUST NOT normalize order — set operations are
@@ -158,7 +156,7 @@ pub struct SelectStatement {
     pub set_operation: Vec<SetOperationEntry>,
 }
 
-/// Sprint-393b — one chained set operation. The first SELECT in a chain
+/// One chained set operation. The first SELECT in a chain
 /// is the root `SelectStatement`; subsequent operators + right-hand
 /// SELECTs are recorded here in input order.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -180,9 +178,9 @@ pub enum SetOperator {
 /// this item attaches to the previous item — `Comma` for the first item
 /// (and for any later comma-separated item), or one of the JOIN variants.
 ///
-/// Sprint-385/393a kept the `schema` + `table` slots at the top level. The
-/// sprint-393a tests inspect those slots directly via `item.table` /
-/// `item.schema`. Sprint-393b *adds* support for subquery FROM items —
+/// Earlier revisions kept the `schema` + `table` slots at the top level. The
+/// existing tests inspect those slots directly via `item.table` /
+/// `item.schema`. Subquery FROM items are *added* on top —
 /// `FROM (SELECT ...) AS alias` — by surfacing the same data through a
 /// discriminated `source` slot AND keeping the legacy `schema` + `table`
 /// slots populated for table-source items (empty string for `table` when
@@ -195,22 +193,22 @@ pub struct FromItem {
     /// table name or for a subquery FROM item.
     pub schema: Option<String>,
     /// Table identifier for a table source; empty string when the source
-    /// is a subquery (the legacy `table` field is kept for the sprint-
-    /// 393a tests that index `from[i].table` directly).
+    /// is a subquery (the legacy `table` field is kept for the tests that
+    /// index `from[i].table` directly).
     pub table: String,
     /// `AS alias` or bare identifier alias. `None` when omitted.
     /// Subquery FROM items REQUIRE an alias — a missing alias is a
     /// `SyntaxError` (AC-393b-Q06).
     pub alias: Option<String>,
     pub join: JoinDescriptor,
-    /// Sprint-393b — discriminated FROM-item source. For a plain table
+    /// Discriminated FROM-item source. For a plain table
     /// reference, this carries `kind="table"` with `schema` + `table`
     /// duplicated from the top-level slots; for a parenthesized SELECT,
     /// `kind="subquery"` with the nested SELECT body.
     pub source: FromSource,
 }
 
-/// Sprint-393b — FROM-item source. The variant tag is the same shape
+/// FROM-item source. The variant tag is the same shape
 /// the spec mandates for downstream consumers (`source.kind === "table"`
 /// vs `"subquery"`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -298,12 +296,12 @@ pub struct LimitClause {
     pub offset: Option<InsertValue>,
 }
 
-/// Sprint-393a widened expression — used by SELECT's `WHERE`, by `HAVING`,
-/// and by any JOIN `ON` predicate. The DML (`UPDATE` / `DELETE`) WHERE
-/// continues to use the narrower `WhereExpr` (sprint-392). 393b unifies
-/// the two.
+/// Widened expression — used by SELECT's `WHERE`, by `HAVING`, by any JOIN
+/// `ON` predicate, and by the DML (`UPDATE` / `DELETE`) WHERE. It replaced
+/// the narrower `WhereExpr`, which is still exported but no longer held by
+/// any statement.
 ///
-/// The variant set adds three new primaries over sprint-392:
+/// The variant set adds three new primaries over the narrow form:
 /// - `Comparison` — column-op-literal/placeholder (existing semantics
 ///   widened so the left side records a `ColumnRef` instead of a bare
 ///   `String`; qualified columns `x.a > 10` are now first-class).
@@ -326,7 +324,7 @@ pub enum SelectExpr {
         op: CompareOp,
         right: ColumnRef,
     },
-    /// Sprint-486 — bounded PostgreSQL symbolic operators from extension
+    /// Bounded PostgreSQL symbolic operators from extension
     /// surfaces (`pg_trgm` `%`, PostGIS `&&`, pgvector operators, JSON
     /// operators). The parser preserves the operator text but does not
     /// semantically validate installed extensions or precedence.
@@ -335,7 +333,7 @@ pub enum SelectExpr {
         operator: String,
         right: ExtensionOperatorOperand,
     },
-    /// Sprint-393b — `col op (SELECT ...)` — column-vs-scalar-subquery
+    /// `col op (SELECT ...)` — column-vs-scalar-subquery
     /// comparison. The right-hand side is a parenthesized SELECT used as
     /// a scalar.
     ScalarSubqueryComparison {
@@ -370,13 +368,13 @@ pub enum SelectExpr {
     IsNotNull {
         column: ColumnRef,
     },
-    /// Sprint-393b — `column IN (literal, literal, ...)`. The negated
+    /// `column IN (literal, literal, ...)`. The negated
     /// `NOT IN` form wraps this primary in `Not`.
     InList {
         column: ColumnRef,
         values: Vec<InsertValue>,
     },
-    /// Sprint-393b — `column IN (SELECT ...)`. Distinct AST variant from
+    /// `column IN (SELECT ...)`. Distinct AST variant from
     /// `InList` so downstream tooling can branch on intent (subquery
     /// IN-membership vs. literal IN-list); the parser routes by lookahead
     /// on the first token inside the parentheses.
@@ -384,31 +382,31 @@ pub enum SelectExpr {
         column: ColumnRef,
         statement: Box<SelectStatement>,
     },
-    /// Sprint-393b — `EXISTS (SELECT ...)`. The negated `NOT EXISTS` form
+    /// `EXISTS (SELECT ...)`. The negated `NOT EXISTS` form
     /// wraps this primary in `Not`.
     Exists {
         statement: Box<SelectStatement>,
     },
-    /// Sprint-393b — `(SELECT ...)` used as a scalar value in a SELECT
+    /// `(SELECT ...)` used as a scalar value in a SELECT
     /// list / comparison RHS. The variant carries the nested SELECT body
     /// only — column count / row count are runtime-checked, not at parse.
     ScalarSubquery {
         statement: Box<SelectStatement>,
     },
-    /// Sprint-482/483 — `func(args)` in SELECT-list and simple predicate
+    /// `func(args)` in SELECT-list and simple predicate
     /// expression positions without `OVER`.
     FunctionCall {
         name: String,
         arguments: Vec<WindowArgument>,
     },
-    /// Sprint-393b — `func(args) OVER (...)`. The arg list, partition-by,
+    /// `func(args) OVER (...)`. The arg list, partition-by,
     /// order-by, and frame are populated per the OVER clause body.
     WindowFunction {
         name: String,
         arguments: Vec<WindowArgument>,
         over: OverClause,
     },
-    /// Sprint-393b — `CASE [operand] WHEN cond THEN result ... [ELSE
+    /// `CASE [operand] WHEN cond THEN result ... [ELSE
     /// fallback] END`. The simple-CASE form populates `operand`; the
     /// searched-CASE form leaves it null.
     Case {
@@ -416,7 +414,7 @@ pub enum SelectExpr {
         when_clauses: Vec<CaseWhen>,
         else_clause: Option<Box<SelectExpr>>,
     },
-    /// Sprint-393b — bare literal expression. Sprint-393a's expression
+    /// Bare literal expression. The earlier expression
     /// grammar required every primary to start with a column reference,
     /// which makes `CASE WHEN x.a > 0 THEN 'pos' ELSE 'neg' END`
     /// un-parseable (the THEN/ELSE result is a literal). This variant
@@ -425,14 +423,14 @@ pub enum SelectExpr {
     Literal {
         value: InsertValue,
     },
-    /// Sprint-393b — bare column-reference expression (the value of a
+    /// Bare column-reference expression (the value of a
     /// column). Used when a column reference appears in operand /
     /// THEN-result / ELSE-result positions of a CASE expression without
     /// a following comparator.
     ColumnRefExpr {
         column: ColumnRef,
     },
-    /// Sprint-393b — `<expression> <op> <literal>`. Used for the rare
+    /// `<expression> <op> <literal>`. Used for the rare
     /// case where the left-hand side of a comparator is not a bare
     /// column reference — e.g. `CASE WHEN ... END = 1`. The existing
     /// `Comparison` variant is preserved for the common column-op-value
@@ -451,7 +449,7 @@ pub enum ExtensionOperatorOperand {
     Column { column: ColumnRef },
 }
 
-/// Sprint-393b — one argument to a window function. The `Star` variant is
+/// One argument to a window function. The `Star` variant is
 /// a dedicated AST shape for `COUNT(*)`; the spec forbids encoding `*` as
 /// a column reference with literal column-name `"*"` (downstream tooling
 /// treats column-ref values as identifiers).
@@ -464,7 +462,7 @@ pub enum WindowArgument {
     Placeholder { name: String },
 }
 
-/// Sprint-393b — `OVER (...)` body.
+/// `OVER (...)` body.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OverClause {
     pub partition_by: Vec<ColumnRef>,
@@ -472,7 +470,7 @@ pub struct OverClause {
     pub frame: Option<WindowFrame>,
 }
 
-/// Sprint-393b — `ROWS|RANGE <start> [BETWEEN <start> AND <end>]`.
+/// `ROWS|RANGE <start> [BETWEEN <start> AND <end>]`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WindowFrame {
     pub unit: FrameUnit,
@@ -487,7 +485,7 @@ pub enum FrameUnit {
     Range,
 }
 
-/// Sprint-393b — one frame bound (`UNBOUNDED PRECEDING` / `N PRECEDING`
+/// One frame bound (`UNBOUNDED PRECEDING` / `N PRECEDING`
 /// / `CURRENT ROW` / `N FOLLOWING` / `UNBOUNDED FOLLOWING`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -499,7 +497,7 @@ pub enum FrameBound {
     Following { offset: i64 },
 }
 
-/// Sprint-393b — one `WHEN ... THEN ...` arm of a `CASE` expression.
+/// One `WHEN ... THEN ...` arm of a `CASE` expression.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CaseWhen {
     pub condition: SelectExpr,
@@ -523,7 +521,7 @@ pub enum Columns {
     Star,
     /// `SELECT a, b, c`
     Named { names: Vec<String> },
-    /// Sprint-393b — at least one expression item that is not a bare
+    /// At least one expression item that is not a bare
     /// column identifier (CASE, window function, scalar subquery, …).
     /// The list preserves input order. Bare-identifier and `*` items
     /// passed through this variant get wrapped accordingly so callers
@@ -532,7 +530,7 @@ pub enum Columns {
     Expressions { items: Vec<SelectListItem> },
 }
 
-/// Sprint-393b — one item in a SELECT list when at least one item is a
+/// One item in a SELECT list when at least one item is a
 /// non-bare-column expression. The discriminator uses kebab-case.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -556,19 +554,19 @@ pub enum SelectListItem {
     Expression { expression: SelectExpr },
 }
 
-// Sprint-385's narrow `WhereClause` / `BinaryOp` / `Literal` types are
-// gone in sprint-393a — `SelectStatement` now holds the widened
+// The narrow `WhereClause` / `BinaryOp` / `Literal` types are
+// gone — `SelectStatement` now holds the widened
 // `SelectExpr` (with `InsertValue`-shaped values + `ColumnRef`-shaped
 // columns). The shape change is intentional: SELECT WHERE is no longer
 // a single column-op-literal predicate, so a dedicated narrow type would
-// fight the JOIN / GROUP / HAVING / ORDER widening that this sprint
-// introduces. DML's narrow WHERE (`WhereExpr`) continues to use
-// sprint-392's column-op-`InsertValue` shape until sprint-393b unifies it.
+// fight the JOIN / GROUP / HAVING / ORDER widening introduced here.
+// DML WHERE is unified onto the same `SelectExpr`; the narrow `WhereExpr`
+// below is still exported but no statement in this AST holds it.
 
 /// Field names are serialized as-is (snake_case) so the TS facade can
 /// `result.error_kind` directly — matches the discriminator name used
 /// across the codebase (`mongoshAst.ts`'s `errorKind` is camelCase but
-/// new code is moving to snake_case in IPC payloads; sprint-385 picks
+/// new code is moving to snake_case in IPC payloads; this crate picks
 /// snake to align with the Rust source of truth).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ParseError {
@@ -586,22 +584,22 @@ pub enum ParseErrorKind {
     /// Lexer-level failure (unterminated string, unknown char, etc.).
     LexError,
     /// Statement begins with a keyword we recognize but do not support
-    /// in this sprint (INSERT / UPDATE / DELETE / ALTER ADD / …).
+    /// (INSERT / UPDATE / DELETE / ALTER ADD / …).
     UnsupportedStatement,
     /// Parser-level failure — wrong token order, missing required clause,
     /// etc. The bulk of `ParseError` variants.
     SyntaxError,
     /// `parse_sql("")` or whitespace-only input.
     EmptyInput,
-    /// Sprint-392 — WHERE / SET expression uses a construct outside the
-    /// sprint-392 narrow expression slice (subquery / function call /
+    /// WHERE / SET expression uses a construct outside the
+    /// narrow expression slice (subquery / function call /
     /// arithmetic / IN-list / cross-table comparison / …). The verb-level
     /// statement structure was recognized; only the inner expression is
     /// unsupported. Caller may fall back to regex heuristics.
     UnsupportedExpression,
 }
 
-// ---- sprint-391 DDL destructive AST nodes ----------------------------
+// ---- DDL destructive AST nodes ----------------------------
 
 /// `DROP <object-type> [IF EXISTS] <name> [CASCADE|RESTRICT]`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -612,7 +610,7 @@ pub struct DropStatement {
     pub cascade: Option<CascadeBehavior>,
 }
 
-/// Object kinds this sprint covers. `Trigger` / `Function` / `Procedure` /
+/// Object kinds this parser covers. `Trigger` / `Function` / `Procedure` /
 /// `Role` are deliberately out of scope — the sqlSafety regex fallback
 /// continues to classify those as `ddl-drop`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -649,9 +647,8 @@ pub struct TruncateStatement {
     pub cascade: Option<CascadeBehavior>,
 }
 
-/// `ALTER TABLE <name> <action>`. Sprint-391 only covers `DROP …` actions;
-/// `ADD COLUMN` / `RENAME` etc. surface as `UnsupportedStatement` until
-/// sprint-394 widens the grammar.
+/// `ALTER TABLE <name> <action>`. Only `DROP …` actions are covered here;
+/// `ADD COLUMN` / `RENAME` etc. surface as `UnsupportedStatement`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AlterTableStatement {
     pub table: String,
@@ -668,8 +665,8 @@ pub enum AlterAction {
         cascade: Option<CascadeBehavior>,
     },
     /// `DROP CONSTRAINT <name> [CASCADE|RESTRICT]`. PostgreSQL allows
-    /// `IF EXISTS` on DROP CONSTRAINT in newer versions; sprint-391 keeps
-    /// this strict (no `IF EXISTS`) — extending is a sprint-394 task.
+    /// `IF EXISTS` on DROP CONSTRAINT in newer versions; this parser keeps
+    /// it strict and rejects `IF EXISTS` here.
     DropConstraint {
         constraint: String,
         cascade: Option<CascadeBehavior>,
@@ -677,7 +674,7 @@ pub enum AlterAction {
     /// `DROP INDEX <name>` — MySQL-style syntax. PostgreSQL emits this as
     /// a top-level `DROP INDEX` statement instead.
     DropIndex { index: String },
-    /// Sprint-394 — `ADD COLUMN [IF NOT EXISTS] <col-def>`. The
+    /// `ADD COLUMN [IF NOT EXISTS] <col-def>`. The
     /// column-def shape (name + data type + constraints) is reused from
     /// CREATE TABLE so downstream tooling that walks column metadata can
     /// share traversal code.
@@ -685,22 +682,22 @@ pub enum AlterAction {
         column: ColumnDefinition,
         if_not_exists: bool,
     },
-    /// Sprint-394 — `ADD [CONSTRAINT <name>] <table-constraint>`. The
+    /// `ADD [CONSTRAINT <name>] <table-constraint>`. The
     /// constraint shape (kebab-case `kind` discriminator + payload) is
     /// the same one used inside CREATE TABLE's table-constraint list.
     AddConstraint { constraint: TableConstraint },
-    /// Sprint-394 — `RENAME TO <new-name>`. Bare identifier; schema-
+    /// `RENAME TO <new-name>`. Bare identifier; schema-
     /// qualified rename targets (e.g. cross-schema move) are out of
-    /// scope this sprint.
+    /// scope.
     RenameTable { new_name: String },
-    /// Sprint-394 — `RENAME COLUMN <old> TO <new>`.
+    /// `RENAME COLUMN <old> TO <new>`.
     RenameColumn { old_name: String, new_name: String },
 }
 
-// ---- sprint-394 DDL additive AST nodes -------------------------------
+// ---- DDL additive AST nodes -------------------------------
 
-/// Sprint-394 — schema-qualified table / view / index reference. Mirrors
-/// the sprint-393a FROM-item shape (`schema: Option<String>` +
+/// Schema-qualified table / view / index reference. Mirrors
+/// the FROM-item shape (`schema: Option<String>` +
 /// `table: String`) so downstream tooling can share traversal helpers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TableRef {
@@ -708,7 +705,7 @@ pub struct TableRef {
     pub table: String,
 }
 
-/// Sprint-394 — `CREATE TABLE [IF NOT EXISTS] <name> ( <cols + table-
+/// `CREATE TABLE [IF NOT EXISTS] <name> ( <cols + table-
 /// constraints> )`. The definition list is split into two ordered slots:
 /// `columns` (column definitions) and `table_constraints` (top-level
 /// table constraints introduced by `CONSTRAINT name …` or by a bare
@@ -723,7 +720,7 @@ pub struct CreateTableStatement {
     pub table_constraints: Vec<TableConstraint>,
 }
 
-/// Sprint-394 — one column in a CREATE TABLE / ALTER TABLE ADD COLUMN
+/// One column in a CREATE TABLE / ALTER TABLE ADD COLUMN
 /// definition list. `source_index` records the zero-based ordinal of
 /// this column in the source list — downstream tooling that maps AST
 /// back to source position relies on it (the slot is set by the parser,
@@ -736,7 +733,7 @@ pub struct ColumnDefinition {
     pub source_index: usize,
 }
 
-/// Sprint-394 — column-type discriminated union. The `kind` tag is the
+/// Column-type discriminated union. The `kind` tag is the
 /// kebab-case lowercase form of the type name (`integer`, `bigint`,
 /// `text`, …). Vendor-specific synonyms (`INT4`, `STRING`, `LONGTEXT`)
 /// are NOT lexed as type tokens — they parse as identifiers, and the
@@ -755,7 +752,7 @@ pub enum ColumnType {
     Serial,
     Uuid,
     /// `VARCHAR(<length>)`. The length argument is required by the
-    /// sprint-394 grammar; bare `VARCHAR` parses to `SyntaxError`.
+    /// DDL grammar; bare `VARCHAR` parses to `SyntaxError`.
     Varchar {
         length: i64,
     },
@@ -784,7 +781,7 @@ pub enum ColumnType {
     Clob,
     /// Oracle binary large object.
     Blob,
-    /// Sprint-486 — known PostgreSQL extension-backed type names. The
+    /// Known PostgreSQL extension-backed type names. The
     /// parser stores the written name and simple modifiers but does not
     /// validate that the backing extension is installed.
     Extension {
@@ -802,7 +799,7 @@ pub enum ExtensionTypeModifier {
     String { value: String },
 }
 
-/// Sprint-394 — column-level constraint. The optional `name` slot is set
+/// Column-level constraint. The optional `name` slot is set
 /// when the user wrote `CONSTRAINT <name> <constraint-body>` inline; it
 /// is `None` for bare constraints. The `kind` discriminator narrows to
 /// the constraint variant; the payload (if any) lives on the variant.
@@ -828,14 +825,14 @@ pub enum ColumnConstraintBody {
         column: Option<String>,
     },
     /// `CHECK ( <expression> )` — the expression uses the unified
-    /// `SelectExpr` shape introduced by sprint-393a / 393b so any WHERE-
+    /// `SelectExpr` shape so any WHERE-
     /// shaped predicate is admissible inside CHECK.
     Check {
         expression: SelectExpr,
     },
 }
 
-/// Sprint-394 — table-level constraint. Same `name` / `body` shape as
+/// Table-level constraint. Same `name` / `body` shape as
 /// `ColumnConstraint`; the body variants carry a `columns` slot for
 /// `primary-key` / `unique` / `references` (the constraint applies to a
 /// named list of columns), and a bare `expression` slot for `check`.
@@ -867,7 +864,7 @@ pub enum TableConstraintBody {
     },
 }
 
-/// Sprint-394 — `CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON table
+/// `CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON table
 /// (col1, col2, …)`. The column list is identifier-only — functional /
 /// expression indexes are deferred.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -879,7 +876,7 @@ pub struct CreateIndexStatement {
     pub columns: Vec<String>,
 }
 
-/// Sprint-394 — `CREATE [OR REPLACE] VIEW <name> AS <select-stmt>`. The
+/// `CREATE [OR REPLACE] VIEW <name> AS <select-stmt>`. The
 /// body may be a plain SELECT (with optional set-operation chain) or a
 /// CTE-wrapped SELECT (`WITH t AS (...) SELECT ...`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -889,7 +886,7 @@ pub struct CreateViewStatement {
     pub body: CreateViewBody,
 }
 
-/// Sprint-394 — the two body shapes accepted inside a CREATE VIEW. The
+/// The two body shapes accepted inside a CREATE VIEW. The
 /// discriminator uses the same kebab-case `kind` tag scheme as
 /// `WithInner` so consumers can branch uniformly.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -900,7 +897,7 @@ pub enum CreateViewBody {
     With(WithStatement),
 }
 
-// ---- sprint-392 DML write triad AST nodes ----------------------------
+// ---- DML write triad AST nodes ----------------------------
 
 /// `INSERT INTO <table> [(cols)] (VALUES (...) | DEFAULT VALUES | SELECT …)
 ///   [ON CONFLICT …] [ON DUPLICATE KEY UPDATE …] [RETURNING …]`.
@@ -926,7 +923,7 @@ pub enum InsertSource {
     Values { rows: Vec<Vec<InsertValue>> },
     /// `DEFAULT VALUES` — PG short-hand for "all defaults".
     DefaultValues,
-    /// `INSERT … SELECT …` — sprint-385's narrow SELECT grammar is the
+    /// `INSERT … SELECT …` — the narrow SELECT grammar is the
     /// source. Boxed to keep `InsertSource` small (recursive variant).
     Select { statement: Box<SelectStatement> },
 }
@@ -990,7 +987,7 @@ pub struct CallStatement {
     pub arguments: Vec<CallArgument>,
 }
 
-/// Sprint-392 widened literal set (sprint-385's `Literal` covered only
+/// Widened literal set (the original `Literal` covered only
 /// `Integer` / `String`; we now also need `Float` / `Boolean` / `Null` so
 /// VALUES can hold every JSON-shaped column type a user would write).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1016,7 +1013,7 @@ pub enum SqlLiteral {
 /// `ON CONFLICT { DO NOTHING | DO UPDATE SET … [WHERE …] }` — PG-only
 /// UPSERT semantic.
 ///
-/// Sprint-393b — the `where_clause` slot now uses the unified `SelectExpr`
+/// The `where_clause` slot now uses the unified `SelectExpr`
 /// shape (with IN-list / IN-subquery / EXISTS / CASE support) so the DML
 /// WHERE matches the SELECT WHERE widening.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1067,8 +1064,8 @@ impl From<InsertValue> for OnDuplicateKeyUpdateValue {
 
 /// `UPDATE <table> SET <col> = <value>[, …] [FROM …] [WHERE …] [RETURNING …]`.
 ///
-/// Sprint-393b — `where_clause` migrates to the unified `SelectExpr`
-/// shape (was `WhereExpr` in sprint-392). DML WHERE now accepts every
+/// `where_clause` migrates to the unified `SelectExpr`
+/// shape (was `WhereExpr`). DML WHERE now accepts every
 /// expression form that SELECT WHERE accepts (BETWEEN / LIKE / IN-list /
 /// IN-subquery / EXISTS / CASE / window functions); the previous
 /// `UnsupportedExpression` deferrals (e.g. AC-392-D06 IN-list) are lifted.
@@ -1092,8 +1089,8 @@ pub struct UpdateAssignment {
 
 /// `DELETE FROM <table> [USING …] [WHERE …] [RETURNING …]`.
 ///
-/// Sprint-393b — `where_clause` migrates to the unified `SelectExpr`
-/// shape (was `WhereExpr` in sprint-392).
+/// `where_clause` migrates to the unified `SelectExpr`
+/// shape (was `WhereExpr`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DeleteStatement {
     pub table: String,
@@ -1103,7 +1100,7 @@ pub struct DeleteStatement {
     pub returning: Vec<String>,
 }
 
-/// Sprint-484 — table-source PostgreSQL MERGE first slice. The target and
+/// Table-source PostgreSQL MERGE. The target and
 /// source are table references with optional aliases; source subqueries,
 /// `WHEN ... AND`, `DELETE`, `BY SOURCE`, and RETURNING stay out of scope.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1125,7 +1122,7 @@ pub struct MergeWhenClause {
     pub values: Vec<SelectExpr>,
 }
 
-/// Sprint-392 narrow WHERE expression. The grammar accepts:
+/// Narrow WHERE expression. The grammar accepts:
 ///   - `column <op> <literal-or-placeholder>` — `Comparison`
 ///   - `<expr> AND <expr>` / `<expr> OR <expr>` — boolean
 ///   - `NOT <expr>` — unary
@@ -1162,9 +1159,9 @@ pub enum WhereExpr {
     },
 }
 
-/// Sprint-392 narrow comparison operators (matches `BinaryOp` of
-/// sprint-385's WhereClause but lives separately so sprint-393's WHERE
-/// widening can extend `WhereExpr` without disturbing `WhereClause`).
+/// Narrow comparison operators (matches `BinaryOp` of
+/// the original WhereClause but lives separately so the widened WHERE
+/// grammar can extend `WhereExpr` without disturbing `WhereClause`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CompareOp {
@@ -1176,9 +1173,9 @@ pub enum CompareOp {
     Ge,
 }
 
-// ---- sprint-395 misc AST nodes ---------------------------------------
+// ---- misc AST nodes ---------------------------------------
 
-/// Sprint-395 — `GRANT priv ON object TO role [WITH GRANT OPTION]`.
+/// `GRANT priv ON object TO role [WITH GRANT OPTION]`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GrantStatement {
     pub privileges: Vec<PrivilegeTag>,
@@ -1187,7 +1184,7 @@ pub struct GrantStatement {
     pub with_grant_option: bool,
 }
 
-/// Sprint-395 — `REVOKE [GRANT OPTION FOR] priv ON object FROM role
+/// `REVOKE [GRANT OPTION FOR] priv ON object FROM role
 /// [CASCADE|RESTRICT]`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RevokeStatement {
@@ -1198,7 +1195,7 @@ pub struct RevokeStatement {
     pub cascade: Option<CascadeBehavior>,
 }
 
-/// Sprint-395 — One privilege tag in a GRANT/REVOKE statement. The `kind`
+/// One privilege tag in a GRANT/REVOKE statement. The `kind`
 /// discriminator (`all`, `select`, `insert`, `update`, `delete`, …) is the
 /// kebab-case form of the SQL keyword. `UPDATE` / `SELECT` / `REFERENCES`
 /// can carry a column-list qualifier (`columns` slot, empty for non-column
@@ -1218,7 +1215,7 @@ pub enum PrivilegeTag {
     Execute,
 }
 
-/// Sprint-395 — GRANT/REVOKE object. The `kind` tag narrows to the object
+/// GRANT/REVOKE object. The `kind` tag narrows to the object
 /// kind keyword that followed `ON`. `all-in-schema` represents the PG
 /// `ALL TABLES IN SCHEMA name` shorthand.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1232,7 +1229,7 @@ pub enum GrantObject {
     AllInSchema { schema_name: String },
 }
 
-/// Sprint-395 — grantee / revokee reference. Plain identifier roles get
+/// Grantee / revokee reference. Plain identifier roles get
 /// `kind="role"`. The `PUBLIC` pseudo-role gets `kind="public"`. Both
 /// `CURRENT_USER` and `SESSION_USER` normalize to `kind="current-session"`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1243,7 +1240,7 @@ pub enum RoleRef {
     CurrentSession,
 }
 
-/// Sprint-395 — `EXPLAIN [ANALYZE] [VERBOSE] [(option …)] inner-stmt`.
+/// `EXPLAIN [ANALYZE] [VERBOSE] [(option …)] inner-stmt`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExplainStatement {
     pub analyze: bool,
@@ -1252,9 +1249,9 @@ pub struct ExplainStatement {
     pub inner_statement: Box<ExplainInner>,
 }
 
-/// Sprint-395 — one option pair inside `EXPLAIN (name value, …)` or
+/// One option pair inside `EXPLAIN (name value, …)` or
 /// `COPY … WITH (name value, …)`. The `name` slot is normalized to
-/// lowercase by the parser. The `value` slot uses the sprint-392
+/// lowercase by the parser. The `value` slot uses the
 /// `InsertValue` shape.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExplainOption {
@@ -1262,7 +1259,7 @@ pub struct ExplainOption {
     pub value: InsertValue,
 }
 
-/// Sprint-395 — the statement variants accepted as the inner body of an
+/// The statement variants accepted as the inner body of an
 /// EXPLAIN. Mirrors the `WithInner` shape but additionally permits the
 /// other DML/DDL kinds that EXPLAIN can wrap on the supported backends.
 /// The dispatcher rejects nested EXPLAIN and out-of-scope inner kinds at
@@ -1279,7 +1276,7 @@ pub enum ExplainInner {
     With(WithStatement),
 }
 
-/// Sprint-395 — `SHOW <target>`. The `target` discriminator narrows to the
+/// `SHOW <target>`. The `target` discriminator narrows to the
 /// SHOW variant.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ShowStatement {
@@ -1295,7 +1292,7 @@ pub enum ShowTarget {
     Schemas,
 }
 
-/// Sprint-395 — `SET [SESSION|LOCAL] <name> {TO|=} <value>`. The `scope`
+/// `SET [SESSION|LOCAL] <name> {TO|=} <value>`. The `scope`
 /// slot defaults to `default` when neither `SESSION` nor `LOCAL` was
 /// specified.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1313,7 +1310,7 @@ pub enum SetScope {
     Default,
 }
 
-/// Sprint-395 — SET RHS. Distinct from `InsertValue` so bare-identifier
+/// SET RHS. Distinct from `InsertValue` so bare-identifier
 /// SET targets (`SET search_path = public`) do not pollute the
 /// placeholder surface used by DML / SELECT.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1324,7 +1321,7 @@ pub enum SetValue {
     Identifier { name: String },
 }
 
-/// Sprint-395 — `COPY { table | (SELECT …) } [(cols)] FROM/TO source
+/// `COPY { table | (SELECT …) } [(cols)] FROM/TO source
 /// [WITH (options)]`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CopyStatement {
@@ -1341,7 +1338,7 @@ pub enum CopyDirection {
     To,
 }
 
-/// Sprint-395 — COPY target. Either a (schema-qualified) table with an
+/// COPY target. Either a (schema-qualified) table with an
 /// optional column list, or a parenthesized SELECT.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -1355,7 +1352,7 @@ pub enum CopyTarget {
     },
 }
 
-/// Sprint-395 — COPY source. STDIN is only valid with `FROM`; STDOUT is
+/// COPY source. STDIN is only valid with `FROM`; STDOUT is
 /// only valid with `TO` (the parser enforces).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
@@ -1365,14 +1362,14 @@ pub enum CopySource {
     Stdout,
 }
 
-/// Sprint-395 — `COMMENT ON <object-kind> <ident> IS <string-or-NULL>`.
+/// `COMMENT ON <object-kind> <ident> IS <string-or-NULL>`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CommentStatement {
     pub target: CommentTarget,
     pub text: CommentText,
 }
 
-/// Sprint-395 — COMMENT object target. Each variant carries the relevant
+/// COMMENT object target. Each variant carries the relevant
 /// identifier slots — `column` carries `table` + `column`, `constraint`
 /// carries `table` + `constraint`, the rest carry a single `name` slot.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1388,7 +1385,7 @@ pub enum CommentTarget {
     Constraint { table: String, constraint: String },
 }
 
-/// Sprint-395 — COMMENT text payload. The `null` variant captures the
+/// COMMENT text payload. The `null` variant captures the
 /// literal `IS NULL` form (clearing the comment); the `string` variant
 /// carries the string literal payload.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

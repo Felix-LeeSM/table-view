@@ -1,10 +1,11 @@
-//! 작성 2026-05-16 (Phase 1 sprint-355) — Q2 corrupt recovery 시나리오.
+//! Written 2026-05-16 — the Q2 corrupt recovery scenario.
 //!
-//! AC-355-04: 디스크에 corrupt 파일 시뮬 (header 첫 16 byte XOR / overwrite)
-//! → app boot → `.bak` rename + fresh DB 생성. 사용자 toast 0.
+//! AC-355-04: simulate a corrupt file on disk (XOR / overwrite of the first 16
+//! header bytes) → app boot → `.bak` rename + a fresh DB is created. No user
+//! toast.
 //!
-//! 본 통합 테스트는 `storage::local::open_pool()` 가 corrupt 파일을
-//! 만났을 때 silently quarantine 후 fresh start 하는지를 검증.
+//! This integration test verifies that `storage::local::open_pool()` quietly
+//! quarantines a corrupt file and then starts fresh.
 
 use serial_test::serial;
 use std::fs;

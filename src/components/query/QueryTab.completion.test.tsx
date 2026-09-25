@@ -1,7 +1,7 @@
-// #2509 — `completion` axis. 툴바 Run 버튼을 다루는 `QueryTab.toolbar.test.tsx`
-// 는 `./SqlQueryEditor` 를 DOM testbed 로 `vi.mock` 하고, 그 대체는 모듈 단위라
-// 그 파일 안에서는 진짜 CodeMirror 팝업을 띄울 수 없다. 그래서 이 축을 따로
-// 두고 에디터를 실물로 마운트한다.
+// #2509 — `completion` axis. `QueryTab.toolbar.test.tsx`, which covers the
+// toolbar Run button, `vi.mock`s `./SqlQueryEditor` into a DOM testbed, and
+// that replacement is module-wide, so a real CodeMirror popup cannot open in
+// that file. This axis therefore sits apart and mounts the real editor.
 
 import { EditorView } from "@codemirror/view";
 import { useHistorySettingsStore } from "@stores/historySettingsStore";
@@ -43,8 +43,9 @@ vi.mock("./QueryResultGrid", () => ({
   default: () => <div data-testid="mock-result" />,
 }));
 
-// 스키마 후보는 이 축이 안 쓴다. 팝업은 SqlQueryEditor 자신의
-// `autocompletion()` + SQL 언어의 키워드 source 가 띄운다.
+// This axis does not use schema candidates. The popup comes from
+// SqlQueryEditor's own `autocompletion()` plus the SQL language keyword
+// source.
 vi.mock("@hooks/useSqlAutocomplete", () => ({
   useSqlAutocomplete: () => ({}),
 }));
@@ -60,20 +61,20 @@ function getEditorView(container: HTMLElement): EditorView {
 describe("QueryTab — autocomplete popup on execute (#2509)", () => {
   beforeEach(() => {
     resetQueryTabStores();
-    // 실행이 기록을 남기면 backend 없는 jsdom 에서 background write 가 거절돼
-    // 단언과 무관한 stderr 가 쌓인다.
+    // If the run records history, the background write is rejected in jsdom
+    // with no backend and stderr unrelated to the assertions piles up.
     useHistorySettingsStore.setState({ queryHistoryEnabled: false });
   });
 
-  // 사용자 시퀀스: 에디터에 타이핑하면 자동완성 팝업이 뜬다 → 마우스로 툴바의
-  // Run 버튼을 누른다 → **팝업이 사라져서 결과 그리드를 가리지 않는다** ←
-  // lock 대상. 단언을 팝업 element 의 부재에 거는 이유는, 닫기 명령이 불렸다는
-  // 사실을 스파이로 재면 그 명령이 아무 일도 하지 않게 바뀌어도 green 이 되기
-  // 때문이다.
+  // User sequence: typing in the editor opens the autocomplete popup → the
+  // mouse clicks the toolbar Run button → **the popup disappears and does not
+  // cover the result grid** ← what this locks. The assertion is on the
+  // absence of the popup element because spying on the close command being
+  // called would stay green even if that command were changed to do nothing.
   //
-  // 이 경로가 값을 지는 이유는 E2E 가 단축키가 아니라 이 버튼을 클릭하기
-  // 때문이다 (`e2e/smoke/_helpers.ts` 의 `runQuery` 가
-  // `[aria-label="Run query"]` 를 누른다).
+  // This path carries the value because E2E clicks this button rather than
+  // the shortcut (`runQuery` in `e2e/smoke/_helpers.ts` presses
+  // `[aria-label="Run query"]`).
   it("closes the autocomplete popup when the toolbar Run button executes", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab({ sql: "SEL" });
@@ -86,8 +87,9 @@ describe("QueryTab — autocomplete popup on execute (#2509)", () => {
     await act(async () => {
       screen.getByLabelText("Run query").click();
     });
-    // 클릭이 실제로 실행 경로에 닿았다는 확인 — 버튼이 아무 일도 안 해서
-    // 팝업이 남았다면 아래 단언이 아니라 이 줄이 먼저 실패해야 한다.
+    // Confirms the click really reached the execute path — if the button did
+    // nothing and the popup survived, this line should fail before the
+    // assertion below.
     expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
 
     await expectCompletionPopupClosed(view);

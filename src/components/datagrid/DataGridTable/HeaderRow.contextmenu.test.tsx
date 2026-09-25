@@ -1,8 +1,8 @@
-// Sprint 316 (2026-05-15) — Slice C.2 column header context menu.
+// Column header context menu.
 //
-// 작성 이유: HeaderRow 가 paradigm-shared 라 한 곳에 6 item 의
-// callback 호출을 lock 하면 RDB+Mongo 양쪽 grid 가 자동 보장.
-// Radix ContextMenu 는 portal → screen 검색이 동작.
+// Reason: HeaderRow is paradigm-shared, so locking the 6 items' callback
+// calls in one place covers both the RDB and the Mongo grid automatically.
+// Radix ContextMenu portals, so `screen` queries work.
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -196,8 +196,8 @@ describe("HeaderRow context menu (Sprint 316)", () => {
     expect(item).toHaveAttribute("data-disabled");
   });
 
-  // Sprint 317 — Slice D.1: Hide column item appears under a separator
-  // when `onHideColumn` is provided.
+  // Hide column item appears under a separator when `onHideColumn` is
+  // provided.
   it("Hide column item dispatches onHideColumn(col) when provided", () => {
     const onHideColumn = vi.fn();
     setup({ onHideColumn });

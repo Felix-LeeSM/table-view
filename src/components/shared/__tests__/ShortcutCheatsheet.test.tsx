@@ -69,15 +69,17 @@ describe("ShortcutCheatsheet", () => {
     expect(screen.getByText("Keyboard shortcuts")).toBeInTheDocument();
   });
 
-  // Reason: #1224 — RAW query 창에서 Cmd+/ 로 주석 토글하면 CodeMirror 가
-  // preventDefault 만 하고 stopPropagation 안 해 keydown 이 document 까지
-  // 버블 → 단축키 도움말도 같이 열리는 사용자 보고 (2026-07-03). Cmd+/ 분기도
-  // editable(contentEditable = CodeMirror `.cm-content`) 가드로 억제해야 함.
+  // Reason: #1224 — user report: in the RAW query window Cmd+/ toggles a
+  // comment, but CodeMirror only calls preventDefault, not stopPropagation, so
+  // the keydown bubbles up to document and the shortcut cheatsheet opens too.
+  // The Cmd+/ branch must also be suppressed by the editable
+  // (contentEditable = CodeMirror `.cm-content`) guard.
   it("ignores Cmd+/ when focus is inside a contentEditable editor (#1224)", () => {
     const editor = document.createElement("div");
     editor.className = "cm-content";
-    // jsdom 은 contenteditable 속성으로 isContentEditable 을 계산하지 않으므로
-    // production code 가 읽는 프로퍼티를 직접 노출 (isEditableTarget 테스트와 동일 패턴).
+    // jsdom does not compute `isContentEditable` from the contenteditable
+    // attribute, so expose the property production code reads directly (same
+    // pattern as the `isEditableTarget` tests).
     Object.defineProperty(editor, "isContentEditable", {
       configurable: true,
       get: () => true,
@@ -142,7 +144,7 @@ describe("ShortcutCheatsheet", () => {
     expect(screen.queryByText("Close tab")).toBeNull();
   });
 
-  // ── Sprint 133: new shortcut labels surfaced in the cheatsheet ──
+  // ── New shortcut labels surfaced in the cheatsheet ──
 
   it("renders the Toggle Home/Workspace label (Cmd+,)", () => {
     fireGlobalKey("?");
@@ -171,9 +173,9 @@ describe("ShortcutCheatsheet", () => {
     expect(screen.getByText("Cmd+J")).toBeInTheDocument();
   });
 
-  // Sprint 134 — `Open connection switcher` (Cmd+K) was removed from the
-  // cheatsheet alongside the deletion of `<ConnectionSwitcher>`. Guard
-  // against a regression by asserting the label is gone.
+  // `Open connection switcher` (Cmd+K) was removed from the cheatsheet
+  // alongside the deletion of `<ConnectionSwitcher>`. Guard against a
+  // regression by asserting the label is gone.
   it("does NOT render the deprecated Open connection switcher label", () => {
     fireGlobalKey("?");
 

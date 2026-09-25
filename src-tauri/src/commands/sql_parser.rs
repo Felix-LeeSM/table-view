@@ -1,11 +1,10 @@
-//! Sprint 385 — backend SQL parser IPC.
+//! Backend SQL parser IPC.
 //!
 //! Wraps the `sql-parser-core` crate's `parse_sql` entry point in a Tauri
 //! command so the frontend can also reach the same AST via the IPC
 //! channel (useful when a feature wants to parse SQL on a long-running
 //! background path where pulling the WASM module into the renderer would
-//! be wasteful, or for parity checks during the future grammar widening
-//! in sprint-386+).
+//! be wasteful, or for parity checks during the future grammar widening).
 //!
 //! Contract:
 //! - The command NEVER returns `Err`. Parse failures are surfaced as the
@@ -20,7 +19,7 @@
 
 use sql_parser_core::{parse_sql, ParseResult};
 
-/// Parse one SQL statement (sprint-385 grammar slice — see
+/// Parse one SQL statement (grammar slice — see
 /// `sql-parser-core` crate docs) and return the AST as a tagged union.
 #[tauri::command]
 pub fn parse_sql_backend(sql: String) -> Result<ParseResult, String> {
@@ -36,9 +35,9 @@ mod tests {
 
     #[test]
     fn select_round_trips_via_command() {
-        // Sprint-393a — `SelectStatement` no longer has a top-level
+        // `SelectStatement` no longer has a top-level
         // `table` field; the FROM list is the source of truth. Single-
-        // table sprint-385-style inputs produce a one-item FROM list
+        // table inputs produce a one-item FROM list
         // with the table identifier.
         let r = parse_sql_backend("SELECT * FROM users".to_string()).expect("ok");
         match r {
@@ -79,7 +78,7 @@ mod tests {
 
     #[test]
     fn ac_393a_select_with_join_round_trips_via_command() {
-        // Sprint-393a — `SELECT a FROM x JOIN y ON x.id = y.x_id` now
+        // `SELECT a FROM x JOIN y ON x.id = y.x_id` now
         // flows through the Tauri command unchanged. The FROM list has
         // two items; the second carries an `InnerJoin { On(...) }`.
         let r =
@@ -97,8 +96,8 @@ mod tests {
     fn invalid_sql_returns_error_variant_not_err() {
         // The Result<_, String> arm is reserved for future infra failure;
         // every parse failure goes through the `Ok(Error(...))` path so the
-        // frontend can pattern-match on a single union shape. Sprint 484
-        // moved MERGE into a supported first slice, so REPLACE keeps this
+        // frontend can pattern-match on a single union shape. MERGE is now
+        // supported, so REPLACE is the verb that keeps this
         // known-but-unsupported path covered.
         let r = parse_sql_backend("REPLACE INTO x VALUES (1)".to_string()).expect("ok");
         match r {

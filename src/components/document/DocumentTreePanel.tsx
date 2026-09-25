@@ -1,12 +1,11 @@
-// Sprint 341 (2026-05-15) — inline JSON tree panel.
-// Sprint 342 (2026-05-15) — V2 enhancements.
+// Inline JSON tree panel.
 //
 // Renders inside DocumentDataGrid as a detail row attached to the
 // data row whose nested cell was toggled. Mirrors NestedExpandPopover's
 // edit-commit contract (pendingByPath / onCommitEdit) so the grid-level
 // commit bar keeps owning the save flow.
 //
-// V2 additions: BSON wrapper inline editor, regex search toggle,
+// Also provides: BSON wrapper inline editor, regex search toggle,
 // diff view toggle (shows original vs pending side-by-side), structural
 // edits (add key on objects, push item on arrays, delete leaf).
 
@@ -69,11 +68,11 @@ export function DocumentTreePanel({
   forbiddenRootKeys,
 }: DocumentTreePanelProps) {
   const { t } = useTranslation("document");
-  // Sprint 344 Slice A — feed pendingByPath into the tree builder so
-  // paths that exist only as pending adds render as ghost nodes
-  // alongside `value`'s real children. Empty / undefined pendingByPath
-  // collapses to the previous `buildTreeNodes(value)` output exactly
-  // (regression-zero, asserted in jsonTree.test.ts).
+  // Feed pendingByPath into the tree builder so paths that exist only as
+  // pending adds render as ghost nodes alongside `value`'s real children.
+  // Empty / undefined pendingByPath collapses to the previous
+  // `buildTreeNodes(value)` output exactly (regression-zero, asserted in
+  // jsonTree.test.ts).
   const nodes = useMemo(
     () =>
       buildTreeNodesWithGhosts(
@@ -408,8 +407,8 @@ export function DocumentTreePanel({
         {node.kind !== "leaf" && KIND_TAG[node.kind] && (
           <TagBadge>{KIND_TAG[node.kind]}</TagBadge>
         )}
-        {/* Sprint 344 Slice A — NEW badge on ghost (`+ key` / `+
-          item` adds). Rendered on obj/arr ghost containers too
+        {/* NEW badge on ghost (`+ key` / `+ item` adds).
+          Rendered on obj/arr ghost containers too
           so a brand-new nested object shows the badge on the
           parent row, distinct from the per-leaf `● edited`. */}
         {node.isGhost && node.kind !== "leaf" && <NewBadge />}
@@ -417,8 +416,8 @@ export function DocumentTreePanel({
         {node.kind === "leaf" && !isEditing && (
           <>
             <span className="ml-1 text-muted-foreground">:</span>
-            {/* Sprint 342 V2 — two render branches for leaves with
-              a pending edit:
+            {/* Two render branches for leaves with a pending
+              edit:
                1. pending = __op__:unset → strike-through original,
                   "● will delete" badge.
                2. otherwise → pending (or original) as the
@@ -443,7 +442,7 @@ export function DocumentTreePanel({
               </button>
             )}
             <TagBadge>{leafTypeTag(node)}</TagBadge>
-            {/* Sprint 344 Slice A — distinct visual states:
+            {/* Distinct visual states:
                - ghost (add): "NEW" badge, no "● edited".
                - existing leaf with pending unset: strike +
                  "● will delete".
@@ -463,8 +462,8 @@ export function DocumentTreePanel({
                 </span>
               )
             )}
-            {/* Sprint 342 V2 — leaf delete entry-point. `_id`
-              cannot be unset (MongoDB rejects it; mqlGenerator's
+            {/* Leaf delete entry-point. `_id` cannot be unset
+              (MongoDB rejects it; mqlGenerator's
               id-in-patch guard would drop the row anyway), so
               hide the trash for those leaves to keep the UI
               honest.
@@ -506,8 +505,8 @@ export function DocumentTreePanel({
           </>
         )}
 
-        {/* Sprint 342 V2 — BSON wrappers (ObjectId / Date /
-          Decimal128 / binData) get the type-aware
+        {/* BSON wrappers (ObjectId / Date / Decimal128 /
+          binData) get the type-aware
           BsonTypeEditor instead of the plain string input.
           The editor commits an EJSON wrapper object; the
           parent's onCommitEdit -> tagBsonWrapper round-trip

@@ -12,10 +12,9 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { TableData } from "@/types/schema";
 import { useDataGridEdit } from "./useDataGridEdit";
 
-// Sprint 93 — handleExecuteCommit's SQL branch must surface commit failures
-// instead of swallowing them. Sprint 183 (date 2026-05-01) flipped the call
-// from N × executeQuery to a single executeQueryBatch wrapped in BEGIN/COMMIT
-// /ROLLBACK, so:
+// handleExecuteCommit's SQL branch must surface commit failures instead of
+// swallowing them. The call is a single executeQueryBatch wrapped in
+// BEGIN/COMMIT/ROLLBACK rather than N × executeQuery, so:
 //   - The user-facing message changed from "executed: K, failed at: K+1 of N"
 //     to "Commit failed — all changes rolled back: <backend message>".
 //   - statementIndex / failedKey are now parsed from the backend message
@@ -111,10 +110,9 @@ function renderEditHook(data: TableData | null = MOCK_DATA) {
   );
 }
 
-// Sprint 183 — happy-path batch resolves to one QueryResult per submitted
-// statement. We don't inspect the result shape in these tests beyond
-// "promise resolved", but mirroring the backend contract keeps drift away
-// from production.
+// Happy-path batch resolves to one QueryResult per submitted statement. We
+// don't inspect the result shape in these tests beyond "promise resolved",
+// but mirroring the backend contract keeps drift away from production.
 function happyBatchResolve(stmts: string[]) {
   return Promise.resolve(
     stmts.map(() => ({
@@ -142,8 +140,8 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
   });
 
   it("[AC-183-08b] simple failure: single statement reject records commitError, keeps preview open, flags cell key", async () => {
-    // Sprint 183 — backend returns "statement 1 of 1 failed: ..." so the
-    // catch block parses the index and surfaces the rolled-back message.
+    // The backend returns "statement 1 of 1 failed: ..." so the catch block
+    // parses the index and surfaces the rolled-back message.
     mockExecuteQueryBatch.mockImplementationOnce(() =>
       Promise.reject(
         new Error("statement 1 of 1 failed: relation does not exist"),
@@ -172,8 +170,8 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
       await result.current.handleExecuteCommit();
     });
 
-    // (a) commitError captured. Sprint 183: standard "all changes rolled
-    // back" wording; old "executed: 0" / "failed at: 1" tokens are gone.
+    // (a) commitError captured. Standard "all changes rolled back" wording;
+    // old "executed: 0" / "failed at: 1" tokens are gone.
     expect(result.current.commitError).not.toBeNull();
     expect(result.current.commitError?.statementIndex).toBe(0);
     expect(result.current.commitError?.statementCount).toBe(1);
@@ -218,9 +216,9 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
   });
 
   it("[AC-183-08b] batch failure (3 statements, backend rolls back at #2) → statementIndex 1, message rolled back", async () => {
-    // Sprint 183 — the batch is atomic. Backend reports
-    // "statement 2 of 3 failed: ..." after issuing ROLLBACK; we extract
-    // the index from that message and surface the rolled-back wording.
+    // The batch is atomic. Backend reports "statement 2 of 3 failed: ..."
+    // after issuing ROLLBACK; we extract the index from that message and
+    // surface the rolled-back wording.
     mockExecuteQueryBatch.mockImplementationOnce(() =>
       Promise.reject(new Error("statement 2 of 3 failed: permission denied")),
     );
@@ -271,8 +269,8 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
     // 0-indexed statement index = 1 (parsed from "statement 2 of 3").
     expect(result.current.commitError?.statementIndex).toBe(1);
     expect(result.current.commitError?.statementCount).toBe(3);
-    // Sprint 183 — standard rolled-back wording. Old "executed:" /
-    // "failed at:" tokens MUST NOT appear (atomic semantics).
+    // Standard rolled-back wording. Old "executed:" / "failed at:" tokens
+    // MUST NOT appear (atomic semantics).
     expect(result.current.commitError?.message).toMatch(
       /Commit failed — all changes rolled back/,
     );
@@ -295,8 +293,8 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
   });
 
   it("[AC-183-08a] happy-path batch: all statements committed in single executeQueryBatch call", async () => {
-    // Sprint 183 — single batch call (not N × executeQuery). Backend
-    // resolves with one QueryResult per submitted statement.
+    // Single batch call (not N × executeQuery). Backend resolves with one
+    // QueryResult per submitted statement.
     mockExecuteQueryBatch.mockImplementationOnce((_conn, stmts) =>
       happyBatchResolve(stmts as string[]),
     );
@@ -414,10 +412,9 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
   });
 
   it("static regression guard: SQL branch catch block is non-empty", () => {
-    // AC-05 / Sprint 183 — ensure no future change re-introduces the
-    // silent-swallow bug. The RDB executor (`executeRdbBatch`) now lives
-    // in the paradigm adapter module; the slice covers its function body
-    // up to the closing brace.
+    // AC-05 — ensure no future change re-introduces the silent-swallow bug.
+    // The RDB executor (`executeRdbBatch`) lives in the paradigm adapter
+    // module; the slice covers its function body up to the closing brace.
     const source = paradigmEditAdapterSource;
 
     const sqlBranchStart = source.indexOf("async function executeRdbBatch(");
@@ -457,7 +454,7 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
     expect(sqlBranchSource).toMatch(/commitFlow\.rolledBack/);
     expect(sqlBranchSource).toMatch(/ok:\s*false/);
     expect(sqlBranchSource).toMatch(/errorMessage/);
-    // Sprint 183 — old partial-failure tokens must NOT reappear.
+    // Old partial-failure tokens must NOT reappear.
     expect(sqlBranchSource).not.toMatch(/executed: \$\{/);
     expect(sqlBranchSource).not.toMatch(/failed at: \$\{/);
   });

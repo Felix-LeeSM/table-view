@@ -1,28 +1,32 @@
-//! 작성 2026-05-16 (Phase 3 sprint-362) — single-instance plugin 의
-//! 2nd-launch callback 행동 검증.
+//! Written 2026-05-16 — verifies the 2nd-launch callback behaviour of the
+//! single-instance plugin.
 //!
-//! sprint-362 (Q3): `tauri-plugin-single-instance` 가 2번째 process 진입을
-//! 가로채면 첫 process 의 launcher 윈도우를 unminimize + show + set_focus
-//! 한다. 다른 윈도우 (workspace-{conn_id}) 는 건드리지 않는다.
+//! Q3: when `tauri-plugin-single-instance` intercepts a second process entry,
+//! it unminimizes + shows + focuses the first process's launcher window. It
+//! touches no other window (workspace-{conn_id}).
 //!
-//! 실제 process spawn 은 OS 레벨이므로 (`UnixListener` macOS, named pipe
-//! Windows) MockRuntime 으로는 재현 불가. 대신 callback 본체를
-//! `handle_second_instance_inner` 로 분리하고 본 테스트가 그 inner 를
-//! 직접 호출하여 윈도우 부수효과를 잠근다. `init` (plugin) 은 동일한
-//! inner 를 wrap 하므로 두 경로의 의미가 동일함을 보장.
+//! A real process spawn happens at the OS level (`UnixListener` on macOS, a
+//! named pipe on Windows), so MockRuntime cannot reproduce it. Instead the
+//! callback body is split out as `handle_second_instance_inner` and this test
+//! calls that inner directly to lock the window side effects. `init` (the
+//! plugin) wraps the same inner, which guarantees both paths mean the same
+//! thing.
 //!
-//! MockRuntime 의 `is_visible()` 은 hardcoded `Ok(true)`, `set_focus()` /
-//! `show()` / `hide()` / `unminimize()` 도 mutate-free no-op 이다. 따라서
-//! 검증 가능한 것은: (a) inner 가 성공/실패하는지, (b) 새 윈도우가
-//! 생기지 않는지, (c) 기존 윈도우 set 이 보존되는지.
+//! MockRuntime's `is_visible()` is a hardcoded `Ok(true)`, and `set_focus()` /
+//! `show()` / `hide()` / `unminimize()` are mutate-free no-ops. What can be
+//! verified is therefore: (a) whether the inner succeeds or fails, (b) that no
+//! new window appears, (c) that the existing window set is preserved.
 //!
-//! 검증 매트릭스 (Acceptance Criteria):
-//!   - AC-362-02 launcher 존재 시 inner 가 Ok 반환 (callback 정상 동작).
-//!   - AC-362-04 workspace 윈도우들이 동시에 존재해도 inner 가 Ok 반환 +
-//!     윈도우 count 변동 0 + 모든 라벨 그대로 — 부수효과 0.
-//!   - 추가: launcher 가 없을 때 `Window` 에러로 명확히 실패 (silent no-op
-//!     금지 — single-instance 플러그인이 작동 중인데 launcher 가 destroy 된
-//!     희귀 상태는 회귀로 분류).
+//! Verification matrix (Acceptance Criteria):
+//!   - AC-362-02 the inner returns Ok when the launcher exists (the callback
+//!     works).
+//!   - AC-362-04 the inner returns Ok even with workspace windows alive at the
+//!     same time, with zero change in window count and every label intact —
+//!     zero side effects.
+//!   - Additionally: when the launcher is missing it fails clearly with a
+//!     `Window` error (no silent no-op — the rare state where the
+//!     single-instance plugin is running while the launcher has been destroyed
+//!     is classified as a regression).
 
 use table_view_lib::commands::single_instance::handle_second_instance_inner;
 use tauri::test::{mock_builder, mock_context, noop_assets};

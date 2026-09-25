@@ -1,5 +1,5 @@
-//! Recursive-descent parser for the sprint-401 mongosh grammar slice.
-//! Mirrors `src/lib/mongo/mongoshAst/parser.ts` (sprint-384) one-for-one.
+//! Recursive-descent parser for the mongosh grammar slice.
+//! Mirrors `src/lib/mongo/mongoshAst/parser.ts` one-for-one.
 //!
 //! The parser is split into three layers:
 //!   - `parse_program` — admin-command vs collection-command discrimination.

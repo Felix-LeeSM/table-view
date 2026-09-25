@@ -14,10 +14,10 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { SchemaInfo } from "@/types/schema";
 
-// Sprint 369 (Phase 4, Q20.2) — `table-view.sidebar.width` localStorage 영속
-// 폐기. boot snapshot 이 차후 sprint 에서 `settings.sidebar_width` 를 hydrate
-// 하면 그 값을 초기로 사용. 본 sprint 는 default 시작 + drag mouseup 500ms
-// debounce 후 IPC commit 만 책임.
+// Q20.2 — `table-view.sidebar.width` localStorage persistence is dropped. If
+// a boot snapshot later hydrates `settings.sidebar_width`, that value becomes
+// the initial width. Today the width starts at the default and only commits
+// over IPC 500ms after the drag mouseup.
 // #1737 — stable empty ref so the schema-slot selector below doesn't churn
 // re-renders when the focused connection has no cached schemas yet.
 const EMPTY_SCHEMAS: readonly SchemaInfo[] = Object.freeze([]);
@@ -31,19 +31,19 @@ const PERSIST_DEBOUNCE_MS = 500;
  * Workspace Sidebar — schema/work surface column shown on `WorkspacePage`.
  * Connection management lives on the dedicated `HomePage` / launcher window.
  *
- * Sprint 291 — workspace 윈도우의 Cmd+N 은 raw query tab 을 여는 것으로
- * 의미가 바뀌어 본 컴포넌트의 `new-connection` listener + 임베디드
- * `ConnectionDialog` mount 는 제거되었다. 새 연결을 만들고 싶은 사용자는
- * launcher 윈도우 (Cmd+, 또는 dock 아이콘 reopen) 에서 진행한다.
+ * Cmd+N in a workspace window now opens a raw query tab, so this component's
+ * `new-connection` listener and the embedded `ConnectionDialog` mount were
+ * removed. A user who wants a new connection goes through the launcher window
+ * (Cmd+, or reopening the dock icon).
  */
 export default function Sidebar() {
   const { t } = useTranslation("layout");
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
-  // sprint-366 (Phase 4, Q15) — Sidebar lives in the workspace window only
-  // (see top-of-file docstring). The window's connection identity is
-  // derived from its Tauri label (`workspace-{connection_id}`) rather than
-  // from the cross-window `focusedConnId` slot, which is now launcher-only.
+  // Q15 — Sidebar lives in the workspace window only (see top-of-file
+  // docstring). The window's connection identity is derived from its Tauri
+  // label (`workspace-{connection_id}`) rather than from the cross-window
+  // `focusedConnId` slot, which is launcher-only.
   // `useCurrentWindowConnectionId()` returns `null` when the hook runs
   // outside a workspace window (jsdom tests, or theoretical launcher
   // mount) — the rest of the component already handles that null case.
@@ -61,18 +61,17 @@ export default function Sidebar() {
   // `WorkspacePage`. #2431 then moved the controls again, to `AppearanceButton`
   // in the workspace toolbar. The sidebar footer renders no theme popover.
 
-  // sprint-366 (Phase 4, Q15) — Removed the two `setFocusedConn` effects
-  // ("focus active tab's conn" + "heal vanished focus") that previously
-  // wrote to the cross-window `focusedConnId` slot from a workspace
-  // window. Both are now incoherent: each workspace window is pinned to
-  // one connection via its Tauri label (sprint-361), so (a) the active
-  // tab's conn always matches the window's by construction, and (b) a
-  // vanished connection means the window itself should close — not a
-  // silent reassignment to a sibling connection (which would surprise
-  // the user). Strategy doc line 1656 requires "workspace 에서 set
-  // 호출 0건"; keeping these as dead writes propagates to the launcher
-  // slot via the cross-window IPC bridge and races with the user's own
-  // launcher selection.
+  // Q15 — Removed the two `setFocusedConn` effects ("focus active tab's
+  // conn" + "heal vanished focus") that previously wrote to the cross-window
+  // `focusedConnId` slot from a workspace window. Both are incoherent: each
+  // workspace window is pinned to one connection via its Tauri label, so (a)
+  // the active tab's conn always matches the window's by construction, and
+  // (b) a vanished connection means the window itself should close — not a
+  // silent reassignment to a sibling connection (which would surprise the
+  // user). Strategy doc line 1656 requires "zero set calls from the
+  // workspace"; keeping these as dead writes propagates to the launcher slot
+  // via the cross-window IPC bridge and races with the user's own launcher
+  // selection.
 
   const {
     size: sidebarWidth,
@@ -88,11 +87,12 @@ export default function Sidebar() {
     initial: DEFAULT_WIDTH,
   });
 
-  // Sprint 369 (Phase 4, Q20.2) — drag mouseup 후 500ms debounce 로
-  // `set_setting("sidebar_width", N)` IPC commit. drag 중 mousemove 는
-  // useResizablePanel 의 hot path 에서 DOM-only 업데이트라 본 effect 는
-  // commit (mouseup → state set) 직후에만 fire — 즉, "drag 종료 후 500ms 안에
-  // 또 다른 drag 가 일어나면 IPC 1회로 합쳐진다" 는 의미. AC-369-12.
+  // Q20.2 — commits `set_setting("sidebar_width", N)` over IPC on a 500ms
+  // debounce after the drag mouseup. mousemove during a drag is a DOM-only
+  // update on useResizablePanel's hot path, so this effect only fires right
+  // after the commit (mouseup → state set) — meaning "another drag within
+  // 500ms of the end of the previous one collapses into a single IPC call".
+  // AC-369-12.
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialPersistSkippedRef = useRef(false);
   useEffect(() => {
@@ -119,16 +119,15 @@ export default function Sidebar() {
     };
   }, [sidebarWidth]);
 
-  // Sprint 376 (Phase 6 Q21 #3-a) — Sidebar handle "Reset width". Same
-  // backend IPC as the Settings panel's "Reset sidebar width" (Q21
-  // #3-b) — receiver applies the frontend default. Local window's
-  // useResizablePanel is not reset here; the next setting.reset event
-  // arriving at this same window (self-echo) is intentionally ignored
-  // because the dispatcher's self-echo skip path means the local
-  // panel's width stays at the user's last drag value until they
-  // explicitly drag again. Acceptable for #3-a (the cross-window
-  // listeners still get the row-delete event); a future sprint can
-  // wire a local "apply default width" path if user feedback demands.
+  // Q21 #3-a — Sidebar handle "Reset width". Same backend IPC as the
+  // Settings panel's "Reset sidebar width" (Q21 #3-b) — the receiver applies
+  // the frontend default. The local window's useResizablePanel is not reset
+  // here; the next setting.reset event arriving at this same window
+  // (self-echo) is intentionally ignored, because the dispatcher's self-echo
+  // skip path means the local panel's width stays at the user's last drag
+  // value until they explicitly drag again. Acceptable for #3-a (the
+  // cross-window listeners still get the row-delete event); a local "apply
+  // default width" path can be wired later if user feedback demands.
   const handleResetSidebarWidth = useCallback(() => {
     void resetSetting("sidebar_width").catch((e: unknown) => {
       const message = e instanceof Error ? e.message : String(e ?? "");
@@ -136,13 +135,12 @@ export default function Sidebar() {
     });
   }, []);
 
-  // Sprint 376 (Phase 6 Q21 #7) — header "Collapse all". Empties the
-  // active workspace's sidebar.expanded list. The workspace persist
-  // pipeline (sprint-360 SQLite write) carries the change to other
-  // windows on the same connection_id.
+  // Q21 #7 — header "Collapse all". Empties the active workspace's
+  // sidebar.expanded list. The workspace persist pipeline (SQLite write)
+  // carries the change to other windows on the same connection_id.
   //
-  // Sprint 379 — 단일 버튼이 DB type 별 적절한 객체 이름 (schemas /
-  // tables / collections) 을 노출하고 토글된다.
+  // The single button exposes the object name that fits the DB type
+  // (schemas / tables / collections) and toggles.
   const handleCollapseAll = useCallback(() => {
     if (!focusedConnId) return;
     const db = resolveActiveDb(focusedConnId);
@@ -159,15 +157,16 @@ export default function Sidebar() {
     return s.schemas[focusedConnId]?.[db] ?? EMPTY_SCHEMAS;
   });
 
-  // #1737 — "전체 펼치기(Expand all)". sprint-379 가 남긴 no-op stub 을
-  // 구현. 현재 로드된 범위만 펼친다: 이 (connId, db) 에 캐시된 모든 스키마
-  // 이름을 sidebar.expanded 에 채운다. SchemaTree 는 `expandedSchemas.has(
-  // schema.name)` 로 bare schema name 을 키로 쓰므로 (treeRows.getVisibleRows
-  // + useSchemaTreeActions.handleExpandSchema) 여기서도 동일한 규칙을 재사용
-  // — nodeIdToString 는 쓰지 않는다 (그러면 트리가 매치 못 해 무효 데이터가
-  // 된다). 미로드 자식은 eager fetch 하지 않는다: expanded set 변경이 트리의
-  // reconciliation 효과(useSchemaTreeActions #1219)를 구동해 각 스키마를
-  // lazy-load 하므로 collapsed 스키마는 여전히 미fetch 로 남는다.
+  // #1737 — "Expand all", implementing what was left as a no-op stub.
+  // Expands only the loaded scope: fills sidebar.expanded with every schema
+  // name cached for this (connId, db). SchemaTree keys on the bare schema
+  // name via `expandedSchemas.has(schema.name)` (treeRows.getVisibleRows +
+  // useSchemaTreeActions.handleExpandSchema), so the same rule is reused here
+  // — nodeIdToString is not used (the tree would fail to match and the data
+  // would be invalid). Unloaded children are not eagerly fetched: changing
+  // the expanded set drives the tree's reconciliation effect
+  // (useSchemaTreeActions #1219), which lazy-loads each schema, so collapsed
+  // schemas stay unfetched.
   const handleExpandAll = useCallback(() => {
     if (!focusedConnId || focusedSchemas.length === 0) return;
     const db = resolveActiveDb(focusedConnId);
@@ -178,9 +177,9 @@ export default function Sidebar() {
     );
   }, [focusedConnId, focusedSchemas, setExpanded]);
 
-  // Sprint 379 — sidebar.expanded 의 현 상태로 토글 라벨 / 클릭 핸들러를
-  // 분기. 안전한 read path 만 사용 (focusedConnId 없으면 비어 있는 워크
-  // 스페이스로 간주 → "Expand" 라벨 + disabled).
+  // Branches the toggle label / click handler on the current state of
+  // sidebar.expanded. Uses only the safe read path (no focusedConnId is
+  // treated as an empty workspace → "Expand" label + disabled).
   // #1447 — select the primitive count (not the whole `workspaces` map): a
   // whole-map subscription re-rendered the entire sidebar tree on every
   // editor keystroke (`updateQuerySql` replaces the map identity).
@@ -229,9 +228,9 @@ export default function Sidebar() {
       {/* Header strip — connection name + "+ Query" action. data-testid is
             kept stable for e2e tests (`sidebar-connection-header`).
 
-            Sprint 376 (Phase 6 Q21 #7) — header "Collapse all" 가시
-            버튼이 추가됨. Q21 직관적 위치 contract — 우클릭 메뉴 대신
-            가시 버튼 (키보드 사용자 발견 가능). */}
+            Q21 #7 — a visible "Collapse all" button in the header. Q21's
+            intuitive-placement contract — a visible button instead of a
+            right-click menu, so keyboard users can find it. */}
       <div className="flex items-center justify-between border-b border-border py-1 pl-3 pr-1">
         <span
           data-testid="sidebar-connection-header"
@@ -243,10 +242,10 @@ export default function Sidebar() {
             : t("sidebar.schemasLabel")}
         </span>
         <div className="flex items-center gap-1">
-          {/* Sprint 379 — DB type 별 객체 이름 + 토글. PG → schemas,
-                MySQL/SQLite → tables, Mongo → collections. expanded 가
-                비어 있으면 동일 버튼이 "Expand all *" 라벨로 전환된다.
-                #1737 — expand path 가 로드된 스키마 캐시를 채우도록 구현됨. */}
+          {/* Object name per DB type + toggle. PG → schemas,
+                MySQL/SQLite → tables, Mongo → collections. When expanded is
+                empty the same button switches to the "Expand all *" label.
+                #1737 — the expand path fills from the loaded schema cache. */}
           <Button
             variant="ghost"
             size="icon-xs"
@@ -292,9 +291,9 @@ export default function Sidebar() {
             single place, which #2431 moved on to `AppearanceButton` in the
             workspace toolbar. Only the "Reset width" affordance remains. */}
       <div className="border-t border-border px-3 py-2">
-        {/* Sprint 376 (Phase 6 Q21 #3-a) — "Reset sidebar width" 가시
-              버튼. 우클릭 컨텍스트 메뉴 대신 직관적 위치 (sidebar
-              하단, drag handle 과 시각 근접) 에 노출. */}
+        {/* Q21 #3-a — a visible "Reset sidebar width" button. Placed
+              intuitively (bottom of the sidebar, visually near the drag
+              handle) instead of in a right-click context menu. */}
         <Button
           variant="ghost"
           size="xs"
@@ -311,10 +310,10 @@ export default function Sidebar() {
       </div>
 
       {/* Resize handle.
-            Sprint 378 (2026-05-17) — 더블클릭 = width reset. `handleResetSidebarWidth`
-            는 sprint-376 #3-a 의 IPC wrapper (`reset_setting("sidebar_width")`).
-            단일 클릭/drag-start 는 mousedown 만 트리거하므로 reset 과는
-            독립이다. */}
+            Double-click = width reset. `handleResetSidebarWidth` is the
+            Q21 #3-a IPC wrapper (`reset_setting("sidebar_width")`). A single
+            click / drag-start only triggers mousedown, so it is independent
+            of the reset. */}
       <div
         className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/90 active:bg-primary/90 focus-visible:outline-1 focus-visible:outline-ring"
         onMouseDown={handleResizeMouseDown}

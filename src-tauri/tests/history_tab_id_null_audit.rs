@@ -1,21 +1,20 @@
-//! 작성 2026-05-17 (Phase 6 sprint-375, AC-375-05) — boot 후 audit 가
-//! `tab_id IS NULL AND source != 'sidebar-prefetch'` row 를 정확히 카운트
-//! 하는지 검증.
+//! Written 2026-05-17 (AC-375-05) — checks that the post-boot audit counts
+//! `tab_id IS NULL AND source != 'sidebar-prefetch'` rows exactly.
 //!
-//! 사유 (test scenarios 8 원칙 적용):
-//!   - **user journey end-to-end**: 사용자 app 을 boot — `lib.rs::setup` 의
-//!     detached task 가 `boot_audit_history_tab_id_null_inner(pool)` 를
-//!     호출 → 정상/위반 source row 를 시드 → count 단언.
-//!   - **lego 맞물림**: history.rs (sprint-371) 의 schema (`tab_id`
-//!     nullable + `source TEXT NOT NULL`) + sprint-375 의 audit query 두
-//!     piece 가 함께 동작해야 통과.
-//!   - **sentinel 양극**: count = 0 (clean) / count > 0 (위반) 양 쪽
-//!     lock 으로 "audit query 가 광범위" / "audit query 가 너무 보수적"
-//!     회귀 모두 잡힘.
+//! Reason (applying the 8 test-scenario principles):
+//!   - **user journey end-to-end**: the user boots the app — the detached task in
+//!     `lib.rs::setup` calls `boot_audit_history_tab_id_null_inner(pool)` → seed
+//!     clean and violating source rows → assert the count.
+//!   - **interlocking pieces**: the `query_history` schema (`tab_id` nullable +
+//!     `source TEXT NOT NULL`) and the audit query are two pieces that have to
+//!     work together for this to pass.
+//!   - **both sentinel poles**: locking count = 0 (clean) and count > 0
+//!     (violation) catches the "audit query is too broad" regression and the
+//!     "audit query is too conservative" one alike.
 //!
-//! 본 테스트는 `boot_audit_history_tab_id_null_inner(&pool)` 을 직접 호출
-//! — 실제 tauri 부팅을 spawn 하지 않고 같은 entrypoint 를 시뮬레이션 (lib.rs
-//! 의 `tauri::async_runtime::spawn` 안에서 호출되는 함수와 동일).
+//! This test calls `boot_audit_history_tab_id_null_inner(&pool)` directly — it
+//! does not spawn a real tauri boot, it simulates the same entrypoint (the same
+//! function that runs inside `lib.rs`'s `tauri::async_runtime::spawn`).
 
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -65,13 +64,13 @@ async fn insert_row(pool: &SqlitePool, tab_id: Option<&str>, source: &str) {
 #[tokio::test]
 #[serial]
 async fn boot_audit_zero_when_clean() {
-    // sprint-375 — empty table 시 audit 가 0 을 보고하고 boot 흐름이 throw
-    // 없이 종료. user journey: 신규 설치 사용자 / fresh DB / 첫 boot 시나리오.
+    // With an empty table the audit reports 0 and the boot flow finishes without
+    // throwing. user journey: new install / fresh DB / first boot.
     let (_dir, pool) = setup().await;
     let count = count_history_tab_id_null_non_prefetch(&pool).await;
     assert_eq!(count, 0, "empty table 은 audit clean");
 
-    // boot 함수 자체도 panic 없이 종료해야 함 (logging 만).
+    // The boot function itself must also finish without panicking (logging only).
     boot_audit_history_tab_id_null_inner(&pool).await;
     cleanup();
 }
@@ -79,19 +78,19 @@ async fn boot_audit_zero_when_clean() {
 #[tokio::test]
 #[serial]
 async fn boot_audit_counts_only_non_prefetch_null_tabs() {
-    // sprint-375 — source별 invariant rule 을 정확히 enforce 하는지
-    // user journey 끝-까지 검증:
-    //   - sidebar-prefetch + tab_id NULL  → 허용 (count 미포함)
-    //   - raw / grid-edit / ddl-structure / mongo-op / explain + tab_id NULL → 위반
-    //   - 모두 tab_id 채워짐 → 허용
+    // Checks end to end through the user journey that the per-source invariant
+    // rule is enforced exactly:
+    //   - sidebar-prefetch + tab_id NULL  → allowed (not counted)
+    //   - raw / grid-edit / ddl-structure / mongo-op / explain + tab_id NULL → violation
+    //   - tab_id filled in everywhere → allowed
     let (_dir, pool) = setup().await;
 
-    // 정상 path 3종
+    // 3 clean paths
     insert_row(&pool, Some("tab-1"), "raw").await;
     insert_row(&pool, Some("tab-2"), "grid-edit").await;
     insert_row(&pool, None, "sidebar-prefetch").await;
 
-    // 위반 path 2종 — 다른 source / 모두 NULL tab_id
+    // 2 violating paths — different sources, both with NULL tab_id
     insert_row(&pool, None, "raw").await;
     insert_row(&pool, None, "ddl-structure").await;
 
@@ -101,7 +100,7 @@ async fn boot_audit_counts_only_non_prefetch_null_tabs() {
         "raw / ddl-structure + NULL tab_id 2건만 위반 count 에 포함"
     );
 
-    // boot inner — count > 0 이라도 panic 안 됨 (error log 한 줄).
+    // boot inner — no panic even when count > 0 (a single error log line).
     boot_audit_history_tab_id_null_inner(&pool).await;
     cleanup();
 }
@@ -109,9 +108,10 @@ async fn boot_audit_counts_only_non_prefetch_null_tabs() {
 #[tokio::test]
 #[serial]
 async fn boot_audit_all_non_prefetch_sources_flagged() {
-    // sprint-375 — 회귀 가드: non-prefetch source 각각 NULL tab_id 시
-    // count 에 포함되는지 individual 확인. user journey: 회귀가 한 source
-    // 만 break 했을 때 (예: ddl-structure caller 가 tab_id elide) 도 잡힘.
+    // Regression guard: check one source at a time that every non-prefetch source
+    // is counted when its tab_id is NULL. user journey: a regression that breaks
+    // only one source (a ddl-structure caller eliding tab_id, say) is still
+    // caught.
     let (_dir, pool) = setup().await;
 
     insert_row(&pool, None, "raw").await;
@@ -119,7 +119,7 @@ async fn boot_audit_all_non_prefetch_sources_flagged() {
     insert_row(&pool, None, "ddl-structure").await;
     insert_row(&pool, None, "mongo-op").await;
     insert_row(&pool, None, "explain").await;
-    // 그리고 정상 path 도 같이 — 둘이 섞여도 정확.
+    // Plus the clean paths — the count stays exact when the two are mixed.
     insert_row(&pool, None, "sidebar-prefetch").await;
     insert_row(&pool, Some("tab-9"), "raw").await;
 

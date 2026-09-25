@@ -341,8 +341,9 @@ describe("DataGrid — Quick Look focus exchange (#1734 (5))", () => {
     expect(document.activeElement).toBe(rovingAnchor());
   });
 
-  // Reason: owner default from the 2026-08-02 decision comment — "Quick Look
-  // 열림 중 행 선택 이동 시 상세 동기화 포함". Fixture rows: 0 = Alice, 2 = Charlie.
+  // Reason: owner default from the 2026-08-02 decision comment — "while
+  // Quick Look is open, moving the row selection also syncs the detail
+  // body". Fixture rows: 0 = Alice, 2 = Charlie.
   it("moving the row selection while the panel is open re-syncs the detail body", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");

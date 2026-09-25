@@ -68,7 +68,7 @@ describe("DocumentDatabaseTree", () => {
   beforeEach(() => {
     __resetDocumentStoreForTests();
     useWorkspaceStore.setState({ workspaces: {} });
-    // Sprint 137 — reset the connection store so previous tests' active DB
+    // Reset the connection store so previous tests' active DB
     // selections cannot leak into the auto-load guard.
     useConnectionStore.setState({ activeStatuses: {}, connections: [] });
   });
@@ -84,10 +84,11 @@ describe("DocumentDatabaseTree", () => {
     });
   });
 
-  // Sprint 346 (2026-05-15) — admin/config/local 시스템 DB 는 sidebar 의 맨
-  // 아래로 정렬, italic + muted 시각으로 사용자 DB 와 구분. backend 의
-  // list_database_names 가 정렬을 보장 안 해 admin 이 맨 위에 떠 사용자
-  // 자신의 DB 가 묻히는 UX 회귀를 막는다.
+  // The admin/config/local system DBs sort to the bottom of the sidebar
+  // and are set apart from user DBs with italic + muted styling. The
+  // backend's list_database_names guarantees no ordering, so admin can
+  // land at the top and bury the user's own DB; this guards that UX
+  // regression.
   it("renders system databases (admin/config/local) after user DBs, italic + muted", async () => {
     const tauri = (await import("@lib/tauri")) as unknown as {
       listMongoDatabases: ReturnType<typeof vi.fn>;
@@ -293,7 +294,7 @@ describe("DocumentDatabaseTree", () => {
     expect(first.type).toBe("table");
     if (first.type === "table") {
       expect(first.paradigm).toBe("document");
-      // Sprint 129 — addTab must populate the new dedicated fields…
+      // addTab must populate the dedicated fields…
       expect(first.database).toBe("table_view_test");
       expect(first.collection).toBe("users");
       // …and keep the legacy schema/table for backwards-compat with any
@@ -332,14 +333,12 @@ describe("DocumentDatabaseTree", () => {
     fireEvent.click(screen.getByLabelText("table_view_test database"));
 
     await waitFor(() => {
-      // Sprint 265 — nested `(connId, db)` cache shape.
+      // Nested `(connId, db)` cache shape.
       expect(
         useDocumentStore.getState().collections["conn-mongo"]?.table_view_test,
       ).toBeDefined();
     });
   });
-
-  // -- Sprint 129 --
 
   it("renders the search input with the documented aria-label", async () => {
     render(<DocumentDatabaseTree connectionId="conn-mongo" />);
@@ -445,9 +444,9 @@ describe("DocumentDatabaseTree", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────
-  // Sprint 135 — AC-S135-05 regression guard.
+  // AC-S135-05 regression guard.
   // The Mongo sidebar must stay at exactly 2 levels (database →
-  // collection). If a future sprint accidentally introduces a "schema"
+  // collection). If a later change accidentally introduces a "schema"
   // layer between database and collection (or flattens the tree), this
   // test fails before the user sees a regression.
   // ─────────────────────────────────────────────────────────────────
@@ -476,9 +475,9 @@ describe("DocumentDatabaseTree", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────
-  // Sprint 136 — preview / persist click semantics for the document
-  // tree. Mirrors the relational tree's AC-S136-01..04 so click
-  // semantics are paradigm-agnostic.
+  // Preview / persist click semantics for the document tree. Mirrors
+  // the relational tree's AC-S136-01..04 so click semantics are
+  // paradigm-agnostic.
   // ─────────────────────────────────────────────────────────────────
 
   it("AC-S136-03: single-click on a collection opens a preview tab (isPreview=true)", async () => {
@@ -582,12 +581,11 @@ describe("DocumentDatabaseTree", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────
-  // Sprint 137 — AC-S137-02: Mongo DB swap (DbSwitcher) must invalidate
-  // the document store cache and trigger an immediate re-fetch so the
-  // sidebar reflects the new DB. The 2026-04-27 user check found that
-  // the previous code path stayed pinned to the connection's default
-  // DB after a `switch_active_db` because the auto-load guard short-
-  // circuited on identical `connectionId`.
+  // AC-S137-02: Mongo DB swap (DbSwitcher) must invalidate the document
+  // store cache and trigger an immediate re-fetch so the sidebar
+  // reflects the new DB. The previous code path stayed pinned to the
+  // connection's default DB after a `switch_active_db` because the
+  // auto-load guard short-circuited on identical `connectionId`.
   // ─────────────────────────────────────────────────────────────────
 
   it("AC-S137-02: re-fetches the database list when the user-active DB changes (DB swap invalidates cache)", async () => {
@@ -685,18 +683,18 @@ describe("DocumentDatabaseTree", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────
-  // Sprint 156 — Phase 13 diagnostic edge cases for document preview.
-  // These tests diagnose user-reported Bug 2 (preview tabs accumulate
-  // instead of swapping) in the document paradigm context.
+  // Diagnostic edge cases for document preview. These tests diagnose
+  // user-reported Bug 2 (preview tabs accumulate instead of swapping)
+  // in the document paradigm context.
   // ─────────────────────────────────────────────────────────────────
 
-  // ADR 0027 (Sprint 262) — per-database workspace partition. The
-  // pre-S262 behaviour for this AC was "preview swaps GLOBALLY across
-  // databases" because tabs lived in one flat list. Under per-(connId,
-  // db) workspaces each database keeps its own preview slot, so
-  // clicking collections in two distinct databases yields TWO preview
-  // tabs (one per workspace). This is the new contract; the legacy
-  // swap is no longer reachable.
+  // ADR 0027 — per-database workspace partition. The earlier behaviour
+  // for this AC was "preview swaps GLOBALLY across databases" because
+  // tabs lived in one flat list. Under per-(connId, db) workspaces each
+  // database keeps its own preview slot, so clicking collections in two
+  // distinct databases yields TWO preview tabs (one per workspace).
+  // This is the current contract; the legacy swap is no longer
+  // reachable.
   it("AC-156-doc-01 (post-S262): clicking collections in different databases keeps a preview per-database", async () => {
     const tauriMock = await import("@lib/tauri");
     const listDatabasesSpy = vi.mocked(tauriMock.listMongoDatabases);
@@ -737,8 +735,9 @@ describe("DocumentDatabaseTree", () => {
     expect(yTab?.collection).toBe("y_collection");
   });
 
-  // Reason: double-click promote 후 다른 collection 클릭 시 permanent + preview
-  //         2개 탭이 생성되어야 함. relational 트리와 동일한 semantics (2026-04-28)
+  // Reason: after a double-click promote, clicking a different
+  //         collection must create two tabs, permanent + preview. Same
+  //         semantics as the relational tree.
   it("AC-156-doc-02: double-click promotion then clicking a different collection creates permanent + preview", async () => {
     // Override mock to include both table_view_test and dbX.
     const tauriMock = await import("@lib/tauri");
@@ -801,8 +800,8 @@ describe("DocumentDatabaseTree", () => {
     }
   });
 
-  // Reason: promote 후 같은 collection 다시 클릭해도 새 탭이 생기지 않아야 함.
-  //         exact match가 동작하는지 확인 (2026-04-28)
+  // Reason: after promoting, clicking the same collection again must
+  //         not create a new tab. Checks that the exact match works.
   it("AC-156-doc-03: after promoting, clicking the same collection again is idempotent", async () => {
     render(<DocumentDatabaseTree connectionId="conn-mongo" />);
 
@@ -831,13 +830,10 @@ describe("DocumentDatabaseTree", () => {
     }
   });
 
-  // ADR 0027 (Sprint 262) — see AC-156-doc-01 comment above. Phase 13's
-  // AC-13-06 tested the same legacy "global preview swap" that no
-  // longer applies once tabs are partitioned by `(connId, db)`. The
-  // updated contract: each database keeps its own preview slot
-  // independently, and clicking collections in two databases yields
-  // one preview per database. Same coverage as AC-156-doc-01 above,
-  // retained here so the Phase 13 reference is preserved in tests.
+  // ADR 0027 — see the AC-156-doc-01 note above. AC-13-06 tested the
+  // same legacy "global preview swap" that no longer applies once tabs
+  // are partitioned by `(connId, db)`. Same coverage as AC-156-doc-01,
+  // retained here so the AC-13-06 reference is preserved in tests.
   it("AC-13-06 (post-S262): keeps a preview slot per-database (same connection)", async () => {
     const tauriMock = await import("@lib/tauri");
     const listDatabasesSpy = vi.mocked(tauriMock.listMongoDatabases);
@@ -878,12 +874,11 @@ describe("DocumentDatabaseTree", () => {
     expect(yTab?.collection).toBe("y_collection");
   });
 
-  // Sprint 330 (Slice DB-Scope.3) — sidebar 우클릭으로 mongosh query tab
-  // 을 spawn. TabDbChip popover (Sprint 329) 가 가리키는 entry-point.
-  // 작성 이유: 사용자가 "다른 DB 에서 query 하고 싶다" 를 마음 먹었을 때
-  // 가는 단일 진입점이 이 우클릭. 다른 곳에는 같은 액션이 없어야 한다
-  // (toolbar DbSwitcher 는 Sprint 328 에서 hide, TabDbChip 은 Sprint 329
-  // 에서 display only).
+  // Right-clicking a sidebar database row spawns a mongosh query tab
+  // prefilled for that database.
+  // Reason: this right-click is the sidebar's entry point when the user
+  // decides "I want to query a different DB". `TabDbChip` retargets an
+  // existing tab instead of spawning one.
   it("Sprint 330: right-click on a database row spawns a mongosh query tab for that database", async () => {
     render(<DocumentDatabaseTree connectionId="conn-mongo" />);
 

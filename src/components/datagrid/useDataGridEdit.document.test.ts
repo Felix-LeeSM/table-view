@@ -4,11 +4,10 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { TableData } from "@/types/schema";
 import { useDocumentDataGridEdit } from "./useDocumentDataGridEdit";
 
-// Sprint 86 — document paradigm dispatch tests. These exercise the MQL
-// generator + Tauri wrapper branch introduced in `handleCommit` /
-// `handleExecuteCommit`. The Tauri module is mocked so tests never reach
-// the real bridge; we assert that each command kind fans out to the right
-// wrapper with the payload the generator produced.
+// Document paradigm dispatch tests. These exercise the MQL generator + Tauri
+// wrapper branch in `handleCommit` / `handleExecuteCommit`. The Tauri module
+// is mocked so tests never reach the real bridge; we assert that each command
+// kind fans out to the right wrapper with the payload the generator produced.
 
 const mockInsertDocument = vi.fn<(...args: unknown[]) => Promise<unknown>>(() =>
   Promise.resolve({ objectId: "507f1f77bcf86cd799439099" }),
@@ -185,8 +184,8 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
         patch: { $set: { name: "Ada Lovelace" } },
       },
     ]);
-    // sqlPreview remains null for the document paradigm so Sprint 87 can
-    // branch the preview modal on paradigm without ambiguity.
+    // sqlPreview remains null for the document paradigm so the preview modal
+    // can branch on paradigm without ambiguity.
     expect(result.current.sqlPreview).toBeNull();
   });
 
@@ -219,9 +218,8 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
       await result.current.handleExecuteCommit();
     });
 
-    // Sprint 326 — Slice I.1: per-command updateDocument / deleteDocument
-    // 가 단일 bulkWriteDocuments 호출로 묶임. 두 ops 가 하나의 IPC 안에
-    // 매핑되어 있는지 assert.
+    // Per-command updateDocument / deleteDocument are folded into a single
+    // bulkWriteDocuments call. Assert both ops map into one IPC.
     expect(mockBulkWriteDocuments).toHaveBeenCalledTimes(1);
     expect(mockBulkWriteDocuments).toHaveBeenCalledWith(
       "conn-mongo",
@@ -248,15 +246,14 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
     expect(result.current.editValue).toBe("");
     expect(mockFetchData).toHaveBeenCalledTimes(1);
     expect(mockExecuteQuery).not.toHaveBeenCalled();
-    // [AC-183-09a] — Mongo branch must NOT funnel through the new RDB
-    // batch transaction helper. Mongo retains its iterative dispatch
-    // (out-of-scope for Sprint 183, separate sprint will introduce
-    // multi-document transactions). 2026-05-01.
+    // [AC-183-09a] — Mongo branch must NOT funnel through the RDB batch
+    // transaction helper. Mongo retains its iterative dispatch;
+    // multi-document transactions are a separate, still-planned change.
     expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
   });
 
   it("handleExecuteCommit preserves pending state on dispatch failure", async () => {
-    // Sprint 326 I.1: commit path is bulkWriteDocuments, not per-command.
+    // Commit path is bulkWriteDocuments, not per-command.
     mockBulkWriteDocuments.mockRejectedValueOnce(new Error("boom"));
     const { result } = renderDocHook();
 
@@ -375,9 +372,8 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
     });
 
     // No preview opened (no valid commands), pendingEdits retained so the
-    // user can correct the mistake. We don't assert on errors state here
-    // because Sprint 87 will wire the generator errors into UI; Sprint 86's
-    // contract only requires no bad preview reaches the modal.
+    // user can correct the mistake. We don't assert on errors state here —
+    // the contract only requires that no bad preview reaches the modal.
     expect(result.current.mqlPreview).toBeNull();
     expect(result.current.pendingEdits.get("0-0")).toBe("mutated");
   });

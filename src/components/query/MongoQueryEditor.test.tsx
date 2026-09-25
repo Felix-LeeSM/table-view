@@ -28,13 +28,13 @@ import {
 import MongoQueryEditor from "./MongoQueryEditor";
 
 /**
- * Sprint 139 — MongoQueryEditor unit tests.
+ * MongoQueryEditor unit tests.
  *
- * Sprint 309 update: the editor is now a single mongosh surface. The
- * `queryMode` prop is gone, the wrapper aria-label is the single string
- * `"MongoDB Query Editor"`, and `data-query-mode` is no longer set. The
- * old "Find aria-label" / "Aggregate aria-label" cases collapse into one
- * "single aria-label" assertion. The structural guards below remain:
+ * The editor is a single mongosh surface. The `queryMode` prop is gone, the
+ * wrapper aria-label is the single string `"MongoDB Query Editor"`, and
+ * `data-query-mode` is no longer set. The old "Find aria-label" /
+ * "Aggregate aria-label" cases collapse into one "single aria-label"
+ * assertion. The structural guards below remain:
  *
  *  1. Mount the JSON language extension (NOT SQL).
  *  2. Surface MQL operator candidates through the autocomplete provider
@@ -84,9 +84,9 @@ describe("MongoQueryEditor (Sprint 139)", () => {
     await waitFor(() => expect(document.activeElement).toBe(cmContent));
   });
 
-  // Sprint 309 — single aria-label `"MongoDB Query Editor"`, no
-  // `data-query-mode`, JSON language. Combines the old find/aggregate
-  // aria-label assertions into one.
+  // Single aria-label `"MongoDB Query Editor"`, no `data-query-mode`, JSON
+  // language. Combines the old find/aggregate aria-label assertions into
+  // one.
   it("renders with the unified MongoDB aria-label and JSON language (Sprint 309)", () => {
     render(
       <MongoQueryEditor
@@ -170,7 +170,7 @@ describe("MongoQueryEditor (Sprint 139)", () => {
 
   // AC-S139-04 — `useMongoAutocomplete` returns extensions that, when
   // installed in the editor, never load an SQL grammar. Verifies via the
-  // active language facet. Sprint 309 — hook called without arguments.
+  // active language facet. The hook is called without arguments.
   it("useMongoAutocomplete extensions never bring in the SQL language", () => {
     const { result } = renderHook(() => useMongoAutocomplete());
     render(
@@ -230,9 +230,10 @@ describe("MongoQueryEditor (Sprint 139)", () => {
     expect(localOnExecute).toHaveBeenCalled();
   });
 
-  // #2509 — 실행하면 자동완성 팝업이 닫혀야 한다. 사용자 시퀀스:
-  // 에디터에 타이핑 → 자동완성 팝업이 뜬 채로 남음 → 쿼리 실행 →
-  // **팝업이 사라지고 결과가 가려지지 않는다** ← lock 대상.
+  // #2509 — executing must close the autocomplete popup. User sequence:
+  // type in the editor → the autocomplete popup stays open → run the query
+  // → **the popup disappears and does not hide the result** ← what is
+  // locked here.
   it("closes the autocomplete popup when the query executes (#2509)", async () => {
     const localOnExecute = vi.fn();
     render(
@@ -273,8 +274,8 @@ describe("MongoQueryEditor (Sprint 139)", () => {
     expect(localOnExecute).not.toHaveBeenCalled();
   });
 
-  // Reason: #1225 — 전 쿼리 에디터 history() 미장착으로 Cmd+Z undo 불가
-  // 사용자 보고 (2026-07-03).
+  // Reason: #1225 — user report that Cmd+Z undo does not work, because no
+  // query editor installs history().
   it("reverts an edit via undo (history extension installed) (#1225)", () => {
     render(
       <MongoQueryEditor

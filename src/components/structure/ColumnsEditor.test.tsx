@@ -1,21 +1,20 @@
-// Reason: Sprint 179 (AC-179-02 / AC-179-03 / AC-179-04) — verifies
-// ColumnsEditor's paradigm-aware copy in isolation. The structure-level
-// tests already exercise the RDB default through StructurePanel.test.tsx;
-// this sibling file keeps the dictionary-driven assertions close to the
-// component they cover so the audit (labels-audit.md) can point here for
-// the "Add Column"/"Add Field" + empty-state evidence. Date: 2026-04-30.
+// Reason: AC-179-02 / AC-179-03 / AC-179-04 — verifies ColumnsEditor's
+// paradigm-aware copy in isolation. The structure-level tests already
+// exercise the RDB default through StructurePanel.test.tsx; this sibling
+// file keeps the dictionary-driven assertions close to the component they
+// cover so the audit (labels-audit.md) can point here for the "Add
+// Column"/"Add Field" + empty-state evidence.
 //
-// Sprint 187 (AC-187-04) — extends this file with strict / warn / cancel /
-// confirm regressions for the structure-surface Safe Mode gate. The
-// `@lib/tauri` mock is hoisted so each test can stub `alterTable` to
-// return the danger DDL we want the analyzer to flag. Date: 2026-05-01.
+// AC-187-04 — extends this file with strict / warn / cancel / confirm
+// regressions for the structure-surface Safe Mode gate. The `@lib/tauri`
+// mock is hoisted so each test can stub `alterTable` to return the danger
+// DDL we want the analyzer to flag.
 //
-// Sprint 236 (AC-236-04 / AC-236-05) — `+ Column` toolbar button + per-row
-// trash icon both REROUTED through `AddColumnDialog` / `DropColumnDialog`
-// modals (no longer push pendingChanges). The inline-batched MODIFY path
-// (Edit pencil → change → save → Review SQL → Execute) stays UNCHANGED,
-// so the Sprint 187 Safe Mode gate regressions are migrated to drive
-// the modify path instead of the trash path. Date: 2026-05-07.
+// AC-236-04 / AC-236-05 — `+ Column` toolbar button + per-row trash icon
+// both REROUTED through `AddColumnDialog` / `DropColumnDialog` modals (no
+// longer push pendingChanges). The inline-batched MODIFY path (Edit pencil
+// → change → save → Review SQL → Execute) stays UNCHANGED, so the Safe
+// Mode gate regressions drive the modify path instead of the trash path.
 
 import {
   act,
@@ -35,19 +34,18 @@ beforeEach(() => {
         sql: "ALTER TABLE users DROP COLUMN email",
       }),
     ),
-    // Sprint 236 — modal IPC wrappers are mocked so the dialogs mount
-    // without exploding when ColumnsEditor renders them. The modal flow
-    // itself is covered by `AddColumnDialog.test.tsx` /
-    // `DropColumnDialog.test.tsx`.
+    // Modal IPC wrappers are mocked so the dialogs mount without exploding
+    // when ColumnsEditor renders them. The modal flow itself is covered by
+    // `AddColumnDialog.test.tsx` / `DropColumnDialog.test.tsx`.
     addColumnRequest: vi.fn(() => Promise.resolve({ sql: "" })),
     dropColumnRequest: vi.fn(() => Promise.resolve({ sql: "" })),
     listPostgresTypes: vi.fn(() => Promise.resolve([])),
-    // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+    // `<DryRunPreview>` IPC stub for confirm dialog.
     executeQueryDryRun: vi.fn(() => Promise.resolve([])),
     cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
-    // Sprint 237 — NULL-rows conflict probe IPC. Default resolves to 0
-    // so existing tests (which don't toggle nullable→NOT NULL) stay
-    // green; targeted tests override via `vi.mocked(...).mockResolvedValue`.
+    // NULL-rows conflict probe IPC. Default resolves to 0 so existing tests
+    // (which don't toggle nullable→NOT NULL) stay green; targeted tests
+    // override via `vi.mocked(...).mockResolvedValue`.
     countNullRows: vi.fn(() => Promise.resolve(0)),
   });
 });
@@ -85,12 +83,11 @@ function setProductionConnection() {
   });
 }
 
-// Sprint 236 — drives the inline-batched MODIFY path (Edit pencil →
-// change data_type → save) instead of the legacy inline-trash drop. The
-// hoisted `alterTable` mock returns a DROP COLUMN preview so the Safe
-// Mode analyzer still classifies the staged batch as danger (mirrors
-// the original Sprint 187 fixture intent). The trash icon is now a
-// modal opener and is NOT exercised here.
+// Drives the inline-batched MODIFY path (Edit pencil → change data_type →
+// save) instead of the legacy inline-trash drop. The hoisted `alterTable`
+// mock returns a DROP COLUMN preview so the Safe Mode analyzer still
+// classifies the staged batch as danger (mirrors the original fixture
+// intent). The trash icon is a modal opener and is NOT exercised here.
 async function renderEditorAndOpenPreview(columns = [SAMPLE_COLUMN]) {
   const onRefresh = vi.fn().mockResolvedValue(undefined);
   const view = render(
@@ -146,7 +143,7 @@ describe("ColumnsEditor — paradigm-aware copy (Sprint 179)", () => {
   // Reason: AC-179-02b — paradigm="document" renders the Mongo button +
   // empty-state copy. The aria-label uses sentence case ("Add field") to
   // match the legacy ariaAddUnit pattern; visible text uses title case
-  // ("Add Field") sourced from the dictionary. Date: 2026-04-30.
+  // ("Add Field") sourced from the dictionary.
   it("[AC-179-02b] paradigm=\"document\" renders 'Add Field' button and 'No fields found' empty state", () => {
     renderEditor({ paradigm: "document" });
 
@@ -163,7 +160,7 @@ describe("ColumnsEditor — paradigm-aware copy (Sprint 179)", () => {
   // Reason: AC-179-02 negative assertion — under paradigm="document" the
   // RDB strings ("Add Column", "No columns found", and the lowercase
   // aria-label "Add column") are absent so users don't see the wrong
-  // vocabulary. Date: 2026-04-30.
+  // vocabulary.
   it('[AC-179-02c] paradigm="document" hides RDB vocabulary', () => {
     renderEditor({ paradigm: "document" });
 
@@ -176,7 +173,7 @@ describe("ColumnsEditor — paradigm-aware copy (Sprint 179)", () => {
 
   // Reason: AC-179-03 — explicit paradigm="rdb" continues to render the
   // legacy RDB vocabulary (button "Add Column" + empty-state "No columns
-  // found"). Date: 2026-04-30.
+  // found").
   it("[AC-179-03c] paradigm=\"rdb\" renders 'Add Column' + 'No columns found'", () => {
     renderEditor({ paradigm: "rdb" });
 
@@ -190,7 +187,6 @@ describe("ColumnsEditor — paradigm-aware copy (Sprint 179)", () => {
   // Reason: AC-179-04b — paradigm prop missing/undefined falls back to
   // the RDB dictionary entry without throwing. Component-level fence on
   // top of the dictionary-level fence (paradigm-vocabulary.test.ts).
-  // Date: 2026-04-30.
   it("[AC-179-04b] paradigm undefined falls back to RDB vocabulary", () => {
     renderEditor({ paradigm: undefined });
 
@@ -214,11 +210,10 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
     });
   });
 
-  // AC-187-04a — production + strict + danger-classified preview opens
-  // the confirm dialog (was block under Sprint 187/244). Sprint 245
-  // (ADR 0022 Phase 1) — destructive-only policy uses the same dialog
-  // for strict / warn / off on production. date 2026-05-01 /
-  // 2026-05-07 / 2026-05-08.
+  // AC-187-04a — production + strict + danger-classified preview opens the
+  // confirm dialog (was block under the earlier policy). ADR 0022 Phase 1 —
+  // the destructive-only policy uses the same dialog for strict / warn / off
+  // on production.
   it("[AC-187-04a] production + strict + danger preview → confirm dialog opens, alterTable deferred", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
@@ -239,13 +234,11 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
     ).toBe(false);
   });
 
-  // AC-187-04b — production + warn + danger preview opens the
-  // confirm dialog instead of committing. alterTable must not be
-  // invoked with preview_only=false until the user clicks Confirm.
-  // Sprint 236 migrated the trigger to the inline MODIFY path; Sprint
-  // 246 (ADR 0022 Phase 2) replaced the type-to-confirm gate with the
-  // simple Yes/No environment-aware dialog. date 2026-05-01 /
-  // 2026-05-07 / 2026-05-08.
+  // AC-187-04b — production + warn + danger preview opens the confirm dialog
+  // instead of committing. alterTable must not be invoked with
+  // preview_only=false until the user clicks Confirm. The trigger is the
+  // inline MODIFY path, and ADR 0022 Phase 2 replaced the type-to-confirm
+  // gate with the simple Yes/No environment-aware dialog.
   it("[AC-187-04b] production + warn + danger preview → ConfirmDestructiveDialog mount", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -268,11 +261,10 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
     ).toBe(false);
   });
 
-  // AC-187-04c — confirm flow: clicking the simple Confirm button
-  // invokes alterTable with preview_only=false. Sprint 246 (ADR 0022
-  // Phase 2) replaced the type-to-confirm + Run-anyway gate with a
-  // single Yes button, so the test drives the destructive testid
-  // directly. date 2026-05-01 / 2026-05-07 / 2026-05-08.
+  // AC-187-04c — confirm flow: clicking the simple Confirm button invokes
+  // alterTable with preview_only=false. ADR 0022 Phase 2 replaced the
+  // type-to-confirm + Run-anyway gate with a single Yes button, so the test
+  // drives the destructive testid directly.
   it("[AC-187-04c] confirmDangerous → alterTable called with preview_only=false", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -299,11 +291,10 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
   });
 
   // AC-187-04d — cancel flow: clicking Cancel inside the warn dialog
-  // surfaces the standard warn message via the SQL preview error banner
-  // (no toast — structure-surface dialog already shows inline errors).
-  // Sprint 246 — Cancel button is reachable via the dialog's stable
-  // testid; no need to query the AlertDialog DOM. date 2026-05-01 /
-  // 2026-05-07 / 2026-05-08.
+  // surfaces the standard warn message via the SQL preview error banner (no
+  // toast — structure-surface dialog already shows inline errors). The Cancel
+  // button is reachable via the dialog's stable testid; no need to query the
+  // AlertDialog DOM.
   it("[AC-187-04d] cancelDangerous → previewError set with warn message", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -329,8 +320,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
   });
 
   // AC-187-04e — non-production environment skips the gate entirely.
-  // The MODIFY-flow click should commit immediately. date 2026-05-01 /
-  // 2026-05-07.
+  // The MODIFY-flow click should commit immediately.
   it("[AC-187-04e] non-production environment commits without gate", async () => {
     useConnectionStore.setState({
       connections: [
@@ -367,11 +357,11 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
     });
   });
 
-  // AC-196-04-1 — Sprint 196 (FB-5b). Successful ALTER apply records a
-  // queryHistoryStore entry tagged `source: "ddl-structure"`. We re-use
-  // the development-environment scaffold so the Safe Mode gate stays in
-  // permissive mode (development connection) and the apply flows directly
-  // to runAlter without a confirm-dialog detour. 2026-05-02 / 2026-05-07.
+  // AC-196-04-1 (FB-5b) — successful ALTER apply records a queryHistoryStore
+  // entry tagged `source: "ddl-structure"`. We re-use the
+  // development-environment scaffold so the Safe Mode gate stays in permissive
+  // mode (development connection) and the apply flows directly to runAlter
+  // without a confirm-dialog detour.
   it("[AC-196-04-1] runAlter records a ddl-structure history entry on success", async () => {
     const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
     useQueryHistoryStore.setState({ recentVisible: [] });
@@ -409,11 +399,11 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
   });
 });
 
-// Sprint 236 — `+ Column` toolbar button now opens `<AddColumnDialog>`
-// (modal). The inline `NewColumnRow` path is removed. Trash icon now
-// opens `<DropColumnDialog>`. These two tests pin the new mount
-// contract; the dialog internals themselves are exercised by
-// `AddColumnDialog.test.tsx` / `DropColumnDialog.test.tsx`. 2026-05-07.
+// The `+ Column` toolbar button opens `<AddColumnDialog>` (modal). The
+// inline `NewColumnRow` path is removed. The trash icon opens
+// `<DropColumnDialog>`. These two tests pin the mount contract; the dialog
+// internals themselves are exercised by `AddColumnDialog.test.tsx` /
+// `DropColumnDialog.test.tsx`.
 describe("ColumnsEditor — Sprint 236 modal entrypoints", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -478,14 +468,13 @@ describe("ColumnsEditor — Sprint 236 modal entrypoints", () => {
   });
 });
 
-// Sprint 237 — Column MODIFY USING + NULL-rows conflict probe (Phase 27
-// closure). The inline MODIFY editor gains: (a) a conditional USING
-// input that appears when the user changes the data type, threaded into
-// the `alterTable` payload as `using_expression`; (b) a 500 ms debounced
-// `countNullRows` probe that fires when the user toggles SET NOT NULL on
-// a currently-nullable column, surfacing an inline warning when the
-// count > 0. Both behaviours are advisory — neither blocks preview /
-// commit. 2026-05-13.
+// Column MODIFY USING + NULL-rows conflict probe. The inline MODIFY editor
+// has: (a) a conditional USING input that appears when the user changes the
+// data type, threaded into the `alterTable` payload as `using_expression`;
+// (b) a 500 ms debounced `countNullRows` probe that fires when the user
+// toggles SET NOT NULL on a currently-nullable column, surfacing an inline
+// warning when the count > 0. Both behaviours are advisory — neither blocks
+// preview / commit.
 describe("ColumnsEditor — Sprint 237 USING + null-rows probe", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -703,11 +692,10 @@ describe("ColumnsEditor — Sprint 237 USING + null-rows probe", () => {
     vi.useRealTimers();
   });
 
-  // [AC-237-04d] — Sprint 237 Attempt 2 (P2-1). The probe is advisory; a
-  // rejected `countNullRows` (network / permission / pool swap) must be
-  // swallowed silently — no warning surfaced, no toast, no preview /
-  // commit blocking. PG surfaces the real error on commit if the user
-  // proceeds. 2026-05-13.
+  // [AC-237-04d] — the probe is advisory; a rejected `countNullRows`
+  // (network / permission / pool swap) must be swallowed silently — no
+  // warning surfaced, no toast, no preview / commit blocking. PG surfaces the
+  // real error on commit if the user proceeds.
   it("[AC-237-04d] countNullRows rejection is silently swallowed — no warning, no toast", async () => {
     vi.useFakeTimers();
     vi.mocked(tauri.countNullRows).mockRejectedValue(new Error("network"));
@@ -740,7 +728,7 @@ describe("ColumnsEditor — Sprint 237 USING + null-rows probe", () => {
 // Purpose: #1735 — column comment edit is exposed ONLY where the engine emits
 // COMMENT ON COLUMN (PG/Oracle → `canEditColumnComment`), and the edited value
 // forwards through the `alter_table` payload as `new_comment`. MySQL/MSSQL keep
-// the comment cell read-only even in edit mode (2026-07-25).
+// the comment cell read-only even in edit mode.
 describe("ColumnsEditor — #1735 column comment edit", () => {
   beforeEach(() => {
     // P3 isolation, mirroring the three sibling describes: the shared
@@ -756,7 +744,7 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
 
   // Reason: #1735 — with the capability on, entering edit mode surfaces the
   // comment input and Save forwards the typed value as `new_comment` in the
-  // alterTable preview payload (2026-07-25).
+  // alterTable preview payload.
   it("edits the comment cell and forwards new_comment when canEditColumnComment", async () => {
     render(
       <ColumnsEditor
@@ -798,7 +786,7 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
   // comment, emptying the input must forward `new_comment: ""` (the explicit
   // clear the backend turns into PG `IS NULL` / Oracle `IS ''`). Without this
   // case an FE regression to `comment || null` would drop the clear silently
-  // and no test would fail (2026-07-25).
+  // and no test would fail.
   it("forwards new_comment as an empty string when the existing comment is cleared", async () => {
     render(
       <ColumnsEditor
@@ -830,7 +818,7 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
 
   // Reason: #1735 — an engine that defers comment emit (MySQL/MSSQL,
   // `canEditColumnComment={false}`) must keep the comment cell read-only: no
-  // comment input appears in edit mode, so no broken edit is surfaced (2026-07-25).
+  // comment input appears in edit mode, so no broken edit is surfaced.
   it("keeps the comment cell read-only when canEditColumnComment is false", () => {
     render(
       <ColumnsEditor
@@ -854,8 +842,8 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
   // Reason: #1804 — an engine that adds and drops columns but needs a full
   // table rebuild to change one (SQLite) keeps `canAlterTable` true and
   // `canModifyColumn` false. Add + Delete stay live and the per-row Edit stays
-  // on screen, disabled — the 2026-07-25 owner grill on #1804 kept the open
-  // question's default (disable + tooltip) for rebuild-requiring changes.
+  // on screen, disabled — the owner grill on #1804 kept the open question's
+  // default (disable + tooltip) for rebuild-requiring changes.
   it("disables the per-row Edit when canModifyColumn is false and keeps Add/Delete", () => {
     render(
       <ColumnsEditor

@@ -1,10 +1,10 @@
 /**
- * 작성 2026-05-17 (Phase 5 sprint-372 / AC-372-01, AC-372-05, AC-372-08).
+ * AC-372-01, AC-372-05, AC-372-08.
  *
- * 사유: QueryLog 가 store `entries` 가 아닌 backend `list_history` IPC 를
- * 통해 row 를 채우는지, 그리고 detail click 이 `get_history_detail` IPC
- * 를 trigger 하는지 lock. user journey 의 출발점이라 mount/toggle 시점부터
- * detail modal 노출까지 outcome 단위로 따라간다.
+ * Reason: locks that QueryLog fills its rows through the backend
+ * `list_history` IPC rather than the store `entries`, and that a detail click
+ * triggers the `get_history_detail` IPC. It is the start of the user journey,
+ * so it follows outcomes from mount/toggle through the detail modal showing.
  */
 
 import {
@@ -51,9 +51,9 @@ describe("QueryLog list_history wire (sprint-372)", () => {
     resetStateChangedRegistryForTests();
   });
 
-  // AC-372-01 — QueryLog mount 시 list_history IPC 1회.
-  // 작성 2026-05-17. 사유: 본 dock panel 이 backend 단일 truth 로 가는
-  // 전환의 첫 user touchpoint. 단일 IPC + sqlRedacted 도달까지 lock.
+  // AC-372-01 — one list_history IPC on QueryLog mount.
+  // Reason: this dock panel is the first user touchpoint of the move to the
+  // backend as single truth. Locks the single IPC and sqlRedacted arriving.
   it("[AC-372-01] toggle-query-log → list_history IPC + render rows", async () => {
     invokeMock.mockResolvedValueOnce({
       rows: [row(1, "SELECT * FROM users WHERE email = ?")],
@@ -65,26 +65,27 @@ describe("QueryLog list_history wire (sprint-372)", () => {
     await waitFor(() => {
       expect(screen.getByTestId("query-log-panel")).toBeInTheDocument();
     });
-    // Hook 가 mount 시 1회 호출
+    // The hook calls once on mount
     expect(invokeMock).toHaveBeenCalledWith("list_history", {
       req: { limit: 100 },
     });
-    // sqlRedacted (truncated) 가 표시됨
+    // sqlRedacted (truncated) is shown
     await waitFor(() => {
       expect(screen.getByTestId("query-log-row-1")).toBeInTheDocument();
     });
   });
 
-  // AC-372-08 — redact-only display. dock panel 어디에도 원문 sql 0 노출.
-  // 작성 2026-05-17. 사유: privacy invariant strategy F.5. List 응답이
-  // sqlRedacted 만 보내고, panel render 도 sqlRedacted 만 사용.
+  // AC-372-08 — redact-only display. The original sql is exposed nowhere in
+  // the dock panel.
+  // Reason: privacy invariant strategy F.5. The list response sends only
+  // sqlRedacted, and the panel render uses only sqlRedacted.
   it("[AC-372-08] panel never renders raw sql even if a fake row tried to leak", async () => {
     invokeMock.mockResolvedValueOnce({
       rows: [
         {
           ...row(1),
-          // 백엔드가 보내지 않는 시나리오지만, 만약 누군가 row 에 sql
-          // 필드를 박아도 component 가 화면에 안 그려야 한다.
+          // The backend never sends this, but even if someone stuffs a sql
+          // field into a row the component must not render it.
           sqlRedacted: "SELECT * FROM users WHERE email = ?",
         },
       ],
@@ -96,13 +97,13 @@ describe("QueryLog list_history wire (sprint-372)", () => {
     await waitFor(() => {
       expect(panel).toHaveTextContent("?");
     });
-    // 원문 leak 이 panel 안에 안 들어옴.
+    // No leak of the original reaches the panel.
     expect(panel).not.toHaveTextContent("leak@example.com");
   });
 
-  // AC-372-05 — first-page 상태에서 create event → refetch + prepend.
-  // 작성 2026-05-17. 사유: 다른 window 에서 INSERT 한 entry 가 본 dock 의
-  // 첫 위치에 prepend 되어야 사용자가 즉시 확인 가능.
+  // AC-372-05 — create event while on the first page → refetch + prepend.
+  // Reason: an entry INSERTed from another window must be prepended at the
+  // top of this dock so the user sees it at once.
   it("[AC-372-05] history.create event triggers refetch and prepends the new row", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [row(1)] });
     render(<QueryLog />);
@@ -112,7 +113,7 @@ describe("QueryLog list_history wire (sprint-372)", () => {
       expect(screen.getByTestId("query-log-row-1")).toBeInTheDocument();
     });
 
-    // 두 번째 IPC — refetch 응답 (id=2 가 위, id=1 가 아래)
+    // Second IPC — refetch response (id=2 on top, id=1 below)
     invokeMock.mockResolvedValueOnce({ rows: [row(2), row(1)] });
 
     await act(async () => {
@@ -133,9 +134,9 @@ describe("QueryLog list_history wire (sprint-372)", () => {
     expect(invokeMock).toHaveBeenCalledTimes(2);
   });
 
-  // detail click 경로 — row 클릭 → modal mount → get_history_detail IPC.
-  // 작성 2026-05-17. 사유: 원문 sql 의 유일한 노출 path (AC-372-03) 가
-  // dock panel 에서 trigger 됨을 확인.
+  // detail click path — row click → modal mount → get_history_detail IPC.
+  // Reason: confirms the dock panel triggers the only path that exposes the
+  // original sql (AC-372-03).
   it("row click opens detail modal and fires get_history_detail IPC", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [row(7)] });
     render(<QueryLog />);
@@ -162,9 +163,9 @@ describe("QueryLog list_history wire (sprint-372)", () => {
     ).toBeInTheDocument();
   });
 
-  // search filter — client side filter on sqlRedacted. 사용자 입력이
-  // visible row 를 좁힌다 (backend search 는 sprint-373+).
-  // 작성 2026-05-17. 사유: dock 의 검색 UX 가 유지됨을 회귀 가드.
+  // search filter — client side filter on sqlRedacted. User input narrows
+  // the visible rows (a backend search is a later refinement).
+  // Reason: regression guard that the dock's search UX keeps working.
   it("search input filters rows by sqlRedacted (client side)", async () => {
     invokeMock.mockResolvedValueOnce({
       rows: [row(1, "SELECT * FROM users"), row(2, "SELECT * FROM orders")],

@@ -807,15 +807,16 @@ async fn test_select_with_block_comment() {
     adapter.disconnect_pool().await.ok();
 }
 
-// ── #1086 — 서버측 단일 실행 회귀 가드 ────────────────────────────────────
-// 작성: 2026-07-03. PG Select 경로가 (1) 메타데이터용 원쿼리 실행 + (2)
-// row_to_json wrap 실행으로 같은 statement 를 서버에서 2회 적용하던 버그.
-// 부수효과(nextval / data-modifying CTE)가 2배 적용되거나 wrap 이 거부돼
-// "커밋 후 에러" 가 났다. Fix: describe(실행 X) + wrap 1회 / SHOW·EXPLAIN·
-// data-modifying WITH 는 wrap 없는 단일 실행. 사용자가 본 증상(nextval 이
-// 2, WITH 가 에러, SHOW 가 syntax error)을 그대로 assertion 으로 박는다.
+// ── #1086 — server-side single-execution regression guard ─────────────────
+// Written: 2026-07-03. The PG Select path applied the same statement twice on
+// the server: (1) the raw query for metadata and (2) the row_to_json wrap. Side
+// effects (nextval / a data-modifying CTE) landed twice, or the wrap was
+// rejected and produced an "error after commit". Fix: describe (no execution) +
+// one wrap, while SHOW / EXPLAIN / data-modifying WITH run once with no wrap.
+// The assertions pin the exact symptoms users saw (nextval reaching 2, WITH
+// erroring, SHOW reporting a syntax error).
 
-/// ADR 0026 — bigint 컬럼은 JSON string 토큰으로 wire 인코딩된다.
+/// ADR 0026 — a bigint column is wire-encoded as a JSON string token.
 fn read_i64(r: &QueryResult) -> i64 {
     r.rows[0][0]
         .as_str()
@@ -824,8 +825,9 @@ fn read_i64(r: &QueryResult) -> i64 {
         .expect("must parse as i64")
 }
 
-/// nextval 은 서버에서 정확히 1회만 증가해야 한다. 이중 실행이면 첫 SELECT
-/// 가 2, 두 번째가 4 를 돌려주고 sequence last_value 가 4 가 된다.
+/// nextval must advance exactly once on the server. Under double execution the
+/// first SELECT returns 2, the second returns 4, and the sequence last_value
+/// becomes 4.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_select_nextval_executes_exactly_once() {
@@ -902,8 +904,8 @@ async fn test_select_nextval_executes_exactly_once() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// SHOW 은 wrap 없이 단일 행을 돌려줘야 한다. 이전에는 2차 wrap 실행이 항상
-/// syntax error 를 냈다.
+/// SHOW must return a single row with no wrap. The second, wrapping execution
+/// used to raise a syntax error every time.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_show_returns_row_without_wrap_error() {
@@ -928,9 +930,10 @@ async fn test_show_returns_row_without_wrap_error() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// data-modifying CTE 는 서버에서 정확히 1회 실행돼야 한다 — RETURNING 행을
-/// 돌려주고 테이블에 정확히 1행만 남긴다. 이전에는 1차 실행이 INSERT·커밋
-/// 하고 2차 wrap 이 에러 → 사용자는 에러만 보는데 INSERT 는 이미 적용됨.
+/// A data-modifying CTE must run exactly once on the server — it returns the
+/// RETURNING row and leaves exactly one row in the table. Before, the first
+/// execution INSERTed and committed while the second, wrapping one errored, so
+/// the user saw only an error although the INSERT had already landed.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_data_modifying_with_executes_once() {
@@ -991,11 +994,12 @@ async fn test_data_modifying_with_executes_once() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// #1175 — per-cell 경로(data-modifying WITH)의 timestamp/timestamptz
-/// 직렬화가 wrap 경로(plain SELECT → `row_to_json`)와 문자 단위로 동일해야
-/// 한다. PR #1172 이전엔 per-cell TIMESTAMP 가 공백 구분자(`... 10:30:00`)를
-/// 써서 같은 컬럼이 실행 경로에 따라 다른 형식으로 나왔다. wrap 출력 자체를
-/// 기준값으로 잡고 per-cell 출력이 같은지 비교한다.
+/// #1175 — the timestamp/timestamptz serialization of the per-cell path
+/// (data-modifying WITH) must be character-for-character identical to the wrap
+/// path (plain SELECT → `row_to_json`). Before PR #1172 the per-cell TIMESTAMP
+/// used a space separator (`... 10:30:00`), so the same column came out in
+/// different formats depending on the execution path. This takes the wrap
+/// output itself as the baseline and compares the per-cell output against it.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_per_cell_timestamp_matches_wrap_path_1175() {
@@ -1089,15 +1093,17 @@ async fn test_per_cell_timestamp_matches_wrap_path_1175() {
 }
 
 // ── #1722 — describe-degrade fallback shares the un-wrapped decode ─────────
-// 작성: 2026-07-22. #1722 fix 는 wrappable SELECT 의 `describe()` 가 (PG-wire
-// 프록시서) 실패하면 un-wrapped per-cell 경로(`run_unwrapped`)로 저하한다.
-// 저하 경로가 wrapped 경로와 "같은 셀"을 내야 사용자가 프록시 뒤에서도
-// 동일한 데이터를 본다. 실제 프록시 없이는 describe 실패를 트리거할 수 없으므로
-// (README/PR 에 명시), 대신 저하 경로가 의존하는 불변식을 고정한다: un-wrapped
-// 경로(data-modifying WITH, 기존 public 트리거)의 mixed-scalar decode 가 wrapped
-// 경로(plain SELECT → row_to_json)와 셀 단위로 동일하다. int4→number,
-// int8→string(ADR 0026), text→string, bool→bool, numeric→string 을 한 번에 건다.
-// #1175 timestamp 등가성 테스트의 자매 가드.
+// Written: 2026-07-22. The #1722 fix degrades a wrappable SELECT to the
+// un-wrapped per-cell path (`run_unwrapped`) when its `describe()` fails
+// (behind a PG-wire proxy). The degraded path must produce "the same cells" as
+// the wrapped path so the user sees identical data behind a proxy too. A
+// describe failure cannot be triggered without a real proxy (stated in the
+// README/PR), so this instead pins the invariant the degraded path relies on:
+// the mixed-scalar decode of the un-wrapped path (data-modifying WITH, the
+// existing public trigger) is cell-for-cell identical to the wrapped path
+// (plain SELECT → row_to_json). It covers int4→number, int8→string (ADR 0026),
+// text→string, bool→bool and numeric→string in one shot.
+// Sister guard to the #1175 timestamp-equivalence test.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_unwrapped_fallback_matches_wrapped_for_mixed_scalars_1722() {
@@ -1220,16 +1226,18 @@ async fn test_unwrapped_fallback_matches_wrapped_for_mixed_scalars_1722() {
     adapter.disconnect_pool().await.ok();
 }
 
-// ── execute_query_batch 통합 시나리오 ──────────────────────────────────────
-// 작성: 2026-05-08, Sprint 237 P5 후속 커버리지 보강.
-// 단위 테스트는 empty / validation 경로만 가지고 있고 실제 BEGIN/COMMIT/
-// ROLLBACK 분기는 통합으로만 hit 된다. 회귀 가드 4 종:
-//  1. happy path — 두 개의 INSERT 가 한 트랜잭션에서 모두 commit.
-//  2. rollback — 두 번째 statement 가 fail 하면 첫 statement 도 롤백되어
-//     테이블에 0 row 가 남아야 한다 (transaction atomicity).
-//  3. trailing semicolon — 각 statement 의 trailing `;` 는 strip 후 실행.
-//  4. mixed DML — UPDATE + DELETE 가 같은 batch 에서 누적 rows_affected 와
-//     index 별 결과가 모두 정확.
+// ── execute_query_batch integration scenarios ─────────────────────────────
+// Written: 2026-05-08, follow-up coverage for P5.
+// The unit tests only hold the empty / validation paths; the real
+// BEGIN/COMMIT/ROLLBACK branches are hit only through integration. Four
+// regression guards:
+//  1. happy path — two INSERTs both commit in one transaction.
+//  2. rollback — when the second statement fails the first is rolled back too,
+//     leaving 0 rows in the table (transaction atomicity).
+//  3. trailing semicolon — each statement's trailing `;` is stripped before
+//     execution.
+//  4. mixed DML — UPDATE + DELETE in the same batch produce an accurate
+//     cumulative rows_affected and accurate per-index results.
 
 #[tokio::test]
 #[serial_test::serial]
@@ -1274,9 +1282,9 @@ async fn test_execute_query_batch_commits_all_statements() {
     }
 
     // Verify rows actually persisted.
-    // Sprint 261 (ADR 0026) — COUNT(*) returns bigint, which is now
-    // wire-encoded as a JSON string token to preserve precision past
-    // ±(2^53-1). Parse the string for the integer assertion.
+    // ADR 0026 — COUNT(*) returns bigint, which is wire-encoded as a JSON
+    // string token to preserve precision past ±(2^53-1). Parse the string for
+    // the integer assertion.
     let count = adapter
         .execute_query(
             &format!("SELECT COUNT(*) AS n FROM {table}"),
@@ -1341,8 +1349,8 @@ async fn test_execute_query_batch_rolls_back_on_mid_failure() {
         "expected error to cite index, got: {msg}"
     );
 
-    // Sprint 261 (ADR 0026) — COUNT(*) returns bigint, wire-encoded as
-    // JSON string token to preserve precision. Parse before asserting 0.
+    // ADR 0026 — COUNT(*) returns bigint, wire-encoded as a JSON string
+    // token to preserve precision. Parse before asserting 0.
     let count = adapter
         .execute_query(
             &format!("SELECT COUNT(*) AS n FROM {table}"),
@@ -1488,10 +1496,10 @@ async fn test_execute_query_batch_strips_trailing_semicolons() {
     adapter.disconnect_pool().await.ok();
 }
 
-// ── query_table_data 필터 / raw_where 시나리오 ────────────────────────────
-// 작성: 2026-05-08. queries.rs 의 큰 build-WHERE 분기 (filters vs raw_where,
-// pg_cast_type 의 cast suffix 적용, ORDER BY parser, pagination offset) 는
-// 통합으로만 진짜 검증 가능.
+// ── query_table_data filter / raw_where scenarios ─────────────────────────
+// Written: 2026-05-08. The large build-WHERE branch in queries.rs (filters vs
+// raw_where, the cast suffix `pg_cast_type` applies, the ORDER BY parser,
+// pagination offset) can only really be verified through integration.
 
 async fn seed_filter_table(adapter: &table_view_lib::db::postgres::PostgresAdapter, table: &str) {
     adapter
@@ -1900,10 +1908,10 @@ async fn test_query_table_data_pagination_and_ordering() {
     adapter.disconnect_pool().await.ok();
 }
 
-// ── stream_table_rows 시나리오 ────────────────────────────────────────────
-// 작성: 2026-05-08. 단위 테스트로는 BEGIN/DECLARE CURSOR/FETCH/CLOSE 를
-// hit 할 수 없다. validation 분기 + happy path (mpsc 수신) + receiver-drop
-// 분기를 통합으로 고정.
+// ── stream_table_rows scenarios ───────────────────────────────────────────
+// Written: 2026-05-08. Unit tests cannot hit BEGIN/DECLARE CURSOR/FETCH/CLOSE.
+// Integration pins the validation branch, the happy path (mpsc receive) and
+// the receiver-drop branch.
 
 #[tokio::test]
 #[serial_test::serial]

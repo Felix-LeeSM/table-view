@@ -7,20 +7,22 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 /**
- * Sprint 323 — Slice G.1: type-aware inline editor for BSON wrappers.
+ * Type-aware inline editor for BSON wrappers.
  *
  * Invariants:
- * - 사용자 raw-string 은 항상 controlled state. coerce 실패 시 commit
- *   막고 hint 노출 → 사용자가 고치고 다시 Enter.
- * - Esc 는 onCancel 만 invoke (commit 안 함).
- * - F.2 의 plain-string Pencil 은 BSON type 미인식 cell 전용; 이 컴포넌트
- *   는 wrapper 인식된 cell 에서만 mount 된다 (Sprint 324 G.2 wire-up).
+ * - The user's raw string is always controlled state. A failed coerce
+ *   blocks the commit and shows a hint → the user fixes it and hits Enter
+ *   again.
+ * - Esc invokes onCancel only (no commit).
+ * - F.2's plain-string Pencil is for cells whose BSON type is not
+ *   recognised; this component mounts only on cells with a recognised
+ *   wrapper.
  */
 interface BsonTypeEditorProps {
   type: BsonType;
-  /** canonical EJSON wrapper. detect 미스매치 시 빈 input. */
+  /** Canonical EJSON wrapper. Empty input on a detect mismatch. */
   initialValue: unknown;
-  /** 검증 통과 시 canonical EJSON wrapper 객체로 호출. */
+  /** Called with the canonical EJSON wrapper object once validation passes. */
   onCommit: (value: Record<string, unknown>) => void;
   onCancel: () => void;
   ariaLabel: string;

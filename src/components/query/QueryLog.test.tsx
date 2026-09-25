@@ -1,13 +1,13 @@
 /**
- * 작성 2026-05-17 (Phase 5 sprint-372) — QueryLog 의 visual/UX 회귀 가드.
+ * Visual/UX regression guard for QueryLog.
  *
- * 사유: sprint-372 가 read source 를 `useQueryHistoryStore.entries` 에서
- * backend `list_history` IPC 로 바꿨다. 본 파일은 그 전환 이후에도
- * 유지되어야 할 visual invariants — 상태 dot 색 (success/error/cancelled),
- * 시간/duration 포매팅, paradigm-aware syntax highlighting (sprint-177 AC),
- * 그리고 toggle visibility / 빈 상태 / search filter — 를 IPC-mock 기반으로
- * 다시 잠근다. `list_history` 호출 wire shape + create/clear event refetch
- * 는 sibling `QueryLog.list-history.test.tsx` 에서 다룬다.
+ * Reason: the read source moved from `useQueryHistoryStore.entries` to the
+ * backend `list_history` IPC. This file re-locks, on IPC mocks, the visual
+ * invariants that must hold after that move — status dot colours
+ * (success/error/cancelled), time/duration formatting, paradigm-aware syntax
+ * highlighting, and toggle visibility / empty state / search filter. The
+ * `list_history` call wire shape and create/clear event refetch belong to the
+ * sibling `QueryLog.list-history.test.tsx`.
  */
 
 import {
@@ -24,7 +24,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-// Icons mocked so testid 단언이 변동 없이 안정적이다.
+// Icons mocked so testid assertions stay stable.
 vi.mock("lucide-react", () => ({
   Search: () => <span data-testid="icon-search" />,
   X: () => <span data-testid="icon-x" />,
@@ -37,9 +37,10 @@ import type { HistoryListRow } from "@lib/tauri/history";
 import QueryLog from "./QueryLog";
 
 /**
- * sprint-177 matcher helper — `QuerySyntax` 가 SQL 을 span tree 로 토큰화하므로
- * RTL 의 `getByText` 가 single text node 만 매칭한다. `font-mono` wrapper
- * span 으로 좁혀 joined `textContent` 가 needle 을 포함하는지 본다.
+ * Matcher helper — `QuerySyntax` tokenizes SQL into a span tree, so RTL's
+ * `getByText` matches a single text node only. Narrow to the `font-mono`
+ * wrapper span and check whether the joined `textContent` contains the
+ * needle.
  */
 function getByJoinedText(needle: string): HTMLElement {
   return screen.getByText((_, element) => {
@@ -221,7 +222,7 @@ describe("QueryLog visual + UX invariants (sprint-372 rewrite)", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 49 — theme CSS variables for status dots
+  // Theme CSS variables for status dots
   // -----------------------------------------------------------------------
   it("uses theme CSS variable for the success status dot", async () => {
     mockList([baseRow({ id: 1, status: "success" })]);
@@ -241,7 +242,7 @@ describe("QueryLog visual + UX invariants (sprint-372 rewrite)", () => {
     expect(dot.className).toContain("destructive");
   });
 
-  // sprint-180 [AC-180-03c] — cancelled status paints calm muted dot.
+  // [AC-180-03c] — cancelled status paints calm muted dot.
   it("[AC-180-03c] uses muted-foreground colour for the cancelled status dot", async () => {
     mockList([
       baseRow({
@@ -262,7 +263,7 @@ describe("QueryLog visual + UX invariants (sprint-372 rewrite)", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 177 — paradigm-aware syntax highlighting
+  // Paradigm-aware syntax highlighting
   // -----------------------------------------------------------------------
   describe("paradigm-aware syntax highlighting (sprint-177 invariant)", () => {
     it("[AC-177-01] Mongo entry surfaces the cm-mql-operator marker", async () => {

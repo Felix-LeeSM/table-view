@@ -1,20 +1,21 @@
-//! 작성 2026-05-16 (Phase 2 sprint-359) — AC-359-07: release_tab_connection
-//! 가 affinity entry 를 떨어뜨리고 (lazy) 후속 cancel 이 `AlreadyCompleted`
-//! 로 분류된다.
+//! Written 2026-05-16 — AC-359-07: release_tab_connection drops the affinity
+//! entry (lazy) and a later cancel is classified as `AlreadyCompleted`.
 //!
-//! Phase 2 의 dedicated `PoolConnection` per tab 가 본 sprint 에선 server-
-//! pid 만 추적 (codex 정합 — pool acquire 는 follow-up). 따라서 본 테스트는
-//! IPC 의 lifecycle 만 단언:
+//! The affinity record tracks the server pid only; holding a dedicated
+//! `PoolConnection` per tab is a follow-up (see the module doc of
+//! `commands/release_tab_connection.rs`). This test therefore asserts the IPC
+//! lifecycle alone:
 //!
-//! - `bind_tab_affinity` 후 entry 존재
-//! - `release_tab_connection` 호출 → entry 제거
-//! - 같은 server_pid 로 `cancel_query_native` → `AlreadyCompleted`
-//!   (connection 자체가 미연결 / 미존재 path 이므로 silent suppression)
+//! - the entry exists after `bind_tab_affinity`
+//! - calling `release_tab_connection` removes the entry
+//! - `cancel_query_native` with the same server_pid → `AlreadyCompleted`
+//!   (the connection itself is on the unconnected / absent path, so it is
+//!   silently suppressed)
 //!
-//! Live PG rollback (실제 INSERT 가 rollback 되는 wire timeline) 은
-//! `db/postgres/queries.rs` 의 transaction 통합 path 가 별도로 보장한다 —
-//! 본 IPC 는 PoolConnection drop → sqlx auto-rollback 의 layer 1
-//! orchestrator 다.
+//! Live PG rollback (the wire timeline where a real INSERT is rolled back) is
+//! guaranteed separately by the transaction integration path in
+//! `db/postgres/queries.rs` — this IPC is the layer-1 orchestrator of
+//! PoolConnection drop → sqlx auto-rollback.
 
 use table_view_lib::commands::cancel_query::{cancel_query_native_inner, CancelError};
 use table_view_lib::commands::connection::AppState;
@@ -41,14 +42,14 @@ async fn release_after_bind_drops_entry_and_subsequent_cancel_is_already_complet
         .unwrap();
     assert!(removed, "release 가 bound entry 를 제거해야 한다");
 
-    // 두 번째 release 는 silent no-op (이미 제거됨).
+    // The second release is a silent no-op (the entry is already gone).
     let removed2 = release_tab_connection_inner(&state, "conn-x", "tab-x")
         .await
         .unwrap();
     assert!(!removed2, "absent entry 의 release 는 false 여야 한다");
 
-    // cancel against the (now unmapped) pid — adapter 자체가 등록 안 됨 →
-    // AlreadyCompleted 로 분류 (frontend silent path).
+    // cancel against the (now unmapped) pid — the adapter itself is not
+    // registered → classified as AlreadyCompleted (frontend silent path).
     let r = cancel_query_native_inner(&state, "conn-x", 7777, None).await;
     assert!(
         matches!(r, Err(CancelError::AlreadyCompleted)),
@@ -59,8 +60,8 @@ async fn release_after_bind_drops_entry_and_subsequent_cancel_is_already_complet
 
 #[tokio::test]
 async fn release_does_not_touch_other_tabs() {
-    // 한 tab 의 release 가 다른 tab 의 entry 를 보존하는지 — connection-
-    // scoped key 의 핵심 invariant.
+    // Releasing one tab must preserve the other tabs' entries — the core
+    // invariant of the connection-scoped key.
     let state = AppState::new();
     bind_tab_affinity_inner(&state, "c", "tab-A", 1)
         .await

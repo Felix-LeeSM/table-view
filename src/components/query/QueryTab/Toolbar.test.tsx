@@ -1,10 +1,11 @@
-// Sprint 381 (2026-05-17) — Mongo db-contract α: Run-button gate.
+// Mongo db-contract α: Run-button gate.
 //
-// 작성 이유: 사용자 보고 캡처 (#2) 의 root cause 는 Run-button 이
-// `tab.database` 빈 문자열만으로 disabled 되는 점이었다. db-contract α
-// 가 admin command (`db.runCommand({...})` / `db.adminCommand({...})`)
-// 시 Run 을 enabled 해야 하므로 statement-kind 분기를 toolbar 가 어떻게
-// 반영하는지 lock 한다. AST 는 sprint-382 — 본 sprint 는 정규식 기반.
+// Reason: the root cause behind the user's report screenshot (#2) was
+// that the Run button went disabled on nothing more than an empty
+// `tab.database` string. db-contract α has to keep Run enabled for admin
+// commands (`db.runCommand({...})` / `db.adminCommand({...})`), so this
+// locks how the toolbar reflects the statement-kind branch. The AST
+// lands later — this gate is regex-based.
 
 import type { QueryTab } from "@stores/workspaceStore";
 import { render, screen } from "@testing-library/react";

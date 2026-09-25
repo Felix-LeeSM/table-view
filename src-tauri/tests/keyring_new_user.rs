@@ -1,17 +1,17 @@
-//! 작성 2026-05-16 (Phase 1 sprint-356)
+//! Written 2026-05-16.
 //!
-//! AC-356-01 Path A (신규 사용자) — 디스크 `.key` 없음 + 빈 keyring 상태에서
-//! `migrate_or_initialize()` 를 호출하면:
-//!   - keyring entry 1개 (이름 `com.tableview.app.file-key`) 가 생성된다.
-//!   - 디스크 `.key` 는 안 만들어진다 (평문 file 폐기).
-//!   - 반환된 `KeyOutcome.key` 는 32 byte AES key 다.
-//!   - 반환된 `KeyOutcome.source` 는 `Generated` 다.
-//!   - 반환된 `KeyOutcome.fallback_to_disk` 는 false 다.
+//! AC-356-01 Path A (new user) — calling `migrate_or_initialize()` with no disk
+//! `.key` and an empty keyring:
+//!   - creates one keyring entry (named `com.tableview.app.file-key`).
+//!   - does not create a disk `.key` (the plaintext file is discarded).
+//!   - returns a `KeyOutcome.key` that is a 32 byte AES key.
+//!   - returns `KeyOutcome.source` as `Generated`.
+//!   - returns `KeyOutcome.fallback_to_disk` as false.
 //!
-//! 본 통합 테스트는 In-memory `InMemoryKeyringBackend` 를 사용해 OS keyring
-//! 을 건드리지 않는다. 실제 macOS Keychain / Windows Credential Manager /
-//! Linux Secret Service 호환은 production `OsKeyringBackend` 의 unit 테스트
-//! 가 별도로 (CI matrix 에서) 다룬다.
+//! This integration test uses the in-memory `InMemoryKeyringBackend` so it does
+//! not touch the OS keyring. Compatibility with the real macOS Keychain /
+//! Windows Credential Manager / Linux Secret Service is covered separately (in
+//! the CI matrix) by the unit tests of the production `OsKeyringBackend`.
 
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -48,8 +48,8 @@ impl Drop for EnvVarGuard {
 
 #[test]
 fn ac_356_01_path_a_new_user_creates_keyring_entry_only() {
-    // 격리된 user-data dir — TABLE_VIEW_TEST_DATA_DIR env 로 storage 가
-    // 보는 디렉토리를 override. Guard restores the prior value on scope exit
+    // Isolated user-data dir — the TABLE_VIEW_TEST_DATA_DIR env var overrides
+    // the directory storage sees. Guard restores the prior value on scope exit
     // (including panic) so the env var never leaks to sibling tests.
     let dir = TempDir::new().unwrap();
     let _env = EnvVarGuard::set("TABLE_VIEW_TEST_DATA_DIR", dir.path());

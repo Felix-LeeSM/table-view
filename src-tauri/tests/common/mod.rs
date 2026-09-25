@@ -1,18 +1,19 @@
 //! Shared test utilities for integration tests.
 //!
-//! Sprint 237 P5+ (2026-05-08) — DB lifecycle을 테스트 프로세스가
-//! 직접 관리. testcontainers-rs로 첫 호출 시 PG/Mongo 컨테이너를 lazy
-//! 시작하고, 프로세스 종료 시 `docker rm -f -v` 로 자동 정리.
-//! docker-compose 외부 의존을 끊었기 때문에 `cargo pg-test`/`cargo mongo-test` 한
-//! 줄이면 호출자는 Docker daemon만 떠 있으면 된다.
+//! Written 2026-05-08 — the test process manages the DB lifecycle itself.
+//! testcontainers-rs lazily starts the PG/Mongo containers on the first call
+//! and cleans them up with `docker rm -f -v` when the process exits. The
+//! external docker-compose dependency is gone, so a single `cargo pg-test` /
+//! `cargo mongo-test` line is enough as long as the caller has the Docker
+//! daemon running.
 //!
-//! 빠른 iteration escape hatch: `PG_TEST_URL` (postgres://user:pass@host:port/db)
-//! 또는 `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` 가 셋팅돼
-//! 있으면 외부 PG 재사용. Mongo도 동일 패턴 (`MONGO_TEST_URL` 또는 host
-//! 변수).
+//! Fast-iteration escape hatch: when `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/
+//! `PGDATABASE` are all set, an external PG is reused. Mongo follows the same
+//! pattern (`MONGO_HOST` / `MONGO_PORT`).
 //!
-//! Docker daemon이 없는 환경에서는 testcontainers가 즉시 실패하고 helper
-//! 가 `None` 을 반환해 기존 통합 테스트의 silent-skip 시맨틱을 보존한다.
+//! Where no Docker daemon is running, testcontainers fails immediately and the
+//! helper returns `None`, preserving the existing integration tests'
+//! silent-skip semantics.
 
 pub mod query_result_contracts;
 
@@ -67,17 +68,9 @@ struct MongoEndpoint {
     auth_source: Option<String>,
 }
 
-/// Sprint 250 — MySQL endpoint resolver for Phase 17 (Sprint 251-256).
-///
-/// Adapter still unimplemented today; this helper exists so the future
-/// `mysql_integration.rs` test binary can resolve a connection endpoint
-/// from env vars without re-deriving the docker-compose default port
-/// convention (`prod default 3306 + 10000 → 13306`).
-///
-/// Unlike `pg_endpoint` / `mongo_endpoint`, this resolver is env-var only —
-/// testcontainers-modules MySQL spawning will be wired in Sprint 253
-/// alongside the `MysqlAdapter` itself, so we avoid pulling the extra
-/// feature flag now and keep `cargo test` startup cost flat.
+/// MySQL endpoint for the integration test binaries. The env-var defaults
+/// follow the docker-compose port convention (`prod default 3306 + 10000 →
+/// 13306`). See [`mysql_endpoint`] for how a value is resolved.
 #[derive(Clone, Debug)]
 struct MysqlEndpoint {
     host: String,
@@ -98,10 +91,11 @@ struct MssqlEndpoint {
     database: String,
 }
 
-/// 컨테이너 핸들을 process 종료까지 살려두기 위해 `Arc<...>` 로 보관.
-/// static 은 Drop 되지 않으므로 testcontainers 기본 Drop 에 기대지 않고,
-/// owner-pid 라벨 + 시작 시 dead-owner sweep + process-exit `rm -f -v` 로
-/// 컨테이너와 anonymous volume 누적을 차단한다.
+/// Container handles are held in an `Arc<...>` so they stay alive until the
+/// process exits. A static is never dropped, so instead of relying on
+/// testcontainers' default Drop, an owner-pid label + a dead-owner sweep at
+/// startup + a process-exit `rm -f -v` keep containers and anonymous volumes
+/// from piling up.
 static PG_CONTAINER: OnceCell<Option<Arc<ContainerAsync<PostgresImage>>>> = OnceCell::const_new();
 static MONGO_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MongoImage>>>> = OnceCell::const_new();
 static MYSQL_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MysqlImage>>>> = OnceCell::const_new();
@@ -135,7 +129,8 @@ fn fail_loud_under_ci(engine: &str, disable_var: &str, reason: &str) {
 }
 
 async fn pg_endpoint() -> Option<PgEndpoint> {
-    // 1) 외부 PG 재사용 — `PGHOST`/`PGPORT`/... 가 모두 있으면 그 값을 그대로.
+    // 1) Reuse an external PG — when `PGHOST`/`PGPORT`/... are all present,
+    //    use them as they are.
     if let (Ok(host), Ok(port_str), Ok(user), Ok(password), Ok(database)) = (
         std::env::var("PGHOST"),
         std::env::var("PGPORT"),
@@ -152,8 +147,8 @@ async fn pg_endpoint() -> Option<PgEndpoint> {
         });
     }
 
-    // 2) testcontainers — lazy 시작. owner-pid 라벨을 박고, 시작 전에
-    //    dead-owner sweep 으로 이전 run 의 좀비를 정리한다.
+    // 2) testcontainers — lazy start. Stamp the owner-pid label and, before
+    //    starting, clear the previous run's zombies with a dead-owner sweep.
     ensure_sweep_once().await;
     let pid = current_pid_label();
     let cell = PG_CONTAINER
@@ -201,8 +196,8 @@ async fn pg_endpoint() -> Option<PgEndpoint> {
 }
 
 async fn mongo_endpoint() -> Option<MongoEndpoint> {
-    // 1) 외부 Mongo 재사용 — host/port 만이라도 있으면 됨 (auth 없는 dev
-    //    인스턴스 가정). user/password 도 있으면 함께 사용.
+    // 1) Reuse an external Mongo — host/port alone is enough (assuming a dev
+    //    instance without auth). user/password are used too when present.
     if let (Ok(host), Ok(port_str)) = (std::env::var("MONGO_HOST"), std::env::var("MONGO_PORT")) {
         return Some(MongoEndpoint {
             host,
@@ -214,9 +209,10 @@ async fn mongo_endpoint() -> Option<MongoEndpoint> {
         });
     }
 
-    // 2) testcontainers — lazy 시작. testcontainers-modules의 기본 Mongo
-    //    image는 auth 비활성, 익명 연결 가능. PG 와 동일한 owner-pid 라벨
-    //    + dead-owner sweep 으로 좀비 누적 차단.
+    // 2) testcontainers — lazy start. The default Mongo image from
+    //    testcontainers-modules has auth disabled, so anonymous connections
+    //    work. The same owner-pid label + dead-owner sweep as PG stops zombies
+    //    from piling up.
     ensure_sweep_once().await;
     let pid = current_pid_label();
     let cell = MONGO_CONTAINER
@@ -264,18 +260,17 @@ async fn mongo_endpoint() -> Option<MongoEndpoint> {
     })
 }
 
-/// Sprint 296 — testcontainers MySQL spawn helper. PG/Mongo 와 동일한
-/// 두 단계 패턴:
-///   1) `MYSQL_HOST` 가 있으면 외부 MySQL 재사용 — docker-compose 또는
-///      host-native (homebrew 등) 인스턴스. PORT/USER/PASSWORD/DATABASE 는
-///      override 가능, 기본은 sprint-250 docker-compose 컨벤션
-///      (port 13306, testuser/testpass/table_view_test).
-///   2) `MYSQL_DISABLE=1` 가 아니면 testcontainers 가 MySQL 8.x image 를
-///      lazy spawn. owner-pid 라벨 + dead-owner sweep 으로 PG/Mongo 와 같은
-///      좀비 청소 패턴 공유.
+/// testcontainers MySQL spawn helper. Same two stages as PG/Mongo:
+///   1) With `MYSQL_HOST` set, reuse an external MySQL — a docker-compose or
+///      host-native (homebrew and the like) instance. PORT/USER/PASSWORD/
+///      DATABASE can be overridden; the defaults follow the docker-compose
+///      convention (port 13306, testuser/testpass/table_view_test).
+///   2) Otherwise, unless `MYSQL_DISABLE=1`, testcontainers lazily spawns a
+///      MySQL 8.x image. The owner-pid label + dead-owner sweep share the same
+///      zombie-cleanup pattern as PG/Mongo.
 ///
-/// `MYSQL_DISABLE=1` escape hatch 는 sprint-250 정책 그대로 유지 — adapter
-/// 단위 테스트가 MySQL 게이트를 명시적으로 끌 때 사용.
+/// The `MYSQL_DISABLE=1` escape hatch is for an adapter unit test that wants to
+/// turn the MySQL gate off explicitly.
 #[allow(dead_code)]
 async fn mysql_endpoint() -> Option<MysqlEndpoint> {
     if std::env::var("MYSQL_DISABLE")
@@ -286,9 +281,9 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
         return None;
     }
 
-    // 1) 외부 MySQL 재사용 — `MYSQL_HOST` 가 있을 때만. PG 가 모든 env 를
-    //    요구하는 것과 달리, MySQL 은 host 만 있으면 PORT/USER/PASSWORD/
-    //    DATABASE 는 docker-compose 컨벤션 default 로 fill.
+    // 1) Reuse an external MySQL — only when `MYSQL_HOST` is set. Unlike PG,
+    //    which demands every env var, MySQL only needs the host: PORT/USER/
+    //    PASSWORD/DATABASE are filled from the docker-compose defaults.
     if let Ok(host) = std::env::var("MYSQL_HOST") {
         let port = std::env::var("MYSQL_PORT")
             .ok()
@@ -313,20 +308,21 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
         });
     }
 
-    // 2) testcontainers — lazy 시작. PG/Mongo 와 정확히 같은 owner-pid +
-    //    sweep 패턴.
+    // 2) testcontainers — lazy start, exactly the same owner-pid + sweep
+    //    pattern as PG/Mongo.
     //
-    // 환경변수 3 종:
-    // - `MYSQL_ROOT_HOST=%`     — testcontainers-modules MysqlImage 의 default
-    //   는 `'root'@'localhost'` 만 grant. macOS Docker Desktop 의 NAT 동작으로
-    //   client source IP 가 wireless / LAN interface 로 인식되는 경우 grant
-    //   table 매칭 실패. `%` 로 host 와일드카드 보장.
-    // - `MYSQL_ROOT_PASSWORD=testpass` — image default `MYSQL_ALLOW_EMPTY_PASSWORD=yes`
-    //   는 caching_sha2_password 의 empty-password handshake 가 macOS NAT
-    //   환경에서 `1045 Access denied (using password: YES)` 로 fail. password
-    //   를 명시하면 sqlx 의 caching_sha2 challenge-response 가 정상 동작.
-    //   `MYSQL_ROOT_PASSWORD` 가 set 되면 image entrypoint 가 ALLOW_EMPTY 를
-    //   자동 무시 (mutually exclusive).
+    // Env vars:
+    // - `MYSQL_ROOT_HOST=%`     — the testcontainers-modules MysqlImage default
+    //   grants only `'root'@'localhost'`. Under macOS Docker Desktop's NAT the
+    //   client source IP can be seen as the wireless / LAN interface, and the
+    //   grant table then fails to match. `%` guarantees the host wildcard.
+    // - `MYSQL_ROOT_PASSWORD=testpass` — with the image default
+    //   `MYSQL_ALLOW_EMPTY_PASSWORD=yes`, the empty-password handshake of
+    //   caching_sha2_password fails under macOS NAT with
+    //   `1045 Access denied (using password: YES)`. Spelling the password out
+    //   makes sqlx's caching_sha2 challenge-response work. When
+    //   `MYSQL_ROOT_PASSWORD` is set the image entrypoint ignores ALLOW_EMPTY
+    //   automatically (they are mutually exclusive).
     ensure_sweep_once().await;
     let pid = current_pid_label();
     let cell = MYSQL_CONTAINER
@@ -366,8 +362,9 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
         }
     };
 
-    // testcontainers-modules Mysql image 8.1 default — db `test`. user `root`.
-    // password 는 본 helper 가 MYSQL_ROOT_PASSWORD env 로 명시 set 한 값.
+    // testcontainers-modules Mysql image 8.1 defaults — db `test`, user
+    // `root`. The password is the value this helper sets explicitly through the
+    // MYSQL_ROOT_PASSWORD env var.
     Some(MysqlEndpoint {
         host: "127.0.0.1".to_string(),
         port,
@@ -563,8 +560,7 @@ async fn mssql_endpoint_available() -> Option<MssqlEndpoint> {
     })
 }
 
-/// MySQL endpoint reflected into a `ConnectionConfig`. Phase 17 Sprint 253
-/// will call this from `mysql_integration.rs` once the adapter compiles.
+/// MySQL endpoint reflected into a `ConnectionConfig`.
 #[allow(dead_code)]
 pub async fn mysql_test_config() -> Option<ConnectionConfig> {
     let endpoint = mysql_endpoint().await?;
@@ -595,11 +591,12 @@ pub async fn mysql_test_config() -> Option<ConnectionConfig> {
 
 /// Return a `ConnectionConfig` for the given database type.
 ///
-/// PG/Mongo는 testcontainers (또는 환경변수 override) 가 endpoint를 결정.
-/// 이 함수는 동기지만 endpoint resolution은 비동기라 panic-on-missing 시그너처를
-/// 유지하기 어렵다. 따라서 Postgresql/Mongodb 분기는 placeholder를 반환하고,
-/// 실제 endpoint 주입은 `setup_adapter` / `setup_mongo_adapter` 가 직접 처리한다.
-/// MySQL은 이전 시그너처 보존 (env override 만).
+/// For PG/Mongo the endpoint is decided by testcontainers (or an env-var
+/// override). This function is sync while endpoint resolution is async, which
+/// makes a panic-on-missing signature hard to keep. So the Postgresql/Mongodb
+/// arms return a placeholder and the real endpoint injection is handled by
+/// `setup_adapter` / `setup_mongo_adapter` themselves. MySQL keeps the older
+/// signature (env override only).
 #[allow(dead_code)]
 pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
     match db_type {
@@ -680,9 +677,9 @@ fn env_or(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
 }
 
-/// PG endpoint를 반영한 `ConnectionConfig`. setup_adapter 에서도 동일
-/// endpoint 를 쓰므로, 직접 sqlx Pool 같은 sibling 클라이언트를 만드는
-/// 테스트는 이 helper 로 endpoint 를 통일하면 된다.
+/// PG endpoint reflected into a `ConnectionConfig`. setup_adapter uses the same
+/// endpoint, so a test that builds a sibling client such as its own sqlx Pool
+/// can line the endpoint up through this helper.
 #[allow(dead_code)]
 pub async fn pg_test_config() -> Option<ConnectionConfig> {
     let endpoint = pg_endpoint().await?;
@@ -711,9 +708,10 @@ pub async fn pg_test_config() -> Option<ConnectionConfig> {
     })
 }
 
-/// Mongo endpoint를 반영한 `ConnectionConfig`. mongo_integration.rs 가
-/// sibling driver client (`seed_client`) 를 만들 때 이 helper 의 결과를
-/// 그대로 넘기면 testcontainers 의 random port 와 일치한다.
+/// Mongo endpoint reflected into a `ConnectionConfig`. When
+/// mongo_integration.rs builds a sibling driver client (`seed_client`), passing
+/// this helper's result through as-is matches the random port testcontainers
+/// picked.
 #[allow(dead_code)]
 pub async fn mongo_test_config() -> Option<ConnectionConfig> {
     let endpoint = mongo_endpoint().await?;
@@ -745,8 +743,8 @@ pub async fn mongo_test_config() -> Option<ConnectionConfig> {
 /// Attempt to connect to the requested database and return a connected adapter.
 ///
 /// Returns `Some(adapter)` on success, or `None` when the testcontainer cannot
-/// start (e.g. Docker daemon not running) or `connect_pool` fails. 호출자는
-/// `match … None => return` 패턴으로 silent-skip 한다.
+/// start (e.g. Docker daemon not running) or `connect_pool` fails. Callers
+/// silent-skip with a `match … None => return` pattern.
 #[allow(dead_code)]
 pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
     assert!(
@@ -781,8 +779,8 @@ pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
     };
 
     let adapter = PostgresAdapter::new();
-    // testcontainers의 PG image는 readiness probe를 자체 실행하지만, sqlx
-    // pool 생성이 race로 한두 번 실패할 수 있으므로 짧은 retry.
+    // The testcontainers PG image runs its own readiness probe, but sqlx pool
+    // creation can lose a race once or twice, hence the short retry.
     for attempt in 0..5 {
         match adapter.connect_pool(&config).await {
             Ok(()) => return Some(adapter),
@@ -798,9 +796,9 @@ pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
     None
 }
 
-/// Sprint 296 — MySQL 도 PG/Mongo 와 같은 lifecycle helper. testcontainers
-/// 가 spawn 또는 외부 인스턴스 reuse 후 `connect_pool` 5-retry. silent-skip
-/// 시맨틱 (`None`) 보존.
+/// The same lifecycle helper for MySQL as PG/Mongo has. After testcontainers
+/// spawns one or an external instance is reused, `connect_pool` retries 5
+/// times. The silent-skip semantics (`None`) are preserved.
 #[allow(dead_code)]
 pub async fn setup_mysql_adapter() -> Option<MysqlAdapter> {
     let endpoint = mysql_endpoint().await?;
@@ -1190,10 +1188,10 @@ pub async fn setup_oracle_adapter() -> Option<OracleAdapter> {
             }
             Err(e) => {
                 println!("SKIP: Oracle connect failed after retries ({})", e);
-                // CI 는 oracle service container 를 `ORACLE_HOST` 로 노출한다
-                // (#2569) — 그 자리에서 connect 가 죽으면 조용한 skip 이 아니라
-                // 실패여야 한다 (#1077 fail-loud rule, MSSQL 의 같은 가드와
-                // 같은 형태).
+                // Connect exhausted its retries — `fail_loud_under_ci` covers
+                // this path as well as an unresolved endpoint (#1077). Under CI
+                // `ORACLE_HOST` points at the job's `oracle` service container
+                // (#2569), so a dead connect here is a real failure.
                 fail_loud_under_ci("Oracle", "ORACLE_DISABLE", &format!("connect failed: {e}"));
                 return None;
             }
@@ -1202,7 +1200,8 @@ pub async fn setup_oracle_adapter() -> Option<OracleAdapter> {
     None
 }
 
-/// Mongo는 PostgresAdapter와 다른 concrete type이라 별도 helper.
+/// Mongo needs its own helper because it is a different concrete type from
+/// PostgresAdapter.
 #[allow(dead_code)]
 pub async fn setup_mongo_adapter() -> Option<MongoAdapter> {
     let endpoint = mongo_endpoint().await?;

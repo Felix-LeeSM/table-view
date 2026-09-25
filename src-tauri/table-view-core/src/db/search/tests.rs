@@ -559,8 +559,9 @@ async fn elasticsearch_live_catalog_summary_allows_empty_catalogs() {
 async fn elasticsearch_live_catalog_summary_surfaces_field_caps_permission_errors() {
     // Reason: #1712 flipped this contract. `_field_caps` is now the AUTHORITATIVE
     // index-visibility source, so a 403 there is terminal and still surfaces a
-    // friendly SearchPermission ("전체 다 실패하면 뭐 할 수 없지"). A 403 on the
-    // best-effort `_cat`/`_aliases` meta is separately proven tolerable by
+    // friendly SearchPermission ("if it all fails there is nothing to do").
+    // A 403 on the best-effort `_cat`/`_aliases` meta is separately proven
+    // tolerable by
     // `elasticsearch_read_only_role_lists_indices_despite_forbidden_cat_and_aliases`.
     // Previously this test asserted an `_aliases`-403 surfaced the error; that is
     // now tolerated, so the assertion is retargeted to field_caps. (2026-07-22)

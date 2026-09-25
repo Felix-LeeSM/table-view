@@ -13,7 +13,7 @@ import {
 import SqlQueryEditor from "./SqlQueryEditor";
 
 /**
- * Sprint 139 — SqlQueryEditor unit tests.
+ * SqlQueryEditor unit tests.
  *
  * Mirrors the slice of QueryEditor tests that exercise SQL behaviour:
  * dialect-specific keyword recognition, language identity, ariaLabel,
@@ -66,18 +66,18 @@ describe("SqlQueryEditor (Sprint 139)", () => {
   });
 
   // AC-S139-02 — aria-label and SQL language facet.
-  // Wave 9.5 회귀 5 (2026-05-16) — 새 raw query tab 이 열리면 즉시 타이핑
-  // 가능해야 한다. user journey: Cmd+N → tab open → editor mount → cm-content
-  // 자동 focus → 사용자가 키 누르면 바로 입력. user-facing invariant 는
-  // "document.activeElement === .cm-content" — implementation detail
-  // (view.focus() 호출됨) 이 아니라 OS-level focus 상태 자체.
+  // A new raw query tab must be typable the moment it opens. User journey:
+  // Cmd+N → tab open → editor mount → cm-content auto-focus → the user's
+  // keypress types straight away. The user-facing invariant is
+  // "document.activeElement === .cm-content" — the OS-level focus state
+  // itself, not the implementation detail (view.focus() was called).
   it("auto-focuses the .cm-content surface on mount so the user can type immediately", async () => {
     const { container } = render(
       <SqlQueryEditor sql="" onSqlChange={vi.fn()} onExecute={vi.fn()} />,
     );
     const cmContent = container.querySelector(".cm-content");
     expect(cmContent).not.toBeNull();
-    // user 의 마지막 outcome — cm-content 가 활성 element.
+    // The user's final outcome — cm-content is the active element.
     await waitFor(() => expect(document.activeElement).toBe(cmContent));
   });
 
@@ -224,9 +224,10 @@ describe("SqlQueryEditor (Sprint 139)", () => {
     expect(localOnExecute).toHaveBeenCalled();
   });
 
-  // #2509 — 실행하면 자동완성 팝업이 닫혀야 한다. 사용자 시퀀스:
-  // 에디터에 타이핑 → 자동완성 팝업이 뜬 채로 남음 → 쿼리 실행 →
-  // **팝업이 사라지고 결과가 가려지지 않는다** ← lock 대상.
+  // #2509 — executing must close the autocomplete popup. User sequence:
+  // type in the editor → the autocomplete popup stays open → run the query
+  // → **the popup disappears and does not hide the result** ← what is
+  // locked here.
   it("closes the autocomplete popup when the query executes (#2509)", async () => {
     const localOnExecute = vi.fn();
     render(
@@ -239,10 +240,10 @@ describe("SqlQueryEditor (Sprint 139)", () => {
     await expectExecuteClosesCompletionPopup(getEditorView(), localOnExecute);
   });
 
-  // [AC-248-K1] Sprint 248 (ADR 0022 Phase 4) — Cmd+Shift+Enter routes
-  // to `onDryRun`. Mirrors the Mod-Enter assertion above (CodeMirror's
-  // native key handling does not fire under jsdom synthetic events, so
-  // we invoke the keymap binding directly).
+  // [AC-248-K1] ADR 0022 — Cmd+Shift+Enter routes to `onDryRun`. Mirrors
+  // the Mod-Enter assertion above (CodeMirror's native key handling does not
+  // fire under jsdom synthetic events, so we invoke the keymap binding
+  // directly).
   it("[AC-248-K1] fires onDryRun via Cmd-Shift-Enter binding", () => {
     const localOnExecute = vi.fn();
     const localOnDryRun = vi.fn();
@@ -268,8 +269,9 @@ describe("SqlQueryEditor (Sprint 139)", () => {
     expect(localOnExecute).not.toHaveBeenCalled();
   });
 
-  // Reason: #1225 — RAW query 창에서 Cmd+V 붙여넣기 후 Cmd+Z undo 불가 사용자
-  // 보고 (2026-07-03). 근본 원인은 history() extension 미장착 (paste 특정 아님).
+  // Reason: #1225 — user report that Cmd+Z undo does not work after a Cmd+V
+  // paste in the RAW query window. Root cause is the missing history()
+  // extension (not paste-specific).
   it("reverts an edit via undo (history extension installed) (#1225)", () => {
     render(
       <SqlQueryEditor
@@ -281,11 +283,11 @@ describe("SqlQueryEditor (Sprint 139)", () => {
     expectUndoRevertsEdit(getEditorView());
   });
 
-  // Reason: #1225 AC — undo 가 editorDocumentSync(controlled prop mirror)와
-  // 무한 루프/충돌 없이 동작해야 한다. undo 가 doc 을 되돌리면 onChange 로
-  // 부모 sql 이 갱신되고 sync 효과가 다시 dispatch 할 수 있는데,
-  // syncEditorDocument 의 equality 가드가 재-dispatch 를 막아 loop 이 없음을
-  // 고정 (2026-07-03).
+  // Reason: #1225 AC — undo must work with `editorDocumentSync` (the
+  // controlled prop mirror) without an infinite loop or a conflict. Undo
+  // reverting the doc updates the parent sql through onChange and the sync
+  // effect can dispatch again, so this locks that `syncEditorDocument`'s
+  // equality guard blocks the re-dispatch and no loop happens.
   it("undo reverts under controlled sql without a sync-dispatch loop (#1225)", () => {
     const changes: string[] = [];
     function Controlled() {

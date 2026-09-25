@@ -1,10 +1,10 @@
 use crate::ast::{ParseError, ParseErrorKind};
 use crate::lexer::Token;
 
-/// Sprint-395 helper — best-effort textual form of a token for use as an
+/// Helper — best-effort textual form of a token for use as an
 /// option name. Returns the user-written form for identifiers (preserving
 /// case). `None` for tokens that have no meaningful text form (punctuation,
-/// literals). Sprint-395's lexer leaves option-name words (`analyze`,
+/// literals). The lexer leaves option-name words (`analyze`,
 /// `verbose`, `format`, etc.) as `Token::Ident`, so the Ident arm covers
 /// everything we need.
 pub(super) fn token_word(tok: &Token) -> Option<&str> {
@@ -165,14 +165,14 @@ pub(super) fn is_known_sql_verb(name: &str) -> bool {
     )
 }
 
-/// Sprint-392 — the set of verbs whose grammar this crate actually
+/// The set of verbs whose grammar this crate actually
 /// implements. Anything in `is_known_sql_verb` but not in here is an
-/// `UnsupportedStatement`. Sprint-393b adds `WITH` (CTE wrap). Sprint-394
-/// adds `CREATE` (TABLE / INDEX / VIEW) — `CREATE FUNCTION` /
+/// `UnsupportedStatement`. `WITH` (CTE wrap) is included, as is `CREATE`
+/// (TABLE / INDEX / VIEW) — `CREATE FUNCTION` /
 /// `CREATE TRIGGER` etc. surface as `SyntaxError` from the dispatcher.
-/// Sprint-395 adds GRANT / REVOKE / EXPLAIN / SHOW / SET / COPY / COMMENT.
-/// Sprint-484 adds the narrow PostgreSQL MERGE first slice.
-/// Sprint-485 keeps PostgreSQL DO blocks known-but-unsupported.
+/// GRANT / REVOKE / EXPLAIN / SHOW / SET / COPY / COMMENT are included.
+/// The narrow PostgreSQL MERGE grammar is included.
+/// PostgreSQL DO blocks stay known-but-unsupported.
 pub(super) fn is_supported_sql_verb(name: &str) -> bool {
     matches!(
         name.to_ascii_uppercase().as_str(),

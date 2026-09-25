@@ -16,7 +16,7 @@ import { useTranslation } from "react-i18next";
 import { activateConnection } from "./ConnectionList";
 
 /**
- * Sprint 167 — format a `Date.now()` epoch ms timestamp as a short relative
+ * Format a `Date.now()` epoch ms timestamp as a short relative
  * time label (e.g. "just now", "5m ago", "3h ago", "2d ago").
  */
 export function relativeTime(timestamp: number): string {
@@ -35,12 +35,13 @@ interface RecentConnectionsProps {
 }
 
 /**
- * Sprint 167 — Recent Connections UI for the launcher.
- * Sprint 290 — 항목별 X 삭제.
- * Sprint 296 — 내부 chevron header 제거. 외부 라벨 헤더와 중첩되어 사용자가
- * "탭이 하나 더 생긴" 모양으로 인식한 회귀를 막기 위함.
- * #2440 — 마운트 지점이 HomePage 의 footer 에서 `ConnectionBrowser` 의
- * `Recent` rail view 로 옮겨졌다. 이 컴포넌트 자체는 그대로다.
+ * Recent Connections UI for the launcher.
+ * Per-entry X removal.
+ * No internal chevron header: it nested with the external label header, and
+ * users read the result as "yet another tab" — removing it prevents that
+ * regression.
+ * #2440 — the mount point moved from the HomePage footer to `ConnectionBrowser`'s
+ * `Recent` rail view. The component itself is unchanged.
  *
  * #2433 — the row is the connect target, so remove is a hover/focus-only
  * affordance and "clear all" sits at the foot of the list rather than in the
@@ -108,24 +109,27 @@ export default function RecentConnections({
             >
               {DB_TYPE_META[conn.dbType].short}
             </span>
-            {/* Sprint 297 — swap slot: 평소엔 시간, 호버 시 같은 자리에 X.
-                grid stack 으로 두 element 가 같은 cell 을 점유해 슬롯 width
-                가 시간 텍스트 기준으로 안정 → X 등장 시 시각 점프 없음.
-                시간 정보는 row 의 aria-label 에 보존되어 호버 의존 없음.
-                #2433 — 두 자리가 `group-focus-within` 을 같이 탄다. 버튼만
-                `focus-visible` 로 켜면 키보드로 왔을 때 시간이 안 꺼져 두
-                element 가 같은 cell 에서 겹쳐 보인다. 행이 `tabIndex={0}` 라
-                Tab 이 행에 닿는 순간 remove 가 드러나고, 한 번 더 Tab 하면
-                버튼 자신이 focus 를 받는다. */}
+            {/* Swap slot: the timestamp normally, the X in the same slot on
+                hover. A grid stack makes both elements occupy the same cell,
+                so the slot width is anchored to the timestamp text and the X
+                appearing causes no visual jump. The time stays available in
+                the row's aria-label, so nothing depends on hover.
+                #2433 — both slots share `group-focus-within`. Toggling only
+                the button on `focus-visible` would leave the timestamp
+                visible for keyboard users and stack the two elements in the
+                same cell. The row carries `tabIndex={0}`, so remove appears
+                as soon as Tab reaches the row, and one more Tab moves focus
+                to the button itself. */}
             <div className="grid shrink-0 items-center justify-items-end">
               <div className="col-start-1 row-start-1 flex items-center gap-1 text-3xs text-muted-foreground whitespace-nowrap transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
                 <Clock size={10} className="shrink-0" />
                 <span>{relativeTime(lastUsed)}</span>
               </div>
-              {/* #2433 — 과녁을 16px(p-0.5 + 12px 아이콘)에서 24px 로 키운다.
-                  행 자체가 connect 과녁이므로 remove 는 hover·focus 때만
-                  보이고, 슬롯 폭은 옆의 시간 텍스트가 잡아 두므로 버튼이
-                  커져도 등장 시 시각 점프가 없다. */}
+              {/* #2433 — grow the target from 16px (p-0.5 + a 12px icon) to 24px.
+                  The row itself is the connect target, so remove shows only on
+                  hover/focus, and the slot width is held by the timestamp text
+                  beside it, so the larger button still appears without a
+                  visual jump. */}
               <button
                 type="button"
                 aria-label={t("recent.removeAria", { name: conn.name })}
@@ -143,12 +147,13 @@ export default function RecentConnections({
         ))}
       </div>
 
-      {/* #2433 — 「전체 지우기」는 목록 끝이다. 예전 자리는 launcher action
-          bar 의 Eraser 아이콘이었는데, 연결 추가·그룹 추가와 나란히 서 있어
-          목록을 겨냥한 파괴적 동작이 목록보다 먼저 눌렸다. 목록이 비면
-          위쪽 early return 이 이 자리까지 안 오므로 지울 것이 없을 때는
-          버튼도 없다. `role="list"` 밖에 둔다 — 안에 넣으면 listitem 이
-          아닌 자식이 목록의 접근성 트리에 섞인다. */}
+      {/* #2433 — "Clear all" lives at the foot of the list. It used to be an
+          Eraser icon in the launcher action bar, standing beside add-connection
+          and add-group, so a destructive action aimed at the list was hit
+          before the list itself. When the list is empty the early return
+          above never reaches this spot, so there is no button with nothing
+          to clear. Kept outside `role="list"` — placing it inside would mix a
+          non-listitem child into the list's accessibility tree. */}
       <div className="mt-1 border-t border-border pt-1">
         <button
           type="button"
@@ -161,18 +166,20 @@ export default function RecentConnections({
         </button>
       </div>
 
-      {/* #2433 — `clear_mru` 는 SQLite `mru` 테이블을 잘라내고 되돌리는
-          경로가 없다. 게다가 이제 행마다의 remove 버튼 바로 아래에 서므로
-          하나를 지우려던 손이 전부를 지우기 쉽다. 파괴적 confirm 규약
-          (`memory/engineering/conventions/frontend/memory.md:64-65`)이 허용
-          하는 `ConfirmDestructiveDialog` 는 `sqlPreview`/`statements`/
-          `paradigm` 을 요구하고 `DryRunPreview` 로 `execute_query_dry_run`
-          을 쏘는 SQL 전용이라 여기 맞지 않는다. 그래서 같은 규약이 인정하는
-          다른 쪽인 AlertDialog 프리셋(`role="alertdialog"`)을 쓴다 — 같은
-          feature 의 `ConnectionItem` 삭제·`ConnectionGroup` 삭제가 쓰는 모양
-          그대로다. 150ms arm 은 안 넣었다: 그 규약(`:65-66`)이 arm 을
-          `ConfirmDestructiveDialog` 와 RDB `SqlPreviewDialog` 에만 걸어 두어
-          이 다이얼로그는 대상 밖이다. */}
+      {/* #2433 — `clear_mru` truncates the SQLite `mru` table with no undo
+          path. It also now sits directly beneath each row's remove button, so
+          a hand aiming at one entry can easily wipe all of them. The
+          destructive confirm convention
+          (`memory/engineering/conventions/frontend/memory.md:64-65`) offers
+          `ConfirmDestructiveDialog`, which demands `sqlPreview`/`statements`/
+          `paradigm` and fires `execute_query_dry_run` as a `DryRunPreview` —
+          SQL-only, so it does not fit here. So this uses the convention's
+          other accepted shape, the AlertDialog preset
+          (`role="alertdialog"`) — exactly what `ConnectionItem` deletion and
+          `ConnectionGroup` deletion in the same feature use. No 150ms arm:
+          the convention (`:65-66`) requires the arm only for
+          `ConfirmDestructiveDialog` and the RDB `SqlPreviewDialog`, so this
+          dialog is out of scope. */}
       <AlertDialog
         open={confirmClear}
         onOpenChange={(open) => !open && setConfirmClear(false)}

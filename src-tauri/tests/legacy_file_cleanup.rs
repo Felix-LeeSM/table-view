@@ -1,21 +1,22 @@
-//! 작성 2026-05-17 (Phase 6 sprint-375, AC-375-06 / AC-375-07) — 30일
-//! retention boundary + silent (no-toast) 보장 검증.
+//! Written 2026-05-17 (AC-375-06 / AC-375-07) — verifies the 30-day retention
+//! boundary and the silent (no-toast) guarantee.
 //!
-//! 사유 (test scenarios 8 원칙 적용):
-//!   - **user journey end-to-end**: 사용자가 sprint-370 의 legacy rename
-//!     으로 `.legacy.json` 파일을 만든 뒤 약 한 달 후 app 을 다시 boot —
-//!     31일 전 mtime 파일은 자동 정리, 29일 전 mtime 파일은 manual recovery
-//!     기간 동안 유지.
-//!   - **lego 맞물림**: helper (`cleanup_legacy_files_in`) + boot wrapper
-//!     (`boot_legacy_file_cleanup`) 두 piece + cron CLI 가 동일한 정책을
-//!     공유. cron script 자체는 별 셸 테스트 없이 같은 함수를 부르는 thin
-//!     wrapper 이라 본 cargo test 가 invariant 의 source of truth.
-//!   - **boundary 양극**: 31일 (정리) / 29일 (유지) 둘 다 단언 — "vacuum
-//!     이 광범위" / "vacuum 이 너무 보수적" 회귀 모두 잡힘.
-//!   - **silent**: `tracing::info!` / `warn!` 만 — toast / dialog 0.
-//!     Rust 레이어에서 user-facing surface 가 없음을 (frontend event emit
-//!     없음, return 값 없음) 함수 시그너처 만으로 lock — 본 테스트는
-//!     return 값 invariant 만 확인.
+//! Reason (applying the 8 test-scenario principles):
+//!   - **user journey end-to-end**: a user creates a `.legacy.json` file
+//!     through the legacy rename and boots the app again about a month later —
+//!     a file with a 31-day-old mtime is cleaned up automatically, one with a
+//!     29-day-old mtime is kept for the manual recovery window.
+//!   - **lego interlock**: the helper (`cleanup_legacy_files_in`) and the boot
+//!     wrapper (`boot_legacy_file_cleanup`) share one policy, and the wrapper
+//!     is what `src-tauri/src/lib.rs` calls at boot, so this cargo test is the
+//!     source of truth for the invariant.
+//!   - **both ends of the boundary**: 31 days (cleaned) and 29 days (kept) are
+//!     both asserted — this catches both the "vacuum too broad" and the
+//!     "vacuum too conservative" regressions.
+//!   - **silent**: `tracing::info!` / `warn!` only — zero toast / dialog. The
+//!     absence of a user-facing surface in the Rust layer (no frontend event
+//!     emit, no return value) is locked by the function signature alone; this
+//!     test only checks the return-value invariant.
 
 use serial_test::serial;
 use std::fs::OpenOptions;
@@ -36,8 +37,9 @@ fn cleanup() {
     std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
 }
 
-/// `.legacy.json` 파일을 만든 뒤 mtime 을 `days_ago` 일 전으로 강제 set.
-/// `File::set_modified` (stable since 1.75) 로 cross-platform unix/macOS/win.
+/// Creates a `.legacy.json` file and then forces its mtime to `days_ago` days
+/// ago. `File::set_modified` (stable since 1.75) keeps this cross-platform
+/// across unix/macOS/win.
 fn write_legacy_with_mtime(dir: &std::path::Path, name: &str, days_ago: u64) {
     let path = dir.join(name);
     let mut f = OpenOptions::new()
@@ -56,8 +58,8 @@ fn write_legacy_with_mtime(dir: &std::path::Path, name: &str, days_ago: u64) {
 #[test]
 #[serial]
 fn cleanup_deletes_file_older_than_30_days() {
-    // sprint-375 (AC-375-06) — 31일 전 mtime 의 `.legacy.json` 은 retention
-    // 외이므로 boot cleanup 후 disk 에서 제거.
+    // AC-375-06 — a `.legacy.json` with a 31-day-old mtime is outside
+    // retention, so boot cleanup removes it from disk.
     let dir = setup();
     write_legacy_with_mtime(dir.path(), "connections.legacy.json", 31);
 
@@ -73,9 +75,9 @@ fn cleanup_deletes_file_older_than_30_days() {
 #[test]
 #[serial]
 fn cleanup_keeps_file_within_30_days() {
-    // sprint-375 (AC-375-06) — 29일 전 mtime 파일은 manual recovery 기간
-    // 동안 유지. user journey: 사용자가 W4 직후 rename 한 파일을 며칠 후
-    // 직접 복구하고 싶어 디스크 탐색.
+    // AC-375-06 — a file with a 29-day-old mtime is kept for the manual
+    // recovery window. user journey: a few days after the rename the user
+    // wants to recover the file by hand and goes digging on disk.
     let dir = setup();
     write_legacy_with_mtime(dir.path(), "connections.legacy.json", 29);
 
@@ -91,7 +93,7 @@ fn cleanup_keeps_file_within_30_days() {
 #[test]
 #[serial]
 fn cleanup_mixed_30d_and_29d_files() {
-    // sprint-375 — boundary 의 양 쪽이 한 cleanup pass 에서 정확히 분리.
+    // Both sides of the boundary are separated exactly in one cleanup pass.
     let dir = setup();
     write_legacy_with_mtime(dir.path(), "connections.legacy.json", 45);
     write_legacy_with_mtime(dir.path(), "favorites.legacy.json", 31);
@@ -110,10 +112,11 @@ fn cleanup_mixed_30d_and_29d_files() {
 #[test]
 #[serial]
 fn boot_wrapper_runs_silently_on_empty_dir() {
-    // sprint-375 (AC-375-07) — boot wrapper 는 빈 디렉토리에서 panic /
-    // toast / error return 없이 silent 종료. return 값이 없음 (void) →
-    // user-facing surface 0 invariant 가 함수 시그너처 자체로 lock 되는데,
-    // 본 단언은 boot path 가 단순히 throw 안 됨을 확인.
+    // AC-375-07 — on an empty directory the boot wrapper finishes silently,
+    // with no panic / toast / error return. It has no return value (void), so
+    // the zero-user-facing-surface invariant is locked by the function
+    // signature itself; this assertion only checks that the boot path does not
+    // throw.
     let _dir = setup();
     let fut = boot_legacy_file_cleanup();
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -124,8 +127,8 @@ fn boot_wrapper_runs_silently_on_empty_dir() {
 #[test]
 #[serial]
 fn boot_wrapper_cleans_31d_legacy_silently() {
-    // sprint-375 (AC-375-06 + AC-375-07) — boot path 가 lib.rs 의
-    // detached task 와 동일한 entry 로 31일 파일을 정리한다 (silent).
+    // AC-375-06 + AC-375-07 — the boot path cleans up the 31-day file through
+    // the same entry as lib.rs's detached task (silently).
     let dir = setup();
     write_legacy_with_mtime(dir.path(), "connections.legacy.json", 31);
 

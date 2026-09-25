@@ -17,11 +17,11 @@ use crate::error::AppError;
 
 const NONCE_SIZE: usize = 12;
 
-/// Sprint 356 (Q22) — keyring entry name. Fixed across all OS backends so the
+/// Q22 — keyring entry name. Fixed across all OS backends so the
 /// same install can read its key after an upgrade.
 pub const KEYRING_ENTRY_NAME: &str = "com.tableview.app.file-key";
 
-/// Sprint 356 (Q22) — abstract OS keyring. We split the trait off the
+/// Q22 — abstract OS keyring. We split the trait off the
 /// `keyring` crate so tests can inject an in-memory backend without (a)
 /// touching a developer's real OS keyring, (b) popping a UI prompt on
 /// macOS, (c) requiring D-Bus on Linux CI. Production wires
@@ -43,7 +43,7 @@ pub trait KeyringBackend {
     fn set(&self, name: &str, value: &[u8]) -> Result<(), AppError>;
 }
 
-/// Sprint 356 (Q22) — production keyring backend. Delegates to the
+/// Q22 — production keyring backend. Delegates to the
 /// `keyring` crate's per-OS native backend (macOS Keychain / Windows
 /// Credential Manager / Linux Secret Service via D-Bus).
 pub struct OsKeyringBackend {
@@ -130,7 +130,7 @@ impl KeyringBackend for OsKeyringBackend {
     }
 }
 
-/// Sprint 356 (Q22) — debug/test-only in-memory keyring. Backed by a
+/// Q22 — debug/test-only in-memory keyring. Backed by a
 /// `Mutex<...>` so the same instance can be passed by `&` to multiple call
 /// sites in one test (mirrors `OsKeyringBackend` which is also `&self`
 /// everywhere). Release binaries should not expose this helper.
@@ -149,7 +149,7 @@ impl KeyringBackend for OsKeyringBackend {
 pub struct InMemoryKeyringBackend {
     inner: Mutex<std::collections::HashMap<String, Vec<u8>>>,
     available: bool,
-    // Sprint 356 — escape hatch for AC-356-04 simulation: force `set` to
+    // Escape hatch for AC-356-04 simulation: force `set` to
     // error so the migration path can be exercised through the
     // sentinel-write branch without needing a write-protected real
     // keyring backend.
@@ -230,10 +230,11 @@ impl KeyringBackend for InMemoryKeyringBackend {
 }
 
 // 2026-05-05 — OWASP "first profile" Argon2id params (m=64MiB, t=3, p=4).
-// 이전 spec(m=19MiB/t=2/p=1, OWASP minimum)에서 상향. 사용자 1회 derive만
-// 필요한 export/import 흐름이라 ~1초 비용 무해. brute-force 비용은 메모리
-// hardness 기준 30~50배 증가. 옛 envelope은 envelope에 KDF 파라미터를 함께
-// 저장하므로 그대로 복호화 가능 — backward compat 마이그 없음.
+// Raised from the previous spec (m=19MiB/t=2/p=1, the OWASP minimum). The
+// export/import flow derives once per user action, so the ~1s cost is harmless.
+// Brute-force cost rises 30-50x on the memory-hardness axis. An old envelope
+// stores its KDF parameters inside the envelope, so it still decrypts as-is —
+// no backward-compat migration.
 const ENVELOPE_ARGON2_M_COST: u32 = 65_536; // 64 MiB
 const ENVELOPE_ARGON2_T_COST: u32 = 3;
 const ENVELOPE_ARGON2_P_COST: u32 = 4;
@@ -256,7 +257,7 @@ const ENVELOPE_VERSION: u8 = 1;
 pub const INCORRECT_MASTER_PASSWORD_MESSAGE: &str =
     "Incorrect master password — the file could not be decrypted";
 
-/// Sprint 140 — JSON-serializable envelope for password-encrypted exports.
+/// JSON-serializable envelope for password-encrypted exports.
 ///
 /// The shape is locked: `v`, `kdf`, `salt`, `nonce`, `alg`, `ciphertext`,
 /// `tag_attached` are required for backward compatibility. Argon2 cost
@@ -414,7 +415,7 @@ pub fn decrypt(encrypted: &str, key: &[u8]) -> Result<String, AppError> {
 }
 
 // ---------------------------------------------------------------------------
-// Sprint 140 — password-derived envelope crypto.
+// Password-derived envelope crypto.
 //
 // Distinct from the file-key based `encrypt` / `decrypt` above (which guard
 // on-disk passwords with a key stored next to `connections.json`): the
@@ -810,7 +811,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // Sprint 140 — password-derived envelope crypto
+    // Password-derived envelope crypto
     // -----------------------------------------------------------------
 
     /// Lower the cost params during tests so the suite stays fast. We do

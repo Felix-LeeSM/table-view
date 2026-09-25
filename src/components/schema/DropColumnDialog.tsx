@@ -22,13 +22,12 @@ import type { SchemaName, TableName } from "@/types/branded";
 import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSummary";
 
 /**
- * Sprint 236 — `DropColumnDialog`. Mirrors the Sprint 235
- * `DropTableDialog` shell shape with the column-drop field set:
- * typing-confirm input ("Type the column name to confirm") + CASCADE
- * checkbox (default OFF, label `"Drop dependent objects (CASCADE)"`
- * per Sprint 236 user spec — DIVERGES from Sprint 235's CASCADE label)
- * + inline DDL preview pane + Cancel + Show DDL + Apply
- * (variant=destructive) buttons.
+ * `DropColumnDialog`. Mirrors the `DropTableDialog` shell shape with the
+ * column-drop field set: typing-confirm input ("Type the column name to
+ * confirm") + CASCADE checkbox (default OFF, label
+ * `"Drop dependent objects (CASCADE)"` — DIVERGES from
+ * `DropTableDialog`'s CASCADE label) + inline DDL preview pane + Cancel +
+ * Show DDL + Apply (variant=destructive) buttons.
  *
  * Issue #2157 — the preview gate and the execution gate are separate.
  * The DDL preview loads as soon as the dialog opens so the user reads
@@ -37,19 +36,18 @@ import SchemaGraphMigrationImpactSummary from "./SchemaGraphMigrationImpactSumma
  *
  * Apply is `disabled` UNTIL the typing-confirm input matches the
  * column name byte-for-byte (case-sensitive — `Email` ≠ `email`). NO
- * trim, NO debounce, every keystroke re-evaluates (mirror Sprint 235
- * `DropTableDialog`).
+ * trim, NO debounce, every keystroke re-evaluates (mirror `DropTableDialog`).
  *
- * Toggling CASCADE re-fetches the preview by itself (Sprint 238) — no
- * Show DDL click in between.
+ * Toggling CASCADE re-fetches the preview by itself — no Show DDL click
+ * in between.
  *
  * Safe Mode dispatch is provided by `useDdlPreviewExecution` —
  * `ALTER TABLE … DROP COLUMN` is classified as `ddl-drop`/danger by
- * `analyzeStatement`. Under the Sprint 245 destructive-only policy
- * (ADR 0022 Phase 1; canonical matrix in `src/lib/safeMode.ts`) every
- * production tier and non-production strict escalate to
- * `pendingConfirm`, mounting an additional `ConfirmDestructiveDialog` on
- * top of the typing-confirm gate. Non-production warn / off allow.
+ * `analyzeStatement`. Under the destructive-only policy (ADR 0022;
+ * canonical matrix in `src/lib/safeMode.ts`) every production tier and
+ * non-production strict escalate to `pendingConfirm`, mounting an
+ * additional `ConfirmDestructiveDialog` on top of the typing-confirm
+ * gate. Non-production warn / off allow.
  * `decideSafeModeAction` never returns `block` for this path.
  *
  * On commit success the dialog calls `onColumnDropped()` which the
@@ -61,9 +59,9 @@ export interface DropColumnDialogProps {
   /** Connection id used by the Safe Mode gate + history record. */
   connectionId: string;
   /**
-   * Sprint 271c — workspace active database. Forwarded as
-   * `expectedDatabase` on the DROP COLUMN request. Optional for
-   * back-compat; new callers pass the workspace db.
+   * Workspace active database. Forwarded as `expectedDatabase` on the
+   * DROP COLUMN request. Optional for back-compat; new callers pass the
+   * workspace db.
    */
   database?: string;
   /** Schema name (display + payload). */
@@ -147,9 +145,8 @@ export default function DropColumnDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, columnName, tableName, schemaName]);
 
-  // Sprint 236 — typing-confirm match is case-sensitive byte-for-byte.
-  // No trim, no debounce — every keystroke re-evaluates (mirror Sprint
-  // 235 `DropTableDialog`).
+  // Typing-confirm match is case-sensitive byte-for-byte. No trim, no
+  // debounce — every keystroke re-evaluates (mirror `DropTableDialog`).
   const typingMatches = typingConfirm === columnName;
   // Issue #2157 — the preview has no gate. `previewOnly: true` never
   // executes anything (`gate_destructive_ddl` and `run_schema_change` in
@@ -159,8 +156,8 @@ export default function DropColumnDialog({
   // execution alone.
   const canApply = typingMatches && !ddl.previewLoading && !!ddl.previewSql;
 
-  // Sprint 238 — auto-refresh debounced: the preview SQL rebuilds on open
-  // and on every CASCADE toggle. Apply stays gated on `canApply`.
+  // Auto-refresh debounced: the preview SQL rebuilds on open and on every
+  // CASCADE toggle. Apply stays gated on `canApply`.
   useEffect(() => {
     if (!open) return;
     const handle = window.setTimeout(() => {
@@ -173,7 +170,7 @@ export default function DropColumnDialog({
             columnName,
             cascade,
             previewOnly: true,
-            // Sprint 271c — opt-in DbMismatch guard.
+            // Opt-in DbMismatch guard.
             expectedDatabase: database,
           });
           return { sql: result.sql };
@@ -187,7 +184,7 @@ export default function DropColumnDialog({
               columnName,
               cascade,
               previewOnly: false,
-              // Sprint 271c — opt-in DbMismatch guard.
+              // Opt-in DbMismatch guard.
               expectedDatabase: database,
             },
             // Issue #1112 — commit runs only after the Safe Mode gate + this

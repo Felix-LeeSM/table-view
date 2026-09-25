@@ -1,14 +1,14 @@
-//! Sprint 358 (Phase 1 W1 dual-write) → Sprint 370 (Phase 4 W3 SQLite SOT)
+//! dual-write → SQLite-only SOT
 //!
-//! key-value settings 의 backend mirror.
+//! Backend mirror for key-value settings.
 //!
-//! Sprint 368 (Phase 4 Q12) — `get_setting` IPC 추가. `state-changed`
-//! 수신자가 key 별 단일 refetch 로 store 를 갱신 (strategy F.4 line 1388).
-//! Sprint 370 부터 SQLite 가 read SOT — `settings` table 에서 직접 조회.
+//! Q12 — added the `get_setting` IPC. The `state-changed` receiver refreshes
+//! its store with a single refetch per key (strategy F.4 line 1388). Since the
+//! W3 cut SQLite is the read SOT — read directly from the `settings` table.
 //!
-//! Sprint 370 (Phase 4 W3): `persist_setting` 는 file (`settings.json`)
-//! write 분기를 제거하고 SQLite-only. `get_setting` 도 file 대신 SQLite
-//! row 를 직접 읽는다.
+//! The W3 cut: `persist_setting` dropped the file (`settings.json`)
+//! write branch and became SQLite-only. `get_setting` also reads the SQLite
+//! row directly instead of the file.
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
@@ -23,8 +23,8 @@ use tauri::{AppHandle, Runtime, State};
 #[serde(rename_all = "camelCase")]
 pub struct PersistSettingRequest {
     pub key: String,
-    /// Raw JSON string (already serialized by frontend). value 자체는 어떤
-    /// shape 이든 OK — settings.value_json 컬럼이 그대로 저장.
+    /// Raw JSON string (already serialized by the frontend). The value itself
+    /// may be any shape — stored as-is in the settings.value_json column.
     pub value_json: String,
 }
 
@@ -34,25 +34,25 @@ pub async fn persist_setting_inner(
 ) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;
 
-    // Sprint 370 (Phase 4 W3) — file SOT 분기 제거. SQLite 가 유일한 SOT.
-    // #1092 — write 실패를 삼키지 않고 IPC 경계로 전파한다 (대체 원본 없음).
+    // The file SOT branch is gone — SQLite is the only SOT.
+    // #1092 — a write failure is not swallowed; it propagates to the IPC
+    // boundary (there is no fallback copy).
     if is_force_failure_for_tests() {
         return Err(AppError::Storage("forced failure for tests".into()));
     }
     write_sqlite_mirror(pool, &req).await
 }
 
-/// Wave 9.5 회귀 7 (2026-05-17) — cross-window 테마/safe_mode broadcast 가
-/// 누락되어 사용자가 "테마가 창 단위로 적용된다" 보고. sprint-365 가 만든
-/// `emit_state_changed` 를 호출하는 site 가 0개였음 — sprint-368 의
-/// backend-first contract 의 마지막 piece. SQLite write 후 항상
-/// `setting.update` 이벤트를 발사.
+/// Regression 7 (2026-05-17) — the cross-window theme/safe_mode broadcast was
+/// missing and users reported "the theme is applied per window". `emit_state_changed`
+/// had zero call sites — this closed the last piece of the backend-first
+/// contract. Always fire the `setting.update` event after the SQLite write.
 ///
-/// `origin_window` 은 frontend 의 dispatcher self-echo skip 의 핵심
-/// discriminator (sprint-365 line 1389) — 호출 측 window label 을 그대로
-/// 전달. emit 이 SQLite write 보다 앞서면 receiver 의 `get_setting` refetch
-/// 가 stale 값을 봐서 idempotent 한 update 가 nothing-update 로 떨어진다 →
-/// 순서 invariant 유지.
+/// `origin_window` is the core discriminator of the frontend dispatcher's
+/// self-echo skip (strategy line 1389) — pass the calling window's label
+/// as-is. If the emit ran before the SQLite write, the receiver's `get_setting`
+/// refetch would see a stale value and an idempotent update would fall through
+/// as a nothing-update → keep the ordering invariant.
 pub async fn persist_setting_with_emit<R: Runtime>(
     pool: &SqlitePool,
     registry: &EventVersionRegistry,
@@ -112,12 +112,12 @@ pub async fn persist_setting<R: Runtime>(
     persist_setting_with_emit(&pool, registry.inner(), &app, origin, req).await
 }
 
-/// Sprint 368 (Phase 4 Q12) — read a single settings key. Frontend
+/// Q12 — read a single settings key. Frontend
 /// `state-changed` receiver calls this after a `setting:update` event to
 /// refetch the canonical value (strategy F.4 line 1388).
 ///
-/// Sprint 370 (Phase 4 W3) — file SOT 폐기. SQLite 의 `settings` table 을
-/// 직접 read. Returns `Some(value_json)` if the row exists, else `None`.
+/// The W3 cut retired the file SOT — read the SQLite `settings` table
+/// directly. Returns `Some(value_json)` if the row exists, else `None`.
 pub async fn get_setting_inner(pool: &SqlitePool, key: &str) -> Result<Option<String>, AppError> {
     let row: Option<(String,)> = sqlx::query_as("SELECT value_json FROM settings WHERE key = ?")
         .bind(key)
@@ -135,7 +135,7 @@ pub async fn get_setting(
     get_setting_inner(&pool, &key).await
 }
 
-/// Sprint 376 (Phase 6 Q21) — reset a single settings key to default by
+/// Q21 — reset a single settings key to default by
 /// removing its row. Strategy doc line 1389: `setting.reset` is the
 /// **row-delete** path — receivers MUST NOT refetch (the row is gone);
 /// they read their frontend `SETTING_DEFAULTS[entityId]` constant
@@ -149,7 +149,8 @@ pub async fn get_setting(
 pub async fn reset_setting_inner(pool: &SqlitePool, key: &str) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;
 
-    // #1092 — delete 실패를 그대로 전파 (이전 counter-only 삼킴 제거).
+    // #1092 — a delete failure propagates as-is (the old counter-only
+    // swallowing is gone).
     if is_force_failure_for_tests() {
         return Err(AppError::Storage("forced failure for tests".into()));
     }
@@ -161,10 +162,10 @@ pub async fn reset_setting_inner(pool: &SqlitePool, key: &str) -> Result<(), App
         .map_err(AppError::from)
 }
 
-/// `reset_setting` 의 wrapper — SQLite delete 후 `setting.reset` emit.
-/// Strategy doc F.4 line 1306 contract: `op = "reset"`, refetch
-/// 안 함 (receiver 가 frontend default 상수로 set). origin_window 채워
-/// frontend dispatcher 의 self-echo skip 가 동작하게 한다.
+/// Wrapper for `reset_setting` — emits `setting.reset` after the SQLite delete.
+/// Strategy doc F.4 line 1306 contract: `op = "reset"`, no refetch (receivers
+/// set their frontend default constant). `origin_window` is filled so the
+/// frontend dispatcher's self-echo skip works.
 pub async fn reset_setting_with_emit<R: Runtime>(
     pool: &SqlitePool,
     registry: &EventVersionRegistry,
@@ -203,8 +204,8 @@ pub async fn reset_setting<R: Runtime>(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 1 sprint-358) — inline lib smoke for `--lib`
-    //! coverage gate. 통합 시나리오는 `tests/dual_write_connections.rs`.
+    //! Written 2026-05-16 — inline lib smoke for the `--lib` coverage gate.
+    //! The integration scenarios live in `tests/dual_write_connections.rs`.
 
     use super::*;
     use crate::storage::local;
@@ -272,7 +273,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 1);
-        // Sprint 370 invariant — file SOT 분기 retired.
+        // Invariant — the file SOT branch is retired.
         assert!(
             !dir.path().join("settings.json").exists(),
             "settings.json must not exist after W3 cut"
@@ -304,9 +305,9 @@ mod tests {
         cleanup();
     }
 
-    // 작성 2026-05-16 (Phase 4 sprint-368) — `get_setting` 의 happy
-    // path + missing-key 시나리오.
-    // Sprint 370 (Phase 4 W3) — SQLite SOT 가 read source. file 미사용.
+    // Written 2026-05-16 (Q12) — `get_setting` happy path and missing-key
+    // scenarios.
+    // The SQLite SOT is the read source — the file is unused.
     #[tokio::test]
     #[serial]
     async fn get_setting_returns_none_for_missing_key() {
@@ -340,14 +341,15 @@ mod tests {
     }
 
     // ---------------------------------------------------------------------
-    // 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    // Written 2026-05-17 — baseline cleanup.
     //
-    // `reset_setting_inner` (sprint-376) 는 baseline 측정 set 의 `tests/reset_setting.rs`
-    // 가 별 binary 라 본 모듈에서 직접 cover 되지 않음. inline 으로 4 시나리오 lock:
-    //   - Happy: 기존 row 가 DELETE 된다.
-    //   - 멱등: 부재 key 의 reset 도 Ok (no-op).
-    //   - sibling 분리: 다른 key 는 영향 0.
-    //   - guard 분기: legacy_imported != Done 시 LegacyImportInProgress.
+    // `reset_setting_inner` is not covered directly in this module because
+    // `tests/reset_setting.rs` is a separate binary in the baseline measurement
+    // set. Inline locks four scenarios:
+    //   - Happy: the existing row is DELETEd.
+    //   - Idempotent: resetting an absent key is also Ok (no-op).
+    //   - Sibling isolation: other keys are unaffected.
+    //   - Guard branch: LegacyImportInProgress when legacy_imported != Done.
     // ---------------------------------------------------------------------
 
     #[tokio::test]

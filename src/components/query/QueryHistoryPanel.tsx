@@ -1,17 +1,18 @@
 /**
- * 작성 2026-05-17 (Phase 5 sprint-372 / AC-372-02 + AC-372-06 + AC-372-08).
+ * AC-372-02 + AC-372-06 + AC-372-08.
  *
- * Per-tab query history panel — `{connectionId, tabId}` filter 로
- * `list_history` IPC 를 호출하고 cursor pagination + event-driven
- * refetch 를 처리한다. 모든 row 는 `sqlRedacted` 만 표시 (redact-only
- * display invariant); 원문 sql 은 row 클릭 시 열리는 detail modal
- * 에서만 노출된다 (sprint-371 backend 의 단일 escape hatch).
+ * Per-tab query history panel — calls the `list_history` IPC with a
+ * `{connectionId, tabId}` filter and handles cursor pagination plus
+ * event-driven refetch. Every row shows `sqlRedacted` only (redact-only
+ * display invariant); the original sql is exposed only in the detail modal a
+ * row click opens (the backend's single escape hatch).
  *
  * Invariants:
- *   - mount 마다 `list_history({connectionId, tabId})` 1회.
- *   - cursor pagination 중 create event → refetch 0 + "New entry" 배지.
- *   - clear event → rows 비움 + cursor reset.
- *   - 원문 sql 0 표시 — 본 panel 내 어디에도 detail modal 외에서 sql 안 노출.
+ *   - One `list_history({connectionId, tabId})` per mount.
+ *   - create event during cursor pagination → no refetch + "New entry" badge.
+ *   - clear event → rows emptied + cursor reset.
+ *   - Original sql never rendered — nowhere in this panel outside the detail
+ *     modal.
  */
 
 import HistoryCollapseToggle from "@components/shared/HistoryCollapseToggle";

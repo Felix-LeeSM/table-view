@@ -40,9 +40,9 @@ const META_STATIC: Record<
     label: "FILE",
     className: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
   },
-  // sprint-373 (2026-05-17) — sidebar 의 collection / table 클릭이 trigger
-  // 한 preview-row SELECT 가 본 source 로 기록. user-initiated 지만 dialog
-  // 가 없는 background-ish 경로라 muted gray 패턴.
+  // A sidebar collection / table click triggers a preview-row SELECT, which is
+  // recorded under this source. User-initiated but with no dialog — a
+  // background-ish path, hence the muted gray pattern.
   "sidebar-prefetch": {
     label: "PREV",
     className: "bg-muted text-muted-foreground",

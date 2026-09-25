@@ -1,5 +1,5 @@
-// Sprint 312 (Phase 28 Slice A6, 2026-05-14) — RTL coverage of the three
-// `ScalarOrListPanel` modes (count / list / findOne-empty).
+// RTL coverage of the three `ScalarOrListPanel` modes (count / list /
+// findOne-empty).
 //
 // Test axes:
 //   1. "count"           — big numeric + "Count" label

@@ -1,27 +1,24 @@
-// Sprint 235 (Phase 27 sprint 10) — `SchemaTree.actions.test.tsx`
-// mechanical migration. Date: 2026-05-07.
+// `SchemaTree.actions.test.tsx` — SchemaTree context-menu actions.
 //
-// Why this file changed in Sprint 235:
-// - Sprint 235 promotes the legacy minimal `DropTableConfirmDialog` +
-//   `RenameTableDialog` slots to the Phase 27-shaped modals
-//   (`RenameTableDialog` + `DropTableDialog` — typing-confirm + inline
-//   DDL preview + Safe Mode dispatch via `useDdlPreviewExecution` +
-//   `useSchemaTableMutations`).
-// - The old `confirmDialog` / `renameDialog` / `renameInput` slots are
+// Shape of the surface under test:
+// - The Rename + Drop entries mount the `RenameTableDialog` +
+//   `DropTableDialog` modals — typing-confirm + inline DDL preview +
+//   Safe Mode dispatch via `useDdlPreviewExecution` +
+//   `useSchemaTableMutations`. They replaced the minimal
+//   `DropTableConfirmDialog` + `RenameTableDialog` slots.
+// - The legacy `confirmDialog` / `renameDialog` / `renameInput` slots are
 //   collapsed into 2 `{ schemaName, tableName } | null` slots
 //   (`renameTableDialog` + `dropTableDialog`); the inline tauri /
-//   history / toast paths now run INSIDE the modals.
-// - All commit-side assertions move from `useSchemaStore.dropTable` /
-//   `renameTable` overrides to `@lib/tauri.dropTable` /
-//   `tauri.renameTable` mocks (the modals delegate to
-//   `useSchemaTableMutations` → `schemaStore.dropTable` →
-//   `tauri.dropTable` compat wrapper).
-// - The toast-fallback assertions (AC-191-03) are removed from this file
-//   because the modal owns the user-visible error surface (inline
-//   `previewError` + `pendingConfirm` dialog) — the original silent-
-//   swallow regression no longer applies.
+//   history / toast paths run INSIDE the modals.
+// - All commit-side assertions run against the `@lib/tauri.dropTable` /
+//   `tauri.renameTable` mocks, because the modals delegate to
+//   `useSchemaTableMutations` → the `tauri.dropTable` compat wrapper.
+// - No toast-fallback assertions (AC-191-03) live here: the modal owns
+//   the user-visible error surface (inline `previewError` +
+//   `pendingConfirm` dialog), so the silent-swallow regression does not
+//   apply.
 //
-// 4 NEW cases per AC-235-07 / AC-235-08:
+// Cases per AC-235-07 / AC-235-08:
 // - "Rename menu opens RenameTableDialog with pre-fill" (AC-235-07)
 // - "Drop menu opens DropTableDialog" (AC-235-08)
 // - "Rename commit-success → tauri.renameTable invoked + dialog closes"
@@ -29,9 +26,8 @@
 // - "Drop commit-success → tauri.dropTable invoked + dialog closes"
 //   (AC-235-08)
 //
-// The other context-menu / view / function / F2 / Export-popover / Create
-// Table cases remain byte-equivalent in intent — only the post-action
-// dialog assertions are mechanically updated.
+// The file also covers the context-menu / view / function / F2 /
+// Export-popover / Create Table cases.
 
 import {
   act,
@@ -44,11 +40,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 
-// Sprint 235 — mock `@lib/tauri` so the new modals' DDL preview +
-// commit paths short-circuit. `dropTableRequest` and
-// `renameTableRequest` must resolve `{ sql }` for the preview path;
-// `dropTable` and `renameTable` are the Sprint 223 compat wrappers
-// the modal commit closure ultimately reaches.
+// Mock `@lib/tauri` so the modals' DDL preview + commit paths
+// short-circuit. `dropTableRequest` and `renameTableRequest` must resolve
+// `{ sql }` for the preview path; `dropTable` and `renameTable` are the
+// compat wrappers the modal commit closure ultimately reaches.
 const {
   mockDropTableRequest,
   mockRenameTableRequest,
@@ -64,14 +59,13 @@ const {
   mockRenameTable: vi.fn().mockResolvedValue(undefined),
   mockListTables: vi.fn().mockResolvedValue([]),
   mockCreateTable: vi.fn(),
-  // Sprint 240 — `CreateTableDialog` now calls a single
-  // `tauri.createTablePlan` IPC instead of fanning out
-  // create_table + create_index + add_constraint. The default impl
-  // routes through `mockCreateTable` so existing assertions on
+  // `CreateTableDialog` calls a single `tauri.createTablePlan` IPC
+  // instead of fanning out create_table + create_index + add_constraint.
+  // The default impl routes through `mockCreateTable` so assertions on
   // `mockCreateTable` call counts (preview vs commit) keep passing
-  // verbatim — the no-index/no-constraint path collapses to a
-  // single `mockCreateTable` invocation per IPC, identical to the
-  // pre-Sprint-240 contract.
+  // verbatim — the no-index/no-constraint path collapses to a single
+  // `mockCreateTable` invocation per IPC, identical to the earlier
+  // contract.
   mockCreateTablePlan: vi.fn(
     async (req: {
       connectionId: string;
@@ -506,10 +500,9 @@ describe("SchemaTree — actions", () => {
     }
   });
 
-  // AC-CM-05 / AC-235-08 — Drop menu mounts the new DropTableDialog with
-  // typing-confirm + CASCADE checkbox. The dialog title remains "Drop
-  // Table" (verbatim from Sprint 226 minimal version) and the description
-  // surfaces `{schema}.{table}`.
+  // AC-CM-05 / AC-235-08 — Drop menu mounts the DropTableDialog with
+  // typing-confirm + CASCADE checkbox. The dialog title is "Drop Table"
+  // and the description surfaces `{schema}.{table}`.
   it("[AC-235-08] Drop menu mounts DropTableDialog with typing-confirm", async () => {
     await expandSchemaWithTables();
 
@@ -528,7 +521,7 @@ describe("SchemaTree — actions", () => {
     // Dialog title + description from new modal
     expect(screen.getByText("Drop Table")).toBeInTheDocument();
     expect(screen.getByText("public.users")).toBeInTheDocument();
-    // Sprint 235 — typing-confirm input + CASCADE checkbox + Apply.
+    // Typing-confirm input + CASCADE checkbox + Apply.
     expect(
       screen.getByLabelText("Type the table name to confirm"),
     ).toBeInTheDocument();
@@ -593,7 +586,7 @@ describe("SchemaTree — actions", () => {
     });
 
     // Show DDL → fetches preview SQL.
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });
@@ -605,7 +598,7 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     });
     await waitFor(() => {
-      // Sprint 271c — `expectedDatabase` last-positional propagated.
+      // `expectedDatabase` propagated as the 4th positional argument.
       expect(mockDropTable).toHaveBeenCalledWith(
         "conn1",
         "users",
@@ -671,9 +664,9 @@ describe("SchemaTree — actions", () => {
     });
   });
 
-  // AC-235-07 — Rename commit-success path. Sprint 223 mutation hook
-  // calls `tauri.renameTable` (compat positional wrapper) which the
-  // modal commit closure forwards to.
+  // AC-235-07 — Rename commit-success path. The mutation hook calls
+  // `tauri.renameTable` (compat positional wrapper) which the modal
+  // commit closure forwards to.
   it("[AC-235-07] Rename commit-success calls tauri.renameTable + dialog closes", async () => {
     await expandSchemaWithTables();
 
@@ -696,7 +689,7 @@ describe("SchemaTree — actions", () => {
     });
 
     // Show DDL → fetches preview SQL.
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockRenameTableRequest).toHaveBeenCalled();
     });
@@ -706,7 +699,7 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     });
     await waitFor(() => {
-      // Sprint 271c — `expectedDatabase` last-positional propagated.
+      // `expectedDatabase` last-positional propagated.
       expect(mockRenameTable).toHaveBeenCalledWith(
         "conn1",
         "users",
@@ -966,7 +959,7 @@ describe("SchemaTree — actions", () => {
   });
 
   // =========================================================================
-  // Sprint 107 (#TREE-1): F2 keyboard rename on focused table button
+  // #TREE-1: F2 keyboard rename on focused table button
   // =========================================================================
 
   // AC-01: F2 on focused table button opens the new RenameTableDialog
@@ -1092,10 +1085,10 @@ describe("SchemaTree — actions", () => {
     expect(input.selectionEnd).toBe("users".length);
   });
 
-  // AC-192-04 — Sprint 192 통합 export. 진입점은 헤더 Popover (Download
-  // 아이콘 → 클릭 시 schema 별 [Schema/Data/Full] 3 액션 노출). RDB
-  // 연결에서만 노출되고 mongodb / redis 연결에서는 trigger button 자체가 hide.
-  // date 2026-05-02
+  // AC-192-04 — unified export. The entry point is the header Popover
+  // (Download icon → click surfaces the 3 actions [Schema/Data/Full] per
+  // schema). It shows on RDB connections only; on mongodb / redis
+  // connections the trigger button itself is hidden.
   it("[AC-192-04-1] header Export popover surfaces 3 actions per schema for RDB connections", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
@@ -1132,7 +1125,7 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(trigger);
     });
 
-    // Popover 안에서 schema row 의 3 가지 액션이 모두 노출.
+    // All 3 schema-row actions are exposed inside the Popover.
     expect(screen.getByLabelText("Export public DDL")).toBeInTheDocument();
     expect(screen.getByLabelText("Export public data")).toBeInTheDocument();
     expect(screen.getByLabelText("Export public full")).toBeInTheDocument();
@@ -1166,8 +1159,8 @@ describe("SchemaTree — actions", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Mongo connection 에선 paradigm !== "rdb" 이므로 Popover trigger
-    // 자체가 hide — refresh 버튼만 노출.
+    // On a Mongo connection `paradigm !== "rdb"`, so the Popover trigger
+    // itself is hidden — only the refresh button shows.
     expect(screen.queryByLabelText("Export")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Refresh schemas")).toBeInTheDocument();
   });
@@ -1289,10 +1282,8 @@ describe("SchemaTree — actions", () => {
   });
 
   // =========================================================================
-  // Sprint 226 (AC-226-05) — schema-row "Create Table…" entry-point
+  // AC-226-05 — schema-row "Create Table…" entry-point
   // =========================================================================
-  //
-  // Date: 2026-05-06.
   //
   // Why this case lives here:
   // - AC-226-05 mandates that right-clicking a schema row exposes a
@@ -1345,7 +1336,7 @@ describe("SchemaTree — actions", () => {
   });
 
   it("[AC-226-05] commit-success calls refreshSchema('public') exactly once", async () => {
-    // Sprint 226: prove the post-commit refresh contract.
+    // Prove the post-commit refresh contract.
     mockCreateTable.mockResolvedValue({
       sql: 'CREATE TABLE "public"."new_t" ("id" integer)',
     });
@@ -1382,8 +1373,8 @@ describe("SchemaTree — actions", () => {
       });
     });
 
-    // Sprint 238 — auto-debounced (250ms) preview fetch. Wait for the
-    // preview-only createTable call to settle before clicking Execute.
+    // Auto-debounced (250ms) preview fetch. Wait for the preview-only
+    // createTable call to settle before clicking Execute.
     await waitFor(
       () => {
         const previewCalls = mockCreateTable.mock.calls.filter(
@@ -1406,7 +1397,7 @@ describe("SchemaTree — actions", () => {
     });
 
     // Post-commit `refreshSchema("public")` resolves into
-    // `loadTables(connectionId, db, "public")` (Sprint 263 — db dimension).
+    // `loadTables(connectionId, db, "public")` (db dimension).
     await waitFor(() => {
       const callsForPublic = loadTablesSpy.mock.calls.filter(
         (c) => c[0] === "conn1" && c[2] === "public",
@@ -1421,7 +1412,7 @@ describe("SchemaTree — actions", () => {
   });
 
   // =========================================================================
-  // Sprint 226 polish — Tables 카테고리 헤더의 '+' 버튼 entry-point
+  // Tables category header '+' button entry-point
   // =========================================================================
   it("Tables 카테고리 헤더의 '+' 버튼 click → CreateTableDialog 열림", async () => {
     setSchemaStoreState({
@@ -1505,19 +1496,21 @@ describe("SchemaTree — actions", () => {
   });
 
   // =========================================================================
-  // Sprint 301 — schema/table 컨텍스트 메뉴 Export 진입점
+  // schema/table context-menu Export entry point
   // =========================================================================
   //
-  // 작성 이유 (2026-05-13, Sprint 301): 헤더 Download Popover 만이 export
-  // 진입점이었는데, 사용자는 우클릭 흐름으로도 schema / table 단위 export
-  // 를 트리거할 수 있길 원함. 본 sprint 는 schema row 우클릭에 "Export…"
-  // sub-menu (Schema DDL / Data / Full), table row 우클릭에 "Export…"
-  // sub-menu (Table DDL / Data / Full) 를 wire 한다. sub-menu 내부 항목
-  // 클릭 트리거는 Radix Portal + jsdom 한계로 visual 영역에 가깝고, 본
-  // 가드는 sub-trigger 노출만 검증 — 회귀 시 menu 가 통째로 사라지면 잡힘.
+  // Reason: the header Download Popover was the only export entry point,
+  // but users want the right-click flow to trigger a schema / table export
+  // too. Right-clicking a schema row wires an "Export…" sub-menu (Schema
+  // DDL / Data / Full) and right-clicking a table row wires an "Export…"
+  // sub-menu (Table DDL / Data / Full). Clicking an item inside the
+  // sub-menu is close to visual territory because of Radix Portal + jsdom
+  // limits, so this guard only checks that the sub-trigger shows — a
+  // regression that drops the menu entirely is still caught.
   //
-  // 비 PG (MySQL / SQLite) connection 에서도 sub-trigger 자체는 노출 (DDL
-  // 만 호출 가능). 의도된 disabled 상태 가드는 follow-up 으로 미룬다.
+  // On non-PG (MySQL / SQLite) connections the sub-trigger shows too (only
+  // DDL can be called). The guard for the intended disabled state is
+  // deferred to a follow-up.
   describe("Sprint 301 — context menu Export entry", () => {
     beforeEach(() => {
       useConnectionStore.setState({
@@ -1555,8 +1548,9 @@ describe("SchemaTree — actions", () => {
         fireEvent.contextMenu(schemaRow, { clientX: 100, clientY: 200 });
       });
 
-      // SubTrigger label 만 가드. sub-content 의 DDL/Data/Full 클릭 트리거
-      // 는 Radix Portal + jsdom 한계로 본 case 의 범위 밖.
+      // Guards the SubTrigger label only. Clicking DDL/Data/Full in the
+      // sub-content is out of scope for this case because of Radix Portal
+      // + jsdom limits.
       expect(screen.getByText("Export Schema…")).toBeInTheDocument();
     });
 

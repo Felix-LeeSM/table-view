@@ -25,11 +25,11 @@ interface BottomPanelProps {
  * mount inline.
  *
  * Tab-strip styling is deliberately NOT the treatment the editor `TabBar`
- * uses one layer above (owner: "두 층이 구별되게"). The editor tabs carry a
- * 2px underline plus a `bg-background` fill on the active tab at `text-sm`;
- * this strip is a fixed `h-7` row of `text-xs` tabs with a *1px* underline
- * and no fill, drawn with `-mb-px` so the active mark replaces the strip's
- * own rule instead of stacking on it.
+ * uses one layer above (owner: "the two layers must read as distinct").
+ * The editor tabs carry a 2px underline plus a `bg-background` fill on the
+ * active tab at `text-sm`; this strip is a fixed `h-7` row of `text-xs`
+ * tabs with a *1px* underline and no fill, drawn with `-mb-px` so the
+ * active mark replaces the strip's own rule instead of stacking on it.
  *
  * The Operations tab is capability-gated the same way its old toolbar button
  * was: a connection without `operations.*` gets no tab at all rather than a

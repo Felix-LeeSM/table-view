@@ -1,22 +1,24 @@
-//! Purpose: DDL request/enum serde **wire contract** lock — 이슈 #1625
-//! (2026-07-24). 이전 13개 테스트는 `to_string → from_str` 왕복만 재단언해
-//! 실제 JSON wire(키/tag)를 검증하지 않았다 (testing-scenarios P9 —
-//! serde derive roundtrip 은 라이브러리 재검증). 여기서는 `to_value` 결과를
-//! 기대 `json!` Value 와 **완전 일치**로 lock 해, 향후 `rename_all` 추가·필드
-//! 이름 변경·enum tag 변경이 조용히 wire 를 깨면 fail 하도록 강화한다.
+//! Purpose: DDL request/enum serde **wire contract** lock — issue #1625
+//! (2026-07-24). The earlier tests only re-asserted the `to_string → from_str`
+//! round trip and never checked the real JSON wire (keys / tag)
+//! (testing-scenarios P9 — a serde derive round trip only re-verifies the
+//! library). Here the `to_value` result is locked to **exact equality** with
+//! the expected `json!` Value, so a later `rename_all`, a field rename, or an
+//! enum tag change that silently breaks the wire makes the test fail.
 //!
-//! Wire 형식 note: `ColumnChange` / `ConstraintDefinition` 은
-//! `#[serde(tag = "type", rename_all = "snake_case")]`, 나머지 request
-//! 구조체는 `rename_all` 없음 → 필드가 Rust snake_case 그대로 나간다. (이
-//! surface 는 camelCase 가 아니다.) `#[serde(default)]` 필드도
-//! `skip_serializing_if` 가 없어 항상 직렬화되므로 wire 에 null 로 등장한다.
+//! Wire format note: `ColumnChange` / `ConstraintDefinition` carry
+//! `#[serde(tag = "type", rename_all = "snake_case")]`; the other request
+//! structs have no `rename_all`, so their fields go out as Rust snake_case.
+//! (This surface is not camelCase.) A `#[serde(default)]` field has no
+//! `skip_serializing_if` either, so it is always serialized and shows up on the
+//! wire as null.
 
 use super::super::*;
 use serde_json::json;
 
-/// `$value` 를 직렬화해 정확한 JSON wire 를 `$wire` 와 Value 동치로 단언한 뒤
-/// 역직렬화까지 확인. Value 동치가 모든 키/tag 를 고정하므로 예전 왕복-only
-/// 테스트가 놓친 rename/tag 회귀를 잡는다.
+/// Serializes `$value`, asserts the exact JSON wire is Value-equal to `$wire`,
+/// then checks deserialization too. Value equality pins every key and tag, so it
+/// catches the rename / tag regressions the old round-trip-only tests missed.
 macro_rules! assert_wire {
     ($ty:ty, $value:expr, $wire:expr $(,)?) => {{
         let value: $ty = $value;
@@ -73,10 +75,11 @@ fn column_change_wire_and_roundtrip() {
     );
 }
 
-/// Sprint 237 back-compat — `using_expression = Some` 는 snake_case 키로
-/// 직렬화되고, 그 필드를 생략한 pre-Sprint-237 payload 는 `#[serde(default)]`
-/// 로 `None` 이 된다. 이 cross-version deserialize 분기는 위 table 의 subset
-/// 이 아니라 별도 계약이므로 명시 유지 (issue #1625 요구).
+/// Back-compat — `using_expression = Some` serializes under its snake_case key,
+/// and an older payload that omits the field becomes `None` via
+/// `#[serde(default)]`. This cross-version deserialize branch is a separate
+/// contract, not a subset of the table above, so it stays explicit (required by
+/// issue #1625).
 #[test]
 fn column_change_modify_using_expression_wire_and_backcompat() {
     assert_wire!(
@@ -100,7 +103,7 @@ fn column_change_modify_using_expression_wire_and_backcompat() {
         }),
     );
 
-    // 필드 생략 legacy payload → None.
+    // Legacy payload with the field omitted → None.
     let legacy = json!({
         "type": "modify",
         "name": "age",
@@ -142,7 +145,7 @@ fn column_change_modify_new_comment_wire_and_backcompat() {
         }),
     );
 
-    // 필드 생략 legacy payload → None (comment 미변경).
+    // Legacy payload with the field omitted → None (comment unchanged).
     let legacy = json!({
         "type": "modify",
         "name": "email",
@@ -198,8 +201,8 @@ fn constraint_definition_wire_and_roundtrip() {
         json!({ "type": "check", "expression": "age > 0" }),
     );
 
-    // Sprint 229 back-compat — on_delete/on_update 를 생략한 pre-229 payload 는
-    // `#[serde(default)]` 로 None 이 된다 (별도 deserialize 분기).
+    // Back-compat — an older payload that omits on_delete/on_update becomes
+    // None via `#[serde(default)]` (a separate deserialize branch).
     let legacy = json!({
         "type": "foreign_key",
         "columns": ["user_id"],

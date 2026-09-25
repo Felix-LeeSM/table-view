@@ -1,13 +1,14 @@
-//! v0.3.1 — boot health check 가 probe 를 통과하는 body corruption 도 잡는지
-//! 검증. 정상 DB 의 page-size field (header byte 16-17) 를 garbage 로 덮어
-//! SQLite magic header(0-15)는 유효하지만 read 가 실패하는 fixture 를 만들고,
-//! `open_pool()` 이 이를 감지 → `state.db.bak` quarantine → fresh DB 재생성
-//! 하는지 확인. 복구 발생 시 `corrupt_recovery::DID_RECOVER` 가 set 됨.
+//! v0.3.1 — checks that the boot health check also catches body corruption
+//! that slips past the probe. It overwrites the page-size field (header
+//! bytes 16-17) of a healthy DB with garbage, which yields a fixture whose
+//! SQLite magic header (0-15) is still valid but whose reads fail, then
+//! confirms `open_pool()` detects it → quarantines to `state.db.bak` →
+//! recreates a fresh DB. On recovery `corrupt_recovery::DID_RECOVER` is set.
 //!
-//! 이 케이스가 이전까지의 회귀 지점이다 — `probe()` 는 magic header 만 검사해
-//! body 손상을 놓쳤고, boot 시 `get_initial_app_state` 의 `BEGIN IMMEDIATE`
-//! read 만 실패해 사용자가 Retry 하나만 보고 갇혔다. v0.3.1 health check 가
-//! 이 gap 을 init 단계에서 잡는다.
+//! This case was the earlier regression point — `probe()` inspected only the
+//! magic header and missed body damage, so at boot only the `BEGIN IMMEDIATE`
+//! read in `get_initial_app_state` failed and the user was stuck with nothing
+//! but a Retry button. The v0.3.1 health check catches that gap during init.
 
 use serial_test::serial;
 use std::sync::atomic::Ordering;
@@ -30,29 +31,30 @@ fn cleanup() {
 async fn open_pool_recovers_from_body_corruption_undetected_by_probe() {
     let _dir = setup_dir();
 
-    // 1. valid DB 생성 — migrations 포함.
+    // 1. Create a valid DB — migrations included.
     let pool = local::open_pool().await.unwrap();
     pool.close().await;
-    // WAL sidecar 가 read-back 에 영향 주지 않도록 제거 (main file 만 손상).
+    // Drop the WAL sidecar so it cannot affect the read-back (only the main
+    // file is corrupted).
     let path = local::db_path().unwrap();
     let _ = std::fs::remove_file(path.with_extension("db-wal"));
     let _ = std::fs::remove_file(path.with_extension("db-shm"));
 
-    // 2. page-size field (offset 16-17) 손상 — magic header(0-15)는 보존.
+    // 2. Corrupt the page-size field (offset 16-17) — magic header (0-15) kept.
     let mut content = std::fs::read(&path).unwrap();
     assert!(content.len() >= 100, "fixture DB must be >= header size");
     content[16] = 0xFF;
     content[17] = 0xFF;
     std::fs::write(&path, &content).unwrap();
 
-    // probe 는 여전히 통과 — body corruption 만 주입했으므로 magic 검사로는
-    // 잡히지 않는 게 이 테스트의 핵심 (이전까지의 gap).
+    // The probe still passes — only body corruption was injected, so the magic
+    // check cannot catch it, and that is the point of this test (the old gap).
     corrupt_recovery::probe(&path).await.unwrap();
 
-    // test 간 AtomicBool 누출 차단.
+    // Keep the AtomicBool from leaking across tests.
     corrupt_recovery::DID_RECOVER.store(false, Ordering::SeqCst);
 
-    // 3. reopen → health check(=migrations/read path) 실패 → quarantine → fresh.
+    // 3. Reopen → health check (= migrations/read path) fails → quarantine → fresh.
     let pool = local::open_pool().await.unwrap();
 
     assert!(
@@ -64,7 +66,7 @@ async fn open_pool_recovers_from_body_corruption_undetected_by_probe() {
         "state.db.bak backup must exist after quarantine"
     );
 
-    // 4. fresh pool 은 정상 read 가능 — 복구 후 사용자 갇히지 않음.
+    // 4. The fresh pool reads fine — the user is not stuck after recovery.
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
         .fetch_one(&pool)
         .await

@@ -1,5 +1,4 @@
-// Sprint 235 (AC-235-01..AC-235-04, AC-235-09) — RenameTableDialog test
-// suite. Date: 2026-05-07.
+// AC-235-01..AC-235-04, AC-235-09 — RenameTableDialog test suite.
 //
 // Why this file exists:
 // - AC-235-01 / AC-235-03: assert IPC payload sent on Show DDL +
@@ -143,7 +142,7 @@ describe("RenameTableDialog (Sprint 235)", () => {
     await act(async () => {
       fireEvent.change(input, { target: { value: "people" } });
     });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockRenameTableRequest).toHaveBeenCalledTimes(1);
     });
@@ -153,7 +152,7 @@ describe("RenameTableDialog (Sprint 235)", () => {
       table: "users",
       newName: "people",
       previewOnly: true,
-      // Sprint 271c — opt-in DbMismatch guard forwards workspace db.
+      // Opt-in DbMismatch guard forwards workspace db.
       expectedDatabase: "db-1",
     });
   });
@@ -165,7 +164,7 @@ describe("RenameTableDialog (Sprint 235)", () => {
     await act(async () => {
       fireEvent.change(input, { target: { value: "people" } });
     });
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockRenameTableRequest).toHaveBeenCalled();
     });
@@ -175,9 +174,8 @@ describe("RenameTableDialog (Sprint 235)", () => {
     await waitFor(() => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
-    // Sprint 223 useSchemaTableMutations calls schemaStore.renameTable
-    // which in turn calls tauri.renameTable (compat positional wrapper).
-    // Sprint 271c — `expectedDatabase` last-positional propagated.
+    // useSchemaTableMutations calls tauri.renameTable (compat positional
+    // wrapper). `expectedDatabase` last-positional propagated.
     expect(mockRenameTable).toHaveBeenCalledWith(
       "conn-1",
       "users",
@@ -188,10 +186,10 @@ describe("RenameTableDialog (Sprint 235)", () => {
   });
 
   // Purpose: audit-residual error-branch + keyboard coverage for the
-  // Sprint 235 RenameTableDialog — preview/commit reject must surface an
-  // inline alert while the modal stays open (P4 parity with the success
-  // path), and the Enter-key submit path must commit. Mirrors the
-  // DropColumnDialog reject pattern (DropColumnDialog.test.tsx:385).
+  // RenameTableDialog — preview/commit reject must surface an inline
+  // alert while the modal stays open (P4 parity with the success path),
+  // and the Enter-key submit path must commit. Mirrors the
+  // DropColumnDialog reject pattern (DropColumnDialog.test.tsx:458).
   // Issue #1630 (2026-07-24) — 2026-07-17 test audit residual.
   describe("error branches + Enter-key submit (issue #1630)", () => {
     // Reason: preview reject (previewOnly:true renameTableRequest throws)

@@ -4,10 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { TableData } from "@/types/schema";
 import QuickLookPanel from "./QuickLookPanel";
 
-// Sprint 194 — minimal `DataGridEditState` factory for QuickLook edit-mode
-// tests. Only the surface QuickLook actually consumes is filled in; the rest
-// is `vi.fn()` no-ops to satisfy the type contract. Pendingedits / errors
-// default to empty Maps so `Modified` pill stays off unless overridden.
+// Minimal `DataGridEditState` factory for QuickLook edit-mode tests. Only the
+// surface QuickLook actually consumes is filled in; the rest is `vi.fn()`
+// no-ops to satisfy the type contract. Pendingedits / errors default to empty
+// Maps so `Modified` pill stays off unless overridden.
 function makeEditState(
   overrides: Partial<DataGridEditState> = {},
 ): DataGridEditState {
@@ -389,7 +389,7 @@ describe("QuickLookPanel", () => {
       ).toBeInTheDocument();
     });
 
-    // ── Sprint 194 — FB-4 edit mode (RDB) ────────────────────────────
+    // ── FB-4 edit mode (RDB) ─────────────────────────────────────────
     // #1734 (4) turned this always-on: RDB has no Edit toggle any more, and
     // supplying `editState` is the whole gate. The dispatch / column-family /
     // key-handling contracts below are unchanged — only the entry step is gone.
@@ -606,7 +606,7 @@ describe("QuickLookPanel", () => {
       expect(screen.getByText("bytea")).toBeInTheDocument();
     });
 
-    // ── Sprint 90 #QL-2: column name / type 2-line split ─────────────
+    // ── #QL-2: column name / type 2-line split ───────────────────────
     describe("column header 2-line split (sprint-90 #QL-2)", () => {
       it("renders column name and data type as separate sibling blocks under a flex flex-col parent", () => {
         render(<QuickLookPanel {...defaultProps} />);
@@ -824,7 +824,7 @@ describe("QuickLookPanel", () => {
       ).not.toBeInTheDocument();
     });
 
-    // ── Sprint 194 — FB-4 edit mode (document) ───────────────────────
+    // ── FB-4 edit mode (document) ────────────────────────────────────
     describe("edit mode (sprint-194 FB-4 document)", () => {
       const docColumns = [
         {
@@ -950,7 +950,7 @@ describe("QuickLookPanel", () => {
       });
     });
 
-    // ── Sprint 105 #QL-1: keyboard-accessible resizer (document mode) ─
+    // ── #QL-1: keyboard-accessible resizer (document mode) ────────────
     it("exposes the resize handle as a focusable separator with ARIA in document mode", () => {
       render(<QuickLookPanel {...documentDefaultProps} />);
 
@@ -968,7 +968,7 @@ describe("QuickLookPanel", () => {
     });
   });
 
-  // ── Sprint 105 #QL-1: keyboard-accessible resizer (RDB mode) ───────
+  // ── #QL-1: keyboard-accessible resizer (RDB mode) ──────────────────
   describe("keyboard resizer (sprint-105 #QL-1)", () => {
     const MIN_HEIGHT = 120;
     const MAX_HEIGHT = 300;
@@ -1089,9 +1089,10 @@ describe("QuickLookPanel", () => {
   });
 
   // ── Esc cancels an in-flight resize drag, reverting to the start height ──
-  // Reason: 사용자 요구 — 모든 draggable 은 드래그 중 Esc 로 시작 크기 복원.
-  // QuickLookPanel 은 공유 리사이즈 훅을 거치지 않는 세 번째 resize 경로라
-  // 동일 시맨틱을 여기서 직접 검증한다 (PR #1690 review 회송) (2026-07-18)
+  // Reason: user requirement — every draggable restores its start size when
+  // Esc is pressed mid-drag. QuickLookPanel is a third resize path that does
+  // not go through the shared resize hook, so the same semantics are verified
+  // directly here (PR #1690).
   describe("drag resize Esc-revert (2026-07-18)", () => {
     const getHandle = () =>
       screen.getByRole("separator", { name: "Resize Quick Look panel" });

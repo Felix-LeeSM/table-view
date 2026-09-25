@@ -1,12 +1,12 @@
-//! Sprint 209 — import / export (plain JSON + master-password envelope).
+//! Import / export (plain JSON + master-password envelope).
 //!
-//! Extracted from the 1710-line `commands/connection.rs` god file. Owns:
+//! Extracted from the `commands/connection.rs` god file. Owns:
 //!   - Schema types: `ExportPayload`, `RenamedEntry`, `ImportResult`,
 //!     `EncryptedExportResult`.
 //!   - Plain-JSON path: `export_connections` / `import_connections`.
 //!     Passwords are NEVER exported — neither plaintext nor ciphertext —
 //!     so users must re-enter passwords after import.
-//!   - Encrypted path (Sprint 140 / b327227): `export_connections_encrypted`
+//!   - Encrypted path (b327227): `export_connections_encrypted`
 //!     auto-generates a 12-word BIP39 mnemonic master password and wraps the
 //!     plain JSON in an `EncryptedEnvelope`. `import_connections_encrypted`
 //!     accepts both envelope and plain-JSON payloads (heuristic: presence of
@@ -114,10 +114,11 @@ pub fn export_connections(ids: Vec<String>) -> Result<String, AppError> {
 }
 
 // ---------------------------------------------------------------------------
-// Sprint 140 — encrypted export / import (master-password envelope)
-// 2026-05-05 — master password는 백엔드가 BIP39 12-word mnemonic으로
-// 자동 생성한다. 사용자 입력 password 시절 정책(MIN_LEN 등)은 폐기:
-// 자동 생성 = 약한 password 자체가 불가능하므로 프론트 검증 floor 불필요.
+// Encrypted export / import (master-password envelope)
+// 2026-05-05 — the backend generates the master password itself as a BIP39
+// 12-word mnemonic. The policies from the user-supplied-password era
+// (MIN_LEN etc.) are retired: auto-generation makes a weak password
+// impossible, so no frontend validation floor is needed.
 // ---------------------------------------------------------------------------
 
 /// Auto-generated mnemonic + serialized envelope JSON returned together by
@@ -355,7 +356,7 @@ mod tests {
     use serial_test::serial;
 
     // -------------------------------------------------------------------
-    // Export / Import (Phase C)
+    // Export / Import
     // -------------------------------------------------------------------
 
     /// Export must contain neither plaintext nor ciphertext password data.
@@ -976,7 +977,7 @@ mod tests {
     }
 
     // -------------------------------------------------------------------
-    // Sprint 140 — encrypted export / import command tests
+    // Encrypted export / import command tests
     // -------------------------------------------------------------------
 
     #[test]
@@ -1028,8 +1029,9 @@ mod tests {
     #[test]
     #[serial]
     fn test_export_connections_encrypted_emits_unique_mnemonic_per_call() {
-        // 자동 생성 = 호출마다 다른 mnemonic. 같은 connection 두 번 export
-        // 했을 때 두 envelope이 서로 풀리지 않아야 함 (각자 자기 mnemonic만).
+        // Auto-generation means a different mnemonic per call. Exporting
+        // the same connection twice must produce two envelopes that cannot
+        // decrypt each other (each is bound to its own mnemonic).
         let _dir = setup_test_env();
         storage_save_conn(sample_connection("c1", "DB1")).unwrap();
 
@@ -1037,7 +1039,7 @@ mod tests {
         let r2 = export_connections_encrypted(vec![]).unwrap();
         assert_ne!(r1.password, r2.password);
 
-        // r1.json는 r2.password로 풀리면 안 됨.
+        // r1.json must not decrypt with r2.password.
         let err = import_connections_encrypted(r1.json.clone(), r2.password.clone()).unwrap_err();
         assert!(matches!(err, AppError::Encryption(_)));
 

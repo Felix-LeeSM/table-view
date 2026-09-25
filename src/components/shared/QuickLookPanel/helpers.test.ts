@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { ColumnInfo } from "@/types/schema";
 import { formatCellValue } from "./helpers";
 
-// Sprint 306 (2026-05-14) — QuickLook BigInt/Decimal 회귀 가드. sprint-305
-// 핫픽스 이전에는 `typeof === "object"` branch 가 raw JSON.stringify 라
-// nested BigInt 입력에서 throw → QuickLookPanel mount-time freeze.
+// QuickLook BigInt/Decimal regression guard. Before the hotfix, the
+// `typeof === "object"` branch used raw JSON.stringify, so a nested BigInt
+// input threw → QuickLookPanel mount-time freeze.
 
 function col(overrides: Partial<ColumnInfo> = {}): ColumnInfo {
   return {

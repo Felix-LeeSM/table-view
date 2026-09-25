@@ -1,7 +1,6 @@
-// Sprint 218 — `toolbar` axis split from `QueryTab.test.tsx` (P11
-// step 2). Covers Sprint 25 Run / Cancel button visibility, disabled
-// state, shortcut hint, and the Run button click → handleExecute path.
-// Cases are byte-equivalent to the originals — no behaviour change.
+// `toolbar` axis split from `QueryTab.test.tsx`. Covers Run / Cancel
+// button visibility, disabled state, shortcut hint, and the Run button
+// click → handleExecute path.
 
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
@@ -26,9 +25,9 @@ import {
 } from "./__tests__/queryTabTestHelpers";
 import QueryTab from "./QueryTab";
 
-// Sprint 248 — `executeQueryDryRun` mock for the new "Dry Run" button
-// path. `vi.fn()` lives at module scope so individual tests can read
-// `.mock.calls` after clicking the button.
+// `executeQueryDryRun` mock for the "Dry Run" button path. `vi.fn()`
+// lives at module scope so individual tests can read `.mock.calls` after
+// clicking the button.
 const mockExecuteQueryDryRun = vi.fn();
 const { mockExplainRdbQuery, mockExplainMongoFind } = vi.hoisted(() => ({
   mockExplainRdbQuery: vi.fn(),
@@ -49,19 +48,12 @@ vi.mock("@/lib/api/explain", () => ({
   explainMongoFind: (...args: unknown[]) => mockExplainMongoFind(...args),
 }));
 
-// Sprint 132 — the QueryTab raw-query hook calls `verifyActiveDb` after
-// optimistic `setActiveDb`. The wrapper itself is unit-tested in
-// `verifyActiveDb.test.ts`; here we mock it so the test can fix the
-// "backend says X" return value per scenario.
+// See the `verifyActiveDb` mock note in `QueryTab.document.test.tsx`.
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: (...args: unknown[]) => mockVerifyActiveDb(...args),
 }));
 
-// Sprint 139 — QueryTab now routes directly to SqlQueryEditor /
-// MongoQueryEditor based on `tab.paradigm`. Both editors are mocked to a
-// shared DOM testbed (`data-testid="mock-editor"`) so the existing
-// fixtures keep working — the mock records `paradigm` from a synthesised
-// prop so the dialect / mongo / paradigm assertions stay meaningful.
+// See the editor-mock note in `QueryTab.document.test.tsx`.
 vi.mock("./SqlQueryEditor", async () => {
   const React = await import("react");
   const MockSqlQueryEditor = React.forwardRef<
@@ -158,7 +150,7 @@ describe("QueryTab — toolbar", () => {
     mockExplainMongoFind.mockReset();
   });
 
-  // ── Sprint 25: Query Editor Toolbar ──
+  // ── Query Editor Toolbar ──
 
   it("renders Run button when idle", () => {
     const tab = makeQueryTab();
@@ -251,7 +243,7 @@ describe("QueryTab — toolbar", () => {
       runBtn.click();
     });
 
-    // Sprint 266 — 4th arg is `expectedDatabase` (opt-in db mismatch guard).
+    // 4th arg is `expectedDatabase` (opt-in db mismatch guard).
     expect(mockExecuteQuery).toHaveBeenCalledWith(
       "conn1",
       "SELECT 1",
@@ -261,7 +253,7 @@ describe("QueryTab — toolbar", () => {
     );
   });
 
-  // ── Sprint 248 (ADR 0022 Phase 4): Dry Run button ──
+  // ── Dry Run button (ADR 0022) ──
 
   // [AC-248-T1] rdb + idle + non-empty SQL → enabled.
   it("[AC-248-T1] renders Dry Run button enabled for rdb + idle + non-empty SQL", () => {
@@ -326,10 +318,10 @@ describe("QueryTab — toolbar", () => {
     });
 
     expect(mockExecuteQueryDryRun).toHaveBeenCalledTimes(1);
-    // Sprint 271b — workspaceDb is now forwarded as the 4th positional
-    // `expectedDatabase`. `seedWorkspace` aligns the connection store
-    // with the seeded tab; without an explicit `database` the default
-    // workspace db is `DEFAULT_TEST_DB === "db1"`.
+    // workspaceDb is forwarded as the 4th positional `expectedDatabase`.
+    // `seedWorkspace` aligns the connection store with the seeded tab;
+    // without an explicit `database` the default workspace db is
+    // `DEFAULT_TEST_DB === "db1"`.
     expect(mockExecuteQueryDryRun).toHaveBeenCalledWith(
       "conn1",
       ["DELETE FROM users WHERE id = 1"],

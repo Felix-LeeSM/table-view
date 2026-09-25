@@ -1,8 +1,7 @@
-// Sprint 248 (ADR 0022 Phase 4) — `useQueryExecution.handleDryRun`
-// contract. The hook owns the explicit "Dry Run" dispatch path the
-// new toolbar button + Cmd+Shift+Enter shortcut both call into; this
-// test pins the 7 acceptance criteria from Sprint 248 contract
-// (`AC-248-E1..E7`). date 2026-05-09.
+// ADR 0022 — `useQueryExecution.handleDryRun` contract. The hook owns
+// the explicit "Dry Run" dispatch path that the toolbar button +
+// Cmd+Shift+Enter shortcut both call into; this test pins the acceptance
+// criteria (`AC-248-E1..E7`).
 //
 // We exercise the hook via `renderHook` rather than mounting QueryTab
 // because:
@@ -52,17 +51,17 @@ beforeEach(() => {
 // `dispatchDbMutationHint` calls verifyActiveDb fire-and-forget. Stub
 // so the dry-run tests don't accidentally trigger the real IPC.
 //
-// Sprint 271b — the dry-run mismatch case below relies on the same
-// `verifyActiveDb` mock to drive `syncMismatchedActiveDb`. We expose a
-// hoisted vi.fn so individual tests can change its resolved value.
+// The dry-run mismatch case below relies on the same `verifyActiveDb`
+// mock to drive `syncMismatchedActiveDb`. We expose a hoisted vi.fn so
+// individual tests can change its resolved value.
 const verifyActiveDbMock = vi.hoisted(() => vi.fn().mockResolvedValue(""));
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: verifyActiveDbMock,
 }));
 
-// Sprint 248 — `splitSqlStatements` keeps semicolon-separated parts so
-// the dry-run multi-statement test can assert IPC payload === full
-// array. Mirrors the simple split used by other QueryTab axis tests.
+// `splitSqlStatements` keeps semicolon-separated parts so the dry-run
+// multi-statement test can assert IPC payload === full array. Mirrors
+// the simple split used by other QueryTab axis tests.
 vi.mock("@lib/sql/sqlUtils", () => ({
   splitSqlStatements: (sql: string) => {
     const parts = sql
@@ -222,10 +221,10 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     });
 
     expect(executeQueryDryRunMock).toHaveBeenCalledTimes(1);
-    // Sprint 271b — workspaceDb is forwarded as the 4th positional
-    // `expectedDatabase`. `seedWorkspace` aligns the connection store
-    // with the seeded tab; without an explicit `database` the default
-    // workspace db is `DEFAULT_TEST_DB === "db1"`.
+    // workspaceDb is forwarded as the 4th positional `expectedDatabase`.
+    // `seedWorkspace` aligns the connection store with the seeded tab;
+    // without an explicit `database` the default workspace db is
+    // `DEFAULT_TEST_DB === "db1"`.
     expect(executeQueryDryRunMock).toHaveBeenCalledWith(
       "conn1",
       ["DELETE FROM users WHERE id = 1"],
@@ -296,8 +295,8 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     });
 
     expect(executeQueryDryRunMock).toHaveBeenCalledTimes(1);
-    // Sprint 271b — workspaceDb is forwarded as the 4th positional
-    // `expectedDatabase`. `seedWorkspace` defaults to `DEFAULT_TEST_DB`.
+    // workspaceDb is forwarded as the 4th positional `expectedDatabase`.
+    // `seedWorkspace` defaults to `DEFAULT_TEST_DB`.
     expect(executeQueryDryRunMock).toHaveBeenCalledWith(
       "conn1",
       ["SELECT * FROM users", "DELETE FROM users WHERE id = 1"],
@@ -328,7 +327,7 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     expect(useQueryHistoryStore.getState().recentVisible).toHaveLength(0);
   });
 
-  // [AC-248-E7] queryId 가 `"dry:"` 로 시작.
+  // [AC-248-E7] queryId starts with `"dry:"`.
   it('[AC-248-E7] queryId is prefixed with "dry:"', async () => {
     executeQueryDryRunMock.mockResolvedValueOnce([DML_RESULT]);
     const tab = seedTab({ sql: "UPDATE t SET x = 1" });
@@ -342,14 +341,14 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     expect(call[2]).toEqual(expect.stringMatching(/^dry:/));
   });
 
-  // Sprint 271b (2026-05-13) — workspaceDb forwarding.
+  // workspaceDb forwarding.
   //
-  // 작성 이유: dry-run preview MUST run on the same db the eventual
+  // Reason: the dry-run preview MUST run on the same db the eventual
   // commit will hit. The contract pins useQueryExecution's dry-run path
   // to thread the workspace `(connId, db)` like it already does for the
-  // executeQuery / executeQueryBatch paths. Without this guard a
-  // swapped pool could roll back against a different db than the user
-  // intended to preview.
+  // executeQuery / executeQueryBatch paths. Without this guard a swapped
+  // pool could roll back against a different db than the user intended
+  // to preview.
   it("forwards tab.database as expectedDatabase (4th positional)", async () => {
     executeQueryDryRunMock.mockResolvedValueOnce([DML_RESULT]);
     const tab = seedTab({
@@ -371,14 +370,13 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     );
   });
 
-  // Sprint 271b (2026-05-13) — DbMismatch end-to-end.
+  // DbMismatch end-to-end.
   //
-  // 작성 이유: mocked IPC throws #744 typed DbMismatch envelope →
-  // useQueryExecution 의 catch 가 normalizer 로 감지 →
-  // syncMismatchedActiveDb 가
-  // verifyActiveDb 의 새 db 를 받아 toast.warning 발사 (user-initiated
-  // dry-run 은 Sprint 269 Retry toast 재사용; background introspection 만
-  // silent).
+  // Reason: the mocked IPC throws the #744 typed DbMismatch envelope →
+  // `useQueryExecution`'s catch detects it through the normalizer →
+  // `syncMismatchedActiveDb` takes the new db from `verifyActiveDb` and
+  // fires `toast.warning` (a user-initiated dry-run reuses the Retry
+  // toast; only background introspection stays silent).
   it("routes DbMismatch through syncMismatchedActiveDb + Retry toast", async () => {
     executeQueryDryRunMock.mockRejectedValueOnce({
       type: "DbMismatch",

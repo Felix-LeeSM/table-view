@@ -6,18 +6,22 @@ import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useCallback, useEffect, useRef } from "react";
 
 /**
- * `QueryTab` 의 window event listener + handleFormat 캡슐화.
+ * Encapsulates the `QueryTab` window event listeners + handleFormat.
  *
- * 책임:
- *   - `cancel-query` listener — 외부 (예: keyboard shortcut layer) 가
- *     dispatch 하면 현재 running queryId 매칭 시 backend cancel 호출.
- *   - `format-sql` listener (Cmd+I) — active tab + 비-document 일 때만
- *     formatter 호출. 선택영역 있으면 선택영역만 포맷, 없으면 전체.
- *   - `uglify-sql` listener (Cmd+Shift+I) — 동일 활성 조건 + 전체 minify.
- *   - `handleFormat` callback — toolbar Format 버튼이 직접 호출 (선택
- *     영역 우선 + 전체 fallback).
+ * Responsibilities:
+ *   - `cancel-query` listener — when something outside (e.g. the keyboard
+ *     shortcut layer) dispatches it, call the backend cancel if the
+ *     running queryId matches.
+ *   - `format-sql` listener (Cmd+I) — call the formatter only on the
+ *     active, non-document tab. Format the selection if there is one,
+ *     otherwise the whole text.
+ *   - `uglify-sql` listener (Cmd+Shift+I) — same active condition, minify
+ *     the whole text.
+ *   - `handleFormat` callback — called directly by the toolbar Format
+ *     button (selection first, whole text as fallback).
  *   - `editorRef` — CodeMirror EditorView ref. SqlQueryEditor /
- *     MongoQueryEditor 가 받음, format/uglify 핸들러가 selection 조회.
+ *     MongoQueryEditor receive it; the format/uglify handlers read the
+ *     selection through it.
  *
  * Invariants:
  * - format / uglify short-circuit on document paradigm — running a JSON
@@ -60,7 +64,7 @@ export function useQueryEvents({
 }: UseQueryEventsArgs): QueryEvents {
   const editorRef = useRef<EditorView | null>(null);
 
-  // cancel-query event listener — backend cancel 호출
+  // cancel-query event listener — calls the backend cancel
   useEffect(() => {
     const handler = (e: Event) => {
       const { queryId } = (e as CustomEvent<{ queryId: string }>).detail;

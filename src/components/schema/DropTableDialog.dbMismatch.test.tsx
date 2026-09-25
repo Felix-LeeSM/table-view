@@ -1,17 +1,16 @@
-// Sprint 271c (2026-05-13) — DropTableDialog end-to-end DbMismatch
-// recovery test.
+// DropTableDialog end-to-end DbMismatch recovery test.
 //
-// 작성 이유: backend Sprint 266 가드가 `tauri.dropTableRequest` 를
-// `AppError::DbMismatch` 로 reject 할 때, dialog 의 ddl preview catch
-// path 가
-//   (1) typed DbMismatch envelope 를 normalizer 로 감지하고
-//   (2) `syncMismatchedActiveDb` 로 verifyActiveDb + setActiveDb 를
-//       호출하며
-//   (3) Sprint 269 passive `toast.warning` 으로 사용자에게 재시도를
-//       안내하는지 확인. user-initiated DDL 은 silent 가 아닌 toast 노출.
-// IPC 는 #744 typed envelope 로 mock 한다. verifyActiveDb 만 직접 mock
-// 하고 나머지 sync 경로는 production code 가 실제 실행 - toast +
-// connectionStore.setActiveDb side-effect 로 end-to-end 단언.
+// Reason: when the backend guard rejects `tauri.dropTableRequest` with
+// `AppError::DbMismatch`, this checks that the dialog's ddl preview catch
+// path
+//   (1) detects the typed DbMismatch envelope through the normalizer,
+//   (2) calls verifyActiveDb + setActiveDb via `syncMismatchedActiveDb`,
+//   (3) tells the user to retry with a passive `toast.warning`.
+// User-initiated DDL surfaces a toast instead of staying silent.
+// IPC is mocked with the #744 typed envelope. Only verifyActiveDb is
+// mocked directly; the rest of the sync path runs production code - the
+// end-to-end assertion is on the toast + connectionStore.setActiveDb
+// side-effect.
 
 import {
   act,
@@ -122,7 +121,7 @@ describe("DropTableDialog — DbMismatch (Sprint 271c)", () => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });
 
-    // Inline error shows the Sprint 266 message verbatim.
+    // Inline error shows the backend message verbatim.
     await waitFor(() => {
       const errors = document.querySelectorAll('[role="alert"]');
       const messages = Array.from(errors).map((e) => e.textContent ?? "");
@@ -135,10 +134,9 @@ describe("DropTableDialog — DbMismatch (Sprint 271c)", () => {
       expect(verifyActiveDbMock).toHaveBeenCalledWith("conn-1");
     });
 
-    // User-initiated → Sprint 269 passive Retry toast. The toast
-    // surface is the user-visible signal that the sync helper's
-    // `onSynced` callback was invoked (which only fires when verify
-    // returned a non-empty actual db).
+    // User-initiated → passive Retry toast. The toast surface is the
+    // user-visible signal that the sync helper's `onSynced` callback was
+    // invoked (which only fires when verify returned a non-empty actual db).
     await waitFor(() => {
       expect(toastWarningMock).toHaveBeenCalledWith(
         expect.stringContaining("db-2"),

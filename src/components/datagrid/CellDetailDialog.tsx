@@ -23,9 +23,9 @@ export interface CellDetailDialogProps {
  */
 function renderCellText(data: unknown): string {
   if (data == null) return "NULL";
-  // Sprint 305 — Decimal / BigInt 는 ADR 0026 의 precision-preserving cell
-  // type. Decimal 은 `typeof === "object"` 라 generic branch 가 `{}` 로
-  // emit, BigInt 는 raw JSON.stringify 가 throw → 둘 다 명시 처리.
+  // Decimal / BigInt are ADR 0026's precision-preserving cell types. Decimal
+  // is `typeof === "object"`, so the generic branch emits it as `{}`; BigInt
+  // makes a raw JSON.stringify throw. Both get an explicit branch.
   if (data instanceof Decimal) return data.toString();
   if (typeof data === "bigint") return data.toString();
   if (typeof data === "object") return safeStringifyCell(data, 2);

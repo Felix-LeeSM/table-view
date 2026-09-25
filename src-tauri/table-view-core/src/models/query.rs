@@ -15,7 +15,7 @@ pub enum QueryType {
 
 /// Display category for a column — drives DataGrid layout (default width
 /// and text-align). Independent of the raw `data_type`, which is preserved
-/// verbatim for structure / records views (Sprint 238 AC-238-02).
+/// verbatim for structure / records views (AC-238-02).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ColumnCategory {
@@ -27,8 +27,8 @@ pub enum ColumnCategory {
     Object,
     Binary,
     Enum,
-    /// UUID 류 (PG `uuid`, Mongo `objectId`). text 보다 폭이 넓고
-    /// (36 자 고정 + dash 4 개), text-align left.
+    /// UUID-like values (PG `uuid`, Mongo `objectId`). Wider than text
+    /// (a fixed 36 characters plus 4 dashes), text-align left.
     Uuid,
     #[default]
     Unknown,
@@ -70,7 +70,7 @@ pub struct ValueSearchResult {
     pub scanned_tables: usize,
 }
 
-/// Sprint 336 — U1 wire shape. PG `pg_stat_activity` row / Mongo
+/// U1 wire shape. PG `pg_stat_activity` row / Mongo
 /// `currentOp` op are flattened into the same struct so the activity
 /// grid renders both paradigms with the same component. Optional
 /// fields cover paradigm differences (PG has `wait_event`, Mongo has
@@ -89,7 +89,7 @@ pub struct ServerActivityRow {
     pub started_at: Option<String>,
 }
 
-/// Sprint 338 — U3 wire shape. PG `pg_stat_user_tables` + `pg_class`
+/// U3 wire shape. PG `pg_stat_user_tables` + `pg_class`
 /// row / Mongo `collStats` runCommand response are mapped into the
 /// same struct so the stats panel renders both paradigms with the
 /// same component. Paradigm-specific extras land in `extras` as a
@@ -120,7 +120,7 @@ pub struct CollectionStatsRow {
     pub extras: std::collections::HashMap<String, Value>,
 }
 
-/// Sprint 340 — U5 wire shape. PG `pg_stat_statements` row / Mongo
+/// U5 wire shape. PG `pg_stat_statements` row / Mongo
 /// `system.profile` document flattened into the same struct for the
 /// SlowQueryPanel. `extras` carries paradigm-specific fields (Mongo
 /// keysExamined/docsExamined/ts/ns/...).
@@ -141,7 +141,7 @@ pub struct SlowQueryRow {
     pub extras: std::collections::HashMap<String, Value>,
 }
 
-/// Sprint 339 — U4 wire shape. PG `version() + pg_settings` row /
+/// U4 wire shape. PG `version() + pg_settings` row /
 /// Mongo `buildInfo + serverStatus` response flattened into the same
 /// struct for the ServerInfoPanel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -168,8 +168,9 @@ pub struct ServerInfoRow {
 /// is deliberately the source (NOT `pg_authid` / `pg_shadow`): it masks
 /// `rolpassword` as `********` and never exposes the password hash, so this
 /// struct carries no secret column. `member_of` lists the roles this role is
-/// a member of (the "permissions" surface). Non-PG RDB engines and non-RDB
-/// paradigms are unsupported for now (PG-first parity lane).
+/// a member of (the "permissions" surface). PostgreSQL, MySQL and SQL Server
+/// override `list_database_users`; every other adapter inherits the
+/// `Unsupported` default.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DatabaseUserRow {
@@ -225,8 +226,8 @@ mod tests {
 
     #[test]
     fn column_category_int_serializes_lowercase() {
-        // Sprint 238 AC-238-02 — category enum 은 frontend 의 ColumnCategory
-        // string-literal 과 일치해야 한다 (snake_case → "int").
+        // AC-238-02 — the category enum must match the frontend
+        // ColumnCategory string literal (snake_case → "int").
         let category = ColumnCategory::Int;
         let json = serde_json::to_string(&category).unwrap();
         assert_eq!(json, "\"int\"");
@@ -234,7 +235,8 @@ mod tests {
 
     #[test]
     fn all_column_categories_serialize_lowercase() {
-        // 9 종 + unknown = 10. Frontend ColumnCategory union 과 일치 검증.
+        // 9 kinds + unknown = 10. Checks the match with the frontend
+        // ColumnCategory union.
         let pairs: &[(ColumnCategory, &str)] = &[
             (ColumnCategory::Int, "int"),
             (ColumnCategory::Float, "float"),

@@ -22,7 +22,7 @@ export function renderPendingText(
   if (typeof pending !== "string") {
     // BSON wrapper object — render the EJSON payload via safeStringifyCell
     // so a Decimal128 / BigInt slipping in doesn't blow up the panel
-    // (Sprint 305 cell-domain rule).
+    // (cell-domain rule).
     return safeStringifyCell(pending);
   }
   return pending.startsWith(BSON_TAG)
@@ -30,12 +30,12 @@ export function renderPendingText(
     : pending;
 }
 
-// Sprint 344 Slice B (2026-05-15) — local copy of the dot/bracket path
-// joiner used by jsonTree.buildTreeNodes. Kept private here because the
-// helper is purely a `+ key` UX concern: the panel only ever joins a
-// parent object path with a typed key (never an array index segment),
-// so a tiny inline implementation is clearer than re-exporting and
-// drags fewer regressions across the lib boundary.
+// Local copy of the dot/bracket path joiner used by
+// jsonTree.buildTreeNodes. Kept private here because the helper is purely
+// a `+ key` UX concern: the panel only ever joins a parent object path
+// with a typed key (never an array index segment), so a tiny inline
+// implementation is clearer than re-exporting and drags fewer regressions
+// across the lib boundary.
 export function joinObjectPath(parent: string, key: string): string {
   if (parent === "") return key;
   return `${parent}.${key}`;
@@ -68,15 +68,14 @@ export interface DocumentTreePanelProps {
   pendingByPath?: ReadonlyMap<string, string | Record<string, unknown>>;
   /** Commit a single leaf edit; grid owns Save/Discard.
    *
-   * Sprint 344 Slice B (2026-05-15) — the panel may also call this with
-   * a Slice D-coerced JSON value (number / boolean / null / array) for
-   * `+ key` adds. The prop signature stays narrow on
-   * `string | Record<string, unknown>` so downstream type-narrowing in
-   * the grid (which does `typeof value === "string" ? value :
-   * tagBsonWrapper(value)`) keeps compiling without grid-side edits;
-   * Slice F is responsible for widening the grid wiring to forward
-   * non-string non-object coerced values to the SQL / MQL emit layer.
-   * The runtime value is whatever `coerceTreeAddValue` returned.
+   * The panel may also call this with a coerced JSON value (number /
+   * boolean / null / array) for `+ key` adds. The prop signature stays
+   * narrow on `string | Record<string, unknown>` so downstream
+   * type-narrowing in the grid (which does `typeof value === "string" ?
+   * value : tagBsonWrapper(value)`) keeps compiling without grid-side
+   * edits; the grid wiring still has to be widened to forward non-string
+   * non-object coerced values to the SQL / MQL emit layer. The runtime
+   * value is whatever `coerceTreeAddValue` returned.
    */
   onCommitEdit?: (
     path: string,
@@ -93,14 +92,13 @@ export interface DocumentTreePanelProps {
   /** Close button on the detail row header (mirrors the cell-level toggle). */
   onClose?: () => void;
   /**
-   * Sprint 344 Slice F (2026-05-15) — paradigm-agnostic guard against
-   * adding reserved keys at the **document root**. Each Set member is
-   * a bare key name (no dot/bracket). The panel rejects `+ key` commits
-   * where `parentPath === ""` AND the typed key matches any entry,
-   * surfacing the same aria-invalid + inline message UX as the empty/
-   * duplicate-key reject branches. Nested objects are unaffected — a
-   * literal `_id` field inside `meta` is still allowed because Mongo
-   * permits arbitrary keys below the root.
+   * Paradigm-agnostic guard against adding reserved keys at the **document
+   * root**. Each Set member is a bare key name (no dot/bracket). The panel
+   * rejects `+ key` commits where `parentPath === ""` AND the typed key
+   * matches any entry, surfacing the same aria-invalid + inline message UX
+   * as the empty/duplicate-key reject branches. Nested objects are
+   * unaffected — a literal `_id` field inside `meta` is still allowed
+   * because Mongo permits arbitrary keys below the root.
    *
    * Mongo grid passes `new Set(["_id"])`; RDB grid passes `undefined`
    * (or omits the prop) — DocumentTreePanel stays paradigm-agnostic.
@@ -153,10 +151,9 @@ export interface TreeAffordances {
   >;
 }
 
-// Sprint 344 Slice B/C (2026-05-15) — for each obj / arr node, the flat-list
-// index right after its subtree ends, so the trailing `+ key` / `+ item`
-// affordance renders at the END of that container's children (matching Slice
-// A's ghost-row insertion order).
+// For each obj / arr node, the flat-list index right after its subtree
+// ends, so the trailing `+ key` / `+ item` affordance renders at the END
+// of that container's children (matching the ghost-row insertion order).
 //
 // #1448 — one O(n) pre-order stack pass replaces the previous per-node O(n²)
 // inner subtree scan (which, on a 50k-node capped tree, quadratically blew

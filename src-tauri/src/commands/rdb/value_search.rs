@@ -139,10 +139,10 @@ mod tests {
     }
 
     // ── dispatch contract ────────────────────────────────────────────────
-    // 작성 이유 (#1525): 빈 입력이 connection lookup 보다 먼저 short-circuit
-    // 하고, 미지원 adapter (non-PG RDB / document paradigm) 가 정확히
-    // Unsupported 를 반환해 frontend 의 "PostgreSQL only" 게이트가 보장됨을
-    // 동결한다.
+    // Rationale (#1525): freezes that blank input short-circuits before the
+    // connection lookup, and that an unsupported adapter (non-PG RDB /
+    // document paradigm) returns exactly Unsupported, guaranteeing the
+    // frontend's "PostgreSQL only" gate.
 
     #[tokio::test]
     async fn empty_term_short_circuits_before_lookup() {

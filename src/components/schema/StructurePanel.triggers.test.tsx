@@ -1,5 +1,5 @@
-// Sprint 272 (2026-05-13) — StructurePanel Triggers tab covers the
-// read-only Triggers sub-tab landing in Phase 26 Slice 1. Asserts:
+// StructurePanel Triggers tab covers the read-only Triggers sub-tab.
+// Asserts:
 //   - Tab list extended with "Triggers" after Constraints.
 //   - `initialSubTab="triggers"` mounts directly on the Triggers tab
 //     (the right-click "View Triggers" affordance threads this value
@@ -12,8 +12,8 @@
 //     / orientation / function reference / WHEN clause).
 //   - Empty trigger list renders the italic "No triggers" placeholder.
 //
-// Sprint 275 (2026-05-13) — sidebar Triggers child group retired;
-// trigger CRUD now lives on this surface. New cases below assert:
+// Trigger CRUD lives on this surface, not in a sidebar Triggers child
+// group. Further cases assert:
 //   - `+ Create Trigger` button mounts the `CreateTriggerDialog`.
 //   - Per-trigger row carries a trash icon (aria-label "Drop trigger
 //     {name}") that mounts the `DropTriggerDialog`.
@@ -32,16 +32,16 @@ import {
   resetStructurePanelMocks,
 } from "./__tests__/structurePanelTestHelpers";
 
-// Sprint 275 — `refreshTableTriggers` is the store action invoked by
-// the StructurePanel CRUD post-commit `onRefresh` callbacks. Stubbed so
-// the tests can assert "the cache was invalidated".
+// `refreshTableTriggers` is the store action invoked by the
+// StructurePanel CRUD post-commit `onRefresh` callbacks. Stubbed so the
+// tests can assert "the cache was invalidated".
 const mockRefreshTableTriggers = vi.fn().mockResolvedValue(MOCK_TRIGGERS);
 
 describe("StructurePanel Triggers tab (Sprint 272)", () => {
   beforeEach(() => {
     resetStructurePanelMocks();
-    // Sprint 275 — wire the refresh action onto the store mock so the
-    // post-commit `onRefresh` paths from Create/Drop can be observed.
+    // Wire the refresh action onto the store mock so the post-commit
+    // `onRefresh` paths from Create/Drop can be observed.
     mockRefreshTableTriggers.mockClear();
     mockRefreshTableTriggers.mockResolvedValue(MOCK_TRIGGERS);
     useConnectionStore.setState({ connections: [] });
@@ -162,7 +162,7 @@ describe("StructurePanel Triggers tab (Sprint 272)", () => {
   });
 
   // -------------------------------------------------------------------
-  // Sprint 275 (2026-05-13) — Trigger CRUD consolidated onto this tab.
+  // Trigger CRUD is consolidated onto this tab.
   // -------------------------------------------------------------------
 
   it("exposes a +Create Trigger button on the Triggers toolbar with aria-label", async () => {

@@ -1,18 +1,18 @@
-//! Sprint 355 (Phase 1) — SQLite SOT 스켈레톤.
+//! SQLite SOT skeleton.
 //!
-//! 본 모듈은 `memory/engineering/architecture/state-management/memory.md` 의 SQLite 단일 path 도입을
-//! 위한 토대다. 향후 Phase 1+ 에서 dual-write, snapshot IPC, dual-read 가 이
-//! 위에 쌓인다.
+//! This module is the foundation for the single SQLite path described in
+//! `memory/engineering/architecture/state-management/memory.md`.
 //!
-//! 책임:
-//! - 앱 데이터 디렉토리 안의 `state.db` 파일 경로 결정
+//! Responsibilities:
+//! - Decide the `state.db` file path inside the app data directory
 //! - SQLite pool init (sqlx, runtime-tokio-rustls + sqlite feature)
-//! - Migration 적용 (sqlx migrate! 매크로) — 멱등 (재실행 안전)
-//! - Q2 corrupt recovery — `open_pool()` 가 corruption 을 감지하면
-//!   `state.db.bak` 으로 quarantine 후 fresh DB 생성. v0.3.1: 복구 발생 시
-//!   `corrupt_recovery::DID_RECOVER` 가 set 되고 frontend toast 로 알림.
+//! - Apply migrations (the sqlx migrate! macro) — idempotent, safe to re-run
+//! - Q2 corrupt recovery — when `open_pool()` detects corruption it quarantines
+//!   the file as `state.db.bak` and creates a fresh DB. v0.3.1: on recovery
+//!   `corrupt_recovery::DID_RECOVER` is set and the frontend raises a toast.
 //!
-//! Q22 (keyring 이주) 는 별 sprint (356) — 본 모듈은 schema 만 안다.
+//! Q22 (the keyring migration) is out of scope here — this module only knows
+//! the schema.
 
 use crate::error::AppError;
 use crate::storage::corrupt_recovery;
@@ -23,28 +23,31 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use tracing::{info, warn};
 
-/// 앱 데이터 디렉토리. 이름을 SQLite 영역에도 남겨 두는 이유는 호출자 편의뿐이고
-/// (storage/mod.rs 는 file-based connections.json 영역, 이 파일은 SQLite 영역,
-/// 디렉토리는 공유), 판정 자체는 [`crate::storage::app_data_dir`] 한 곳에 있다.
-/// #2184 이전에는 이 함수가 override → fallback 본문을 따로 한 벌 갖고 있었다 —
-/// 같은 본문이 세 벌이라 #2183 의 구멍이 세 군데에서 동시에 열려 있었다.
+/// App data directory. Keeping the name in the SQLite area too is purely a
+/// convenience for callers (storage/mod.rs is the file-based connections.json
+/// area, this file is the SQLite area, and they share the directory); the
+/// decision itself lives in one place, [`crate::storage::app_data_dir`].
+/// Before #2184 this function carried its own copy of the override → fallback
+/// body — three copies of the same body left the hole in #2183 open in three
+/// places at once.
 pub fn app_data_dir() -> Result<PathBuf, AppError> {
     crate::storage::app_data_dir()
 }
 
-/// SQLite DB 파일 경로. Phase 1 부터 영구 위치.
+/// SQLite DB file path. This is the permanent location.
 pub fn db_path() -> Result<PathBuf, AppError> {
     Ok(app_data_dir()?.join("state.db"))
 }
 
-/// 렌더러가 지정한, Tauri command 가 파일로 쓸 대상 경로를 검증한다. 상대경로
-/// (must be absolute) 와 내부 app 데이터 디렉토리(`app_data_dir()`) 안으로
-/// resolve 되는 경로를 거부 — 침해된 렌더러가 export target 을 빌미로 `.key`
-/// (마스터키) / `connections.json` 과 그 `.bak` (#2183, 둘 다 암호화 password
-/// blob) / `state.db`(+`.bak`·`-wal` sidecar) 등 내부 credential 을
-/// overwrite/삭제하지 못하게 막는다.
-/// Issue #1094, #1449. sqlite connect/create 와 같은 `reject_internal_app_data_path`
-/// 가드를 재사용한다.
+/// Validates the renderer-named target path a Tauri command will write to as a
+/// file. Rejects a relative path (it must be absolute) and any path that
+/// resolves inside the internal app data directory (`app_data_dir()`) — this
+/// stops a compromised renderer from using an export target as a pretext to
+/// overwrite or delete internal credentials such as `.key` (the master key),
+/// `connections.json` and its `.bak` (#2183, both encrypted password blobs), or
+/// `state.db` (plus its `.bak` and `-wal` sidecars).
+/// Issue #1094, #1449. Reuses the same `reject_internal_app_data_path` guard
+/// that sqlite connect/create uses.
 pub fn validate_export_target_path(path: &Path) -> Result<(), AppError> {
     if !path.is_absolute() {
         return Err(AppError::Validation(
@@ -54,18 +57,20 @@ pub fn validate_export_target_path(path: &Path) -> Result<(), AppError> {
     reject_internal_app_data_path(path)
 }
 
-/// 인자 경로가 내부 app 데이터 디렉토리(`app_data_dir()`) 안으로 resolve 되면
-/// 거부. `state.db` 단일 파일이 아니라 디렉토리 전체를 confinement 한다 —
-/// `connections.json` 과 그 `.bak`(#2183, 암호화 비밀번호 blob) / `.key`
-/// (마스터키) / `state.db`(+`.bak`·`-wal` sidecar) 등 앱 내부 state 를
-/// export/import/connect/create
-/// target 이나 DuckDB file analytics source 로 삼아 overwrite 하거나 read-exfil
-/// 하는 것을 막는다 (Issue #1106, #1449). export/import/connect/create·file
-/// analytics 가 공유하는 단일 가드. normalized (`..`·`.` 정리) 와 canonical
-/// (symlink 해소) 두 방식으로 디렉토리 포함 여부를 비교한다 — 미존재 target
-/// (신규 export/create) 은 canonicalize 가 실패하므로 normalized 비교가 잡고,
-/// 존재 파일·symlink 는 canonical 비교가 잡는다. 호출자가 미리 canonicalize 해
-/// 넘겨도 무방하다.
+/// Rejects the argument path when it resolves inside the internal app data
+/// directory (`app_data_dir()`). The confinement covers the whole directory
+/// rather than the single `state.db` file — it stops app-internal state such as
+/// `connections.json` and its `.bak` (#2183, encrypted password blobs), `.key`
+/// (the master key), or `state.db` (plus its `.bak` and `-wal` sidecars) from
+/// being taken as an export/import/connect/create target or a DuckDB file
+/// analytics source and then overwritten or read-exfiltrated (Issue #1106,
+/// #1449). This is the single guard that export/import/connect/create and file
+/// analytics share. It compares directory containment two ways: normalized
+/// (`..` and `.` cleaned up) and canonical (symlinks resolved) — a target that
+/// does not exist yet (a new export/create) fails canonicalize, so the
+/// normalized comparison catches it, while existing files and symlinks are
+/// caught by the canonical comparison. A caller may canonicalize beforehand
+/// without harm.
 pub fn reject_internal_app_data_path(path: &Path) -> Result<(), AppError> {
     // #2184 — resolve the directory instead of opening it: this check is
     // read-only, so it must not create the very directory it protects, and it
@@ -108,14 +113,15 @@ fn normalize_absolute_path(path: &Path) -> PathBuf {
     normalized
 }
 
-/// SQLite pool 을 열고 migration 을 적용. corrupt 파일은 자동으로 quarantine
-/// (Q2). 호출자는 결과 pool 을 AppState 또는 `OnceCell` 에 등록.
+/// Opens the SQLite pool and applies migrations. A corrupt file is quarantined
+/// automatically (Q2). The caller registers the resulting pool in AppState or in
+/// a `OnceCell`.
 pub async fn open_pool() -> Result<SqlitePool, AppError> {
     let path = db_path()?;
 
-    // Pre-open corruption check — magic header 손상은 probe 로 잡는다. pool 이
-    // open 한 뒤 query 실행 시 fail 하면 그제야 quarantine 시도하면 race 가
-    // 생기므로 boot 시점에 1회 체크.
+    // Pre-open corruption check — the probe catches magic header damage. Waiting
+    // until the pool is open and a query fails before attempting quarantine
+    // would race, so this runs once at boot.
     if path.exists() {
         if let Err(e) = corrupt_recovery::probe(&path).await {
             warn!(
@@ -129,19 +135,22 @@ pub async fn open_pool() -> Result<SqlitePool, AppError> {
         }
     }
 
-    // connect + migrate + boot health check 까지 묶어서 시도. body corruption
-    // (probe 는 통과하지만 read path 가 죽는 손상) 은 이 단계에서 잡힌다.
+    // Attempt connect + migrate + boot health check together. Body corruption
+    // (damage the probe passes but that kills the read path) is caught here.
     let pool = match open_pool_inner(&path).await {
         Ok(p) => p,
         Err(e) if is_lock_error(&e) || is_migration_error(&e) => {
-            // Recovery(quarantine+fresh)를 read-path 손상으로만 한정한다. 두 경우는
-            // corruption 이 아니므로 quarantine 하면 데이터만 유실된다:
-            // - Lock (이중 실행 등): quarantine+fresh 해봤자 같은 파일 lock 으로
-            //   재실행도 실패. 근본 fix 는 single-instance 보장 (별도 PR).
-            // - Migration 실패 (downgrade VersionMissing / dirty / version mismatch
-            //   / broken SQL): DB 바이트는 정상인데 quarantine 하면 connections/
-            //   favorites/query_history/settings 가 조용히 사라진다 (#1558).
-            // 둘 다 그대로 전파해 명확한 부팅 에러로 실패시키고 데이터를 보존한다.
+            // Recovery (quarantine+fresh) is limited to read-path damage. Neither
+            // case below is corruption, so quarantining them only loses data:
+            // - Lock (a second instance, say): quarantine+fresh changes nothing,
+            //   the re-run fails on the same file lock. The root fix is a
+            //   single-instance guarantee.
+            // - Migration failure (downgrade VersionMissing / dirty / version
+            //   mismatch / broken SQL): the DB bytes are fine, yet quarantining
+            //   makes connections/favorites/query_history/settings disappear
+            //   silently (#1558).
+            // Both propagate as-is, so boot fails with a clear error and the data
+            // is preserved.
             return Err(e);
         }
         Err(e) => {
@@ -153,7 +162,7 @@ pub async fn open_pool() -> Result<SqlitePool, AppError> {
             );
             corrupt_recovery::quarantine(&path)?;
             corrupt_recovery::DID_RECOVER.store(true, Ordering::SeqCst);
-            // fresh 재시도 1회. 여기서도 실패하면 진짜 에러.
+            // One fresh retry. A failure here too is a genuine error.
             open_pool_inner(&path).await?
         }
     };
@@ -162,8 +171,9 @@ pub async fn open_pool() -> Result<SqlitePool, AppError> {
     Ok(pool)
 }
 
-/// connect + migrate + boot health check 까지 수행. 실패 시 pool 을 close 한
-/// 뒤 에러를 반환한다 (background connection 정리 → quarantine rename 안전).
+/// Runs connect + migrate + boot health check. On failure it closes the pool and
+/// then returns the error (cleaning up background connections is what makes the
+/// quarantine rename safe).
 async fn open_pool_inner(path: &Path) -> Result<SqlitePool, AppError> {
     let options = SqliteConnectOptions::from_str(&format!("sqlite://{}", path.display()))
         .map_err(|e| AppError::Storage(format!("SQLite connect options: {}", e)))?
@@ -176,9 +186,10 @@ async fn open_pool_inner(path: &Path) -> Result<SqlitePool, AppError> {
         .connect_with(options)
         .await?;
 
-    // Migration 실패는 `run_migrations` 가 corruption(→ `Storage`, quarantine 대상)
-    // 과 논리 실패(downgrade/dirty/broken SQL → `Migration`, 전파)로 구분해 반환한다
-    // (#1558). health_check 는 page body corruption 을 read path 로 한 번 더 잡는다.
+    // `run_migrations` splits a migration failure into corruption (→ `Storage`, a
+    // quarantine candidate) and logical failure (downgrade/dirty/broken SQL →
+    // `Migration`, propagated) (#1558). health_check catches page body corruption
+    // once more through the read path.
     if let Err(e) = run_migrations(&pool).await {
         let _ = pool.close().await;
         return Err(e);
@@ -187,16 +198,18 @@ async fn open_pool_inner(path: &Path) -> Result<SqlitePool, AppError> {
         let _ = pool.close().await;
         return Err(e);
     }
-    // sqlx 가 state.db 와 WAL/SHM sidecar 를 process umask (umask 022 → 0644) 로
-    // 만들고 sidecar 는 생성 시점 db mode 를 복사한다 — 셋 다 0600 으로 좁힌다.
-    // 다른 credential 파일 (connections.json / .key) 과 동일 정책 (Issue #1452).
+    // sqlx creates state.db and the WAL/SHM sidecars under the process umask
+    // (umask 022 → 0644), and a sidecar copies the db mode at creation time —
+    // narrow all three to 0600. Same policy as the other credential files
+    // (connections.json / .key) (Issue #1452).
     restrict_state_db_permissions(path);
     Ok(pool)
 }
 
-/// state.db 와 WAL/SHM sidecar 를 Unix 0600 으로 제한한다. sqlx 는 파일 mode 를
-/// 지정할 수 없어 생성 후 좁히며, 기존 0644 파일도 재부팅 시 교정된다. chmod 실패는
-/// boot 를 막지 않고 경고만 남긴다 (DB 자체는 정상 동작).
+/// Restricts state.db and the WAL/SHM sidecars to Unix 0600. sqlx cannot specify
+/// a file mode, so this narrows them after creation, and an existing 0644 file is
+/// corrected on the next boot as well. A chmod failure does not block boot, it
+/// only logs a warning (the DB itself keeps working).
 #[cfg(unix)]
 fn restrict_state_db_permissions(path: &Path) {
     use std::os::unix::fs::PermissionsExt;
@@ -220,10 +233,10 @@ fn restrict_state_db_permissions(path: &Path) {
 #[cfg(not(unix))]
 fn restrict_state_db_permissions(_path: &Path) {}
 
-/// Boot health check — `get_initial_app_state_inner` 가 실행하는 read path 와
-/// 동일한 트랜잭션(`BEGIN IMMEDIATE` + read)을 돌려, boot 시점에 실패할 손상
-/// (page body corrupt 등; probe 의 magic 검사는 통과하는 케이스)을 init 단계
-/// 에서 잡는다. 정상 DB 에서 sub-ms.
+/// Boot health check — runs the same transaction (`BEGIN IMMEDIATE` + read) as
+/// the read path `get_initial_app_state_inner` executes, so damage that would
+/// fail at boot (page body corruption and the like; the cases the probe's magic
+/// check passes) is caught at the init stage. Sub-ms on a healthy DB.
 async fn health_check(pool: &SqlitePool) -> Result<(), AppError> {
     let mut tx = pool
         .begin_with("BEGIN IMMEDIATE")
@@ -239,41 +252,44 @@ async fn health_check(pool: &SqlitePool) -> Result<(), AppError> {
     Ok(())
 }
 
-/// 에러 메시지가 SQLite lock(busy) 관련이면 recovery 를 skip 한다 — lock 은
-/// quarantine+fresh 로는 풀리지 않고 데이터만 유실시킨다.
+/// Skips recovery when the error message is about a SQLite lock (busy) — a lock
+/// is not released by quarantine+fresh, it only loses data.
 fn is_lock_error(e: &AppError) -> bool {
     let msg = e.to_string().to_lowercase();
     msg.contains("locked") || msg.contains("busy")
 }
 
-/// 논리적 migration 실패 (downgrade `VersionMissing` / dirty / version mismatch
-/// / broken migration SQL) 인지 판정. 이 경우 DB 바이트는 정상이므로 quarantine
-/// 하면 사용자 데이터가 조용히 사라진다 (#1558) — recovery 를 skip 하고 에러를
-/// 전파한다. 진짜 read-path 손상은 `run_migrations` 가 `Storage` 로 남겨 (아래
-/// `_ => quarantine` arm) 정상적으로 복구된다.
+/// Decides whether this is a logical migration failure (downgrade
+/// `VersionMissing` / dirty / version mismatch / broken migration SQL). In that
+/// case the DB bytes are fine, so quarantining would make user data disappear
+/// silently (#1558) — recovery is skipped and the error propagates. Genuine
+/// read-path damage is left as `Storage` by `run_migrations` (the
+/// `_ => quarantine` arm below) and recovers normally.
 fn is_migration_error(e: &AppError) -> bool {
     matches!(e, AppError::Migration(_))
 }
 
-/// Migration runner — `sqlx::migrate!()` 로
-/// `src-tauri/table-view-core/migrations/*.sql` 적용.
-/// 재실행 안전 (sqlx 가 `_sqlx_migrations` table 로 적용 이력 관리).
+/// Migration runner — applies `src-tauri/table-view-core/migrations/*.sql`
+/// through `sqlx::migrate!()`. Safe to re-run (sqlx tracks the applied history in
+/// the `_sqlx_migrations` table).
 pub async fn run_migrations(pool: &SqlitePool) -> Result<(), AppError> {
     use sqlx::migrate::MigrateError;
     sqlx::migrate!("./migrations")
         .run(pool)
         .await
         .map_err(|e| match &e {
-            // `Execute` = migrator 부트키핑(`_sqlx_migrations` 조회/생성 등)이
-            // 터진 경우. read-path 손상(page body corrupt)일 때 여기로 오므로
-            // 기존 corruption recovery(quarantine) 대상으로 남긴다
-            // (`tests/corrupt_body_recovery.rs` 회귀).
+            // `Execute` = the migrator's bookkeeping (reading/creating
+            // `_sqlx_migrations` and so on) blew up. Read-path damage (page body
+            // corruption) lands here, so it stays a candidate for the existing
+            // corruption recovery (quarantine)
+            // (`tests/corrupt_body_recovery.rs` regression).
             MigrateError::Execute(_) => AppError::Storage(format!("Migration failed: {}", e)),
-            // 나머지는 DB 바이트가 정상인 논리 실패다: downgrade(`VersionMissing`)
-            // / checksum `VersionMismatch` / `Dirty` / 특정 마이그레이션 SQL 실패
-            // (`ExecuteMigration`) 등. quarantine 하면 connections/favorites/
-            // query_history/settings 가 조용히 사라지므로(#1558) 보존하고 명확한
-            // 부팅 에러로 전파한다.
+            // The rest are logical failures where the DB bytes are fine:
+            // downgrade (`VersionMissing`) / checksum `VersionMismatch` /
+            // `Dirty` / a specific migration's SQL failing (`ExecuteMigration`)
+            // and so on. Quarantining would make connections/favorites/
+            // query_history/settings disappear silently (#1558), so the data is
+            // preserved and the error propagates as a clear boot error.
             _ => AppError::Migration(e.to_string()),
         })?;
     Ok(())
@@ -281,10 +297,10 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), AppError> {
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 1 sprint-355) — open_pool / run_migrations 의
-    //! happy-path 단위 검증. 자세한 PK / 인덱스 / corrupt recovery 검증은
-    //! `tests/migration_apply.rs`, `tests/corrupt_recovery.rs` 통합 테스트
-    //! 파일에 있음.
+    //! Written 2026-05-16 — happy-path unit checks for open_pool /
+    //! run_migrations. The detailed PK / index / corrupt recovery checks live in
+    //! the `tests/migration_apply.rs` and `tests/corrupt_recovery.rs` integration
+    //! test files.
 
     use super::*;
     use serial_test::serial;
@@ -361,10 +377,11 @@ mod tests {
         cleanup_env();
     }
 
-    /// state.db 는 credential 성 데이터를 담는 SQLite SOT 다. 다른 credential
-    /// 파일 (connections.json / .key) 과 동일하게 Unix 0600 이어야 한다 (Issue
-    /// #1452). WAL journal mode 라 sqlite 가 만드는 `-wal` / `-shm` sidecar 도
-    /// 검증한다 — 존재하면 함께 0600 이어야 한다.
+    /// state.db is the SQLite SOT holding credential-bearing data. Like the other
+    /// credential files (connections.json / .key) it must be Unix 0600 (Issue
+    /// #1452). WAL journal mode means sqlite also creates `-wal` / `-shm`
+    /// sidecars, and those are checked too — when present they must be 0600 as
+    /// well.
     #[cfg(unix)]
     #[tokio::test]
     #[serial]
@@ -375,7 +392,7 @@ mod tests {
         let path = db_path().unwrap();
 
         let pool = open_pool().await.unwrap();
-        // 쓰기를 강제해 WAL/SHM sidecar 를 확실히 만든다.
+        // Force a write so the WAL/SHM sidecars definitely exist.
         sqlx::query("CREATE TABLE IF NOT EXISTS _perm_probe (id INTEGER PRIMARY KEY)")
             .execute(&pool)
             .await
@@ -401,13 +418,15 @@ mod tests {
         cleanup_env();
     }
 
-    /// #1653 회귀 — `reject_internal_app_data_path` 가 symlink 우회를 canonical
-    /// 비교(:74)로 막는지 검증한다. 침해된 렌더러가 app_data_dir **밖**에
-    /// 심볼릭 링크를 두고 그 링크가 내부 credential (`connections.json` /
-    /// `.key` / `state.db`) 를 가리키게 해도, canonicalize 로 링크가 해소돼
-    /// 내부 디렉토리 포함이 드러나 거부(Err)돼야 한다. normalized 비교만으로는
-    /// 링크가 밖에 있어 통과처럼 보이므로 canonical arm 이 필수다. 정직하게
-    /// 밖을 가리키는 정상 경로는 통과(Ok)해 대조한다.
+    /// #1653 regression — checks that `reject_internal_app_data_path` blocks a
+    /// symlink escape through the canonical comparison. Even when a compromised
+    /// renderer puts a symbolic link **outside** app_data_dir and points that
+    /// link at an internal credential (`connections.json` / `.key` /
+    /// `state.db`), canonicalize resolves the link, the containment in the
+    /// internal directory becomes visible, and the path must be rejected (Err).
+    /// The normalized comparison alone would look like a pass because the link
+    /// sits outside, so the canonical arm is essential. A path that honestly
+    /// points outside passes (Ok) as the contrast case.
     #[cfg(unix)]
     #[tokio::test]
     #[serial]
@@ -417,22 +436,25 @@ mod tests {
         let _dir = setup_env();
         let data_dir = app_data_dir().unwrap();
 
-        // 내부 credential 파일을 흉내내는 실제 파일 (symlink canonicalize 성공 조건).
+        // A real file standing in for an internal credential, so symlink
+        // canonicalize succeeds.
         let internal_secret = data_dir.join("connections.json");
         std::fs::write(&internal_secret, b"secret").unwrap();
 
-        // app_data_dir 밖의 별도 디렉토리에 내부 파일을 가리키는 symlink 생성.
+        // Create a symlink in a separate directory outside app_data_dir that
+        // points at the internal file.
         let outside = TempDir::new().unwrap();
         let link = outside.path().join("escape_link");
         symlink(&internal_secret, &link).unwrap();
 
-        // 우회 시도: 링크는 밖에 있지만 canonicalize 하면 내부를 가리킨다 → 거부.
+        // Escape attempt: the link sits outside, but canonicalize points it
+        // inside → rejected.
         assert!(
             reject_internal_app_data_path(&link).is_err(),
             "symlink resolving into app data dir must be rejected"
         );
 
-        // 대조: 정직하게 밖을 가리키는 정상 경로는 통과.
+        // Contrast: a path that honestly points outside passes.
         let outside_file = outside.path().join("legit_export.csv");
         assert!(
             reject_internal_app_data_path(&outside_file).is_ok(),

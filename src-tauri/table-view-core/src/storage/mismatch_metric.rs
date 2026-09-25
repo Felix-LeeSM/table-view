@@ -1,28 +1,26 @@
-//! Sprint 370 (Phase 4 W2→W3) — boot-time mismatch metric.
+//! Boot-time mismatch metric.
 //!
-//! sprint-358 부터 dual-write (file/LS + SQLite mirror) 로 4 도메인이 둘 다
-//! 저장된다. W2 dogfood 동안 두 source 가 byte-equivalent 임을 확인하기 위해
-//! boot 시점에 row count + content hash 를 비교한다.
+//! Dual-write (file/LS + SQLite mirror) stores all 4 domains in both places.
+//! To confirm the two sources stay byte-equivalent, boot compares row count
+//! + content hash.
 //!
-//! 4 도메인:
+//! 4 domains:
 //!   - `connections` (file `connections.json` ↔ SQLite `connections`)
 //!   - `favorites`   (file `favorites.json`   ↔ SQLite `favorites`)
 //!   - `mru`         (file `mru.json`         ↔ SQLite `mru`)
 //!   - `settings`    (file `settings.json`    ↔ SQLite `settings`)
 //!
-//! 결과:
-//!   - 모든 도메인이 일치 → counter 변경 없음 + `tracing::info!` 로 "ok" log.
-//!   - 불일치 → counter += 1 + `tracing::warn!` 로 도메인 + 두 source 의 row
-//!     count + truncated hash 를 log. **본 모듈은 사용자 visible 영향 0** —
-//!     모든 dual-read fallback 은 reconcile 가 다음 boot 에 처리.
+//! Results:
+//!   - every domain matches → counter unchanged + an "ok" `tracing::info!`
+//!     log.
+//!   - mismatch → counter += 1 + a `tracing::warn!` logging the domain, both
+//!     sources' row counts and the truncated hashes. **This module has zero
+//!     user-visible effect** — it observes drift and never repairs it.
 //!
-//! Phase 6 (sprint-375) 의 file/LS 폐기 후 본 모듈도 retire — SQLite 가 단일
-//! source 이므로 비교할 대상이 사라진다.
-//!
-//! `mismatch_counter` 는 `reconcile.rs` 의 dual-write 실패 counter 와 별 atomic.
-//! 두 counter 는 의미가 다르다:
-//!   - `reconcile::mismatch_counter` — dual-write 시점에 SQLite write 가 실패
-//!   - `mismatch_metric::counter`    — boot 시점에 file/LS 와 SQLite 가 drift
+//! `mismatch_counter` is a separate atomic from the dual-write failure
+//! counter in `reconcile.rs`. The two counters mean different things:
+//!   - `reconcile::mismatch_counter` — a SQLite write failed during dual-write
+//!   - `mismatch_metric::counter`    — file/LS and SQLite drifted at boot
 
 use crate::error::AppError;
 use crate::storage::load_storage_redacted;
@@ -36,8 +34,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tracing::{info, warn};
 
 // ---------------------------------------------------------------------------
-// counter — process-wide. 4 도메인 중 하나라도 drift 발견 시 +1.
-// `current()` 는 dev console / debug IPC 가 read. `reset()` 은 테스트 전용.
+// counter — process-wide. +1 when drift is found in any of the 4 domains.
+// `current()` reads it back; `reset()` is test-only.
 // ---------------------------------------------------------------------------
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -59,12 +57,12 @@ pub mod counter {
 }
 
 // ---------------------------------------------------------------------------
-// MismatchReport — 4 도메인 결과 묶음. 테스트가 직접 단언, 프로덕션 path 는
-// tracing log 로만 surface.
+// MismatchReport — the 4 domain results bundled. Tests assert on it
+// directly; the production path surfaces it through tracing logs only.
 // ---------------------------------------------------------------------------
 
-/// 한 도메인의 비교 결과. `Ok` → file/LS 와 SQLite 의 row count + hash 가 일치.
-/// `Mismatch` → drift 감지, counter += 1 + warn log.
+/// Comparison result for one domain. `Ok` → file/LS and SQLite agree on row
+/// count + hash. `Mismatch` → drift detected, counter += 1 + warn log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DomainResult {
     Ok {
@@ -86,8 +84,8 @@ impl DomainResult {
     }
 }
 
-/// Boot 시점 4 도메인 비교 결과. log + counter update 후 caller 에 반환.
-/// 테스트 / debug IPC 가 read.
+/// The 4-domain comparison result at boot. Returned to the caller after the
+/// log + counter update. Read by the tests.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MismatchReport {
     pub domains: Vec<DomainResult>,
@@ -100,13 +98,14 @@ impl MismatchReport {
 }
 
 // ---------------------------------------------------------------------------
-// Entry — boot 직후 호출. 호출자는 `lib.rs` 의 setup callback (또는 dev IPC).
+// Entry — called right after boot. The caller is `lib.rs`'s setup callback.
 // ---------------------------------------------------------------------------
 
-/// 4 도메인 (connections / favorites / mru / settings) 의 file/LS SOT 와 SQLite
-/// mirror 를 비교. 각 도메인 결과를 `DomainResult` 로 만들고 mismatch 시
-/// counter += 1 + warn log. 한 도메인 read 실패는 silent — warn log + 그 도메인
-/// 만 skip (다른 도메인 진행).
+/// Compares the file/LS SOT against the SQLite mirror for the 4 domains
+/// (connections / favorites / mru / settings). Builds a `DomainResult` per
+/// domain and, on mismatch, does counter += 1 + a warn log. A read failure in
+/// one domain is silent — a warn log and that domain alone is skipped (the
+/// others still run).
 pub async fn measure_all(pool: &SqlitePool) -> Result<MismatchReport, AppError> {
     let mut domains = Vec::with_capacity(4);
 
@@ -157,8 +156,8 @@ fn truncate_hash(hex: &str) -> &str {
 }
 
 // ---------------------------------------------------------------------------
-// Per-domain helpers — 각 도메인의 file SOT + SQLite mirror 를 read 한 뒤
-// row count + canonical content hash 비교.
+// Per-domain helpers — read each domain's file SOT + SQLite mirror, then
+// compare row count + canonical content hash.
 // ---------------------------------------------------------------------------
 
 type ConnectionMirrorRow = (String, String, String, String, i64, String, String, i64);
@@ -472,11 +471,10 @@ fn hash_pairs(payload: &[(String, String)]) -> String {
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 4 W2→W3 sprint-370)
-    //!
-    //! 사유: boot 시점 4 도메인 비교 모듈의 core invariant — 같은 데이터일
-    //! 때 counter 변경 없음 + 불일치 시 counter += 1 — 을 unit 레벨에서 lock.
-    //! E2E 시나리오 (lib.rs setup 호출) 는 `tests/mismatch_metric.rs` 가 담당.
+    //! Reason: locks the core invariant of the boot-time 4-domain comparison
+    //! module at the unit level — counter unchanged when the data matches,
+    //! counter += 1 on mismatch. The E2E scenario (the `lib.rs` setup call) is
+    //! covered by `tests/mismatch_metric.rs`.
 
     use crate::models::SslMode;
 
@@ -546,7 +544,7 @@ mod tests {
         let (_dir, pool) = pool_setup().await;
         counter::reset();
 
-        // file SOT 에 entry — SQLite 는 empty.
+        // An entry in the file SOT — SQLite is empty.
         save_mru_file(&[MruRecord {
             connection_id: "c-drift".into(),
             last_used: 1_700_000_000_000,
@@ -633,7 +631,7 @@ mod tests {
             r#"{"themeId":"slate","mode":"dark"}"#.into(),
         );
         save_settings_file(&m).unwrap();
-        // SQLite 에 다른 값.
+        // A different value in SQLite.
         sqlx::query("INSERT INTO settings(key, value_json, updated_at) VALUES (?, ?, ?)")
             .bind("theme")
             .bind(r#"{"themeId":"github","mode":"light"}"#)
@@ -662,7 +660,7 @@ mod tests {
     async fn measure_all_detects_connections_drift() {
         let (_dir, pool) = pool_setup().await;
         counter::reset();
-        // file SOT 에 connection 1 개.
+        // 1 connection in the file SOT.
         let conn = ConnectionConfig {
             id: "c-1".into(),
             name: "X".into(),

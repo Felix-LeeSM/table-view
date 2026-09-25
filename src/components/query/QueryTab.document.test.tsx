@@ -1,13 +1,11 @@
-// Sprint 218 — `document` axis split from `QueryTab.test.tsx` (P11
-// step 2). Covers Sprint 73 Document paradigm (Find / Aggregate)
-// branches (RDB regression, find / aggregate dispatch, body validation,
-// missing context guard, mode toggle visibility, hide-Format-SQL,
-// idempotent post-success error), Sprint 132 raw-query DB-change
-// detection (PG `\c` happy / mismatch / no-match / comment / document
-// short-circuit), and the Sprint 188 nested describe for Mongo
-// aggregate safe-mode gate (verbatim with its own `beforeEach` for
-// localStorage + safe-mode reset). Cases are byte-equivalent to the
-// originals — no behaviour change.
+// `document` axis split from `QueryTab.test.tsx`. Covers the Document
+// paradigm (Find / Aggregate) branches (RDB regression, find / aggregate
+// dispatch, body validation, missing context guard, mode toggle
+// visibility, hide-Format-SQL, idempotent post-success error), raw-query
+// DB-change detection (PG `\c` happy / mismatch / no-match / comment /
+// document short-circuit), and the nested describe for the Mongo
+// aggregate safe-mode gate (with its own `beforeEach` for localStorage +
+// safe-mode reset).
 
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
@@ -50,26 +48,26 @@ beforeEach(() => {
     cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
     findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
     aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
-    // Sprint 247 — `<DryRunPreview>` IPC stub. Document paradigm short-
-    // circuits to `unsupported` without invoking IPC; the mock is here
-    // for completeness so the import resolves.
+    // `<DryRunPreview>` IPC stub. Document paradigm short-circuits to
+    // `unsupported` without invoking IPC; the mock is here for
+    // completeness so the import resolves.
     executeQueryDryRun: vi.fn(() => Promise.resolve([])),
   });
 });
 
-// Sprint 132 — the QueryTab raw-query hook calls `verifyActiveDb` after
-// optimistic `setActiveDb`. The wrapper itself is unit-tested in
+// The QueryTab raw-query hook calls `verifyActiveDb` after optimistic
+// `setActiveDb`. The wrapper itself is unit-tested in
 // `verifyActiveDb.test.ts`; here we mock it so the test can fix the
 // "backend says X" return value per scenario.
 vi.mock("@lib/api/verifyActiveDb", () => ({
   verifyActiveDb: (...args: unknown[]) => mockVerifyActiveDb(...args),
 }));
 
-// Sprint 139 — QueryTab now routes directly to SqlQueryEditor /
-// MongoQueryEditor based on `tab.paradigm`. Both editors are mocked to a
-// shared DOM testbed (`data-testid="mock-editor"`) so the existing
-// fixtures keep working — the mock records `paradigm` from a synthesised
-// prop so the dialect / mongo / paradigm assertions stay meaningful.
+// QueryTab routes directly to SqlQueryEditor / MongoQueryEditor based on
+// `tab.paradigm`. Both editors are mocked to a shared DOM testbed
+// (`data-testid="mock-editor"`) so the existing fixtures keep working —
+// the mock records `paradigm` from a synthesised prop so the dialect /
+// mongo / paradigm assertions stay meaningful.
 vi.mock("./SqlQueryEditor", async () => {
   const React = await import("react");
   const MockSqlQueryEditor = React.forwardRef<
@@ -159,7 +157,7 @@ describe("QueryTab — document", () => {
     resetQueryTabStores();
   });
 
-  // ── Sprint 73: Document paradigm (Find / Aggregate) branches ─────────────
+  // ── Document paradigm (Find / Aggregate) branches ────────────────────────
 
   it("rdb paradigm routes handleExecute through executeQuery (regression)", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
@@ -176,9 +174,9 @@ describe("QueryTab — document", () => {
     expect(mockAggregateDocuments).not.toHaveBeenCalled();
   });
 
-  // Sprint 311 (Phase 28 Slice A5) — document Run dispatch is now driven
-  // by `parseMongoshExpression`, so the editor body is no longer a JSON
-  // literal. The cases below cover the parser-driven dispatch contract:
+  // Document Run dispatch is driven by `parseMongoshExpression`, so the
+  // editor body is not a JSON literal. The cases below cover the
+  // parser-driven dispatch contract:
   //   - find expression → findDocuments with cursor-chain → FindBody mapping
   //   - aggregate expression → aggregateDocuments with parsed pipeline
   //   - parser error → queryState.error (no IPC)
@@ -302,14 +300,14 @@ describe("QueryTab — document", () => {
     });
   });
 
-  // Sprint 309 — Find/Aggregate ToggleGroup removed from the editor
-  // surface. Mongosh method parsing (A1) makes the mode toggle redundant:
-  // `db.coll.find(...)` and `db.coll.aggregate(...)` are now distinguished
-  // by the editor text itself. The previous "renders toggle" / "click flips
-  // state" cases (Sprint 73) are intentionally deleted — A5 replaces the
-  // dispatch branch keyed on `tab.queryMode`. This regression guard locks
-  // the new contract: no toggle on either paradigm, no `role="group"` with
-  // the Mongo-mode label, no per-mode toggle items.
+  // The Find/Aggregate ToggleGroup is gone from the editor surface.
+  // Mongosh method parsing makes the mode toggle redundant:
+  // `db.coll.find(...)` and `db.coll.aggregate(...)` are distinguished by
+  // the editor text itself. The previous "renders toggle" / "click flips
+  // state" cases are intentionally deleted — parser-driven dispatch
+  // replaces the branch keyed on `tab.queryMode`. This regression guard
+  // locks the contract: no toggle on either paradigm, no `role="group"`
+  // with the Mongo-mode label, no per-mode toggle items.
   it("does NOT render the Find / Aggregate toggle on either paradigm (Sprint 309)", () => {
     const rdbTab = makeQueryTab();
     const { rerender } = render(<QueryTab tab={rdbTab} />);
@@ -367,17 +365,17 @@ describe("QueryTab — document", () => {
     });
   });
 
-  // ── Sprint 132: raw-query DB-change detection (AC-08) ─────────────────
+  // ── Raw-query DB-change detection (AC-08) ─────────────────────────────
   //
-  // The four scenarios below cover the AC-08 cases from the sprint
-  // contract: happy path, verify mismatch, no-match, and false-positive
-  // inside a comment. Every test seeds `connectionStore.activeStatuses`
-  // with a `connected` variant so the optimistic `setActiveDb` can land
-  // (the action no-ops on disconnected/connecting variants by design —
-  // see `connectionStore.setActiveDb`).
+  // The four scenarios below cover the AC-08 cases: happy path, verify
+  // mismatch, no-match, and false-positive inside a comment. Every test
+  // seeds `connectionStore.activeStatuses` with a `connected` variant so
+  // the optimistic `setActiveDb` can land (the action no-ops on
+  // disconnected/connecting variants by design — see
+  // `connectionStore.setActiveDb`).
 
   /**
-   * Sprint 132 AC-08 / scenario 1 — happy path.
+   * AC-08 / scenario 1 — happy path.
    *
    * `\c admin` triggers an optimistic `setActiveDb("admin")` and the
    * backend confirms the same value via `verifyActiveDb`. No mismatch
@@ -401,11 +399,11 @@ describe("QueryTab — document", () => {
       executeBtn.click();
     });
 
-    // Sprint 254 (2026-05-09) — analyzer 의 `kind: "other"` default 가
-    // INFO (`severity: "info"`) 로 변경되었으므로 `\c admin` 는 WARN dialog
-    // 를 skip 하고 직접 IPC 발동 (Sprint 255 의 dialog mount 우회). Sprint
-    // 255 의 dialog mount 분기 회귀 0 — `kind: "other"` 가 더 이상 WARN
-    // 이 아니므로 dialog 가 발생하지 않는다.
+    // The analyzer's `kind: "other"` default changed to INFO
+    // (`severity: "info"`), so `\c admin` skips the WARN dialog and fires
+    // IPC directly, bypassing the dialog mount. No regression in the
+    // dialog-mount branch — `kind: "other"` is no longer WARN, so no
+    // dialog appears.
 
     // Wait for verifyActiveDb to resolve (it's awaited inside the
     // applyDbMutationHint helper which the QueryTab fires post-execute).
@@ -427,7 +425,7 @@ describe("QueryTab — document", () => {
   });
 
   /**
-   * Sprint 132 AC-08 / scenario 2 — verify mismatch.
+   * AC-08 / scenario 2 — verify mismatch.
    *
    * The lex pulled `admin` out of `\c admin` and the optimistic
    * `setActiveDb("admin")` fired immediately. The backend round-trip
@@ -453,9 +451,9 @@ describe("QueryTab — document", () => {
       executeBtn.click();
     });
 
-    // Sprint 254 (2026-05-09) — `\c admin` 의 `kind: "other"` default 가
-    // INFO 로 변경되었으므로 dialog mount 우회 + 직접 IPC. Sprint 255 의
-    // dialog mount 회귀 0.
+    // The `kind: "other"` default for `\c admin` changed to INFO, so the
+    // dialog mount is bypassed and IPC fires directly. No regression in
+    // the dialog-mount branch.
 
     // Verify ran and the active-db reverted to the backend's truth.
     await waitFor(() => {
@@ -477,7 +475,7 @@ describe("QueryTab — document", () => {
   });
 
   /**
-   * Sprint 132 AC-08 / scenario 3 — no-match.
+   * AC-08 / scenario 3 — no-match.
    *
    * A plain `SELECT 1` does not match any DB-mutation pattern, so the
    * hook short-circuits before calling `setActiveDb` or `verifyActiveDb`.
@@ -514,10 +512,10 @@ describe("QueryTab — document", () => {
   });
 
   /**
-   * Sprint 132 AC-08 / scenario 4 — false positive in a comment must
-   * remain 0. `-- \c admin` is a SQL line comment; the lex pass masks
-   * its body so no DB-mutation hint surfaces. Same expectations as the
-   * no-match path.
+   * AC-08 / scenario 4 — false positive in a comment must remain 0.
+   * `-- \c admin` is a SQL line comment; the lex pass masks its body so
+   * no DB-mutation hint surfaces. Same expectations as the no-match
+   * path.
    */
   it("[S132] false positive `-- \\c admin` — comment masked → no setActiveDb / verify", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
@@ -560,10 +558,10 @@ describe("QueryTab — document", () => {
   });
 
   /**
-   * Sprint 132 — document paradigm tab must skip the SQL-style hook
-   * entirely. Mongo doesn't use `\c` / `USE`, so the helper short-circuits
-   * on `paradigm !== "rdb"` before any extractor runs. Regression guard
-   * for AC-07 (paradigm branch correctness).
+   * Document paradigm tab must skip the SQL-style hook entirely. Mongo
+   * doesn't use `\c` / `USE`, so the helper short-circuits on
+   * `paradigm !== "rdb"` before any extractor runs. Regression guard for
+   * AC-07 (paradigm branch correctness).
    */
   it("[S132] document paradigm — hook is skipped (no setActiveDb / verify)", async () => {
     mockFindDocuments.mockResolvedValueOnce({
@@ -586,8 +584,8 @@ describe("QueryTab — document", () => {
       title: "Mongo",
       connectionId: "conn1" as ConnectionId,
       closable: true,
-      // Sprint 311 — document Run is parser-driven; the editor must
-      // carry a mongosh expression, not a bare JSON literal.
+      // Document Run is parser-driven; the editor must carry a mongosh
+      // expression, not a bare JSON literal.
       sql: "db.users.find({})",
       queryState: { status: "idle" },
       paradigm: "document",
@@ -615,18 +613,17 @@ describe("QueryTab — document", () => {
     }
   });
 
-  // ── Sprint 188: Mongo aggregate dangerous-op gate ────────────────────────
+  // ── Mongo aggregate dangerous-op gate ────────────────────────────────────
   // AC-188-03 — `useSafeModeGate` is wired into the aggregate dispatch
   // path. Pin every cell of the matrix that the contract enumerates by
   // exercising the actual user-visible surface (queryState transitions +
   // ConfirmDestructiveDialog) rather than asserting on the gate hook
   // internals — those have unit coverage in `useSafeModeGate.test.ts`.
-  // date 2026-05-01.
   describe("Sprint 188 — Mongo aggregate safe-mode gate", () => {
-    // Sprint 311 (Phase 28 Slice A5) — pipelines now arrive via the
-    // parser as `db.users.aggregate([...])` rather than bare JSON
-    // arrays. The dispatch is parser-driven; the gate still operates
-    // on the parsed pipeline so the Sprint 188 matrix is unchanged.
+    // Pipelines arrive via the parser as `db.users.aggregate([...])`
+    // rather than bare JSON arrays. The dispatch is parser-driven; the
+    // gate still operates on the parsed pipeline so the AC-188-03 matrix
+    // is unchanged.
     const PROD_PIPELINE = 'db.users.aggregate([{$match:{}},{$out:"snapshot"}])';
     const SAFE_PIPELINE = "db.users.aggregate([{$match:{active:true}}])";
 
@@ -649,9 +646,9 @@ describe("QueryTab — document", () => {
     });
 
     it("[AC-188-03a] production × strict × $out → confirm dialog opens, dispatch deferred", async () => {
-      // Sprint 245 (ADR 0022 Phase 1) — was "blocks dispatch with
-      // canonical error". The destructive-only policy opens the confirm
-      // dialog instead of blocking; dispatch only fires on confirm.
+      // ADR 0022 — was "blocks dispatch with canonical error". The
+      // destructive-only policy opens the confirm dialog instead of
+      // blocking; dispatch only fires on confirm.
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "strict" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
@@ -674,9 +671,8 @@ describe("QueryTab — document", () => {
     });
 
     it("[AC-188-03b] production × warn × $out → opens confirm dialog; Confirm dispatches", async () => {
-      // Sprint 246 (ADR 0022 Phase 2) — confirm dialog is a simple
-      // Yes/No, so the test clicks Confirm instead of typing the
-      // analyzer reason verbatim.
+      // The confirm dialog is a simple Yes/No, so the test clicks
+      // Confirm instead of typing the analyzer reason verbatim.
       mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "warn" });
@@ -736,11 +732,11 @@ describe("QueryTab — document", () => {
     });
 
     it("[AC-190-01-5] production × off × $out → confirm dialog with prod-auto reason copy", async () => {
-      // Sprint 190 (FB-1b) — Hard auto. Was AC-188-03d (off bypassed gate).
-      // Sprint 245 (ADR 0022 Phase 1) — was "blocked (prod-auto)"; now
-      // opens the confirm dialog with prod-auto reason copy preserved.
-      // Off remains distinguishable from warn on production via the
-      // dialog body text. date 2026-05-02 / 2026-05-08.
+      // FB-1b — Hard auto. Was AC-188-03d (off bypassed gate).
+      // ADR 0022 — was "blocked (prod-auto)"; now opens the confirm
+      // dialog with prod-auto reason copy preserved. Off remains
+      // distinguishable from warn on production via the dialog body
+      // text.
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "off" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
@@ -759,11 +755,10 @@ describe("QueryTab — document", () => {
     });
 
     it("[AC-188-03e] non-production × strict × $out → confirm dialog (M.1 NEW flow)", async () => {
-      // Sprint 245 (ADR 0022 Phase 1) — was "dispatch proceeds (env
-      // scoping)". Strict now opens the destructive dialog in non-
-      // production too (M.1 — shared-staging / learning environments).
-      // Warn / off on non-prod still bypass the dialog for safe writes
-      // and destructive alike.
+      // ADR 0022 — was "dispatch proceeds (env scoping)". Strict opens
+      // the destructive dialog in non-production too (M.1 —
+      // shared-staging / learning environments). Warn / off on non-prod
+      // still bypass the dialog for safe writes and destructive alike.
       useConnectionStore.setState({
         connections: [
           makeConn({
@@ -793,9 +788,9 @@ describe("QueryTab — document", () => {
     });
 
     it("[AC-188-03e-2] preview[danger] non-production × warn × $out → MQL Preview, confirm 후 dispatch", async () => {
-      // Sprint 245 — paired with the M.1 strict flow above so the matrix
-      // coverage stays complete: `decideSafeModeAction` still returns
-      // `allow` here, so no ConfirmDestructiveDialog opens.
+      // Paired with the M.1 strict flow above so the matrix coverage
+      // stays complete: `decideSafeModeAction` still returns `allow`
+      // here, so no ConfirmDestructiveDialog opens.
       //
       // Issue #2375 — `allow` no longer means "straight to the driver".
       // The QueryTab preview gate now covers every tier above INFO, so the

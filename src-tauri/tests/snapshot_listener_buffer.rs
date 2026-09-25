@@ -1,23 +1,24 @@
-//! 작성 2026-05-16 (Phase 4 sprint-367) — snapshot 적용 직전 race-window 의
-//! `state-changed` event 가 backend 에서 emit 될 때 listener (먼저 등록) 가
-//! 그 event 를 누락 없이 수신함을 검증.
+//! Written 2026-05-16 (AC-367-04) — when the backend emits a `state-changed`
+//! event in the race window just before a snapshot is applied, a listener
+//! registered beforehand receives that event with nothing dropped.
 //!
-//! AC-367-04 의 backend half — frontend 단위 테스트가 buffer / drain 의 dedup
-//! 동작을 검증하는 반면, 본 cargo test 는 다음을 잠근다:
+//! The backend half of AC-367-04 — the frontend unit tests cover the buffer /
+//! drain dedup behaviour, while this cargo test locks:
 //!
-//!   1. `app.handle().listen(STATE_CHANGED_EVENT, …)` 가 `emit_state_changed`
-//!      호출 이전에 등록되면 emit 직후 payload 가 listener 에 도달한다 (Tauri
-//!      mock runtime 이 emit 을 동기적으로 fan-out).
-//!   2. `emit_state_changed` 의 `snapshot_version` 인자가 그대로 wire 에 실린다 —
-//!      frontend 의 drain dedup logic 이 `snapshotVersion > applied` 으로
-//!      비교할 때 같은 변수를 본다.
-//!   3. listener 가 이미 등록된 상태에서 두 번 emit 하면 둘 다 수신 — 즉
-//!      "listener pre-register" 패턴이 단발성이 아닌 지속 수신 가능함.
+//!   1. When `app.handle().listen(STATE_CHANGED_EVENT, …)` is registered before
+//!      the `emit_state_changed` call, the payload reaches the listener right
+//!      after the emit (the Tauri mock runtime fans an emit out synchronously).
+//!   2. The `snapshot_version` argument of `emit_state_changed` goes onto the
+//!      wire unchanged — the frontend drain dedup logic reads the same variable
+//!      when it compares `snapshotVersion > applied`.
+//!   3. Emitting twice while the listener is already registered delivers both —
+//!      the "listener pre-register" pattern keeps receiving rather than firing
+//!      once.
 //!
-//! 이 cargo test 는 실제 SQLite pool 또는 `get_initial_app_state_inner` 호출을
-//! 포함하지 않는다 — snapshot 본문 자체는 `tests/snapshot_atomic.rs` /
-//! `tests/snapshot_shape.rs` 가 다룬다. 본 test 의 책임은 listener 등록 vs emit
-//! 의 시간 순서이다.
+//! This cargo test involves no real SQLite pool and no call to
+//! `get_initial_app_state_inner` — the snapshot body itself is covered by
+//! `tests/snapshot_atomic.rs` / `tests/snapshot_shape.rs`. What this test owns is
+//! the time ordering between listener registration and emit.
 
 use std::sync::{Arc, Mutex};
 
@@ -181,7 +182,7 @@ fn ac_367_04_pre_registered_listener_keeps_receiving_after_first_event() {
 
     let captured = bucket.lock().expect("bucket lock").clone();
     assert_eq!(captured.len(), 2);
-    // 같은 (domain, entity_id) 면 version 이 1 → 2 단조 증가.
+    // For the same (domain, entity_id), version rises monotonically 1 → 2.
     assert_eq!(captured[0].version, 1);
     assert_eq!(captured[1].version, 2);
 }

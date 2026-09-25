@@ -9,9 +9,9 @@ import {
 import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
 import SearchQueryEditor from "./SearchQueryEditor";
 
-// Purpose: SearchQueryEditor 회귀 커버리지 신설 — #1225 (2026-07-03).
-// 검색(Elasticsearch/OpenSearch) 에디터도 다른 세 에디터와 동일하게
-// CodeMirror history() 를 장착해야 Cmd+Z undo 가 동작한다.
+// Purpose: regression coverage for SearchQueryEditor — #1225.
+// The search (Elasticsearch/OpenSearch) editor has to install CodeMirror
+// history() like the other three editors for Cmd+Z undo to work.
 
 // #1133 — the accessible name now lives on CodeMirror's real `.cm-content`;
 // walk up to the editor wrapper (carries data-paradigm) for DOM queries.
@@ -61,8 +61,8 @@ describe("SearchQueryEditor", () => {
     );
   });
 
-  // Reason: #1225 — 전 쿼리 에디터 history() 미장착으로 Cmd+Z undo 불가
-  // 사용자 보고 (2026-07-03).
+  // Reason: #1225 — user report that Cmd+Z undo does not work, because no
+  // query editor installs history().
   it("reverts an edit via undo (history extension installed) (#1225)", () => {
     render(
       <SearchQueryEditor sql="{}" onSqlChange={vi.fn()} onExecute={vi.fn()} />,
@@ -70,9 +70,10 @@ describe("SearchQueryEditor", () => {
     expectUndoRevertsEdit(getEditorView());
   });
 
-  // #2509 — 실행하면 자동완성 팝업이 닫혀야 한다. 사용자 시퀀스:
-  // 에디터에 타이핑 → 자동완성 팝업이 뜬 채로 남음 → 쿼리 실행 →
-  // **팝업이 사라지고 결과가 가려지지 않는다** ← lock 대상.
+  // #2509 — executing must close the autocomplete popup. User sequence:
+  // type in the editor → the autocomplete popup stays open → run the query
+  // → **the popup disappears and does not hide the result** ← what is
+  // locked here.
   it("closes the autocomplete popup when the query executes (#2509)", async () => {
     const onExecute = vi.fn();
     render(

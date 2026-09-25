@@ -60,12 +60,11 @@ describe("useDataGridEdit — document paradigm edit permission (Sprint 86)", ()
     vi.clearAllMocks();
   });
 
-  // Sprint 66 used to assert a no-op for the document paradigm. Sprint 86
-  // removes that guard because the hook now routes document edits through
-  // the MQL generator + Tauri mutate wrappers, so `handleStartEdit` must
-  // open an editor for document grids identically to RDB grids. This case
-  // preserves the original intent (the default parameter path stays
-  // backward-compatible) while documenting the behaviour change.
+  // The hook routes document edits through the MQL generator + Tauri mutate
+  // wrappers, so `handleStartEdit` must open an editor for document grids
+  // identically to RDB grids — an earlier no-op guard for the document
+  // paradigm is gone. This case preserves the original intent (the default
+  // parameter path stays backward-compatible).
   it("handleStartEdit sets editingCell/editValue through the document hook", () => {
     const { result } = renderHook(() =>
       useDocumentDataGridEdit({

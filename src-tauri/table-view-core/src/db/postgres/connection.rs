@@ -1,8 +1,8 @@
 //! PostgreSQL connection lifecycle — `PostgresAdapter` struct,
 //! `PgPoolState`, build / probe / pool open / pool close / sub-pool
-//! switching (Sprint 130) / current-db accessor / `ping`.
+//! switching / current-db accessor / `ping`.
 //!
-//! Sprint 202 split from `db/postgres.rs`. `is_pg_database_permission_denied`
+//! Split from `db/postgres.rs`. `is_pg_database_permission_denied`
 //! co-located since the only producer is `list_databases`'s row-level
 //! permission probe and connection lifecycle tests.
 
@@ -17,12 +17,12 @@ use crate::db::tls::{resolve_tls_decision, TlsDecision};
 use crate::error::AppError;
 use crate::models::ConnectionConfig;
 
-/// Sprint 130 — soft cap on simultaneously cached PG sub-pools per
-/// `PostgresAdapter`. The 9th `switch_active_db` cache miss evicts the
-/// oldest non-current entry so we never grow unbounded as the user hops
-/// between databases. The number is intentionally small: TablePlus-style
-/// flows rarely touch more than a handful of databases per session, and
-/// each idle pool still holds 1+ TCP connections.
+/// Soft cap on simultaneously cached PG sub-pools per `PostgresAdapter`. The
+/// 9th `switch_active_db` cache miss evicts the oldest non-current entry so we
+/// never grow unbounded as the user hops between databases. The number is
+/// intentionally small: TablePlus-style flows rarely touch more than a handful
+/// of databases per session, and each idle pool still holds 1+ TCP
+/// connections.
 const PG_SUBPOOL_CAP: usize = 8;
 
 /// Per-sub-pool sqlx connection cap. Each `PgPoolOptions::max_connections`
@@ -52,8 +52,8 @@ pub(crate) fn pool_options(config: &ConnectionConfig) -> PgPoolOptions {
         .acquire_timeout(config.connect_timeout(PG_POOL_ACQUIRE_TIMEOUT_MAX_SECS))
 }
 
-/// Sprint 130 — pure helper that picks the next eviction target from an
-/// LRU order, skipping the protected `current` database.
+/// Pure helper that picks the next eviction target from an LRU order, skipping
+/// the protected `current` database.
 ///
 /// Returns the oldest entry in `lru` whose name does not match `current`,
 /// or `None` when every entry is the current db (so eviction is a no-op).
@@ -170,10 +170,10 @@ impl PostgresAdapter {
 
         info!("Connected to PostgreSQL at {}:{}", config.host, config.port);
 
-        // Sprint 130 — seed the sub-pool cache with the default DB. The
-        // stored config has its credentials but a placeholder `database`
-        // (we'll always override it via `switch_active_db`) — we keep the
-        // original DB name on the config for fallbacks.
+        // Seed the sub-pool cache with the default DB. The stored config has
+        // its credentials but a placeholder `database` (we'll always override
+        // it via `switch_active_db`) — we keep the original DB name on the
+        // config for fallbacks.
         //
         // audit M5: clone outside the lock so we hold the mutex only long
         // enough to do the four pointer-level inserts.
@@ -191,9 +191,8 @@ impl PostgresAdapter {
 
     pub async fn disconnect_pool(&self) -> Result<(), AppError> {
         let mut guard = self.inner.lock().await;
-        // Sprint 130 — close every cached sub-pool, not just the active
-        // one. Drain the map up-front so we don't hold the mutex across
-        // the awaits below.
+        // Close every cached sub-pool, not just the active one. Drain the map
+        // up-front so we don't hold the mutex across the awaits below.
         let pools: Vec<PgPool> = guard.pools.drain().map(|(_, p)| p).collect();
         guard.lru_order.clear();
         guard.current_db = None;
@@ -209,10 +208,10 @@ impl PostgresAdapter {
         Ok(())
     }
 
-    /// Sprint 130 — clone the active sub-pool out from the inner mutex so
-    /// callers can run queries without holding the lock across awaits.
-    /// Returns `Connection("Not connected")` when the adapter has no
-    /// `current_db` (i.e. before `connect_pool` or after `disconnect_pool`).
+    /// Clone the active sub-pool out from the inner mutex so callers can run
+    /// queries without holding the lock across awaits. Returns
+    /// `Connection("Not connected")` when the adapter has no `current_db`
+    /// (i.e. before `connect_pool` or after `disconnect_pool`).
     pub(super) async fn active_pool(&self) -> Result<PgPool, AppError> {
         let guard = self.inner.lock().await;
         let db = guard
@@ -226,7 +225,7 @@ impl PostgresAdapter {
             .ok_or_else(|| AppError::Connection("Not connected".into()))
     }
 
-    /// Sprint 130 — switch the adapter's active sub-pool to `db_name`.
+    /// Switch the adapter's active sub-pool to `db_name`.
     ///
     /// On a cache hit (`pools` already contains `db_name`) we simply
     /// re-promote the entry to the back of the LRU and flip
@@ -341,9 +340,9 @@ impl PostgresAdapter {
         }
     }
 
-    /// Sprint 130 — read the active database name (whatever
-    /// `switch_active_db` last selected, or the seed `connect_pool`
-    /// installed). Returns `None` when the adapter is disconnected.
+    /// Read the active database name (whatever `switch_active_db` last
+    /// selected, or the seed `connect_pool` installed). Returns `None` when
+    /// the adapter is disconnected.
     pub async fn current_database(&self) -> Option<String> {
         self.inner.lock().await.current_db.clone()
     }
@@ -356,13 +355,13 @@ impl PostgresAdapter {
         Ok(())
     }
 
-    /// Sprint 359 (Q5.3 PG) — `SELECT pg_cancel_backend(<pid>)` on a
-    /// **fresh, side connection**. Reusing the active pool is unsafe
-    /// because the pid we are targeting may itself be sitting on a
-    /// connection that the active sub-pool just lent out and is currently
-    /// servicing the slow query. The side connection comes up against the
-    /// stored credentials with a 5-second acquire timeout — cancellation
-    /// should not hang the UI for longer than the user's "Stop" click.
+    /// Q5.3 PG — `SELECT pg_cancel_backend(<pid>)` on a **fresh, side
+    /// connection**. Reusing the active pool is unsafe because the pid we are
+    /// targeting may itself be sitting on a connection that the active
+    /// sub-pool just lent out and is currently servicing the slow query. The
+    /// side connection comes up against the stored credentials with a 5-second
+    /// acquire timeout — cancellation should not hang the UI for longer than
+    /// the user's "Stop" click.
     ///
     /// Maps PG outcomes onto `AppError` so the IPC `classify_cancel_error`
     /// helper can re-classify:
@@ -490,9 +489,9 @@ mod tests {
 
     #[tokio::test]
     async fn new_adapter_has_no_pool() {
-        // Sprint 130 — adapter starts with empty sub-pool cache and no
-        // current_db. `active_pool()` should fail with `Not connected` and
-        // there should be no cached pools or LRU entries.
+        // The adapter starts with an empty sub-pool cache and no current_db.
+        // `active_pool()` should fail with `Not connected` and there should be
+        // no cached pools or LRU entries.
         let adapter = PostgresAdapter::new();
         let guard = adapter.inner.lock().await;
         assert!(
@@ -811,8 +810,8 @@ mod tests {
         );
     }
     /// Stub `DatabaseError` so the SQLSTATE / message matchers can be
-    /// exercised without a live Postgres server. Sprint 128 tests for
-    /// the permission-denied fallback only need `code()` and `message()`.
+    /// exercised without a live Postgres server. The permission-denied
+    /// fallback tests only need `code()` and `message()`.
     #[derive(Debug)]
     struct StubDbError {
         code: Option<String>,

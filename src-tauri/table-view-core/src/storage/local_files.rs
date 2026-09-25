@@ -1,14 +1,15 @@
-//! Sprint 358 (Phase 1 W1 dual-write) — file-based SOT 의 4 도메인 read/write
-//! helper. `connections.json` 은 기존 `storage::mod.rs` 가 보유하므로 본 module
-//! 은 그 외 3 도메인 (favorites / mru / settings) 의 file SOT 만 다룬다.
+//! Read/write helpers for the file-based SOT of the 4 domains.
+//! `connections.json` is held by `storage::mod.rs`, so this module handles only
+//! the file SOT of the other 3 domains (favorites / mru / settings).
 //!
-//! 각 도메인 파일은 `storage::app_data_dir()` 하위에 위치:
-//!   - `favorites.json` — `[{id,name,sql,connection_id,created_at,updated_at}]` 배열
-//!   - `mru.json`       — `[{connection_id,last_used}]` 배열
-//!   - `settings.json`  — `{key: value_json}` map. key 는 6 known + 임의 확장 가능
+//! Each domain file lives under `storage::app_data_dir()`:
+//!   - `favorites.json` — `[{id,name,sql,connection_id,created_at,updated_at}]` array
+//!   - `mru.json`       — `[{connection_id,last_used}]` array
+//!   - `settings.json`  — `{key: value_json}` map. 6 known keys, extensible with others
 //!
-//! Atomic write — write_via_tempfile (write+sync → rename). 이미 corrupt JSON 은
-//! 빈 시드로 fallback (corrupt connections.json 패턴과 동일).
+//! Atomic write — `save_json_atomic` (write+sync → rename). JSON that is already
+//! corrupt falls back to an empty seed (same pattern as a corrupt
+//! connections.json).
 
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
@@ -46,8 +47,8 @@ fn settings_path() -> Result<PathBuf, AppError> {
     Ok(super::local::app_data_dir()?.join("settings.json"))
 }
 
-/// Atomic write via tempfile + rename. 0600 mode (Unix) — 같은 데이터 디렉토리
-/// 의 connections.json 과 동일 정책.
+/// Atomic write via tempfile + rename. 0600 mode (Unix) — the same policy as
+/// connections.json in the same data directory.
 fn save_json_atomic<T: Serialize + ?Sized>(path: &PathBuf, data: &T) -> Result<(), AppError> {
     let parent = path
         .parent()
@@ -98,8 +99,8 @@ pub fn load_favorites_file() -> Result<Vec<FavoriteRecord>, AppError> {
     match serde_json::from_str::<Vec<FavoriteRecord>>(&content) {
         Ok(v) => Ok(v),
         Err(e) => {
-            // corrupt: log + return empty. Dual-write 의 다음 호출이 file 을
-            // 덮어쓸 것 — 손실은 corrupt 파일 한 줄.
+            // corrupt: log + return empty — the loss is bounded to the corrupt
+            // file.
             warn!(
                 target: "storage",
                 path = %path.display(),
@@ -146,7 +147,7 @@ pub fn save_mru_file(mru: &[MruRecord]) -> Result<(), AppError> {
 }
 
 // ---------------------------------------------------------------------------
-// settings — key-value (string → JSON-string) map. BTreeMap 으로 정렬 보장.
+// settings — key-value (string → JSON-string) map. BTreeMap guarantees ordering.
 // ---------------------------------------------------------------------------
 
 pub fn load_settings_file() -> Result<BTreeMap<String, String>, AppError> {
@@ -176,9 +177,9 @@ pub fn save_settings_file(settings: &BTreeMap<String, String>) -> Result<(), App
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 1 sprint-358) — JSON round-trip + corrupt fallback
-    //! 검증. atomic write 의 rename 보장은 connections.json 의 기존 테스트가
-    //! 검증.
+    //! Written 2026-05-16 — verifies the JSON round-trip + corrupt fallback. The
+    //! rename guarantee of the atomic write is covered by the existing
+    //! connections.json tests.
 
     use super::*;
     use serial_test::serial;
@@ -253,7 +254,7 @@ mod tests {
     #[serial]
     fn missing_files_return_empty() {
         let _dir = setup();
-        // 파일이 없을 때 each load returns empty.
+        // When the file is missing, each load returns empty.
         assert!(load_favorites_file().unwrap().is_empty());
         assert!(load_mru_file().unwrap().is_empty());
         assert!(load_settings_file().unwrap().is_empty());

@@ -11,13 +11,14 @@ import { useTranslation } from "react-i18next";
 import type { SortInfo, TableData } from "@/types/schema";
 
 /**
- * Sprint 258 — `<thead>` 폐기, `<div role="rowgroup">` + sticky header
- * row. column widths 는 outer container 의 `--cols` CSS variable cascade
- * 로 결정된다.
+ * `<thead>` is replaced by a `<div role="rowgroup">` + sticky header row.
+ * Column widths come from the outer container's `--cols` CSS variable
+ * cascade.
  *
- * Sprint 316 — Slice C.2: column header 우클릭 → Radix ContextMenu.
- * 6 item (Sort ASC/DESC, Add to sort ASC/DESC, Clear per-column,
- * Clear all). 신규 callback 3개는 optional 이라 기존 caller 회귀 0.
+ * Right-click on a column header opens a Radix ContextMenu with 6 items
+ * (Sort ASC/DESC, Add to sort ASC/DESC, Clear per-column, Clear all). The
+ * three added callbacks are optional, so existing callers see zero
+ * regression.
  *
  * Invariants:
  * - Sort fires only when click ↔ mousedown movement ≤ 4px, so dragging
@@ -39,7 +40,7 @@ export interface HeaderRowProps {
     visualIdx: number,
   ) => void;
   /**
-   * Sprint — WCAG 2.1.1: keyboard counterpart to `onResizeStart`. Wired in
+   * WCAG 2.1.1: keyboard counterpart to `onResizeStart`. Wired in
    * DataGridTable.tsx / DocumentDataGrid.tsx to
    * `useColumnResize.handleResizeKeyDown`. Optional so existing tests that
    * mount HeaderRow without it stay valid.
@@ -50,7 +51,7 @@ export interface HeaderRowProps {
     visualIdx: number,
   ) => void;
   /**
-   * Sprint 316 — explicit sort override invoked by the context menu.
+   * Explicit sort override invoked by the context menu.
    * `append=true` mirrors the shift+click multi-key behaviour (push to
    * the end); `append=false` replaces the current sort with a single
    * key. Optional so existing tests / callers stay valid.
@@ -65,21 +66,20 @@ export interface HeaderRowProps {
   /** Drop every sort key. */
   onClearAllSorts?: () => void;
   /**
-   * Sprint 317 — Slice D.1: hide this column. When provided, the
-   * context menu surfaces a "Hide column" item below a separator.
-   * `useHiddenColumns` handles state + persist on the caller side.
+   * Hide this column. When provided, the context menu surfaces a "Hide
+   * column" item below a separator. `useHiddenColumns` handles state +
+   * persist on the caller side.
    */
   onHideColumn?: (columnName: string) => void;
   /**
-   * Sprint 376 (Phase 6 Q21 #5) — "Reset column widths" affordance.
-   * When provided, the context menu surfaces an item that calls back.
-   * Wire (in DataGridTable.tsx): the callback is
-   * `useColumnWidths.reset`, which fires
+   * Q21 #5 — "Reset column widths" affordance. When provided, the context
+   * menu surfaces an item that calls back. Wire (in DataGridTable.tsx): the
+   * callback is `useColumnWidths.reset`, which fires
    * `resetDatagridPrefs(field="widths")` — strategy doc line 1395.
    */
   onResetColumnWidths?: () => void;
   /**
-   * Sprint 376 (Phase 6 Q21 #6) — "Show all columns" affordance.
+   * Q21 #6 — "Show all columns" affordance.
    * Wire: callback is `useHiddenColumns.clear`, which fires
    * `setDatagridPrefs({ hiddenColumns: [] })` (functionally equivalent
    * to `resetDatagridPrefs(field="hiddenColumns")` — both clear the
@@ -109,10 +109,12 @@ export default function HeaderRow({
 }: HeaderRowProps) {
   const { t } = useTranslation("datagrid");
   const sortMouseStartRef = useRef<{ x: number; y: number } | null>(null);
-  // issue #1130 (B1) — 헤더행은 단일 roving tab stop. 정적 tabIndex={0} N개는
-  // grid 안에 N개 tab stop 을 만들어(헤더에서 Tab N연타) body 단일 roving 과
-  // nav 모델을 이원화한다. 헤더도 첫 columnheader 만 tab stop 이고 ArrowLeft/
-  // Right/Home/End 로 이동한다 (body roving 과 분리된 1 stop, Tab 으로 body 진입).
+  // issue #1130 (B1) — the header row is a single roving tab stop. N static
+  // tabIndex={0}s would put N tab stops inside the grid (N Tab presses across
+  // the header) and split the navigation model from the body's single roving
+  // stop. The header too keeps only the first columnheader as the tab stop
+  // and moves with ArrowLeft/Right/Home/End (a separate 1-stop roving from
+  // the body; Tab enters the body).
   const [focusedHeaderCol, setFocusedHeaderCol] = useState(0);
   const clampedHeaderCol =
     order.length > 0 ? Math.min(focusedHeaderCol, order.length - 1) : 0;
@@ -137,7 +139,7 @@ export default function HeaderRow({
         style={{
           display: "grid",
           gridTemplateColumns: "var(--cols)",
-          // Sprint 261 — bg-secondary 가 horizontal scroll 끝까지 그려지도록.
+          // bg-secondary paints through to the end of the horizontal scroll.
           minWidth: "max-content",
         }}
       >
@@ -175,15 +177,17 @@ export default function HeaderRow({
                 onSort(col.name, e.shiftKey);
               }}
               onKeyDown={(e) => {
-                // 내부 resize separator / context menu item 에서 버블한 키는
-                // 무시(자기 셀만).
+                // Ignore keys bubbled from the inner resize separator or a
+                // context menu item (this cell only).
                 if (e.target !== e.currentTarget) return;
                 const { key } = e;
-                // #1127 AC1 — header 에서 ArrowDown → 대응 컬럼 최상단 data cell
-                // (row 0) 복귀. body roving 의 ArrowUp(row 0 → header) 과 짝을
-                // 이뤄 컬럼을 보존한다. body cell 의 onFocus 가 roving anchor 를
-                // (0, visualIdx) 로 sync 한다. 가상화로 row 0 이 미렌더면 no-op
-                // (sticky header + scroll 상태의 edge; round-trip 은 top row 기준).
+                // #1127 AC1 — ArrowDown from the header returns to the
+                // matching column's topmost data cell (row 0). Pairs with the
+                // body roving's ArrowUp (row 0 → header) so the column is
+                // preserved. The body cell's onFocus syncs the roving anchor
+                // to (0, visualIdx). A no-op when virtualization has row 0
+                // unrendered (an edge of sticky header + scroll state; the
+                // round-trip is defined against the top row).
                 if (key === "ArrowDown") {
                   e.preventDefault();
                   const gridEl = e.currentTarget.closest('[role="grid"]');
@@ -194,10 +198,11 @@ export default function HeaderRow({
                     ?.focus();
                   return;
                 }
-                // issue #1130 (B1) — 헤더행 roving: ArrowLeft/Right/Home/End 로
-                // 단일 tab stop 을 형제 columnheader 로 옮긴다. body roving 과
-                // 같은 방식(이벤트 상대 querySelector + .focus(), 가상화 없어
-                // 즉시 focus). Tab 은 헤더↔body 이동에 그대로 쓴다.
+                // issue #1130 (B1) — header-row roving: ArrowLeft/Right/Home/End
+                // move the single tab stop between sibling columnheaders. Same
+                // mechanism as the body roving (event-relative querySelector +
+                // .focus(); no virtualization here, so focus is immediate).
+                // Tab remains the header↔body move.
                 if (
                   key === "ArrowLeft" ||
                   key === "ArrowRight" ||
@@ -220,8 +225,8 @@ export default function HeaderRow({
                   headers?.[next]?.focus();
                   return;
                 }
-                // issue #1130 AC3 — Enter/Space 로 정렬, Shift 는 shift+click 과
-                // 동일하게 multi-sort append.
+                // issue #1130 AC3 — Enter/Space sorts; Shift appends to the
+                // multi-sort, same as shift+click.
                 if (key !== "Enter" && key !== " ") return;
                 e.preventDefault();
                 if (editingCell) onSaveCurrentEdit();
@@ -253,16 +258,17 @@ export default function HeaderRow({
               >
                 {col.data_type}
               </div>
-              {/* Sprint 378 (2026-05-17) — 더블클릭 = column widths reset.
-                  `onResetColumnWidths` 가 connected 면 (DataGridTable 가 wire
-                  한 `useColumnWidths.reset` → `reset_datagrid_prefs
-                  (field=widths)` IPC) 호출. column-level 이 아닌 *전체*
-                  widths reset 임에 유의 (sprint-378 contract). 단일
-                  mousedown (drag-start) 은 reset 과 독립. e.stopPropagation
-                  으로 header onClick/sort 로의 bubble 차단.
-                  #1733 (2026-07-24) — 중복이던 툴바 reset 버튼을 제거했으므로
-                  더블클릭이 유일한 grip reset 트리거다. hover `title` 로
-                  발견성 보완 (aria-label 은 SR 용 "Resize column" 유지). */}
+              {/* Double-click = column widths reset. Calls
+                  `onResetColumnWidths` when connected (DataGridTable wires
+                  `useColumnWidths.reset` → the `reset_datagrid_prefs
+                  (field=widths)` IPC). Note this resets *all* widths, not
+                  column-level. A single mousedown (drag-start) is independent
+                  of the reset; e.stopPropagation blocks bubbling to the
+                  header onClick/sort.
+                  #1733 (2026-07-24) — the duplicate toolbar reset button was
+                  removed, so double-click is the only grip reset trigger.
+                  The hover `title` aids discoverability (the aria-label stays
+                  the SR-facing "Resize column"). */}
               <div
                 className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60 focus-visible:outline-1 focus-visible:outline-ring"
                 onMouseDown={(e) => onResizeStart(e, col.name, visualIdx)}
@@ -344,8 +350,8 @@ export default function HeaderRow({
                     </ContextMenuItem>
                   </>
                 )}
-                {/* Sprint 376 (Phase 6 Q21 #5 + #6) — reset affordances.
-                    Confirm dialog 없음 (Q21 직접 IPC contract). */}
+                {/* Q21 #5 + #6 — reset affordances. No confirm dialog
+                    (the Q21 direct IPC contract). */}
                 {(onResetColumnWidths || onShowAllColumns) && (
                   <>
                     {(onSortColumn ||

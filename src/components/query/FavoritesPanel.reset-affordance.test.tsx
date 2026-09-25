@@ -1,13 +1,14 @@
 /**
- * 작성 2026-05-17 (Phase 6 sprint-376 Q21 affordance #9 — audit only).
+ * Q21 affordance #9 — audit only.
  *
- * 사유: Favorites panel 의 entry-별 remove 는 기존 구현 (FavoritesPanel.tsx
- * line 122-134) 이 그대로 Q21 의 reset affordance. 본 sprint 는 신규
- * UI 추가가 아니라 회귀 가드 — 다음 sprint 가 remove 버튼을 실수로
- * 제거하면 본 test 가 fail. (Q21 audit 항목 #9.)
+ * Reason: the per-entry remove in the Favorites panel is already the Q21
+ * reset affordance, as implemented by the `removeFavorite` button in
+ * `FavoritesPanel.tsx`. This file adds no new UI; it is a regression guard —
+ * if a later change removes that button by mistake, this test fails.
+ * (Q21 audit item #9.)
  *
- * Lego: remove 버튼 클릭 → `removeFavorite(id)` zustand action 1회 →
- * `favorites` array 에서 해당 entry 가 사라짐.
+ * Lego: click remove → one `removeFavorite(id)` zustand action → the entry
+ * disappears from the `favorites` array.
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";

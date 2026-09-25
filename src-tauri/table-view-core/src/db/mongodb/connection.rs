@@ -1,6 +1,6 @@
 //! MongoAdapter struct + connection lifecycle + `impl DbAdapter`.
 //!
-//! Sprint 197 split — extracted from `db/mongodb.rs`. Holds:
+//! Split out of `db/mongodb.rs`. Holds:
 //!   * the adapter struct (shared `(client, default_db, active_db,
 //!     runtime_capabilities)` slots)
 //!   * `build_options` / `test` / `current_client` / `switch_active_db`
@@ -39,7 +39,7 @@ pub(crate) const MONGO_CONNECT_TIMEOUT_MAX_SECS: u32 = 300;
 pub struct MongoAdapter {
     pub(super) client: Arc<Mutex<Option<Client>>>,
     pub(super) default_db: Arc<Mutex<Option<String>>>,
-    /// Sprint 131 — the database the user has currently "use_db"'d into.
+    /// The database the user has currently "use_db"'d into.
     ///
     /// Mirrors `default_db`'s lifecycle (seeded on `connect()`, cleared on
     /// `disconnect()`) but is mutated by `switch_active_db` so that future
@@ -175,9 +175,9 @@ impl MongoAdapter {
             .ok_or_else(|| AppError::Connection("MongoDB connection is not established".into()))
     }
 
-    /// Switch the user-active database for this connection (Sprint 131).
+    /// Switch the user-active database for this connection.
     ///
-    /// Mirrors `PostgresAdapter::switch_active_db`'s contract from S130 with
+    /// Mirrors `PostgresAdapter::switch_active_db`'s contract with
     /// MongoDB-specific quirks:
     ///   * MongoDB has no per-database connection pool — `Client` already
     ///     multiplexes across DBs — so there is no sub-pool to evict, and
@@ -235,7 +235,7 @@ impl MongoAdapter {
         Ok(())
     }
 
-    /// Sprint 131 — accessor for the current user-active database.
+    /// Accessor for the current user-active database.
     ///
     /// Returns `None` when the adapter is disconnected or the connection
     /// was opened without a default `database`. Mirrors
@@ -254,23 +254,23 @@ impl MongoAdapter {
             .unwrap_or_else(MongoRuntimeCapabilities::unknown)
     }
 
-    /// Sprint 137 (AC-S137-01) — resolve which Mongo database name a
-    /// metadata fetch should run against.
+    /// AC-S137-01 — resolve which Mongo database name a metadata fetch should
+    /// run against.
     ///
     /// Routing precedence (in order):
     ///   1. `requested` — when the caller explicitly provided a non-empty
     ///      database name, honor it verbatim. The frontend's existing
     ///      `list_mongo_collections(connection_id, database)` command path
     ///      passes the user-clicked database row this way, so this branch
-    ///      preserves the original Sprint 65 contract.
+    ///      preserves the original contract.
     ///   2. `active_db` — when the caller did not provide a name (or
     ///      passed an empty/whitespace-only string), fall back to whatever
     ///      database the user most recently `use_db`'d into via
-    ///      `switch_active_db`. **This is the key Sprint 137 fix**: prior to
-    ///      S137 the only fallback was `default_db`, so a Mongo workspace
-    ///      that opened against db `X` and then swapped to db `Y` via the
-    ///      DbSwitcher kept resolving collection-list calls against `X`
-    ///      because `default_db` never moves.
+    ///      `switch_active_db`. **This is the key fix**: with `default_db`
+    ///      as the only fallback, a Mongo workspace that opened against db
+    ///      `X` and then swapped to db `Y` via the DbSwitcher kept
+    ///      resolving collection-list calls against `X` because
+    ///      `default_db` never moves.
     ///   3. `default_db` — last-resort fallback for the very first
     ///      metadata fetch on a connection that was opened without an
     ///      intervening `switch_active_db`. Same value the adapter
@@ -337,11 +337,10 @@ impl DbAdapter for MongoAdapter {
                 *guard = Some(capabilities);
             }
             // Seed both `default_db` and `active_db` from the connection's
-            // configured database. Sprint 131 — `active_db` mirrors
-            // `default_db` on the initial connect; subsequent
-            // `switch_active_db` calls move only `active_db`, so the
-            // adapter retains the user's original landing DB even after
-            // they navigate away.
+            // configured database. `active_db` mirrors `default_db` on the
+            // initial connect; subsequent `switch_active_db` calls move only
+            // `active_db`, so the adapter retains the user's original landing
+            // DB even after they navigate away.
             let initial = if config.database.trim().is_empty() {
                 None
             } else {
@@ -366,9 +365,9 @@ impl DbAdapter for MongoAdapter {
             *guard = None;
             let mut db_guard = self.default_db.lock().await;
             *db_guard = None;
-            // Sprint 131 — clear the user-selected DB on disconnect so a
-            // subsequent connect() does not silently reuse a stale
-            // selection from the previous session.
+            // Clear the user-selected DB on disconnect so a subsequent
+            // connect() does not silently reuse a stale selection from the
+            // previous session.
             let mut active_guard = self.active_db.lock().await;
             *active_guard = None;
             // Issue #1821 — drop the probed capability with the session. A
@@ -392,9 +391,9 @@ impl DbAdapter for MongoAdapter {
         })
     }
 
-    /// Sprint 359 (Q5.3 Mongo) — delegate to `kill_op_impl`, the live
-    /// `adminCommand({killOp: 1, op: <opid>})` from sprint-336. The IPC
-    /// surface stays uniform (`server_pid` field) while the Mongo wire
+    /// Q5.3 (Mongo) — delegate to `kill_op_impl`, the live
+    /// `adminCommand({killOp: 1, op: <opid>})`. The IPC surface stays uniform
+    /// (`server_pid` field) while the Mongo wire
     /// uses the opid materialised by the runner. Errors propagate the
     /// driver message verbatim so `classify_cancel_error` can bucket.
     fn cancel_query<'a>(&'a self, server_pid: i64) -> BoxFuture<'a, Result<(), AppError>> {
@@ -423,7 +422,7 @@ impl DbAdapter for MongoAdapter {
 
 /// Issue #1453 — mongodb driver errors can echo the connection URI
 /// (`mongodb://user:pw@host`); route connect/ping errors through the
-/// redacting constructor. mssql `mssql_connection_error` 패턴 답습.
+/// redacting constructor. Follows the mssql `mssql_connection_error` pattern.
 fn mongo_connection_error(context: &'static str, err: impl std::fmt::Display) -> AppError {
     AppError::connection_redacted(format!("{context}: {err}"))
 }
@@ -698,13 +697,13 @@ mod tests {
         );
     }
 
-    // -- Sprint 131 — switch_active_db ---------------------------------------
+    // -- switch_active_db ----------------------------------------------------
 
     #[tokio::test]
     async fn test_switch_active_db_rejects_empty_db_name() {
         // Pure validation — no live MongoDB needed because the empty-name
         // guard runs before `current_client()`. Mirrors the PG sibling
-        // test in postgres.rs (S130).
+        // test in postgres.rs.
         let adapter = MongoAdapter::new();
         match adapter.switch_active_db("").await {
             Err(AppError::Validation(msg)) => {
@@ -742,17 +741,17 @@ mod tests {
     async fn test_current_active_db_starts_none() {
         // Adapter constructed but never connected — the active_db slot
         // begins life as None. This pins the lifecycle invariant the
-        // S131 contract relies on (no stale selection leaks across
-        // connect → disconnect → connect cycles).
+        // switch_active_db contract relies on (no stale selection leaks
+        // across connect → disconnect → connect cycles).
         let adapter = MongoAdapter::new();
         assert!(adapter.current_active_db().await.is_none());
     }
 
-    // -- Sprint 137 — list_collections honors active_db (AC-S137-01) -------
+    // -- list_collections honors active_db (AC-S137-01) --------------------
 
     /// `resolved_db_name(Some("alpha"))` honors the explicit override even
     /// when a different `active_db` is already set. This pins the original
-    /// Sprint 65 contract — frontend rows that pass an explicit DB name
+    /// contract — frontend rows that pass an explicit DB name
     /// keep working as before — while leaving the empty-name path open
     /// for the active-db fallback (next test).
     #[tokio::test]
@@ -810,7 +809,7 @@ mod tests {
 
     /// When `active_db` was never set (no use_db ever fired), the resolver
     /// falls back to `default_db` so the very first metadata fetch on a
-    /// fresh connection still has somewhere to land. Mirrors the Sprint 65
+    /// fresh connection still has somewhere to land. Mirrors the original
     /// behavior for unswapped connections.
     #[tokio::test]
     async fn test_resolved_db_name_falls_back_to_default_when_no_active() {
