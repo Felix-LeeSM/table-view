@@ -1,24 +1,25 @@
-//! Sprint 296 (2026-05-14) — MySQL adapter 통합 게이트 합류.
+//! MySQL adapter joins the integration gate.
 //!
-//! 작성 이유: `db/mysql/{queries,schema,mutations,connection}.rs` 의 IO
-//! 본체가 unit-mock 으로 cover 되지 않아 Rust 통합 커버리지 게이트
-//! (`.github/workflows/ci.yml` 의 `Run integration coverage`) 임계가
-//! baseline drift (77.77/72.96/77.39) 로 만성 미달.
-//! PG (`query_integration` + `schema_integration`) 시나리오를 MySQL 로
-//! mirror — adapter parity 강제 (X+ 정책: 1:1 mirror + 양쪽 추가 + dialect).
+//! Why this exists: the IO bodies in `db/mysql/{queries,schema,mutations,connection}.rs`
+//! are not covered by unit mocks, so the Rust integration coverage gate
+//! (`Run integration coverage` in `.github/workflows/ci.yml`) chronically
+//! misses its threshold on baseline drift (77.77/72.96/77.39).
+//! The PG (`query_integration` + `schema_integration`) scenarios are mirrored
+//! to MySQL — enforcing adapter parity (X+ policy: 1:1 mirror + additions on
+//! both sides + dialect).
 //!
-//! 실행:
+//! Run:
 //!   cargo mysql-test
-//!   MYSQL_HOST=localhost MYSQL_PORT=13306 cargo mysql-test   (외부 재사용)
+//!   MYSQL_HOST=localhost MYSQL_PORT=13306 cargo mysql-test   (reusable externally)
 //!
-//! Dialect 차이 패치 메모:
+//! Dialect difference patch notes:
 //! - `pg_sleep(N)`         → `SLEEP(N)`
 //! - `pg_tables`           → `information_schema.tables`
-//! - `CREATE TEMP TABLE`   → unique-named normal table (TEMP 는 connection-scoped,
-//!   sqlx pool 의 다른 connection 에서 안 보임)
-//! - `NUMERIC`             → `DECIMAL(10, 2)` (호환성)
-//! - `$1, $2` 파라미터     → `?, ?` (현 시나리오에는 미사용)
-//! - `RETURNING`           → `LAST_INSERT_ID()` (현 시나리오에는 미사용)
+//! - `CREATE TEMP TABLE`   → unique-named normal table (TEMP is connection-scoped,
+//!   invisible from other connections in the sqlx pool)
+//! - `NUMERIC`             → `DECIMAL(10, 2)` (compatibility)
+//! - `$1, $2` parameters   → `?, ?` (unused in the current scenarios)
+//! - `RETURNING`           → `LAST_INSERT_ID()` (unused in the current scenarios)
 
 mod common;
 
@@ -38,8 +39,8 @@ use table_view_lib::models::{
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
-// MySQL 의 "schema" 는 database 이름. setup_mysql_adapter() 가 endpoint.database
-// = "test" 로 connect 하므로 query_table_data 의 schema 인자도 "test".
+// In MySQL, "schema" means the database name. setup_mysql_adapter() connects
+// with endpoint.database = "test", so query_table_data's schema argument is also "test".
 const MYSQL_SCHEMA: &str = "test";
 
 fn expected_check_catalog_support_from_version(raw: &str) -> bool {
@@ -117,11 +118,11 @@ async fn seed_filter_table_mysql(adapter: &table_view_lib::db::mysql::MysqlAdapt
 }
 
 // =============================================================================
-// Batch 1 (Slice B-2) — query_integration.rs 시나리오 1-7 mirror
+// Batch 1 — mirror of query_integration.rs scenarios 1-7
 // =============================================================================
 
-/// Mirror of PG `test_select_query_returns_columns_and_rows` — SELECT 가
-/// 컬럼/행 메타데이터를 반환.
+/// Mirror of PG `test_select_query_returns_columns_and_rows` — SELECT returns
+/// column/row metadata.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_select_query_returns_columns_and_rows() {
@@ -242,8 +243,8 @@ async fn test_mysql_call_procedure_returns_result_rows() {
     assert_eq!(result.columns[0].name, "echoed_id");
     assert_eq!(result.total_count, 1);
     assert_eq!(result.rows.len(), 1);
-    // echoed_id 는 BIGINT 파라미터를 투영하므로 ADR 0026 (issue #1082) 에 따라
-    // JSON string token 으로 wire 된다.
+    // echoed_id projects a BIGINT parameter, so per ADR 0026 (issue #1082) it is
+    // wired as a JSON string token.
     assert_eq!(result.rows[0][0].as_str(), Some("872"));
 
     sqlx::raw_sql(&format!("DROP PROCEDURE IF EXISTS {proc_name}"))
@@ -282,7 +283,7 @@ async fn test_mysql_check_constraint_catalog_gate_uses_live_server_version() {
 }
 
 /// Mirror of PG `test_dml_query_returns_rows_affected` — INSERT/UPDATE/DELETE
-/// 모두 affected rows 보고.
+/// all report affected rows.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_dml_query_returns_rows_affected() {
@@ -356,10 +357,10 @@ async fn test_mysql_dml_query_returns_rows_affected() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// Mirror of PG `test_ddl_query_returns_success` — DDL 성공 + 테이블 실제
-/// 생성 확인. PG 가 `CREATE TEMP TABLE` + `pg_tables` EXISTS 로 검증한 부분을
-/// MySQL 에서는 unique-named normal table + `information_schema.tables` 로
-/// dialect mirror.
+/// Mirror of PG `test_ddl_query_returns_success` — DDL succeeds and the table
+/// really is created. What PG verified with `CREATE TEMP TABLE` + `pg_tables`
+/// EXISTS is mirrored on MySQL with a unique-named normal table +
+/// `information_schema.tables`.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_ddl_query_returns_success() {
@@ -416,8 +417,8 @@ async fn test_mysql_ddl_query_returns_success() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// Mirror of PG `test_query_cancellation_works` — `SLEEP(10)` 으로 대체.
-/// MySQL `SLEEP()` 도 cancellable (sqlx CancellationToken connection-level).
+/// Mirror of PG `test_query_cancellation_works` — substituted with `SLEEP(10)`.
+/// MySQL `SLEEP()` is cancellable too (sqlx CancellationToken connection-level).
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_query_cancellation_works() {
@@ -462,8 +463,8 @@ async fn test_mysql_query_cancellation_works() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// Mirror of PG `test_query_error_returns_database_error` — 존재 안 하는
-/// 테이블 SELECT 가 Database error 반환.
+/// Mirror of PG `test_query_error_returns_database_error` — SELECT on a
+/// nonexistent table returns a Database error.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_query_error_returns_database_error() {
@@ -494,7 +495,7 @@ async fn test_mysql_query_error_returns_database_error() {
 }
 
 /// Mirror of PG `test_complex_select_query` — JOIN + aggregate ordering.
-/// `NUMERIC` → `DECIMAL(10, 2)` dialect 패치.
+/// `NUMERIC` → `DECIMAL(10, 2)` dialect patch.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_complex_select_query() {
@@ -582,7 +583,7 @@ async fn test_mysql_complex_select_query() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// Mirror of PG `test_empty_result_set` — 빈 테이블 SELECT 는 rows 0 + Select.
+/// Mirror of PG `test_empty_result_set` — SELECT on an empty table returns 0 rows + Select.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_empty_result_set() {
@@ -631,10 +632,10 @@ async fn test_mysql_empty_result_set() {
 }
 
 // =============================================================================
-// Batch 2 (Slice B-2) — comment / trailing semicolon / execute_query_batch
+// Batch 2 — comment / trailing semicolon / execute_query_batch
 // =============================================================================
 
-/// Mirror of PG `test_select_with_leading_comment` — `--` 라인 코멘트 후 SELECT.
+/// Mirror of PG `test_select_with_leading_comment` — SELECT after a `--` line comment.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_select_with_leading_comment() {
@@ -660,8 +661,8 @@ async fn test_mysql_select_with_leading_comment() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// Mirror of PG `test_select_with_trailing_semicolon` — trailing `;` 가 wrapping
-/// subquery 를 깨뜨리지 않아야.
+/// Mirror of PG `test_select_with_trailing_semicolon` — a trailing `;` must not
+/// break the wrapping subquery.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_select_with_trailing_semicolon() {
@@ -685,7 +686,7 @@ async fn test_mysql_select_with_trailing_semicolon() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// Mirror of PG `test_dml_with_trailing_semicolon` — DML 의 trailing `;` 도 ok.
+/// Mirror of PG `test_dml_with_trailing_semicolon` — a DML trailing `;` is ok too.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_dml_with_trailing_semicolon() {
@@ -733,7 +734,7 @@ async fn test_mysql_dml_with_trailing_semicolon() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// Mirror of PG `test_select_with_block_comment` — `/* ... */` 블록 코멘트.
+/// Mirror of PG `test_select_with_block_comment` — a `/* ... */` block comment.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_select_with_block_comment() {
@@ -758,10 +759,10 @@ async fn test_mysql_select_with_block_comment() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// Mirror of PG `test_execute_query_batch_commits_all_statements` — 두 INSERT
-/// 가 한 트랜잭션에서 모두 commit. `COUNT(*)` 의 wire-encoding 검증 포함
-/// (ADR 0026 의 BIGINT→string 정책이 MySQL adapter 에서도 동일하게 적용되는지
-/// 가 본 시나리오의 부가 검증 포인트).
+/// Mirror of PG `test_execute_query_batch_commits_all_statements` — both INSERTs
+/// commit in one transaction. Also verifies the wire encoding of `COUNT(*)`
+/// (a side check that ADR 0026's BIGINT→string policy applies to the MySQL
+/// adapter the same way).
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_execute_query_batch_commits_all_statements() {
@@ -812,8 +813,8 @@ async fn test_mysql_execute_query_batch_commits_all_statements() {
         )
         .await
         .expect("count");
-    // COUNT(*) 는 MySQL 에서 BIGINT 를 반환하므로 ADR 0026 (issue #1082) 에 따라
-    // 정밀도-보존 JSON string token 으로 wire 된다 (PG mirror 와 동일).
+    // COUNT(*) returns a BIGINT on MySQL, so per ADR 0026 (issue #1082) it is
+    // wired as a precision-preserving JSON string token (same as the PG mirror).
     let n: i64 = count.rows[0][0]
         .as_str()
         .and_then(|s| s.parse().ok())
@@ -831,10 +832,10 @@ async fn test_mysql_execute_query_batch_commits_all_statements() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// Mirror of PG `test_execute_query_batch_rolls_back_on_mid_failure` — 두 번째
-/// statement 가 fail 하면 첫 statement 도 롤백되어 테이블에 0 row 가 남아야.
-/// MySQL 도 default `autocommit=OFF` 안에서 begin/commit/rollback 정상 작동
-/// (sqlx 가 명시적 transaction 사용).
+/// Mirror of PG `test_execute_query_batch_rolls_back_on_mid_failure` — when the
+/// second statement fails, the first is rolled back too and the table must be
+/// left with 0 rows. MySQL also works normally under the default
+/// `autocommit=OFF` begin/commit/rollback (sqlx uses an explicit transaction).
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_execute_query_batch_rolls_back_on_mid_failure() {
@@ -858,7 +859,7 @@ async fn test_mysql_execute_query_batch_rolls_back_on_mid_failure() {
         .expect("CREATE TABLE");
 
     // Statement 2 references a column that does not exist → fails.
-    // InnoDB 가 transactional 이므로 statement 1 도 rollback 되어 row count 0.
+    // InnoDB is transactional, so statement 1 is rolled back too, leaving a row count of 0.
     let stmts = vec![
         format!("INSERT INTO {table} VALUES (1)"),
         format!("INSERT INTO {table} (no_such_col) VALUES (2)"),
@@ -957,8 +958,8 @@ async fn test_mysql_execute_query_batch_rolls_back_when_update_changes_multiple_
         )
         .await
         .expect("count");
-    // COUNT(*) 는 MySQL 에서 BIGINT 를 반환하므로 ADR 0026 (issue #1082) 에 따라
-    // string token 으로 wire 된다.
+    // COUNT(*) returns a BIGINT on MySQL, so per ADR 0026 (issue #1082) it is
+    // wired as a string token.
     let n: i64 = count.rows[0][0]
         .as_str()
         .and_then(|s| s.parse().ok())
@@ -977,7 +978,7 @@ async fn test_mysql_execute_query_batch_rolls_back_when_update_changes_multiple_
 }
 
 // =============================================================================
-// Batch 4 (Slice B-2) — stream_table_rows validation + happy path + drop
+// Batch 4 — stream_table_rows validation + happy path + drop
 // =============================================================================
 
 /// Mirror of PG `test_stream_table_rows_validation_rejects_zero_batch_size`.
@@ -1348,7 +1349,7 @@ async fn test_mysql_dump_round_trip_restores_into_mysql() {
 }
 
 // =============================================================================
-// Batch 3 (Slice B-2) — query_table_data filter / raw_where / pagination
+// Batch 3 — query_table_data filter / raw_where / pagination
 // =============================================================================
 
 /// Mirror of PG `test_query_table_data_filter_eq_with_numeric_cast`.
@@ -1487,8 +1488,8 @@ async fn test_mysql_query_table_data_filter_like_and_isnull() {
 }
 
 /// Mirror of PG `test_query_table_data_filter_unknown_column_is_ignored` —
-/// queries.rs 가 invalid 컬럼을 silently skip 해서 stale frontend cache 에
-/// 견디는 behavior.
+/// queries.rs silently skips invalid columns, a behavior that tolerates a
+/// stale frontend cache.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_query_table_data_filter_unknown_column_is_ignored() {
@@ -1638,8 +1639,8 @@ async fn test_mysql_query_table_data_cancel_token_interrupts_in_flight_raw_where
     adapter.disconnect_pool().await.ok();
 }
 
-/// Mirror of PG `test_query_table_data_raw_where_rejects_semicolon` — raw_where
-/// 안 `;` 는 adapter-level validation 이 거부.
+/// Mirror of PG `test_query_table_data_raw_where_rejects_semicolon` — a `;`
+/// inside raw_where is rejected by adapter-level validation.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_query_table_data_raw_where_rejects_semicolon() {
@@ -1781,8 +1782,8 @@ async fn test_mysql_query_table_data_pagination_and_ordering() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// Mirror of PG `test_execute_query_batch_strips_trailing_semicolons` — 각
-/// statement 의 trailing `;` 가 strip 후 실행.
+/// Mirror of PG `test_execute_query_batch_strips_trailing_semicolons` — each
+/// statement's trailing `;` is stripped before execution.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_execute_query_batch_strips_trailing_semicolons() {
@@ -1829,31 +1830,32 @@ async fn test_mysql_execute_query_batch_strips_trailing_semicolons() {
 }
 
 // =============================================================================
-// Batch 5 (Slice B-3, 2026-05-14) — schema_integration.rs 시나리오 mirror
+// Batch 5 — mirror of schema_integration.rs scenarios
 // =============================================================================
-// 작성 이유: db/mysql/schema.rs (list_schemas/list_tables/get_table_columns/
-// list_views/list_functions/get_table_indexes/get_table_constraints/
-// list_schema_columns) 와 db/mysql/queries.rs 의 query_table_data 의 정렬/
-// 필터/페이지네이션 분기를 schema_integration.rs (PG) 와 1:1 mirror 로 hit.
-// PG-only `list_types` (pg_type catalog) 는 MySQL 짝꿍 없음 → 미러 안 함.
+// Why this exists: db/mysql/schema.rs (list_schemas/list_tables/
+// get_table_columns/list_views/list_functions/get_table_indexes/
+// get_table_constraints/list_schema_columns) and db/mysql/queries.rs's
+// query_table_data sort/filter/pagination branches are hit with a 1:1 mirror
+// of schema_integration.rs (PG).
+// PG-only `list_types` (pg_type catalog) has no MySQL counterpart → not mirrored.
 //
-// Dialect 차이:
-// - `\"identifier\"`           → MySQL 은 unquoted (or backtick) — 본 파일은 unquoted
+// Dialect differences:
+// - `\"identifier\"`           → MySQL is unquoted (or backtick) — this file uses unquoted
 // - `SERIAL`                   → `INT AUTO_INCREMENT PRIMARY KEY`
 // - `TIMESTAMP DEFAULT NOW()`  → `TIMESTAMP DEFAULT CURRENT_TIMESTAMP`
 // - `COMMENT ON COLUMN …`      → inline `COMMENT 'text'` syntax
 // - PG schema "public"         → MySQL schema "test" (MYSQL_SCHEMA)
 // - PG PK name `<t>_pkey`      → MySQL PK name "PRIMARY"
-// - `<col>::bigint`            → `CAST(<col> AS SIGNED)` (현 시나리오에는 미사용)
-// - PG `data_type="serial"`    → MySQL `data_type="int"` (AUTO_INCREMENT 는
-//                                 컬럼 default 의 fingerprint 일 뿐 column_type 미반영)
+// - `<col>::bigint`            → `CAST(<col> AS SIGNED)` (unused in the current scenarios)
+// - PG `data_type="serial"`    → MySQL `data_type="int"` (AUTO_INCREMENT is only a
+//                                 fingerprint of the column default; column_type does not reflect it)
 //
-// Wire encoding (ADR 0026 정합 — issue #1082 로 MySQL 정수 경로도 합류):
+// Wire encoding (consistent with ADR 0026 — issue #1082 brought the MySQL integer path in):
 // - PG BIGINT → JSON string. MySQL BIGINT → JSON string (issue #1082).
 // - PG NUMERIC → JSON string. MySQL DECIMAL → JSON string (queries.rs line 145).
-// - INT/SMALLINT/MEDIUMINT/YEAR 는 둘 다 JSON number (≤32bit, f64 무손실).
-// - CHECK clauses: MySQL adapter 는 information_schema CHECK expression 을
-//   column-level check_clauses 로 투영.
+// - INT/SMALLINT/MEDIUMINT/YEAR are JSON number on both (≤32bit, lossless in f64).
+// - CHECK clauses: the MySQL adapter projects information_schema CHECK expressions
+//   into column-level check_clauses.
 
 #[tokio::test]
 #[serial_test::serial]
@@ -1863,8 +1865,8 @@ async fn test_mysql_list_schemas() {
         None => return,
     };
     let schemas = adapter.list_schemas().await.expect("list_schemas");
-    // testcontainers 의 MySQL 은 default DB "test". 외부 재사용 시에도 endpoint
-    // 가 "test" 로 connect 하므로 항상 존재.
+    // testcontainers' MySQL uses default DB "test". The endpoint connects with
+    // "test" on external reuse too, so it always exists.
     assert!(
         schemas.iter().any(|s| s.name == MYSQL_SCHEMA),
         "expected '{MYSQL_SCHEMA}' in list_schemas: {:?}",
@@ -1884,7 +1886,8 @@ async fn test_mysql_list_tables_returns_non_empty_names() {
         .list_tables(MYSQL_SCHEMA)
         .await
         .expect("list_tables");
-    // 다른 테스트의 잔여 테이블이 있을 수 있어 비어있어도 OK. 단 모든 name 은 non-empty.
+    // Leftover tables from other tests may be present, and an empty list is fine
+    // too — only every name must be non-empty.
     assert!(
         tables.iter().all(|t| !t.name.is_empty()),
         "all table names should be non-empty"
@@ -1974,14 +1977,14 @@ async fn test_mysql_get_table_columns() {
     assert_eq!(columns.len(), 3, "expected 3 columns, got {columns:?}");
 
     let id_col = columns.iter().find(|c| c.name == "id").expect("id missing");
-    // MySQL `data_type` = column_type — INT 는 MySQL 8 에서 display width 없이 "int".
+    // MySQL `data_type` = column_type — INT is "int" without display width on MySQL 8.
     assert_eq!(id_col.data_type, "int");
     assert!(!id_col.nullable);
     assert!(id_col.is_primary_key);
     assert!(!id_col.is_foreign_key);
-    // #1433 — AUTO_INCREMENT 는 column_default 가 NULL 이라 `extra` 파싱이
-    // is_identity 의 유일한 신호. 여기서 실 MySQL 로 wiring 을 검증한다
-    // (틀리면 datagrid INSERT 생략 fix 가 조용히 no-op).
+    // #1433 — AUTO_INCREMENT has a NULL column_default, so parsing `extra` is the
+    // only signal for is_identity. This verifies the wiring against a real MySQL
+    // (if wrong, the datagrid skip-INSERT fix silently becomes a no-op).
     assert!(
         id_col.is_identity,
         "AUTO_INCREMENT column must report is_identity=true, got {id_col:?}"
@@ -2010,7 +2013,7 @@ async fn test_mysql_get_table_columns() {
         created_col.default_value.is_some(),
         "created_at should have default"
     );
-    // #1433 — default 가 있어도 identity 는 아니다 (생략 사유가 다름).
+    // #1433 — a defaulted column is still not identity (different reason for omission).
     assert!(!created_col.is_identity, "defaulted column is not identity");
 
     adapter
@@ -2214,9 +2217,9 @@ async fn test_mysql_get_table_columns_with_comments() {
         .as_millis();
     let table = format!("test_comments_{ts}");
 
-    // MySQL 의 column comment 는 inline 으로 정의. PG 의 `COMMENT ON COLUMN`
-    // 별도 statement 와 의미 동일, information_schema.columns.column_comment
-    // 가 반환.
+    // MySQL defines column comments inline. Same meaning as PG's separate
+    // `COMMENT ON COLUMN` statement; returned from
+    // information_schema.columns.column_comment.
     adapter
         .execute_query(
             &format!(
@@ -2676,7 +2679,7 @@ async fn test_mysql_get_view_columns_returns_columns_in_order() {
     assert_eq!(columns[1].name, "name");
     assert_eq!(columns[2].name, "score");
 
-    // view columns 는 PK/FK 메타를 들고 다니지 않는다 (schema.rs line 543-545).
+    // view columns carry no PK/FK metadata (schema.rs line 543-545).
     for col in &columns {
         assert!(!col.is_primary_key, "view col {} not PK", col.name);
         assert!(!col.is_foreign_key, "view col {} not FK", col.name);
@@ -2812,8 +2815,8 @@ async fn test_mysql_get_view_definition_returns_select_text() {
         .get_view_definition(MYSQL_SCHEMA, &view)
         .await
         .expect("get_view_definition");
-    // MySQL information_schema.views.view_definition 은 일반적으로 SELECT 키워드
-    // 와 base table 참조를 포함. sql_mode 에 따라 quoting/whitespace 가 다르다.
+    // MySQL information_schema.views.view_definition usually contains the SELECT
+    // keyword and a reference to the base table. quoting/whitespace vary with sql_mode.
     assert!(
         def.to_lowercase().contains("select"),
         "view definition missing SELECT: {def}"
@@ -2842,12 +2845,12 @@ async fn test_mysql_get_view_definition_returns_select_text() {
     adapter.disconnect_pool().await.ok();
 }
 
-// CREATE FUNCTION / CREATE PROCEDURE 는 MySQL 의 prepared statement protocol
-// 에서 지원하지 않는다 (server error 1295). 현 어댑터 `execute_query` 는
-// sqlx::query 로 항상 prepared path 를 탄다. 다음 두 시나리오는 어댑터가
-// `query_unprepared` (sqlx-mysql 의 `execute_many` 또는 raw connection) 를
-// 노출하기 전까지 실행 불가 — `#[ignore]` 로 회귀 게이트 제외하고,
-// future sprint 에서 어댑터 보강 시 `ignore` attr 제거.
+// CREATE FUNCTION / CREATE PROCEDURE is not supported by MySQL's prepared
+// statement protocol (server error 1295). The adapter's `execute_query` always
+// takes the prepared path via sqlx::query. The next two scenarios cannot
+// run until the adapter exposes `query_unprepared` (sqlx-mysql's `execute_many`
+// or a raw connection) — they are kept out of the regression gate with
+// `#[ignore]`.
 #[tokio::test]
 #[serial_test::serial]
 #[ignore = "CREATE FUNCTION blocked by sqlx prepared-protocol limit (MySQL 1295)"]
@@ -2862,9 +2865,9 @@ async fn test_mysql_list_functions_returns_user_function() {
         .as_millis();
     let fn_name = format!("test_fn_{ts}");
 
-    // MySQL FUNCTION 은 DETERMINISTIC 또는 NO SQL 등 deterministic 표식 필요
-    // (binlog 활성 시 trust_function_creators=0 default). 본 컨테이너는
-    // binlog 비활성이지만 안전하게 DETERMINISTIC 표식 부여.
+    // A MySQL FUNCTION needs a determinism marker such as DETERMINISTIC or
+    // NO SQL (with binlog enabled, trust_function_creators=0 is the default).
+    // This container has binlog disabled, but DETERMINISTIC is added for safety.
     adapter
         .execute_query(
             &format!("CREATE FUNCTION {fn_name}(x INT) RETURNS INT DETERMINISTIC RETURN x + 1"),
@@ -2949,10 +2952,10 @@ async fn test_mysql_list_databases_includes_user_db() {
     };
     let dbs = adapter.list_databases().await.expect("list_databases");
     let names: Vec<_> = dbs.iter().map(|d| &d.name).collect();
-    // MySQL adapter 의 `list_schemas` (schema.rs line 73) 는 admin DB
-    // (information_schema / mysql / performance_schema / sys) 를 의도적으로
-    // 제외 — UI 의 schema panel surface 에 noise 가 노출되지 않게. testcontainers
-    // 의 default DB "test" 는 user DB 로 항상 포함.
+    // The MySQL adapter's `list_schemas` (schema.rs line 73) deliberately
+    // excludes admin DBs (information_schema / mysql / performance_schema / sys)
+    // so no noise reaches the UI's schema panel surface. testcontainers' default
+    // DB "test" is always included as a user DB.
     assert!(
         names.iter().any(|n| *n == MYSQL_SCHEMA),
         "expected '{MYSQL_SCHEMA}' in list_databases: {names:?}"
@@ -3051,8 +3054,8 @@ async fn test_mysql_get_table_indexes_returns_pk_and_secondary_indexes() {
         .as_millis();
     let t = format!("test_idx_t_{ts}");
 
-    // MySQL 8 InnoDB. UNIQUE INDEX 는 TEXT 컬럼 (utf8mb4) 인덱싱 시 prefix
-    // length 필요. VARCHAR(190) 으로 안정화.
+    // MySQL 8 InnoDB. A UNIQUE INDEX over a TEXT column (utf8mb4) needs a prefix
+    // length. Stabilized with VARCHAR(190).
     adapter
         .execute_query(
             &format!(
@@ -3090,7 +3093,7 @@ async fn test_mysql_get_table_indexes_returns_pk_and_secondary_indexes() {
         .await
         .expect("get_table_indexes");
 
-    // MySQL PK index name = "PRIMARY" — adapter 는 이를 is_primary=true 로 표식.
+    // MySQL PK index name = "PRIMARY" — the adapter marks it as is_primary=true.
     let pk = indexes
         .iter()
         .find(|i| i.is_primary)
@@ -3164,7 +3167,7 @@ async fn test_mysql_get_table_indexes_composite_columns_preserve_order() {
         .iter()
         .find(|i| i.name == idx)
         .expect("composite missing");
-    // information_schema.statistics 의 seq_in_index 순으로 a → b.
+    // Ordered by information_schema.statistics' seq_in_index: a → b.
     assert_eq!(composite.columns, vec!["a".to_string(), "b".to_string()]);
 
     adapter
@@ -3207,7 +3210,7 @@ async fn test_mysql_get_table_constraints_pk_unique_check() {
         .as_millis();
     let t = format!("test_cons_{ts}");
 
-    // UNIQUE column 은 VARCHAR — TEXT 의 UNIQUE 는 prefix length 가 필요해 회피.
+    // UNIQUE columns use VARCHAR — UNIQUE on TEXT needs a prefix length, so it is avoided.
     adapter
         .execute_query(
             &format!(
@@ -3276,8 +3279,8 @@ async fn test_mysql_get_table_constraints_foreign_key_carries_reference() {
     let parent = format!("test_fk_parent_{ts}");
     let child = format!("test_fk_child_{ts}");
 
-    // MySQL 8 default engine = InnoDB → FK 지원. 명시적으로 ENGINE=InnoDB 도
-    // 부착해 sql_mode 변형에 견디게.
+    // MySQL 8 default engine = InnoDB → FK support. ENGINE=InnoDB is attached
+    // explicitly as well, to tolerate sql_mode variants.
     adapter
         .execute_query(
             &format!("CREATE TABLE {parent} (id INT PRIMARY KEY) ENGINE=InnoDB"),
@@ -3382,7 +3385,7 @@ async fn test_mysql_get_table_columns_populates_fk_reference_in_child() {
         .find(|c| c.name == "parent_id")
         .expect("parent_id missing");
     assert!(parent_id.is_foreign_key);
-    // MySQL `format_fk_reference` 는 PG 와 동일 format `"<schema>.<table>(<col>)"`.
+    // MySQL `format_fk_reference` uses the same format as PG: `"<schema>.<table>(<col>)"`.
     let expected = format!("{MYSQL_SCHEMA}.{parent}(id)");
     assert_eq!(parent_id.fk_reference.as_deref(), Some(expected.as_str()));
 
@@ -3405,13 +3408,13 @@ async fn test_mysql_get_table_columns_populates_fk_reference_in_child() {
     adapter.disconnect_pool().await.ok();
 }
 
-// ── Wire-encoding 시나리오 — ADR 0026 정합 (MySQL == PG, issue #1082) ─────
+// ── Wire-encoding scenarios — consistent with ADR 0026 (MySQL == PG, issue #1082) ─────
 // MySQL adapter (queries.rs):
-// - BIGINT (i64/u64): JSON string — 프론트가 BigInt 로 승격 (정밀도 보존).
+// - BIGINT (i64/u64): JSON string — the frontend promotes it to BigInt (precision preserved).
 // - DECIMAL/NEWDECIMAL: JSON string (line 145).
-// - INT/SMALLINT/MEDIUMINT/INTEGER/YEAR/TINYINT: JSON number (i64) — ≤32bit
-//   라 f64 (±2^53-1) 무손실이므로 그대로 Number. 폭 넓은 TINYINT("TINYINT")
-//   와 "TINYINT UNSIGNED" 는 Number, TINYINT(1)("BOOLEAN") 은 bool (issue #1484).
+// - INT/SMALLINT/MEDIUMINT/INTEGER/YEAR/TINYINT: JSON number (i64) — ≤32bit is
+//   lossless in f64 (±2^53-1), so it stays Number. Wide TINYINT("TINYINT") and
+//   "TINYINT UNSIGNED" are Number; TINYINT(1)("BOOLEAN") is bool (issue #1484).
 
 #[tokio::test]
 #[serial_test::serial]
@@ -3434,9 +3437,9 @@ async fn test_mysql_query_table_data_bigint_value_is_string_wire() {
         )
         .await
         .expect("CREATE TABLE");
-    // i64::MAX = 9223372036854775807 은 f64 (±2^53-1) 범위를 초과한다. ADR 0026
-    // (issue #1082) — BIGINT 은 정밀도-보존 JSON string token 으로 wire 되고
-    // 프론트 wrapNumericCells 가 BigInt 로 승격한다.
+    // i64::MAX = 9223372036854775807 exceeds the f64 (±2^53-1) range. Per ADR 0026
+    // (issue #1082) BIGINT is wired as a precision-preserving JSON string token
+    // and the frontend's wrapNumericCells promotes it to BigInt.
     adapter
         .execute_query(
             &format!("INSERT INTO {table} (id) VALUES (9223372036854775807)"),
@@ -3526,10 +3529,10 @@ async fn test_mysql_query_table_data_bigint_unsigned_value_is_string_wire() {
     adapter.disconnect_pool().await.ok();
 }
 
-// Sprint 296 follow-up (2026-05-14) — sqlx `bigdecimal` feature 활성화 +
-// queries.rs decode 경로가 `BigDecimal::to_string()` 으로 변환 → ADR 0026
-// 와 동일한 wire format (JSON string). 정밀-민감 DECIMAL 컬럼의 frontend
-// grid 노출 누락 회귀 가드.
+// sqlx `bigdecimal` feature enabled + the queries.rs decode path converts via
+// `BigDecimal::to_string()` → the same wire format as ADR 0026 (JSON string).
+// Regression guard against precision-sensitive DECIMAL columns going missing
+// from the frontend grid.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_query_table_data_decimal_value_is_string_wire() {
@@ -3636,14 +3639,15 @@ async fn test_mysql_query_table_data_int_value_remains_number_wire() {
     adapter.disconnect_pool().await.ok();
 }
 
-/// issue #1484 — 폭 넓은 TINYINT 정수 컬럼이 그리드에서 true/false bool 로
-/// 붕괴하던 회귀 가드. sqlx-mysql 의 type_info().name() 은 ColumnType::Tiny 를
-/// 폭에 따라 세 keyword 로 report 한다 (vendored column.rs L175-181):
-/// TINYINT(1) → "BOOLEAN", unsigned → "TINYINT UNSIGNED", 나머지 → "TINYINT".
-/// sqlx bool decode 는 byte != 0 이면 성공하므로 예전 `"TINYINT" | "BOOLEAN"`
-/// 공통 bool-우선 분기가 non-zero TINYINT (2, 127, -5)를 전부 Ok(Some(true)) 로
-/// 붕괴시켰다. 폭 넓은 TINYINT 는 JSON number 로, TINYINT(1)(="BOOLEAN") 은
-/// MySQL boolean 관례대로 JSON bool 로 렌더돼야 한다 (line 3227 계약).
+/// issue #1484 — regression guard against wide TINYINT integer columns collapsing
+/// into true/false bools in the grid. sqlx-mysql's type_info().name() reports
+/// ColumnType::Tiny as one of three keywords depending on width (vendored
+/// column.rs L175-181): TINYINT(1) → "BOOLEAN", unsigned → "TINYINT UNSIGNED",
+/// otherwise → "TINYINT". sqlx's bool decode succeeds whenever byte != 0, so the
+/// old shared `"TINYINT" | "BOOLEAN"` bool-first branch collapsed every non-zero
+/// TINYINT (2, 127, -5) into Ok(Some(true)). Wide TINYINT must render as a JSON
+/// number and TINYINT(1)(="BOOLEAN") as a JSON bool, per the MySQL boolean idiom
+/// (line 3227 contract).
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_query_table_data_tinyint_value_is_number_not_bool() {
@@ -3657,8 +3661,8 @@ async fn test_mysql_query_table_data_tinyint_value_is_number_not_bool() {
         .as_millis();
     let table = format!("test_wire_tinyint_{ts}");
 
-    // `flag` 는 폭 넓은 TINYINT (sqlx name "TINYINT") — 정수로 렌더돼야 한다.
-    // `narrow` 는 TINYINT(1) (sqlx name "BOOLEAN") — bool 렌더 보존 검증.
+    // `flag` is a wide TINYINT (sqlx name "TINYINT") — must render as an integer.
+    // `narrow` is TINYINT(1) (sqlx name "BOOLEAN") — verifies bool rendering is preserved.
     adapter
         .execute_query(
             &format!("CREATE TABLE {table} (id INT PRIMARY KEY, flag TINYINT, narrow TINYINT(1))"),
@@ -3684,17 +3688,17 @@ async fn test_mysql_query_table_data_tinyint_value_is_number_not_bool() {
         .expect("query_table_data");
     assert_eq!(data.rows.len(), 3);
 
-    // id -> (flag, narrow) 매핑으로 순서 무관하게 두 케이스를 잠근다.
+    // Lock in both cases order-independently via an id -> (flag, narrow) mapping.
     for r in &data.rows {
         let id = r[0].as_i64().expect("id");
         let flag = &r[1];
         let narrow = &r[2];
-        // 폭 넓은 TINYINT: 정수 (issue #1484 버그 fix — 예전엔 Bool 로 붕괴).
+        // Wide TINYINT: integer (issue #1484 bug fix — it used to collapse to Bool).
         assert!(
             flag.is_number(),
             "wide TINYINT must be JSON number, not bool (issue #1484), got: {flag:?}"
         );
-        // TINYINT(1): MySQL boolean 관례 — bool 렌더 보존.
+        // TINYINT(1): MySQL boolean idiom — bool rendering preserved.
         assert!(
             narrow.is_boolean(),
             "TINYINT(1) must render as JSON bool (MySQL boolean idiom), got: {narrow:?}"
@@ -3721,21 +3725,21 @@ async fn test_mysql_query_table_data_tinyint_value_is_number_not_bool() {
 }
 
 // =============================================================================
-// Batch 6 (Slice B-4, 2026-05-14) — mutation preview + trait dispatch coverage
+// Batch 6 — mutation preview + trait dispatch coverage
 // =============================================================================
-// 작성 이유: Rust 통합 커버리지 게이트 (`.github/workflows/ci.yml` 의
-// `Run integration coverage`) 의 lines/functions 임계가 baseline drift 로
-// -1.79/-0.72 미달 (Sprint 296 측정). 본 batch 는 두 갭을 채운다:
-// 1) `db/mysql/mutations.rs` 의 emission/validation 분기를 preview_only path
-//    로 hit — DB connection 불필요. PK constraint emission / FK on_delete /
-//    Unique / Check / index types / drop column / drop constraint / alter table
-//    의 ADD/MODIFY/DROP 변형.
-// 2) `db/mysql.rs` 의 RdbAdapter 트레잇 dispatch wrapper (각 메소드 4-6 line)
-//    를 `Box<dyn RdbAdapter>` 호출로 hit. PG 의 동일 패턴 (db/postgres.rs)
-//    이 4.62% 인 채라 본 batch 는 MySQL 만 cover — PG 보강은 별 sprint.
+// Why this exists: the lines/functions thresholds of the Rust integration
+// coverage gate (`Run integration coverage` in `.github/workflows/ci.yml`) fell
+// -1.79/-0.72 short on baseline drift. This batch fills the two gaps:
+// 1) hit `db/mysql/mutations.rs` emission/validation branches through the
+//    preview_only path — no DB connection needed. PK constraint emission /
+//    FK on_delete / Unique / Check / index types / drop column / drop constraint /
+//    alter table ADD/MODIFY/DROP variants.
+// 2) hit `db/mysql.rs`'s RdbAdapter trait dispatch wrappers via
+//    `Box<dyn RdbAdapter>` calls. PG's same pattern (db/postgres.rs) sits at
+//    4.62%, so this batch covers MySQL only.
 
-/// drop_table 의 preview_only path. validate_identifier + emission 만 hit —
-/// DB 없이 동작.
+/// drop_table's preview_only path. Hits validate_identifier + emission only —
+/// runs without a DB.
 #[tokio::test]
 async fn test_mysql_drop_table_preview_emits_sql() {
     let adapter = MysqlAdapter::new();
@@ -3765,7 +3769,7 @@ async fn test_mysql_rename_table_preview_emits_rename_form() {
         expected_database: None,
     };
     let result = adapter.rename_table(&req).await.expect("preview");
-    // MySQL 의 canonical form 은 `RENAME TABLE old TO new`.
+    // MySQL's canonical form is `RENAME TABLE old TO new`.
     assert!(result.sql.starts_with("RENAME TABLE"));
     assert!(result.sql.contains("old_t"));
     assert!(result.sql.contains("new_t"));
@@ -3792,7 +3796,7 @@ async fn test_mysql_add_column_preview_with_identity_emits_auto_increment() {
     };
     let result = adapter.add_column(&req).await.expect("preview");
     assert!(result.sql.contains("ADD COLUMN"));
-    // is_identity → AUTO_INCREMENT NOT NULL 강제 (NOT NULL implicit).
+    // is_identity → force AUTO_INCREMENT NOT NULL (NOT NULL implicit).
     assert!(result.sql.contains("AUTO_INCREMENT"));
     assert!(result.sql.contains("NOT NULL"));
     assert!(result.sql.contains("COMMENT 'auto id'"));
@@ -3864,7 +3868,7 @@ async fn test_mysql_drop_column_preview_emits_drop_column() {
         expected_database: None,
     };
     let result = adapter.drop_column(&req).await.expect("preview");
-    // CASCADE 키워드는 MySQL DROP COLUMN 이 받지 않으므로 emit 되지 않는다.
+    // MySQL's DROP COLUMN does not accept the CASCADE keyword, so it is not emitted.
     assert!(result.sql.contains("DROP COLUMN"));
     assert!(!result.sql.contains("CASCADE"));
 }
@@ -4269,13 +4273,13 @@ async fn test_mysql_drop_constraint_preview_emits_drop_constraint() {
     assert!(result.sql.contains("DROP CONSTRAINT"));
 }
 
-// ── 트레잇 dispatch 통합 — db/mysql.rs 의 wrapper 메소드들을 실제 DB 로 hit ──
+// ── Trait dispatch integration — hit db/mysql.rs's wrappers on a real DB ───────
 //
-// 본 시나리오는 connect/disconnect/ping/list_namespaces/list_tables/
-// query_table_data/execute_sql/execute_sql_batch/drop_table/get_columns 등
-// RdbAdapter 트레잇 메소드를 `Arc<dyn RdbAdapter>` 로 호출 — db/mysql.rs 의
-// 4-6 line wrapper 들을 한 번씩 hit 한다. PG 측 (db/postgres.rs 4.62%) 의
-// 같은 패턴 보강은 별 sprint.
+// These scenarios call RdbAdapter trait methods — connect/disconnect/ping/
+// list_namespaces/list_tables/query_table_data/execute_sql/execute_sql_batch/
+// drop_table/get_columns and so on — through `Arc<dyn RdbAdapter>`, hitting
+// each of db/mysql.rs's wrappers once. The same pattern on the PG side
+// (db/postgres.rs) sits at 4.62%.
 
 #[tokio::test]
 #[serial_test::serial]
@@ -4302,7 +4306,7 @@ async fn test_mysql_trait_dispatch_covers_rdb_adapter_surface() {
     let rdb: Arc<dyn RdbAdapter> = raw.clone();
 
     let namespaces = rdb.list_namespaces().await.expect("trait list_namespaces");
-    // namespaces 는 current_database 한 개 (MySQL 의 단일-DB hierarchy).
+    // namespaces holds just current_database (MySQL's single-DB hierarchy).
     assert!(!namespaces.is_empty());
 
     let current = rdb
@@ -4312,7 +4316,7 @@ async fn test_mysql_trait_dispatch_covers_rdb_adapter_surface() {
     assert_eq!(current.as_deref(), Some(MYSQL_SCHEMA));
 
     let dbs = rdb.list_databases().await.expect("trait list_databases");
-    // admin DB 제외 — 최소한 "test" 가 들어있어야.
+    // Admin DBs excluded — at minimum "test" must be in there.
     assert!(dbs.iter().any(|d| d.name == MYSQL_SCHEMA));
 
     let ts = std::time::SystemTime::now()
@@ -4393,9 +4397,10 @@ async fn test_mysql_execute_query_bigint_select_emits_string_wire() {
         None => return,
     };
 
-    // PG 의 `SELECT 9223372036854775807::bigint` 의 MySQL 대응. MySQL 의
-    // integer literal 은 자동으로 BIGINT 로 promote — 별도 cast 불필요.
-    // ADR 0026 (issue #1082) — BIGINT literal 도 정밀도-보존 string token 으로 wire.
+    // The MySQL counterpart of PG's `SELECT 9223372036854775807::bigint`. A
+    // MySQL integer literal promotes to BIGINT automatically — no separate cast
+    // is needed. ADR 0026 (issue #1082) — a BIGINT literal is also wired as a
+    // precision-preserving string token.
     let result = adapter
         .execute_query(
             "SELECT 9223372036854775807 AS big",
@@ -4416,13 +4421,14 @@ async fn test_mysql_execute_query_bigint_select_emits_string_wire() {
 }
 
 // =============================================================================
-// Sprint 296 follow-up — MySQL trigger 메소드 coverage
+// MySQL trigger method coverage
 // =============================================================================
-// 작성 이유: `db/mysql/schema.rs` 의 `list_triggers` / `get_trigger_source` 가
-// 미커버 (information_schema.triggers path). CREATE TRIGGER 자체는 sqlx
-// prepared protocol 미지원 (Sprint 296 ignored 시나리오와 동일) 라 trigger 가
-// 없는 path 만 hit 가능. `create_trigger` / `drop_trigger` 트레잇 wrapper 는
-// Unsupported reject 로 회귀 가드.
+// Why this exists: `list_triggers` / `get_trigger_source` in
+// `db/mysql/schema.rs` were uncovered (the information_schema.triggers path).
+// CREATE TRIGGER itself is not supported by the sqlx prepared protocol (the
+// same reason as the ignored scenarios above), so only the no-trigger path is
+// reachable. The `create_trigger` / `drop_trigger` trait wrappers are guarded
+// against regression through their Unsupported reject.
 
 #[tokio::test]
 #[serial_test::serial]
@@ -4446,8 +4452,9 @@ async fn test_mysql_list_triggers_empty_table_returns_vec() {
         .await
         .expect("CREATE TABLE");
 
-    // trigger 가 없는 table 은 empty vec — information_schema.triggers
-    // round-trip + BTreeMap fold path 가 happy path 로 동작.
+    // A table with no triggers gives an empty vec — the
+    // information_schema.triggers round-trip + BTreeMap fold path runs as the
+    // happy path.
     let triggers = adapter
         .list_triggers(MYSQL_SCHEMA, &table)
         .await
@@ -4475,8 +4482,8 @@ async fn test_mysql_get_trigger_source_unknown_returns_connection_error() {
         Some(a) => a,
         None => return,
     };
-    // 본 어댑터는 trigger 미존재 시 `AppError::Connection("Trigger … not found")`
-    // 반환 (schema.rs line 777).
+    // This adapter returns `AppError::Connection("Trigger … not found")` when
+    // the trigger does not exist (schema.rs line 777).
     let err = adapter
         .get_trigger_source(MYSQL_SCHEMA, "any_table", "definitely_does_not_exist_trg")
         .await
@@ -4492,9 +4499,10 @@ async fn test_mysql_get_trigger_source_unknown_returns_connection_error() {
 
 #[tokio::test]
 async fn test_mysql_create_trigger_trait_returns_unsupported() {
-    // MySQL adapter 의 `create_trigger` 트레잇 wrapper (db/mysql.rs line 397)
-    // 는 Unsupported 즉시 반환 — MySQL 의 trigger body 는 inline compound
-    // statement 이고 PG 의 `function_name`-driven 모델과 패러다임 불일치.
+    // The MySQL adapter's `create_trigger` trait wrapper (db/mysql.rs line 397)
+    // returns Unsupported immediately — a MySQL trigger body is an inline
+    // compound statement, a paradigm mismatch with PG's `function_name`-driven
+    // model.
     let adapter: Arc<dyn RdbAdapter> = Arc::new(MysqlAdapter::new());
     let req = CreateTriggerRequest {
         connection_id: "c".into(),
@@ -4547,8 +4555,8 @@ async fn test_mysql_drop_trigger_trait_returns_unsupported() {
     }
 }
 
-// list_types — MySQL adapter 는 trait default (Unsupported) 를 상속. 트레잇
-// dispatch surface 회귀 가드.
+// list_types — the MySQL adapter inherits the trait default (Unsupported). A
+// regression guard on the trait dispatch surface.
 #[tokio::test]
 async fn test_mysql_list_types_trait_default_returns_unsupported() {
     let adapter: Arc<dyn RdbAdapter> = Arc::new(MysqlAdapter::new());
@@ -4559,12 +4567,14 @@ async fn test_mysql_list_types_trait_default_returns_unsupported() {
     matches!(err, AppError::Unsupported(_));
 }
 
-/// issue #1083 — MySQL cell decode 실패가 무음 NULL 로 위장하면 안 된다. GEOMETRY
-/// 는 `cell_to_json` 에 매치 branch 가 없어 `_` String decode 가 실패하는
-/// deterministic repro (zero-date 는 server sql_mode 의존이라 pool-connection
-/// 마다 SET SESSION 이 필요해 불안정). 실값이 있는 GEOMETRY 셀은 진짜 NULL 이
-/// 아니라 `<decode error: GEOMETRY>` 마커로 surface 되어야 하고, 같은 행의 실제
-/// NULL 컬럼은 여전히 Null 이어야 한다 (진짜 NULL vs 실패 분리 검증).
+/// issue #1083 — a MySQL cell decode failure must never disguise itself as a
+/// silent NULL. GEOMETRY is the deterministic repro: `cell_to_json` has no
+/// match branch for it, so the `_` String decode fails (a zero-date depends on
+/// the server sql_mode and would need a SET SESSION per pool connection, which
+/// is unstable). A GEOMETRY cell holding a real value must surface as the
+/// `<decode error: GEOMETRY>` marker rather than a true NULL, and a genuinely
+/// NULL column in the same row must still be Null (verifying that a true NULL
+/// stays separate from a failure).
 #[tokio::test]
 #[serial_test::serial]
 async fn test_mysql_geometry_decode_failure_surfaces_marker_not_null_1083() {
@@ -4601,7 +4611,8 @@ async fn test_mysql_geometry_decode_failure_surfaces_marker_not_null_1083() {
         .expect("read back the GEOMETRY row");
     assert_eq!(data.rows.len(), 1);
 
-    // geom 컬럼: 실값이 있으므로 무음 NULL 이 아니라 decode-error 마커.
+    // geom column: it holds a real value, so a decode-error marker, not a
+    // silent NULL.
     let geom_cell = &data.rows[0][1];
     assert!(
         !geom_cell.is_null(),
@@ -4613,7 +4624,7 @@ async fn test_mysql_geometry_decode_failure_surfaces_marker_not_null_1083() {
         "decode failure should surface an explicit marker, got {geom_cell:?}"
     );
 
-    // maybe 컬럼: 실제 NULL 은 여전히 Null 이어야 한다 (거짓 마커 금지).
+    // maybe column: a genuine NULL must still be Null (no false marker).
     assert!(
         data.rows[0][2].is_null(),
         "a genuine NULL must stay NULL, got {:?}",
@@ -4916,7 +4927,7 @@ async fn test_mysql_explain_query_returns_json_plan_without_mutation_1067() {
 }
 
 /// `create_database` / `drop_database` round-trip against a live server —
-/// PG (Sprint 335) parity. The destructive `DROP DATABASE` command gate
+/// PG parity. The destructive `DROP DATABASE` command gate
 /// (`gate_read_only_database` + `gate_destructive_ddl`) lives in the shared
 /// dialect-agnostic wrapper, so the adapter method itself is exercised here.
 #[tokio::test]

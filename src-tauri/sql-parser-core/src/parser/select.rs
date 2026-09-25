@@ -1,26 +1,24 @@
 use super::*;
 
 impl Parser<'_> {
-    /// `SELECT` body + optional set-operation chain. Sprint-393a widened
-    /// the SELECT body itself; sprint-393b adds:
-    ///   - chained set operations (`UNION` / `UNION ALL` / `INTERSECT` /
-    ///     `EXCEPT`) at the end of a SELECT body.
+    /// `SELECT` body + optional set-operation chain. The chain admits
+    /// `UNION` / `UNION ALL` / `INTERSECT` / `EXCEPT` at the end of a
+    /// SELECT body.
     ///
     /// Clause order is the standard SQL order:
     ///   SELECT … FROM … WHERE … GROUP BY … HAVING … ORDER BY … LIMIT …
     ///   [UNION … SELECT … ]*
     /// Inputs that supply clauses out of order parse to `SyntaxError`.
     ///
-    /// HAVING-without-GROUP-BY is rejected (contract §parser): aggregates
-    /// land in sprint-393b/c, so a standalone HAVING would always reduce
-    /// to a WHERE — the parser refuses the form to keep the AST shape
-    /// unambiguous and the safety classifier straightforward.
+    /// HAVING-without-GROUP-BY is rejected (contract §parser): the grammar
+    /// admits HAVING only behind a GROUP BY clause, so a standalone HAVING —
+    /// which would reduce to a WHERE — never reaches the AST. That keeps the
+    /// AST shape unambiguous and the safety classifier straightforward.
     pub(super) fn parse_select(&mut self) -> Result<SelectStatement, ParseError> {
         let mut head = self.parse_select_body()?;
 
-        // Sprint-393b — collect set-operation chain. Each entry consumes
-        // the operator keyword and parses one more SELECT body
-        // left-associatively.
+        // Collect set-operation chain. Each entry consumes the operator
+        // keyword and parses one more SELECT body left-associatively.
         let mut chain: Vec<SetOperationEntry> = Vec::new();
         loop {
             let operator = match self.peek().map(|t| &t.token) {
@@ -55,12 +53,11 @@ impl Parser<'_> {
             });
         }
 
-        // Sprint-393b AC-393b-U06 — when a set-operation chain has a
-        // trailing ORDER BY / LIMIT, those clauses lexically belong to
-        // the rightmost SELECT body (the parser's natural consumption
-        // point), but the contract specifies they record on the *root*
-        // SELECT. Move them up so the outer ORDER BY / LIMIT is
-        // accessible without traversing the chain.
+        // AC-393b-U06 — when a set-operation chain has a trailing ORDER BY
+        // / LIMIT, those clauses lexically belong to the rightmost SELECT
+        // body (the parser's natural consumption point), but the contract
+        // specifies they record on the *root* SELECT. Move them up so the
+        // outer ORDER BY / LIMIT is accessible without traversing the chain.
         if let Some(last) = chain.last_mut() {
             // Only move when the head doesn't already have its own
             // ORDER BY / LIMIT (we never overwrite a head-position clause).
@@ -341,8 +338,8 @@ impl Parser<'_> {
     /// is the JOIN kind already resolved by `parse_from_list` (or the
     /// sentinel `Comma` for non-join attachments).
     fn parse_from_item(&mut self, seeded_join: JoinDescriptor) -> Result<FromItem, ParseError> {
-        // Sprint-393b — `(SELECT ...)` subquery FROM item. Recognized by
-        // a leading `(` token; the inner body must start with `SELECT`.
+        // `(SELECT ...)` subquery FROM item. Recognized by a leading `(`
+        // token; the inner body must start with `SELECT`.
         // Subquery FROM items REQUIRE an alias (AC-393b-Q06).
         if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
             let at = self.peek().map(|t| t.at);
@@ -426,10 +423,10 @@ impl Parser<'_> {
         })
     }
 
-    /// Sprint-393b — second-pass step that fills in the predicate for the
-    /// join kind that the FROM-list dispatcher previously seeded with an
-    /// empty placeholder. Shared between the table-source and the
-    /// subquery-source FROM-item paths.
+    /// Second-pass step that fills in the predicate for the join kind that
+    /// the FROM-list dispatcher previously seeded with an empty placeholder.
+    /// Shared between the table-source and the subquery-source FROM-item
+    /// paths.
     fn attach_join_predicate(
         &mut self,
         seeded_join: JoinDescriptor,
@@ -481,9 +478,9 @@ impl Parser<'_> {
         {
             // Lookahead: bare alias only if not immediately followed by a
             // `.` (which would make this the start of `schema.table`).
-            // For sprint-393a FROM list, only `,` / JOIN-kw / WHERE / GROUP /
-            // ORDER / LIMIT / HAVING / ON / USING / RParen terminate this
-            // position, so a bare Ident here is unambiguously an alias.
+            // In the FROM list only `,` / JOIN-kw / WHERE / GROUP / ORDER /
+            // LIMIT / HAVING / ON / USING / RParen terminate this position,
+            // so a bare Ident here is unambiguously an alias.
             // We still guard against the `.` follower for completeness.
             let next_after = self.tokens.get(self.cursor + 1).map(|t| &t.token);
             if !matches!(next_after, Some(Token::Dot)) {
@@ -701,18 +698,17 @@ impl Parser<'_> {
     /// by a leading keyword (`EXISTS (...)`, `NOT EXISTS (...)`, `CASE
     /// ... END`).
     ///
-    /// Sprint-393b — new primaries added:
+    /// Keyword-led primaries:
     /// - `EXISTS (SELECT ...)` / `NOT EXISTS (SELECT ...)`.
     /// - `CASE [operand] WHEN ... THEN ... [ELSE ...] END`.
-    /// - `col IN (literal, ...)` — literal IN-list (sprint-392 deferral
-    ///   lifted).
+    /// - `col IN (literal, ...)` — literal IN-list.
     /// - `col IN (SELECT ...)` — IN-subquery (routed by lookahead on the
     ///   first token inside the parens).
     /// - `col NOT IN (...)` — wraps the above in `Not`.
     fn parse_select_expr_primary(&mut self) -> Result<SelectExpr, ParseError> {
-        // Sprint-393b — `EXISTS (SELECT ...)` primary. `NOT EXISTS (...)`
-        // is handled by the outer `parse_select_expr_not` loop wrapping
-        // this primary in `Not`.
+        // `EXISTS (SELECT ...)` primary. `NOT EXISTS (...)` is handled by
+        // the outer `parse_select_expr_not` loop wrapping this primary in
+        // `Not`.
         if matches!(self.peek().map(|t| &t.token), Some(Token::Exists)) {
             self.advance();
             self.expect_token(Token::LParen, "expected '('")?;
@@ -724,9 +720,9 @@ impl Parser<'_> {
             });
         }
 
-        // Sprint-393b — `CASE [operand] WHEN ... THEN ... [ELSE ...] END`.
-        // After CASE, optionally a comparator + value follows (e.g.
-        // `CASE WHEN ... END = 1`); we wrap CASE in `ExpressionComparison`.
+        // `CASE [operand] WHEN ... THEN ... [ELSE ...] END`. After CASE,
+        // optionally a comparator + value follows (e.g. `CASE WHEN ... END =
+        // 1`); we wrap CASE in `ExpressionComparison`.
         if matches!(self.peek().map(|t| &t.token), Some(Token::Case)) {
             let case = self.parse_case_expression()?;
             if let Some(op) = self.peek_compare_op() {
@@ -742,7 +738,7 @@ impl Parser<'_> {
         }
 
         if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
-            // Sprint-393b — parenthesized primary disambiguation:
+            // Parenthesized primary disambiguation:
             //   `(SELECT ...)` → scalar-subquery primary.
             //   `(<expr>)` → parenthesized sub-expression (existing).
             // Peek one token past the `(` to decide.
@@ -821,9 +817,8 @@ impl Parser<'_> {
             self.advance(); // consume NOT
         }
 
-        // Sprint-393b — `IN (...)` (literal list or subquery). Sprint-392
-        // surfaced this as `UnsupportedExpression`; sprint-393b lifts the
-        // deferral. Lookahead one token past the `(` decides:
+        // `IN (...)` (literal list or subquery). Lookahead one token past
+        // the `(` decides:
         //   first token = SELECT → in-subquery
         //   anything else → in-list (literal/placeholder values)
         if matches!(self.peek().map(|t| &t.token), Some(Token::In)) {
@@ -963,7 +958,7 @@ impl Parser<'_> {
         };
         self.advance();
 
-        // Sprint-393b — RHS scalar subquery: `col op (SELECT ...)`.
+        // RHS scalar subquery: `col op (SELECT ...)`.
         if matches!(self.peek().map(|t| &t.token), Some(Token::LParen))
             && matches!(
                 self.tokens.get(self.cursor + 1).map(|t| &t.token),
@@ -1002,8 +997,8 @@ impl Parser<'_> {
         })
     }
 
-    /// Sprint-393b — `CASE [operand] WHEN ... THEN ... [ELSE ...] END`.
-    /// Assumes the `CASE` token has been peeked but NOT yet consumed.
+    /// `CASE [operand] WHEN ... THEN ... [ELSE ...] END`. Assumes the
+    /// `CASE` token has been peeked but NOT yet consumed.
     ///
     /// The grammar admits literals/placeholders in operand / condition /
     /// result / else positions; the simple-CASE form (`CASE x WHEN 1
@@ -1063,14 +1058,13 @@ impl Parser<'_> {
         })
     }
 
-    /// Sprint-393b — value-or-expression parser used inside CASE clauses.
-    /// Accepts bare literals / placeholders (promotes to
-    /// `SelectExpr::Literal`), bare column references (promotes to
-    /// `SelectExpr::ColumnRefExpr` when no comparator follows), or any
-    /// full expression the SELECT WHERE accepts (column ref + operator +
-    /// value / BETWEEN / LIKE / IS NULL / etc.).
-    /// Sprint-393b — peek the next token without advancing; if it is a
-    /// comparison operator, return its semantic `CompareOp`.
+    /// Value-or-expression parser used inside CASE clauses. Accepts bare
+    /// literals / placeholders (promotes to `SelectExpr::Literal`), bare
+    /// column references (promotes to `SelectExpr::ColumnRefExpr` when no
+    /// comparator follows), or any full expression the SELECT WHERE accepts
+    /// (column ref + operator + value / BETWEEN / LIKE / IS NULL / etc.).
+    /// Peek the next token without advancing; if it is a comparison
+    /// operator, return its semantic `CompareOp`.
     fn peek_compare_op(&self) -> Option<CompareOp> {
         match self.peek().map(|t| &t.token) {
             Some(Token::Eq) => Some(CompareOp::Eq),
@@ -1146,7 +1140,7 @@ impl Parser<'_> {
     }
 
     // -------------------------------------------------------------
-    // Sprint-393b — CTE / WITH parser.
+    // CTE / WITH parser.
     // -------------------------------------------------------------
 
     /// `WITH [RECURSIVE] <cte> [, <cte>]* <inner-statement>`. Assumes the
@@ -1250,11 +1244,11 @@ impl Parser<'_> {
             return Ok(Columns::Star);
         }
 
-        // Sprint-393b — fast path: pure bare-identifier list (`a, b, c`).
-        // We peek through identifiers + commas; if we hit `FROM` first
-        // *without* encountering any non-Ident expression-start token,
-        // the list is a `Columns::Named`. Otherwise we restart and parse
-        // the list as `Columns::Expressions`.
+        // Fast path: pure bare-identifier list (`a, b, c`). We peek through
+        // identifiers + commas; if we hit `FROM` first *without*
+        // encountering any non-Ident expression-start token, the list is a
+        // `Columns::Named`. Otherwise we restart and parse the list as
+        // `Columns::Expressions`.
         let saved_cursor = self.cursor;
         let bare_list_ok = self.try_parse_bare_named_list();
         if let Some(names) = bare_list_ok {
@@ -1262,9 +1256,9 @@ impl Parser<'_> {
         }
         self.cursor = saved_cursor;
 
-        // Sprint-393b — at least one item is a non-bare-column expression
-        // (CASE, scalar-subquery, window-function, etc.). Walk the list
-        // and capture each item as a `SelectListItem`.
+        // At least one item is a non-bare-column expression (CASE,
+        // scalar-subquery, window-function, etc.). Walk the list and capture
+        // each item as a `SelectListItem`.
         let mut items: Vec<SelectListItem> = Vec::new();
         loop {
             let item = self.parse_select_list_item()?;
@@ -1278,10 +1272,10 @@ impl Parser<'_> {
         Ok(Columns::Expressions { items })
     }
 
-    /// Sprint-393b — fast path: try to parse a pure `Ident (, Ident)*`
-    /// select-list. Returns `Some(names)` on success (and leaves the
-    /// cursor just before `FROM`), or `None` if any item is not a bare
-    /// identifier (caller restarts the cursor and parses as expressions).
+    /// Fast path: try to parse a pure `Ident (, Ident)*` select-list.
+    /// Returns `Some(names)` on success (and leaves the cursor just before
+    /// `FROM`), or `None` if any item is not a bare identifier (caller
+    /// restarts the cursor and parses as expressions).
     fn try_parse_bare_named_list(&mut self) -> Option<Vec<String>> {
         let mut names: Vec<String> = Vec::new();
         loop {
@@ -1328,8 +1322,7 @@ impl Parser<'_> {
         )
     }
 
-    /// Sprint-393b — parse one item of an expression-form select list.
-    /// Possible shapes:
+    /// Parse one item of an expression-form select list. Possible shapes:
     ///   - `*` → `SelectListItem::Star`.
     ///   - bare or qualified column ref (no following operator) →
     ///     `SelectListItem::Column`.
@@ -1399,8 +1392,8 @@ impl Parser<'_> {
                 });
             }
             // Anything else after the column ref is unexpected at top-
-            // level select-list position (we don't support arithmetic
-            // expressions yet — that's a future sprint).
+            // level select-list position — arithmetic expressions are not
+            // part of this grammar.
             let at = self.peek().map(|t| t.at);
             return Err(syntax_err(at, "unexpected token in SELECT list"));
         }
@@ -1435,10 +1428,10 @@ impl Parser<'_> {
         Ok(None)
     }
 
-    /// Sprint-393b — parse one expression that lives in select-list
-    /// position. Distinct from `parse_select_expr_or` because the
-    /// select-list grammar admits a subset (no top-level boolean
-    /// `AND`/`OR` — those are reserved for WHERE/HAVING).
+    /// Parse one expression that lives in select-list position. Distinct
+    /// from `parse_select_expr_or` because the select-list grammar admits a
+    /// subset (no top-level boolean `AND`/`OR` — those are reserved for
+    /// WHERE/HAVING).
     fn parse_select_list_expression(&mut self) -> Result<SelectExpr, ParseError> {
         // CASE / scalar-subquery / window-function — leading tokens.
         if matches!(self.peek().map(|t| &t.token), Some(Token::Case)) {
@@ -1472,8 +1465,8 @@ impl Parser<'_> {
         Err(syntax_err(at, "expected expression in SELECT list"))
     }
 
-    /// Sprint-482 — `<ident>(args)` in SELECT-list position; optional
-    /// `OVER (...)` keeps the sprint-393b window-function shape.
+    /// `<ident>(args)` in SELECT-list position; an optional `OVER (...)`
+    /// keeps the window-function shape.
     fn parse_function_or_window(&mut self) -> Result<SelectExpr, ParseError> {
         let ident_tok = self
             .peek()
@@ -1510,9 +1503,9 @@ impl Parser<'_> {
         })
     }
 
-    /// Sprint-393b — one window-function argument: `*` / column-ref /
-    /// literal / placeholder. The `Star` variant is a dedicated AST
-    /// shape (AC-393b-O07).
+    /// One window-function argument: `*` / column-ref / literal /
+    /// placeholder. The `Star` variant is a dedicated AST shape
+    /// (AC-393b-O07).
     fn parse_window_argument(&mut self) -> Result<WindowArgument, ParseError> {
         if matches!(self.peek().map(|t| &t.token), Some(Token::Star)) {
             self.advance();
@@ -1581,8 +1574,8 @@ impl Parser<'_> {
         }
     }
 
-    /// Sprint-393b — `OVER ( [PARTITION BY ...] [ORDER BY ...] [frame] )`.
-    /// The `OVER` keyword has been consumed by the caller.
+    /// `OVER ( [PARTITION BY ...] [ORDER BY ...] [frame] )`. The `OVER`
+    /// keyword has been consumed by the caller.
     fn parse_over_clause(&mut self) -> Result<OverClause, ParseError> {
         self.expect_token(Token::LParen, "expected '(' after OVER")?;
 
@@ -1619,7 +1612,7 @@ impl Parser<'_> {
         })
     }
 
-    /// Sprint-393b — `(ROWS | RANGE) ( BETWEEN <start> AND <end> | <start> )`.
+    /// `(ROWS | RANGE) ( BETWEEN <start> AND <end> | <start> )`.
     fn parse_window_frame(&mut self) -> Result<WindowFrame, ParseError> {
         let unit = match self.peek().map(|t| &t.token) {
             Some(Token::Rows) => {

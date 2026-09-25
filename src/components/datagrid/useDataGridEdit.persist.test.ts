@@ -1,14 +1,13 @@
-// Sprint 251 — `useDataGridEdit` persistence across unmount/remount via
-// `dataGridEditStore`. Maps to AC-251-H1..H5 from
-// Sprint 251 contract. Date 2026-05-09.
+// `useDataGridEdit` persistence across unmount/remount via
+// `dataGridEditStore`. Maps to AC-251-H1..H5.
 //
 // The hook used to keep its four pending slices (`pendingEdits`,
 // `pendingNewRows`, `pendingDeletedRowKeys`, `undoStack`) in `useState`,
 // so a tab switch (which unmounts the grid) discarded all in-flight work.
-// Sprint 251 lifts those four slices to an in-memory store. Sprint 433
-// keys that store by `(connectionId, database, schema, table)` so the next
-// mount of the *same* table re-binds the same pending state without
-// crossing database boundaries.
+// Those four slices now live in an in-memory store keyed by
+// `(connectionId, database, schema, table)`, so the next mount of the *same*
+// table re-binds the same pending state without crossing database
+// boundaries.
 //
 // Out of scope for this file (covered elsewhere):
 // - Cross-window sync / localStorage persistence — intentionally excluded.
@@ -171,9 +170,8 @@ describe("useDataGridEdit — Sprint 251 store-backed persistence", () => {
   });
 
   it("[RISK-039] same connection/schema/table in a different database starts with empty pending state", () => {
-    // Reason: Sprint 433 RISK-039 — db1.public.users pending edits must not
-    // appear when the user switches to db2.public.users on the same
-    // connection. (2026-05-22)
+    // Reason: RISK-039 — db1.public.users pending edits must not appear when
+    // the user switches to db2.public.users on the same connection.
     const db1 = renderEditHook({ database: "db1" });
     act(() => {
       db1.result.current.handleStartEdit(0, 1, "Alice");
@@ -241,7 +239,7 @@ describe("useDataGridEdit — Sprint 251 store-backed persistence", () => {
   it("[AC-251-H5] Sprint 249 / 250 invariants hold under store-backed state — undo + onBlur saveCurrentEdit", () => {
     const { result } = renderEditHook();
 
-    // Sprint 249 invariant: handleAddRow → undo restores empty.
+    // Invariant: handleAddRow → undo restores empty.
     act(() => {
       result.current.handleAddRow();
     });
@@ -252,8 +250,8 @@ describe("useDataGridEdit — Sprint 251 store-backed persistence", () => {
     expect(result.current.pendingNewRows.length).toBe(0);
     expect(result.current.canUndo).toBe(false);
 
-    // Sprint 250 invariant: saveCurrentEdit (onBlur path) on a real
-    // value-change persists like Tab/Enter.
+    // Invariant: saveCurrentEdit (onBlur path) on a real value-change
+    // persists like Tab/Enter.
     act(() => {
       result.current.handleStartEdit(0, 1, "Alice");
     });
@@ -267,7 +265,7 @@ describe("useDataGridEdit — Sprint 251 store-backed persistence", () => {
     expect(result.current.editingCell).toBeNull();
     expect(result.current.canUndo).toBe(true);
 
-    // Sprint 250 invariant: cancelEdit (Esc) on the editor does NOT push.
+    // Invariant: cancelEdit (Esc) on the editor does NOT push.
     act(() => {
       result.current.handleStartEdit(1, 1, "Bob");
     });

@@ -1,9 +1,9 @@
 //! MongoDB metadata path — `list_databases` / `list_collections` /
 //! `infer_collection_fields` + sample-driven column inference helpers.
 //!
-//! Sprint 197 split — extracted from `db/mongodb.rs`. The
-//! `DocumentAdapter` trait surface stays in `mod.rs`; this file holds the
-//! `_impl` bodies (verbatim) plus the pure inference helpers.
+//! Extracted from `db/mongodb.rs`. The `DocumentAdapter` trait surface stays
+//! in `mod.rs`; this file holds the `_impl` bodies (verbatim) plus the pure
+//! inference helpers.
 
 use std::collections::HashMap;
 
@@ -25,7 +25,7 @@ use super::queries::{bson_type_name, validate_ns};
 use super::MongoAdapter;
 
 impl MongoAdapter {
-    /// Sprint 197 — body of `DocumentAdapter::list_databases`.
+    /// Body of `DocumentAdapter::list_databases`.
     pub(super) async fn list_databases_impl(&self) -> Result<Vec<NamespaceInfo>, AppError> {
         let client = self.current_client().await?;
         let names = client
@@ -38,13 +38,13 @@ impl MongoAdapter {
             .collect())
     }
 
-    /// Sprint 197 — body of `DocumentAdapter::list_collections`.
+    /// Body of `DocumentAdapter::list_collections`.
     ///
     /// Routes through `resolved_db_name` so a `use_db("alpha")` swap takes
     /// effect even when an upstream caller still passes an empty /
     /// whitespace-only `db` string. When the caller passes a non-empty
-    /// name, that name still wins (preserves the original Sprint 65
-    /// per-row expand contract). Falls back to the connection's
+    /// name, that name still wins (preserves the original per-row expand
+    /// contract). Falls back to the connection's
     /// `default_db` only when no `switch_active_db` has ever been called.
     pub(super) async fn list_collections_impl(
         &self,
@@ -72,7 +72,7 @@ impl MongoAdapter {
         Ok(collections)
     }
 
-    /// Sprint 197 — body of `DocumentAdapter::infer_collection_fields`.
+    /// Body of `DocumentAdapter::infer_collection_fields`.
     pub(super) async fn infer_collection_fields_impl(
         &self,
         db: &str,
@@ -83,11 +83,9 @@ impl MongoAdapter {
         let client = self.current_client().await?;
         let coll = client.database(db).collection::<Document>(collection);
 
-        // Sprint 66 uses a best-effort sample: `find(None)` + `limit`.
-        // Aggregation with `$sample` would be more uniform but requires
-        // pipeline support which is still stubbed. The first N documents
-        // is plenty for P0 inference and matches what the Quick Open
-        // grid will preview initially.
+        // Best-effort sample: `find(None)` + `limit`. Aggregation with
+        // `$sample` would be more uniform. The first N documents are plenty
+        // for P0 inference.
         let limit_i64: i64 = sample_size.max(1).min(i64::MAX as usize) as i64;
         let mut cursor = coll
             .find(Document::new())
@@ -108,15 +106,16 @@ impl MongoAdapter {
         Ok(infer_columns_from_samples(&samples))
     }
 
-    /// Sprint 332 (Slice J live wire) — collection 의 인덱스 메타데이터를
-    /// driver `Collection::list_indexes()` 로 받아 RDB 와 같은 `IndexInfo`
-    /// shape 으로 매핑한다. Mongo 의 IndexModel 은 `{ name, key, unique?,
-    /// hidden?, expire_after_seconds?, ... }` — 우리는 그 중 (name, key
-    /// fields, unique, hashed/text/geo special index name) 만 노출한다.
+    /// Reads a collection's index metadata through the driver's
+    /// `Collection::list_indexes()` and maps it into the same `IndexInfo`
+    /// shape the RDB adapters use. Mongo's IndexModel is
+    /// `{ name, key, unique?, hidden?, expire_after_seconds?, ... }` — we
+    /// expose only (name, key fields, unique, hashed/text/geo special index
+    /// name) out of it.
     ///
-    /// Routing 은 `list_collections_impl` 과 동일 — caller 가 빈 db 를
-    /// 넘기면 `resolved_db_name` 으로 active DB 까지 fallback. 빈 collection
-    /// 은 `validate_ns` 가 거부.
+    /// Routing matches `list_collections_impl` — when the caller passes an
+    /// empty db, `resolved_db_name` falls back as far as the active DB. An
+    /// empty collection is rejected by `validate_ns`.
     pub(super) async fn list_collection_indexes_impl(
         &self,
         db: &str,
@@ -148,7 +147,7 @@ impl MongoAdapter {
         Ok(out)
     }
 
-    /// Sprint 351 — create a Mongo collection index from a fully-typed
+    /// Create a Mongo collection index from a fully-typed
     /// request. Translates `CreateMongoIndexRequest` into a
     /// `mongodb::IndexModel` + `mongodb::options::IndexOptions` and
     /// forwards driver errors verbatim as `AppError::Database(<msg>)`
@@ -252,7 +251,7 @@ impl MongoAdapter {
         })
     }
 
-    /// Sprint 351 — drop a Mongo collection index by canonical name.
+    /// Drop a Mongo collection index by canonical name.
     /// Driver errors (e.g. `IndexNotFound`) flow through as
     /// `AppError::Database` so the panel-level alert reads the verbatim
     /// driver message. The `_id_` guard lives in the Tauri command layer
@@ -286,7 +285,7 @@ impl MongoAdapter {
         Ok(())
     }
 
-    /// Sprint 333/352 (Slice K live wire) — read the collection's stored
+    /// Read the collection's stored
     /// validator, validationLevel, and validationAction via
     /// `listCollections({filter: {name}})`. Each field is `None` when the
     /// server has never persisted a value (validator absent or `options`
@@ -345,7 +344,7 @@ impl MongoAdapter {
         })
     }
 
-    /// Sprint 333/352 (Slice K live wire) — apply / clear the collection
+    /// Apply / clear the collection
     /// validator via `runCommand(collMod)`. `validator == None` resets the
     /// validator (`{}` per Mongo manual). When `validation_level` /
     /// `validation_action` are `Some`, they are merged into the command
@@ -408,7 +407,7 @@ impl MongoAdapter {
         Ok(())
     }
 
-    /// Sprint 334 (Slice L live wire) — `runCommand({create: coll, ...})`.
+    /// `runCommand({create: coll, ...})`.
     /// `options` is merged in as additional fields on the command body.
     pub(super) async fn create_collection_impl(
         &self,
@@ -452,8 +451,8 @@ impl MongoAdapter {
         Ok(())
     }
 
-    /// Sprint 336 (U1 live wire) — `adminCommand({currentOp: 1, "$all":
-    /// true})`. Maps each op into the same `ServerActivityRow` shape the
+    /// `adminCommand({currentOp: 1, "$all": true})`. Maps each op into the
+    /// same `ServerActivityRow` shape the
     /// PG `pg_stat_activity` query produces. Mongo "opid" is the kill
     /// id used by `killOp`.
     pub(super) async fn current_op_impl(
@@ -567,7 +566,7 @@ impl MongoAdapter {
         Ok(None)
     }
 
-    /// Sprint 336 (U1 live wire) — `adminCommand({killOp: 1, op: id})`. The
+    /// `adminCommand({killOp: 1, op: id})`. The
     /// currentOp panel's manual kill carries an `i64` opid (standalone /
     /// replica-set), so this delegates to the BSON-typed path.
     pub(super) async fn kill_op_impl(&self, id: i64) -> Result<(), AppError> {
@@ -590,7 +589,7 @@ impl MongoAdapter {
         Ok(())
     }
 
-    /// Sprint 335 (Slice M live wire) — `db.dropDatabase()`. The Mongo
+    /// `db.dropDatabase()`. The Mongo
     /// driver's `Database::drop()` is idempotent: dropping a non-existent
     /// database succeeds.
     pub(super) async fn drop_database_impl(&self, name: &str) -> Result<(), AppError> {
@@ -608,8 +607,8 @@ impl MongoAdapter {
         Ok(())
     }
 
-    /// Sprint 334 (Slice L live wire) — `admin.runCommand({renameCollection,
-    /// to})`. Same-DB rename only; cross-DB rename is out of scope.
+    /// `admin.runCommand({renameCollection, to})`. Same-DB rename only;
+    /// cross-DB rename is out of scope.
     pub(super) async fn rename_collection_impl(
         &self,
         db: &str,
@@ -639,7 +638,7 @@ impl MongoAdapter {
         Ok(())
     }
 
-    /// Sprint 339 (U4 live wire) — server identity (`buildInfo`) +
+    /// Server identity (`buildInfo`) +
     /// runtime info (`serverStatus`). Two `adminCommand` round trips
     /// merged into the same `ServerInfoRow` slot.
     pub(super) async fn server_info_impl(&self) -> Result<crate::models::ServerInfoRow, AppError> {
@@ -711,11 +710,11 @@ impl MongoAdapter {
         })
     }
 
-    /// Sprint 338 (U3 live wire) — `runCommand({collStats: <coll>})`.
+    /// `runCommand({collStats: <coll>})`.
     ///
-    /// PG `pg_stat_user_tables` row 와 같은 `CollectionStatsRow` 슬롯
-    /// 으로 매핑. Mongo-only 필드 (`capped`, `avgObjSize`, `totalIndexSize`,
-    /// `paddingFactor`, …) 는 `extras` 에 raw JSON 값으로 surface 한다.
+    /// Maps into the same `CollectionStatsRow` slot a PG `pg_stat_user_tables`
+    /// row uses. Mongo-only fields (`capped`, `avgObjSize`, `totalIndexSize`,
+    /// `paddingFactor`, …) surface in `extras` as raw JSON values.
     pub(super) async fn collection_stats_impl(
         &self,
         db: &str,
@@ -783,16 +782,16 @@ impl MongoAdapter {
         })
     }
 
-    /// Sprint 337 (U2 live wire) — Mongo `find` query plan.
+    /// Mongo `find` query plan.
     ///
-    /// `runCommand({explain: {find, filter, sort, projection, skip, limit},
-    /// verbosity})` 를 target DB 에 dispatch. verbosity 는 `"queryPlanner"`,
-    /// `"executionStats"`, `"allPlansExecution"` 중 하나 — 비어 있으면
-    /// `"queryPlanner"` 로 fallback. Issue #1210 — sort/projection/skip/limit
-    /// 을 `find_impl` 과 동일한 semantics 로 explain command 에 실어, 표시
-    /// 계획이 실제 실행과 일치하도록 한다. 응답 Document 를 raw
-    /// `serde_json::Value` 로 변환 — frontend tree viewer 가 paradigm-neutral
-    /// shape 으로 렌더.
+    /// Dispatches `runCommand({explain: {find, filter, sort, projection, skip,
+    /// limit}, verbosity})` to the target DB. verbosity is one of
+    /// `"queryPlanner"`, `"executionStats"`, `"allPlansExecution"` — an empty
+    /// value falls back to `"queryPlanner"`. Issue #1210 — sort/projection/
+    /// skip/limit ride on the explain command with the same semantics
+    /// `find_impl` uses, so the plan shown matches the real execution. The
+    /// response Document is converted to a raw `serde_json::Value` — the
+    /// frontend tree viewer renders it in a paradigm-neutral shape.
     pub(super) async fn explain_query_impl(
         &self,
         db: &str,
@@ -826,7 +825,7 @@ impl MongoAdapter {
             .map_err(|e| AppError::Database(format!("explain response decode failed: {e}")))
     }
 
-    /// Sprint 340 (U5 live wire) — top-N slow queries from
+    /// Top-N slow queries from
     /// `system.profile` of the currently-active DB. Mongo profiling is
     /// off by default — when the collection is empty/absent we return
     /// an empty Vec rather than erroring. Caller enables profiling via
@@ -926,19 +925,19 @@ impl MongoAdapter {
         Ok(out)
     }
 
-    /// Sprint 381 — `db.runCommand({...})` / `db.adminCommand({...})` gateway.
+    /// `db.runCommand({...})` / `db.adminCommand({...})` gateway.
     ///
-    /// 작성 이유 (2026-05-17): Phase 28 method whitelist 에 묶이지 않은
-    /// admin / diagnostic command (`serverStatus`, `dbStats`, `currentOp`,
-    /// `ping`, …) 을 frontend 가 한 IPC 로 통과시킬 수 있도록 thin gateway.
+    /// Reason (2026-05-17): a thin gateway so the frontend can pass admin /
+    /// diagnostic commands (`serverStatus`, `dbStats`, `currentOp`, `ping`, …)
+    /// not covered by the method whitelist through one IPC call.
     ///
-    /// - `database = None` → driver 의 `admin` DB context (`adminCommand`
-    ///   semantics) — `listDatabases` / `serverStatus` 등.
-    /// - `database = Some("myapp")` → 해당 db (`dbStats`, `collStats` 등).
+    /// - `database = None` → the driver's `admin` DB context (`adminCommand`
+    ///   semantics) — `listDatabases`, `serverStatus` and the like.
+    /// - `database = Some("myapp")` → that db (`dbStats`, `collStats`, …).
     ///
-    /// 응답 BSON 은 `serde_json::to_value(&Bson::Document(resp))` 로 canonical
-    /// EJSON 직렬화 — frontend JSON viewer 가 paradigm-neutral shape 으로
-    /// 렌더한다.
+    /// The response BSON is serialized as canonical EJSON through
+    /// `serde_json::to_value(&Bson::Document(resp))` — the frontend JSON viewer
+    /// renders it in a paradigm-neutral shape.
     pub(super) async fn run_command_impl(
         &self,
         database: Option<&str>,
@@ -961,17 +960,17 @@ impl MongoAdapter {
     }
 }
 
-/// Sprint 332 — `mongodb::IndexModel` → `crate::models::IndexInfo`.
+/// `mongodb::IndexModel` → `crate::models::IndexInfo`.
 ///
-/// 매핑 규칙:
-/// - `columns` = key spec 의 field 이름 (insertion order). text / geo index
-///   는 weights spec 의 field 도 같은 슬롯에 담긴다.
-/// - `index_type` = special key value 우선 ("text", "hashed", "2dsphere",
-///   "2d", "geoHaystack"). 일반 (1 / -1 BTree) 이면 compound vs single 로
-///   "compound" / "btree" 분기.
+/// Mapping rules:
+/// - `columns` = the field names of the key spec (insertion order). For a text
+///   or geo index the weights spec's fields go into the same slot.
+/// - `index_type` = the special key value wins ("text", "hashed", "2dsphere",
+///   "2d", "geoHaystack"). A plain (1 / -1 BTree) index branches into
+///   "compound" / "btree" by compound vs single.
 /// - `is_unique` = options.unique == Some(true).
-/// - `is_primary` = name == "_id_" (Mongo 가 자동 생성하는 primary key
-///   인덱스).
+/// - `is_primary` = name == "_id_" (the primary key index Mongo creates
+///   automatically).
 fn map_index_model(model: &mongodb::IndexModel) -> IndexInfo {
     let name = model
         .options
@@ -1037,7 +1036,7 @@ fn bson_to_json_value(value: Bson) -> serde_json::Value {
     serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
 }
 
-/// Sprint 351 — build a `mongodb::options::Collation` from the wire-side
+/// Build a `mongodb::options::Collation` from the wire-side
 /// `MongoIndexCollation`. The frontend only exposes the two ICU knobs we
 /// care about for index tuning (`locale` + `strength` 1..5); the other
 /// Collation flags stay at the driver's defaults.
@@ -1068,9 +1067,9 @@ fn build_collation(input: MongoIndexCollation) -> Result<mongodb::options::Colla
     Ok(collation)
 }
 
-/// Mongo driver 가 IndexModel.options.name 을 비워둔 경우의 fallback —
-/// `field_1_other_-1` 같은 기본 명명 규칙. 실제로는 driver 가 거의
-/// 항상 name 을 채워 보내므로 방어용.
+/// Fallback for when the Mongo driver leaves IndexModel.options.name empty —
+/// the default naming rule such as `field_1_other_-1`. In practice the driver
+/// almost always fills the name in, so this is defensive.
 fn keys_to_default_name(keys: &Document) -> String {
     let mut parts: Vec<String> = Vec::with_capacity(keys.len());
     for (k, v) in keys.iter() {
@@ -1086,7 +1085,7 @@ fn keys_to_default_name(keys: &Document) -> String {
     parts.join("_")
 }
 
-// ── Helpers (Sprint 66) ────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────
 
 /// Build a `Vec<ColumnInfo>` from a document sample.
 ///
@@ -1098,7 +1097,7 @@ fn keys_to_default_name(keys: &Document) -> String {
 ///     BSON type across the sample (ties broken by insertion order).
 ///   * A field is `nullable = true` when it is missing from at least one
 ///     sampled document OR any sampled occurrence is `Bson::Null`.
-///   * Deep / nested inference is explicitly out of scope in Sprint 66.
+///   * Deep / nested inference is explicitly out of scope.
 pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo> {
     // Preserve first-seen order so UI column layout is stable across
     // repeated inferences on the same sample set.
@@ -1626,11 +1625,11 @@ mod tests {
         }
     }
 
-    // Sprint 337 (U2 live wire) — explain_query unit cases.
+    // explain_query unit cases.
     #[tokio::test]
     async fn explain_query_rejects_empty_db_and_no_active() {
-        // 작성 이유 (2026-05-15): 빈 db 입력은 active-db fallback 으로
-        // 떨어지는데 active 가 없으므로 Validation 으로 reject.
+        // Reason (2026-05-15): an empty db input drops to the active-db
+        // fallback, and with no active DB it is rejected with Validation.
         let adapter = MongoAdapter::new();
         match adapter
             .explain_query("", "c", FindBody::default(), "queryPlanner")
@@ -1744,7 +1743,7 @@ mod tests {
         assert_eq!(spec.get_document("projection").unwrap(), &Document::new());
     }
 
-    // Sprint 338 (U3 live wire) — collection_stats unit cases.
+    // collection_stats unit cases.
     #[tokio::test]
     async fn collection_stats_rejects_empty_db_and_no_active() {
         let adapter = MongoAdapter::new();
@@ -1778,7 +1777,7 @@ mod tests {
         }
     }
 
-    // Sprint 339 (U4 live wire) — server_info no-param path. Real
+    // server_info no-param path. Real
     // buildInfo/serverStatus shape mapping is covered by Mongo
     // integration tests; unit test only asserts the no-connection guard.
     #[tokio::test]
@@ -1792,7 +1791,7 @@ mod tests {
         }
     }
 
-    // Sprint 340 (U5 live wire) — slow_queries: no-DB path bails at
+    // slow_queries: no-DB path bails at
     // `resolved_db_name` with a Validation error before touching the
     // client. Real system.profile shape mapping (millis/nreturned/extras)
     // is covered by Mongo integration tests.
@@ -1809,8 +1808,8 @@ mod tests {
 
     #[tokio::test]
     async fn set_collection_validator_rejects_non_object_json() {
-        // Sprint 333 — payload 가 array / scalar 이면 collMod validator 가
-        // bson Document 일 수 없으므로 fast-fail.
+        // An array / scalar payload cannot be a bson Document for the collMod
+        // validator, so fast-fail.
         let adapter = MongoAdapter::new();
         match adapter
             .set_collection_validator("db", "c", Some(serde_json::json!([1, 2, 3])), None, None)

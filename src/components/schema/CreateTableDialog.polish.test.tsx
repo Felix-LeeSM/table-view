@@ -13,7 +13,7 @@ import {
 } from "./__tests__/createTableDialogTestHelpers";
 
 // ─────────────────────────────────────────────────────────────────────
-// Sprint 234 — UX consolidation polish (Phase 27 sprint 9).
+// UX consolidation polish.
 // AC-234-01 cross-tab cue / AC-234-02 empty-state message / AC-234-03/04
 // reorder / AC-234-05/06 table-level COMMENT / AC-234-07 schema picker
 // position / AC-234-08/09 type-kind color coding.
@@ -30,17 +30,17 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
     mockListPostgresTypes.mockResolvedValue([]);
   });
 
-  // Sprint 234 AC-234-07 — schema picker LIVES IN THE BODY, not in the
-  // header. The contract drives the layout: schema picker → table name
-  // → table comment → tabs.
+  // AC-234-07 — schema picker LIVES IN THE BODY, not in the header.
+  // The contract drives the layout: schema picker → table name → table
+  // comment → tabs.
   it("renders the target schema dropdown in the body, not in the header (AC-234-07)", () => {
     renderDialog({ availableSchemas: ["public", "analytics"] });
     const schemaCombobox = screen.getByRole("combobox", {
       name: "Target schema",
     });
     // Header is the closest [data-slot="dialog-header"] ancestor when
-    // the picker still lives there. Sprint 234 strips the picker, so
-    // the picker MUST NOT be inside the header.
+    // the picker still lives there. The picker MUST NOT be inside the
+    // header.
     const header = document.querySelector('[data-slot="dialog-header"]');
     expect(header).not.toBeNull();
     expect(header).not.toContainElement(schemaCombobox);
@@ -49,17 +49,17 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
     expect(document.body).toContainElement(schemaCombobox);
   });
 
-  // Sprint 234 AC-234-05 — Table comment input rendered between Table
-  // name and the Tabs block. Optional, default empty, controlled.
+  // AC-234-05 — Table comment input rendered between Table name and
+  // the Tabs block. Optional, default empty, controlled.
   it("renders a Table comment input above the tabs (AC-234-05)", () => {
     renderDialog();
     const commentInput = screen.getByLabelText("Table comment");
     expect(commentInput).toBeInTheDocument();
     expect(commentInput.getAttribute("placeholder")).toBe("comment (optional)");
     // Verify positional ordering — Table comment input sits AFTER Table
-    // name input but BEFORE the tablist. Sprint 241 introduced nested
-    // sub-tabs inside the Constraints panel, so the document now has
-    // multiple `tablist`s; use the first (outer / main) one.
+    // name input but BEFORE the tablist. The Constraints panel nests its
+    // own sub-tabs, so the document has multiple `tablist`s; use the
+    // first (outer / main) one.
     const tableNameInput = screen.getByLabelText("Table name");
     const mainTablist = screen.getAllByRole("tablist")[0]!;
     expect(
@@ -72,9 +72,9 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
     ).toBeTruthy();
   });
 
-  // Sprint 234 AC-234-05/06 — non-empty comment plumbs into the Tauri
-  // payload as `table_comment: <trimmed string>`; whitespace-only stays
-  // as `null` so the Sprint 226-233 byte-equivalence holds.
+  // AC-234-05/06 — non-empty comment plumbs into the Tauri payload as
+  // `table_comment: <trimmed string>`; whitespace-only stays as `null`
+  // so the byte-equivalence holds.
   it("plumbs Table comment into buildRequest as table_comment (trimmed) (AC-234-05/06)", async () => {
     setDevConnection();
     useSafeModeStore.setState({ mode: "off" });
@@ -98,7 +98,8 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
       target: { value: "  event log  " },
     });
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     const call = mockCreateTable.mock.calls[0]![0] as {
       table_comment: string | null;
@@ -129,7 +130,8 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
       target: { value: "   " },
     });
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     const call = mockCreateTable.mock.calls[0]![0] as {
       table_comment: string | null;
@@ -137,8 +139,8 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
     expect(call.table_comment).toBeNull();
   });
 
-  // Sprint 234 AC-234-01 — `(N)` count badges next to Keys / Indexes /
-  // Foreign Keys tab labels reflect the live declared lists.
+  // AC-234-01 — `(N)` count badges next to Keys / Indexes / Foreign
+  // Keys tab labels reflect the live declared lists.
   it("shows (N) count badge next to Keys / Indexes / Foreign Keys tab labels (AC-234-01)", async () => {
     setDevConnection();
     renderDialog();
@@ -175,8 +177,8 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
     expect(screen.queryByRole("tab", { name: /^Constraints.*\(/ })).toBeNull();
   });
 
-  // Sprint 234 AC-234-02 — locked empty-state message surfaces when no
-  // named column exists. Same string across all sub-tabs (Keys + the
+  // AC-234-02 — locked empty-state message surfaces when no named
+  // column exists. Same string across all sub-tabs (Keys + the
   // sub-component bodies; the IndexesTabBody / ForeignKeysTabBody
   // strings are guarded by their own component tests).
   it("surfaces empty-state message when no named column exists (AC-234-02)", () => {
@@ -193,9 +195,9 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
     ).toBeInTheDocument();
   });
 
-  // Sprint 234 AC-234-03 — Move column up/down buttons. Clicking them
-  // swaps the column rows in place; ↑ disabled at row 0, ↓ disabled
-  // at the last row.
+  // AC-234-03 — Move column up/down buttons. Clicking them swaps the
+  // column rows in place; ↑ disabled at row 0, ↓ disabled at the last
+  // row.
   it(
     "Move column up/down buttons reorder rows in place and disable at boundaries (AC-234-03)",
     () => {
@@ -255,9 +257,8 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
     HEAVY_LOAD_TEST_TIMEOUT_MS,
   );
 
-  // Sprint 234 AC-234-04 / Sprint 238 — reorder auto-refetches the
-  // preview with the swapped column order. 더 이상 "Show DDL" 재클릭이
-  // 필요하지 않다.
+  // AC-234-04 — reorder auto-refetches the preview with the swapped
+  // column order. No "Show DDL" re-click needed.
   it(
     "reorder auto-refetches the preview with new column order (AC-234-04)",
     async () => {

@@ -1,16 +1,19 @@
-// 작성 2026-05-16 (Phase 3 sprint-363)
+// Written 2026-05-16
 //
-// 사유: sprint-363 (Q13 / strategy line 773) 으로 launcher close 의 의미가
-// **exit → hide** 로 바뀐다. `registerLauncherCloseHandler` 는 backend 가
-// 이미 `api.prevent_close()` 로 OS-level close 를 차단하고 hide 를 수행한
-// 상태에서 jsdom / runtime 모두에서 동일한 lifecycle 신호 (`hideWindow('launcher')`)
-// 를 발사해야 한다. workspace-{conn} window 는 launcher close 와 독립이므로
-// hideWindow 가 'workspace' 또는 그 어떤 per-conn label 로도 호출되면 안 된다.
+// Reason: following state-management-strategy Q3 / line 776, launcher close
+// changes meaning from **exit → hide**. `registerLauncherCloseHandler` must
+// fire the same lifecycle signal (`hideWindow('launcher')`) in both jsdom and
+// runtime, after the backend has already blocked the OS-level close with
+// `api.prevent_close()` and performed the hide. workspace-{conn} windows are
+// independent of the launcher close, so hideWindow must not be called with
+// 'workspace' or any per-conn label.
 //
-// AC 매트릭스:
-//   - AC-363-04-FE-01 close-requested → hideWindow('launcher') 호출 1회.
-//   - AC-363-04-FE-02 close-requested → exitApp() 호출 0회 (pre-sprint-363 회귀 가드).
-//   - AC-363-04-FE-03 close-requested → workspace 라벨 hide/show 호출 0회.
+// AC matrix:
+//   - AC-363-04-FE-01 close-requested → hideWindow('launcher') called once.
+//   - AC-363-04-FE-02 close-requested → exitApp() called zero times
+//     (regression guard against the old exit-on-close behavior).
+//   - AC-363-04-FE-03 close-requested → zero hide/show calls with a
+//     workspace label.
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 const hideWindowMock = vi.fn((label: string) => {

@@ -38,18 +38,18 @@ describe("cellToEditValue — preserves null/empty-string distinction", () => {
     expect(cellToEditValue([1, 2])).toBe("[\n  1,\n  2\n]");
   });
 
-  // Sprint 261 (ADR 0026) — BigInt 셀 (bigint / int8 컬럼) 의 edit-path
-  // 직렬화. `String(BigInt(...))` → digit-only string. SQL UPDATE 의
-  // numeric literal 자리에 그대로 들어가도록 의도.
+  // ADR 0026 — edit-path serialization of a BigInt cell (bigint / int8
+  // column). `String(BigInt(...))` → digit-only string, meant to drop
+  // straight into the numeric literal slot of a SQL UPDATE.
   it("returns digit string for BigInt cells", () => {
     expect(cellToEditValue(9223372036854775807n)).toBe("9223372036854775807");
     expect(cellToEditValue(0n)).toBe("0");
   });
 
-  // Sprint 261 (ADR 0026) — Decimal 셀 (numeric / decimal / Decimal128
-  // 컬럼) 의 edit-path 직렬화. `Decimal.toString()` 은 base-10 무손실
-  // 표현. trailing zero 는 Decimal 정규화 결과를 그대로 사용 (0.10 →
-  // "0.1").
+  // ADR 0026 — edit-path serialization of a Decimal cell (numeric / decimal
+  // / Decimal128 column). `Decimal.toString()` is a lossless base-10
+  // representation. Trailing zeros follow Decimal's own normalisation
+  // (0.10 → "0.1").
   it("returns base-10 string for Decimal cells", () => {
     expect(cellToEditValue(new Decimal("123.456"))).toBe("123.456");
     expect(cellToEditValue(new Decimal("9999999999999999.99999999"))).toBe(
@@ -57,10 +57,10 @@ describe("cellToEditValue — preserves null/empty-string distinction", () => {
     );
   });
 
-  // Sprint 305 (2026-05-14) — DataGrid mount-time freeze. cell 이 nested
-  // BigInt 가 든 object 일 때 raw `JSON.stringify` 가 throw 했다 (사용자
-  // 보고: "datagrid 를 연 상태에서 굳어버렸음"). `safeStringifyCell` 로
-  // wrap 했으므로 BigInt 가 nested 든 어디에 있든 stringify 가 성공해야.
+  // DataGrid mount-time freeze. When the cell was an object holding a nested
+  // BigInt, raw `JSON.stringify` threw (user report: "it froze with the
+  // datagrid open"). `safeStringifyCell` wraps it, so stringify must succeed
+  // however deeply the BigInt is nested.
   it("[Sprint 305] does not throw on objects containing nested BigInt", () => {
     expect(() =>
       cellToEditValue({ id: 9223372036854775807n, name: "x" }),

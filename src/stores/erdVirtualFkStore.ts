@@ -1,6 +1,6 @@
 /**
- * #2150 — virtual FK persistence (ADR 0055 "표시 + 저장 + reconcile", ADR 0056 (1)
- * "가상 FK 는 connection 단위 로컬 persist").
+ * #2150 — virtual FK persistence (ADR 0055 "display + save + reconcile",
+ * ADR 0056 (1) "virtual FKs persist locally per connection").
  *
  * Storage is the SQLite `settings` KV through the existing `persist_setting` /
  * `get_setting` commands, the same route `themeFavoritesStore` uses — no new

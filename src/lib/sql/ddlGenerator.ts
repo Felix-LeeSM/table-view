@@ -30,15 +30,16 @@ export interface DdlExportTable {
 export interface GenerateMigrationDDLParams {
   dialect: DdlDialect;
   /**
-   * Logical schema name. PostgreSQL 의 schema, MySQL 의 database 에
-   * 해당. SQLite 는 schema 개념이 없어 무시하지만 헤더 주석에는
-   * 적힌다 (사용자가 어디서 export 한 것인지 식별).
+   * Logical schema name. Corresponds to a PostgreSQL schema or a MySQL
+   * database. SQLite has no schema concept, so it is ignored there, but it
+   * is still written into the header comment (so the user can tell where
+   * the export came from).
    */
   schema: string;
   tables: DdlExportTable[];
   /**
-   * 헤더 주석에 박힐 timestamp. 테스트 결정성을 위해 주입 — 미지정
-   * 시 호출 시점의 `new Date()` 사용.
+   * Timestamp written into the header comment. Injected for test
+   * determinism — when omitted, `new Date()` at call time is used.
    */
   generatedAt?: Date;
 }
@@ -46,10 +47,10 @@ export interface GenerateMigrationDDLParams {
 const HEADER_VERSION = "table-view migration export v1";
 
 /**
- * AC-192-01 entry point. 입력된 metadata 로부터 dialect-올바른
- * migration DDL 을 합성. 출력 string 은 한 줄짜리 statement 들이
- * 빈 줄로 구분된 형태 — 그대로 `psql` / `mysql` / `sqlite3` CLI 에
- * 던질 수 있다.
+ * AC-192-01 entry point. Synthesizes dialect-correct migration DDL from the
+ * given metadata. The output string is a series of sections separated by
+ * blank lines — it can be fed as-is to the `psql` / `mysql` / `sqlite3`
+ * CLI.
  */
 export function generateMigrationDDL(
   params: GenerateMigrationDDLParams,
@@ -60,15 +61,15 @@ export function generateMigrationDDL(
 
   sections.push(buildHeader(dialect, schema, tables, generatedAt));
 
-  // 1) CREATE TABLE 들 — FK 는 여기서 emit 하지 않고 마지막 단계로
-  //    미루기 때문에 forward reference / circular 를 걱정할 필요가
-  //    없다. 컬럼 정의 + 단일/복합 PK 만 inline.
+  // 1) CREATE TABLE statements — FKs are not emitted here but deferred to
+  //    the last step, so forward references / circular references are not
+  //    a concern. Only column definitions + single/composite PKs go inline.
   for (const table of tables) {
     sections.push(buildCreateTable(dialect, schema, table));
   }
 
-  // 2) Secondary index 들 — primary key 인덱스는 CREATE TABLE 의
-  //    PRIMARY KEY 로 이미 표현됐으니 skip.
+  // 2) Secondary indexes — the primary key index is skipped because the
+  //    CREATE TABLE's PRIMARY KEY already expresses it.
   const indexLines: string[] = [];
   for (const table of tables) {
     for (const idx of table.indexes) {
@@ -80,10 +81,11 @@ export function generateMigrationDDL(
     sections.push(["-- Indexes", ...indexLines].join("\n"));
   }
 
-  // 3) Foreign key constraints — 모든 테이블이 만들어진 뒤 적용.
-  //    pk / unique / check 는 본 sprint 의 OOS (constraint 의
-  //    primary 표현은 CREATE TABLE 에서 처리, unique 는 보통 unique
-  //    index 로 중복 표현되어 skip, check 는 expression 미보유로 skip).
+  // 3) Foreign key constraints — applied after all tables are created.
+  //    pk / unique / check are out of scope (the primary constraint is
+  //    expressed in CREATE TABLE, unique is skipped because a unique index
+  //    usually duplicates it, and check is skipped because no expression
+  //    is held).
   const fkLines: string[] = [];
   for (const table of tables) {
     for (const c of table.constraints) {
@@ -136,8 +138,8 @@ function buildCreateTable(
     return formatColumnLine(dialect, col, pkColumns.length === 1);
   });
 
-  // 복합 PK 만 테이블 라인으로 emit. 단일 PK 는 column line 안의
-  // PRIMARY KEY 로 표현된다.
+  // Only a composite PK is emitted as a table-level line. A single PK is
+  // expressed as PRIMARY KEY inside its column line.
   const tableLevelLines: string[] = [];
   if (pkColumns.length > 1) {
     const cols = pkColumns.map((c) => quoteIdent(dialect, c)).join(", ");
@@ -182,11 +184,12 @@ function formatColumnLine(
 }
 
 /**
- * PG nextval default 를 SERIAL family 로 매핑. nextval 의 sequence name
- * 인자는 regclass cast 가 있어도 없어도 OK — `nextval(` prefix 만 본다.
- * 단순히 type 만 바꾸면 PG 가 사용자의 기존 sequence 와 새 sequence 간
- * 충돌을 일으킬 수 있어 주의가 필요하지만, 이름 규칙이 일치하면 PG 는
- * 동일한 sequence 를 재생성한다.
+ * Map a PG nextval default to the SERIAL family. The sequence-name
+ * argument of nextval may or may not carry a regclass cast — only the
+ * `nextval(` prefix is checked. Swapping only the type needs care, because
+ * PG can end up with a conflict between the user's existing sequence and
+ * the new one, but when the naming rule matches, PG recreates the same
+ * sequence.
  */
 function mapPgNextvalToSerial(col: ColumnInfo): string | null {
   const def = col.default_value;
@@ -247,10 +250,10 @@ function buildCreateIndex(
   const indexIdent = quoteIdent(dialect, idx.name);
   const tableIdent = qualifiedName(dialect, schema, tableName);
   const cols = idx.columns.map((c) => quoteIdent(dialect, c)).join(", ");
-  // PG / SQLite 는 `CREATE INDEX name ON tbl (...)`, MySQL 도 동일
-  // 형식을 받아 들임 (`CREATE INDEX idx ON tbl (col)`). MySQL 은
-  // `ALTER TABLE ... ADD INDEX` 형식을 더 즐겨 쓰지만 mysql CLI 는
-  // `CREATE INDEX` 도 똑같이 해석하므로 한 형식으로 통일.
+  // PG / SQLite use `CREATE INDEX name ON tbl (...)`, and MySQL accepts the
+  // same form (`CREATE INDEX idx ON tbl (col)`). MySQL favors the
+  // `ALTER TABLE ... ADD INDEX` form, but the mysql CLI reads
+  // `CREATE INDEX` the same way, so a single form is used.
   return `CREATE ${unique}INDEX ${indexIdent} ON ${tableIdent} (${cols});`;
 }
 
@@ -292,8 +295,8 @@ function qualifiedName(
   schema: string,
   table: string,
 ): string {
-  // SQLite 는 schema 개념이 없어 unqualified 가 정상. attached DB 를
-  // 별도 schema 로 export 하는 use case 는 본 sprint OOS.
+  // SQLite has no schema concept, so unqualified names are correct.
+  // Exporting an attached DB as a separate schema is out of scope.
   if (dialect === "sqlite") return quoteIdent(dialect, table);
   return `${quoteIdent(dialect, schema)}.${quoteIdent(dialect, table)}`;
 }

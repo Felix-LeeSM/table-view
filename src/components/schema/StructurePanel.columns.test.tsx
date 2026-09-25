@@ -1,20 +1,17 @@
-// Sprint 220 — `columns` axis split from `StructurePanel.test.tsx` (P11
-// step 3). Covers the Column-CRUD behaviour: Add Column / inline edit /
-// cancel / save / delete / multiple pending changes / Review SQL modal /
-// Execute / Cancel / preview-and-execute error / Actions header /
-// Enter-Escape keys / Escape closes modal / refresh after execute /
-// table prop reset / pending-add removal.
+// `columns` axis of the StructurePanel suite. Covers the Column-CRUD
+// behaviour: Add Column / inline edit / cancel / save / delete / multiple
+// pending changes / Review SQL modal / Execute / Cancel /
+// preview-and-execute error / Actions header / Enter-Escape keys / Escape
+// closes modal / refresh after execute / table prop reset.
 //
-// Sprint 236 (AC-236-04 / AC-236-05 / AC-236-07 / AC-236-08) — `+ Column`
-// toolbar button + per-row trash icon now open `AddColumnDialog` /
-// `DropColumnDialog` modals (no inline NewColumnDraft, no trash-as-
-// pending-drop). The inline-batched MODIFY path (Edit pencil → change →
-// save → Review SQL → Execute) stays UNCHANGED. Cases below are
-// migrated mechanically: pending-drop tests now exercise the inline
-// MODIFY path (which still flows through `pendingChanges` + alterTable),
-// and inline-add NewColumnRow assertions are replaced with modal-mount
-// assertions. The dialog internals themselves are exhaustively covered
-// by `AddColumnDialog.test.tsx` / `DropColumnDialog.test.tsx`.
+// AC-236-04 / AC-236-05 / AC-236-07 / AC-236-08 — the `+ Column` toolbar
+// button + per-row trash icon open `AddColumnDialog` / `DropColumnDialog`
+// modals (no inline new-column draft, no trash-as-pending-drop). The
+// inline-batched MODIFY path (Edit pencil → change → save → Review SQL →
+// Execute) flows through `pendingChanges` + alterTable, so the
+// pending-change cases below exercise it; the add / drop cases assert the
+// modal mount. The dialog internals themselves are exhaustively covered by
+// `AddColumnDialog.test.tsx` / `DropColumnDialog.test.tsx`.
 // Date: 2026-05-07.
 
 import { invalidatePostgresTypesCache } from "@hooks/usePostgresTypes";
@@ -50,7 +47,7 @@ describe("StructurePanel", () => {
   beforeEach(() => {
     resetStructurePanelMocks();
     invalidatePostgresTypesCache("conn-1");
-    // Sprint 236 — modal IPC stubs so the dialogs that ColumnsEditor
+    // Modal IPC stubs so the dialogs that ColumnsEditor
     // mounts unconditionally (`<AddColumnDialog>`) don't trip on
     // missing tauri exports during initial render.
     vi.spyOn(tauri, "addColumnRequest").mockResolvedValue({
@@ -97,9 +94,9 @@ describe("StructurePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  // Sprint 236 — `+ Column` no longer adds an inline editable empty row;
-  // it now opens `<AddColumnDialog>`. The new assertion is the dialog's
-  // identifying input (`Column name`) is visible after the click.
+  // `+ Column` opens `<AddColumnDialog>` rather than an inline editable
+  // empty row. The assertion is that the dialog's identifying input
+  // (`Column name`) is visible after the click.
   it("[AC-236-04] clicking Add Column opens AddColumnDialog", async () => {
     await act(async () => {
       renderPanel();
@@ -199,9 +196,9 @@ describe("StructurePanel", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Delete column — Sprint 236 reroutes the trash icon to the
-  // `DropColumnDialog` modal. The legacy "trash → pendingChanges →
-  // Review SQL" surface is gone. Test now asserts the dialog mount.
+  // Delete column — the trash icon opens the `DropColumnDialog` modal
+  // instead of queueing a pending change for Review SQL. The test asserts
+  // the dialog mount.
   // -----------------------------------------------------------------------
   it("[AC-236-05] clicking delete opens DropColumnDialog", async () => {
     await act(async () => {
@@ -224,8 +221,8 @@ describe("StructurePanel", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Pending state tracking — multiple changes (Sprint 236 migrated to
-  // inline-MODIFY: edit two columns to data_type changes).
+  // Pending state tracking — multiple changes (inline MODIFY: edit two
+  // columns to data_type changes).
   // -----------------------------------------------------------------------
   it("tracks multiple pending changes and shows correct count", async () => {
     await act(async () => {
@@ -255,12 +252,10 @@ describe("StructurePanel", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 236 — confirming/canceling the inline-add draft is gone (the
-  // inline NewColumnRow component was removed). The corresponding
-  // `Confirm add column` / `Cancel add column` aria-labels no longer
-  // exist. The new contract: clicking `+ Column` mounts
-  // `AddColumnDialog`. The dialog's own internals (commit / cancel /
-  // form validation) are exhaustively covered by AddColumnDialog.test.
+  // Clicking `+ Column` mounts `AddColumnDialog`; there is no inline-add
+  // draft to confirm or cancel. The dialog's own internals (commit /
+  // cancel / form validation) are exhaustively covered by
+  // AddColumnDialog.test.
   // -----------------------------------------------------------------------
   it("[AC-236-04] AddColumnDialog Cancel closes the modal", async () => {
     await act(async () => {
@@ -284,9 +279,8 @@ describe("StructurePanel", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Review SQL modal — Sprint 236 migrated the trigger to the inline
-  // MODIFY path. The Review SQL → Execute → preview/execute lifecycle
-  // is unchanged.
+  // Review SQL modal — triggered from the inline MODIFY path, then the
+  // Review SQL → Execute → preview/execute lifecycle.
   // -----------------------------------------------------------------------
   it("clicking Review SQL opens a modal with SQL preview", async () => {
     await act(async () => {
@@ -431,9 +425,9 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Review SQL (1)" }));
     });
 
-    // Error should appear — Sprint 271c switched useDdlPreviewExecution to
-    // surface `err.message` (so parseDbMismatch's `^Database mismatch:` anchor
-    // can match), dropping the legacy `"Error: "` prefix from `String(e)`.
+    // Error should appear — useDdlPreviewExecution surfaces
+    // `getTauriErrorMessage(e)`, the bare message without the `"Error: "`
+    // prefix `String(e)` would add.
     expect(screen.getByText("Preview failed")).toBeInTheDocument();
   });
 
@@ -461,7 +455,7 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Execute" }));
     });
 
-    // Modal should still be open with error (Sprint 271c: bare err.message).
+    // Modal should still be open with error (bare message).
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("Execute failed")).toBeInTheDocument();
   });
@@ -478,9 +472,8 @@ describe("StructurePanel", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 236 — pending-add removal (`Remove pending column email`) is
-  // gone with the inline NewColumnDraft surface. The replacement
-  // contract is the AddColumnDialog Cancel button (covered above).
+  // Pending-add removal has no inline surface; discarding a new column is
+  // the AddColumnDialog Cancel button (covered above).
   // -----------------------------------------------------------------------
 
   // -----------------------------------------------------------------------
@@ -687,7 +680,7 @@ describe("StructurePanel", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 236 — AC-236-08: column appears / disappears after refresh.
+  // AC-236-08: column appears / disappears after refresh.
   // The DropColumnDialog modal commit closure calls `onColumnDropped()`
   // which the parent ColumnsEditor wires to `onRefresh` →
   // `getTableColumns`. This case asserts the refresh fires once after
@@ -695,10 +688,9 @@ describe("StructurePanel", () => {
   // -----------------------------------------------------------------------
   it("[AC-236-08] DropColumnDialog commit triggers getTableColumns refresh", async () => {
     vi.useFakeTimers();
-    // Sprint 245 (ADR 0022 Phase 1) — pin Safe Mode to `warn` so the
-    // destructive DROP COLUMN flows through. The default `strict` mode
-    // would now open the M.1 non-production confirm dialog and short-
-    // circuit the refresh-after-commit assertion.
+    // ADR 0022 Phase 1 — pin Safe Mode to `warn` so the destructive DROP
+    // COLUMN flows through. `strict` would open the M.1 non-production
+    // confirm dialog and short-circuit the refresh-after-commit assertion.
     const { useSafeModeStore } = await import("@stores/safeModeStore");
     useSafeModeStore.setState({ mode: "warn" });
     await act(async () => {
@@ -718,7 +710,7 @@ describe("StructurePanel", () => {
         { target: { value: "name" } },
       );
     });
-    // Sprint 238 — auto-debounced (250ms) preview fetch settles before
+    // The auto-debounced (250ms) preview fetch settles before
     // Apply becomes enabled. Wait for the dropColumnRequest mock to be
     // called at least once with previewOnly=true before clicking Apply.
     const dropColumnSpy = vi.mocked(tauri.dropColumnRequest);

@@ -26,7 +26,7 @@ export interface MasterPasswordFieldProps {
 }
 
 /**
- * Sprint 140 — master password input used by both Encrypted Export and
+ * Master password input used by both Encrypted Export and
  * Encrypted Import flows. Renders:
  *   - a labelled `<input>` with a show/hide toggle (Lucide eye icons),
  *   - an inline error when `0 < value.length < minLength`,

@@ -1,5 +1,5 @@
 /**
- * Sprint 365 (Phase 3, F.4) — cross-window `state-changed` event router.
+ * Cross-window `state-changed` event router (F.4).
  *
  * Backend `emit_state_changed` (see `src-tauri/src/events.rs`) broadcasts
  * a canonical payload via `AppHandle::emit("state-changed", payload)`.

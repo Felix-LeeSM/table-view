@@ -1,5 +1,5 @@
 /**
- * Sprint-88 AC-02: DOM identity stability helper.
+ * AC-02: DOM identity stability helper.
  *
  * Captures the live DOM node returned by a getter at one moment in time and
  * provides an `assertStillSame()` method that re-invokes the getter and asserts

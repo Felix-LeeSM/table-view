@@ -1,14 +1,14 @@
 /**
- * 작성 2026-05-17 (Phase 6 sprint-376 Q21 affordance #4).
+ * Written 2026-05-17 (Q21 affordance #4).
  *
- * 사유: Group 헤더 우클릭 "Reset collapse states" → 모든 group 의
- * `collapsed` 가 false 가 되도록 `set_group_collapsed` IPC 가 group 수만큼
- * 호출되는지 lock. (set_group_collapsed 는 sprint-369 의 IPC — Q21 의 새
- * IPC 추가 없이 기존 path 재활용. backend reset_group_collapse 같은 bulk
- * IPC 도입하지 않은 이유: per-group write 가 이미 idempotent + cross-window
- * 의 state-changed group.update 가 그대로 흐른다.)
+ * Reason: locks that the group header's right-click "Reset collapse states"
+ * calls the `set_group_collapsed` IPC once per group so that every group's
+ * `collapsed` becomes false. (set_group_collapsed is an existing IPC — Q21
+ * reuses that path instead of adding a new IPC. No bulk IPC such as a backend
+ * reset_group_collapse is introduced because the per-group write is already
+ * idempotent.)
  *
- * 본 sprint 의 contract — confirm dialog 없음 + 직접 IPC.
+ * Contract — no confirm dialog, direct IPC.
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";

@@ -2,50 +2,49 @@ import { syntaxTree } from "@codemirror/language";
 import type { EditorState } from "@codemirror/state";
 
 /**
- * Sprint 304 (2026-05-14) — cursor 가 SQL Statement 안에서 어떤 clause 에
- * 있는지 분별. lang-sql 의 `schemaCompletionSource` 는 ns top-level (=
- * table) 을 *모든 컨텍스트* 에서 emit 한다. 컬럼만 와야 하는 자리
- * (`WHERE` / `SET` / `INSERT (|)` / SELECT projection) 에서도 table 후보가
- * 노출되어, 우리 column source 와 같은 라벨이 `type: "type"` (`t` 아이콘)
- * + `type: "property"` (`□` 아이콘) 으로 *두 번* popup 에 뜬다 (2026-05-14
- * 사용자 보고: "column 이 두 번씩 나열되고 아이콘이 다름").
+ * Classify which clause of a SQL Statement the cursor sits in (2026-05-14),
+ * because lang-sql emits table candidates even where only columns belong
+ * (`WHERE` / `SET` / `INSERT (|)` / SELECT projection). For the background,
+ * see `wrappedSchemaCompletionSource` in
+ * `src/lib/sql/schemaCompletionWrapper.ts`.
  *
- * 이 분별기는 cursor 위치를 기준으로:
- *   - `column-only` — 컬럼 후보만 의미 있는 자리. lang-sql 의 table emit
- *     은 제거되어야.
- *   - `table-allowed` — `FROM` / `JOIN` / `UPDATE` / `INSERT INTO` /
- *     `DELETE FROM` 직후, 또는 statement 진입 직전. table 후보 정상.
+ * Based on the cursor position, this classifier returns:
+ *   - `column-only` — only column candidates make sense here. lang-sql's
+ *     table emit should be removed.
+ *   - `table-allowed` — right after `FROM` / `JOIN` / `UPDATE` /
+ *     `INSERT INTO` / `DELETE FROM`, or right before a statement starts.
+ *     Table candidates are expected.
  *
- * 알고리즘 — 정공법은 syntax tree 의 정확한 clause 노드를 추출하는
- * 것이지만 lang-sql 의 SQL parser 는 sub-clause 노드를 별도로 노출하지
- * 않는다. 대신 *cursor 직전의 마지막 SQL keyword* 를 스캔해 cursor 가
- * `from` / `join` / `into` / `update` 직후인지로 판별. 이 접근은 sprint-
- * 292 / 294 / 295 의 update / alias / cte source 가 이미 사용 중인 동일
- * 패턴이라 일관성이 있다.
+ * Algorithm — the proper approach would extract the exact clause node from
+ * the syntax tree, but lang-sql's SQL parser does not expose sub-clause
+ * nodes. Instead, scan for *the last SQL keyword before the cursor* and
+ * decide whether the cursor sits right after `from` / `join` / `into` /
+ * `update`. The update / alias / cte sources already use the same pattern,
+ * so this approach stays consistent with them.
  */
 export type CursorClause = "column-only" | "table-allowed";
 
 const COLUMN_ONLY_AFTER = new Set([
-  // SET 다음 — UPDATE … SET col = …
+  // After SET — UPDATE … SET col = …
   "set",
-  // WHERE 다음 — 모든 statement 의 row 필터
+  // After WHERE — the row filter of any statement
   "where",
-  // BY 다음 — GROUP BY / ORDER BY
+  // After BY — GROUP BY / ORDER BY
   "by",
-  // HAVING 다음 — 집계 필터
+  // After HAVING — aggregate filter
   "having",
-  // ON 다음 — JOIN ON col = col
+  // After ON — JOIN ON col = col
   "on",
-  // USING 다음 — JOIN USING (col)
+  // After USING — JOIN USING (col)
   "using",
-  // SELECT 다음 — projection list (table 별칭 자리 아님)
+  // After SELECT — projection list (not a table alias position)
   "select",
-  // RETURNING 다음 — INSERT/UPDATE/DELETE RETURNING col list
+  // After RETURNING — INSERT/UPDATE/DELETE RETURNING col list
   "returning",
 ]);
 
 const TABLE_ALLOWED_AFTER = new Set([
-  // FROM, JOIN, UPDATE, INTO 다음 — 다음 토큰이 table 이어야 함
+  // After FROM, JOIN, UPDATE, INTO — the next token must be a table
   "from",
   "join",
   "update",
@@ -80,10 +79,10 @@ export function detectCursorClause(
       lastSignificant = text;
     }
   }
-  // Fallback — keyword scan 이 잡지 못한 토큰 (예: `RETURNING` 이 일부
-  // dialect 에서 Identifier 로 토큰화되는 경우) 을 위해 statement 텍스트의
-  // 마지막 alphabetic word 도 검사. 마지막 keyword 와 textual scan 결과
-  // 둘 중 *하나라도* known set 에 매치하면 그 결정에 따른다.
+  // Fallback — for tokens the keyword scan misses (e.g. `RETURNING`
+  // tokenized as an Identifier in some dialects), also check the last
+  // alphabetic word of the statement text. If *either* the last keyword or
+  // the textual scan result matches a known set, follow that decision.
   const stmtText = state.doc.sliceString(stmt.from, pos);
   const lastWordMatch = stmtText.match(/([A-Za-z_][A-Za-z_0-9]*)\s*$/);
   const lastWord = lastWordMatch?.[1]?.toLowerCase() ?? null;

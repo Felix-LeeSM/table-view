@@ -25,7 +25,7 @@ const SLOW_THRESHOLD_MS = 10_000;
  * survives tab switches / remounts; if absent (tests constructing state
  * directly) it falls back to mount time.
  *
- * (선택 AC) After 10s the text shifts to the warning color to nudge the
+ * (Optional AC) After 10s the text shifts to the warning color to nudge the
  * user toward Cancel — same visual severity signal used elsewhere for
  * "attention needed" without a separate alert.
  */

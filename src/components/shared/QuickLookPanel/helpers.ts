@@ -57,9 +57,9 @@ export function looksLikeJson(value: unknown): boolean {
 export function formatCellValue(value: unknown, col: ColumnInfo): string {
   if (value == null) return "NULL";
   if (typeof value === "boolean") return value ? "true" : "false";
-  // Sprint 305 — ADR 0026 precision-preserving cell type. Decimal 는
-  // `typeof === "object"` 라 generic branch 가 `{}` 로 emit, BigInt 는
-  // raw JSON.stringify 가 throw → QuickLook 마운트 시점 freeze.
+  // ADR 0026 precision-preserving cell type. Decimal is `typeof === "object"`,
+  // so the generic branch emits `{}`; BigInt makes raw JSON.stringify throw →
+  // freeze at QuickLook mount time.
   if (value instanceof Decimal) return value.toString();
   if (typeof value === "bigint") return value.toString();
   if (typeof value === "object") return safeStringifyCell(value, 2);

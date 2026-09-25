@@ -1,9 +1,9 @@
 /**
  * Toggle-driven dock panel that surfaces the user's recent query history
- * sourced from the backend `list_history` IPC (sprint-372 conversion —
- * was previously reading `useQueryHistoryStore.entries`).
+ * sourced from the backend `list_history` IPC (it previously read
+ * `useQueryHistoryStore.entries`).
  *
- * Sprint 372 (Phase 5 F.5) — backend single source of truth.
+ * F.5 — backend single source of truth.
  *   - `useQueryHistory` hook owns the IPC + cursor pagination + event
  *     refetch wiring (`history.create` / `history.clear`).
  *   - List response carries `sqlRedacted` only; the original SQL never
@@ -50,7 +50,7 @@ export default function QueryLog() {
 
   // Backend already returns rows in DESC executedAt order; the search
   // filter only narrows by the redacted text on the client. Switching
-  // to a backend search field is a sprint-373+ refinement.
+  // to a backend search field is a later refinement.
   const filtered = rows.filter((row) =>
     row.sqlRedacted.toLowerCase().includes(search.toLowerCase()),
   );

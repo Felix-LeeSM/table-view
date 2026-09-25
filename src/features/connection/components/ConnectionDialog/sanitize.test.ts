@@ -9,7 +9,7 @@ import { sanitizeMessage } from "./sanitize";
 
 describe("sanitizeMessage", () => {
   // Reason: pre-#1453 contract — known secret literal + URL-encoded form
-  // masked (Sprint 178 / #1389) (2026-07-10)
+  // masked (#1389) (2026-07-10)
   it("masks a known secret literal and its URL-encoded form", () => {
     expect(sanitizeMessage("auth failed for p@ss and p%40ss", "p@ss")).toBe(
       "auth failed for *** and ***",

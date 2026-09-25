@@ -3,7 +3,7 @@
 //! `as_document()` / etc. resolve a typed reference or surface
 //! `AppError::Unsupported` when the caller's paradigm does not match.
 //!
-//! Hoisted out of `db/mod.rs` (Sprint 213, P5 step 2). The public surface
+//! Hoisted out of `db/mod.rs` (P5 step 2). The public surface
 //! is unchanged — `crate::db::ActiveAdapter` is preserved via `pub use`.
 
 use crate::error::AppError;
@@ -90,11 +90,12 @@ impl ActiveAdapter {
 
 #[cfg(test)]
 mod tests {
-    // 작성 이유: ActiveAdapter 의 paradigm 분기는 모든 RDB / Document / Search /
-    // Kv 명령의 진입 게이트다. as_rdb / as_document / as_search / as_kv 가
-    // mismatch 시 정확히 Unsupported 를 반환해야 frontend 의 UX (toast 메시지)
-    // 와 보안 (paradigm 누설 방지) 이 보장된다. 기존엔 테스트 0건이라 회귀
-    // 시 silently 통과 가능. (2026-05-07)
+    // Reason: the paradigm branch of ActiveAdapter is the entry gate for every
+    // RDB / Document / Search / Kv command. as_rdb / as_document / as_search /
+    // as_kv must return exactly Unsupported on a mismatch for the frontend UX
+    // (the toast message) and the security property (no paradigm leak) to hold.
+    // There were no tests before, so a regression could pass silently.
+    // (2026-05-07)
     use super::*;
     use crate::db::{MongoAdapter, PostgresAdapter};
 
@@ -163,7 +164,7 @@ mod tests {
         assert!(matches!(document_active().kind(), DatabaseType::Mongodb));
     }
 
-    // ── lifecycle() — DbAdapter handle 노출 ──────────────────────────────
+    // ── lifecycle() — exposes the DbAdapter handle ───────────────────────
     #[test]
     fn lifecycle_rdb_returns_dbadapter_with_matching_kind() {
         let active = rdb_active();

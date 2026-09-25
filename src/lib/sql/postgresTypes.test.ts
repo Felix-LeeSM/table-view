@@ -1,4 +1,4 @@
-// Sprint 227 — unit tests for the canonical PG type list + filter.
+// Unit tests for the canonical PG type list + filter.
 //
 // Date: 2026-05-06.
 //

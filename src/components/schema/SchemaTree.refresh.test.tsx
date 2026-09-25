@@ -1,8 +1,8 @@
-// Sprint 216 — `refresh` axis split from `SchemaTree.test.tsx`. Covers
-// the `Refresh schemas` button (AC-07), the `refresh-schema` window
-// event listener + cleanup (AC-10), per-schema right-click Refresh
-// (AC-CM-17, AC-CM-18), and the loadSchemas-rejection cleanup path.
-// Cases are byte-equivalent to the originals.
+// `refresh` axis split from `SchemaTree.test.tsx`. Covers the `Refresh
+// schemas` button (AC-07), the `refresh-schema` window event listener +
+// cleanup (AC-10), per-schema right-click Refresh (AC-CM-17, AC-CM-18), and
+// the loadSchemas-rejection cleanup path. Cases are byte-equivalent to the
+// originals.
 
 import {
   act,

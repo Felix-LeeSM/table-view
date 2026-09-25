@@ -5,7 +5,7 @@
  * (`src/lib/sql/wasm/`) to the rest of the TS codebase. The WASM module
  * is **lazy-loaded** via dynamic `import()` so it lives in its own Vite
  * chunk and does NOT bloat the main entry bundle — that is a load-bearing
- * invariant of the sprint-385 contract.
+ * invariant.
  *
  * The AST type shapes this parser resolves to live in `sqlAstTypes.ts`
  * (shared value/expression/SELECT types) and `sqlAstStatementTypes.ts`
@@ -35,7 +35,7 @@ interface SqlWasmModule {
 // rather than re-fetching for each call.
 let modulePromise: Promise<SqlWasmModule> | null = null;
 
-// Sprint 391 — once the WASM module has finished initialising we mirror
+// Once the WASM module has finished initialising we mirror
 // the module reference into a synchronous slot so sync callers
 // (`parseSqlPreloaded`, used by `sqlSafety.analyzeStatement`) can route
 // through the AST path without awaiting. `null` means the module has
@@ -59,7 +59,7 @@ async function loadWasm(): Promise<SqlWasmModule> {
       // web`. Calling it with no args lets the glue locate the sibling
       // `.wasm` via `new URL("...", import.meta.url)`.
       await mod.default();
-      // Sprint 391 — once the module is ready, expose it via the sync
+      // Once the module is ready, expose it via the sync
       // slot so `parseSqlPreloaded` can dispatch without awaiting.
       loadedModule = mod;
       return mod;
@@ -70,15 +70,14 @@ async function loadWasm(): Promise<SqlWasmModule> {
 
 /**
  * Lazy-loaded SQL parser entry point. Resolves to either a successful
- * `SqlSelectStatement` or a `SqlParseError` — errors are NOT thrown so
+ * statement variant or a `SqlParseError` — errors are NOT thrown so
  * callers can pattern-match on the `kind` discriminant without
  * try/catch ceremony.
  *
  * Caller responsibility: do NOT pass untrusted SQL to a backend executor
  * based on the AST alone. The parser only verifies syntax; semantic
  * checks (schema-aware completion, dialect validation, safety gating)
- * still belong to the existing pipelines (`sqlSafety`, `queryAnalyzer`,
- * …). Replacing those is sprint-386+.
+ * still belong to the existing pipelines (`sqlSafety`, `queryAnalyzer`, …).
  */
 export async function parseSql(sql: string): Promise<SqlParseResult> {
   const mod = await loadWasm();
@@ -99,7 +98,7 @@ export async function parseSql(sql: string): Promise<SqlParseResult> {
 }
 
 /**
- * Sprint 391 — synchronous AST entry point. Returns `null` if the WASM
+ * Synchronous AST entry point. Returns `null` if the WASM
  * module is not yet loaded; otherwise dispatches into the same Rust
  * `parse_sql` function as `parseSql`. Used by `sqlSafety.analyzeStatement`
  * to migrate the regex-based DDL destructive classifier to an AST-based
@@ -117,10 +116,9 @@ export function parseSqlPreloaded(sql: string): SqlParseResult | null {
 }
 
 /**
- * Sprint 391 — fire-and-forget preload. Resolves once the WASM module
- * is loaded. Used by integration tests to make `parseSqlPreloaded`
- * synchronously available. Production code does not need to call this
- * explicitly; the first `parseSql(...)` await primes the same cache.
+ * Fire-and-forget preload. Resolves once the WASM module is loaded,
+ * making `parseSqlPreloaded` synchronously available. The first
+ * `parseSql(...)` await primes the same cache.
  */
 export async function preloadSqlWasm(): Promise<void> {
   await loadWasm();
@@ -133,19 +131,19 @@ const SQL_PARSE_RESULT_KINDS = new Set<string>([
   "drop",
   "truncate",
   "alter-table",
-  // Sprint-392 — DML write triad.
+  // DML write triad.
   "insert",
   "call",
   "update",
   "delete",
   "merge",
-  // Sprint-393b — CTE-wrap top-level.
+  // CTE-wrap top-level.
   "with",
-  // Sprint-394 — DDL additive top-levels.
+  // DDL additive top-levels.
   "create-table",
   "create-index",
   "create-view",
-  // Sprint-395 — misc grammar top-levels.
+  // Misc grammar top-levels.
   "grant",
   "revoke",
   "explain",

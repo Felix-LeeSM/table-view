@@ -40,13 +40,14 @@ import GroupColorDot from "./GroupColorDot";
 import GroupDialog from "./GroupDialog";
 
 // ---------------------------------------------------------------------------
-// Collapse-state persistence (Sprint 369 Phase 4 Q20.3)
+// Collapse-state persistence (Q20.3)
 // ---------------------------------------------------------------------------
 //
-// 기존 `table-view-group-collapsed` localStorage map 영속 폐기. SQLite
-// `connection_groups.collapsed` 컬럼이 SOT. 본 컴포넌트는 group prop 의
-// `collapsed` 값으로 mount 하고 toggle 시 `set_group_collapsed` IPC + (store
-// 가 hydrate 한 다음 sprint 에서) state-changed 가 cross-window 로 전파.
+// Persistence in the old `table-view-group-collapsed` localStorage map is
+// retired; the SQLite `connection_groups.collapsed` column is the SOT. This
+// component mounts with the group prop's `collapsed` value and calls the
+// `set_group_collapsed` IPC on toggle. Cross-window propagation through
+// state-changed is not wired yet.
 
 interface ConnectionGroupProps {
   group: ConnectionGroupType;
@@ -105,22 +106,21 @@ export default function ConnectionGroup({
     if (renaming) return;
     const next = !collapsed;
     setCollapsed(next);
-    // SQLite SOT. Failure leaves the UI updated — cross-window broadcast 도
-    // 실패한 셈이지만 사용자 mutate 가 다시 들어오면 retry. (best-effort.)
+    // SQLite SOT. Failure leaves the UI updated; the next user mutation
+    // retries. (best-effort.)
     void setGroupCollapsed({ groupId: group.id, collapsed: next }).catch(() => {
       /* best-effort */
     });
   };
 
-  // Sprint 376 (Phase 6 Q21 #4) — "Reset collapse states". 모든 group
-  // 을 expanded (collapsed=false) 로 set. per-group IPC 가 idempotent 라
-  // bulk IPC 새로 도입하지 않음 — sprint-369 의 set_group_collapsed 가
-  // group.update emit 을 발사해 cross-window converge.
+  // Q21 #4 — "Reset collapse states". Sets every group to expanded
+  // (collapsed=false). The per-group IPC is idempotent, so no new bulk IPC
+  // is introduced.
   const handleResetAllCollapse = () => {
-    // 현 컴포넌트가 mount 한 group 이 보유한 expanded 시각 상태도 같이
-    // 갱신해 사용자 immediate feedback. 다른 group 의 collapsed UI 는
-    // 각 ConnectionGroup 인스턴스의 자기 state — group.update event
-    // 가 store 변경 → re-render 로 흐른다 (sprint-369 contract).
+    // Also update the expanded visual state of the group this component
+    // mounted, for immediate user feedback. Other groups' collapsed UI is
+    // each ConnectionGroup instance's own state; no group.update event
+    // reaches them.
     setCollapsed(false);
     for (const g of allGroups) {
       void setGroupCollapsed({ groupId: g.id, collapsed: false }).catch(
@@ -137,9 +137,10 @@ export default function ConnectionGroup({
   // Group-wide drop target: any drop within the group's padded visual area
   // (header OR an expanded member row OR the surrounding padding) joins this
   // group. Padding gives the user a more forgiving hit area without any
-  // visual indicator (per 2026-05-05 user request — "각 그룹의 영역을 넓히고
-  // indicator 제거"). `e.stopPropagation()` keeps the event from also firing
-  // ConnectionList's ungroup handler when both could handle the drop.
+  // visual indicator (per 2026-05-05 user request — "widen each group's area
+  // and remove the indicator"). `e.stopPropagation()` keeps the event from
+  // also firing ConnectionList's ungroup handler when both could handle the
+  // drop.
   const handleGroupDragOver = (e: DragEvent) => {
     if (!draggedConnectionId) return;
     e.preventDefault();
@@ -202,9 +203,8 @@ export default function ConnectionGroup({
               ) : (
                 <ChevronDown size={12} />
               )}
-              {/* Color accent dot — Sprint 78. Shared with the GroupDialog
-                  preview via `GroupColorDot` so both render a color the same
-                  way. */}
+              {/* Color accent dot. Shared with the GroupDialog preview via
+                  `GroupColorDot` so both render a color the same way. */}
               <GroupColorDot color={group.color} testId="group-color-accent" />
               {renaming ? (
                 <Input
@@ -241,9 +241,8 @@ export default function ConnectionGroup({
               <Palette size={14} /> {t("group.changeColor")}
             </ContextMenuItem>
             <ContextMenuSeparator />
-            {/* Sprint 376 (Phase 6 Q21 #4) — Reset collapse states. 모든
-                group 의 collapsed=false UPDATE. Confirm dialog 없음
-                (Q21 직접 IPC contract). */}
+            {/* Q21 #4 — Reset collapse states. Sets collapsed=false on every
+                group. No confirm dialog (the Q21 direct IPC contract). */}
             <ContextMenuItem onClick={handleResetAllCollapse}>
               <UnfoldVertical size={14} /> {t("group.resetCollapseStates")}
             </ContextMenuItem>

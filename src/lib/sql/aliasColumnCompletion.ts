@@ -7,8 +7,7 @@ import { syntaxTree } from "@codemirror/language";
 import { parseFromContext } from "@lib/completion/shared";
 
 /**
- * Sprint 294 (2026-05-14) — Slice B — alias-aware column completion for
- * the **mid-typing flow**.
+ * Alias-aware column completion for the **mid-typing flow**.
  *
  * Why this source exists
  * ----------------------
@@ -23,7 +22,7 @@ import { parseFromContext } from "@lib/completion/shared";
  * and binding `<alias>` to `<table>`. This source does the same:
  *
  *   1. Walk the syntax tree at the cursor and bail on String / Number /
- *      LineComment / BlockComment surfaces (sprint-292 guard pattern —
+ *      LineComment / BlockComment surfaces (same guard as
  *      `updateColumnCompletionSource`).
  *   2. Check the cursor is sitting at `<alias>.<partial>` (the token to
  *      the left must be `.`, and the token before that must be an
@@ -42,18 +41,15 @@ import { parseFromContext } from "@lib/completion/shared";
  * ---------------
  * If the same alias name appears in two different statements, the
  * cursor's Statement wins. This matches lang-sql's behaviour for
- * fully-formed statements and is the least surprising default. See
- * `slice-B-execution-brief.md` (Assumptions / Risks).
+ * fully-formed statements and is the least surprising default.
  *
- * Out of scope (later slices / sprints)
- * -------------------------------------
- *   - 3+ JOIN, schema-qualified target, explicit `AS`, duplicate alias
- *     edge — Slice D.
- *   - Duplicate-candidate dedup with the built-in source — Slice E.
- *   - CTE / derived subquery — sprint-295.
+ * Out of scope
+ * ------------
+ *   - Duplicate-candidate dedup with the built-in source.
+ *   - CTE / derived subquery aliases — see `cteColumnCompletionSource`.
  *
- * Wiring is done in Slice C (`SqlQueryEditor.tsx`); until then this
- * source is exercised only by its unit test.
+ * Only tests exercise this source: #685 moved query completion into the
+ * WASM core and dropped its wiring.
  */
 export function aliasColumnCompletionSource(
   getSchema: () => SQLNamespace | undefined,
@@ -68,8 +64,8 @@ export function aliasColumnCompletionSource(
     const tree = syntaxTree(state);
     const node = tree.resolveInner(pos, -1);
 
-    // Sprint 292 guard — never surface column candidates inside value
-    // surfaces (strings, numbers, comments). Replicated verbatim.
+    // Never surface column candidates inside value surfaces (strings,
+    // numbers, comments).
     if (
       node.name === "String" ||
       node.name === "Number" ||

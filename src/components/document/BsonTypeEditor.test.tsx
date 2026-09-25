@@ -1,10 +1,9 @@
-// Sprint 323 (2026-05-15) — Slice G.1: BSON type-aware editor.
+// BSON type-aware editor.
 //
-// 작성 이유: 4 BSON wrapper (ObjectId/ISODate/Decimal128/BinData) 의
-// inline editor 가 (a) 초기값을 raw-string 으로 풀어 보이고 (b) 유효성
-// 검증 후에만 onCommit 을 invoke 하며 (c) invalid input 시 hint
-// message 를 노출하는지를 회귀 가드. wire-up 은 Sprint 324 (G.2)
-// 가 진행.
+// Reason: regression guard that the inline editor for the 4 BSON wrappers
+// (ObjectId/ISODate/Decimal128/BinData) (a) shows the initial value
+// unwrapped as a raw string, (b) invokes onCommit only after validation
+// passes, and (c) surfaces a hint message on invalid input.
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";

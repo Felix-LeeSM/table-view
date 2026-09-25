@@ -18,12 +18,12 @@ import { useTranslation } from "react-i18next";
 import type { DropTriggerRequest } from "@/types/schema";
 
 /**
- * Sprint 274 — `DropTriggerDialog`. Typing-confirm input + CASCADE
- * checkbox + inline DDL preview pane + Cancel + Apply buttons.
+ * `DropTriggerDialog`. Typing-confirm input + CASCADE checkbox + inline
+ * DDL preview pane + Cancel + Apply buttons.
  *
- * Structural parity target: Sprint 235 `DropTableDialog` — same layout,
- * same two gates. What differs: the SQL target (DROP TRIGGER vs DROP
- * TABLE) and the typing-confirm target (trigger name vs table name).
+ * Structural parity target: `DropTableDialog` — same layout, same two
+ * gates. What differs: the SQL target (DROP TRIGGER vs DROP TABLE) and
+ * the typing-confirm target (trigger name vs table name).
  *
  * Issue #2191 (the split issue #2157 made in `DropColumnDialog`) — the
  * preview gate and the execution gate are separate. The DDL preview loads
@@ -32,8 +32,9 @@ import type { DropTriggerRequest } from "@/types/schema";
  *
  * Apply is `disabled` UNTIL the typing-confirm input matches the
  * current trigger name byte-for-byte (case-sensitive — `Audit` ≠
- * `audit`). Per Sprint 235 contract: NO `onChange` debounce, NO trim
- * (whitespace-only matches stay invalid), every keystroke re-evaluates.
+ * `audit`). Per the `DropTableDialog` contract: NO `onChange` debounce,
+ * NO trim (whitespace-only matches stay invalid), every keystroke
+ * re-evaluates.
  *
  * CASCADE checkbox defaults to OFF — user opts INTO the more dangerous
  * `DROP TRIGGER … CASCADE` form explicitly. Toggling it re-fetches the
@@ -41,12 +42,12 @@ import type { DropTriggerRequest } from "@/types/schema";
  *
  * Safe Mode dispatch is provided by `useDdlPreviewExecution` — `DROP
  * TRIGGER` is classified as `ddl-drop` / danger by the analyzer. Under
- * the Sprint 245 destructive-only policy (ADR 0022 Phase 1; canonical
- * matrix in `src/lib/safeMode.ts`) every production tier and
- * non-production strict escalate to `pendingConfirm`, mounting an
- * additional `ConfirmDestructiveDialog` on top of the typing-confirm
- * gate. Non-production warn / off allow. `decideSafeModeAction` never
- * returns `block` for this path.
+ * the destructive-only policy (ADR 0022; canonical matrix in
+ * `src/lib/safeMode.ts`) every production tier and non-production strict
+ * escalate to `pendingConfirm`, mounting an additional
+ * `ConfirmDestructiveDialog` on top of the typing-confirm gate.
+ * Non-production warn / off allow. `decideSafeModeAction` never returns
+ * `block` for this path.
  *
  * Sequence:
  *   1. dialog opens → debounced preview fetch renders the DROP statement.
@@ -54,9 +55,8 @@ import type { DropTriggerRequest } from "@/types/schema";
  *      Apply → `attemptExecute`.
  *   3. Safe Mode gate decides → confirm (pendingConfirm dialog) | allow
  *      (commit).
- *   4. on confirm, the user answers the single-click Yes/No dialog
- *      (Sprint 246 replaced the earlier type-to-confirm gate) → commit
- *      runs.
+ *   4. on confirm, the user answers the single-click Yes/No dialog →
+ *      commit runs.
  *   5. on commit success, `onRefresh` invalidates the
  *      `schemaStore.triggers[connId][db][schema][table]` cache entry
  *      so the dropped trigger disappears from the SchemaTree Triggers
@@ -66,7 +66,7 @@ import type { DropTriggerRequest } from "@/types/schema";
 export interface DropTriggerDialogProps {
   /** Connection id used by the Safe Mode gate + history record. */
   connectionId: string;
-  /** Active database — schemaStore cache key dimension (Sprint 263). */
+  /** Active database — schemaStore cache key dimension. */
   database: string;
   /** Schema name (display + payload). */
   schemaName: string;
@@ -102,7 +102,7 @@ export default function DropTriggerDialog({
   // Preview pane defaults open — the auto-debounced fetch fills it as
   // soon as the dialog opens, with no typing involved (issue #2191).
   // Hiding it by default required an extra click and made users think
-  // the preview was broken (mirrors Sprint 235).
+  // the preview was broken (mirrors `DropTableDialog`).
   const [showDdl, setShowDdl] = useState(true);
 
   const connectionEnvironment = useConnectionStore(
@@ -131,9 +131,9 @@ export default function DropTriggerDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, triggerName, tableName, schemaName]);
 
-  // Sprint 274 — typing-confirm match is case-sensitive byte-for-byte.
-  // No trim, no debounce — every keystroke re-evaluates. Mirrors the
-  // `DropTableDialog` contract.
+  // Typing-confirm match is case-sensitive byte-for-byte. No trim, no
+  // debounce — every keystroke re-evaluates. Mirrors the `DropTableDialog`
+  // contract.
   const typingMatches = typingConfirm === triggerName;
   // Issue #2191 — the preview has no gate. `previewOnly: true` never
   // executes anything (`gate_destructive_ddl` in
@@ -144,10 +144,9 @@ export default function DropTriggerDialog({
   // execution alone.
   const canApply = typingMatches && !ddl.previewLoading && !!ddl.previewSql;
 
-  // Sprint 274 — 250ms debounced auto-refresh: the preview SQL rebuilds
-  // on open and on every CASCADE toggle. Mirrors Sprint 235
-  // `DropTableDialog`; `buildRequest(false)` below carries the CASCADE
-  // choice into the commit.
+  // 250ms debounced auto-refresh: the preview SQL rebuilds on open and on
+  // every CASCADE toggle. Mirrors `DropTableDialog`; `buildRequest(false)`
+  // below carries the CASCADE choice into the commit.
   useEffect(() => {
     if (!open) return;
     const handle = window.setTimeout(() => {
@@ -158,10 +157,9 @@ export default function DropTriggerDialog({
         triggerName,
         cascade,
         previewOnly,
-        // Sprint 271c — opt-in DbMismatch guard. Forward the
-        // workspace `(connId, db)` coordinate so a swapped pool
-        // rejects with `AppError::DbMismatch` before the trigger is
-        // dropped against the wrong database.
+        // Opt-in DbMismatch guard. Forward the workspace `(connId, db)`
+        // coordinate so a swapped pool rejects with `AppError::DbMismatch`
+        // before the trigger is dropped against the wrong database.
         expectedDatabase: database,
       });
       void ddl.loadPreview(

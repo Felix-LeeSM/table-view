@@ -8,14 +8,13 @@
 //! current row drain finishes — which can mean minutes for `SELECT
 //! pg_sleep(60)`-style queries.
 //!
-//! This sprint adds `cancel_query_native(connection_id, server_pid)`,
-//! which routes through `DbAdapter::cancel_query(server_pid)`:
+//! `cancel_query_native(connection_id, server_pid)` cancels on the server
+//! instead, routing through `DbAdapter::cancel_query(server_pid)`:
 //!
 //! * PG    → opens a separate connection and runs
 //!   `SELECT pg_cancel_backend(<pid>)`.
 //! * MySQL → opens a side connection and runs `KILL QUERY <thread_id>`.
-//! * Mongo → `db.adminCommand({killOp: 1, op: <opid>})` (live wire from
-//!   sprint-336).
+//! * Mongo → `db.adminCommand({killOp: 1, op: <opid>})` (live wire).
 //!
 //! Failure classification (Q5.5) lives in [`classify_cancel_error`].
 //!
@@ -136,11 +135,12 @@ pub async fn cancel_query_native_inner(
     }
 }
 
-/// `not found` 계열 메시지면 cancel race 로 보고 `AlreadyCompleted` 로 흡수한다.
+/// Treat `not found` messages as a cancel race and absorb them as `AlreadyCompleted`.
 ///
-/// #1769 전에는 `CancelError` 의 inherent method 였다. `CancelError` 가
-/// `table-view-core` 로 내려가면서 이 crate 에서 inherent `impl` 을 못 달게 됐고
-/// (E0116), `self` 를 읽지 않던 method 라 자유 함수로 내렸다 — 동작 동일.
+/// Before #1769 this was an inherent method on `CancelError`. When
+/// `CancelError` moved down into `table-view-core`, an inherent `impl` was no
+/// longer possible in this crate (E0116), and since the method never read
+/// `self` it became a free function — behavior unchanged.
 fn pass_through_if_completion(msg: &str) -> Option<CancelError> {
     let lower = msg.to_ascii_lowercase();
     if lower.contains("not found") {
@@ -179,19 +179,21 @@ pub async fn cancel_query_native(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 이유 (2026-05-16, sprint-359):
-    //! - `cancel_query_native_inner` 의 connection 미존재 path / classify
-    //!   helper 분기 / `CancelError` JSON wire-shape 의 unit-level
-    //!   gating. live cancel timing 은 cancel_pg/cancel_mysql/cancel_mongo
-    //!   통합 테스트가 별도로 다룬다.
+    //! Reason (2026-05-16):
+    //! - unit-level gating of the missing-connection path in
+    //!   `cancel_query_native_inner`, the classify helper branches, and the
+    //!   `CancelError` JSON wire-shape. Live cancel timing is covered
+    //!   separately by the cancel_pg/cancel_mysql/cancel_mongo
+    //!   integration tests.
 
     use super::*;
 
     #[tokio::test]
     async fn unknown_connection_returns_already_completed() {
-        // 미등록 connection 으로 cancel 시도하면 race 상황으로 보고
-        // AlreadyCompleted 로 분류 → frontend silent. NotFound 와는
-        // 별도 — 이쪽은 사용자가 disconnect 후 cancel 누른 경우.
+        // Cancelling against an unregistered connection is treated as a
+        // race and classified as AlreadyCompleted → silent on the
+        // frontend. Distinct from NotFound — this is the user pressing
+        // cancel after a disconnect.
         let state = AppState::new();
         let r = cancel_query_native_inner(&state, "absent", 1234, None).await;
         assert!(matches!(r, Err(CancelError::AlreadyCompleted)));
@@ -208,7 +210,7 @@ mod tests {
 
     #[tokio::test]
     async fn empty_connection_id_is_network_error() {
-        // empty conn_id 는 frontend 가 코딩 실수한 경우 — toast 로 보임.
+        // An empty conn_id means a frontend coding mistake — surfaces as a toast.
         let state = AppState::new();
         let r = cancel_query_native_inner(&state, "  ", 1, None).await;
         assert!(matches!(r, Err(CancelError::NetworkError { .. })));

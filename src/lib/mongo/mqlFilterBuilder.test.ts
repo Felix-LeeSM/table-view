@@ -91,10 +91,9 @@ describe("buildMqlFilter", () => {
     });
   });
 
-  // Sprint 313 (2026-05-14) — Slice B.1 introduces `$in` / `$nin`. The
-  // form layer surfaces a single comma-separated input that the builder
-  // splits, trims, and per-token coerces. Empty arrays are dropped (D-23)
-  // because `$in: []` is almost always a typo.
+  // `$in` / `$nin`: the form layer surfaces a single comma-separated input
+  // that the builder splits, trims, and per-token coerces. Empty arrays are
+  // dropped (D-23) because `$in: []` is almost always a typo.
   it("builds a $in clause with per-token numeric coercion from CSV input", () => {
     expect(buildMqlFilter([condition("age", "$in", "18, 19, 20")])).toEqual({
       age: { $in: [18, 19, 20] },
@@ -138,10 +137,9 @@ describe("buildMqlFilter", () => {
     expect(result).toEqual({ age: { $gte: 18, $in: [21, 25, 30] } });
   });
 
-  // Sprint 314 (2026-05-15) — Slice B.2: composite ops. The builder
-  // gains `matchMode` (`$or` wrapping) and per-row `negate` (`$not`
-  // wrapping). `$and` stays implicit (D-25). Single-row `any` collapses
-  // to the inner clause (D-26).
+  // Composite ops. The builder takes `matchMode` (`$or` wrapping) and
+  // per-row `negate` (`$not` wrapping). `$and` stays implicit (D-25).
+  // Single-row `any` collapses to the inner clause (D-26).
   describe("composite operators (Slice B.2)", () => {
     it("wraps a single negated condition in $not", () => {
       const result = buildMqlFilter([

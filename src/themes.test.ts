@@ -1,28 +1,28 @@
-// Sprint 253 (AC-253-01, AC-253-02) — Token foundation guard.
+// Token foundation guard (AC-253-01, AC-253-02).
 //
-// ADR 0023 의 5-sprint chain (253→255→254→256→257) 의 foundation. Sprint
-// 256 의 Chrome H (top stripe + prod border) 와 ConfirmDestructiveDialog
-// 헤더 token 정렬 / Sprint 254 의 severity classifier color matrix 가
-// 모두 본 6 env-specific 토큰 + `--tv-warning` 깊이 조정에 의존하므로,
-// 본 테스트는 토큰 정의의 *유일한 source of truth* (`src/themes.css`)
-// 를 텍스트 수준에서 검증한다.
+// Foundation of the ADR 0023 chain (253→255→254→256→257). The Chrome H
+// (top stripe + prod border) and ConfirmDestructiveDialog header token
+// alignment, and the severity classifier color matrix, all depend on these
+// 6 env-specific tokens + the `--tv-warning` deepening, so this test
+// verifies the token definitions' *only source of truth* (`src/themes.css`)
+// at the text level.
 //
-// 왜 텍스트 검증인가: getComputedStyle 은 jsdom 에서 CSS variable
-// inheritance 를 신뢰성 있게 풀지 않는다 (jsdom 의 CSS engine 이
-// custom property cascade 를 부분만 구현). 토큰 정의는 css 파일에
-// 들어 있는 *문자열* 자체가 contract 이므로, regex 매칭으로 정의
-// 존재 + 값 정확성 + `--tv-status-connecting` 의 amber 기본값을 갈아
-// 끼운 theme 이 어느 것인지를 단언한다.
+// Why text-level verification: getComputedStyle does not reliably resolve
+// CSS variable inheritance in jsdom (jsdom's CSS engine implements the
+// custom property cascade only partially). The *string* content of the
+// token definitions in the css file is itself the contract, so regex
+// matching asserts definition presence + value accuracy + which theme
+// substitutes its own tone for the `--tv-status-connecting` amber default.
 //
-// 왜 fs.readFileSync (`require` 우회) 인가: Vite 6 의 css 플러그인은
-// `import x from "*.css?raw"` 와 `import.meta.glob("*.css", {query:"?raw"})`
-// 를 모두 가로채 default = "" 로 stub 한다 (CSS side-effect 처리). 그래서
-// 본 sprint 의 token 검증은 vite 의 모듈 그래프를 우회해 직접 fs 로
-// css 파일을 읽는다. `@types/node` 가 dev-dep 으로 명시 안 돼 있어
-// `import` 가 type 에러 → `eval`-free runtime require + `// @ts-expect-error`
-// 로 노드 모듈을 안전하게 끌어온다 (vitest = node runtime).
+// Why fs.readFileSync (bypassing `require`): Vite 6's css plugin intercepts
+// both `import x from "*.css?raw"` and `import.meta.glob("*.css", {query:"?raw"})`
+// and stubs them with default = "" (CSS side-effect handling). So this token
+// verification bypasses vite's module graph and reads the css file directly
+// via fs. `@types/node` is not an explicit dev-dep, so `import` would be a
+// type error → `eval`-free runtime require + `// @ts-expect-error` pulls in
+// the node module safely (vitest = node runtime).
 //
-// 작성 일자: 2026-05-09 (Sprint 253, /tdd 흐름)
+// Written: 2026-05-09 (/tdd flow)
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -40,9 +40,9 @@ describe("themes.css — Sprint 253 token foundation (AC-253-01, AC-253-02)", ()
     expect(themes.length).toBeGreaterThan(1000);
   });
 
-  // AC-253-01 — 6 env-specific 토큰이 universal scope (theme-independent)
-  // 에 정의된다. 정의 위치는 :root 또는 globally-applied selector 어디든
-  // 가능하며, 모든 81 theme variant 가 inherit 가능해야 한다.
+  // AC-253-01 — the 6 env-specific tokens are defined in universal scope
+  // (theme-independent). The definition site can be :root or any
+  // globally-applied selector, and all 81 theme variants must inherit it.
   it("defines --tv-env-prod with the spec value (#dc2626)", () => {
     expect(themes).toMatch(/--tv-env-prod:\s*#dc2626/);
   });
@@ -67,24 +67,27 @@ describe("themes.css — Sprint 253 token foundation (AC-253-01, AC-253-02)", ()
     expect(themes).toMatch(/--tv-env-staging-text:\s*#7c2d12/);
   });
 
-  // AC-253-02 — `--tv-warning` 의 값이 spec deep orange (#ea580c) 로
-  // 정의된다. Pre-Sprint 253 에는 `--tv-warning` 자체가 정의돼 있지
-  // 않아 (`--color-warning` 은 `--tv-status-connecting` 을 가리킴),
-  // 본 sprint 가 universal :root 에 신규 정의로 도입한다.
+  // AC-253-02 — `--tv-warning` is defined with the spec deep orange
+  // (#ea580c). Before this change `--tv-warning` itself was undefined
+  // (`--color-warning` pointed at `--tv-status-connecting`); it was
+  // introduced as a new definition in the universal :root.
   it("defines --tv-warning with the deepened spec value (#ea580c)", () => {
     expect(themes).toMatch(/--tv-warning:\s*#ea580c/);
   });
 
-  // AC-253-02 — amber `#f59e0b` 가 `--tv-status-connecting` 의 기본값이다.
-  // "connecting" 의미와 "warning/staging" 의미를 시각적으로 분리한다.
+  // AC-253-02 — amber `#f59e0b` is the `--tv-status-connecting` default.
+  // It visually separates the "connecting" meaning from the
+  // "warning/staging" meaning.
   //
-  // 갈아 끼운 theme 을 **이름으로** 단언한다. 개수 하한(직전 판: 실측 152 에
-  // 바닥 72)은 80블록이 amber 를 잃어도 green 이라 "기본값" 을 지키지 못했다.
-  // 이름 집합은 amber theme 이 새로 늘어도 안 흔들리고, 갈아 끼우는 theme 이
-  // 늘면 그때만 이 줄을 같이 고치게 만든다.
+  // Asserts the substituting themes **by name**. A count floor (previous
+  // revision: measured 152, floor 72) failed to protect the "default" —
+  // 80 blocks could lose amber and still stay green. A name set stays
+  // stable as more amber themes are added, and only forces this line to
+  // change when a new substituting theme appears.
   it("keeps amber (#f59e0b) the --tv-status-connecting default outside the themes that substitute their own tone", () => {
-    // #2117 이 들여온 refero 9종 중 유채색을 안 쓰는 supply·henry 와 자기
-    // 팔레트 톤을 쓰는 authkit·lattice·ease. 나머지 전 블록은 amber 다.
+    // Of the 9 refero themes #2117 brought in: supply·henry avoid chromatic
+    // colors, authkit·lattice·ease use their own palette tone. Every
+    // remaining block is amber.
     const SUBSTITUTES = ["authkit", "ease", "henry", "lattice", "supply"];
     const substituting = new Set<string>();
     const blockNames: string[] = [];
@@ -95,25 +98,26 @@ describe("themes.css — Sprint 253 token foundation (AC-253-01, AC-253-02)", ()
         /\[data-theme="([^"]+)"\]\[data-mode="(light|dark)"\]\s*\{([^}]*)\}/g,
       )) {
       const body = m[3] ?? "";
-      // syntax-only 블록은 `--tv-background` 가 없다 (ADR 0031 의 2블록 분할).
+      // syntax-only blocks lack `--tv-background` (ADR 0031's 2-block split).
       if (!/--tv-background:/.test(body)) continue;
       blockNames.push(`${m[1]} ${m[2]}`);
-      // 선언 누락은 skip 이 아니라 substitute 로 센다 — 조용한 skip 은 안 잰
-      // 블록을 "통과" 로 보고하는 경로다.
+      // Count a missing declaration as a substitute, not a skip — a silent
+      // skip is a path that reports unmeasured blocks as "passing".
       if (/--tv-status-connecting:\s*#f59e0b\b/.test(body)) amber += 1;
       else substituting.add(m[1] ?? "");
     }
-    // 형제 스윕 셋이 이미 쓰는 완전성 앵커. 없으면 아래 `uiBlocks` 가 고정이
-    // 아니라 측정값이라, 블록 정규식이 절반만 깨져도 `amber === uiBlocks - 10`
-    // 이 그대로 성립하며 green 이다.
+    // Completeness anchor the sibling sweep sets already use. Without it
+    // `uiBlocks` below is a measurement, not a fixed value, so if the block
+    // regex breaks halfway `amber === uiBlocks - 10` still holds and the
+    // test stays green.
     assertSweepIsComplete(blockNames);
     const uiBlocks = blockNames.length;
     expect([...substituting].sort()).toEqual(SUBSTITUTES);
-    // 세는 명령: grep -c -- '--tv-status-connecting: #f59e0b' src/themes.css
+    // Counting command: grep -c -- '--tv-status-connecting: #f59e0b' src/themes.css
     expect(amber).toBe(uiBlocks - SUBSTITUTES.length * 2);
   });
 
-  // 회귀 가드 — `--tv-warning` 이 다시 amber 로 회귀하지 않도록.
+  // Regression guard — keeps `--tv-warning` from regressing back to amber.
   it("does not reintroduce amber #f59e0b for --tv-warning", () => {
     expect(themes).not.toMatch(/--tv-warning:\s*#f59e0b/);
   });
@@ -128,19 +132,19 @@ describe("themes.css — Sprint 253 token foundation (AC-253-01, AC-253-02)", ()
   });
 });
 
-// Sprint 257 (AC-257-01..04) — Per-theme syntax palette curation. ADR
-// 0023 grill Q12 의 큐레이션 결정을 *규칙 기반 derivation* 으로 일괄
-// 적용한 회귀 가드 (사용자 선택 (b)). 작성 일자: 2026-05-09.
+// Per-theme syntax palette curation (AC-257-01..04). Regression guard that
+// applies the ADR 0023 grill Q12 curation decision as *rule-based
+// derivation* (user option (b)). Written: 2026-05-09.
 describe("themes.css — Sprint 257 syntax palette derivation (AC-257-01..04)", () => {
-  // 사전 default 값 — 모든 theme 이 이 값으로만 회귀하면 derivation 이
-  // 스킵되었다는 신호.
+  // Pre-derivation default values — if every theme regresses to only these,
+  // derivation was skipped.
   const PRE_LIGHT = ["#7c3aed", "#16a34a", "#dc2626"] as const;
   const PRE_DARK = ["#c4b5fd", "#86efac", "#fca5a5"] as const;
 
-  // AC-257-01 — derivation 적용 후, default-light triple 이 *전체*
-  // 162 block 에서 dominant 하게 살아 있지 않아야 한다 (사전 ≥ 50,
-  // post derivation 은 ≤ 5 — clickhouse 등 collision theme 이 우연히
-  // default 와 일치할 수 있어 0 이 아닌 작은 상한).
+  // AC-257-01 — after derivation, the default-light triple must not survive
+  // dominantly across *all* 162 blocks (pre ≥ 50, post derivation ≤ 5 —
+  // a small non-zero ceiling, since collision themes like clickhouse can
+  // accidentally match the default).
   it("does not leave the pre-derivation light default palette dominant", () => {
     const matches = themes.match(
       /--tv-syntax-keyword:#7c3aed; --tv-syntax-string:#16a34a; --tv-syntax-number:#dc2626;/g,
@@ -155,14 +159,15 @@ describe("themes.css — Sprint 257 syntax palette derivation (AC-257-01..04)", 
     expect((matches ?? []).length).toBeLessThanOrEqual(5);
   });
 
-  // AC-257-01 — derivation 다양성. syntax-keyword unique 색상 수가 너무
-  // 빈약하면 default-palette 회귀 신호.
+  // AC-257-01 — derivation diversity. Too few unique syntax-keyword colors
+  // signals a regression to the default palette.
   //
-  // ADR 0023 AC-257-01 의 자동 HSL derivation 은 ADR 0031 (2026-05-15) 로
-  // superseded — 72 테마 × 12 토큰 시방서 수동 import. derivation 일관성
-  // 보다 brand identity 우선 정책이라 unique 수가 일부 줄어든다 (≥ 30 →
-  // ≥ 10). 본 가드의 의도는 "단일 default 가 모든 테마를 덮어쓰지 않음"
-  // 으로 유지. 토큰 포맷의 `:` 뒤 공백도 ADR 0031 의 시방서 출력 그대로.
+  // The ADR 0023 AC-257-01 automatic HSL derivation was superseded by
+  // ADR 0031 (2026-05-15) — a manually imported spec of 72 themes × 12
+  // tokens. Brand identity takes priority over derivation consistency, so
+  // the unique count drops somewhat (≥ 30 → ≥ 10). This guard's intent
+  // stays "no single default covers every theme". The space after `:` in
+  // the token format also matches ADR 0031's spec output.
   it("produces a diverse syntax-keyword palette across themes", () => {
     const re = /--tv-syntax-keyword:\s*(#[0-9a-fA-F]{3,6})/g;
     const seen = new Set<string>();
@@ -173,14 +178,15 @@ describe("themes.css — Sprint 257 syntax palette derivation (AC-257-01..04)", 
     expect(seen.size).toBeGreaterThanOrEqual(10);
   });
 
-  // AC-257-01 — derivation 의 정의 covering. 모든 (theme, mode) pair 가
-  // syntax triple 을 갖고 있어야 한다 (어떤 pair 도 syntax 누락 0).
+  // AC-257-01 — derivation definition coverage. Every (theme, mode) pair
+  // must carry the syntax triple (zero pairs missing syntax).
   //
-  // ADR 0031 (2026-05-15) — 같은 (theme, mode) 가 두 CSS 블록으로 분할됨
-  // (base palette + syntax token 각각). 따라서 block 단위가 아니라
-  // (theme, mode) pair 의 union 으로 triple 존재를 검증한다 (commit msg:
-  // "parseThemes 가 같은 (theme, mode) 다중 블록을 union 으로 merge"). 토큰
-  // 포맷의 `:` 뒤 공백도 ADR 0031 의 시방서 출력 그대로이므로 정규식 추가.
+  // ADR 0031 (2026-05-15) — the same (theme, mode) is split across two CSS
+  // blocks (base palette and syntax token respectively). So the triple's
+  // presence is verified as the union of (theme, mode) pairs, not per block
+  // (commit msg: "parseThemes merges multiple blocks of the same
+  // (theme, mode) as a union"). The space after `:` in the token format
+  // also matches ADR 0031's spec output, hence the regex.
   it("defines a syntax-keyword/string/number triple in every theme block", () => {
     const blockRe =
       /\[data-theme="([^"]+)"\]\[data-mode="(light|dark)"\]\s*\{([^}]+)\}/g;
@@ -204,8 +210,8 @@ describe("themes.css — Sprint 257 syntax palette derivation (AC-257-01..04)", 
     expect(withTriple).toBe(bodyByPair.size);
   });
 
-  // 사전 default 값이 레퍼런스용으로만 사용되도록 가드 (regression
-  // 테스트의 self-reference 보호).
+  // Guards that the pre-derivation defaults are used for reference only
+  // (protects the regression test's self-reference).
   it("references the pre-derivation defaults exactly twice (light + dark) in this test file", () => {
     expect(PRE_LIGHT).toHaveLength(3);
     expect(PRE_DARK).toHaveLength(3);

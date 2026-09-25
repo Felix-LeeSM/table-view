@@ -1,14 +1,13 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the `${...}` is inside a test name that quotes the composite key's shape. Interpolating it would name the test after four undefined variables.
 
-// Sprint 251 — `dataGridEditStore` (in-memory zustand) lift of the four
-// pending-edit slices. Maps to AC-251-S1..S5 from
-// Sprint 251 contract. Date 2026-05-09.
+// `dataGridEditStore` (in-memory zustand) lift of the four
+// pending-edit slices. Maps to AC-251-S1..S5.
 //
-// Sprint 433 extends the key to
+// The RISK-039 fix extends the key to
 // `${connectionId}::${database}::${schema}::${table}` so same-name RDB
 // tables in different databases do not share pending edits. The store
 // lives only for the lifetime of the workspace window — no localStorage,
-// no cross-window broadcast (out of scope per contract). The five actions
+// no cross-window broadcast (out of scope). The five actions
 // (`getEntry`, `setSlice`, `clearEntry`, `purgeKey`, `purgeForConnection`)
 // must produce immutable Map / Set / Array replacements so React selectors
 // detect the change.
@@ -124,7 +123,7 @@ describe("dataGridEditStore — Sprint 251 in-memory pending-edit lift", () => {
   });
 
   it("[RISK-039] same connection/schema/table in two databases uses isolated pending entries", () => {
-    // Reason: Sprint 433 RISK-039 — users can open db1.public.users and
+    // Reason: RISK-039 — users can open db1.public.users and
     // db2.public.users at the same time; pending edits must not bleed
     // across the active database boundary. (2026-05-22)
     useDataGridEditStore

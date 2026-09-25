@@ -3,21 +3,20 @@ import { EditorView } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
 import { autocompleteTooltipTheme } from "./autocompleteTheme";
 
-// Sprint 303 (2026-05-14) — autocomplete popup 의 다크모드 토큰 매핑 가드.
-// CodeMirror 의 default `tooltips.baseTheme` 는 light 색을 직접 박아 다크
-// 모드에서 흰 배경 + 흰 글씨로 가독성 0 이 됐다 (2026-05-14 user 보고).
-// 이 가드는 우리가 inject 한 theme extension 이 popup 의 핵심 surface
-// (tooltip wrapper / list item / selected state / matched-text) 에
-// design-token 으로 매핑된 style 을 *주입* 한다는 사실을 확인한다.
-// 실제 token 의 light/dark 값은 themes.css 에 있고, 우리는 token 이름이
-// 정확히 들어갔는지만 검사 — JSDOM 은 CSS variable 을 resolve 하지 않아
-// computedStyle 의 var 까지만 본다.
+// Guard for the autocomplete popup's dark-mode token mapping (2026-05-14).
+// CodeMirror's default `tooltips.baseTheme` hard-codes light colours, so in
+// dark mode the popup showed white text on a white background and could not
+// be read (user report, 2026-05-14). This guard checks that the theme
+// extension we inject *injects* design-token-mapped styles into the popup's
+// core surfaces (tooltip wrapper / list item / selected state / matched-text).
+// The tokens' actual light/dark values live in themes.css; this test only
+// checks that the token names went in correctly — JSDOM does not resolve CSS
+// variables, so a computed style shows no more than the `var(...)`.
 //
-// ADR 0031 (2026-05-15) — raw `--primary` / `--popover` 는 어디에도 정의돼
-// 있지 않았다. 이 프로젝트의 token surface 는 `--tv-*` (themes.css) 와
-// `--color-*` (index.css Tailwind `@theme inline`) 둘 뿐. autocompleteTheme
-// 이 ADR 0031 시점에 `--tv-*` 로 교정됐고, 본 테스트는 *해당 prefix 가 실제
-// 로 emit 됨* 을 lock 한다. 다시 raw var 로 회귀하면 즉시 실패.
+// ADR 0031 (2026-05-15) — raw `--primary` / `--popover` were not defined
+// anywhere; see the `autocompleteTooltipTheme` TSDoc in
+// `src/lib/editor/autocompleteTheme.ts`. This test locks that the `--tv-*`
+// prefix is actually emitted, so a regression to raw vars fails immediately.
 
 describe("autocompleteTooltipTheme", () => {
   it("emits styles for the popup tooltip wrapper", () => {

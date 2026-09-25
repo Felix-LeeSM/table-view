@@ -39,7 +39,7 @@ describe("showWindow — Rust command routing", () => {
 
   // Reason: the critical recovery path — workspace_show fails (window
   // destroyed), then workspace_ensure recreates it, then workspace_show
-  // retries. This is the fix for the "창이 안 열려" bug. (2026-04-28)
+  // retries. This is the fix for the "window won't open" bug. (2026-04-28)
   it("invokes workspace_ensure then retries workspace_show when workspace_show fails", async () => {
     mockInvoke
       .mockRejectedValueOnce(new Error("window 'workspace' not found"))

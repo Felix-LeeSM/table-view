@@ -1,5 +1,5 @@
 /**
- * Sprint 138 (#4 — DBMS-aware connection form): Redis-specific form fields.
+ * Redis-specific form fields.
  * Differences from PG/MySQL:
  *
  *   - `user` is the optional ACL username (Redis 6+); empty means default

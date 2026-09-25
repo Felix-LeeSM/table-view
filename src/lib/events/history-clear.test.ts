@@ -1,12 +1,12 @@
 /**
- * 작성 2026-05-16 (Phase 3 sprint-365, AC-365-09)
+ * Written 2026-05-16 (AC-365-09)
  *
- * 사유: F.5 "Clear query history" (strategy doc lines 1366–1368 + codex
- * 7차 #3). `{domain:"history", op:"clear", entityId:null, version:N+1}`
- * 수신 → mounted history panel 의 `entries=[]` set + page reset. refetch
- * 0회. 본 테스트는 dispatcher 가 history.clear payload 를 `onClear`
- * 핸들러로만 라우팅하고 `onCreated` (per-entry refetch 핸들러) 는 0회임
- * 을 잠근다.
+ * Reason: F.5 "Clear query history" (strategy doc lines 1369–1371).
+ * Receiving `{domain:"history", op:"clear", entityId:null, version:N+1}`
+ * makes the mounted history panel set `entries=[]` and reset its page, with
+ * zero refetches. This test locks that the dispatcher routes the
+ * history.clear payload only to the `onClear` handler and calls `onCreated`
+ * (the per-entry refetch handler) zero times.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";

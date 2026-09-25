@@ -236,7 +236,7 @@ fn binary_operator_is_safe(op: &BinaryOperator) -> bool {
 // lockfile (#2161); a version bump there is
 // the trigger: diff `sqlparser::ast::Expr` and re-confirm every variant matched
 // here still carries no unvalidated `Expr`/`Query` child. Rule mirrored in
-// `memory/engineering/conventions/rust/memory.md` (보안).
+// `memory/engineering/conventions/rust/memory.md` § 보안.
 fn is_safe_value_expr(expr: &Expr) -> bool {
     match expr {
         Expr::InSubquery { .. }

@@ -5,13 +5,13 @@ import { useSchemaStore } from "@stores/schemaStore";
 import { useCallback } from "react";
 
 /**
- * connect 시 schema/document cache를 함께 invalidate. connectionStore action을
- * 컴포넌트가 직접 호출하면 backend가 새로 연 default-DB sub-pool과 이전
- * active DB 기준의 cached schema가 어긋나 재진입 화면이 "초기 DB"로 잘못
- * 노출된다.
+ * Invalidates the schema/document caches together with connect. When a
+ * component calls the connectionStore action directly, the default-DB
+ * sub-pool the backend just opened and the schema cached for the previous
+ * active DB disagree, and the re-entered screen wrongly shows "initial DB".
  *
- * disconnect/delete teardown은 connectionStore의 state-transition watcher가
- * `cleanupConnectionFrontendState(connectionId)` 한 곳으로 수렴시킨다.
+ * The connectionStore state-transition watcher funnels disconnect/delete
+ * teardown into one place, `cleanupConnectionFrontendState(connectionId)`.
  */
 export function useConnectionLifecycle() {
   const storeConnect = useConnectionStore((s) => s.connectToDatabase);
@@ -30,9 +30,10 @@ export function useConnectionLifecycle() {
       clearConnectionSchemaCache(id);
       clearDocumentCatalog(id);
       clearDocumentQuery(id);
-      // connectionStore action은 throw 대신 status를 error 변형에 기록하므로
-      // 호출자가 await 결과로는 성공 여부를 알 수 없다. hook(외부 layer)에서
-      // fresh status를 한 번 읽어 boolean으로 환산해 호출자에게 알린다.
+      // The connectionStore action records a failure in the status's error
+      // variant instead of throwing, so the caller cannot tell success from
+      // the awaited result. The hook (the outer layer) reads the fresh
+      // status once and reports it to the caller as a boolean.
       const status = useConnectionStore.getState().activeStatuses[id];
       return status?.type === "connected";
     },

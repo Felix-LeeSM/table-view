@@ -1,10 +1,9 @@
-// Sprint 222 — `sort` axis split from `DataGrid.test.tsx` (P11 step 5,
-// last). Covers single-column sort cycle (ASC → DESC → null) +
-// Shift+Click multi-column variants (add / toggle / remove) + regular
-// click replaces all + sort resets page + orderBy plumbing + Sprint 76
-// per-tab sort state (AC-02 / AC-03 — store action route, mount-time
-// restoration, multi-column restoration, cross-tab isolation).
-// Cases are byte-equivalent to the originals — no behaviour change.
+// `sort` axis of the DataGrid tests. Covers single-column sort cycle
+// (ASC → DESC → null) + Shift+Click multi-column variants (add /
+// toggle / remove) + regular click replaces all + sort resets page +
+// orderBy plumbing + per-tab sort state (AC-02 / AC-03 — store action
+// route, mount-time restoration, multi-column restoration, cross-tab
+// isolation).
 
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -50,8 +49,8 @@ beforeEach(() => {
   });
 });
 
-// Sprint 76 — a minimal reactive mock that mirrors zustand's hook + getState
-// shape. The component subscribes through the selector; `updateTabSorts`
+// A minimal reactive mock that mirrors zustand's hook + getState shape.
+// The component subscribes through the selector; `updateTabSorts`
 // mutates the tab entry and bumps `version` so every selector re-runs on
 // the next render. `forceRerender` via `useTabStoreBump` keeps React in
 // sync without dragging the real zustand library into the mock.
@@ -298,13 +297,12 @@ describe("DataGrid", () => {
     // Find the latest call with orderBy
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    // Sprint 354 (L2 fix) — `db` no longer occupies the 2nd positional
-    // slot (schemaStore wrapper retired); `orderBy` index shifts from 6
-    // to 5.
+    // `db` no longer occupies the 2nd positional slot (schemaStore
+    // wrapper retired); `orderBy` index shifts from 6 to 5.
     expect(lastCall[5]).toBe("id ASC");
   });
 
-  // ── Sprint 76: Per-tab sort state ──
+  // ── Per-tab sort state ──
 
   // AC-02 — sort writes go through the store action, not local state.
   it("routes handleSort through updateTabSorts (store action)", async () => {
@@ -408,9 +406,8 @@ describe("DataGrid", () => {
     expect(await screen.findByText("▲")).toBeInTheDocument();
     const aCalls = mockQueryTableData.mock.calls;
     let lastCall = aCalls[aCalls.length - 1] as unknown[];
-    // Sprint 354 (L2 fix) — `db` no longer occupies the 2nd positional
-    // slot (schemaStore wrapper retired); `orderBy` index shifts from 6
-    // to 5.
+    // `db` no longer occupies the 2nd positional slot (schemaStore
+    // wrapper retired); `orderBy` index shifts from 6 to 5.
     expect(lastCall[5]).toBe("id ASC");
 
     // Simulate tab switch by remounting with tab B active.

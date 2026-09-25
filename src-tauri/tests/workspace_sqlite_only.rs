@@ -1,11 +1,12 @@
-//! 작성 2026-05-16 (Phase 1 sprint-358) — workspace 도메인은 W1 시작 시점부터
-//! SQLite-only. LS write 0 (codex 6차 #5). 본 테스트는 backend persist_workspace
-//! IPC 의 (1) guard 통과 후 SQLite UPDATE, (2) LS-equivalent file write 0,
-//! (3) row 의 PK (connection_id, db_name) 충돌 시 UPSERT 동작 검증.
+//! Written 2026-05-16 — the workspace domain is SQLite-only, with zero LS
+//! writes. This test verifies, for the backend persist_workspace IPC, (1) the
+//! SQLite UPDATE after the guard passes, (2) zero LS-equivalent file writes,
+//! and (3) the UPSERT behaviour when a row's PK (connection_id, db_name)
+//! collides.
 //!
 //! AC mapping:
-//!   - AC-358-05 workspaces SQLite-only (file/LS write 0)
-//!   - AC-358-08 guard 4-state (workspace persist 도 동일 guard)
+//!   - AC-358-05 workspaces SQLite-only (zero file/LS writes)
+//!   - AC-358-08 guard 4-state (workspace persist shares the same guard)
 
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -52,7 +53,7 @@ async fn ac_358_05_persist_workspace_writes_only_to_sqlite() {
         .await
         .unwrap();
 
-    // SQLite row 1 — UPSERT 결과.
+    // SQLite row 1 — the UPSERT result.
     let row: (String, String, Option<String>, String) = sqlx::query_as(
         "SELECT connection_id, db_name, active_tab_id, tabs_json FROM workspaces \
          WHERE connection_id = ? AND db_name = ?",
@@ -67,7 +68,7 @@ async fn ac_358_05_persist_workspace_writes_only_to_sqlite() {
     assert_eq!(row.2.as_deref(), Some("tab-1"));
     assert!(row.3.contains("tab-1"));
 
-    // 어떤 file 도 workspace JSON 을 wirte 하지 않아야 함.
+    // No file may write the workspace JSON.
     let workspaces_json = dir.path().join("workspaces.json");
     assert!(
         !workspaces_json.exists(),
@@ -107,7 +108,7 @@ async fn ac_358_05_persist_workspace_upserts_in_place_on_pk_conflict() {
     cleanup();
 }
 
-// AC-358-08: workspace persist 도 같은 guard. pending → reject.
+// AC-358-08: workspace persist shares the same guard. pending → reject.
 #[tokio::test]
 #[serial]
 async fn ac_358_08_persist_workspace_rejects_when_legacy_import_pending() {

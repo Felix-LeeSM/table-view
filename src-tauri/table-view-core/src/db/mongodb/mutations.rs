@@ -2,10 +2,9 @@
 //! `update_document` / `delete_document` + `DocumentId` ↔ `Bson`
 //! round-trip helpers.
 //!
-//! Sprint 197 split — extracted from `db/mongodb.rs`. Sprint 198 will
-//! land bulk-write commands (`delete_many` / `update_many` /
-//! `drop_collection`) in this same file so the mutation surface stays
-//! co-located.
+//! Extracted from `db/mongodb.rs`. The bulk-write commands (`delete_many` /
+//! `update_many` / `drop_collection`) live in this same file so the mutation
+//! surface stays co-located.
 
 use bson::{doc, Bson, Document};
 
@@ -16,7 +15,7 @@ use super::queries::validate_ns;
 use super::MongoAdapter;
 
 impl MongoAdapter {
-    /// Sprint 197 — body of `DocumentAdapter::insert_document`.
+    /// Body of `DocumentAdapter::insert_document`.
     pub(super) async fn insert_document_impl(
         &self,
         db: &str,
@@ -35,7 +34,7 @@ impl MongoAdapter {
         Ok(bson_id_to_document_id(&inserted.inserted_id))
     }
 
-    /// Sprint 197 — body of `DocumentAdapter::update_document`.
+    /// Body of `DocumentAdapter::update_document`.
     pub(super) async fn update_document_impl(
         &self,
         db: &str,
@@ -45,10 +44,10 @@ impl MongoAdapter {
     ) -> Result<(), AppError> {
         validate_ns(db, collection)?;
 
-        // Sprint 80 contract: reject `_id` in the patch up-front so the
-        // driver never sees a mutating update on the identity column.
-        // The guard runs before `current_client()` so a misuse does not
-        // burn a connection/round-trip.
+        // Contract: reject `_id` in the patch up-front so the driver never
+        // sees a mutating update on the identity column. The guard runs before
+        // `current_client()` so a misuse does not burn a
+        // connection/round-trip.
         if patch.contains_key("_id") {
             return Err(AppError::Validation(
                 "update_document: patch must not contain _id".into(),
@@ -77,7 +76,7 @@ impl MongoAdapter {
         Ok(())
     }
 
-    /// Sprint 197 — body of `DocumentAdapter::delete_document`.
+    /// Body of `DocumentAdapter::delete_document`.
     pub(super) async fn delete_document_impl(
         &self,
         db: &str,
@@ -107,7 +106,7 @@ impl MongoAdapter {
         Ok(())
     }
 
-    /// Sprint 198 — body of `DocumentAdapter::delete_many`.
+    /// Body of `DocumentAdapter::delete_many`.
     ///
     /// Empty filter `{}` is allowed at this layer — the Safe Mode
     /// classifier (`analyzeMongoOperation`) gates on the frontend before
@@ -130,7 +129,7 @@ impl MongoAdapter {
         Ok(result.deleted_count)
     }
 
-    /// Sprint 198 — body of `DocumentAdapter::update_many`.
+    /// Body of `DocumentAdapter::update_many`.
     ///
     /// Mirrors `update_document_impl`'s `_id` rejection: a bulk update
     /// must never rewrite the identity column. The check runs before
@@ -163,7 +162,7 @@ impl MongoAdapter {
         Ok(result.modified_count)
     }
 
-    /// Sprint 198 — body of `DocumentAdapter::drop_collection`.
+    /// Body of `DocumentAdapter::drop_collection`.
     pub(super) async fn drop_collection_impl(
         &self,
         db: &str,
@@ -180,13 +179,14 @@ impl MongoAdapter {
         Ok(())
     }
 
-    /// Sprint 308 — body of `DocumentAdapter::insert_many`.
+    /// Body of `DocumentAdapter::insert_many`.
     ///
-    /// 작성 이유 (2026-05-14): A1 mongosh 파서가 `db.coll.insertMany([...])`
-    /// 를 dispatch 했을 때 다수의 문서를 한 round-trip 으로 삽입.
-    /// 빈 배열은 driver round-trip 없이 `Ok(vec![])` 로 short-circuit —
-    /// driver (3.6) 가 empty input 을 거부하는 케이스를 wrap 하지 않고
-    /// "no-op insert" 의 유저-가시 의미를 그대로 보존한다.
+    /// Reason (2026-05-14): inserts many documents in one round-trip when the
+    /// A1 mongosh parser dispatches `db.coll.insertMany([...])`.
+    /// An empty array short-circuits to `Ok(vec![])` with no driver
+    /// round-trip — instead of wrapping the case where the driver (3.6)
+    /// rejects empty input, it preserves the user-visible meaning of a
+    /// "no-op insert".
     pub(super) async fn insert_many_impl(
         &self,
         db: &str,
@@ -223,7 +223,7 @@ impl MongoAdapter {
             .collect())
     }
 
-    /// Sprint 308 — body of `DocumentAdapter::bulk_write`.
+    /// Body of `DocumentAdapter::bulk_write`.
     ///
     /// The frontend sends a single IPC payload that mirrors
     /// `db.coll.bulkWrite([...])`, but the backend executes the ops through the
@@ -334,7 +334,7 @@ impl MongoAdapter {
     }
 }
 
-// ── Mutate helpers (Sprint 80) ─────────────────────────────────────────
+// ── Mutate helpers ─────────────────────────────────────────────────────
 
 /// Convert a `DocumentId` into the `Bson` shape MongoDB expects in an
 /// `_id` filter position.
@@ -558,7 +558,7 @@ mod tests {
         }
     }
 
-    // ── Sprint 198 — bulk-write smoke tests ───────────────────────────
+    // ── Bulk-write smoke tests ────────────────────────────────────────
     //
     // Each `*_without_connection` case probes the same `current_client()`
     // gate as the single-doc variants so we know the new methods plug into
@@ -568,7 +568,7 @@ mod tests {
     // (Safe Mode + `analyzeMongoOperation`) relies on as a backend
     // safety net.
     //
-    // Sprint 198 / 2026-05-02.
+    // 2026-05-02.
 
     #[tokio::test]
     async fn delete_many_without_connection_returns_connection_error() {

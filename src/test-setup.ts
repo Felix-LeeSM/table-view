@@ -3,8 +3,9 @@
 // cells would hit react-dom's stringify throw.
 import "@lib/bigintJson";
 import "@testing-library/jest-dom/vitest";
-// i18n 전역 인스턴스를 테스트 프로세스 시작 시 1회 init — useTranslation 을
-// 쓰는 컴포넌트(ThemePicker / LanguageSwitcher 등)가 provider 없이도 동작.
+// Initialize the i18n global instance once at test-process start so
+// components that use useTranslation (ThemePicker / LanguageSwitcher, etc.)
+// work without a provider.
 import "@lib/i18n";
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
 import { __resetLayoutStoreForTests } from "@stores/layoutStore";
@@ -43,14 +44,14 @@ vi.mock("@lib/tauri/workspaces", () => ({
   persistWorkspace: vi.fn(() => Promise.resolve()),
 }));
 
-// Sprint 401 (2026-05-17) — eager WASM bootstrap for the mongosh parser.
-// `parseMongoshStatement` 의 *모든* 호출부 (Toolbar render, useQueryExecution
-// dispatch, runCommandParser classify) 가 sync 시그니처를 기대하므로,
-// vitest 전체 프로세스 시작 시점에 WASM 모듈을 1회 instantiate 해서 facade
-// 의 `wasmModule` 슬롯을 채워둔다. jsdom 에는 `fetch()` 도 없으므로
-// wasm-pack 의 default `__wbg_init` 가 fetch fallback 으로 떨어진다 —
-// `initMongoshWasm(bytes)` overload 로 Node `fs.readFileSync` 결과를 직접
-// 전달해 `initSync` 코드패스를 탄다.
+// Eager WASM bootstrap for the mongosh parser. Every caller of
+// `parseMongoshStatement` (Toolbar render, useQueryExecution
+// dispatch, runCommandParser classify) expects the sync signature, so
+// instantiate the WASM module once at vitest process start to fill the
+// facade's `wasmModule` slot. jsdom has no `fetch()` either, so
+// wasm-pack's default `__wbg_init` would fall into the fetch fallback —
+// pass the Node `fs.readFileSync` result straight to the
+// `initMongoshWasm(bytes)` overload to take the `initSync` code path.
 beforeAll(async () => {
   const { initMongoshWasm } = await import("@features/query");
   const { readFileSync } = await import("node:fs");
@@ -72,7 +73,7 @@ beforeAll(async () => {
   await initMongoshWasm(ab);
 });
 
-// sprint-366 (2026-05-16, Phase 4 Q15) — workspace tree components read
+// Phase 4 Q15 — workspace tree components read
 // their connection identity from `useCurrentWindowConnectionId()` which
 // delegates to `getCurrentWindowLabel()`. The real implementation calls
 // `getCurrentWebviewWindow()` and returns `null` outside Tauri (which
@@ -94,7 +95,7 @@ vi.mock("@lib/window-label", async () => {
   };
 });
 
-// Sprint 251 — `dataGridEditStore` is a singleton across the test process.
+// `dataGridEditStore` is a singleton across the test process.
 // Without a per-test reset, pending state from one test leaks into the
 // next via the `(connectionId, database, schema, table)` keying — many existing
 // suites (`useDataGridEdit.undo.test.ts`, `useDataGridEdit.onblur.test.ts`,
@@ -166,7 +167,7 @@ Object.defineProperty(window, "matchMedia", {
   }),
 });
 
-// Sprint-112: Radix Select uses pointer-capture + scrollIntoView APIs that
+// Radix Select uses pointer-capture + scrollIntoView APIs that
 // jsdom doesn't implement. Polyfill them here so the Radix-based <Select>
 // component can be opened, navigated, and have its options clicked in tests.
 if (typeof Element !== "undefined") {
@@ -232,7 +233,7 @@ if (typeof Element !== "undefined") {
   });
 }
 
-// Sprint-114: `@tanstack/react-virtual` reads a ResizeObserver from the
+// `@tanstack/react-virtual` reads a ResizeObserver from the
 // scroll container to react to viewport resizes. jsdom doesn't ship one,
 // so the virtualizer crashes during render without this polyfill. We only
 // need the no-op surface — tests drive size via `getBoundingClientRect` /

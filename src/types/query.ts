@@ -8,10 +8,10 @@ import type { SearchResultEnvelope } from "@/types/search";
  * Column metadata returned by a query execution.
  * Matches the Rust `QueryColumn` struct from `src-tauri/table-view-core/src/models/query.rs`.
  *
- * Sprint 238 — `category` 는 백엔드가 dialect 별 `dataType` 매핑 (`PG`,
- * `Mongo`) 으로 채워 보낸다. DataGrid 의 default 폭 + text-align 에만 사용.
- * Structure / Records 뷰는 raw `dataType` 을 그대로 노출 — `category` 로
- * 치환 금지 (예: uuid 컬럼은 "uuid" 로 보여야 한다).
+ * The backend fills `category` from a per-dialect `dataType` mapping. It is
+ * used only for the DataGrid's default width + text-align. Structure /
+ * Records views show the raw `dataType` as-is — do not substitute `category`
+ * for it (e.g. a uuid column must show "uuid").
  */
 export interface QueryColumn {
   name: string;
@@ -33,12 +33,12 @@ export type QueryType = "select" | { dml: { rows_affected: number } } | "ddl";
  * Result of executing an arbitrary SQL query.
  * Matches the Rust `QueryResult` struct.
  *
- * Sprint 311 (Phase 28 Slice A5) — added `resultKind` to discriminate
- * between the default grid render (`"grid"` / undefined), the scalar
- * panel (`"scalar"` for `countDocuments` / `estimatedDocumentCount`),
- * and the list panel (`"list"` for `distinct`). A6 will introduce
- * `"writeSummary"` for mutation results. Optional so every existing
- * RDB call site stays compatible without changes.
+ * Phase 28 Slice A5 added `resultKind` to discriminate between the default
+ * grid render (`"grid"` / undefined), the scalar panel (`"scalar"` for
+ * `countDocuments` / `estimatedDocumentCount`), and the list panel
+ * (`"list"` for `distinct`); Phase 28 Slice A6 added `"writeSummary"` for
+ * mutation results. Optional so every existing RDB call site stays
+ * compatible without changes.
  */
 export interface QueryResult {
   columns: QueryColumn[];
@@ -53,16 +53,16 @@ export interface QueryResult {
    */
   resultUnit?: "document";
   /**
-   * Sprint 312 (Phase 28 Slice A6, 2026-05-14) — `"writeSummary"` joins
-   * the discriminator union. The 7 Mongo write methods (`insertOne` /
+   * Phase 28 Slice A6 (2026-05-14) — `"writeSummary"` joins the
+   * discriminator union. The Mongo write methods (`insertOne` /
    * `insertMany` / `updateOne` / `updateMany` / `deleteOne` /
-   * `deleteMany` / `bulkWrite`) populate `writeSummary` and set this
-   * field so `QueryResultGrid` routes to `WriteSummaryPanel` instead of
-   * the default DataGrid render.
+   * `deleteMany` / `replaceOne` / `bulkWrite`) populate `writeSummary` and
+   * set this field so `QueryResultGrid` routes to `WriteSummaryPanel`
+   * instead of the default DataGrid render.
    */
   resultKind?: "grid" | "scalar" | "list" | "writeSummary";
   /**
-   * Sprint 312 — populated when `resultKind === "writeSummary"`. Carries
+   * Populated when `resultKind === "writeSummary"`. Carries
    * the per-method counters the panel renders; left undefined for every
    * non-write result.
    */
@@ -77,8 +77,8 @@ export interface QueryResult {
 }
 
 /**
- * Sprint 312 (Phase 28 Slice A6, 2026-05-14) — discriminated union of
- * write-method summaries surfaced by `WriteSummaryPanel`. Each variant
+ * Phase 28 Slice A6 (2026-05-14) — discriminated union of write-method
+ * summaries surfaced by `WriteSummaryPanel`. Each variant
  * holds the counter fields the user must see:
  *
  * - `"insert"`:  `insertedIds[]` (one id per inserted document) — drives
@@ -87,7 +87,7 @@ export interface QueryResult {
  *                document(s) (matched M)".
  * - `"delete"`:  `deletedCount` — drives "Deleted N document(s)".
  * - `"bulkWrite"`: the full `BulkWriteResult` shape so the panel can
- *                render one row per non-zero counter + upserted ids.
+ *                render one row per counter + upserted ids.
  */
 export type WriteSummaryData =
   | { kind: "insert"; insertedIds: DocumentId[] }
@@ -267,7 +267,7 @@ export interface QueryStatementResult {
  * If a multi-statement run fails for *every* statement, the state collapses
  * to `{ status: "error" }` instead — same as single-statement failure.
  *
- * Sprint 248 (ADR 0022 Phase 4) — `isDryRun` is set by the explicit
+ * ADR 0022 Phase 4 — `isDryRun` is set by the explicit
  * "Dry Run" button / `Cmd+Shift+Enter` shortcut so the result grid can
  * surface a "rolled back" banner. Defaults to `false` / undefined for the
  * regular `executeQuery` / `executeQueryBatch` paths.

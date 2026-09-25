@@ -5,7 +5,7 @@ import { POSTGRES_COMMON_TYPES } from "@/lib/sql/postgresTypes";
 import type { PostgresTypeInfo } from "@/types/schema";
 
 /**
- * Sprint 230 — `usePostgresTypes(connectionId)` lazy-fetches the PG
+ * `usePostgresTypes(connectionId)` lazy-fetches the PG
  * type list from `tauri.listPostgresTypes` and merges it with the
  * canonical `POSTGRES_COMMON_TYPES` list so the combobox is
  * responsive on mount (the canonical list shows immediately) and
@@ -13,16 +13,12 @@ import type { PostgresTypeInfo } from "@/types/schema";
  * up once the fetch resolves.
  *
  * Cache layer = module-level `Map<connectionId, CacheEntry>` memo,
- * NOT zustand. Justification (locked by contract Decisions §1):
+ * NOT zustand. Justification:
  * - Data is small per connection (~200-500 strings) and pure-derived
  *   from PG state — no cross-window broadcast required.
  * - A zustand slice would require adding a `typesByConnection` field
  *   to `schemaStore` AND wiring `clearForConnection` cache punch
- *   AND IPC bridge subscriptions for sync. `schemaStore.ts` body is
- *   a Sprint 224 frozen invariant — out of scope for Sprint 230.
- * - Module memo + `invalidatePostgresTypesCache(connectionId)` free
- *   function gives Sprint 231 the single hook point it needs to
- *   wire disconnect / reconnect cleanup later.
+ *   AND IPC bridge subscriptions for sync.
  *
  * Concurrent calls on the same connection share one in-flight
  * Promise (stored in the cache entry). A connectionId change between
@@ -34,7 +30,7 @@ export interface UsePostgresTypesResult {
   /** Merged type list — canonical first, then non-duplicate live extras. */
   types: string[];
   /**
-   * Sprint 234 — display label → `type_kind` lookup map. Keys are the
+   * Display label → `type_kind` lookup map. Keys are the
    * same display labels surfaced in `types` (`pg_catalog.X` stripped to
    * `X`; other schemas qualified as `<schema>.X`). Values are the raw
    * `PostgresTypeInfo.type_kind` string from the live fetch (`"base"`
@@ -57,13 +53,13 @@ interface CacheEntry {
   /** Resolved merged list (canonical + non-duplicate live extras). */
   types: string[] | null;
   /**
-   * Sprint 234 — resolved display-label → `type_kind` map. Built by
+   * Resolved display-label → `type_kind` map. Built by
    * `mergeTypesByName`; canonical entries default to `"base"`, live
    * entries reflect their `PostgresTypeInfo.type_kind`. `null` until
    * the first fetch resolves (matches `types` semantics).
    */
   typesByName: Map<string, string> | null;
-  /** Raw `PostgresTypeInfo[]` retained for future Sprint 231 type-coloring. */
+  /** Raw `PostgresTypeInfo[]` from the live fetch. */
   raw: PostgresTypeInfo[] | null;
   /** Sticky error string — surfaced to the consumer until next reload. */
   error: string | null;
@@ -79,9 +75,8 @@ interface CacheEntry {
 const cache: Map<string, CacheEntry> = new Map();
 
 /**
- * Sprint 230 — free helper exported alongside the hook so future
- * Sprint 231 wiring (connection disconnect / reconnect / DB switch)
- * can punch the cache without depending on the hook lifecycle.
+ * Free helper exported alongside the hook so the cache can be punched
+ * without depending on the hook lifecycle.
  *
  * Calling this for an unknown `connectionId` is a safe no-op.
  */
@@ -135,7 +130,7 @@ function mergeTypes(live: PostgresTypeInfo[]): string[] {
 }
 
 /**
- * Sprint 234 — companion to `mergeTypes`. Builds the display-label →
+ * Companion to `mergeTypes`. Builds the display-label →
  * `type_kind` lookup map.
  *
  * Rules:
@@ -163,7 +158,7 @@ function mergeTypesByName(live: PostgresTypeInfo[]): Map<string, string> {
 }
 
 /**
- * Sprint 234 — fallback map used in the error path so consumers always
+ * Fallback map used in the error path so consumers always
  * observe a non-null `typesByName`. Mirrors the canonical-fallback
  * shape from `mergeTypes`.
  */
@@ -195,7 +190,7 @@ function fetchTypes(connectionId: string): Promise<void> {
 
   const promise = (async () => {
     try {
-      // Sprint 271a — forward (connId, db) so a swapped backend pool rejects
+      // Forward (connId, db) so a swapped backend pool rejects
       // with DbMismatch instead of returning a stale db's type list.
       const expectedDb = resolveActiveDb(connectionId) || undefined;
       const live = await tauri.listPostgresTypes(connectionId, expectedDb);
@@ -278,11 +273,8 @@ export function usePostgresTypes(connectionId: string): UsePostgresTypesResult {
   // first render before the effect runs), surface the canonical list
   // + loading=true so the combobox is instantly usable.
   //
-  // Sprint 234 — `typesByName` follows the same invariant as `types`:
-  // never null. Empty `Map` while the very first fetch is in flight so
-  // consumers can call `.get(label)` without null-checking. Once a
-  // fetch resolves it switches to the populated cache map (canonical
-  // entries seeded with `"base"` + live entries with their `type_kind`).
+  // `typesByName` follows the same invariant as `types`: never null (see
+  // `UsePostgresTypesResult.typesByName`).
   const cached = cache.get(connectionId);
   if (!cached) {
     return {

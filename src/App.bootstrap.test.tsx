@@ -25,8 +25,8 @@
  * one case red — no two of them share a boundary observation.
  *
  * NOT guarded here: `loadPersistedMru()` in `src/App.tsx` and in
- * `src/AppRouter.tsx`. That action has an empty body since sprint-370 moved MRU
- * hydration to the `get_initial_app_state` snapshot (`src/stores/mruStore.ts`
+ * `src/AppRouter.tsx`. That action has an empty body because MRU hydrates from
+ * the `get_initial_app_state` snapshot (`src/stores/mruStore.ts`
  * `loadPersistedMru`, and the no-op is itself locked by
  * `src/stores/mruStore.test.ts`). A line that reaches no boundary and changes no
  * state cannot be observed from a render, so no assertion here can go red when

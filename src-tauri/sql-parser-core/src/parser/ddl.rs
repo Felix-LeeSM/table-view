@@ -2,7 +2,7 @@ use super::*;
 
 impl Parser<'_> {
     // ---------------------------------------------------------------
-    // Sprint 391 — DDL destructive sub-parsers.
+    // DDL destructive sub-parsers.
     // ---------------------------------------------------------------
 
     /// `DROP <object-type> [IF EXISTS] <name> [CASCADE|RESTRICT]`.
@@ -82,10 +82,10 @@ impl Parser<'_> {
     }
 
     /// `ALTER TABLE <name> <action>`. Assumes the `ALTER` token has been
-    /// consumed. Sprint-391 covers DROP-family actions; sprint-394 adds
-    /// ADD COLUMN / ADD CONSTRAINT / RENAME TO / RENAME COLUMN. Any
-    /// other action keyword (`ALTER COLUMN TYPE`, `OWNER TO`, …) is a
-    /// `SyntaxError` — out of scope for this sprint.
+    /// consumed. DROP-family actions are covered; ADD COLUMN / ADD
+    /// CONSTRAINT / RENAME TO / RENAME COLUMN are not. Any other action
+    /// keyword (`ALTER COLUMN TYPE`, `OWNER TO`, …) is a `SyntaxError` —
+    /// out of scope.
     pub(super) fn parse_alter_table(&mut self) -> Result<AlterTableStatement, ParseError> {
         // TABLE
         self.expect_keyword(Token::Table, "expected TABLE")?;
@@ -95,7 +95,7 @@ impl Parser<'_> {
 
         // action dispatch — DROP / ADD / RENAME. Anything else (ALTER
         // COLUMN / OWNER TO / SET TABLESPACE / …) surfaces as a syntax
-        // error per the sprint-394 out-of-scope list.
+        // error per the out-of-scope list.
         let action_tok = self
             .peek()
             .ok_or_else(|| syntax_err(None, "expected action"))?;
@@ -122,7 +122,7 @@ impl Parser<'_> {
         }
     }
 
-    /// Sprint-394 — parse the body of `ALTER TABLE <name> ADD …`. Three
+    /// Parse the body of `ALTER TABLE <name> ADD …`. Three
     /// shapes are accepted:
     ///   1. `ADD COLUMN [IF NOT EXISTS] <col-def>`
     ///   2. `ADD CONSTRAINT <name> <constraint-body>`
@@ -164,7 +164,7 @@ impl Parser<'_> {
         })
     }
 
-    /// Sprint-394 — parse the body of `ALTER TABLE <name> RENAME …`. Two
+    /// Parse the body of `ALTER TABLE <name> RENAME …`. Two
     /// shapes are accepted:
     ///   1. `RENAME TO <new-name>` — rename the table itself.
     ///   2. `RENAME COLUMN <old> TO <new>` — rename a column.
@@ -254,7 +254,7 @@ impl Parser<'_> {
     }
 
     // ---------------------------------------------------------------
-    // Sprint 394 — DDL additive sub-parsers (CREATE TABLE / INDEX /
+    // DDL additive sub-parsers (CREATE TABLE / INDEX /
     //              VIEW + ALTER TABLE ADD / RENAME helpers).
     // ---------------------------------------------------------------
 
@@ -265,7 +265,7 @@ impl Parser<'_> {
     ///
     /// Any other follow-up token (FUNCTION / TRIGGER / EXTENSION /
     /// TEMPORARY / MATERIALIZED / …) parses to `SyntaxError` per the
-    /// sprint-394 out-of-scope list.
+    /// the out-of-scope list.
     pub(super) fn parse_create_dispatch(&mut self) -> Result<ParseResult, ParseError> {
         let next = self
             .peek()
@@ -380,7 +380,7 @@ impl Parser<'_> {
         }
         if columns.is_empty() {
             // Edge case — only table-level constraints inside the
-            // parens. Sprint-394 rejects this (AC-394-T20 spec wording
+            // parens. This is rejected (AC-394-T20 spec wording
             // says "empty column list" but the broader invariant is
             // that a CREATE TABLE produces at least one column).
             let at = self.peek().map(|t| t.at);
@@ -394,14 +394,14 @@ impl Parser<'_> {
         })
     }
 
-    /// Sprint-394 — schema-qualified or bare table reference. Used by
+    /// Schema-qualified or bare table reference. Used by
     /// CREATE TABLE / CREATE INDEX (`ON table`) / CREATE VIEW.
     pub(super) fn parse_table_ref(&mut self) -> Result<TableRef, ParseError> {
         let first = self.expect_ident("expected table name")?;
         if matches!(self.peek().map(|t| &t.token), Some(Token::Dot)) {
             self.advance();
             let table = self.expect_ident("expected table name after '.'")?;
-            // Reject three-dot qualifier (sprint-393a's table-ref shape
+            // Reject three-dot qualifier (the table-ref shape
             // is at most two-part).
             if matches!(self.peek().map(|t| &t.token), Some(Token::Dot)) {
                 let at = self.peek().map(|t| t.at);
@@ -691,7 +691,7 @@ impl Parser<'_> {
                 Some(Token::Default) => {
                     self.advance();
                     // The DEFAULT slot accepts only literal / placeholder
-                    // values in this sprint (function calls are deferred —
+                    // values (function calls are deferred —
                     // see contract Out-of-Scope §). `parse_insert_value`
                     // surfaces a `SyntaxError` for anything else.
                     let value = self.parse_insert_value()?;
@@ -803,7 +803,7 @@ impl Parser<'_> {
         Ok(cols)
     }
 
-    /// Sprint-394 — optional `IF NOT EXISTS` token triple. Returns
+    /// Optional `IF NOT EXISTS` token triple. Returns
     /// `true` when all three keywords are present (in order); returns
     /// `false` if `IF` is absent. A partial sequence (`IF` without
     /// `NOT EXISTS`) is a `SyntaxError`.

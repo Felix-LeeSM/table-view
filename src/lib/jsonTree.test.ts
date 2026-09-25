@@ -1,4 +1,4 @@
-// Sprint 341 (2026-05-15) — jsonTree util tests.
+// 2026-05-15 — jsonTree util tests.
 // Locks the tree-walk + stats contract so DocumentTreePanel stays stable
 // when buildTreeNodes is reordered (e.g., depth-first vs breadth-first
 // changes would break path order assertions in the UI).
@@ -151,9 +151,9 @@ describe("filterTreeNodes", () => {
     ).toBe(true);
   });
 
-  // Sprint 342 V2 (2026-05-15) — regex mode lets users find e.g. `Gloss\w+`
-  // patterns. Locking the option=true branch so a future refactor (e.g.
-  // moving the matcher into a hook) can't silently revert it to substring.
+  // 2026-05-15 — regex mode lets users find e.g. `Gloss\w+` patterns.
+  // Locking the option=true branch so a future refactor (e.g. moving the
+  // matcher into a hook) can't silently revert it to substring.
   it("regex option matches by JS regex (case-insensitive)", () => {
     const nodes = buildTreeNodes(GLOSSARY);
     const visible = filterTreeNodes(nodes, "^Gloss(See|Def)", { regex: true });
@@ -170,9 +170,9 @@ describe("filterTreeNodes", () => {
     // (It would only be there if it sat on the path to a match.)
   });
 
-  // Sprint 342 V2 — invalid regex source (e.g. user typing "[" mid-flight)
-  // must not blank the tree out; fall back to substring matching so the
-  // search bar stays responsive instead of throwing.
+  // Invalid regex source (e.g. user typing "[" mid-flight) must not blank
+  // the tree out; fall back to substring matching so the search bar stays
+  // responsive instead of throwing.
   it("regex option falls back to substring when source is invalid", () => {
     const nodes = buildTreeNodes(GLOSSARY);
     const visible = filterTreeNodes(nodes, "Gloss[", { regex: true });
@@ -183,11 +183,11 @@ describe("filterTreeNodes", () => {
   });
 });
 
-// Sprint 344 Slice A (2026-05-15) — `buildTreeNodesWithGhosts` extends
-// the base traversal so paths present only in `pendingByPath` (= ghost
-// adds) render alongside the real value. Required for `+ key` / `+ item`
-// affordances (Slices B/C) — without ghost rendering, a freshly added
-// key vanishes from the tree until the user hits Save.
+// 2026-05-15 — `buildTreeNodesWithGhosts` extends the base traversal so
+// paths present only in `pendingByPath` (= ghost adds) render alongside the
+// real value. Required for the `+ key` / `+ item` affordances — without
+// ghost rendering, a freshly added key vanishes from the tree until the
+// user hits Save.
 describe("buildTreeNodesWithGhosts", () => {
   // AC-344-A-01 — root-level ghost: a brand-new key that isn't in `value`
   // appears in the tree with `isGhost = true`.
@@ -365,17 +365,20 @@ describe("buildTreeNodesWithGhosts", () => {
   });
 });
 
-// Ghost depth off-by-one (2026-07-18) — 사용자 보고: DocumentTreePanel 에서
-// 배열 원소 객체에 `+ key` 로 새 키를 추가하면 형제 필드와 같은 들여쓰기가
-// 아니라 한 레벨 더 깊게 렌더됐다. 원인은 `buildTreeNodesWithGhosts` 의 로컬
-// `depthOf` 헬퍼가 `[` 로 시작하는 경로(배열 컬럼 root 기준)의 선행 대괄호를
-// 구분자로 이중 계산해 세그먼트 수보다 +1 큰 depth 를 돌려준 것. `depth` 가
-// `paddingLeft: node.depth * 16px` 로 쓰이므로 ghost 가 형제보다 16px 더
-// 들여써졌다. ghost.depth 는 같은 부모의 형제 base 노드와 반드시 일치해야 한다.
+// Ghost depth off-by-one (2026-07-18) — user report: in DocumentTreePanel,
+// adding a new key with `+ key` to an array-element object rendered it one
+// level deeper instead of at the indent of its sibling fields. The cause was
+// the local `depthOf` helper in `buildTreeNodesWithGhosts`: for a path that
+// starts with `[` (rooted at an array column) it double-counted the leading
+// bracket as a separator and returned a depth one larger than the segment
+// count. `depth` feeds `paddingLeft: node.depth * 16px`, so the ghost was
+// indented 16px more than its siblings. A ghost's depth must match the
+// sibling base nodes under the same parent.
 describe("buildTreeNodesWithGhosts ghost depth parity", () => {
-  // Reason: 사용자 보고 회귀 — 배열 원소 객체(`[0]`)에 pending 새 키 `[0].a` 를
-  // 추가하면 ghost depth 가 형제 `[0].id`(2)와 달라 한 레벨 더 들여써졌다.
-  // depthOf("[0].a") 가 3 을 반환하던 off-by-one (2026-07-18).
+  // Reason: user-reported regression — adding a pending new key `[0].a` to an
+  // array-element object (`[0]`) gave the ghost a depth different from its
+  // sibling `[0].id` (2), so it was indented one level deeper. The
+  // off-by-one: depthOf("[0].a") returned 3 (2026-07-18).
   it("gives an array-element ghost key the same depth as its sibling fields", () => {
     const value = [{ id: "x" }];
     const pending = new Map<string, string>([["[0].a", "3"]]);
@@ -391,8 +394,9 @@ describe("buildTreeNodesWithGhosts ghost depth parity", () => {
     expect(idIdx).toBeLessThan(ghostIdx);
   });
 
-  // Reason: 회귀 방지 — 순수 점 경로(루트 키)는 off-by-one 대상이 아니므로
-  // fix 후에도 root ghost depth 는 기존 루트 필드와 동일(1)해야 한다 (2026-07-18).
+  // Reason: regression guard — plain dot paths (root keys) were not affected
+  // by the off-by-one, so after the fix a root ghost's depth must still equal
+  // the existing root fields' depth (1) (2026-07-18).
   it("keeps a root-level ghost at the same depth as existing root fields", () => {
     const value = { id: "x" };
     const pending = new Map<string, string>([["a", '{"role":"owner"}']]);
@@ -406,9 +410,9 @@ describe("buildTreeNodesWithGhosts ghost depth parity", () => {
     expect(nodes.find((n) => n.path === "a.role")?.depth).toBe(2);
   });
 
-  // Reason: 회귀 방지 — 배열에 `+ item` append 하는 ghost(`[N]`)도 같은
-  // over-indent 버그를 공유했다. append ghost depth 는 형제 원소(`[0]`)와
-  // 동일(1)해야 한다 (2026-07-18).
+  // Reason: regression guard — the ghost (`[N]`) that `+ item` appends to an
+  // array shared the same over-indent bug. The append ghost's depth must
+  // equal its sibling element's (`[0]`) depth (1) (2026-07-18).
   it("gives an array append ghost the same depth as existing elements", () => {
     const value = ["x"];
     const pending = new Map<string, string>([["[1]", "3"]]);
@@ -527,11 +531,11 @@ describe("tree DoS guards (#1445)", () => {
   });
 });
 
-// Sprint 344 Slice D (2026-05-15) — `coerceTreeAddValue` turns a user-
-// typed raw string (from the `+ key` / `+ item` inline inputs) into a
-// JSON-typed commit payload. Outer-quotes rule: trim, try `JSON.parse`;
-// success → parsed value (number/bool/null/object/array/quoted-string);
-// failure → trimmed raw string. Pure / deterministic / never throws.
+// 2026-05-15 — `coerceTreeAddValue` turns a user-typed raw string (from the
+// `+ key` / `+ item` inline inputs) into a JSON-typed commit payload.
+// Outer-quotes rule: trim, try `JSON.parse`; success → parsed value
+// (number/bool/null/object/array/quoted-string); failure → trimmed raw
+// string. Pure / deterministic / never throws.
 describe("coerceTreeAddValue", () => {
   // AC-344-D-02 (2026-05-15) — bare digits parse as number. The whole
   // "outer-quotes rule" hinges on this: a user typing `42` (no quotes)
@@ -570,8 +574,9 @@ describe("coerceTreeAddValue", () => {
   });
 
   // AC-344-D-05 (2026-05-15) — JSON object literal expands to a
-  // structured value. Slice A's ghost renderer relies on this to walk
-  // a nested ghost subtree from a single `+ key` commit.
+  // structured value. The ghost renderer (`buildTreeNodesWithGhosts`)
+  // relies on this to walk a nested ghost subtree from a single `+ key`
+  // commit.
   it("returns parsed object for JSON object input (AC-344-D-05)", () => {
     expect(coerceTreeAddValue('{"a":1}')).toEqual({ a: 1 });
   });

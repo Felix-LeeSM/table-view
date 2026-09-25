@@ -1,13 +1,12 @@
 //! MySQL connection lifecycle — `MysqlAdapter` struct + connect / disconnect
 //! / ping + multi-DB sub-pool LRU.
 //!
-//! Sprint 279 (skeleton) → Sprint 287 (Slice G, multi-DB).
-//!
-//! PG (`db/postgres/connection.rs`) 의 패턴과 동일 — `Arc<Mutex<...>>` 안에
-//! `db_name → MySqlPool` cache + LRU order + current_db. MySQL 은 PG 처럼
-//! database 마다 독립 connection 이 자연스럽고 (`USE` 명령 대신 connect
-//! string 의 `/database` 부분 교체), sub-pool 별로 자체 pool 식별이 유지돼
-//! 다른 DB 의 long-running query 가 active DB 의 fairness 를 안 깬다.
+//! Same pattern as PG (`db/postgres/connection.rs`) — a `db_name → MySqlPool`
+//! cache + LRU order + current_db inside an `Arc<Mutex<...>>`. Like PG, MySQL
+//! takes an independent connection per database naturally (swap the
+//! `/database` part of the connect string instead of issuing `USE`), and each
+//! sub-pool keeps its own pool identity so a long-running query on another DB
+//! does not break the active DB's fairness.
 
 use sqlx::mysql::{MySqlConnectOptions, MySqlPoolOptions, MySqlSslMode};
 use sqlx::MySqlPool;
@@ -22,43 +21,43 @@ use crate::models::ConnectionConfig;
 
 use super::version::{parse_mysql_server_version, MysqlServerVersion};
 
-/// Per-pool sqlx connection cap. PG 의 `PG_POOL_MAX_CONNECTIONS` (5) 와
-/// 동일한 의도 — interactive UI 의 동시 in-flight 1 + meta probe 몇 개를
-/// 커버하는 보수적 budget.
+/// Per-pool sqlx connection cap. Same intent as PG's `PG_POOL_MAX_CONNECTIONS`
+/// (5) — a conservative budget covering the interactive UI's one concurrent
+/// in-flight query plus a few meta probes.
 const MYSQL_POOL_MAX_CONNECTIONS: u32 = 5;
 
-/// Hard ceiling for `MySqlPoolOptions::acquire_timeout`. PG 패턴 답습.
+/// Hard ceiling for `MySqlPoolOptions::acquire_timeout`. Follows the PG pattern.
 pub(crate) const MYSQL_POOL_ACQUIRE_TIMEOUT_MAX_SECS: u32 = 30;
 
-/// Issue #2429 — PG `postgres::connection::pool_options` 와 같은 자리. 최초
-/// `connect_pool` 과 `switch_database` cache miss 가 같은 knob 을 쓰게 묶는다.
-/// 미설정 timeout 의 기본값은 이 어댑터가 아니라
-/// [`ConnectionConfig::connect_timeout`] 이 갖는다.
+/// Issue #2429 — the same place as PG's `postgres::connection::pool_options`.
+/// It ties the first `connect_pool` and a `switch_database` cache miss to the
+/// same knob. The default for an unset timeout belongs to
+/// [`ConnectionConfig::connect_timeout`], not to this adapter.
 pub(crate) fn pool_options(config: &ConnectionConfig) -> MySqlPoolOptions {
     MySqlPoolOptions::new()
         .max_connections(MYSQL_POOL_MAX_CONNECTIONS)
         .acquire_timeout(config.connect_timeout(MYSQL_POOL_ACQUIRE_TIMEOUT_MAX_SECS))
 }
 
-/// PG `PG_SUBPOOL_CAP` (8) 와 동일 — sub-pool cache 가 무한히 자라지 않게
-/// 막는 LRU 한계. 매 DB switch 마다 새 pool 을 열 수 있으므로 user 가 10+
-/// DB 를 사이클링하면 cache 가 새지 않게 한다.
+/// Same as PG's `PG_SUBPOOL_CAP` (8) — the LRU limit that keeps the sub-pool
+/// cache from growing without bound. Every DB switch can open a new pool, so
+/// this stops the cache leaking when a user cycles through 10+ DBs.
 const MYSQL_SUBPOOL_CAP: usize = 8;
 
-/// Inner mutable state. PG `PgPoolState` 와 동등.
+/// Inner mutable state. Equivalent to PG's `PgPoolState`.
 #[derive(Default)]
 pub struct MysqlPoolState {
-    /// Connect 당시 config. credentials 가 후속 `switch_database` 에서
-    /// 새 sub-pool 을 만들 때 재사용된다.
+    /// Config as of connect. The credentials are reused when a later
+    /// `switch_database` builds a new sub-pool.
     config: Option<ConnectionConfig>,
-    /// `db_name → MySqlPool` cache. `MYSQL_SUBPOOL_CAP` 로 bounded.
+    /// `db_name → MySqlPool` cache. Bounded by `MYSQL_SUBPOOL_CAP`.
     pools: HashMap<String, MySqlPool>,
-    /// 현재 활성 database. `None` 이면 disconnected.
+    /// The currently active database. `None` means disconnected.
     current_db: Option<String>,
     /// `SELECT VERSION()` parsed at connect time. Unknown means gated
     /// metadata features stay disabled.
     server_version: Option<MysqlServerVersion>,
-    /// LRU ordering — 오래된 것이 front, 최근 사용된 것이 back.
+    /// LRU ordering — oldest at the front, most recently used at the back.
     lru_order: VecDeque<String>,
 }
 
@@ -90,21 +89,22 @@ impl MysqlAdapter {
         }
     }
 
-    /// `MySqlConnectOptions` 를 builder 로 안전 조합 — string interpolation
-    /// 회피로 injection 차단.
+    /// Compose `MySqlConnectOptions` through the builder — avoiding string
+    /// interpolation blocks injection.
     ///
-    /// Issue #1062 / #1649 — 모델의 sslmode posture 를 `MySqlSslMode` 로 결선.
-    /// TLS 를 켠 operator 가 sqlx 기본 `ssl-mode=PREFERRED` 로 조용히 평문
-    /// downgrade 되지 않도록 한다. #1649 (ADR 0058) 는 `verify-ca` 를 추가 —
-    /// 사용자 CA (`ca_cert_path`) 를 `ssl_ca` 로 넘겨 **추가** 신뢰 앵커로
-    /// 삼는다.
+    /// Issue #1062 / #1649 — wire the model's sslmode posture onto
+    /// `MySqlSslMode` so an operator who turned TLS on is never silently
+    /// downgraded to plaintext by sqlx's default `ssl-mode=PREFERRED`. #1649
+    /// (ADR 0058) adds `verify-ca` — the user CA (`ca_cert_path`) is handed to
+    /// `ssl_ca` as an **additional** trust anchor.
     ///
-    /// `MySqlSslMode::VerifyCa` 는 의도적으로 절대 선택하지 않는다 — 그 모드는
-    /// hostname 검증을 끄면서 (`sqlx-mysql-0.8.6/src/connection/tls.rs:64`)
-    /// 번들 Mozilla 루트를 하나도 빼지 않으므로
-    /// (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:141`) `VerifyIdentity` 보다
-    /// 약해질 뿐 좁아지지 않는다. 근거는 `db::tls` 모듈 문서. fallible 인 유일한
-    /// 이유는 CA 없는 `verify-ca` 의 fail-closed 거부다.
+    /// `MySqlSslMode::VerifyCa` is deliberately never chosen: that mode turns
+    /// hostname verification off (`sqlx-mysql-0.8.6/src/connection/tls.rs:64`)
+    /// while removing none of the bundled Mozilla roots
+    /// (`sqlx-core-0.8.6/src/net/tls/tls_rustls.rs:141`), so it only gets
+    /// weaker than `VerifyIdentity`, never narrower. The `db::tls` module docs
+    /// carry the evidence. The one reason this is fallible is the fail-closed
+    /// rejection of `verify-ca` with no CA.
     fn connect_options(config: &ConnectionConfig) -> Result<MySqlConnectOptions, AppError> {
         let options = MySqlConnectOptions::new()
             .host(&config.host)
@@ -126,7 +126,7 @@ impl MysqlAdapter {
         })
     }
 
-    /// 5s timeout 의 one-shot probe. PG `test` 패턴 답습.
+    /// One-shot probe with a 5s timeout. Follows the PG `test` pattern.
     pub async fn test(config: &ConnectionConfig) -> Result<(), AppError> {
         let options = Self::connect_options(config)?;
         let pool = MySqlPoolOptions::new()
@@ -158,7 +158,8 @@ impl MysqlAdapter {
 
         info!("Connected to MySQL at {}:{}", config.host, config.port);
 
-        // PG 패턴과 동일 — clone 후 lock 안에 들어가서 multi-field 갱신.
+        // Same as the PG pattern — clone first, then enter the lock and update
+        // multiple fields.
         let stored_config = config.clone();
         let db_for_pools = config.database.clone();
         let db_for_lru = config.database.clone();
@@ -190,7 +191,8 @@ impl MysqlAdapter {
         Ok(())
     }
 
-    /// 활성 sub-pool 의 clone. disconnect 상태에서 호출되면 `Not connected`.
+    /// A clone of the active sub-pool. Called while disconnected it returns
+    /// `Not connected`.
     pub(super) async fn active_pool(&self) -> Result<MySqlPool, AppError> {
         let guard = self.inner.lock().await;
         let db = guard
@@ -204,9 +206,9 @@ impl MysqlAdapter {
             .ok_or_else(|| AppError::Connection("Not connected".into()))
     }
 
-    /// Sprint 287 — sub-pool LRU 기반 `USE <db>` 등가. PG `switch_active_db`
-    /// 와 동일한 4-step pattern: lock → hit/miss → (miss 면 새 pool 빌드,
-    /// await 동안 lock 놓음) → 재-lock 후 install + evict.
+    /// The sub-pool LRU equivalent of `USE <db>`. Same 4-step pattern as PG's
+    /// `switch_active_db`: lock → hit/miss → (on a miss build a new pool,
+    /// releasing the lock across the await) → re-lock, then install + evict.
     pub async fn switch_active_db(&self, db_name: &str) -> Result<(), AppError> {
         if db_name.is_empty() {
             return Err(AppError::Validation(
@@ -256,7 +258,7 @@ impl MysqlAdapter {
                 let evicted: Option<MySqlPool> = {
                     let mut guard = self.inner.lock().await;
                     if guard.pools.contains_key(db_name) {
-                        // race: 다른 작업이 동일 db_name 을 install 함.
+                        // race: another task installed the same db_name.
                         guard.current_db = Some(db_name.to_string());
                         guard.lru_order.retain(|name| name != db_name);
                         guard.lru_order.push_back(db_name.to_string());
@@ -293,8 +295,8 @@ impl MysqlAdapter {
         }
     }
 
-    /// 현재 활성 database 이름 (`switch_active_db` 마지막 선택, 또는
-    /// `connect_pool` 의 seed). disconnect 상태에선 `None`.
+    /// Name of the currently active database (the last `switch_active_db`
+    /// choice, or the `connect_pool` seed). `None` while disconnected.
     pub async fn current_database_name(&self) -> Option<String> {
         self.inner.lock().await.current_db.clone()
     }
@@ -317,8 +319,8 @@ impl MysqlAdapter {
         Ok(())
     }
 
-    /// Sprint 359 (Q5.3 MySQL) — `KILL QUERY <thread_id>` on a **fresh,
-    /// side connection**. The thread we are killing is busy executing
+    /// Q5.3 (MySQL) — `KILL QUERY <thread_id>` on a **fresh, side
+    /// connection**. The thread we are killing is busy executing
     /// the slow statement so it cannot accept the cancel itself; we open
     /// a dedicated 1-connection pool with a 5-second acquire timeout.
     ///
@@ -383,7 +385,8 @@ impl MysqlAdapter {
 
 /// Issue #1453 — every driver-sourced connect/ping error routes through the
 /// redacting constructor so a conn-string / URI echo in the driver text can
-/// never surface a plaintext password. PG `pg_connection_error` 패턴 답습.
+/// never surface a plaintext password. Follows the PG `pg_connection_error`
+/// pattern.
 fn mysql_connection_error(err: impl std::fmt::Display) -> AppError {
     AppError::connection_redacted(err.to_string())
 }
@@ -399,8 +402,9 @@ async fn detect_server_version(
     parse_mysql_server_version(&raw, kind)
 }
 
-/// LRU front 의 `current` 가 아닌 첫 entry 를 eviction 대상으로 선택. PG
-/// `select_eviction_target` 와 동등 — 현재 active 가 우선 보호된다.
+/// Pick the first entry from the LRU front that is not `current` as the
+/// eviction target. Equivalent to PG's `select_eviction_target` — the currently
+/// active DB is protected first.
 fn select_eviction_target(lru: &VecDeque<String>, current: &str) -> Option<String> {
     for name in lru {
         if name != current {
@@ -412,10 +416,11 @@ fn select_eviction_target(lru: &VecDeque<String>, current: &str) -> Option<Strin
 
 #[cfg(test)]
 mod tests {
-    //! 작성 이유 (2026-05-13, Sprint 279 → 287 확장): MySQL pool 호출은 실
-    //! DB 없이는 검증 불가. 여기서는 sync state (struct 생성, 초기 상태,
-    //! ping/active_pool 의 disconnect 경로, LRU eviction selector) 만 검증.
-    //! 실 DB 통합 test 는 Sprint 280+ 에서 `mysql_test_config` opt-in 으로.
+    //! Reason (2026-05-13): MySQL pool calls cannot be verified without a real
+    //! DB. This module checks only the sync state — struct construction, the
+    //! initial state, the disconnect path of ping/active_pool, and the LRU
+    //! eviction selector. Real-DB integration tests run behind the
+    //! `mysql_test_config` opt-in (`tests/mysql_integration.rs`).
     use super::*;
     use crate::models::{ConnectionConfig, DatabaseType, SslMode};
 
@@ -655,9 +660,10 @@ mod tests {
         lru.push_back("a".to_string());
         lru.push_back("b".to_string());
         lru.push_back("c".to_string());
-        // front 의 "a" 가 current 일 때 — 두 번째 "b" 를 골라야 한다.
+        // When the front entry "a" is current, the second one, "b", is picked.
         assert_eq!(select_eviction_target(&lru, "a"), Some("b".to_string()));
-        // current 가 LRU 어디에도 없으면 front 그대로 (보호 대상 없음).
+        // When current is nowhere in the LRU, the front stands (nothing to
+        // protect).
         assert_eq!(select_eviction_target(&lru, "z"), Some("a".to_string()));
     }
 
@@ -665,7 +671,8 @@ mod tests {
     fn select_eviction_target_only_current_returns_none() {
         let mut lru = VecDeque::new();
         lru.push_back("solo".to_string());
-        // current 만 있으면 eviction 후보 없음 (PG 와 동일 정책).
+        // With only current present there is no eviction candidate (same policy
+        // as PG).
         assert_eq!(select_eviction_target(&lru, "solo"), None);
     }
 

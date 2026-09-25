@@ -1,12 +1,13 @@
 /**
- * 작성 2026-05-17 (Phase 5 sprint-372) — `useQueryHistory` hook 의 IPC
- * + event 수신 시나리오 lock.
+ * Written 2026-05-17 (state-management-strategy Phase 5) — locks the IPC +
+ * event-reception scenarios of the `useQueryHistory` hook.
  *
- * 사유: AC-372-01 / AC-372-05 / AC-372-06 / AC-372-07 의 user-flow path
- * (mount → list IPC, create event 시 first-page refetch / cursor mode
- * 배지, clear event 시 rows 비우기). backend 의 wire shape
- * (`src/lib/tauri/history.test.ts`) 와 byte-equivalent 한 invoke arg 를
- * 기대해 양쪽이 동시에 깨지도록 lego 한다.
+ * Reason: the user-flow paths of AC-372-01 / AC-372-05 / AC-372-06 /
+ * AC-372-07 (mount → list IPC, first-page refetch / cursor-mode badge on a
+ * create event, emptying rows on a clear event). The tests expect invoke
+ * args byte-equivalent to the backend wire shape
+ * (`src/lib/tauri/history.test.ts`), interlocking the two so both break
+ * together.
  */
 
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -42,10 +43,10 @@ describe("useQueryHistory event + IPC flow (sprint-372)", () => {
     resetStateChangedRegistryForTests();
   });
 
-  // AC-372-01 — mount 시 list_history IPC 1회.
-  // 작성 2026-05-17. 사유: panel mount 가 단일 IPC 로 첫 page 를 채우는
-  // user flow 의 진입점. invoke 호출 args 를 잠가 sprint-371 backend
-  // 의 wire shape 과 lego.
+  // AC-372-01 — one list_history IPC on mount.
+  // Written 2026-05-17. Reason: a panel mount filling the first page with a
+  // single IPC is the entry point of the user flow. Locking the invoke args
+  // interlocks them with the backend wire shape.
   it("[AC-372-01] mount calls list_history once with the supplied filter", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [row(1), row(2)] });
     const { result } = renderHook(() =>
@@ -63,9 +64,9 @@ describe("useQueryHistory event + IPC flow (sprint-372)", () => {
     expect(result.current.hasMore).toBe(false);
   });
 
-  // AC-372-05 — first-page 상태에서 history.create event 수신 시 refetch.
-  // 작성 2026-05-17. 사유: 다른 window 가 INSERT 한 entry 가 본 hook 의
-  // visible list 에 prepend 되어야 user 가 새 entry 를 즉시 볼 수 있다.
+  // AC-372-05 — refetch on a history.create event while on the first page.
+  // Written 2026-05-17. Reason: an entry another window INSERTs must be
+  // prepended to this hook's visible list so the user sees it immediately.
   it("[AC-372-05] create event while on first page triggers refetch + prepend", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [row(1)] });
     const { result } = renderHook(() =>
@@ -73,7 +74,7 @@ describe("useQueryHistory event + IPC flow (sprint-372)", () => {
     );
     await waitFor(() => expect(result.current.rows).toHaveLength(1));
 
-    // 두 번째 IPC — refetch 응답
+    // Second IPC — the refetch response
     invokeMock.mockResolvedValueOnce({ rows: [row(2), row(1)] });
 
     await act(async () => {
@@ -129,19 +130,19 @@ describe("useQueryHistory event + IPC flow (sprint-372)", () => {
     expect(invokeMock).toHaveBeenCalledTimes(2);
   });
 
-  // AC-372-06 — cursor pagination 중 history.create → refetch 0 + 배지.
-  // 작성 2026-05-17. 사유: 사용자가 2 page 이상으로 paging 한 상태에서
-  // 자동 refetch 는 view position 을 망친다. "New entry" 배지로 사용자
-  // 능동 갱신을 유도한다.
+  // AC-372-06 — history.create during cursor pagination → no refetch + badge.
+  // Written 2026-05-17. Reason: once the user has paged to page 2 or later,
+  // an automatic refetch would wreck the view position. The "New entry" badge
+  // prompts the user to refresh on their own.
   it("[AC-372-06] create event while paginated → no refetch, newEntryAvailable=true", async () => {
-    // 첫 page 응답 — nextCursor 가 있어 hasMore=true
+    // First-page response — nextCursor is present, so hasMore=true
     invokeMock.mockResolvedValueOnce({ rows: [row(10)], nextCursor: 10 });
     const { result } = renderHook(() =>
       useQueryHistory({ connectionId: "conn-1" }),
     );
     await waitFor(() => expect(result.current.hasMore).toBe(true));
 
-    // loadMore — cursor mode 진입
+    // loadMore — enters cursor mode
     invokeMock.mockResolvedValueOnce({ rows: [row(9)], nextCursor: 9 });
     await act(async () => {
       await result.current.loadMore();
@@ -149,7 +150,7 @@ describe("useQueryHistory event + IPC flow (sprint-372)", () => {
     expect(invokeMock).toHaveBeenCalledTimes(2);
     expect(result.current.rows).toHaveLength(2);
 
-    // create event — refetch 0 회, 배지만 set
+    // create event — no refetch, only the badge is set
     await act(async () => {
       dispatchStateChangedPayload("this-window", {
         domain: "history",
@@ -167,8 +168,9 @@ describe("useQueryHistory event + IPC flow (sprint-372)", () => {
   });
 
   // AC-372-07 — clear event → rows=[] + cursor reset.
-  // 작성 2026-05-17. 사유: clear_history 다른 창 호출이 본 창의 visible
-  // list 를 정확히 비워야 한다. cursor/page 도 첫 page 로 reset.
+  // Written 2026-05-17. Reason: a clear_history call from another window must
+  // empty this window's visible list exactly. cursor/page also reset to the
+  // first page.
   it("[AC-372-07] clear event resets rows + cursor + newEntryAvailable", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [row(10)], nextCursor: 10 });
     const { result } = renderHook(() =>
@@ -176,14 +178,14 @@ describe("useQueryHistory event + IPC flow (sprint-372)", () => {
     );
     await waitFor(() => expect(result.current.rows).toHaveLength(1));
 
-    // loadMore 로 cursor mode 진입
+    // Enter cursor mode via loadMore
     invokeMock.mockResolvedValueOnce({ rows: [row(9)] });
     await act(async () => {
       await result.current.loadMore();
     });
     expect(result.current.rows).toHaveLength(2);
 
-    // create 로 newEntryAvailable=true 만들기
+    // Set newEntryAvailable=true with a create event
     await act(async () => {
       dispatchStateChangedPayload("this-window", {
         domain: "history",
@@ -215,9 +217,9 @@ describe("useQueryHistory event + IPC flow (sprint-372)", () => {
     expect(result.current.newEntryAvailable).toBe(false);
   });
 
-  // 추가 happy path — cursor pagination 의 loadMore 가 append 임을 잠근다.
-  // 작성 2026-05-17. 사유: page 2+ 가 rows 를 prepend 가 아니라 append 해야
-  // 시간순 정렬이 유지된다.
+  // Extra happy path — locks that cursor-pagination loadMore appends.
+  // Written 2026-05-17. Reason: page 2+ must append rows, not prepend them,
+  // to keep the rows in time order.
   it("loadMore appends to existing rows (no duplicate prepend)", async () => {
     invokeMock.mockResolvedValueOnce({
       rows: [row(20), row(19)],
@@ -235,7 +237,7 @@ describe("useQueryHistory event + IPC flow (sprint-372)", () => {
 
     expect(result.current.rows.map((r) => r.id)).toEqual([20, 19, 18, 17]);
     expect(result.current.hasMore).toBe(false);
-    // 두 번째 호출은 cursor=19 로 보내져야 함
+    // The second call must send cursor=19
     const lastCall = invokeMock.mock.calls[1];
     expect(lastCall?.[0]).toBe("list_history");
     expect(lastCall?.[1]).toEqual({
@@ -243,9 +245,9 @@ describe("useQueryHistory event + IPC flow (sprint-372)", () => {
     });
   });
 
-  // Error path — IPC reject 시 error state 가 채워지고 rows 가 깨지지 않음.
-  // 작성 2026-05-17. 사유: backend 가 Validation 으로 reject 했을 때 user
-  // 가 빈 화면 + 진단 메시지를 보도록 보장.
+  // Error path — an IPC reject fills the error state without breaking rows.
+  // Written 2026-05-17. Reason: when the backend rejects with Validation, the
+  // user is guaranteed to see an empty view plus a diagnostic message.
   it("propagates IPC failure to error state without breaking rows", async () => {
     invokeMock.mockRejectedValueOnce(new Error("backend Validation"));
     const { result } = renderHook(() => useQueryHistory({}));

@@ -5,10 +5,11 @@ import { SYNCED_KEYS, useConnectionStore } from "./connectionStore";
 import { useDataGridEditStore } from "./dataGridEditStore";
 import { useWorkspaceStore } from "./workspaceStore";
 
-// Mock @tauri-apps/api/event. The Sprint 152 bridge attach inside
-// `connectionStore.ts` calls both `emit` (outbound) and `listen` (inbound)
-// at module-load time, so both must be exported here. Both are no-ops for
-// these tests — the cross-window contract is exercised in
+// Mock @tauri-apps/api/event. The bridge attach in
+// `src/features/connection/store.ts` (re-exported by `connectionStore.ts`)
+// calls both `emit` (outbound) and `listen` (inbound) at module-load time,
+// so both must be exported here. Both are no-ops for these tests — the
+// cross-window contract is exercised in
 // `src/__tests__/cross-window-connection-sync.test.tsx` with a real bus.
 vi.mock("@tauri-apps/api/event", () => ({
   emit: vi.fn(() => Promise.resolve()),
@@ -60,9 +61,9 @@ vi.mock("@lib/zustand-ipc-bridge", () => ({
 }));
 
 vi.mock("@lib/window-label", async () => {
-  // sprint-366 (2026-05-16) — preserve real parseWorkspaceLabel /
-  // formatWorkspaceLabel exports so transitive imports of
-  // `useCurrentWindowConnectionId` resolve.
+  // Preserve the real parseWorkspaceLabel / formatWorkspaceLabel exports so
+  // transitive imports of `useCurrentWindowConnectionId` resolve
+  // (2026-05-16).
   const actual =
     await vi.importActual<typeof import("@lib/window-label")>(
       "@lib/window-label",
@@ -762,7 +763,7 @@ describe("connectionStore", () => {
     });
   });
 
-  // -- Sprint 130 — activeDb tracking + setActiveDb action --
+  // -- activeDb tracking + setActiveDb action --
 
   it("seeds activeDb from connection.database on a successful connect", async () => {
     useConnectionStore.setState({
@@ -816,15 +817,14 @@ describe("connectionStore", () => {
     });
   });
 
-  // -- Sprint 131 — Mongo paradigm activeDb seeding --
+  // -- Mongo paradigm activeDb seeding --
 
   it("seeds activeDb from connection.database for a Mongo paradigm connection", async () => {
-    // Sprint 131 contract: connectToDatabase must be paradigm-agnostic
-    // for activeDb seeding. Previously the seed was scoped to RDB-only
-    // (S130), which left the Mongo DbSwitcher trigger label stuck on
-    // "(default)" until the user manually switched DBs. With the seed
-    // applied, the trigger reflects the connection's configured DB on
-    // first connect.
+    // Contract: connectToDatabase must be paradigm-agnostic for activeDb
+    // seeding. Previously the seed was scoped to RDB-only, which left the
+    // Mongo DbSwitcher trigger label stuck on "(default)" until the user
+    // manually switched DBs. With the seed applied, the trigger reflects the
+    // connection's configured DB on first connect.
     useConnectionStore.setState({
       connections: [
         {
@@ -921,17 +921,20 @@ describe("connectionStore", () => {
     expect(useConnectionStore.getState().activeStatuses).toEqual({});
   });
 
-  // -- AC-148-4 retire (2026-05-05) — close/reopen 시 activeDb를 default로 reset.
+  // -- AC-148-4 retire (2026-05-05) — close/reopen resets activeDb to default.
   //
-  // Sprint 143가 도입한 `tableview:activeDb:*` localStorage persist는 사용자가
-  // workspace를 닫았다가 다시 열면 DbSwitcher 라벨만 마지막 선택을 유지하지만
-  // backend sub-pool은 재연결로 default DB로 reset되어 source 간 불일치를 만들었다.
-  // 사용자 결정으로 persist 폐기 → 모든 source가 default DB로 일관 reset.
-  // 회귀 테스트: prior session의 localStorage 값이 있어도 활용하지 않아야 한다.
+  // With the `tableview:activeDb:*` localStorage persist, closing and
+  // reopening a workspace kept only the DbSwitcher label on the last
+  // selection, while the backend sub-pool reconnected and reset to the
+  // default DB — the sources disagreed. By user decision the persist was
+  // dropped → every source resets consistently to the default DB.
+  // Regression test: a localStorage value from a prior session must not be
+  // used.
 
   it("connectToDatabase ignores any prior tableview:activeDb:* localStorage entry and uses connection.database", async () => {
-    // 2026-05-05 — Sprint 143 (AC-148-4) retire 회귀. 마이그레이션 안 된
-    // 사용자 환경에 stale key가 남아 있어도 새 정책은 항상 conn.database 사용.
+    // 2026-05-05 — AC-148-4 retire regression. Even if a stale key remains in
+    // a user environment that was never migrated, the policy always uses
+    // conn.database.
     window.localStorage.setItem("tableview:activeDb:m1", "admin");
     useConnectionStore.setState({
       connections: [
@@ -964,8 +967,8 @@ describe("connectionStore", () => {
   });
 
   it("setActiveDb does not write to localStorage", () => {
-    // 2026-05-05 — Sprint 143 (AC-148-4) retire 회귀. setActiveDb는 in-memory
-    // store만 갱신해야 하며 localStorage에 어떤 key도 만들지 않아야 한다.
+    // 2026-05-05 — AC-148-4 retire regression. setActiveDb must update only
+    // the in-memory store and must not create any localStorage key.
     useConnectionStore.setState({
       activeStatuses: { m1: { type: "connected", activeDb: "test" } },
     });
@@ -973,7 +976,7 @@ describe("connectionStore", () => {
     expect(window.localStorage.getItem("tableview:activeDb:m1")).toBeNull();
   });
 
-  // -- Sprint 152 (AC-152-04) — cross-window broadcast allowlist regression --
+  // -- AC-152-04 — cross-window broadcast allowlist regression --
   //
   // The `SYNCED_KEYS` constant is the load-bearing audit point for the
   // cross-window bridge: every key listed here is broadcast on the
@@ -984,7 +987,7 @@ describe("connectionStore", () => {
   // cannot silently broadcast a sensitive new field.
   //
   // If you are adding a key intentionally:
-  //   1. Update `SYNCED_KEYS` in `connectionStore.ts`.
+  //   1. Update `SYNCED_KEYS` in `src/features/connection/store.ts`.
   //   2. Update this expectation.
   //   3. Document the rationale in the JSDoc above `SYNCED_KEYS`.
   //   4. Add a cross-window-sync test case that exercises the new key.
@@ -1004,17 +1007,16 @@ describe("connectionStore", () => {
       expect(SYNCED_KEYS).not.toContain("error");
     });
 
-    // Sprint 270 (2026-05-13)
     // `hasLoadedOnce` is a window-local runtime flag (perceived-load gate),
-    // explicitly NOT broadcast. Pinning its absence here means a future
-    // contributor who adds another runtime-only key cannot silently slip it
-    // into the cross-window sync allowlist.
+    // explicitly NOT broadcast (2026-05-13). Pinning its absence here means a
+    // future contributor who adds another runtime-only key cannot silently
+    // slip it into the cross-window sync allowlist.
     it("does NOT include hasLoadedOnce (window-local runtime flag)", () => {
       expect(SYNCED_KEYS).not.toContain("hasLoadedOnce");
     });
   });
 
-  // -- Sprint 270 — hasLoadedOnce gates the first-paint skeleton --
+  // -- hasLoadedOnce gates the first-paint skeleton --
   //
   // `loading` is "actively in flight"; `hasLoadedOnce` is "ever finished".
   // The skeleton mounts when `connections.length === 0 && !hasLoadedOnce`
@@ -1024,22 +1026,22 @@ describe("connectionStore", () => {
 
   describe("hasLoadedOnce flag (Sprint 270)", () => {
     it("starts false on a fresh store", () => {
-      // Sprint 270 (2026-05-13) — initial-state guarantee for AC-270-01/02.
+      // Initial-state guarantee for AC-270-01/02 (2026-05-13).
       expect(useConnectionStore.getState().hasLoadedOnce).toBe(false);
     });
 
     it("flips to true after a successful loadConnections", async () => {
-      // Sprint 270 (2026-05-13) — success-branch flip (AC-270-03 swap-order
-      // backing): once load resolves, skeleton must be allowed to unmount.
+      // Success-branch flip (AC-270-03 swap-order backing, 2026-05-13): once
+      // load resolves, skeleton must be allowed to unmount.
       expect(useConnectionStore.getState().hasLoadedOnce).toBe(false);
       await useConnectionStore.getState().loadConnections();
       expect(useConnectionStore.getState().hasLoadedOnce).toBe(true);
     });
 
     it("flips to true even when loadConnections rejects", async () => {
-      // Sprint 270 (2026-05-13) — error-branch flip. Without this the
-      // skeleton stays shimmering forever after a backend failure; the
-      // contract requires we surface the existing empty/error card instead.
+      // Error-branch flip (2026-05-13). Without this the skeleton stays
+      // shimmering forever after a backend failure; the contract requires we
+      // surface the existing empty/error card instead.
       const { listConnections } = await import("@lib/tauri");
       (listConnections as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
         new Error("boom"),
@@ -1057,10 +1059,10 @@ describe("connectionStore", () => {
   // -- Session storage persistence on connection switching --
   //
   // Reason: verify that switching from one connection to another correctly
-  // updates the session-scoped localStorage entries. Pre-sprint-152 the
-  // launcher persisted a stale focusedConnId/activeStatuses that the
-  // workspace would hydrate on boot, causing the workspace to show the
-  // previously-focused connection instead of the newly-selected one. (2026-04-28)
+  // updates the session-scoped localStorage entries. Earlier, the launcher
+  // persisted a stale focusedConnId/activeStatuses that the workspace would
+  // hydrate on boot, causing the workspace to show the previously-focused
+  // connection instead of the newly-selected one. (2026-04-28)
 
   describe("session storage persistence on connection switching", () => {
     function seedTwoConnections() {

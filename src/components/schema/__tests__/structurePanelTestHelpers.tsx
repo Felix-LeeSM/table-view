@@ -1,19 +1,15 @@
-// Sprint 220 — shared helpers extracted from `StructurePanel.test.tsx`
-// (P11 step 3) so the behaviour-axis test files can reuse the same
-// `vi.fn()` instances + 3 fixture constants + 2 helper functions + the
-// `beforeEach` body. The 3 mock functions, the `MOCK_*` fixtures, and
-// the `setStoreState` / `renderPanel` / `resetStructurePanelMocks`
-// helpers mirror the original mega-test verbatim — no behaviour change.
-// Each axis file imports these and re-applies them in its own
-// `beforeEach` so worker-per-file isolation + `clearAllMocks()` keep
-// state from leaking across cases.
+// Shared helpers for the `StructurePanel.*.test.tsx` behaviour-axis
+// files so they reuse the same `vi.fn()` instances, fixture constants,
+// helper functions, and `beforeEach` body: the mock functions, the
+// `MOCK_*` fixtures, and the `setStoreState` / `renderPanel` /
+// `resetStructurePanelMocks` helpers. Each axis file imports these and
+// re-applies them in its own `beforeEach` so worker-per-file isolation +
+// `clearAllMocks()` keep state from leaking across cases.
 //
-// Unlike Sprint 218 (QueryTab.test) — which had 7 hoisted
-// `vi.mock(...)` factories that cannot live in a helper module — this
-// mega-test has 0 `vi.mock(...)` factories. The 5 `vi.spyOn(tauri, ...)`
-// calls in `beforeEach` are not hoisted by ES module rules and live in
-// `resetStructurePanelMocks()` here without disturbing the original
-// behaviour.
+// Hoisted `vi.mock(...)` factories cannot live in a helper module; this
+// one declares none. The `vi.spyOn(tauri, ...)` calls in `beforeEach`
+// are not hoisted by ES module rules and live in
+// `resetStructurePanelMocks()` here.
 
 import * as tauri from "@lib/tauri";
 import { useSchemaStore } from "@stores/schemaStore";
@@ -138,7 +134,7 @@ export const mockGetTableIndexes = vi.fn().mockResolvedValue(MOCK_INDEXES);
 export const mockGetTableConstraints = vi
   .fn()
   .mockResolvedValue(MOCK_CONSTRAINTS);
-// Sprint 272 — trigger fetcher mock. Default resolves with the canonical
+// Trigger fetcher mock. Default resolves with the canonical
 // `MOCK_TRIGGERS` fixture; individual tests override per-call.
 export const mockGetTableTriggers = vi.fn().mockResolvedValue(MOCK_TRIGGERS);
 
@@ -181,7 +177,7 @@ export function resetStructurePanelMocks(): void {
   mockGetTableColumns.mockResolvedValue([...MOCK_COLUMNS]);
   mockGetTableIndexes.mockResolvedValue([...MOCK_INDEXES]);
   mockGetTableConstraints.mockResolvedValue([...MOCK_CONSTRAINTS]);
-  // Sprint 272 — reset triggers mock between tests so a per-test
+  // Reset the triggers mock between tests so a per-test
   // `.mockResolvedValueOnce(...)` doesn't leak into the next case.
   mockGetTableTriggers.mockResolvedValue([...MOCK_TRIGGERS]);
   setStoreState();

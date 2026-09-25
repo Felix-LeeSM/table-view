@@ -1,25 +1,27 @@
-//! 작성 2026-05-17 (Wave 9.5 회귀 7) — `persist_setting` 후 backend 가
-//! `state-changed` 이벤트를 모든 window 에 broadcast 하는지 검증.
+//! Written 2026-05-17 — verifies that after `persist_setting` the backend
+//! broadcasts a `state-changed` event to every window.
 //!
-//! 사용자 보고: "친구 테마가 창 단위로 적용되는 것 같아. 모든 창이 공유해야
-//! 하는데". 진단 결과 sprint-365 가 만든 `emit_state_changed` 의 호출 site 가
-//! `commands/` 전체에서 0개 — sprint-368 의 backend-first contract 가 SQLite
-//! write 만 하고 cross-window 알림은 누락. frontend `theme-sync` bridge 가
-//! 따로 있지만 backend path 가 살아 있어야 reconcile / state-changed 의 9-domain
-//! 통합 dispatcher 가 일관되게 동작 (strategy F.4 line 1388).
+//! User report: "the theme seems to be applied per window, but all windows
+//! should share it". The diagnosis found that `emit_state_changed` had zero
+//! call sites anywhere in `commands/` — the backend-first contract only did
+//! the SQLite write and dropped the cross-window notification. A frontend
+//! `theme-sync` bridge exists separately, but the backend path has to be alive
+//! for the 9-domain unified dispatcher of reconcile / state-changed to behave
+//! consistently (strategy F.4 line 1388).
 //!
-//! 본 test 는 user journey 의 backend half 를 lock 한다:
+//! This test locks the backend half of the user journey:
 //!
-//!   1. 사용자가 한 창에서 ThemePicker 클릭
+//!   1. The user clicks ThemePicker in one window
 //!   2. → `invoke("persist_setting", ...)`
 //!   3. → backend SQLite write
 //!   4. → backend `emit_state_changed(..., domain=Setting, op=Update, entityId="theme", originWindow=<caller label>)`
-//!   5. → 모든 window 의 listener 가 동일 payload 수신
-//!   6. → (frontend) 자기 window 는 self-echo skip, 다른 window 는
-//!      `applyThemeSettingFromBackend()` → store mutate → DOM 적용.
+//!   5. → every window's listener receives the same payload
+//!   6. → (frontend) the originating window skips the self-echo; the other
+//!      windows run `applyThemeSettingFromBackend()` → store mutate → DOM
+//!      update.
 //!
-//! 본 test 는 step 4~5 를 MockRuntime 으로 lock — payload 의 wire shape /
-//! version monotonicity / origin_window 채워짐을 단언.
+//! Steps 4-5 are the part locked here with MockRuntime — the payload's wire
+//! shape, version monotonicity, and origin_window being filled in.
 
 use std::sync::{Arc, Mutex};
 
@@ -234,7 +236,8 @@ async fn persist_setting_writes_sqlite_before_emit_so_receiver_refetch_sees_new_
 
     // At the moment emit fired, the SQLite row must already contain the
     // new value so any receiver immediately calling `get_setting("theme")`
-    // sees it (strategy F.4 line 1388 — event=알림, 실제 값=수신자 refetch).
+    // sees it (strategy F.4 line 1388 — the event is the notification; the
+    // actual value comes from the receiver's refetch).
     let value: String = sqlx::query_scalar("SELECT value_json FROM settings WHERE key = 'theme'")
         .fetch_one(&pool)
         .await

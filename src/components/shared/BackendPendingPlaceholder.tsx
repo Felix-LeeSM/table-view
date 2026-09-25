@@ -1,7 +1,7 @@
-// Sprint 327 (2026-05-15) — Shared placeholder for surfaces whose backend
-// wrapper is intentionally deferred to a follow-up sprint. Renders a stable
-// `role="status"` block with a sprint pointer so the user knows the feature
-// is scaffolded, not abandoned. Sprint 327 decision log: D-71 ~ D-75.
+// Shared placeholder for surfaces whose backend wrapper is intentionally
+// deferred to follow-up work. Renders a stable `role="status"` block with
+// the `pendingSprint` pointer so the user knows the feature is
+// scaffolded, not abandoned. Decision log: D-71 ~ D-75.
 
 import { useTranslation } from "react-i18next";
 

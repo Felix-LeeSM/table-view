@@ -1,30 +1,31 @@
 /**
- * 작성 2026-05-17 (Phase 6 sprint-376 Q21 affordance #2 + #8;
- * sprint-377 회귀 가드 #1+#3 추가).
+ * Written 2026-05-17 (state-management-strategy Q21 affordances #2 + #8;
+ * Q21 #1 + #3 regression guards added).
  *
- * 사유: Q21 9 affordance 중
- *   (8) Home action bar "Clear recent" → clear_mru IPC 1회.
+ * Reason: of the nine Q21 affordances,
+ *   (8) Home action bar "Clear recent" → one clear_mru IPC.
  *
- * #2433 (2026-08-18): affordance (8) 이 Recent 목록 끝으로 옮겨가 이 트리
- * 에서 사라졌다. 여기 남은 케이스는 옛 자리 부재 단언이고, 동작은
- * `src/features/connection/components/RecentConnections.test.tsx` 와
- * `src/stores/mruStore.test.ts` 가 나눠 갖는다.
+ * #2433 (2026-08-18): affordance (8) moved to the foot of the Recent list
+ * and left this tree. The case left here asserts its absence from the old
+ * spot; the behavior is split between
+ * `src/features/connection/components/RecentConnections.test.tsx` and
+ * `src/stores/mruStore.test.ts`.
  *
- * #2440 (2026-08-17): affordance (2) — Home "Recent" 헤더의 "Reset" —
- * 제거. Recent 가 footer 에서 group rail 의 view 로 옮겨져 접히는 footer
- * 자체가 없어졌고, 초기화할 접힘 상태가 남지 않았다. 해당 케이스도 같이
- * 지웠다.
+ * #2440 (2026-08-17): affordance (2) — the "Reset" on Home's "Recent"
+ * header — was removed. Recent moved from the footer to a group-rail view,
+ * so the collapsible footer itself is gone and no collapsed state is left
+ * to reset. Its case was deleted too.
  *
- * 본 spec 은 HomePage 의 사용자 entry point — 우클릭 메뉴 / 액션 바
- * 버튼 — 가 위 IPC 를 정확한 wire shape 으로 발사하는지 lock. #2433 이전
- * 에는 "confirm dialog 가 도입되면 fail" 이 여기 걸려 있었는데, 그 계약은
- * affordance (8) 과 함께 옮겨갔다 — 되돌릴 수 없는 전체 삭제라 지금은
- * 확인 창을 거치는 쪽이 계약이다.
+ * This spec used to lock that HomePage's user entry points — right-click
+ * menu / action-bar button — fire the IPC above with the exact wire shape.
+ * Before #2433, "fail if a confirm dialog is introduced" was pinned here;
+ * that contract moved with affordance (8) — clearing everything cannot be
+ * undone, so going through a confirm dialog is the contract now.
  *
- * sprint-377 (2026-05-17): 사용자 직접 요청으로 settings panel 의
- * "Reset settings" / "Reset sidebar width" 두 버튼 제거. 본 spec 에
- * AC-377-01/02 negative-assertion 케이스 추가 — HomePage 트리에서
- * 두 버튼 부재 회귀 가드.
+ * 2026-05-17: the Settings panel's two buttons, "Reset settings" / "Reset
+ * sidebar width", were removed. AC-377-01/02 negative-assertion case added
+ * to this spec — a regression guard for the two buttons' absence from the
+ * HomePage tree.
  */
 
 import { render, screen } from "@testing-library/react";
@@ -106,33 +107,33 @@ describe("HomePage reset affordances (Q21 #2 + #8)", () => {
     });
   });
 
-  // 갱신 (2026-08-18, #2433): affordance (8) 이 launcher action bar 를 떠나
-  // Recent 목록 끝으로 갔다. HomePage 는 `ConnectionBrowser` 를 stub 으로
-  // 갈아 끼우므로 그 버튼은 이 트리에 아예 없다. 여기 남는 것은 옛 자리에
-  // 다시 mount 되는 것을 막는 부재 단언이고 — AC-377-01/02 와 같은 형태다 —
-  // 실제 동작은 두 곳이 나눠 갖는다:
-  //   - 버튼 · 확인 창: src/features/connection/components/RecentConnections.test.tsx
+  // Updated (2026-08-18, #2433): affordance (8) left the launcher action bar
+  // for the foot of the Recent list. This spec swaps `ConnectionBrowser` for
+  // a stub, so that button is not in this tree at all. What remains here is
+  // an absence assertion that keeps it from being mounted at the old spot
+  // again — the same shape as AC-377-01/02 — and the real behavior is split
+  // between two places:
+  //   - button · confirm dialog: src/features/connection/components/RecentConnections.test.tsx
   //   - clear_mru wire shape: src/stores/mruStore.test.ts
   it("AC-376-08 (#2433 이관): 'Clear recent' 가 launcher action bar 에 없다", () => {
     render(<HomePage />);
 
     expect(screen.queryByRole("button", { name: /clear recent/i })).toBeNull();
     expect(screen.queryByTestId("home-clear-recent")).toBeNull();
-    // 버튼이 없으니 mount 만으로 IPC 가 나가지도 않는다.
+    // With no button, mounting alone sends no IPC either.
     expect(
       invokeMock.mock.calls.filter((call) => call[0] === "clear_mru"),
     ).toHaveLength(0);
     expect(useMruStore.getState().recentConnections).toHaveLength(2);
   });
 
-  // 작성 2026-05-17 (sprint-377 회귀 가드). 사유: 사용자 직접 요청 —
-  // Settings panel 의 두 reset 버튼 ("Reset settings" / "Reset sidebar
-  // width") 제거. 미래에 누군가 launcher 의 settings strip 에 reset
-  // 버튼을 다시 mount 하면 이 test 가 fail. sidebar handle 우클릭
-  // entry (Sidebar.tsx) 와 home-recent footer 의 작은 reset 버튼은
-  // 별도 affordance 로 유지되므로 본 test 는 *HomePage 트리* 안에서만
-  // 두 버튼 부재를 단언 — sidebar handle 은 별 컴포넌트라 HomePage
-  // 트리에 포함되지 않음.
+  // Written 2026-05-17 (regression guard). Reason: the Settings panel's two
+  // reset buttons ("Reset settings" / "Reset sidebar width") were removed.
+  // If someone mounts a reset button in the launcher's settings strip again,
+  // this test fails. The sidebar's "Reset width" entry (Sidebar.tsx) stays
+  // as a separate affordance, so this test asserts the two buttons' absence
+  // only inside the *HomePage tree* — the sidebar handle belongs to a
+  // separate component, outside the HomePage tree.
   it("AC-377-01/02: Settings panel 'Reset settings' 와 'Reset sidebar width' 버튼이 HomePage 트리에 존재하지 않음", () => {
     render(<HomePage />);
     expect(

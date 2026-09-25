@@ -1,26 +1,22 @@
-// Sprint 222 — shared helpers extracted from `DataGrid.test.tsx`
-// (P11 step 5, last) so the behaviour-axis test files can reuse the
-// same `vi.fn()` instances + `MOCK_DATA` fixture + the `beforeEach`
-// body. The 6 mock functions, the `MOCK_DATA` fixture, and the
-// reset / fixture-builder / render helpers mirror the original
-// mega-test verbatim — no behaviour change. Each axis file imports
-// these and re-applies them in its own `beforeEach` so worker-per-
-// file isolation + `mockReset()` keep state from leaking across
-// cases.
+// Shared helpers so the behaviour-axis DataGrid test files can reuse
+// the same `vi.fn()` instances + `MOCK_DATA` fixture + the `beforeEach`
+// body. Each axis file imports these and re-applies them in its own
+// `beforeEach` so worker-per-file isolation + `mockReset()` keep state
+// from leaking across cases.
 //
 // ES hoisting note: `vi.mock(...)` factories cannot live in a helper
 // module. Each axis file declares the 3 factories
 // (`./FilterBar` / `@stores/schemaStore` / `@stores/workspaceStore`) at its
 // own module top-level and references the mock functions exported
-// from this helper. The Sprint 76 reactive `mockTabStoreState` +
-// `subscribers` + `useReducer` rerender pattern also stays at each
-// axis file's module top because the `vi.mock("@stores/workspaceStore", ...)`
-// factory captures the closure inline.
+// from this helper. The reactive `mockTabStoreState` + `subscribers` +
+// `useReducer` rerender pattern also stays at each axis file's module
+// top because the `vi.mock("@stores/workspaceStore", ...)` factory
+// captures the closure inline.
 //
-// Cross-store import policy (Sprint 221 lint rule answer): this file
-// uses **type-only** imports from `@stores/*`/`@/types/*`. No runtime
-// store handle is imported — the dynamic `await import(...)` calls
-// in the last two cases stay inline in the editing axis file.
+// Cross-store import policy (lint rule answer): this file uses
+// **type-only** imports from `@stores/*`/`@/types/*`. No runtime store
+// handle is imported — the dynamic `await import(...)` calls in the
+// last two cases stay inline in the editing axis file.
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { render } from "@testing-library/react";
@@ -29,7 +25,7 @@ import type { TableData } from "@/types/schema";
 import DataGrid from "../DataGrid";
 
 // ---------------------------------------------------------------------------
-// Mock fixture data — byte-equivalent to the original DataGrid.test.tsx
+// Mock fixture data
 // ---------------------------------------------------------------------------
 
 export const MOCK_DATA: TableData = {
@@ -98,9 +94,9 @@ export const mockExecuteQuery = vi.fn(() =>
   }),
 );
 
-// Sprint 183 — RDB commit pipeline now flows through executeQueryBatch.
-// Default to a happy resolution that mirrors the backend contract (one
-// QueryResult per submitted statement).
+// The RDB commit pipeline flows through executeQueryBatch. Default to a
+// happy resolution that mirrors the backend contract (one QueryResult
+// per submitted statement).
 export const mockExecuteQueryBatch = vi.fn(
   (_id: string, statements: string[]) =>
     Promise.resolve(
@@ -123,11 +119,11 @@ export const mockSetTabDirty = vi.fn();
 export const mockAddTab = vi.fn();
 
 // ---------------------------------------------------------------------------
-// Reset helper — mirrors the original `beforeEach` body verbatim. Each
-// axis file calls this before every test in addition to clearing its
-// own Sprint-76 reactive `mockTabStoreState` (which lives at the axis
-// file's module top because the `vi.mock("@stores/workspaceStore", ...)`
-// factory captures it through the closure).
+// Reset helper. Each axis file calls this before every test in addition
+// to clearing its own reactive `mockTabStoreState` (which lives at the
+// axis file's module top because the
+// `vi.mock("@stores/workspaceStore", ...)` factory captures it through
+// the closure).
 // ---------------------------------------------------------------------------
 
 export function resetDataGridMocks(): void {
@@ -166,9 +162,8 @@ export function resetDataGridMocks(): void {
     execution_time_ms: 5,
     query_type: "dml" as const,
   });
-  // Sprint 183 — restore the default happy-path batch resolver after
-  // each test (mockReset wipes the implementation we registered at
-  // module scope).
+  // Restore the default happy-path batch resolver after each test
+  // (mockReset wipes the implementation we registered at module scope).
   mockExecuteQueryBatch.mockReset();
   mockExecuteQueryBatch.mockImplementation((_id: string, stmts: string[]) =>
     Promise.resolve(

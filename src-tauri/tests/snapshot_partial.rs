@@ -1,11 +1,11 @@
-//! 작성 2026-05-16 (Phase 1 sprint-357) — `get_initial_app_state_inner` 의
-//! partial fallback 검증 (AC-357-07). Strategy F.2 line 1125 — 한 store 의
-//! SQLite query 실패 시 `{ error: "..." }` 만 그 슬롯에 채우고 `partial: true`.
-//! 다른 store 는 정상 진행.
+//! Written 2026-05-16 — verifies the partial fallback of
+//! `get_initial_app_state_inner` (AC-357-07). Strategy F.2 line 1125 — when one
+//! store's SQLite query fails, only that slot is filled with `{ error: "..." }`
+//! and `partial: true`. The other stores proceed normally.
 //!
-//! 시나리오: `mru` 테이블을 drop 한 상태에서 snapshot 호출. mru 슬롯은
+//! Scenario: call the snapshot with the `mru` table dropped. The mru slot is
 //! `{ error: "..." }` + partial=true; connections / workspaces / theme /
-//! safe_mode 는 정상 (default 값).
+//! safe_mode are normal (default values).
 
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -30,7 +30,7 @@ fn cleanup() {
 async fn test_snapshot_partial_when_one_store_table_missing() {
     let (_dir, pool) = setup().await;
 
-    // mru 테이블을 drop — read_mru 가 sqlx error 를 반환하게 만든다.
+    // Drop the mru table — makes read_mru return a sqlx error.
     sqlx::query("DROP TABLE mru").execute(&pool).await.unwrap();
 
     let snap = get_initial_app_state_inner(&pool, "launcher", &HashMap::new())
@@ -45,7 +45,7 @@ async fn test_snapshot_partial_when_one_store_table_missing() {
         "partial must be true when any store fails"
     );
 
-    // mru slot 은 { error: "..." } 형태.
+    // The mru slot has the shape { error: "..." }.
     let mru = json["stores"]["mru"].as_object().unwrap();
     assert!(
         mru.contains_key("error"),
@@ -58,7 +58,7 @@ async fn test_snapshot_partial_when_one_store_table_missing() {
         "error message must be non-empty for debugging"
     );
 
-    // 다른 store 들은 정상 (default).
+    // The other stores are normal (default).
     let conns = json["stores"]["connections"].as_object().unwrap();
     assert!(
         conns.contains_key("items"),
@@ -70,7 +70,7 @@ async fn test_snapshot_partial_when_one_store_table_missing() {
     cleanup();
 }
 
-// 두 개의 store 가 동시에 fail 해도 둘 다 { error } 로 표현. partial=true.
+// When two stores fail at once, both are expressed as { error }. partial=true.
 #[tokio::test]
 #[serial]
 async fn test_snapshot_partial_with_multiple_failures() {
@@ -101,7 +101,7 @@ async fn test_snapshot_partial_with_multiple_failures() {
         .contains_key("error"));
 }
 
-// All-OK 인 경우 partial: false.
+// partial: false when all stores are OK.
 #[tokio::test]
 #[serial]
 async fn test_snapshot_partial_false_when_all_stores_ok() {

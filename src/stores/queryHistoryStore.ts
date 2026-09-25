@@ -1,23 +1,24 @@
 /**
- * Sprint 373 (Phase 5 F.5) — `queryHistoryStore` thin wrapper.
+ * state-management-strategy F.5 — `queryHistoryStore` thin wrapper.
  *
- * 작성 2026-05-17 — sprint-371 backend IPC + sprint-372 hook 도착 직후의
- * 잔여 in-memory `entries` / `globalLog` field 를 retire 한다. backend
- * `query_history` 가 single source of truth — store 는 (a) optimistic
- * insert 직후 사용자에게 즉시 row 를 보여주는 `recentVisible` cache 와
- * (b) write helper (`addOptimisticEntry`) + (c) list refetch 결과를 받는
- * setter (`setRecentVisible`) 만 보유.
+ * Written 2026-05-17 — retires the leftover in-memory `entries` / `globalLog`
+ * fields once the backend IPC and the `useQueryHistory` hook landed. The
+ * backend `query_history` is the single source of truth — the store holds
+ * only (a) the `recentVisible` cache that receives a row right after an
+ * optimistic insert, (b) the write helper (`addOptimisticEntry`), and (c) a
+ * setter for list refetch results (`setRecentVisible`).
  *
- * 사유 (요약):
- *   - In-memory `entries` 는 process 메모리에 한정 — cross-window 공유 불가.
- *     sprint-365 의 `state-changed` event + sprint-372 의 `useQueryHistory`
- *     hook 으로 단일 backend truth 가 multi-window 에 dispatch 된다.
- *   - `globalLog` 의 500 cap 은 disk-backed retention (sprint-371 의
- *     `boot_vacuum_old_history` + sprint-373 의 `query_history_retention_days`
- *     setting) 로 대체.
- *   - "Disable history" 토글 (`query_history_enabled`) 은 호출자가
- *     `useSettings().queryHistoryEnabled` 를 확인하고 `addOptimisticEntry`
- *     자체를 호출 안 함으로써 enforce — store 내부 분기 없음.
+ * Reason (summary):
+ *   - In-memory `entries` is confined to process memory — no cross-window
+ *     sharing. The `state-changed` event + the `useQueryHistory` hook
+ *     dispatch a single backend truth across windows.
+ *   - The 500 cap of `globalLog` is replaced by disk-backed retention
+ *     (`boot_vacuum_old_history` + the `query_history_retention_days`
+ *     setting).
+ *   - The "Disable history" toggle (`query_history_enabled`) is enforced by
+ *     the caller checking `useHistorySettingsStore.queryHistoryEnabled`
+ *     (`recordHistoryEntryAsync`) and not calling `addOptimisticEntry` at
+ *     all — no branch inside the store.
  */
 
 import { logger } from "@lib/logger";
@@ -56,10 +57,10 @@ function emitLocalHistoryCreated(row: HistoryListRow): void {
  *                       pending pipeline (e.g. Add Document modal).
  * - `explain`          — query editor Explain plan-inspection action.
  * - `file-analytics`   — DuckDB local-file source-scoped query dialog.
- * - `sidebar-prefetch` — sprint-373 새 source. Sidebar 의 preview-rows
- *                       (사용자가 sidebar tree 에서 collection/table 을
- *                       클릭해 DataGrid 로 열 때) prefetch row 가 비-동
- *                       backend SELECT 으로 기록된다.
+ * - `sidebar-prefetch` — Sidebar preview rows: when the user clicks a
+ *                       table in the sidebar tree to open it in a DataGrid,
+ *                       the prefetched rows are recorded as a backend
+ *                       SELECT.
  */
 export type QueryHistorySource =
   | "raw"
@@ -72,29 +73,30 @@ export type QueryHistorySource =
 
 interface QueryHistoryState {
   /**
-   * sprint-372 (Phase 5 F.5) — thin-wrapper field. Visible history rows
-   * after a backend `list_history` fetch. Populated/managed by the
-   * `useQueryHistory` hook + cross-window `history.create` / `clear`
-   * receivers. The store itself only holds the slot so consumers that
-   * still read off zustand can subscribe to it.
+   * state-management-strategy F.5 — thin-wrapper field. History rows written
+   * by `addOptimisticEntry` (optimistic prepend, then the committed row).
+   * The `useQueryHistory` hook keeps its own `list_history` rows and does
+   * not write this slot. The store itself only holds the slot.
    */
   recentVisible: HistoryListRow[];
 
   /**
-   * sprint-372 — optimistic prepend after a user-triggered query, then
-   * fire-and-forget the backend `add_history_entry` IPC. Backend emits
-   * `history.create`; sprint-365 dispatcher self-echo-skips the origin
-   * window so we don't double-insert. Errors are best-effort
-   * (logger.warn only); the next backend list refetch is the recovery
-   * path.
+   * Optimistic prepend after a user-triggered query, then fire-and-forget
+   * the backend `add_history_entry` IPC. Backend emits `history.create`;
+   * `dispatchStateChangedPayload` self-echo-skips the origin window so we
+   * don't double-insert. Errors are best-effort (logger.warn only); the
+   * next backend list refetch is the recovery path.
    *
-   * sprint-373 — only writer the store offers. Callers gate on
-   * `useQueryHistoryEnabledSetting()` BEFORE invoking — when the user
-   * disabled history this function is never reached and the backend IPC
-   * count is zero (AC-373-03).
+   * The only writer the store offers. Callers gate on
+   * `useHistorySettingsStore.getState().queryHistoryEnabled` BEFORE invoking
+   * (see `recordHistoryEntryAsync`) — when the user disabled history this
+   * function is never reached and the backend IPC count is zero (AC-373-03).
    */
   addOptimisticEntry: (req: AddHistoryEntryRequest) => Promise<void>;
-  /** sprint-372 — `useQueryHistory` 의 list 결과를 store 에 저장. */
+  /**
+   * Stores a list result in `recentVisible`. `useQueryHistory` keeps its
+   * rows in its own state and does not call this.
+   */
   setRecentVisible: (rows: HistoryListRow[]) => void;
 }
 
@@ -104,9 +106,9 @@ export const useQueryHistoryStore = create<QueryHistoryState>((set) => ({
   setRecentVisible: (rows) => set({ recentVisible: rows }),
 
   addOptimisticEntry: async (req) => {
-    // 1. Optimistic prepend — sql_redacted 가 backend 생성이므로 본
-    //    시점에는 `sqlRedacted` 를 `sql` 로 채워둔다. backend 응답이
-    //    오면 정상 redact 본으로 덮어쓴다 (아래 set 호출).
+    // 1. Optimistic prepend — the backend generates sql_redacted, so for
+    //    now `sqlRedacted` is filled with `sql`. When the backend responds,
+    //    the properly redacted text overwrites it (the set call below).
     const tempId = -Date.now();
     const tempRow: HistoryListRow = {
       id: tempId,
@@ -127,8 +129,8 @@ export const useQueryHistoryStore = create<QueryHistoryState>((set) => ({
     };
     set((state) => ({ recentVisible: [tempRow, ...state.recentVisible] }));
 
-    // 2. Backend IPC — emits `history.create`; origin window self-echoes
-    //    skip via sprint-365 dispatcher.
+    // 2. Backend IPC — emits `history.create`; `dispatchStateChangedPayload`
+    //    skips the origin window's self-echo.
     try {
       const resp = await addHistoryEntryIpc(req);
       const committedRow: HistoryListRow = {
@@ -143,9 +145,9 @@ export const useQueryHistoryStore = create<QueryHistoryState>((set) => ({
       }));
       emitLocalHistoryCreated(committedRow);
     } catch (e) {
-      // best-effort — backend 가 reject 하면 다음 refetch 가 truth 를
-      // 다시 잡는다. optimistic row 는 그대로 두고 사용자에게는 보이는
-      // 그대로 — 잠시 후 새 list 에서 빠진다. logger 만 남긴다.
+      // Best-effort — on a backend reject, the next list refetch shows the
+      // truth. The optimistic row stays in `recentVisible`; the backend list
+      // never contains it. Only a log is left.
       logger.warn(
         "[queryHistoryStore.addOptimisticEntry] backend reject",
         e instanceof Error ? e.message : e,

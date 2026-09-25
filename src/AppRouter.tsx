@@ -76,11 +76,10 @@ export default function AppRouter() {
   // errors as a toast so a background failure never disappears silently.
   useEffect(() => installGlobalErrorToast(), []);
 
-  // sprint-361 (Phase 3, Q13) — workspace windows are now per-connection,
-  // labeled `workspace-{connection_id}`. The router recognizes the new
-  // pattern via `parseWorkspaceLabel(label) !== null` and treats the bare
-  // legacy `"workspace"` label as unknown (it should no longer be emitted
-  // by backend after Phase 3 lands). Launcher label is unchanged.
+  // Workspace windows are per-connection, labeled `workspace-{connection_id}`
+  // (Q13; see `KnownWindowLabel`). The router recognizes the pattern via
+  // `parseWorkspaceLabel(label) !== null` and treats the bare legacy
+  // `"workspace"` label as unknown.
   const isWorkspaceLabel =
     typeof label === "string" && parseWorkspaceLabel(label) !== null;
 
@@ -203,6 +202,5 @@ function WorkspaceShell() {
 }
 
 // Re-export the workspace mount so unit tests that previously imported the
-// concrete `WorkspacePage` continue to work while later sprints peel apart
-// `App`.
+// concrete `WorkspacePage` continue to work.
 export { WorkspacePage };

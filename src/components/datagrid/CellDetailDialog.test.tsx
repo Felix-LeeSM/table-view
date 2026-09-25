@@ -59,9 +59,9 @@ describe("CellDetailDialog", () => {
     ).toBeInTheDocument();
   });
 
-  // Sprint 306 (2026-05-14) — BigInt freeze 회귀 가드. CellDetailDialog 는
-  // JSONB / numeric column 에서 nested BigInt 또는 top-level BigInt 를 받아
-  // 굳었던 sprint-305 hot-path.
+  // Regression guard for the BigInt freeze. CellDetailDialog is the hot path
+  // that froze when a JSONB / numeric column handed it a nested or
+  // top-level BigInt.
   it("[Sprint 306] renders top-level BigInt as digit string without throwing", () => {
     expect(() =>
       renderDialog(BigInt("9223372036854775807"), "id"),

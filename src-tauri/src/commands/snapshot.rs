@@ -1,19 +1,23 @@
-//! Sprint 357 (Phase 1) — `get_initial_app_state` snapshot IPC.
+//! `get_initial_app_state` snapshot IPC.
 //!
-//! Strategy F.2 (line 911–998) 의 wire shape 을 byte-equivalent 으로 반환.
-//! Boot 시점에 frontend 가 단일 IPC 로 5 boot-critical stores + runtime
-//! activeStatuses 를 atomic 으로 받아 hydration. Lazy stores (favorites /
-//! queryHistory / schemaCache / datagrid_prefs) 는 mount 시 별도 IPC.
+//! Returns the wire shape of strategy F.2 byte-equivalently. At boot the
+//! frontend hydrates the 5 boot-critical stores + runtime activeStatuses
+//! atomically over a single IPC. Lazy stores (favorites /
+//! queryHistory / schemaCache / datagrid_prefs) go over a separate IPC at
+//! mount.
 //!
-//! Atomic guarantee — 모든 store read 는 단일 `BEGIN IMMEDIATE` 트랜잭션 안에서
-//! 수행. Transaction 시작 후 다른 thread 의 write 는 snapshot 결과에 반영 X.
+//! Atomic guarantee — every store read runs inside a single
+//! `BEGIN IMMEDIATE` transaction. Writes from other threads after the
+//! transaction starts are not reflected in the snapshot.
 //!
-//! Partial fallback (F.2 line 1125) — 한 store 의 SQLite query 실패 시 그 슬롯에
-//! `{ error: "..." }` 채우고 `partial: true`. 다른 store 는 정상 진행. 본
-//! Phase 1 구현은 single tx 안에서 read 하므로 partial 진입 분기는 코드 형태로
-//! 만 두고 실제 trigger 는 향후 store별 hydrate 가 별 코드 path 가 되었을 때.
+//! Partial fallback (F.2) — if one store's SQLite query fails, its slot gets
+//! `{ error: "..." }` and `partial: true`. The other stores proceed normally.
+//! All five reads share one transaction, so this branch fires on a per-store
+//! query error (a dropped table, say), not on a torn read — the
+//! `inner_partial_on_dropped_mru_table` test below covers it.
 //!
-//! Q9 perf — 10 connection × 50 tab 시드 환경에서 p95 < 50ms (cargo test --release).
+//! Q9 perf — p95 < 50ms in a seeded environment of 10 connections × 50 tabs
+//! (cargo test --release).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -29,17 +33,17 @@ use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionGroup, ConnectionStatus};
 
 // ---------------------------------------------------------------------------
-// snapshotVersion — monotonic 단조 증가. 같은 process 안에서 호출마다 +1.
-// frontend event dedup baseline (Phase 3 의 store mirror event 가 snapshot 보다
-// stale 인지 비교).
+// snapshotVersion — monotonic increment. +1 per call within the same process.
+// Baseline for frontend event dedup (compares whether a store mirror event is
+// stale relative to the snapshot).
 // ---------------------------------------------------------------------------
 static SNAPSHOT_VERSION: AtomicU64 = AtomicU64::new(0);
 
-/// Workspace window label 의 prefix. workspace-{conn_id} 형태.
+/// Prefix of the workspace window label. Shape: workspace-{conn_id}.
 const WORKSPACE_LABEL_PREFIX: &str = "workspace-";
 
 // ---------------------------------------------------------------------------
-// Wire types — F.2 line 911–998 정합.
+// Wire types — matching F.2.
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,19 +53,20 @@ pub struct InitialAppState {
     pub snapshot_version: u64,
     pub generated_at: i64,
     pub partial: bool,
-    /// v0.3.1: boot 자동 복구(quarantine + fresh)가 이 process lifetime 에
-    /// 발생했으면 `true`. runtime meta 이지 wire shape change 가 아니므로
-    /// `schema_version` 은 1 유지.
+    /// v0.3.1: `true` if boot auto-recovery (quarantine + fresh) happened
+    /// within this process lifetime. Runtime meta, not a wire shape change,
+    /// so `schema_version` stays 1.
     pub recovered: bool,
-    /// #2183: `connections.json` 이 없어서 옆의 백업으로 되살렸고 그 백업에
-    /// 연결이나 그룹이 들어 있었으면 `true`. #2187 부터는 빈 문서를 되살린
-    /// 경우가 빠진다 — 돌려놓은 것이 없으니 알릴 것도 없다.
-    /// `recovered` 와 별개인 이유는 두 사건이 사용자에게 반대되는 말을 해야
-    /// 하기 때문이다 — `recovered` 는 "앱 상태를 초기화했고 옛 사본은
-    /// `state.db.bak` 에 있다", 이쪽은 "저장해 둔 연결과 그룹이
-    /// `connections.json.bak` 에서 돌아왔고 초기화된 것은 없다". 둘 중 한쪽만
-    /// 돌아와도 `true` 라서 사용자에게 보여 줄 문장은 둘 다 이름을 불러야 한다.
-    /// 같은 runtime meta 라 `schema_version` 은 1 유지.
+    /// #2183: `true` if `connections.json` was missing and was restored from
+    /// the backup next to it, and that backup contained connections or
+    /// groups. From #2187 on, restoring an empty document no longer counts —
+    /// nothing was brought back, so there is nothing to announce.
+    /// Separate from `recovered` because the two events must say opposite
+    /// things to the user — `recovered` says "the app state was reset and an
+    /// old copy is in `state.db.bak`", this one says "the saved connections
+    /// and groups came back from `connections.json.bak` and nothing was
+    /// reset". Either one alone sets `true`, so the sentence shown to the
+    /// user must name both. Same runtime meta, so `schema_version` stays 1.
     pub connections_restored_from_backup: bool,
     pub stores: Stores,
     pub runtime: Runtime,
@@ -77,9 +82,9 @@ pub struct Stores {
     pub safe_mode: StoreSlot<SafeModeStore>,
 }
 
-/// 각 store slot 의 partial fallback union — 성공 시 도메인 데이터,
-/// 실패 시 `{ error: "..." }`. `#[serde(untagged)]` 로 직렬화 시 두 형태가
-/// 그대로 wire 에 노출.
+/// Partial fallback union for each store slot — domain data on success,
+/// `{ error: "..." }` on failure. `#[serde(untagged)]` exposes both shapes
+/// verbatim on the wire.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum StoreSlot<T> {
@@ -97,17 +102,17 @@ pub struct ConnectionsStore {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspacesStore {
-    /// Q13 PK (connection_id, db_name) — nested map. Launcher window → 빈 map;
-    /// Workspace window → 그 connection 만.
+    /// Q13 PK (connection_id, db_name) — nested map. Launcher window → empty
+    /// map; workspace window → only that connection.
     pub by_connection_id: HashMap<String, HashMap<String, Value>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MruStore {
-    /// `last_used` DESC 정렬된 connection id 배열.
+    /// Connection id array sorted by `last_used` DESC.
     pub recent_connections: Vec<String>,
-    /// 맨 위 (가장 최근) connection id. 비어있으면 `null`.
+    /// The top (most recent) connection id. `null` when empty.
     pub last_used_connection_id: Option<String>,
 }
 
@@ -121,12 +126,12 @@ pub struct ThemeStore {
 
 impl Default for ThemeStore {
     fn default() -> Self {
-        // frontend `DEFAULT_THEME_ID` 와 동일해야 한다. 이전 `"default"` 는
-        // catalog 에 없는 id 라 `data-theme="default"` 셀렉터가 매칭되지
-        // 않아 첫 부팅 시 스타일 깨짐을 일으켰다 (Wave 9.5 회귀 2,
-        // 2026-05-16). Frontend test `loadAll.theme-fallback.test.ts` 가
-        // boundary 단에서도 catalog 검증을 하지만, wire 의 truth 도
-        // 처음부터 valid 한 값이어야 한다.
+        // Must match the frontend `DEFAULT_THEME_ID`. The old `"default"` was
+        // an id absent from the catalog, so the `data-theme="default"`
+        // selector matched nothing and broke styles on first boot (regression
+        // 2, 2026-05-16). The frontend test `loadAll.theme-fallback.test.ts`
+        // checks the catalog even at the boundary, but the wire's truth must
+        // also be a valid value from the start.
         Self {
             theme_id: "slate".into(),
             mode: "system".into(),
@@ -135,15 +140,16 @@ impl Default for ThemeStore {
 }
 
 /// Safe Mode 3-tier. Wire value = lowercase variant (`"off"` / `"warn"` /
-/// `"strict"`). `#[serde(other)]` 로 미인식/legacy 값(구 `"on"` 등)은
-/// `Warn` 으로 역직렬화 fallback — 이슈 #1113 기결정 기본값(warn)과 일치.
-/// Default 도 `Warn` (신규 설치의 실효 기본값).
+/// `"strict"`). `#[serde(other)]` deserializes unrecognised/legacy values
+/// (the old `"on"` and similar) as a `Warn` fallback — matching the issue
+/// #1113 decided default (warn). The default is also `Warn` (the effective
+/// default for new installs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SafeMode {
     Off,
     Strict,
-    // `#[serde(other)]` 는 마지막 variant 필수. Warn 이 fallback 겸 기본값.
+    // `#[serde(other)]` must be the last variant. Warn is both fallback and default.
     #[default]
     #[serde(other)]
     Warn,
@@ -152,7 +158,7 @@ pub enum SafeMode {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SafeModeStore {
-    /// 3-tier `off` / `warn` / `strict`. 미인식 값은 `warn` fallback (#1113).
+    /// 3-tier `off` / `warn` / `strict`. Unrecognised values fall back to `warn` (#1113).
     pub mode: SafeMode,
 }
 
@@ -163,15 +169,15 @@ pub struct Runtime {
 }
 
 // ---------------------------------------------------------------------------
-// Inner — pool + window_label + status_map 를 받아 snapshot 을 반환. Tauri
-// command wrapper 가 `tauri::Window`, `tauri::State<AppState>` 에서 두 인자를
-// 추출해 호출. 본 inner 는 통합 테스트가 직접 호출하므로 mock window 가 필요
-// 없음.
+// Inner — takes pool + window_label + status_map and returns the snapshot.
+// The Tauri command wrapper extracts the two arguments from `tauri::Window`
+// and `tauri::State<AppState>` and calls it. Integration tests call this
+// inner directly, so no mock window is needed.
 // ---------------------------------------------------------------------------
 
-/// Atomic snapshot read. `window_label` 은 `"launcher"` 또는 `"workspace-{conn_id}"`
-/// 형태. workspace label 에서 prefix 를 자르면 그 connection 의 sub-workspace 만
-/// 반환.
+/// Atomic snapshot read. `window_label` is `"launcher"` or
+/// `"workspace-{conn_id}"`. Stripping the prefix from a workspace label
+/// returns only that connection's sub-workspace.
 pub async fn get_initial_app_state_inner(
     pool: &SqlitePool,
     window_label: &str,
@@ -187,14 +193,14 @@ pub async fn get_initial_app_state_inner(
         .strip_prefix(WORKSPACE_LABEL_PREFIX)
         .map(|s| s.to_string());
 
-    // F.2 line 1122 — `BEGIN IMMEDIATE` 단일 read transaction. 모든 store 가
-    // 같은 시점의 일관된 view 를 보도록 잠금.
+    // F.2 — a single `BEGIN IMMEDIATE` read transaction. Locks so that every
+    // store sees a consistent view of the same instant.
     let mut tx = pool
         .begin_with("BEGIN IMMEDIATE")
         .await
         .map_err(|e| AppError::Storage(format!("snapshot tx begin: {}", e)))?;
 
-    // 각 store 는 별 helper. 한 helper 가 실패해도 partial=true 로 전이.
+    // Each store has its own helper. If one helper fails, the state still transitions to partial=true.
     let mut partial = false;
 
     let connections = match read_connections(&mut tx).await {
@@ -247,8 +253,9 @@ pub async fn get_initial_app_state_inner(
         }
     };
 
-    // commit 으로 read 락 해제. tx 자체가 read-only 라 rollback / commit 의
-    // semantic 차이는 없으나 sqlx 의 LIFO 보장 위해 commit.
+    // Commit releases the read lock. The tx is read-only, so rollback and
+    // commit have no semantic difference, but commit keeps sqlx's LIFO
+    // guarantee.
     tx.commit()
         .await
         .map_err(|e| AppError::Storage(format!("snapshot tx commit: {}", e)))?;
@@ -274,15 +281,16 @@ pub async fn get_initial_app_state_inner(
 }
 
 // ---------------------------------------------------------------------------
-// Store readers — 각 helper 가 SqliteTransaction 안에서 한 도메인 read. JSON
-// 컬럼은 serde_json::Value 로 deserialize.
+// Store readers — each helper performs one domain read inside the
+// SqliteTransaction. JSON columns deserialize into serde_json::Value.
 // ---------------------------------------------------------------------------
 
 async fn read_connections(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
 ) -> Result<ConnectionsStore, AppError> {
-    // connections → ConnectionConfigPublic shape. password_enc 는 has_password
-    // boolean 으로만 노출 — plaintext / ciphertext 절대 wire 에 안 보냄.
+    // connections → ConnectionConfigPublic shape. password_enc is exposed
+    // only as the has_password boolean — plaintext / ciphertext never go on
+    // the wire.
     let conn_rows = sqlx::query_as::<_, ConnectionRow>(
         "SELECT id, name, db_type, host, port, user, password_enc, database, read_only, group_id, color, \
          connection_timeout, keep_alive_interval, environment, auth_source, replica_set, \
@@ -423,8 +431,8 @@ async fn read_workspaces(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     scope_conn_id: Option<&str>,
 ) -> Result<WorkspacesStore, AppError> {
-    // Launcher window (scope_conn_id == None) → 빈 byConnectionId. workspace
-    // window → 그 conn 만.
+    // Launcher window (scope_conn_id == None) → empty byConnectionId.
+    // Workspace window → only that conn.
     let Some(conn_id) = scope_conn_id else {
         return Ok(WorkspacesStore::default());
     };
@@ -516,11 +524,13 @@ async fn read_safe_mode(
     }
 }
 
-/// Boot 읽기 하위 호환 (#1190). frontend `persistSettingValue("safe_mode", mode)`
-/// 는 bare JSON string(`"warn"`)을 저장하지만, 과거/이론적 object wire
-/// (`{"mode":"warn"}`)도 흡수해야 한다. bare string 을 먼저 시도하고
-/// (`SafeMode` 는 `#[serde(other)]` 로 미인식 값을 warn 으로 흡수), 실패하면
-/// object 로 파싱한다. 둘 다 실패하면 `warn` fallback — #1113 enum 정책과 일관.
+/// Boot-read backward compatibility (#1190). The frontend
+/// `persistSettingValue("safe_mode", mode)` stores a bare JSON string
+/// (`"warn"`), but the past/theoretical object wire (`{"mode":"warn"}`) must
+/// also be absorbed. Try the bare string first (`SafeMode` absorbs
+/// unrecognised values as warn via `#[serde(other)]`), then parse as an
+/// object on failure. If both fail, `warn` fallback — consistent with the
+/// #1113 enum policy.
 fn parse_safe_mode_value(json: &str) -> SafeModeStore {
     if let Ok(mode) = serde_json::from_str::<SafeMode>(json) {
         return SafeModeStore { mode };
@@ -529,8 +539,9 @@ fn parse_safe_mode_value(json: &str) -> SafeModeStore {
 }
 
 // ---------------------------------------------------------------------------
-// Tauri command wrapper — `tauri::Window` 자동 주입 + `AppState::connection_status`
-// read. Pool 은 `OnceCell` 의 lazy init.
+// Tauri command wrapper — `tauri::Window` auto-injection +
+// `AppState::connection_status` read. The pool is lazy-initialized in a
+// `OnceCell`.
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
@@ -542,13 +553,14 @@ pub async fn get_initial_app_state(
     let status_map = state.connection_status.lock().await.clone();
     let label = window.label().to_string();
     let mut snap = get_initial_app_state_inner(&pool, &label, &status_map).await?;
-    // boot 자동 복구 발생 여부를 frontend toast 로 전달. swap 으로 읽으면서
-    // reset — 다음 boot cycle 은 false 로 시작.
+    // Carries whether boot auto-recovery happened to the frontend toast.
+    // Read-and-reset via swap — the next boot cycle starts at false.
     snap.recovered = crate::storage::corrupt_recovery::DID_RECOVER
         .swap(false, std::sync::atomic::Ordering::SeqCst);
-    // #2183 — 같은 방식으로 connections.json 백업 복구를 전달한다. 위
-    // `_inner` 안의 `read_connections` 가 파일 SOT 를 읽으므로(wallet presence
-    // + TLS posture overlay) 이 swap 시점엔 복구가 이미 일어난 뒤다.
+    // #2183 — carries the connections.json backup restore the same way. The
+    // `read_connections` inside `_inner` above reads the file SOT (wallet
+    // presence + TLS posture overlay), so by this swap point the restore has
+    // already happened.
     snap.connections_restored_from_backup = crate::storage::CONNECTIONS_RESTORED_FROM_BACKUP
         .swap(false, std::sync::atomic::Ordering::SeqCst);
     Ok(snap)
@@ -556,22 +568,22 @@ pub async fn get_initial_app_state(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 1 sprint-357) — snapshot 의 default ctor + JSON
-    //! serialization shape 의 unit-level 검증. 본 module 의 진짜 통합 검증은
-    //! `tests/snapshot_*.rs` 에 있음 — 이 module 은 `cargo llvm-cov --lib`
-    //! coverage 가 통합 테스트를 포함하지 않아 `--lib` 측정의 floor 를 유지하기
-    //! 위한 최소 unit smoke.
+    //! Written 2026-05-16 — unit-level verification of the snapshot's default
+    //! ctor + JSON serialization shape. The module's real integration
+    //! verification lives in `tests/snapshot_*.rs` — because `cargo llvm-cov
+    //! --lib` coverage does not include the integration tests, this module is
+    //! the minimal unit smoke that keeps the `--lib` measurement's floor.
     //!
-    //! 시나리오:
-    //!   - Default values 의 wire shape (theme = `"slate"` / `"system"`,
+    //! Scenarios:
+    //!   - Wire shape of the default values (theme = `"slate"` / `"system"`,
     //!     safe_mode = `"warn"`, runtime/workspaces empty)
-    //!   - StoreSlot::Ok / Err 의 `#[serde(untagged)]` round-trip
-    //!   - WORKSPACE_LABEL_PREFIX strip 로직 (launcher → None, workspace-X → Some("X"))
-    //!   - SNAPSHOT_VERSION 단조 증가
-    //!   - InitialAppState 의 camelCase serialization (schemaVersion / snapshotVersion / ...)
+    //!   - StoreSlot::Ok / Err `#[serde(untagged)]` round-trip
+    //!   - WORKSPACE_LABEL_PREFIX strip logic (launcher → None, workspace-X → Some("X"))
+    //!   - SNAPSHOT_VERSION monotonic increment
+    //!   - InitialAppState camelCase serialization (schemaVersion / snapshotVersion / ...)
     //!
-    //! Pool 이 필요 없는 pure-shape 테스트만 — DB-touching 시나리오는 통합
-    //! 테스트에 위임.
+    //! Only pure-shape tests that need no pool — DB-touching scenarios are
+    //! delegated to the integration tests.
 
     use crate::models::SslMode;
 
@@ -580,10 +592,11 @@ mod tests {
 
     #[test]
     fn theme_store_default_is_slate_themeid_system_mode() {
-        // 작성 2026-05-16 — Wave 9.5 회귀 2 (테마 빈 부팅).
-        // backend 의 default 는 반드시 frontend `DEFAULT_THEME_ID` ("slate")
-        // 와 일치해야 한다. 둘이 어긋나면 첫 부팅 시 unknown `data-theme`
-        // 셀렉터가 박혀 themes.css 매칭 실패 → 시각적 스타일 깨짐.
+        // Written 2026-05-16 — regression 2 (blank-theme boot).
+        // The backend default must match the frontend `DEFAULT_THEME_ID`
+        // ("slate"). If they diverge, an unknown `data-theme` selector sticks
+        // on first boot, themes.css matching fails, and the visual styles
+        // break.
         let t = ThemeStore::default();
         assert_eq!(t.theme_id, "slate");
         assert_eq!(t.mode, "system");
@@ -594,9 +607,10 @@ mod tests {
 
     #[test]
     fn safe_mode_store_default_is_warn() {
-        // 이슈 #1113 — 신규 설치의 실효 기본값. 기존 default 는 "off" 였고
-        // (frontend hydration 전 snapshot 이 이 default 를 실효값으로 노출),
-        // 이 때문에 non-prod 에서 DROP / WHERE-less DELETE 가 무가드 실행됐다.
+        // Issue #1113 — the effective default for new installs. The old
+        // default was "off" (the snapshot exposed it as the effective value
+        // before frontend hydration), so on non-prod a DROP / WHERE-less
+        // DELETE ran with no gate.
         let s = SafeModeStore::default();
         assert_eq!(s.mode, SafeMode::Warn);
         let json = serde_json::to_value(&s).unwrap();
@@ -605,22 +619,23 @@ mod tests {
 
     #[test]
     fn safe_mode_deserializes_variants_and_falls_back_to_warn() {
-        // 하위 호환 lock (#1113) — 기존 SQLite 에 영속된 3-tier 문자열은
-        // 그대로 역직렬화되고, 미인식/legacy 값(구 "on" 등)은 `warn` 으로
-        // fallback 한다. `SafeModeStore` 는 object wire (`{"mode":"..."}`)
-        // 이므로 struct 레벨과 bare-enum 레벨 둘 다 확인.
+        // Backward-compatibility lock (#1113) — 3-tier strings persisted in
+        // existing SQLite deserialize unchanged, and unrecognised/legacy
+        // values (the old "on" and similar) fall back to `warn`.
+        // `SafeModeStore` is the object wire (`{"mode":"..."}`), so both the
+        // struct level and the bare-enum level are checked.
         for (raw, expected) in [
             (r#"{"mode":"off"}"#, SafeMode::Off),
             (r#"{"mode":"warn"}"#, SafeMode::Warn),
             (r#"{"mode":"strict"}"#, SafeMode::Strict),
-            // legacy / 미인식 → warn fallback.
+            // legacy / unrecognised → warn fallback.
             (r#"{"mode":"on"}"#, SafeMode::Warn),
             (r#"{"mode":"garbage"}"#, SafeMode::Warn),
         ] {
             let store: SafeModeStore = serde_json::from_str(raw).unwrap();
             assert_eq!(store.mode, expected, "store deserialize of {raw}");
         }
-        // Round-trip: 유효 variant 는 serialize → deserialize 항등.
+        // Round-trip: valid variants are identity under serialize → deserialize.
         for m in [SafeMode::Off, SafeMode::Warn, SafeMode::Strict] {
             let s = serde_json::to_string(&m).unwrap();
             assert_eq!(serde_json::from_str::<SafeMode>(&s).unwrap(), m);
@@ -629,17 +644,18 @@ mod tests {
 
     #[test]
     fn parse_safe_mode_value_accepts_bare_string_and_legacy_object() {
-        // #1190 — boot read 하위 호환. frontend 는 bare string 을 저장하고,
-        // legacy/이론적 object wire 도 흡수. 미인식 값은 warn fallback.
+        // #1190 — boot-read backward compatibility. The frontend stores a
+        // bare string, and the legacy/theoretical object wire is absorbed
+        // too. Unrecognised values fall back to warn.
         for (raw, expected) in [
-            // frontend 실제 저장 shape — bare JSON string.
+            // The shape the frontend actually stores — a bare JSON string.
             (r#""off""#, SafeMode::Off),
             (r#""warn""#, SafeMode::Warn),
             (r#""strict""#, SafeMode::Strict),
             // legacy object wire.
             (r#"{"mode":"off"}"#, SafeMode::Off),
             (r#"{"mode":"strict"}"#, SafeMode::Strict),
-            // 미인식 bare / object / 완전 malformed → warn fallback.
+            // Unrecognised bare / object / fully malformed → warn fallback.
             (r#""garbage""#, SafeMode::Warn),
             (r#"{"mode":"on"}"#, SafeMode::Warn),
             (r#"not json"#, SafeMode::Warn),
@@ -674,7 +690,7 @@ mod tests {
     fn store_slot_ok_serializes_as_inner_value() {
         let slot: StoreSlot<MruStore> = StoreSlot::Ok(MruStore::default());
         let json = serde_json::to_value(&slot).unwrap();
-        // `untagged` enum — Ok variant 는 inner 그대로 직렬화. error key 없음.
+        // `untagged` enum — the Ok variant serializes as the inner value. No error key.
         assert!(!json.as_object().unwrap().contains_key("error"));
         assert!(json.as_object().unwrap().contains_key("recentConnections"));
     }
@@ -691,7 +707,7 @@ mod tests {
 
     #[test]
     fn workspace_label_prefix_strip_for_launcher_returns_none() {
-        // Launcher 는 prefix 가 없으므로 strip 결과 None.
+        // The launcher has no prefix, so the strip result is None.
         let label = "launcher";
         let scope = label.strip_prefix(WORKSPACE_LABEL_PREFIX);
         assert!(scope.is_none());
@@ -706,7 +722,7 @@ mod tests {
 
     #[test]
     fn workspace_label_prefix_strip_for_unknown_prefix_returns_none() {
-        // workspace 가 아닌 다른 prefix (예: "preview-...") → None → launcher 로 fallback.
+        // A prefix other than workspace (e.g. "preview-...") → None → fallback to launcher.
         let label = "preview-foo";
         let scope = label.strip_prefix(WORKSPACE_LABEL_PREFIX);
         assert!(scope.is_none());
@@ -746,7 +762,7 @@ mod tests {
         ] {
             assert!(obj.contains_key(key), "missing camelCase key `{}`", key);
         }
-        // snake_case 가 새지 않음.
+        // No snake_case leaks.
         for forbidden in [
             "schema_version",
             "snapshot_version",
@@ -759,7 +775,7 @@ mod tests {
                 forbidden
             );
         }
-        // stores 의 safeMode (camelCase).
+        // stores' safeMode (camelCase).
         let stores = obj["stores"].as_object().unwrap();
         assert!(stores.contains_key("safeMode"));
         assert!(!stores.contains_key("safe_mode"));
@@ -770,10 +786,10 @@ mod tests {
 
     #[test]
     fn snapshot_version_atomic_increments_monotonically() {
-        // 직접 SNAPSHOT_VERSION 의 monotonic guarantee 를 unit level 에서 확인.
-        // 통합 테스트가 inner 호출로 검증하지만, 이 atomic 자체의 round-trip 도
-        // 명시적으로 lock — 다른 sprint 가 OrderInversion / Ordering::Relaxed 로
-        // 바꾸지 못하게.
+        // Checks SNAPSHOT_VERSION's monotonic guarantee directly at unit
+        // level. The integration tests verify it via inner calls, but this
+        // atomic's own round-trip is also explicitly locked — so that nothing
+        // swaps in OrderInversion / Ordering::Relaxed.
         let v1 = SNAPSHOT_VERSION.fetch_add(1, Ordering::SeqCst);
         let v2 = SNAPSHOT_VERSION.fetch_add(1, Ordering::SeqCst);
         let v3 = SNAPSHOT_VERSION.fetch_add(1, Ordering::SeqCst);
@@ -790,10 +806,11 @@ mod tests {
     }
 
     // ----------------------------------------------------------------------
-    // DB-touching inline tests — `cargo llvm-cov --lib` 가 통합 테스트를
-    // 포함하지 않아 `read_*` helpers 의 coverage 가 0 이 된다. 본 핵심
-    // 시나리오는 통합 테스트가 풀로 cover 하지만, `--lib` 측정의 floor 유지
-    // 위해 일부 happy-path 를 inline 으로 복제.
+    // DB-touching inline tests — `cargo llvm-cov --lib` does not include the
+    // integration tests, so the `read_*` helpers' coverage would be 0. The
+    // integration tests cover these core scenarios with the pool, but some
+    // happy paths are duplicated inline to keep the `--lib` measurement's
+    // floor.
     // ----------------------------------------------------------------------
 
     use crate::storage::local;
@@ -940,7 +957,7 @@ mod tests {
             StoreSlot::Err { error } => panic!("theme must read OK, got error={}", error),
         }
         match &snap.stores.safe_mode {
-            // seeded value "on" 은 3-tier 이전 legacy sentinel — warn fallback (#1113).
+            // The seeded value "on" is a pre-3-tier legacy sentinel — warn fallback (#1113).
             StoreSlot::Ok(s) => assert_eq!(s.mode, SafeMode::Warn),
             StoreSlot::Err { error } => panic!("safe_mode must read OK, got error={}", error),
         }
@@ -950,15 +967,16 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn inner_bare_string_safe_mode_respected_by_boot_read() {
-        // #1190 regression — frontend `persistSettingValue("safe_mode", mode)`
-        // 는 bare JSON string(`"off"`)을 value_json 에 저장한다. boot read 는
-        // bare string 과 legacy object(`{"mode":...}`) 를 둘 다 흡수해야 하며,
-        // 영속된 off 가 재시작 후에도 존중돼야 한다 (round-trip). 이 assertion 은
-        // #1190 fix 이전엔 실패했다 (그때는 default(warn)로 fallback 했다).
+        // #1190 regression — the frontend `persistSettingValue("safe_mode",
+        // mode)` stores a bare JSON string (`"off"`) in value_json. The boot
+        // read must absorb both the bare string and the legacy object
+        // (`{"mode":...}`), and the persisted off must still be honored after
+        // a restart (round-trip). This assertion failed before the #1190 fix
+        // (it fell back to the default, warn, then).
         let (_dir, pool) = pool_setup().await;
         sqlx::query("INSERT INTO settings(key, value_json, updated_at) VALUES (?, ?, ?)")
             .bind("safe_mode")
-            .bind(r#""off""#) // bare string — frontend 실제 저장 shape
+            .bind(r#""off""#) // bare string — the shape the frontend actually stores
             .bind(1i64)
             .execute(&pool)
             .await
@@ -967,7 +985,7 @@ mod tests {
             .await
             .unwrap();
         match &snap.stores.safe_mode {
-            // 영속된 bare string off 가 boot snapshot 에서 존중된다 (#1190 fix).
+            // The persisted bare-string off is honored in the boot snapshot (#1190 fix).
             StoreSlot::Ok(s) => assert_eq!(s.mode, SafeMode::Off),
             StoreSlot::Err { error } => panic!("safe_mode must read OK, got error={}", error),
         }

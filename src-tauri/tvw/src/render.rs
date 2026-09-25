@@ -2,7 +2,8 @@
 //!
 //! Every format is chosen by `--format` alone. Nothing here reads the terminal,
 //! `$TERM`, `isatty` or the locale, because ADR 0061 rejected TTY-dependent
-//! output: "같은 명령이 환경마다 다른 출력이면 CI 디버깅 함정".
+//! output: "the same command producing different output per environment is a
+//! CI debugging trap".
 
 use comfy_table::{presets, ContentArrangement, Table};
 use serde_json::{json, Value};

@@ -11,10 +11,10 @@
  *   - `$or` — surfaced through `matchMode: "any"` on `buildMqlFilter`.
  *     All rows become elements of a top-level `$or` array. Single-row
  *     `any` mode is emitted without the array wrap (Mongo-equivalent
- *     but shorter; see sprint-314 D-26).
+ *     but shorter; see D-26).
  *   - `$and` — implicit. Multi-field flat object is already
  *     Mongo-equivalent to `$and: [...]`. No explicit wrap is emitted
- *     (sprint-314 D-25).
+ *     (D-25).
  *   - `$not` — per-row toggle via `MqlCondition.negate`. The
  *     operator clause is wrapped: `{ $not: <clause> }`.
  * - Numeric coercion is best-effort. A whitespace-only string is NOT
@@ -24,7 +24,7 @@
  * - `$in` / `$nin` accept comma-separated input — tokens are trimmed,
  *   empty tokens dropped, then numerically coerced per-token. Empty
  *   arrays are skipped because `$in: []` matches nothing (almost
- *   always a typo). See sprint-313 D-23.
+ *   always a typo). See D-23.
  * - Empty conditions → `{}` (no-op filter).
  */
 
@@ -47,7 +47,7 @@ export interface MqlCondition {
   operator: MqlOperator;
   /** Always a string at the form layer; coerced at build time. */
   value: string;
-  /** When true, wrap the operator clause in `$not`. Sprint-314 D-Q8. */
+  /** When true, wrap the operator clause in `$not`. */
   negate?: boolean;
 }
 
@@ -59,7 +59,7 @@ export interface MqlCondition {
  */
 export type MatchMode = "all" | "any";
 
-// Order = frequency (phase-28 Q7: "13 ops 빈도순"). Display label uses
+// Order = frequency (phase-28 Q7: 13 ops by frequency). Display label uses
 // SQL idiom for IN / NOT IN so RDB ↔ Mongo flippers see the same word
 // (D-22). $exists / $regex use lowercase Mongo names because there is
 // no SQL equivalent worth aliasing.
@@ -123,7 +123,7 @@ function buildOperatorClause(
     const arr = coerceArray(raw);
     // `$in: []` / `$nin: []` are almost certainly typos — drop the
     // clause so the row degrades to a no-op instead of silently
-    // matching nothing / everything. Sprint-313 D-23.
+    // matching nothing / everything. See D-23.
     if (arr.length === 0) return null;
     return { [operator]: arr };
   }
@@ -155,7 +155,7 @@ function wrapNot(
  *
  * Rows with `negate: true` have their operator clause wrapped in
  * `$not`. Rows whose `buildOperatorClause` returns null (e.g. empty
- * `$in` array) are dropped silently per sprint-313 D-23.
+ * `$in` array) are dropped silently per D-23.
  */
 export function buildMqlFilter(
   conditions: readonly MqlCondition[],

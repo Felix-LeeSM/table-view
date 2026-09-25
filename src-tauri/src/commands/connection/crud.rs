@@ -1,6 +1,6 @@
-//! Sprint 209 — connection CRUD + connect/disconnect lifecycle.
+//! Connection CRUD + connect/disconnect lifecycle.
 //!
-//! Extracted from the 1710-line `commands/connection.rs` god file. Owns:
+//! Extracted from the `commands/connection.rs` god file. Owns:
 //!   - `list_connections` / `save_connection` / `delete_connection` —
 //!     storage-backed CRUD that never exposes plaintext passwords to the
 //!     frontend.
@@ -176,11 +176,11 @@ pub async fn connect(
         .find(|c| c.id == id)
         .ok_or_else(|| AppError::NotFound(format!("Connection '{}' not found", id)))?;
 
-    // Sprint 364 (Phase 3 Q14) — `Connecting` 진입은 pool acquire 직전.
-    // long-running connect (5s+) 동안 UI 가 spinner 를 띄울 수 있도록
-    // 상태 map 에 먼저 기록하고, adapter.connect 가 끝나면 Connected /
-    // Error 로 transition. fail path 가 ?  연산자로 일찍 return 하면 Error
-    // 까지 기록해야 frontend listener 가 stuck-in-connecting 을 보지 않음.
+    // Q14 — `Connecting` is recorded right before the pool acquire, so
+    // the UI can spin a spinner during a long-running connect (5s+).
+    // Once `adapter.connect` finishes the state transitions to Connected
+    // or Error. If a fail path returns early through `?` it must record
+    // Error too, otherwise the frontend listener is stuck in connecting.
     {
         let mut status = state.connection_status.lock().await;
         status.insert(id.clone(), ConnectionStatus::Connecting);
@@ -210,7 +210,7 @@ pub async fn connect(
         return Err(e);
     }
 
-    // Sprint 364 — pool ready, transition to Connected. `active_db` is
+    // Pool ready, transition to Connected. `active_db` is
     // seeded from the connection's default database; `None` when the user
     // left `database` empty (e.g. Mongo without a default DB). Computed
     // before `config` is moved into the keep-alive task below.
@@ -551,10 +551,10 @@ mod tests {
     }
 
     /// Regression for "Unsupported operation: Mongodb is not supported yet"
-    /// returned by `test_connection` (2026-05-01). The MongoAdapter has had
-    /// `connect`/`ping`/CRUD wired since Sprint 65–80, but the test-connection
-    /// dispatcher in `commands::connection` only listed `Postgresql`, so the
-    /// "Test Connection" button on the Mongo dialog always returned
+    /// returned by `test_connection` (2026-05-01). The MongoAdapter already
+    /// had `connect`/`ping`/CRUD wired, but the test-connection dispatcher in
+    /// `commands::connection` only listed `Postgresql`, so the "Test
+    /// Connection" button on the Mongo dialog always returned
     /// `AppError::Unsupported`.
     ///
     /// The assertion is purely about routing: we send an unreachable host

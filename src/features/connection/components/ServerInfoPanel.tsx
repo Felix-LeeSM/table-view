@@ -1,5 +1,4 @@
-// Sprint 339 (2026-05-15) — U4 live wire. Replaces the
-// BackendPendingPlaceholder.
+// U4 live wire. Replaces the BackendPendingPlaceholder.
 
 import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";

@@ -1,9 +1,8 @@
 //! MongoDB query path — `find` / `aggregate` + cursor flattening helpers.
 //!
-//! Sprint 197 split — extracted from `db/mongodb.rs` (1809-line monolith)
-//! together with `connection.rs` / `schema.rs` / `mutations.rs`. Body kept
-//! verbatim from the pre-split file (Sprint 66 + Sprint 72 contract); the
-//! split is module-organisational only, no runtime behavior change.
+//! Extracted from the `db/mongodb.rs` monolith together with `connection.rs` /
+//! `schema.rs` / `mutations.rs`. Body kept verbatim from the pre-split file;
+//! the split is module-organisational only, no runtime behavior change.
 
 use std::time::Instant;
 
@@ -19,7 +18,7 @@ use super::super::{DocumentQueryResult, DocumentRow, FindBody};
 use super::MongoAdapter;
 
 impl MongoAdapter {
-    /// Sprint 197 — body of `DocumentAdapter::find`. The trait dispatcher in
+    /// Body of `DocumentAdapter::find`. The trait dispatcher in
     /// `mod.rs` wraps this in `BoxFuture` and `tokio::select!` for cancel
     /// cooperation; logic identical to pre-split.
     pub(super) async fn find_impl(
@@ -104,8 +103,8 @@ impl MongoAdapter {
 
         // `estimated_document_count` is O(1) via collection metadata and
         // is acceptable for the P0 total-count badge — exact counts
-        // require a full collection scan which Sprint 66 explicitly
-        // defers.
+        // require a full collection scan, which this path deliberately
+        // avoids.
         let total_count_u64 = coll
             .estimated_document_count()
             .await
@@ -125,13 +124,13 @@ impl MongoAdapter {
         })
     }
 
-    /// Sprint 308 — body of `DocumentAdapter::find_one`.
+    /// Body of `DocumentAdapter::find_one`.
     ///
-    /// 작성 이유 (2026-05-14): A1 mongosh 파서가 `findOne(<filter>)` 을
-    /// dispatch 하면 단일 row 의 projection 이 필요. `find_impl` 의 column
-    /// inference + `project_row` + `flatten_cell` 를 그대로 재사용해
-    /// `DocumentQueryResult` 와 동일 shape 의 슬라이스 (`DocumentRow`) 를
-    /// 만든다. 매칭이 없으면 `Ok(None)`.
+    /// Reason (2026-05-14): when the A1 mongosh parser dispatches
+    /// `findOne(<filter>)`, a single row has to be projected. This reuses the
+    /// column inference + `project_row` + `flatten_cell` of `find_impl` as-is
+    /// to build a slice (`DocumentRow`) with the same shape as
+    /// `DocumentQueryResult`. Returns `Ok(None)` when nothing matches.
     pub(super) async fn find_one_impl(
         &self,
         db: &str,
@@ -161,10 +160,10 @@ impl MongoAdapter {
         Ok(Some(DocumentRow { columns, row, raw }))
     }
 
-    /// Sprint 308 — body of `DocumentAdapter::count_documents`.
+    /// Body of `DocumentAdapter::count_documents`.
     ///
-    /// 작성 이유 (2026-05-14): exact count 가 필요한 A1 dispatch path.
-    /// Mongo driver 의 `count_documents` 는 collection scan 을 수행.
+    /// Reason (2026-05-14): the A1 dispatch path that needs an exact count.
+    /// The Mongo driver's `count_documents` performs a collection scan.
     pub(super) async fn count_documents_impl(
         &self,
         db: &str,
@@ -182,9 +181,9 @@ impl MongoAdapter {
         Ok(clamp_u64_to_i64(count_u64))
     }
 
-    /// Sprint 308 — body of `DocumentAdapter::estimated_document_count`.
+    /// Body of `DocumentAdapter::estimated_document_count`.
     ///
-    /// 작성 이유 (2026-05-14): metadata-based O(1) estimate.
+    /// Reason (2026-05-14): metadata-based O(1) estimate.
     pub(super) async fn estimated_document_count_impl(
         &self,
         db: &str,
@@ -201,11 +200,11 @@ impl MongoAdapter {
         Ok(clamp_u64_to_i64(count_u64))
     }
 
-    /// Sprint 308 — body of `DocumentAdapter::distinct`.
+    /// Body of `DocumentAdapter::distinct`.
     ///
-    /// 작성 이유 (2026-05-14): unique field-value set. Result 의 각 BSON
-    /// scalar 는 `flatten_cell` 로 wrap (canonical extjson + 수치 unwrap)
-    /// 해서 grid / Quick Look 가 동일 shape 으로 소비.
+    /// Reason (2026-05-14): the unique field-value set. Each BSON scalar in
+    /// the result is wrapped by `flatten_cell` (canonical extjson + numeric
+    /// unwrap) so the grid / Quick Look consume the same shape.
     pub(super) async fn distinct_impl(
         &self,
         db: &str,
@@ -230,7 +229,7 @@ impl MongoAdapter {
         Ok(values.iter().map(flatten_cell).collect())
     }
 
-    /// Sprint 197 — body of `DocumentAdapter::aggregate`.
+    /// Body of `DocumentAdapter::aggregate`.
     ///
     /// Issue #1269 (P1) — `comment` stamps the cancel tag on the aggregate op
     /// (mirrors `find_impl`) so it is discoverable via `$currentOp` matched on
@@ -307,9 +306,9 @@ impl MongoAdapter {
     }
 }
 
-// ── Helpers (Sprint 66) ────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────
 
-/// Sprint 308 — clamp `u64` driver counts into `i64` (the wire type the
+/// Clamp `u64` driver counts into `i64` (the wire type the
 /// frontend expects). Mongo can theoretically return values above
 /// `i64::MAX` for distributed sharded estimated counts; we clamp rather
 /// than overflow so the cell stays a finite number.
@@ -372,20 +371,20 @@ pub(super) fn bson_type_name(b: &Bson) -> &'static str {
 
 /// Flatten a single BSON value into the JSON cell shape the grid consumes.
 ///
-/// Invariant (Sprint 66 contract):
+/// Invariant:
 /// - `Bson::Document(_) → Value::String("{...}")` (sentinel)
 /// - `Bson::Array(arr)  → Value::String("[N items]")` (sentinel)
-/// - 수치 타입 (Sprint 261 ADR 0026):
-///   - `Bson::Int64(n)` → `Value::String(n.to_string())` — frontend wrapper 가 BigInt 로 wrap.
-///   - `Bson::Decimal128(d)` → `Value::String(d.to_string())` — frontend wrapper 가 Decimal 로 wrap.
-///   - `Bson::Int32(n)` → raw JSON number — JS Number 안전 범위.
-///   - `Bson::Double(d)` → raw JSON number — JS Number 와 IEEE 754 동일 표현.
-///   - canonical extjson 의 `{"$numberLong": ...}` / `{"$numberInt": ...}` /
-///     `{"$numberDouble": ...}` / `{"$numberDecimal": ...}` wrapper 모두 우회.
-///     NaN / Infinity 같은 non-finite Double 만 fallback 으로 extjson 유지.
-/// - 비-수치 discriminator-bearing 타입 (ObjectId / DateTime / Binary / ...) →
-///   canonical extended JSON 유지: `ObjectId` ≈ `{"$oid": "..."}` /
-///   `DateTime` ≈ `{"$date": "..."}` (Quick Look 트리 뷰어가 의존).
+/// - Numeric types (ADR 0026):
+///   - `Bson::Int64(n)` → `Value::String(n.to_string())` — the frontend wraps it as BigInt.
+///   - `Bson::Decimal128(d)` → `Value::String(d.to_string())` — the frontend wraps it as Decimal.
+///   - `Bson::Int32(n)` → raw JSON number — inside the safe JS Number range.
+///   - `Bson::Double(d)` → raw JSON number — JS Number and IEEE 754 share a representation.
+///   - The canonical extjson `{"$numberLong": ...}` / `{"$numberInt": ...}` /
+///     `{"$numberDouble": ...}` / `{"$numberDecimal": ...}` wrappers are all bypassed.
+///     Only non-finite Doubles such as NaN / Infinity keep extjson as a fallback.
+/// - Non-numeric discriminator-bearing types (ObjectId / DateTime / Binary / ...) →
+///   canonical extended JSON is kept: `ObjectId` ≈ `{"$oid": "..."}` /
+///   `DateTime` ≈ `{"$date": "..."}` (the Quick Look tree viewer depends on it).
 pub(super) fn flatten_cell(b: &Bson) -> serde_json::Value {
     match b {
         Bson::Document(_) => serde_json::Value::String("{...}".into()),
@@ -522,8 +521,9 @@ mod tests {
             flatten_cell(&Bson::String("hi".into())),
             serde_json::json!("hi")
         );
-        // ObjectId / DateTime / Binary 등 비-수치 discriminator-bearing 타입은
-        // canonical extjson wrapper 유지 (Sprint 261 ADR 0026 — 수치만 unwrap).
+        // Non-numeric discriminator-bearing types such as ObjectId / DateTime /
+        // Binary keep the canonical extjson wrapper (ADR 0026 — only numbers
+        // are unwrapped).
         let oid_bson =
             Bson::ObjectId(bson::oid::ObjectId::parse_str("65abcdef0123456789abcdef").unwrap());
         let oid = flatten_cell(&oid_bson);
@@ -533,22 +533,23 @@ mod tests {
         );
     }
 
-    // Sprint 261 (ADR 0026) — Int64 / Decimal128 은 wire 위에서 plain JSON
-    // string 으로 보낸다 (precision-preserving). canonical extjson 의
-    // `{"$numberLong": "..."}` / `{"$numberDecimal": "..."}` wrapper 우회.
-    // Frontend wrapper 가 column metadata 기반으로 BigInt / Decimal 로 wrap.
+    // ADR 0026 — Int64 / Decimal128 go over the wire as plain JSON strings
+    // (precision-preserving), bypassing the canonical extjson
+    // `{"$numberLong": "..."}` / `{"$numberDecimal": "..."}` wrappers. The
+    // frontend wrapper turns them into BigInt / Decimal from the column
+    // metadata.
     #[test]
     fn flatten_cell_int64_emits_plain_string_sprint_261() {
         assert_eq!(
             flatten_cell(&Bson::Int64(42)),
             serde_json::Value::String("42".into())
         );
-        // 정밀도 초과 케이스 (i64 max 근처).
+        // Precision-overflow case (near i64 max).
         assert_eq!(
             flatten_cell(&Bson::Int64(9223372036854775807)),
             serde_json::Value::String("9223372036854775807".into())
         );
-        // 음수.
+        // Negative.
         assert_eq!(
             flatten_cell(&Bson::Int64(-9223372036854775808)),
             serde_json::Value::String("-9223372036854775808".into())
@@ -557,8 +558,8 @@ mod tests {
 
     #[test]
     fn flatten_cell_decimal128_emits_plain_string_sprint_261() {
-        // Decimal128 → "123.456..." plain string. canonical extjson 의
-        // `{"$numberDecimal": "..."}` 우회.
+        // Decimal128 → "123.456..." plain string, bypassing the canonical
+        // extjson `{"$numberDecimal": "..."}`.
         let d128 = Bson::Decimal128("123.456789012345678901234567890".parse().unwrap());
         let result = flatten_cell(&d128);
         match result {
@@ -574,15 +575,16 @@ mod tests {
 
     #[test]
     fn flatten_cell_int32_remains_raw_number_sprint_261() {
-        // Int32 는 JS Number 안전 범위라 raw number 유지 — 무손실 round-trip.
+        // Int32 is inside the safe JS Number range, so it stays a raw
+        // number — lossless round-trip.
         assert_eq!(flatten_cell(&Bson::Int32(42)), serde_json::json!(42));
     }
 
     #[test]
     fn flatten_cell_double_remains_raw_number_sprint_261() {
-        // Double 은 JS Number = IEEE 754 64-bit 동일 표현 — 무손실.
-        // 1.5 (정확히 표현 가능한 dyadic rational) 로 clippy::approx_constant
-        // 회피.
+        // Double has the same representation as JS Number = IEEE 754 64-bit —
+        // lossless. 1.5 (an exactly representable dyadic rational) avoids
+        // clippy::approx_constant.
         assert_eq!(flatten_cell(&Bson::Double(1.5)), serde_json::json!(1.5));
     }
 

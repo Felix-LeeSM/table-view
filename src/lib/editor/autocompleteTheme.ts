@@ -1,27 +1,31 @@
 import { EditorView } from "@codemirror/view";
 
 /**
- * CodeMirror autocomplete popup 의 다크모드 토큰 매핑 + UX 향상.
+ * Dark-mode token mapping and UX improvements for the CodeMirror autocomplete
+ * popup.
  *
- * 2026-05-15 — 토큰 이름 보정. 이전 버전은 `var(--popover)` /
- * `var(--primary)` 같은 *raw* CSS variable 을 참조했는데, 이 프로젝트의
- * design token 은 `--tv-primary` (themes.css) 와 `--color-primary`
- * (index.css 의 Tailwind `@theme inline`) 으로만 정의된다. `--primary`
- * 단독은 어디에도 없어서 `background-color: var(--primary)` 가 invalid 로
- * 떨어졌고, 그래서 active 항목 highlight 가 사용자 눈에 "티가 안 나는"
- * 회색으로 보였다. 모든 참조를 `--tv-*` raw 변수로 교체해 background
- * 변화가 실제로 적용되도록 한다.
+ * 2026-05-15 — token names corrected. The previous version referenced *raw*
+ * CSS variables such as `var(--popover)` / `var(--primary)`, but this
+ * project defines those tokens only with a prefix: `--tv-primary`
+ * (themes.css) and `--color-primary` (Tailwind `@theme inline` in index.css).
+ * A bare `--primary` was defined nowhere, so
+ * `background-color: var(--primary)` fell through as invalid, and the active
+ * item's highlight showed as a gray the user could barely notice. Every
+ * reference now uses the raw `--tv-*` variables so the background change
+ * actually applies.
  *
- * UX 패키지 (옵션 1·2·4·5·6):
- *   - 옵션 1: active 항목 좌측 3px accent bar. `--tv-ring` 토큰 (focus
- *     ring) 재사용.
- *   - 옵션 2: popup 하단 키 안내 hint bar (`↑↓ · ⏎/⇥ · Esc`).
- *   - 옵션 4: completion `type` 별 아이콘 색 분기.
- *   - 옵션 5: `.cm-completionDetail` 스타일.
- *   - 옵션 6: `.cm-completionInfo` 우측 패널 토큰 매핑.
+ * UX package (options 1, 2, 4, 5, 6 of
+ * `docs/explorations/mongo-autocomplete-ux-2026-05-15.html`):
+ *   - Option 1: a 3px accent bar on the left of the active item, reusing the
+ *     `--tv-ring` token (focus ring).
+ *   - Option 2: a key hint bar at the bottom of the popup (`↑↓ · ⏎/⇥ · Esc`).
+ *   - Option 4: icon colour per completion `type`.
+ *   - Option 5: `.cm-completionDetail` styling.
+ *   - Option 6: token mapping for the `.cm-completionInfo` right-hand panel.
  *
- * SqlQueryEditor / MongoQueryEditor / DocumentFilterBar / AddDocumentModal
- * 가 동일 mount — 두 paradigm 의 popup tone 이 일치.
+ * SqlQueryEditor / MongoQueryEditor / RedisCommandEditor / SearchQueryEditor /
+ * DocumentFilterBar / AddDocumentModal mount the same theme, so the popup tone
+ * matches across paradigms.
  */
 export const autocompleteTooltipTheme = EditorView.theme({
   ".cm-tooltip": {
@@ -58,10 +62,11 @@ export const autocompleteTooltipTheme = EditorView.theme({
     padding: "2px 6px",
     boxShadow: "inset 3px 0 0 transparent",
   },
-  // active 항목 — `--tv-primary` 가 실제 보라/파랑 (테마별로 ~ #4f46e5 /
-  // #818cf8 / #0969da). 이전엔 정의 안 된 `--primary` 라 background 가
-  // 안 바뀌어 cue 가 거의 없었다. 가독성 위해 `!important` 로 못박아
-  // CodeMirror default 의 hover background 가 active 위에 덮어쓰지 않도록.
+  // Active item — `--tv-primary` resolves to a real colour (per theme, e.g.
+  // #4f46e5 / #818cf8 / #0969da). It used to be the undefined `--primary`, so
+  // the background did not change and there was almost no cue. `!important`
+  // pins it for legibility so CodeMirror's default hover background does not
+  // paint over the active item.
   ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
     backgroundColor: "var(--tv-primary) !important",
     color: "var(--tv-primary-foreground) !important",

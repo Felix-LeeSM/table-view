@@ -1,34 +1,35 @@
 /**
- * 작성 2026-05-17 (Phase 5 sprint-373, AC-373-03 + AC-373-04 + AC-373-08).
+ * AC-373-03 + AC-373-04 + AC-373-08.
  *
- * 사용자 journey:
- *   1. (default) HistorySettings 토글 ON — `query_history_enabled = true`
- *      (AC-373-08). 6 source caller (`recordHistoryEntry`) 가 `add_history_entry`
- *      IPC 를 호출.
- *   2. 사용자 토글 OFF — `setQueryHistoryEnabled(false)` 호출 →
+ * User journey:
+ *   1. (default) HistorySettings toggle ON — `query_history_enabled = true`
+ *      (AC-373-08). The 6 source callers (`recordHistoryEntry`) call the
+ *      `add_history_entry` IPC.
+ *   2. User toggles OFF — calls `setQueryHistoryEnabled(false)` →
  *      `persist_setting("query_history_enabled", false)` IPC + store mutate.
- *      이후 6 source caller 가 `recordHistoryEntry` 호출 시 IPC 0회 (early
- *      return).
- *   3. 사용자 다시 토글 ON — IPC 호출 재개.
+ *      Afterwards the 6 source callers fire 0 IPCs when calling
+ *      `recordHistoryEntry` (early return).
+ *   3. User toggles ON again — IPC calls resume.
  *
- * 사유 (test scenarios 8 원칙):
- *   - user journey path: 토글 → 6 source caller 모두 시뮬 → IPC spy 0/N
- *     검증. mock 광역화 silent failure 가 안 일어나도록 6 caller 각자
- *     호출이 ON 시 +1 / OFF 시 +0 임을 정확히 단언.
- *   - state transition: ON → OFF → ON 의 3 단계 모두 자명한 단언.
- *   - regression-lock: `recordHistoryEntry` 의 early-return 분기가 빠지면
- *     OFF 상태에서도 IPC count 가 6 — 본 테스트가 회귀를 즉시 잡음.
+ * Reason (the 8 test-scenario principles):
+ *   - user journey path: toggle → simulate all 6 source callers → verify the
+ *     IPC spy 0/N. To keep broad mocks from producing a silent failure, assert
+ *     precisely that each of the 6 callers is +1 when ON and +0 when OFF.
+ *   - state transition: all 3 steps of ON → OFF → ON get explicit assertions.
+ *   - regression-lock: if `recordHistoryEntry`'s early-return branch is
+ *     dropped, the IPC count is 6 even when OFF — this test catches that
+ *     regression immediately.
  *
- * Tauri `invoke` 만 mock — `recordHistoryEntry` / `useHistorySettingsStore`
- * 의 실제 logic 을 실행해서 lego (settings → record → store → invoke)
- * 가 완전히 맞물려 동작하는지 검증.
+ * Only the Tauri `invoke` is mocked — the real logic of `recordHistoryEntry`
+ * / `useHistorySettingsStore` runs, verifying that the lego (settings →
+ * record → store → invoke) meshes and works end to end.
  */
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// hoisted mock — module-level invoke. 6 source caller 마다 어떤 IPC 가
-// 호출되는지 단언하기 위해 spy 화.
+// hoisted mock — module-level invoke, turned into a spy so each of the 6
+// source callers can be asserted on for the IPC it fires.
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
@@ -40,9 +41,9 @@ import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import HistorySettings from "./HistorySettings";
 
 /**
- * 6 source caller 의 동일 입력 시뮬레이터. 본 helper 는 `recordHistoryEntry`
- * 의 6종 source 라벨을 1회씩 발사 — IPC mock 의 count 가 ON 일 때 6,
- * OFF 일 때 0 인지 검증할 수 있다.
+ * One-input simulator for the 6 source callers. This helper fires each of
+ * `recordHistoryEntry`'s 6 source labels once, so the IPC mock's count can be
+ * verified as 6 when ON and 0 when OFF.
  */
 function simulateAll6Sources() {
   // raw
@@ -119,9 +120,9 @@ function simulateAll6Sources() {
 }
 
 /**
- * `add_history_entry` IPC 만 카운트. `persist_setting` 등 다른 invoke
- * 는 spy 에서 제외 — 본 테스트의 invariant 는 history insert path 의
- * count 만 잡는다.
+ * Counts only the `add_history_entry` IPC. Other invokes such as
+ * `persist_setting` are excluded from the spy — this test's invariant covers
+ * only the count of the history insert path.
  */
 function countAddHistoryCalls(): number {
   return invokeMock.mock.calls.filter((call) => call[0] === "add_history_entry")
@@ -131,8 +132,8 @@ function countAddHistoryCalls(): number {
 describe("HistorySettings (sprint-373) — disable toggle gates IPC", () => {
   beforeEach(() => {
     invokeMock.mockReset();
-    // backend IPC 가 응답하지 않는다고 가정해도 store 가 optimistic
-    // mutate 되므로 default 응답은 resolve 로 통일.
+    // Even if the backend IPC never responds, the store mutates
+    // optimistically, so the default response is uniformly a resolve.
     invokeMock.mockResolvedValue({
       id: 99,
       executedAt: 1,
@@ -146,26 +147,26 @@ describe("HistorySettings (sprint-373) — disable toggle gates IPC", () => {
     useQueryHistoryStore.setState({ recentVisible: [] });
   });
 
-  // AC-373-08 — 신규 사용자 boot 시 default = enabled.
-  // 작성 2026-05-17. 사유: 신규 사용자에게 history 가 자동 ON 이어야
-  // "기록되는지 모름" 회귀를 만들지 않음.
+  // AC-373-08 — default = enabled on a new user's boot.
+  // Reason: history must start ON for new users so the "did not know it
+  // was recording" regression never appears.
   it("defaults to enabled = true (AC-373-08)", () => {
     expect(useHistorySettingsStore.getState().queryHistoryEnabled).toBe(true);
   });
 
-  // AC-373-03 — 토글 OFF 후 6 source caller 모두 IPC 호출 안 함.
-  // 작성 2026-05-17. 사유: 사용자가 disable 하면 IPC count = 0 invariant.
+  // AC-373-03 — after toggling OFF, none of the 6 source callers fire IPC.
+  // Reason: when the user disables, the IPC count = 0 invariant.
   it("disables IPC across all 6 source callers when toggled off (AC-373-03)", async () => {
     render(<HistorySettings />);
 
-    // 1. ON 상태 — 6 source 발사 → 6 IPC.
+    // 1. ON — fire the 6 sources → 6 IPCs.
     act(() => {
       simulateAll6Sources();
     });
     expect(countAddHistoryCalls()).toBe(6);
 
-    // 2. 사용자 토글 OFF — IPC 1회 (persist_setting). count reset 후
-    //    add_history_entry count 만 다시 잰다.
+    // 2. User toggles OFF — 1 IPC (persist_setting). After resetting the
+    //    count, re-count only add_history_entry.
     invokeMock.mockClear();
     const toggle = screen.getByTestId("history-settings-toggle");
     await act(async () => {
@@ -173,7 +174,7 @@ describe("HistorySettings (sprint-373) — disable toggle gates IPC", () => {
     });
     expect(useHistorySettingsStore.getState().queryHistoryEnabled).toBe(false);
 
-    // 3. OFF 상태에서 6 source 다시 발사 → IPC 0.
+    // 3. Fire the 6 sources again while OFF → 0 IPCs.
     invokeMock.mockClear();
     act(() => {
       simulateAll6Sources();
@@ -181,27 +182,27 @@ describe("HistorySettings (sprint-373) — disable toggle gates IPC", () => {
     expect(countAddHistoryCalls()).toBe(0);
   });
 
-  // AC-373-04 — 토글 ON 복원 후 IPC 호출 재개.
-  // 작성 2026-05-17. 사유: disable → enable 의 round-trip 가 사용자
-  // 의 mental model 과 정확히 일치 (IPC stop → IPC resume).
+  // AC-373-04 — after restoring the toggle to ON, IPC calls resume.
+  // Reason: the disable → enable round trip matches the user's mental
+  // model exactly (IPC stop → IPC resume).
   it("re-enables IPC when toggled back on (AC-373-04)", async () => {
     render(<HistorySettings />);
 
-    // 1. OFF 로 토글.
+    // 1. Toggle OFF.
     const toggle = screen.getByTestId("history-settings-toggle");
     await act(async () => {
       fireEvent.click(toggle);
     });
     expect(useHistorySettingsStore.getState().queryHistoryEnabled).toBe(false);
 
-    // 2. ON 으로 복원.
+    // 2. Restore ON.
     invokeMock.mockClear();
     await act(async () => {
       fireEvent.click(toggle);
     });
     expect(useHistorySettingsStore.getState().queryHistoryEnabled).toBe(true);
 
-    // 3. 6 source 발사 → IPC 6회 (resume).
+    // 3. Fire the 6 sources → 6 IPCs (resume).
     invokeMock.mockClear();
     act(() => {
       simulateAll6Sources();
@@ -209,9 +210,9 @@ describe("HistorySettings (sprint-373) — disable toggle gates IPC", () => {
     expect(countAddHistoryCalls()).toBe(6);
   });
 
-  // 토글 상태가 aria-pressed 에 동기화 — accessibility 회귀 가드.
-  // 작성 2026-05-17. 사유: screen reader 사용자가 토글 상태를 정확히
-  // 인지하도록 aria-pressed 가 enabled boolean 과 1:1.
+  // The toggle state mirrors aria-pressed — accessibility regression guard.
+  // Reason: aria-pressed is 1:1 with the enabled boolean so a screen
+  // reader user perceives the toggle state accurately.
   it("aria-pressed mirrors the enabled state", async () => {
     render(<HistorySettings />);
     const toggle = screen.getByTestId("history-settings-toggle");

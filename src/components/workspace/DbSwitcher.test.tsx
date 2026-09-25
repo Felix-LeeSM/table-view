@@ -90,7 +90,7 @@ function setStores(options: {
   connected: boolean;
   tab?: TableTab | QueryTab;
   dbType?: ConnectionConfig["dbType"];
-  /** Sprint 130 — seed the connected status with a specific activeDb. */
+  /** Seed the connected status with a specific activeDb. */
   activeDb?: string;
 }) {
   const tab =
@@ -157,7 +157,7 @@ describe("DbSwitcher", () => {
     // (process-singleton isolation, alongside datagrid/tableActivity stores).
   });
 
-  // -- Read-only chrome (S127 invariants preserved for non-eligible cases) --
+  // -- Read-only chrome (invariants preserved for non-eligible cases) --
 
   it("shows the em-dash sentinel when no tab is active (read-only)", () => {
     render(<DbSwitcher />);
@@ -176,7 +176,7 @@ describe("DbSwitcher", () => {
     expect(trigger).toHaveAttribute("tabindex", "-1");
   });
 
-  // Sprint 141 (AC-141-3) — the read-only trigger must NOT carry an HTML
+  // AC-141-3 — the read-only trigger must NOT carry an HTML
   // `title=` attribute. The combination of native `title` + Radix
   // <Tooltip> caused the "stuck tooltip" bug the user reported on
   // 2026-04-27 (the native browser tooltip lingered past hover-out
@@ -189,7 +189,7 @@ describe("DbSwitcher", () => {
     expect(trigger).not.toHaveAttribute("title");
   });
 
-  // Sprint 141 (AC-141-4) — the read-only Radix tooltip copy must not
+  // AC-141-4 — the read-only Radix tooltip copy must not
   // mention internal "sprint" / "phase" nomenclature. A user looking at
   // a kv / search / disconnected trigger should see why the action is
   // unavailable in plain language, not a roadmap reference.
@@ -267,7 +267,7 @@ describe("DbSwitcher", () => {
     expect(screen.queryAllByText(/redis|valkey|kv/i)).toHaveLength(0);
   });
 
-  // -- S128 active behavior (rdb + connected) --
+  // -- Active behavior (rdb + connected) --
 
   it("renders an active switcher when the active tab paradigm is rdb and connected", () => {
     setStores({ paradigm: "rdb", connected: true });
@@ -466,7 +466,7 @@ describe("DbSwitcher", () => {
     ).toBeInTheDocument();
   });
 
-  // -- S130 switch dispatch --
+  // -- Switch dispatch --
 
   it("dispatches switch_active_db when an entry is selected", async () => {
     setStores({ paradigm: "rdb", connected: true, activeDb: "postgres" });
@@ -519,12 +519,9 @@ describe("DbSwitcher", () => {
     }
   });
 
-  // Sprint 263 — DbSwitcher no longer wipes the per-connection schema
-  // cache on toggle. schemaStore caches are now `(connId, db)` keyed; the
-  // sidebar re-subscribes to the new slot via the workspace key, and an
-  // already-populated slot is reused instantly across toggles. This test
-  // (was AC-262-pre-263 "clears … on switch") now anchors that the
-  // *previously-loaded* db1 cache survives a db1 → db2 toggle.
+  // DbSwitcher does not wipe the per-connection schema cache on toggle (see
+  // `handleSelect` in `DbSwitcher.tsx`): the *previously-loaded* db1 cache
+  // must survive a db1 → db2 toggle.
   it("preserves schema caches across a successful DB toggle (AC-263-04)", async () => {
     setStores({ paradigm: "rdb", connected: true, activeDb: "postgres" });
     // Seed db1's slot — after the switch this MUST still exist.
@@ -565,12 +562,12 @@ describe("DbSwitcher", () => {
     expect(schemaState.tables.c1?.postgres?.public).toHaveLength(1);
   });
 
-  // Sprint 131 "Document paradigm switch" cases (clears document store on
-  // Mongo switch / does NOT clear schema store on Mongo switch) were
-  // removed in Sprint 328 — the Mongo branch of this component no longer
-  // renders, so its dispatch path is unreachable. The cross-paradigm
-  // guard below ("does NOT clear the document store on an RDB paradigm
-  // switch") is preserved because the symmetric RDB path is still live.
+  // The "Document paradigm switch" cases (clears document store on Mongo
+  // switch / does NOT clear schema store on Mongo switch) were removed —
+  // document renders only the read-only chip (#1047), so its dispatch path
+  // is unreachable. The cross-paradigm guard below ("does NOT clear the
+  // document store on an RDB paradigm switch") is preserved because the
+  // symmetric RDB path is still live.
 
   it("does NOT clear the document store on an RDB paradigm switch", async () => {
     // Symmetric guard — clearing documentStore from a PG switch would
@@ -746,12 +743,6 @@ describe("DbSwitcher", () => {
     expect(trigger.textContent).toMatch(/warehouse/);
   });
 
-  // Sprint 328 — Mongo display branches removed. The two cases below
-  // ("shows focused connection's activeDb when no tab is open (document)"
-  // and "falls back to the document tab database when paradigm is
-  // document") asserted Mongo-side rendering of the toolbar chip, which
-  // no longer exists. RDB equivalents above still apply.
-
   // Reason: when no tab AND no focused connection exist, the em-dash sentinel
   // must still appear. (2026-04-29)
   it("shows em-dash when no tab and no focused connection", () => {
@@ -778,7 +769,7 @@ describe("DbSwitcher", () => {
     expect(trigger.textContent).toMatch(/warehouse/);
   });
 
-  // ADR 0027 (Sprint 262) — workspace state is keyed by `(connId, db)`,
+  // ADR 0027 — workspace state is keyed by `(connId, db)`,
   // so `useActiveTab()` can only resolve a tab when the connection has
   // an `activeDb`. The two legacy fallback scenarios below — "no
   // activeDb, fall back to tab.schema" and "no activeDb / no tab.database
@@ -788,7 +779,5 @@ describe("DbSwitcher", () => {
   // `null` when `activeDb` is missing). Production callers always set
   // `activeDb` via `connectToDatabase`. The DbSwitcher still falls back
   // to `(default)` when `paradigm === "rdb"` but the focused connection
-  // has no activeDb (e.g. mid-connection); that branch is exercised by
-  // `shows em-dash when no tab and no focused connection` + the
-  // production wiring in `connectionStore.connectToDatabase`.
+  // has no activeDb (e.g. mid-connection).
 });

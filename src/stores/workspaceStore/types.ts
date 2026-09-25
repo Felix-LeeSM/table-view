@@ -26,7 +26,7 @@ export type { WorkspaceQueryMode } from "./queryMode";
 export type TabSubView = "records" | "structure";
 
 /**
- * Sprint 272 — sub-tab of the Structure pane. Extends the
+ * Sub-tab of the Structure pane. Extends the
  * `StructurePanel` `SubTab` enum verbatim. `undefined` keeps the default
  * "columns" route so existing tabs / persisted payloads are
  * byte-equivalent. Only consumed when `subView === "structure"`.
@@ -61,11 +61,11 @@ export interface TableTab {
   collection?: string;
   subView: TabSubView;
   /**
-   * Sprint 272 — initial Structure sub-tab when `subView === "structure"`.
-   * The "View Triggers" right-click affordance threads `"triggers"` here
-   * so `StructurePanel` mounts on the Triggers sub-tab. `undefined`
-   * preserves the default "columns" route (existing call sites byte-
-   * equivalent).
+   * Initial Structure sub-tab when `subView === "structure"`;
+   * `StructurePanel` mounts on this sub-tab. The sidebar "View Triggers"
+   * entry that threaded `"triggers"` here was retired (see `initialSubTab`
+   * in `StructurePanel.tsx`). `undefined` preserves the default "columns"
+   * route (existing call sites byte-equivalent).
    */
   initialStructureSubTab?: StructureSubTab;
   /** Whether this tab points at a base table or a view. */
@@ -91,16 +91,16 @@ export interface QueryTab {
   queryState: QueryState;
   paradigm: Paradigm;
   /**
-   * @deprecated Sprint 309 (Phase 28 Slice A3) — Find/Aggregate toggle
+   * @deprecated Phase 28 Slice A3 — Find/Aggregate toggle
    * removed from the editor surface, so the editor and toolbar no longer
    * consume this field. RDB tabs continue to carry `"sql"`; legacy
-   * persisted document tabs may still carry `"find" | "aggregate"` and
-   * `useQueryExecution` (sprint-311 A5 target) still branches on
-   * `=== "aggregate"` until parser-driven dispatch lands. New document
-   * tabs created in sprint-309 leave this field `undefined` — that
-   * deliberately falls through the legacy `aggregate` check into the
-   * default find dispatch. The type union itself will be removed in a
-   * later sprint once A5 lands and no consumer remains.
+   * persisted document tabs may still carry `"find" | "aggregate"`. Since
+   * Phase 28 Slice A5 the parser decides document dispatch and
+   * `useQueryExecution` no longer reads this field; the history fallback in
+   * `useQueryContext` still checks `=== "aggregate"`. New document tabs
+   * leave this field `undefined` — that deliberately falls through that
+   * legacy `aggregate` check into the default `"find"`. The type union
+   * itself will be removed once no consumer remains.
    */
   queryMode?: WorkspaceQueryMode;
   /** Canonical query language metadata for future routing. */
@@ -142,7 +142,7 @@ export type WorkspaceState = {
   tabs: Tab[];
   activeTabId: string | null;
   closedTabHistory: Tab[];
-  /** localStorage round-trip 위해 array (`Set` 직렬화 X). */
+  /** An array, not a `Set` — a `Set` does not survive JSON serialization. */
   dirtyTabIds: string[];
   sidebar: SidebarState;
 };

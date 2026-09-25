@@ -1,4 +1,4 @@
-//! Sprint 371 (Phase 5 F.5) — `query_history` backend IPC surface.
+//! `query_history` backend IPC surface.
 //!
 //! 4 IPC + 1 boot helper:
 //!   - `add_history_entry`  — INSERT one row, computes `sql_redacted`
@@ -10,17 +10,20 @@
 //!   - `get_history_detail` — single row `{id, source, sql, sqlRedacted}`;
 //!     file-analytics rows return redacted SQL even on detail.
 //!   - `clear_history`      — BEGIN→COUNT→DELETE→COMMIT, then VACUUM
-//!     (transaction 밖 — SQLite 제약), emits `history.clear`, returns
-//!     `{deletedCount}`.
+//!     (outside the transaction — a SQLite constraint), emits
+//!     `history.clear`, returns `{deletedCount}`.
 //!   - `boot_vacuum_old_history` — retention policy (drop rows older
 //!     than `settings.query_history_retention_days`). Function-level
-//!     unit test (AC-371-10); boot wire is sprint-373.
+//!     unit test (AC-371-10); the boot wiring lives in
+//!     `storage::history_retention_boot`.
 //!
 //! Strategy doc F.5 (line 535–605) — privacy invariants:
-//!   - `sql_redacted NOT NULL` — `sql_redact()` 가 panic 시 원문 fallback.
-//!   - list 응답 어디에도 `sql` 부재.
-//!   - detail IPC 가 단일 row id 만 — bulk dump path 0.
-//!   - VACUUM 은 transaction 분리 (SQLite 가 mid-tx VACUUM 거부).
+//!   - `sql_redacted NOT NULL` — falls back to the original text if
+//!     `sql_redact()` panics.
+//!   - `sql` appears nowhere in a list response.
+//!   - the detail IPC takes a single row id only — no bulk dump path.
+//!   - VACUUM runs outside the transaction (SQLite refuses a mid-tx
+//!     VACUUM).
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
@@ -37,16 +40,16 @@ use tracing::warn;
 // Discriminated union — paradigm + queryMode pair.
 // ---------------------------------------------------------------------------
 
-/// `paradigm` + `queryMode` discriminated union 으로 invalid pair 를 serde
-/// 단계에서 reject (AC-371-01). RDB 는 SQL only, document(Mongo) 는 query
-/// builder family 만 허용.
+/// A `paradigm` + `queryMode` discriminated union, so an invalid pair is
+/// rejected at the serde stage (AC-371-01). RDB allows SQL only; document
+/// (Mongo) allows the query-builder family only.
 ///
-/// Wire 예시 (camelCase):
+/// Wire examples (camelCase):
 ///   `{ "paradigm": "rdb",      "queryMode": "sql" }`
 ///   `{ "paradigm": "document", "queryMode": "find" }`
 ///   `{ "paradigm": "document", "queryMode": "aggregate" }`
 ///
-/// Invalid 예시 (serde reject → 400):
+/// Invalid examples (serde reject → 400):
 ///   `{ "paradigm": "rdb",      "queryMode": "find" }`
 ///   `{ "paradigm": "document", "queryMode": "sql" }`
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -75,28 +78,31 @@ pub enum HistoryQueryMode {
     },
 }
 
-/// RDB paradigm 의 허용 query mode. 현재 "sql" 만.
+/// Query modes allowed for the RDB paradigm. "sql" only.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum RdbQueryMode {
     Sql,
 }
 
-/// KV paradigm (Redis/Valkey) 의 허용 query mode. Redis 명령 한 종류.
+/// Query modes allowed for the KV paradigm (Redis/Valkey). One Redis
+/// command kind.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum KvQueryMode {
     Command,
 }
 
-/// Search paradigm (ES/OpenSearch) 의 허용 query mode. Search DSL 한 종류.
+/// Query modes allowed for the search paradigm (ES/OpenSearch). One search
+/// DSL kind.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SearchQueryMode {
     Dsl,
 }
 
-/// Document paradigm 의 허용 query mode. mongosh 명령 family.
+/// Query modes allowed for the document paradigm. The mongosh command
+/// family.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum DocumentQueryMode {
@@ -161,9 +167,9 @@ impl HistoryQueryMode {
     }
 }
 
-/// Filter 의 discriminated union — list/filter 도 paradigm 없이 queryMode 만
-/// 지정하면 400 (AC-371-02). 본 enum 의 외부 wire shape 은 `HistoryQueryMode`
-/// 와 동일.
+/// Discriminated union for the filter — list/filter also returns 400 when
+/// only `queryMode` is given without a paradigm (AC-371-02). The external
+/// wire shape of this enum is identical to `HistoryQueryMode`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "paradigm", rename_all = "lowercase")]
 pub enum HistoryQueryModeFilter {
@@ -232,25 +238,26 @@ impl HistoryQueryModeFilter {
 // add_history_entry
 // ---------------------------------------------------------------------------
 
-/// query_history INSERT 의 wire shape. Frontend 의 history.recordExecution
-/// 분기에서 호출.
+/// Wire shape of the query_history INSERT. Called from the frontend's
+/// history.recordExecution branch.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddHistoryEntryRequest {
     pub connection_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tab_id: Option<String>,
-    /// paradigm + queryMode discriminated union — invalid combo 는 serde
-    /// 단계에서 reject.
+    /// paradigm + queryMode discriminated union — an invalid combo is
+    /// rejected at the serde stage.
     #[serde(flatten)]
     pub mode: HistoryQueryMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collection: Option<String>,
-    /// `raw` / `grid-edit` / 기타 frontend 가 라벨링한 trigger source.
+    /// Trigger source labelled by the frontend — `raw` / `grid-edit` / etc.
     pub source: String,
-    /// 원본 SQL / mongosh 표현. backend 가 `sql_redact()` 호출.
+    /// The original SQL / mongosh expression. The backend calls
+    /// `sql_redact()` on it.
     pub sql: String,
     pub status: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -258,16 +265,16 @@ pub struct AddHistoryEntryRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rows_affected: Option<i64>,
     pub duration_ms: i64,
-    /// 사용자 시계로 측정된 execution start time (unix ms). backend 가
-    /// `|now - executed_at| > 5min` 검증 후 drift 시 backend now 로 override
-    /// (AC-371-09).
+    /// Execution start time measured on the user's clock (unix ms). The
+    /// backend checks `|now - executed_at| > 5min` and, on drift, overrides
+    /// it with the backend now (AC-371-09).
     pub executed_at: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_pid: Option<i64>,
 }
 
-/// `add_history_entry` 응답 — caller 가 detail fetch / store reconcile 에
-/// 사용할 row id (AUTOINCREMENT INTEGER).
+/// `add_history_entry` response — the row id (AUTOINCREMENT INTEGER) the
+/// caller uses for a detail fetch / store reconcile.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddHistoryEntryResponse {
@@ -293,8 +300,9 @@ pub async fn add_history_entry_inner(
     guard_legacy_import_done(pool).await?;
 
     // AC-371-09 — executed_at drift validation. |now - executed_at| > 5min
-    // → backend now override + dev warning. Frontend clock 이 사용자 OS
-    // 시계 변경 / NTP 동기화 실패 등으로 wildly off 인 경우의 안전망.
+    // → backend now override + dev warning. A safety net for a frontend clock
+    // that is wildly off because the user changed the OS clock, NTP sync
+    // failed, and so on.
     let now = now_ms();
     let executed_at = if (now - req.executed_at).abs() > DRIFT_THRESHOLD_MS {
         warn!(
@@ -325,7 +333,8 @@ pub async fn add_history_entry_inner(
     let paradigm = req.mode.paradigm_str();
     let query_mode = req.mode.query_mode_str();
 
-    // INSERT 단일 row. id 는 AUTOINCREMENT — `last_insert_rowid()` 로 회수.
+    // INSERT a single row. The id is AUTOINCREMENT — recovered through
+    // `last_insert_rowid()`.
     let row: (i64,) = sqlx::query_as(
         "INSERT INTO query_history \
          (connection_id, tab_id, paradigm, query_mode, database, collection, source, \
@@ -380,24 +389,26 @@ const MAX_LIMIT: i64 = 500;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListHistoryRequest {
-    /// connectionId filter — `tabId` 가 있으면 본 필드 필수 (AC-371-03).
+    /// connectionId filter — required whenever `tabId` is present
+    /// (AC-371-03).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tab_id: Option<String>,
-    /// Filter union — paradigm 없이 queryMode 단독은 reject.
+    /// Filter union — a bare queryMode without a paradigm is rejected.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filter: Option<HistoryQueryModeFilter>,
-    /// Cursor pagination — `Some(id)` 이면 id < cursor 인 row 만 (executed_at
-    /// DESC, id DESC 정렬과 호환).
+    /// Cursor pagination — with `Some(id)`, only rows with id < cursor
+    /// (compatible with the executed_at DESC, id DESC ordering).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<i64>,
-    /// Page size. None → 100. > 500 → 500 으로 clamp.
+    /// Page size. None → 100. > 500 → clamped to 500.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<i64>,
 }
 
-/// list 응답의 row — `sql` 필드 **부재** (AC-371-05). `sqlRedacted` 만 노출.
+/// A row of the list response — the `sql` field is **absent** (AC-371-05).
+/// Only `sqlRedacted` is exposed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryListRow {
@@ -422,8 +433,8 @@ pub struct HistoryListRow {
 #[serde(rename_all = "camelCase")]
 pub struct ListHistoryResponse {
     pub rows: Vec<HistoryListRow>,
-    /// 다음 페이지 cursor — `rows.last().id` 또는 None (rows 비었거나 page
-    /// 끝).
+    /// Cursor for the next page — `rows.last().id`, or None when rows is
+    /// empty or the page is the last one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<i64>,
 }
@@ -432,25 +443,27 @@ pub async fn list_history_inner(
     pool: &SqlitePool,
     req: ListHistoryRequest,
 ) -> Result<ListHistoryResponse, AppError> {
-    // AC-371-03 — tabId 가 있으면 connectionId 필수. workspace 안의 tab 은
-    // connection 컨텍스트가 필수이므로 이 제약은 시맨틱 invariant.
+    // AC-371-03 — connectionId is required whenever tabId is present. A tab
+    // inside a workspace always needs its connection context, so this
+    // constraint is a semantic invariant.
     if req.tab_id.is_some() && req.connection_id.is_none() {
         return Err(AppError::Validation(
             "list_history: tabId requires connectionId".into(),
         ));
     }
 
-    // AC-371-04 — limit clamp. None → 100. negative/zero 는 default 로 fall
-    // back (시맨틱 buggy input 보호). 500 초과는 잘림.
+    // AC-371-04 — limit clamp. None → 100. Negative/zero falls back to the
+    // default (guards against semantically buggy input). Anything over 500 is
+    // truncated.
     let limit = match req.limit {
         Some(v) if v > 0 => v.min(MAX_LIMIT),
         _ => DEFAULT_LIMIT,
     };
 
-    // Filter 의 paradigm/queryMode pair 를 SQL 절로 변환. paradigm 단독은
-    // OK (paradigm = 'rdb' / 'document' 만 필터). queryMode 단독은 위 enum
-    // 의 union 정의로 serde 단계에서 reject — list_history_inner 까지 도달
-    // 불가.
+    // Turn the filter's paradigm/queryMode pair into SQL clauses. A bare
+    // paradigm is fine (filters on paradigm = 'rdb' / 'document' alone). A
+    // bare queryMode is rejected at the serde stage by the union definition
+    // of the enum above — it cannot reach list_history_inner.
     let (filter_clauses, filter_params): (Vec<&'static str>, Vec<String>) = match &req.filter {
         None => (Vec::new(), Vec::new()),
         Some(f) => {
@@ -487,11 +500,13 @@ pub async fn list_history_inner(
         format!(" WHERE {}", where_clauses.join(" AND "))
     };
 
-    // ORDER BY id DESC — AUTOINCREMENT id 가 monotonically increasing 이라
-    // 입력 순서 (= execute 순서) 와 1:1 correlate. cursor pagination 의
-    // `id < cursor` 절이 (executed_at, id) 복합 키 비교 없이 단순 정렬을
-    // 보장하므로 안정적인 next_cursor 가 가능. 사용자 시계가 NTP 동기화로
-    // 뒤로 점프해도 (executed_at 가 dup 되는 edge case) id 가 tiebreak.
+    // ORDER BY id DESC — the AUTOINCREMENT id increases monotonically, so it
+    // correlates 1:1 with insertion order (= execution order). That lets the
+    // `id < cursor` clause of the cursor pagination hold a simple ordering
+    // without comparing an (executed_at, id) composite key, which is what
+    // makes next_cursor stable. Even if the user's clock jumps backwards on
+    // an NTP sync (the edge case where executed_at duplicates), the id breaks
+    // the tie.
     let sql = format!(
         "SELECT id, connection_id, tab_id, paradigm, query_mode, database, collection, \
                 source, sql_redacted, status, error_message, rows_affected, duration_ms, \
@@ -605,7 +620,8 @@ pub struct GetHistoryDetailRequest {
     pub id: i64,
 }
 
-/// detail 응답 — bulk dump path 가 0 이므로 단일 row id 만 받는다.
+/// Detail response — it takes a single row id only, so there is no bulk
+/// dump path.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryDetailResponse {
@@ -664,16 +680,17 @@ pub struct ClearHistoryResponse {
     pub deleted_count: i64,
 }
 
-/// AC-371-07 의 invariant:
+/// Invariant of AC-371-07:
 ///   1. BEGIN — transaction open.
-///   2. COUNT — pre-delete row 수 read (반환값).
-///   3. DELETE — 모든 query_history row 제거.
-///   4. COMMIT — transaction close (VACUUM 의 prerequisite).
-///   5. VACUUM — transaction 밖. SQLite 가 mid-transaction VACUUM 거부.
+///   2. COUNT — read the pre-delete row count (the return value).
+///   3. DELETE — remove every query_history row.
+///   4. COMMIT — transaction close (a prerequisite for VACUUM).
+///   5. VACUUM — outside the transaction. SQLite refuses a mid-transaction
+///      VACUUM.
 ///
-/// Step 5 의 VACUUM 은 best-effort — DB lock 등으로 실패해도 deleted_count
-/// 응답은 정상 반환. user-visible 영향 0 (다음 boot 의 boot_vacuum_old_history
-/// 가 mop-up).
+/// The VACUUM in step 5 is best-effort — even if it fails on a DB lock or
+/// similar, the deleted_count response still returns normally. Zero
+/// user-visible effect (`boot_vacuum_old_history` mops up on the next boot).
 pub async fn clear_history_inner(pool: &SqlitePool) -> Result<i64, AppError> {
     guard_legacy_import_done(pool).await?;
 
@@ -686,8 +703,9 @@ pub async fn clear_history_inner(pool: &SqlitePool) -> Result<i64, AppError> {
         .await?;
     tx.commit().await?;
 
-    // VACUUM — transaction 분리 (SQLite 제약). DB lock / busy 등으로
-    // 실패해도 caller 의 deletedCount 응답은 유지.
+    // VACUUM — separated from the transaction (a SQLite constraint). Even if
+    // it fails on a DB lock / busy, the caller's deletedCount response
+    // stands.
     if let Err(e) = sqlx::query("VACUUM").execute(pool).await {
         warn!(
             target: "history",
@@ -729,13 +747,14 @@ pub async fn clear_history<R: Runtime>(
 // boot_vacuum_old_history (AC-371-10)
 // ---------------------------------------------------------------------------
 
-/// Retention 정책 단위. `settings.query_history_retention_days` 값을
-/// `i64` ms 로 환산해 `executed_at < now - retention_days` 인 row 를 삭제.
-/// 본 함수의 wire-up (boot 호출 site, e2e 검증) 은 sprint-373 책임 —
-/// 본 sprint 는 function-level 단위 테스트만 잠근다.
+/// Unit of the retention policy. Converts the
+/// `settings.query_history_retention_days` value into `i64` ms and deletes
+/// the rows where `executed_at < now - retention_days`. The boot call site
+/// and its e2e coverage live in `storage::history_retention_boot`; the tests
+/// here lock the function level only.
 ///
-/// `retention_days` 가 0 이하면 no-op (사용자가 "무한 보관" 으로 설정한
-/// 경우). 정상 path 는 1~365 사이.
+/// `retention_days` <= 0 is a no-op (the user chose "keep forever"). The
+/// normal path is between 1 and 365.
 pub async fn boot_vacuum_old_history(
     pool: &SqlitePool,
     retention_days: i64,
@@ -753,9 +772,9 @@ pub async fn boot_vacuum_old_history(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-17 (Phase 5 sprint-371) — `boot_vacuum_old_history` 의
-    //! function-level 단위 테스트 (AC-371-10). Wire 시나리오 (4 IPC) 는
-    //! `tests/history_*.rs` 통합 테스트가 책임.
+    //! Function-level unit tests for `boot_vacuum_old_history` (AC-371-10).
+    //! The wired scenarios (the 4 IPC) are covered by the
+    //! `tests/history_*.rs` integration tests.
 
     use super::*;
     use crate::storage::local;
@@ -844,27 +863,28 @@ mod tests {
     }
 
     // ---------------------------------------------------------------------
-    // 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    // The inline tests above cover `boot_vacuum_*` only, and the
+    // `tests/history_*` integration binaries sit outside the coverage
+    // measurement set, which leaves `add_history_entry_inner` /
+    // `list_history_inner` / `get_history_detail_inner` /
+    // `clear_history_inner` thinly covered. The tests below lock the core
+    // paths of the 4 IPC on the `--lib` route.
     //
-    // 기존 inline `boot_vacuum_*` 만 cover. `tests/history_*` 통합 binary 는
-    // baseline 측정 set 에 없어 `add_history_entry_inner` / `list_history_inner`
-    // / `get_history_detail_inner` / `clear_history_inner` 의 line coverage 가
-    // 27% 만. 본 추가 테스트는 4 IPC 의 핵심 path 를 `--lib` 경로에서 lock.
-    //
-    // 8 원칙:
-    //   - Happy: add → list → detail → clear flow 가 한 lock.
-    //   - 빈 입력: list_history with empty filter → 빈 응답.
-    //   - 에러 복구: get_history_detail with absent id → AppError::NotFound.
-    //   - 동시성: clear 후 add 가 새 id 부여 (autoincrement 가 reset 안 됨).
-    //   - 상태 전이: filter union — paradigm only / paradigm+queryMode.
-    //   - try-await reject: list 의 tabId-without-connectionId → Validation.
-    //   - 빈 catch 없음: clear 의 VACUUM 실패 path 는 warn 만 — invariant 가
-    //     row 0 / count 단언으로 lock.
+    // 8 principles:
+    //   - Happy: the add → list → detail → clear flow in one lock.
+    //   - Empty input: list_history with an empty filter → empty response.
+    //   - Error recovery: get_history_detail with an absent id →
+    //     AppError::NotFound.
+    //   - Concurrency: an add after clear gets a fresh id (autoincrement is
+    //     not reset).
+    //   - State transition: filter union — paradigm only / paradigm+queryMode.
+    //   - try-await reject: list's tabId-without-connectionId → Validation.
+    //   - No empty catch: the VACUUM failure path of clear only warns — the
+    //     invariant is locked by the row 0 / count assertions.
     // ---------------------------------------------------------------------
 
     /// Build an empty `ListHistoryRequest` — used in place of `Default::default()`
-    /// to avoid adding `#[derive(Default)]` to the sprint-371 wire struct (boundary
-    /// rule: other-sprint code is import-only).
+    /// so no `#[derive(Default)]` has to be added to the wire struct.
     fn empty_list_request() -> ListHistoryRequest {
         ListHistoryRequest {
             connection_id: None,
@@ -1492,7 +1512,8 @@ mod tests {
 
     #[test]
     fn all_four_paradigms_round_trip() {
-        // AC 4 — serde 왕복이 4 paradigm 전부 대칭. rdb/document 기존값 + kv/search 신규.
+        // AC 4 — the serde round trip is symmetric for all 4 paradigms:
+        // the pre-existing rdb/document values plus the added kv/search.
         let modes = [
             HistoryQueryMode::Rdb {
                 query_mode: RdbQueryMode::Sql,

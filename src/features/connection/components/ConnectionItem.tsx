@@ -169,15 +169,16 @@ export default function ConnectionItem({
   // masking entry points.
   const errorMessage =
     status.type === "error" ? sanitizeMessage(status.message) : null;
-  // #1056 — 드라이버 원문을 사람 문장 + 행동 힌트로 분류. 미분류면 null 이라
-  // 기존처럼 원문만 보여준다 (fail-open).
+  // #1056 — classify the raw driver message into a human-readable sentence +
+  // an action hint. An unclassified message yields null, so only the raw
+  // message shows, as before (fail-open).
   const errorHint = errorMessage ? classifyDriverError(errorMessage) : null;
   const errorSummary = errorHint ? t(errorHint.titleKey) : errorMessage;
   const [showErrorDetail, setShowErrorDetail] = useState(false);
 
-  // Row aria-label 의 상태어는 standalone status-dot(대문자 "Connecting" 등)
-  // 과 달리 소문자다. 기존 `${name} — ${status.type}` 동작을 보존하기 위해
-  // 별도 rowStatus 키를 쓴다.
+  // The status word in the row aria-label is lowercase, unlike the standalone
+  // status dot (capitalized "Connecting" etc.). A separate rowStatus key
+  // preserves the existing `${name} — ${status.type}` behavior.
   const statusLabel =
     status.type === "connected"
       ? t("item.rowStatus.connected")
@@ -451,9 +452,11 @@ export default function ConnectionItem({
         <div className="flex w-full items-start gap-2 px-3 py-0">
           <span className="shrink-0 w-2" />
           <div className="min-w-0 flex-1 text-destructive">
-            {/* NOTE: title+hint 마크업은 @components/errors/DriverErrorHint 와
-                의도적으로 동일 형태다. feature import 경계 룰로 `@components/**` 를
-                import 할 수 없어 inline 복제한다 — 한쪽 변경 시 다른 쪽도 맞춰라. */}
+            {/* NOTE: the title+hint markup intentionally matches
+                @components/errors/DriverErrorHint. The feature import boundary
+                rule forbids `@components/**` imports other than
+                `@components/ui`, so it is duplicated inline — when one side
+                changes, update the other. */}
             {errorHint && (
               <>
                 <div className="text-xs font-medium">

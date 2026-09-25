@@ -3,11 +3,12 @@ import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import { detectCursorClause } from "./cursorClause";
 
-// Sprint 304 (2026-05-14) — column = table dup 해소를 위한 cursor clause
-// 분별기 회귀 가드. 사용자 보고: column 이 두 번씩 나열 (t / □ 아이콘).
-// 원인은 lang-sql 의 schemaCompletionSource 가 모든 컨텍스트에서 ns
-// top-level (table) 을 emit 하는 데 있다. 분별기가 column-only 자리를
-// 정확히 검출해야 wrapper 가 table emit 을 안전하게 제거할 수 있다.
+// Regression guard for the cursor clause classifier behind the fix for
+// column labels duplicated as table candidates (2026-05-14). For the
+// background, see `wrappedSchemaCompletionSource` in
+// `src/lib/sql/schemaCompletionWrapper.ts`. The classifier must detect
+// column-only positions precisely so the wrapper can safely remove the
+// table emit.
 
 function makeState(doc: string) {
   return EditorState.create({

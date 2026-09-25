@@ -5,28 +5,25 @@ import { useCallback } from "react";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 
 /**
- * Sprint 219 (P10 step 1) — moves the user-facing toast notifications for
+ * Use-case hook that owns the user-facing toast notifications for
  * connection mutations (`addConnection` / `updateConnection` /
- * `removeConnection`) out of `connectionStore.ts` and into a use-case hook.
+ * `removeConnection`), keeping them out of `connectionStore.ts`.
  *
- * Behaviour change 0 — the same toast text is published at the same point
- * (after the store action's set(...) settles, on the success path only). On
- * a store throw the hook re-propagates without firing a toast so the
- * dialog's catch can render the error inline.
+ * Toasts are published after the store action's set(...) settles, on the
+ * success path only. On a store throw the hook re-propagates without firing
+ * a toast so the dialog's catch can render the error inline.
  *
  * The hook is pure orchestration — no useEffect / setInterval / setTimeout /
- * subscribe / window event listener. Cross-window sync is unaffected:
- * `attachZustandIpcBridge` still broadcasts state mutations on
+ * subscribe / window event listener. Cross-window sync:
+ * `attachZustandIpcBridge` broadcasts state mutations on
  * `connection-sync`; the receiving window does NOT call this hook, so it
- * does NOT toast (byte-equivalent to the previous behaviour where the
- * receiving window's store action was never invoked either).
+ * does NOT toast.
  *
  * `removeConnection`: the display name must be resolved BEFORE awaiting the
  * store action — once the store removes the connection from `connections`,
  * the lookup would yield `undefined` and we'd land on the fallback toast
  * text. When the id is genuinely unresolvable (e.g. already gone), fall
- * back to "Connection removed." (without the name), matching the
- * pre-extraction store behaviour.
+ * back to "Connection removed." (without the name).
  */
 export function useConnectionMutations(): {
   addConnection: (draft: ConnectionDraft) => Promise<ConnectionConfig>;

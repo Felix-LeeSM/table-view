@@ -1,19 +1,22 @@
-//! Sprint 358 (Phase 1 W1 dual-write) — mismatch counter + boot reconciliation.
+//! Mismatch counter + boot reconciliation.
 //!
-//! Dual-write 의 invariant:
-//!   - file/LS write 가 성공 path. SQLite mirror write 실패는 silent —
-//!     dev tracing::warn 로그 + 본 module 의 `mismatch_counter` 가 += 1.
-//!   - 다음 boot 직후 `reconcile_pending_domains(pool)` 호출 — file/LS SOT 를
-//!     SQLite 에 재투영. 한 도메인당 3회 retry → 실패 시 stop + dev console
-//!     error. user-visible 영향 0.
+//! Dual-write invariants:
+//!   - The file/LS write is the success path. A failed SQLite mirror write is
+//!     silent — a dev tracing::warn log plus `mismatch_counter` += 1 in this
+//!     module.
+//!   - `reconcile_pending_domains(pool)` re-projects the file/LS SOT onto
+//!     SQLite: 3 retries per domain → on failure it stops with a dev console
+//!     error. Zero user-visible impact.
 //!
-//! 본 module 은 backend-only — counter / reconcile entrypoint / test override
-//! flag 를 노출하고, 도메인별 `dual_write_*` 호출은 commands/persist_* 의
-//! `dual_write_*` helper 에서 본 module 의 `record_sqlite_failure` 를 호출한다.
+//! This module is backend-only — it exposes the counter, the reconcile
+//! entrypoint, and the test override flag. The `commands::persist_*`
+//! dual-write helpers call into it; `record_sqlite_result` documents which
+//! domains hand a mirror-write failure here.
 //!
-//! Test injection: `set_force_failure_for_tests(true)` 는 process-wide flag.
-//! 실제 SQLite I/O 가 항상 성공하는 unit-test 환경에서 실패 path 를 강제하기
-//! 위해 dual-write helper 가 본 flag 를 검사해 simulated Err 를 반환한다.
+//! Test injection: `set_force_failure_for_tests(true)` is a process-wide flag.
+//! The dual-write helpers check it and return a simulated Err so the failure
+//! path can be forced in a unit-test environment where real SQLite I/O always
+//! succeeds.
 
 use crate::error::AppError;
 use crate::storage::load_storage_redacted;
@@ -22,8 +25,8 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tracing::{error, warn};
 
 // ---------------------------------------------------------------------------
-// mismatch counter — process-wide AtomicU64. dual-write 사이트가 SQLite 실패
-// 시 증가. reconcile 성공 시 reset. UI / metrics 가 read.
+// mismatch counter — process-wide AtomicU64. A dual-write site bumps it when
+// SQLite fails; a successful reconcile resets it. Read through `current()`.
 // ---------------------------------------------------------------------------
 
 pub mod mismatch_counter {
@@ -46,8 +49,9 @@ pub mod mismatch_counter {
 }
 
 // ---------------------------------------------------------------------------
-// test-only force-failure flag. dual-write helper 가 SQLite query 직전에 본
-// flag 를 확인해 simulated Err 반환. 프로덕션 path 에서는 항상 false.
+// test-only force-failure flag. The dual-write helpers check it right before
+// the SQLite query and return a simulated Err. Always false on the production
+// path.
 // ---------------------------------------------------------------------------
 
 static FORCE_FAILURE_FOR_TESTS: AtomicBool = AtomicBool::new(false);
@@ -60,15 +64,17 @@ pub fn is_force_failure_for_tests() -> bool {
     FORCE_FAILURE_FOR_TESTS.load(Ordering::SeqCst)
 }
 
-/// dual-write helper 가 SQLite mirror write 결과를 본 함수에 넘겨 silent 처리.
-/// `Ok(())` 면 no-op. `Err(_)` 면 dev tracing::warn 로그 + counter 증가.
+/// A dual-write helper hands its SQLite mirror write result here for silent
+/// handling. `Ok(())` is a no-op; `Err(_)` logs a dev tracing::warn and bumps
+/// the counter.
 ///
-/// #1092 (2026-07-02) — 이 삼킴은 **file SOT 가 살아있는 도메인 전용**이다.
-/// W3 이후 SQLite-only 가 된 favorites/mru/settings 는 대체 원본이 없어
-/// 실패를 삼키면 무음 소실이 되므로, 그 커맨드들은 이제 실패를 IPC 경계로
-/// 직접 전파한다. 유일한 현 호출자는 `persist_connections` — connections 는
-/// file `connections.json` 이 read SOT 라 SQLite mirror 실패가 데이터 손실을
-/// 일으키지 않는다 (다음 성공 write 까지 mirror 만 drift).
+/// #1092 (2026-07-02) — this swallowing is **only for domains whose file SOT
+/// is still alive**. favorites/mru/settings went SQLite-only after the W3 cut
+/// and have no alternative source, so swallowing a failure there would be a
+/// silent loss; those commands now propagate the failure straight to the IPC
+/// boundary. The only caller is `persist_connections` — for connections the
+/// file `connections.json` is the read SOT, so a SQLite mirror failure causes
+/// no data loss (only the mirror drifts until the next successful write).
 pub fn record_sqlite_result(domain: &str, result: Result<(), AppError>) {
     if let Err(e) = result {
         warn!(
@@ -82,24 +88,25 @@ pub fn record_sqlite_result(domain: &str, result: Result<(), AppError>) {
 }
 
 // ---------------------------------------------------------------------------
-// Reconcile entrypoint — boot 직후 단일 task. file/LS SOT 를 SQLite 에 재투영.
-// 한 도메인당 3회 retry → 모두 실패면 stop + dev console error.
+// Reconcile entrypoint — a single task that re-projects the file/LS SOT onto
+// SQLite. 3 retries per domain → if all fail it stops with a dev console error.
 // ---------------------------------------------------------------------------
 
 const MAX_RETRIES: usize = 3;
 
 pub async fn reconcile_pending_domains(pool: &SqlitePool) -> Result<(), AppError> {
-    // mismatch counter 가 0 이면 reconcile 도 no-op.
+    // A zero mismatch counter makes reconcile a no-op too.
     if mismatch_counter::current() == 0 {
         return Ok(());
     }
 
-    // Phase 1 W1 시점에는 mru / settings / favorites / connections 4 도메인의
-    // file/LS SOT 가 모두 SQLite mirror 보다 우위. 각 도메인 helper 를 순서
-    // 그대로 호출. workspace 는 SQLite-only 라 reconcile target 에서 제외.
+    // Calls the per-domain helper for mru / favorites / connections / settings
+    // in that order; each replays that domain's file/LS content into SQLite.
+    // `workspace` is SQLite-only and has no reconcile helper.
 
-    // 한 도메인이라도 재투영에 실패하면 counter 를 보존해 다음 boot 가 다시
-    // 시도하게 한다. Err 는 로깅만 하고 삼키되, all_ok 로 reset 여부를 결정.
+    // If even one domain fails to re-project, the counter is preserved so the
+    // next boot tries again. An Err is only logged and swallowed, but `all_ok`
+    // decides whether to reset.
     let mut all_ok = true;
     if let Err(e) = reconcile_mru(pool).await {
         error!(target: "dual_write", error = %e, "reconcile mru gave up after retries");
@@ -118,8 +125,9 @@ pub async fn reconcile_pending_domains(pool: &SqlitePool) -> Result<(), AppError
         all_ok = false;
     }
 
-    // 4개 도메인이 전부 Ok 일 때만 reset. 일부/전부 실패면 counter 유지 →
-    // 다음 boot 의 `counter != 0` 이 재시도를 재개한다. (issue #1559)
+    // Reset only when all four domains are Ok. On a partial or total failure
+    // the counter is kept → the next boot's `counter != 0` resumes the retry.
+    // (issue #1559)
     if all_ok {
         mismatch_counter::reset();
     }
@@ -131,8 +139,8 @@ async fn reconcile_mru(pool: &SqlitePool) -> Result<(), AppError> {
     for attempt in 0..MAX_RETRIES {
         let mut all_ok = true;
         for entry in &entries {
-            // 실패 simulation 은 reconcile path 에선 무시 (boot 시 retry path 가
-            // forced-failure 를 만나면 멈춰야 하므로 그대로 검사).
+            // The failure simulation is honoured on the reconcile path too, so
+            // the boot retry path stops when it meets a forced failure.
             if is_force_failure_for_tests() {
                 all_ok = false;
                 break;
@@ -245,8 +253,8 @@ async fn reconcile_settings(pool: &SqlitePool) -> Result<(), AppError> {
 }
 
 async fn reconcile_connections(pool: &SqlitePool) -> Result<(), AppError> {
-    // connections.json 는 기존 storage::mod.rs 가 SOT 로 관리. load_storage_redacted
-    // 로 ciphertext 없는 list 를 read 한 뒤 SQLite mirror UPSERT.
+    // connections.json is managed as the SOT by storage::mod.rs. Read the
+    // ciphertext-free list with load_storage_redacted, then UPSERT the SQLite mirror.
     let data = load_storage_redacted()?;
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -278,7 +286,7 @@ async fn reconcile_connections(pool: &SqlitePool) -> Result<(), AppError> {
             .bind(&c.host)
             .bind(c.port as i64)
             .bind(&c.user)
-            .bind("") // ciphertext from redacted view is cleared; reconcile 에선 keyring SOT 가 별개
+            .bind("") // ciphertext from redacted view is cleared; on reconcile the keyring SOT is separate
             .bind(&c.database)
             .bind(if c.read_only { 1i64 } else { 0i64 })
             .bind(&c.group_id)
@@ -319,9 +327,10 @@ async fn reconcile_connections(pool: &SqlitePool) -> Result<(), AppError> {
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 1 sprint-358) — counter 의 monotonic / reset
-    //! 동작과 force-failure flag 의 toggle 동작 검증. Reconcile 의 end-to-end
-    //! 시나리오는 `tests/dual_write_reconcile.rs` 의 integration 에 위임.
+    //! Written 2026-05-16 — verifies the counter's monotonic / reset behaviour
+    //! and the force-failure flag's toggle behaviour. The end-to-end reconcile
+    //! scenario is delegated to the integration in
+    //! `tests/dual_write_reconcile.rs`.
 
     use super::*;
     use serial_test::serial;
@@ -369,11 +378,11 @@ mod tests {
     }
 
     // ----------------------------------------------------------------------
-    // DB-backed unit smoke for reconcile helpers — 전체 E2E 시나리오를 담은
-    // `tests/dual_write_reconcile.rs` 는 CI 의 어떤 job 에서도 실행되지 않는다
-    // (`ci.yml` 의 `--test` 목록 밖). 그대로 두면 reconcile 의 각 도메인 helper
-    // coverage 가 0 이 되므로, 본 모듈이 helper happy/sad path 를 inline 으로
-    // 1회씩 cover 해 floor 를 유지한다.
+    // DB-backed unit smoke for reconcile helpers — `tests/dual_write_reconcile.rs`,
+    // which holds the full E2E scenario, is run by no CI job (it is outside
+    // `ci.yml`'s `--test` list). Left alone that would put every reconcile
+    // domain helper at zero coverage, so this module covers the helper
+    // happy/sad path inline once each to hold the floor.
     // ----------------------------------------------------------------------
 
     use crate::storage::local;
@@ -410,7 +419,7 @@ mod tests {
     #[serial]
     async fn reconcile_replays_mru_from_file_sot() {
         let (_dir, pool) = pool_setup().await;
-        // file SOT 에 entry 준비. SQLite mirror 는 비어있음.
+        // Seed an entry in the file SOT. The SQLite mirror is empty.
         save_mru_file(&[MruRecord {
             connection_id: "c-r".into(),
             last_used: 42,
@@ -471,7 +480,7 @@ mod tests {
     #[serial]
     async fn reconcile_replays_connections_from_file_sot() {
         let (_dir, pool) = pool_setup().await;
-        // connections.json file SOT 준비.
+        // Seed the connections.json file SOT.
         use crate::models::{ConnectionConfig, DatabaseType, SslMode};
         let conn = ConnectionConfig {
             id: "c-recon".into(),
@@ -520,9 +529,9 @@ mod tests {
         mismatch_counter::increment();
         set_force_failure_for_tests(true);
         reconcile_pending_domains(&pool).await.unwrap();
-        // counter 는 reset 되지 않음.
+        // The counter is not reset.
         assert!(mismatch_counter::current() >= 1);
-        // SQLite 변경 없음.
+        // SQLite is unchanged.
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mru")
             .fetch_one(&pool)
             .await
@@ -531,11 +540,12 @@ mod tests {
         pool_cleanup();
     }
 
-    // Reason: 회귀 — issue #1559. mismatch counter reset 이 `is_force_failure_for_tests()`
-    // (테스트 전용 게이트) 에만 걸려 있어, prod 에서 `reconcile_*` 가 실제 Err 를
-    // 반환해도 counter 가 무조건 0 으로 reset 됐다. reset 되면 다음 boot 의
-    // `counter == 0` 조기 return 이 재시도를 영구 skip 한다. force flag 없이 실제
-    // 실패(pool close)를 주입해 counter 보존 + 다음 boot 재시도를 잠근다. (2026-07-17)
+    // Reason: regression — issue #1559. The mismatch counter reset hung only on
+    // `is_force_failure_for_tests()` (a test-only gate), so in prod the counter
+    // was reset to 0 unconditionally even when `reconcile_*` returned a real
+    // Err. Once reset, the next boot's `counter == 0` early return skips the
+    // retry forever. Injects a real failure (pool close) without the force flag
+    // to pin counter preservation plus the next-boot retry. (2026-07-17)
     #[tokio::test]
     #[serial]
     async fn reconcile_preserves_counter_on_real_failure_then_retries_next_boot() {
@@ -547,20 +557,21 @@ mod tests {
         .unwrap();
         mismatch_counter::increment();
 
-        // 실제 실패 주입 — 테스트 게이트가 아니라 prod 와 동일한 Err 경로.
-        // closed pool 의 execute 는 PoolClosed 로 실패한다.
+        // Inject a real failure — the same Err path as prod, not the test gate.
+        // execute on a closed pool fails with PoolClosed.
         pool.close().await;
         reconcile_pending_domains(&pool).await.unwrap();
 
-        // BUG(old): prod 경로에서 무조건 reset → 0 → 다음 boot skip.
-        // FIX: 일부 도메인 실패 시 counter 보존.
+        // BUG(old): unconditional reset on the prod path → 0 → next boot skips.
+        // FIX: preserve the counter when some domain fails.
         assert!(
             mismatch_counter::current() >= 1,
             "counter must survive a real reconcile failure so next boot retries"
         );
 
-        // 다음 boot 재시도 실증 — fresh(working) pool 로 다시 reconcile 하면
-        // counter > 0 이라 조기 return 안 하고, file SOT 를 SQLite 로 재투영한다.
+        // Demonstrates the next-boot retry — reconciling again with a fresh
+        // (working) pool does not early-return because counter > 0, and it
+        // re-projects the file SOT into SQLite.
         let pool2 = local::open_pool().await.unwrap();
         reconcile_pending_domains(&pool2).await.unwrap();
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mru")

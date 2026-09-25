@@ -1,9 +1,8 @@
 /**
- * Boot-time launcher close handler. Sprint 363 (Q13 / strategy line 773)
- * changed the close semantics: the launcher's X button now HIDES the
- * launcher window instead of exiting the app — open workspace windows
- * stay alive, the process stays alive, and the launcher can be
- * resurfaced via the macOS dock icon or system tray.
+ * Boot-time launcher close handler (Q13 / strategy line 773): the
+ * launcher's X button HIDES the launcher window instead of exiting the
+ * app — open workspace windows stay alive, the process stays alive, and
+ * the launcher can be resurfaced via the macOS dock icon or system tray.
  *
  * The backend (`src-tauri/src/lib.rs` `on_window_event`) intercepts the
  * `CloseRequested` event with `api.prevent_close()` + a call to
@@ -31,7 +30,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 
 /**
  * Register the launcher's `tauri://close-requested` listener so closing
- * the launcher hides (NOT exits) — sprint-363 semantics:
+ * the launcher hides (NOT exits):
  *
  *   1. The backend's `on_window_event` matcher already intercepts the
  *      OS-level close with `api.prevent_close()` and hides the launcher.
@@ -43,7 +42,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
  *   3. Workspace windows are explicitly NOT touched — the user may
  *      still be working in a `workspace-{conn_id}` window.
  *
- * Pre-sprint-363 the handler called `exitApp()`; that path is retired.
+ * The handler previously called `exitApp()`; that path is retired.
  */
 export async function registerLauncherCloseHandler(): Promise<UnlistenFn> {
   return onCloseRequested("launcher" as WindowLabel, async () => {
@@ -67,7 +66,6 @@ export async function bootWindowLifecycle(): Promise<void> {
   await registerLauncherCloseHandler();
 }
 
-// Re-export `showWindow` so future sprints that grow the boot module don't
-// have to thread additional imports — keeps the boot surface pinned to one
-// import statement in `main.tsx`.
+// Re-export `showWindow` — keeps the boot surface pinned to one import
+// statement in `main.tsx`.
 export { showWindow };

@@ -1,10 +1,12 @@
-// 작성 2026-05-16 (Phase 4 sprint-367) — AC-367-05 snapshot fail path.
+// Written 2026-05-16 — AC-367-05 snapshot fail path.
 //
-// IPC reject 시:
-//   1. store 는 default (빈) 상태 유지 — partial hydrate 0.
-//   2. 사용자에게 error toast 노출 + Retry action button.
-//   3. listener 는 등록된 채로 유지 (다음 retry 후 적용 가능).
-//   4. orchestrator 가 reject 를 throw 해서 caller (main.tsx) 가 인지.
+// On IPC reject:
+//   1. Stores stay at their default (empty) state — no partial hydrate.
+//   2. The user sees an error toast with a Retry action button.
+//   3. The listener stays registered (events can apply after the next
+//      retry).
+//   4. The orchestrator re-throws the reject so the caller (main.tsx) sees
+//      it.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -65,7 +67,8 @@ describe("AC-367-05 snapshot failure path", () => {
     expect(toasts).toHaveLength(1);
     const t = toasts[0]!;
     expect(t.variant).toBe("error");
-    // F.2 spec: message 는 "snapshot load failed" 같은 사용자-가독 문장.
+    // F.2 spec: the message is a user-readable sentence such as
+    // "snapshot load failed".
     expect(t.message).toMatch(/snapshot|load failed|boot/i);
     expect(t.action).toBeDefined();
     expect(t.action?.label.toLowerCase()).toContain("retry");
@@ -77,8 +80,9 @@ describe("AC-367-05 snapshot failure path", () => {
 
     expect(isSnapshotBufferActive()).toBe(false); // before call
     await loadAllFromSnapshot().catch(() => undefined);
-    // failure 시 buffer 는 다시 ON — Retry 가 호출되면 race-window event 가
-    // 다시 잡혀야 함. orchestrator 는 fail 후 buffer 를 새로 활성화한다.
+    // On failure the buffer is ON again — when Retry runs, race-window
+    // events must be caught again. The orchestrator re-activates the buffer
+    // after a failure.
     expect(isSnapshotBufferActive()).toBe(true);
   });
 });

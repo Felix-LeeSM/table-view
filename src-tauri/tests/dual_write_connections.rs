@@ -1,21 +1,22 @@
-//! 작성 2026-05-16 (Phase 1 sprint-358) — Phase 1 W1 dual-write 4 domains:
+//! Written 2026-05-16 — dual-write across 4 domains:
 //! connections / favorites / mru / settings.
 //!
-//! Sprint 358 (Phase 1 W1) 시점에는 file/LS write 후 SQLite mirror INSERT/UPDATE.
-//! Sprint 370 (Phase 4 W3 cut) 이후 favorites / mru / settings 의 file 분기는
-//! retire 되었고 SQLite-only 가 된다. 본 통합 파일의 단언도 sprint-370 의
-//! 회귀를 함께 잠근다 — file 미생성 + SQLite row 만 존재.
+//! The original shape was a file/LS write followed by a SQLite mirror
+//! INSERT/UPDATE. The W3 cut retired the file branch of favorites / mru /
+//! settings and made those three SQLite-only, so the assertions in this
+//! integration file lock that down as well — no file is created and only the
+//! SQLite row exists.
 //!
-//! `connections` 도메인은 별 트리거 (storage::save_connection — 기존
-//! connections.json file SOT). sprint-370 의 In Scope 는 favorites / mru /
-//! settings 의 W3 cut 만 다루고 connections file SOT 는 sprint-375 의 W4
-//! file cleanup 까지 유지된다.
+//! The `connections` domain has its own trigger (`storage::save_connection`,
+//! the existing `connections.json` file SOT). The W3 cut covered only
+//! favorites / mru / settings; `persist_connection_inner` still calls
+//! `storage::save_connection`, so connections remains a real dual-write.
 //!
 //! AC mapping:
 //!   - AC-358-01 connections dual-write   (file connections.json + SQLite connections row)
-//!   - AC-358-02 favorites SQLite-only    (sprint-370 W3 cut — file retired)
-//!   - AC-358-03 mru SQLite-only          (sprint-370 W3 cut — file retired)
-//!   - AC-358-04 settings SQLite-only     (sprint-370 W3 cut — file retired)
+//!   - AC-358-02 favorites SQLite-only    (W3 cut — file retired)
+//!   - AC-358-03 mru SQLite-only          (W3 cut — file retired)
+//!   - AC-358-04 settings SQLite-only     (W3 cut — file retired)
 //!   - AC-358-08 guard 4-state            (pending/importing/failed reject; done accept)
 //!   - AC-358-09 mismatch counter == 0    (100-call stress, normal path)
 
@@ -38,13 +39,14 @@ async fn setup() -> (TempDir, SqlitePool) {
     let dir = TempDir::new().unwrap();
     std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
     let pool = local::open_pool().await.unwrap();
-    // 모든 dual-write 테스트는 import 완료 상태에서 시작 — guard 가 통과해야
-    // SQLite write 가 일어남.
+    // Every dual-write test starts from the import-done state — the SQLite
+    // write only happens once the guard passes.
     set_legacy_import_state(&pool, LegacyImportState::Done)
         .await
         .unwrap();
-    // 이 helper 가 호출되는 시점에는 process-shared mismatch_counter 가 다른
-    // 테스트에서 누적되어 있을 수 있다. 각 테스트는 시작 시 reset 한다 (아래).
+    // By the time this helper runs, the process-shared mismatch_counter may
+    // already have accumulated from another test. Each test resets it at the
+    // start (see below).
     (dir, pool)
 }
 
@@ -88,9 +90,9 @@ async fn ac_358_01_persist_connection_writes_to_file_and_sqlite() {
     let req = sample_connection_req("c-d1", "DualOne");
     persist_connection_inner(&pool, req).await.unwrap();
 
-    // file write: connections.json must contain the entry. 후속 sprint 가
-    // file SOT 로부터 list_connections 를 호출하므로 같은 storage helper 를
-    // 통해 read.
+    // file write: connections.json must contain the entry. `list_connections`
+    // reads the file SOT, so the read-back here goes through the same storage
+    // helper.
     let data = table_view_lib::storage::load_storage_redacted().unwrap();
     assert_eq!(data.connections.len(), 1, "file write missing");
     assert_eq!(data.connections[0].id, "c-d1");
@@ -165,8 +167,8 @@ fn sample_favorite_req(id: &str, name: &str, sql: &str) -> PersistFavoriteReques
 #[tokio::test]
 #[serial]
 async fn ac_358_02_persist_favorite_writes_to_sqlite_only() {
-    // Sprint 358 → Sprint 370 — file (`favorites.json`) write 분기 retire.
-    // 본 테스트는 W3 cut 이후의 invariant 를 잠근다: SQLite row 1, file 0.
+    // The file (`favorites.json`) write branch retired. This test locks the
+    // invariant after the W3 cut: 1 SQLite row, 0 files.
     mismatch_counter::reset();
     let (dir, pool) = setup().await;
 
@@ -181,7 +183,7 @@ async fn ac_358_02_persist_favorite_writes_to_sqlite_only() {
     .await
     .unwrap();
 
-    // Sprint 370 invariant — favorites.json 미생성.
+    // Invariant — favorites.json is never created.
     let path = dir.path().join("favorites.json");
     assert!(
         !path.exists(),
@@ -210,7 +212,7 @@ async fn ac_358_02_persist_favorite_writes_to_sqlite_only() {
 #[tokio::test]
 #[serial]
 async fn ac_358_03_persist_mru_writes_to_sqlite_only() {
-    // Sprint 358 → Sprint 370 — file (`mru.json`) write 분기 retire.
+    // The file (`mru.json`) write branch retired.
     mismatch_counter::reset();
     let (dir, pool) = setup().await;
 
@@ -224,7 +226,7 @@ async fn ac_358_03_persist_mru_writes_to_sqlite_only() {
     .await
     .unwrap();
 
-    // Sprint 370 invariant — mru.json 미생성.
+    // Invariant — mru.json is never created.
     let path = dir.path().join("mru.json");
     assert!(
         !path.exists(),
@@ -252,7 +254,7 @@ async fn ac_358_03_persist_mru_writes_to_sqlite_only() {
 #[tokio::test]
 #[serial]
 async fn ac_358_04_persist_settings_all_six_known_keys_round_trip() {
-    // Sprint 358 → Sprint 370 — file (`settings.json`) write 분기 retire.
+    // The file (`settings.json`) write branch retired.
     mismatch_counter::reset();
     let (dir, pool) = setup().await;
 
@@ -279,7 +281,7 @@ async fn ac_358_04_persist_settings_all_six_known_keys_round_trip() {
         .unwrap();
     }
 
-    // Sprint 370 invariant — settings.json 미생성.
+    // Invariant — settings.json is never created.
     let path = dir.path().join("settings.json");
     assert!(
         !path.exists(),
@@ -293,7 +295,7 @@ async fn ac_358_04_persist_settings_all_six_known_keys_round_trip() {
         .unwrap();
     assert_eq!(count, 6);
 
-    // 각 row 의 value_json 까지 일치하는지 확인.
+    // Check that each row's value_json matches too.
     for (key, value) in &cases {
         let stored: String = sqlx::query_scalar("SELECT value_json FROM settings WHERE key = ?")
             .bind(*key)
@@ -308,7 +310,7 @@ async fn ac_358_04_persist_settings_all_six_known_keys_round_trip() {
 }
 
 // ---------------------------------------------------------------------------
-// AC-358-08: guard 4-state — pending / importing / failed 거부, done 정상.
+// AC-358-08: guard 4-state — pending / importing / failed rejected, done accepted.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -325,7 +327,7 @@ async fn ac_358_08_persist_connection_rejects_when_legacy_import_pending() {
         .unwrap_err();
     assert!(matches!(err, AppError::LegacyImportInProgress));
 
-    // SQLite row 0 — guard 가 작동했음.
+    // 0 SQLite rows — the guard fired.
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM connections")
         .fetch_one(&pool)
         .await

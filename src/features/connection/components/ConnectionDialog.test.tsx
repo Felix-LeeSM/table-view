@@ -140,14 +140,14 @@ describe("ConnectionDialog", () => {
   });
 
   // -----------------------------------------------------------------------
-  // connection 생성 시 dropdown 에는 supported 어댑터만 노출되어야 한다.
+  // Creating a connection: the dropdown must expose only supported adapters.
   // -----------------------------------------------------------------------
   it("DBMS dropdown exposes supported adapters", async () => {
     const user = userEvent.setup();
     renderDialog();
     await user.click(screen.getByLabelText("Database Type"));
 
-    // Supported — 보임.
+    // Supported — visible.
     expect(
       screen.getByRole("option", { name: "PostgreSQL" }),
     ).toBeInTheDocument();
@@ -253,8 +253,9 @@ describe("ConnectionDialog", () => {
     expect(mockAddConnection).not.toHaveBeenCalled();
   });
 
-  // Sprint 345 (2026-05-15) — database required for non-SQLite DBMS. 사용자가
-  // prefill 된 default 를 지우고 submit 하면 backend round-trip 전에 reject.
+  // 2026-05-15 — database required for non-SQLite DBMS. When the user clears
+  // the prefilled default and submits, the dialog rejects it before the
+  // backend round-trip.
   it("shows error when database is empty on save (non-SQLite)", async () => {
     renderDialog();
     const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
@@ -755,7 +756,7 @@ describe("ConnectionDialog", () => {
     const user = userEvent.setup();
     renderDialog();
 
-    // Sprint-112: Radix Select migration — open the trigger then click
+    // Radix Select — open the trigger then click
     // the desired option. The trigger reflects the current value through
     // its accessible name, so subsequent assertions use textContent.
     const trigger = screen.getByLabelText("Database Type");
@@ -851,8 +852,8 @@ describe("ConnectionDialog", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 59: Environment select field
-  // Sprint 112: migrated from native HTML select to Radix-based Select;
+  // Environment select field
+  // Migrated from native HTML select to Radix-based Select;
   // assertions now read the trigger's accessible name (textContent) instead
   // of an HTMLSelectElement.value, and option-pick uses userEvent.
   // -----------------------------------------------------------------------
@@ -941,7 +942,7 @@ describe("ConnectionDialog", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Phase B-2: password security UX
+  // Password security UX
   // -----------------------------------------------------------------------
   describe("Password handling", () => {
     it("password input starts empty when editing a connection with a stored password", () => {
@@ -1048,7 +1049,7 @@ describe("ConnectionDialog", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 65: MongoDB-specific conditional fields
+  // MongoDB-specific conditional fields
   // -----------------------------------------------------------------------
   describe("MongoDB conditional fields", () => {
     it("does not render mongo-only fields when dbType is postgresql", async () => {
@@ -1077,11 +1078,12 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
     });
 
-    // Sprint 345 (2026-05-15) — Mongo database default 'admin' 으로 prefill.
-    // Sprint 381 (2026-05-17) — Mongo db-contract α: required 가 다시 풀린다.
-    // MongoFormFields 가 "Database (optional)" 으로 노출하고, ConnectionDialog
-    // 의 Save 검증이 isMongo 분기에서 빈 입력을 통과시키는지는 별 테스트
-    // ("AC-381-01") 가 lock — 본 테스트는 label 만 단언한다.
+    // 2026-05-15 — the Mongo database is prefilled with the default 'admin'.
+    // 2026-05-17 — Mongo db-contract α: the field is optional again.
+    // MongoFormFields labels it "Database (optional)". A separate test
+    // ("AC-381-01") locks that the ConnectionDialog Save validation lets an
+    // empty value through on the isMongo branch — this test asserts only the
+    // label.
     it("renders Database label (optional) when MongoDB is selected", async () => {
       const user = userEvent.setup();
       renderDialog();
@@ -1136,15 +1138,16 @@ describe("ConnectionDialog", () => {
       expect(draft.sslMode).toBe("verify-full");
     });
 
-    // Sprint 381 (2026-05-17) — db-contract α: Mongo connection 의
-    // database 필드가 optional 로 풀린다. RDB (postgresql / mysql) 는
-    // required 유지 (regression).
+    // 2026-05-17 — db-contract α: the database field of a Mongo connection
+    // becomes optional. RDB (postgresql / mysql) keeps it required
+    // (regression).
     //
-    // 작성 이유: 사용자 보고 (#2) — Mongo Query 창의 "(select database)"
-    // chip 강제는 connection 생성 시점부터 database 를 채워야 한다는
-    // 잘못된 가정에서 출발했다. MongoDB 는 connection 단계의 database
-    // 필수 아님 — admin command (`db.runCommand({ping: 1})`) 는 admin
-    // context 에서, collection command 는 chip 으로 per-tab 선택.
+    // Reason: user report — forcing the "(select database)" chip in the
+    // Mongo Query window started from the wrong assumption that the database
+    // must be filled in from connection creation. MongoDB does not need a
+    // database at the connection stage — admin commands
+    // (`db.runCommand({ping: 1})`) run in the admin context, and collection
+    // commands pick the database per tab through the chip.
     it("AC-381-01: accepts empty database for MongoDB connection on save", async () => {
       const user = userEvent.setup();
       renderDialog();
@@ -1179,12 +1182,13 @@ describe("ConnectionDialog", () => {
       expect(draft.database).toBe("");
     });
 
-    // AC-381-02: PostgreSQL regression guard — database 빈 입력 시 여전히
-    // "Database is required" 차단되어야 한다. 본 검증은 위쪽 "shows error
-    // when database is empty on save (non-SQLite)" 케이스가 default PG
-    // 시나리오로 이미 lock 하고 있다. 본 sprint 는 회귀 방지를 위해
-    // *명시적*으로 한 번 더 단언 — paradigm 분기 (`!isMongo` && `!isSqlite`)
-    // 가 PG 에서 회귀하지 않는다는 사실을 표제로 남긴다.
+    // AC-381-02: PostgreSQL regression guard — an empty database must still
+    // be blocked with "Database is required". The "shows error when database
+    // is empty on save (non-SQLite)" case above already locks this with the
+    // default PG scenario; this test asserts it once more *explicitly* to
+    // prevent regression, and its title records that the paradigm branch
+    // (`!isFileConnection && !isMongo && !isSearch` in
+    // `validateConnectionDraft`) does not regress on PG.
     it("AC-381-02: PostgreSQL connection still rejects empty database (regression guard)", async () => {
       renderDialog();
       const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
@@ -1253,7 +1257,7 @@ describe("ConnectionDialog", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 79: Footer layout + dialog width + Test result aria-live
+  // Footer layout + dialog width + Test result aria-live
   // -----------------------------------------------------------------------
   describe("Sprint 79: layout + inline Test feedback polish", () => {
     it("places Test Connection on the left group of the footer", () => {
@@ -1276,8 +1280,8 @@ describe("ConnectionDialog", () => {
       // DialogContent carries the width class directly.
       expect(dialog.className).toContain("w-dialog-sm");
       expect(dialog.className).not.toContain("w-dialog-xs");
-      // Inner wrapper should also use the same token — guards the two-call-site
-      // replacement from regressing to a single-side change.
+      // Inner wrapper should also use the same token — guards the replacement
+      // from regressing to a single-side change.
       expect(document.querySelector('[class*="w-dialog-xs"]')).toBeNull();
     });
 
@@ -1302,12 +1306,12 @@ describe("ConnectionDialog", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 92 (#CONN-DIALOG-6): Test feedback slot stability + 4-state model
+  // #CONN-DIALOG-6: Test feedback slot stability + 4-state model
   //
   // The alert region for the Test Connection result must be mounted at all
   // four states (idle / pending / success / error) so back-to-back clicks
   // never unmount the slot. Identity is asserted via the `expectNodeStable`
-  // helper from sprint-88; jsdom can't measure offsetHeight reliably, so the
+  // helper; jsdom can't measure offsetHeight reliably, so the
   // contract uses DOM identity as the proxy for "no height jump".
   // -----------------------------------------------------------------------
   describe("Sprint 92: test-feedback slot stability + 4-state model", () => {
@@ -1319,7 +1323,7 @@ describe("ConnectionDialog", () => {
       const slot = getSlot();
       expect(slot).not.toBeNull();
       // Idle slot is a placeholder (aria-hidden) — no role=alert yet. After
-      // the sprint-95 migration to `<DialogFeedback>`, the idle placeholder
+      // the migration to `<DialogFeedback>`, the idle placeholder
       // carries the primitive's testid (`dialog-feedback-idle`).
       expect(
         slot.querySelector('[data-testid="dialog-feedback-idle"]'),
@@ -1502,7 +1506,7 @@ describe("ConnectionDialog", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 108 (#CONN-DIALOG-2): DB type change custom-port guard
+  // #CONN-DIALOG-2: DB type change custom-port guard
   //
   // When the user changes DB type while the port is at the default for the
   // current type (or 0/empty), the port auto-updates silently. When the port
@@ -1540,7 +1544,7 @@ describe("ConnectionDialog", () => {
       renderDialog();
 
       const trigger = screen.getByLabelText("Database Type");
-      // Sprint 138: SQLite renders no Port field at all (the form drops
+      // SQLite renders no Port field at all (the form drops
       // host/port/user/password). The internal `port` is still 0 so a
       // subsequent switch to MySQL must take the silent-default path
       // (no ConfirmDialog) and the new MySQL form must show port=3306.
@@ -1693,10 +1697,11 @@ describe("ConnectionDialog", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 276 (2026-05-13) — supported pair (PG ↔ MongoDB) 로 port-guard
-  // 로직 자체를 계속 회귀 보호. Sprint 108 의 PG↔MySQL 시나리오들이 251
-  // 의 unsupported-hide 정책으로 일괄 skip 됐기 때문에, port-guard 의
-  // 자동/모달 분기가 적어도 1개 supported 페어에 대해선 살아 있도록 가드.
+  // 2026-05-13 — keeps regression coverage on the port-guard logic itself
+  // with a supported pair (PG ↔ MongoDB). The PG↔MySQL scenarios in the DB
+  // type change port guard describe above were once all skipped under the
+  // unsupported-hide policy, so this guards that the port guard's auto/modal
+  // branches stay alive for at least one supported pair.
   // -----------------------------------------------------------------------
   describe("Sprint 276: DB type change port guard (PG ↔ Mongo)", () => {
     it("auto-updates port when current port is the default (PG 5432 → Mongo 27017)", async () => {
@@ -1738,7 +1743,7 @@ describe("ConnectionDialog", () => {
       expect(
         screen.getByRole("button", { name: "Use default port 27017" }),
       ).toBeInTheDocument();
-      // 사용자 결정 전엔 form 그대로.
+      // The form stays unchanged until the user decides.
       expect(trigger).toHaveTextContent("PostgreSQL");
       expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
         "15432",
@@ -1747,10 +1752,10 @@ describe("ConnectionDialog", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 138 (#4 — DBMS-aware connection form): one scenario per DBMS
+  // DBMS-aware connection form: one scenario per DBMS
   // covering AC-S138-01 / 03 / 04 / 07. The "switching preserves host but
-  // resets user" case lives in the Sprint 108 describe above (the swap
-  // path is shared).
+  // resets user" case lives in the DB type change port guard describe above
+  // (the swap path is shared).
   // -----------------------------------------------------------------------
   describe("Sprint 138: DBMS-aware form shape", () => {
     it("AC-S138-01 PG: defaults port=5432, user=postgres, database=postgres", () => {
@@ -1772,7 +1777,8 @@ describe("ConnectionDialog", () => {
       expect(dbInput.placeholder).toBe("postgres");
     });
 
-    // Sprint 276 — MySQL 옵션 hide. Phase 17 합류 시 unskip.
+    // Skipped while the MySQL option was hidden, pending Phase 17 (MySQL);
+    // the dropdown lists MySQL again now.
     it.skip("AC-S138-01 / 03 MySQL: defaults port=3306, user=root (NOT postgres)", async () => {
       const user = userEvent.setup();
       renderDialog();
@@ -1925,7 +1931,8 @@ describe("ConnectionDialog", () => {
       });
     });
 
-    // Sprint 276 — Redis 옵션 hide. Redis 어댑터 합류 시 unskip.
+    // Skipped while the Redis option was hidden, pending the Redis adapter;
+    // the dropdown lists Redis now.
     it.skip("AC-S138-01 Redis: database index defaults to 0 and clamps to 0..15", async () => {
       const user = userEvent.setup();
       renderDialog();

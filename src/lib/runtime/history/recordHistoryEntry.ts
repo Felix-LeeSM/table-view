@@ -1,27 +1,29 @@
 /**
- * Sprint 373 (Phase 5 F.5) — `add_history_entry` IPC 의 thin caller.
+ * F.5 — thin caller of the `add_history_entry` IPC.
  *
- * 작성 2026-05-17. 6 source caller (raw / grid-edit / ddl-structure /
- * mongo-op / explain / sidebar-prefetch) 가 공유. 책임:
+ * Written 2026-05-17. Shared by the callers of each `QueryHistorySource`
+ * (raw / grid-edit / ddl-structure / mongo-op / explain / file-analytics /
+ * sidebar-prefetch). Responsibilities:
  *
- *   1. `useHistorySettingsStore.queryHistoryEnabled` 가 false 면 early
- *      return — IPC 호출 자체를 skip 한다 (AC-373-03 invariant).
- *   2. 호출자가 넘긴 history input shape (`paradigm` + `queryMode` +
- *      `duration` + 기타) 을 backend wire shape (discriminated union +
- *      `durationMs`) 으로 normalise.
- *   3. `useQueryHistoryStore.addOptimisticEntry` 에 위임 — optimistic
+ *   1. Return early when `useHistorySettingsStore.queryHistoryEnabled` is
+ *      false — the IPC call itself is skipped (AC-373-03 invariant).
+ *   2. Normalise the history input shape the caller passes (`paradigm` +
+ *      `queryMode` + `duration` + the rest) into the backend wire shape
+ *      (discriminated union + `durationMs`).
+ *   3. Delegate to `useQueryHistoryStore.addOptimisticEntry` — optimistic
  *      `recentVisible` prepend + backend IPC.
  *
- * RDB paradigm 의 `queryMode` 는 항상 `"sql"` 로 normalise (backend
- * `RdbQueryMode` 의 유일한 variant). Document paradigm 의 legacy mode
- * `"countDocuments"` 는 backend `"count"` 로 매핑 — 그 외에는 그대로 통과.
+ * The RDB paradigm's `queryMode` is always normalised to `"sql"` (the only
+ * variant of the backend `RdbQueryMode`). The document paradigm's legacy
+ * mode `"countDocuments"` maps to the backend `"count"`; the other modes
+ * pass through unchanged.
  *
- * 함수 노출 이유 (hook 이 아님): non-React 모듈 / hook 안 useCallback 안
- * 양쪽에서 동일 진입점을 쓸 수 있도록 plain function. React 컴포넌트도
- * 필요 시 `useHistorySettingsStore((s) => s.queryHistoryEnabled)` 로
- * subscribe 해서 추가 selector 캐싱을 할 수 있다 — 본 함수는 호출 시점에
- * `useHistorySettingsStore.getState()` 로 truth 를 직접 읽으므로 selector
- * 캐싱 없이도 정확.
+ * Why a plain function, not a hook: non-React modules and `useCallback`
+ * bodies inside hooks can share the same entry point. A React component may
+ * still subscribe with `useHistorySettingsStore((s) => s.queryHistoryEnabled)`
+ * for extra selector caching when it needs to — this function reads the
+ * truth directly with `useHistorySettingsStore.getState()` at call time, so
+ * it is correct without selector caching.
  */
 
 import type {
@@ -43,18 +45,18 @@ export type DocumentRecordHistoryQueryMode =
 interface RecordHistoryEntryCommonArgs {
   /** Connection id; required (snapshot truth from tab/grid context). */
   connectionId: string;
-  /** Optional db/collection (document paradigm 의 경우 거의 항상 set). */
+  /** Optional db/collection (almost always set for the document paradigm). */
   database?: string;
   collection?: string;
-  /** Source label — 호출자가 명시. */
+  /** Source label — set explicitly by the caller. */
   source: QueryHistorySource;
-  /** 원본 SQL 또는 mongosh 표현. backend 가 `sql_redacted` 생성. */
+  /** Raw SQL or mongosh expression. The backend derives `sql_redacted`. */
   sql: string;
   /** `"success" | "error" | "cancelled"`. */
   status: "success" | "error" | "cancelled";
-  /** 사용자 시계 unix ms. backend 가 5min drift 시 override (sprint-371). */
+  /** User clock, unix ms. The backend overrides it on a drift over 5 min. */
   executedAt: number;
-  /** legacy 인자명 — backend wire 는 `durationMs`. */
+  /** Legacy argument name — the backend wire uses `durationMs`. */
   duration: number;
   /** optional metadata. */
   tabId?: string;
@@ -77,10 +79,11 @@ export type RecordHistoryEntryArgs = RecordHistoryEntryCommonArgs &
   );
 
 /**
- * Frontend history input → backend `DocumentQueryMode` 매핑.
- * `countDocuments` 가 유일한 legacy method-name 정정 — 나머지는 1:1.
- * `kv` / `search` paradigm 은 `toAddHistoryEntryRequest` 가 고정 query mode
- * (`command` / `dsl`) 로 직접 처리 (#1171) — 본 함수는 document 전용.
+ * Maps the frontend history input to the backend `DocumentQueryMode`.
+ * `countDocuments` is the only legacy method-name correction; the rest map
+ * 1:1. `toAddHistoryEntryRequest` handles the `kv` / `search` paradigms
+ * directly with a fixed query mode (`command` / `dsl`) (#1171) — this
+ * function is document-only.
  */
 function toDocumentQueryMode(
   mode: DocumentRecordHistoryQueryMode | undefined,
@@ -115,7 +118,7 @@ function toDocumentQueryMode(
 
 /**
  * Frontend history input → backend `AddHistoryEntryRequest`.
- * Invalid runtime pair 는 기존 동작대로 silent skip (`null`) 한다.
+ * An invalid runtime pair is silently skipped (`null`), as before.
  */
 function toAddHistoryEntryRequest(
   args: RecordHistoryEntryArgs,
@@ -172,11 +175,13 @@ function toAddHistoryEntryRequest(
 }
 
 /**
- * 메인 진입점. 모든 history caller 가 본 함수를 호출.
+ * Main entry point. Every history caller calls this function or its
+ * awaitable variant `recordHistoryEntryAsync`.
  *
- * "Disable history" 토글 (`query_history_enabled = false`) 검사가 본
- * 함수의 첫 줄 — 토글 OFF 일 때는 IPC 호출 path 가 0 (AC-373-03 spy
- * test 가 본 invariant 를 lock).
+ * The "Disable history" toggle (`query_history_enabled = false`) check is
+ * the first statement of `recordHistoryEntryAsync`, which this function
+ * delegates to — with the toggle OFF there is no IPC call path (the
+ * AC-373-03 spy test locks this invariant).
  */
 export function recordHistoryEntry(args: RecordHistoryEntryArgs): void {
   void recordHistoryEntryAsync(args);
@@ -198,6 +203,6 @@ export async function recordHistoryEntryAsync(
     return;
   }
 
-  // Error 는 store 내부에서 logger.warn 으로만 노출 (best-effort).
+  // Errors surface only as a logger.warn inside the store (best-effort).
   await useQueryHistoryStore.getState().addOptimisticEntry(req);
 }

@@ -1,13 +1,15 @@
 /**
  * i18n foundation (react-i18next).
  *
- * 라이브러리 init + boot 시 SQLite 영속 locale 적용. 리소스는 `locales/*.ts`
- * 의 surface별 네임스페이스 파일들을 `import.meta.glob` 로 자동 등록한다.
+ * Initializes the library and applies the SQLite-persisted locale at boot.
+ * Resources are the per-surface namespace files under `locales/*.ts`,
+ * registered automatically through `import.meta.glob`.
  *
- * ponytail: 네임스페이스를 surface별 파일로 분리하고 glob 로 자동 등록한다 —
- * surface 를 추가/이주할 때 이 파일을 건드릴 필요가 없어 마이그레이션 swarm 의
- * 공유 파일 충돌(merge conflict)을 원천 차단한다. 파일명(확장자 제외)이 곧
- * 네임스페이스 이름이고, 각 파일은 `en`/`ko` 를 named export 한다.
+ * ponytail: namespaces are split into per-surface files and registered by
+ * glob — adding or migrating a surface does not require touching this file,
+ * which rules out shared-file merge conflicts in a migration swarm. The file
+ * name (without extension) is the namespace name, and each file named-exports
+ * `en` / `ko`.
  */
 
 import i18n from "i18next";
@@ -16,19 +18,23 @@ import { initReactI18next } from "react-i18next";
 export const SUPPORTED_LOCALES = ["en", "ko"] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
-/** 초기/fallback 언어. boot 의 `applyPersistedLocale` 가 영속값으로 덮어쓴다. */
+/**
+ * Initial/fallback language. At boot, `applyPersistedLocale` overrides it with
+ * the persisted value.
+ */
 export const DEFAULT_LOCALE: Locale = "en";
 
-/** SQLite settings 의 locale 키. */
+/** Locale key in the SQLite settings. */
 export const LOCALE_SETTING_KEY = "locale";
 
 type LocaleBundle = Partial<Record<Locale, Record<string, unknown>>>;
 
-// 각 `locales/<ns>.ts` 가 `{ en, ko }` 를 named export. eager 로 빌드 타임에
-// 모두 로드해 동기 init — 인라인 리소스라 비동기 로드/Suspense 가 없다.
-// `*.test.ts` 는 명시적으로 제외한다 — 파일명=네임스페이스 계약상 locales/ 안에
-// 테스트 파일이 있으면 네임스페이스로 import 돼 부팅/빌드가 깨진다 (#1227). 계약
-// 강제를 위해 locale 테스트는 locales/ 밖(`src/lib/i18n/*-locales.test.ts`)에 둔다.
+// Each `locales/<ns>.ts` named-exports `{ en, ko }`. `eager` loads them all at
+// build time for a synchronous init — inline resources mean no async loading
+// and no Suspense. `*.test.ts` is excluded explicitly — under the file name =
+// namespace contract, a test file inside locales/ would be imported as a
+// namespace and break boot/build (#1227). To enforce the contract, locale
+// tests live outside locales/ (`src/lib/i18n/*-locales.test.ts`).
 const modules = import.meta.glob<LocaleBundle>(
   ["./locales/*.ts", "!./locales/*.test.ts"],
   { eager: true },
@@ -56,9 +62,9 @@ void i18n.use(initReactI18next).init({
   fallbackLng: DEFAULT_LOCALE,
   defaultNS: "common",
   ns: namespaces.length > 0 ? namespaces : ["common"],
-  // React 가 이미 출력값을 escape 하므로 i18next 의 이중 escape 를 끈다.
+  // React already escapes output, so i18next's double escaping is turned off.
   interpolation: { escapeValue: false },
-  // 인라인 리소스라 비동기 로드가 없다 — Suspense 경계를 요구하지 않도록 off.
+  // Off: inline resources have no async load, so no Suspense boundary needed.
   react: { useSuspense: false },
 });
 
@@ -70,17 +76,18 @@ export function isSupportedLocale(value: unknown): value is Locale {
 }
 
 /**
- * boot: SQLite 에 영속된 locale 을 읽어 적용. 미설정이면 DEFAULT_LOCALE 유지.
- * theme reconcile 과 같은 위치에서 첫 render 전에 호출되어 언어 flash 를 막는다.
- * 영속값 손상/IPC 실패는 삼키고 DEFAULT_LOCALE 로 진행한다.
+ * Boot: reads the locale persisted in SQLite and applies it; when unset,
+ * DEFAULT_LOCALE stays. Called before the first render, at the same place as
+ * the theme reconcile, so the language does not flash. A corrupt persisted
+ * value or an IPC failure is swallowed and boot goes on with DEFAULT_LOCALE.
  */
 export async function applyPersistedLocale(): Promise<void> {
   try {
-    // Lazy import: 이 모듈을 단순 import 하는 것만으로 tauri IPC 바인딩
-    // (`@tauri-apps/api/core` invoke) 을 끌어오지 않게 한다. test-setup 이
-    // i18n 을 eager import 하므로, 여기서 정적 import 하면 `@lib/tauri/settings`
-    // 가 setup 단계에 실제 core 로 바인딩돼 이후 테스트의
-    // `vi.mock("@tauri-apps/api/core")` 를 무력화한다(reset-affordance 회귀).
+    // Lazy import: merely importing this module must not pull in the tauri IPC
+    // binding (`@tauri-apps/api/core` invoke). test-setup imports i18n
+    // eagerly, so a static import here would bind `@lib/tauri/settings` to the
+    // real core during setup and defeat later tests'
+    // `vi.mock("@tauri-apps/api/core")` (reset-affordance regression).
     const { getSetting } = await import("@lib/tauri/settings");
     const raw = await getSetting(LOCALE_SETTING_KEY);
     if (raw == null) return;
@@ -89,7 +96,8 @@ export async function applyPersistedLocale(): Promise<void> {
       await i18n.changeLanguage(parsed);
     }
   } catch {
-    // 손상된 영속값/IPC 실패 — DEFAULT_LOCALE fallback, boot 계속.
+    // Corrupt persisted value / IPC failure — fall back to DEFAULT_LOCALE and
+    // keep booting.
   }
 }
 

@@ -130,14 +130,13 @@ export function useDdlPreviewExecution({
     dialectFromDbType(s.connections.find((c) => c.id === connectionId)?.dbType),
   );
 
-  // Sprint 271c (2026-05-13) — DbMismatch recovery. DDL dispatches are
-  // user-initiated (dialog Apply / editor Execute), so on a mismatch the
-  // backend's typed DbMismatch envelope reaches this catch path. Route
-  // through `syncMismatchedActiveDb` to align the
-  // frontend's `activeDb` with the backend pool, and raise the Sprint
-  // 269 passive Retry toast so the user re-issues the action against
-  // the synced db (DDL Apply has no auto-retry — re-clicking the dialog
-  // button is the natural retry surface).
+  // DbMismatch recovery. DDL dispatches are user-initiated (dialog Apply /
+  // editor Execute), so on a mismatch the backend's typed DbMismatch envelope
+  // reaches this catch path. Route through `syncMismatchedActiveDb` to align
+  // the frontend's `activeDb` with the backend pool, and raise the passive
+  // Retry toast so the user re-issues the action against the synced db (DDL
+  // Apply has no auto-retry — re-clicking the dialog button is the natural
+  // retry surface).
   const surfaceDbMismatchIfMatched = useCallback(
     (err: unknown): boolean => {
       const info = getDbMismatchInfo(err);
@@ -162,7 +161,7 @@ export function useDdlPreviewExecution({
       pendingExecuteRef.current = null;
       setPreviewSql("");
       // onRefresh is awaited so a refresh failure surfaces as a commit
-      // error (history entry status: "error") — sprint-187/196 parity.
+      // error (history entry status: "error").
       await onRefresh();
       recordHistoryEntry({
         sql: recordedSql,

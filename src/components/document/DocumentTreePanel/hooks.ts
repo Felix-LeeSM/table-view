@@ -29,16 +29,16 @@ export function useTreeAdd({
   onCommitEdit?: CommitEdit;
   forbiddenRootKeys?: ReadonlySet<string>;
 }) {
-  // Sprint 344 Slice B (2026-05-15) — `+ key` add UI state. Only one
-  // object node can be in "add key" mode at a time (the rendered input
-  // pair captures focus). `addingPath` holds the parent object's path
-  // (root = ""). `keyDraft` / `valueDraft` hold the typed inputs.
-  // `addError` is the active validation message (null = no error).
-  // Sprint 344 Slice C (2026-05-15) — `addingKind` distinguishes object
-  // `+ key` from array `+ item` so the panel renders the right UI
-  // branch (paired inputs vs. read-only index label + single input).
-  // The same `addingPath` slot drives both — only one inline add UI is
-  // visible at a time across the whole tree, by design.
+  // `+ key` add UI state. Only one object node can be in "add key" mode
+  // at a time (the rendered input pair captures focus). `addingPath`
+  // holds the parent object's path (root = ""). `keyDraft` / `valueDraft`
+  // hold the typed inputs. `addError` is the active validation message
+  // (null = no error).
+  // `addingKind` distinguishes object `+ key` from array `+ item` so the
+  // panel renders the right UI branch (paired inputs vs. read-only index
+  // label + single input). The same `addingPath` slot drives both — only
+  // one inline add UI is visible at a time across the whole tree, by
+  // design.
   const [addingPath, setAddingPath] = useState<string | null>(null);
   const [addingKind, setAddingKind] = useState<"obj" | "arr" | null>(null);
   const [keyDraft, setKeyDraft] = useState("");
@@ -46,10 +46,10 @@ export function useTreeAdd({
   const [addError, setAddError] = useState<string | null>(null);
   const keyInputRef = useRef<HTMLInputElement | null>(null);
   const valueInputRef = useRef<HTMLInputElement | null>(null);
-  // Sprint 344 Slice C — the `+ item` flow uses a separate ref because
-  // the value input renders in a different DOM subtree (AddItemRow vs.
-  // AddKeyRow). Reusing `valueInputRef` would race on parallel
-  // mounting in renders where both rows happen to exist transiently.
+  // The `+ item` flow uses a separate ref because the value input renders
+  // in a different DOM subtree (AddItemRow vs. AddKeyRow). Reusing
+  // `valueInputRef` would race on parallel mounting in renders where both
+  // rows happen to exist transiently.
   const itemValueInputRef = useRef<HTMLInputElement | null>(null);
 
   const startAddKey = useCallback((parentPath: string) => {
@@ -68,10 +68,10 @@ export function useTreeAdd({
     setAddError(null);
   }, []);
 
-  // Sprint 344 Slice C — entering array-add mode. Reuses the same
-  // `addingPath` slot but marks the kind as "arr". The index label
-  // (`[N]`) is computed at render time from the array node's
-  // childCount + any pending appends to the same path.
+  // Entering array-add mode. Reuses the same `addingPath` slot but marks
+  // the kind as "arr". The index label (`[N]`) is computed at render time
+  // from the array node's childCount + any pending appends to the same
+  // path.
   const startAddItem = useCallback((arrayPath: string) => {
     setAddingPath(arrayPath);
     setAddingKind("arr");
@@ -98,13 +98,12 @@ export function useTreeAdd({
       setAddError("key required");
       return;
     }
-    // Sprint 344 Slice F (2026-05-15) — paradigm-agnostic reserved-key
-    // guard. Only applies at the document root (`parentPath === ""`) so
-    // a `_id` field inside a nested object is still legal — only the
-    // root document's `_id` is protected (Mongo rejects re-adding it,
-    // and the mqlGenerator's id-in-patch guard would drop the row
-    // anyway). The Mongo grid wires this with `Set(["_id"])`; the RDB
-    // grid omits it — keeping DocumentTreePanel paradigm-agnostic.
+    // Paradigm-agnostic reserved-key guard. Only applies at the document root
+    // (`parentPath === ""`) so a `_id` field inside a nested object is still
+    // legal — only the root document's `_id` is protected (Mongo rejects
+    // re-adding it, and the mqlGenerator's id-in-patch guard would drop the
+    // row anyway). The Mongo grid wires this with `Set(["_id"])`; the RDB grid
+    // omits it — keeping DocumentTreePanel paradigm-agnostic.
     if (
       addingPath === "" &&
       forbiddenRootKeys !== undefined &&
@@ -147,14 +146,14 @@ export function useTreeAdd({
       }
     }
 
-    // Coerce raw input → JSON-typed value per Slice D's outer-quotes
-    // rule (number / boolean / null / object / array / string). The
+    // Coerce raw input → JSON-typed value per the outer-quotes rule
+    // (number / boolean / null / object / array / string). The
     // panel forwards the typed result verbatim; the test contract
     // asserts on the runtime type at the callback boundary.
     //
     // The prop signature is intentionally narrower than what we may
     // pass at runtime (number / boolean / null / array can flow
-    // through). Slice F owns widening the grid wiring; for now the
+    // through). The grid wiring has not been widened yet; for now the
     // cast keeps TS quiet while preserving the runtime type for
     // assertion. Consumers MUST narrow on `typeof value` before
     // serialising — see DocumentDataGrid + DataGridTable for the
@@ -176,7 +175,7 @@ export function useTreeAdd({
     forbiddenRootKeys,
   ]);
 
-  // Sprint 344 Slice C (2026-05-15) — auto-index for the `+ item` row.
+  // Auto-index for the `+ item` row.
   // The next index for an array at `arrayPath` is:
   //   baseLength + count(prior pending bracket-index appends to this
   //                       same array path).
@@ -266,12 +265,12 @@ export function useTreeEditing({
 
   const startEdit = useCallback(
     (node: TreeNode) => {
-      // #1445 KV JSON tree Phase 1 (2026-07-17) — read-only gate. Without a
-      // commit handler the panel has no write path, so opening the leaf editor
-      // only to no-op the commit is a dead-end. Gate the shared entry point
-      // (both the leaf click and the Enter keydown route through here) so the
-      // editor never opens read-only. Mongo always passes onCommitEdit → no
-      // behavior change there.
+      // #1445 KV JSON tree — read-only gate. Without a commit handler the
+      // panel has no write path, so opening the leaf editor only to no-op
+      // the commit is a dead-end. Gate the shared entry point (both the leaf
+      // click and the Enter keydown route through here) so the editor never
+      // opens read-only. Mongo always passes onCommitEdit → no behavior
+      // change there.
       if (!onCommitEdit) return;
       if (node.kind !== "leaf") return;
       setEditingPath(node.path);
@@ -303,11 +302,11 @@ export function useTreeEditing({
 
   const commitDraft = useCallback(() => {
     if (editingPath === null) return;
-    // Sprint 341 feedback (1) — only fire onCommitEdit when the draft
-    // actually differs from what the panel rendered, otherwise a click
-    // + blur on a leaf registers a phantom "edit" with no semantic
-    // change. Comparison is done on the *rendered* form so a string
-    // round-tripped with its quotes still matches.
+    // Only fire onCommitEdit when the draft actually differs from what the
+    // panel rendered, otherwise a click + blur on a leaf registers a
+    // phantom "edit" with no semantic change. Comparison is done on the
+    // *rendered* form so a string round-tripped with its quotes still
+    // matches.
     const node = nodes.find((n) => n.path === editingPath);
     const original = node ? renderLeafValue(node) : "";
     if (onCommitEdit && draft !== original) {

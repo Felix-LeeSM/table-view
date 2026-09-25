@@ -21,7 +21,8 @@ import {
 
 /**
  * #2150 acceptance — draw a virtual FK, close the ERD tab, open it again and
- * find the same edge (ADR 0055 "표시 + 저장 + reconcile", ADR 0056 (1)).
+ * find the same edge (ADR 0055 scope: display + persistence + reconcile;
+ * ADR 0056 (1)).
  *
  * The fake stands in for the SQLite `settings` table rather than for the typed
  * wrapper, so the round trip runs through the real `persistSettingValue`

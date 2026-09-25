@@ -6,14 +6,16 @@ import {
 } from "./mqlGenerator";
 
 // ---------------------------------------------------------------------------
-// Purpose: MongoDB code 40 prefix-overlap conflict 회귀 가드 — user report
-// 2026-07-18 (2차 버그, #1699 이후). 한 커밋에서 컨테이너를 추가한 뒤 그 안을
-// 채우면 부모 경로와 자식 경로가 같은 update patch 에 함께 방출된다
-// (`$set: { "tags.1": {…}, "tags.1.test": 3 }`). MongoDB 는 한 update 문서에서
-// 부모+자식 경로 동시 수정을 금지 → WriteError code 40
+// Purpose: regression guard for the MongoDB code 40 prefix-overlap conflict —
+// user report 2026-07-18 (the second bug, after #1699). Adding a container
+// and then filling it in one commit emits the parent path and the child path
+// together in the same update patch
+// (`$set: { "tags.1": {…}, "tags.1.test": 3 }`). MongoDB forbids modifying a
+// parent and a child path in one update document → WriteError code 40
 // ("Updating the path 'tags.1.test' would create a conflict at 'tags.1'").
-// 해소: 자식들을 부모의 객체 값 위에 deep-merge 해 부모 경로 하나만 방출.
-// 어떤 편집도 조용히 버리지 않는다 (부모 객체의 기존 필드 보존).
+// Fix: deep-merge the children into the parent's object value and emit only
+// the parent path. No edit is silently dropped (the parent object's existing
+// fields are preserved).
 // Split out of mqlGenerator.test.ts to stay under the max-lines cap.
 // ---------------------------------------------------------------------------
 
@@ -54,7 +56,7 @@ function patchOf(command: unknown): Record<string, unknown> {
 }
 
 describe("generateMqlPreview — code 40 prefix-overlap collapse (user report 2026-07-18)", () => {
-  // 1. 빈 객체 추가 후 그 안을 채우는 흐름: `a` = {} 그리고 `a.b` = 3.
+  // 1. Add an empty object, then fill it: `a` = {} and `a.b` = 3.
   it("merges a child into a freshly-added empty-object parent (a={} + a.b=3)", () => {
     const { commands, errors } = generateMqlPreview(
       makeInput({
@@ -72,7 +74,7 @@ describe("generateMqlPreview — code 40 prefix-overlap collapse (user report 20
     expect(Object.keys(setOf(commands[0]))).toEqual(["a"]);
   });
 
-  // 2. 부모 객체의 기존 필드는 병합 시 보존되어야 한다.
+  // 2. The parent object's existing fields must survive the merge.
   it("preserves existing parent fields when folding a child (a={x:1} + a.b=3)", () => {
     const { commands, errors } = generateMqlPreview(
       makeInput({
@@ -90,8 +92,9 @@ describe("generateMqlPreview — code 40 prefix-overlap collapse (user report 20
     });
   });
 
-  // 3. 배열 원소 케이스 (user 실제 증상): `tags.1` = {…} + `tags.1.test` = 3.
-  //    grid 는 non-string 커밋 값을 `__bson__:` 로 태그하므로 언랩 후 병합.
+  // 3. Array-element case (the user's actual symptom): `tags.1` = {…} +
+  //    `tags.1.test` = 3. The grid tags non-string commit values with
+  //    `__bson__:`, so they are unwrapped before the merge.
   it("merges a nested-array-element parent and its new key (tags.1 + tags.1.test)", () => {
     const { commands, errors } = generateMqlPreview(
       makeInput({
@@ -110,7 +113,7 @@ describe("generateMqlPreview — code 40 prefix-overlap collapse (user report 20
     expect(Object.keys(setOf(commands[0]))).toEqual(["tags.1"]);
   });
 
-  // 4. 여러 레벨 병합: `a`={} + `a.b`={} + `a.b.c`=3.
+  // 4. Multi-level merge: `a`={} + `a.b`={} + `a.b.c`=3.
   it("merges across two nesting levels (a={} + a.b={} + a.b.c=3)", () => {
     const { commands, errors } = generateMqlPreview(
       makeInput({
@@ -129,7 +132,8 @@ describe("generateMqlPreview — code 40 prefix-overlap collapse (user report 20
     });
   });
 
-  // 5. $unset 자식 병합: 부모 $set 객체에서 자식 필드를 deep-delete (code 40 회피).
+  // 5. $unset child merge: deep-delete the child field from the parent
+  //    $set object (avoids code 40).
   it("applies an $unset child by deep-deleting from the parent $set object", () => {
     const { commands, errors } = generateMqlPreview(
       makeInput({
@@ -147,7 +151,8 @@ describe("generateMqlPreview — code 40 prefix-overlap collapse (user report 20
     expect(patchOf(commands[0])).not.toHaveProperty("$unset");
   });
 
-  // 6. 부모 $unset 이 자식을 subsume: 부모 전체 삭제가 자식 편집을 흡수.
+  // 6. A parent $unset subsumes the child: deleting the whole parent
+  //    absorbs the child edit.
   it("drops a child edit subsumed by an $unset of its parent", () => {
     const { commands, errors } = generateMqlPreview(
       makeInput({
@@ -164,7 +169,8 @@ describe("generateMqlPreview — code 40 prefix-overlap collapse (user report 20
     expect(patchOf(commands[0])).not.toHaveProperty("$set");
   });
 
-  // 7. 회귀 가드: 자식만·부모만·서로 다른 원소는 병합/충돌 없이 그대로.
+  // 7. Regression guard: child-only, parent-only, and distinct elements
+  //    pass through unchanged, with no merge or conflict.
   it("leaves non-overlapping paths untouched (child-only, parent-only, sibling elements)", () => {
     const childOnly = generateMqlPreview(
       makeInput({

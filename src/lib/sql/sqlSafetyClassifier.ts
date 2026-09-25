@@ -55,10 +55,10 @@ const KNOWN_SAFE_RE =
   /^(BEGIN|START\s+TRANSACTION|COMMIT|END\s+TRANSACTION|ROLLBACK|SAVEPOINT|RELEASE|VACUUM|ANALYZE|REINDEX|CHECKPOINT|PRAGMA)\b/;
 
 /**
- * Sprint 391 — DDL destructive classifier callsite migration.
- * Sprint 392 — DML write triad migration (INSERT / UPDATE / DELETE).
+ * DDL destructive classifier callsite migration.
+ * DML write triad migration (INSERT / UPDATE / DELETE).
  *
- * Convert a parsed AST node (sprint-391 / 392 grammar slice) into the
+ * Convert a parsed AST node (grammar slice) into the
  * `StatementAnalysis` shape used by the rest of the codebase. Returns
  * `null` for AST variants outside the supported scope so the caller
  * falls through to the legacy regex matcher.
@@ -67,24 +67,24 @@ const KNOWN_SAFE_RE =
  * → analysis projection is a *contract* — `kind` / `severity` / `reasons`
  * shape must stay identical to the prior regex output (sqlSafety tests
  * pin this). Isolating the mapper makes the contract auditable and gives
- * sprint-393/394 a single point to extend without re-touching
+ * future grammar extensions a single point to extend without re-touching
  * `analyzeStatement` for every new variant.
  *
- * Sprint-403 invariants:
+ * Mapper invariants:
  * - INSERT — kind:'dml-insert', severity:'info'.
  * - UPDATE — kind:'dml-update'; `where_clause === null` → severity:'danger'
  *   + reason "UPDATE without WHERE clause"; otherwise severity:'warn'.
  * - DELETE — kind:'dml-delete'; `where_clause === null` → severity:'danger'
  *   + reason "DELETE without WHERE clause"; otherwise severity:'warn'.
  *
- * The DML reason strings *match* the pre-sprint-392 regex output bit-for-
+ * The DML reason strings *match* the pre-migration regex output bit-for-
  * bit so the existing sqlSafety test suite stays green (no regression).
  */
 function statementAnalysisFromAst(
   ast: SqlParseResult,
 ): StatementAnalysis | null {
   switch (ast.kind) {
-    // Sprint-393b — `WITH (CTE wrap) <inner-statement>` inherits the inner
+    // `WITH (CTE wrap) <inner-statement>` inherits the inner
     // statement's classification per D1/D2. The recursive call uses the
     // same mapper to avoid duplicating the per-variant rules.
     //
@@ -111,7 +111,7 @@ function statementAnalysisFromAst(
       }
       return worstAnalysis(analyses);
     }
-    // Sprint-395 — EXPLAIN wrap inherits the inner statement's
+    // EXPLAIN wrap inherits the inner statement's
     // classification verbatim per D1. The outer EXPLAIN does not add a
     // reason or escalate severity. If the inner statement is itself
     // unclassifiable (returns null), fall through so the regex fallback
@@ -122,7 +122,7 @@ function statementAnalysisFromAst(
       if (innerAnalysis === null) return null;
       return innerAnalysis;
     }
-    // Sprint-395 — GRANT / REVOKE → permission-change / warn / pinned
+    // GRANT / REVOKE → permission-change / warn / pinned
     // reason. The reason strings are pinned per D5 — exact-string
     // verification in AC-395-X01 / X02.
     case "grant":
@@ -137,16 +137,16 @@ function statementAnalysisFromAst(
         severity: "warn",
         reasons: ["REVOKE — 권한 변경"],
       };
-    // Sprint-395 — SHOW → config-read / info / empty reasons. D4: the
+    // SHOW → config-read / info / empty reasons. D4: the
     // classifier does not distinguish between target variants.
     case "show":
       return { kind: "config-read", severity: "info", reasons: [] };
-    // Sprint-395 — SET → config-write / info / empty reasons. D3: SET's
+    // SET → config-write / info / empty reasons. D3: SET's
     // severity is info, not warn (per-session config change, no row
     // impact).
     case "set-stmt":
       return { kind: "config-write", severity: "info", reasons: [] };
-    // Sprint-395 — COPY → data-movement / warn / direction-specific
+    // COPY → data-movement / warn / direction-specific
     // pinned reason. D2: direction does not escalate severity.
     case "copy":
       return {
@@ -157,7 +157,7 @@ function statementAnalysisFromAst(
             ? ["COPY FROM — 대량 import"]
             : ["COPY TO — 대량 export"],
       };
-    // Sprint-395 — COMMENT → metadata / info / empty reasons.
+    // COMMENT → metadata / info / empty reasons.
     case "comment":
       return { kind: "metadata", severity: "info", reasons: [] };
     case "drop": {
@@ -185,7 +185,7 @@ function statementAnalysisFromAst(
       // so we map it to the same kind — its blast radius (index drop)
       // matches a top-level `DROP INDEX`.
       //
-      // Sprint-394 — additive actions (ADD COLUMN / ADD CONSTRAINT /
+      // Additive actions (ADD COLUMN / ADD CONSTRAINT /
       // RENAME TO / RENAME COLUMN) map to `ddl-alter-add` /
       // `ddl-alter-rename` per the per-action table in the contract.
       // The reason strings are pinned per decision D2 — reviewers must
@@ -236,7 +236,7 @@ function statementAnalysisFromAst(
       }
       return null;
     }
-    // Sprint-394 — DDL additive top-levels. Per contract D1: all three
+    // DDL additive top-levels. Per contract D1: all three
     // CREATE variants classify as `ddl-create` / info / empty reasons.
     // `OR REPLACE` does NOT escalate severity (`create-view.or_replace`
     // is intentionally ignored here).
@@ -244,7 +244,7 @@ function statementAnalysisFromAst(
     case "create-index":
     case "create-view":
       return { kind: "ddl-create", severity: "info", reasons: [] };
-    // Sprint-392 — DML write triad.
+    // DML write triad.
     case "insert":
       return { kind: "dml-insert", severity: "info", reasons: [] };
     case "call":
@@ -295,7 +295,7 @@ function statementAnalysisFromAst(
       }
       return { kind: "dml-merge", severity: "warn", reasons: [] };
     }
-    // Sprint-393a — successful widened SELECT parse always classifies as
+    // A successful widened SELECT parse always classifies as
     // read-only `info`. No JOIN / GROUP / ORDER / LIMIT shape escalates
     // severity — the AST simply confirms the statement is a valid SELECT
     // and the regex fallback is bypassed.
@@ -310,14 +310,11 @@ function statementAnalysisFromAst(
 }
 
 /**
- * Sprint 254 — DML CTE 식별. `WITH x AS (UPDATE …) SELECT *` 같은 statement
- * 는 `WITH` 로 시작하지만 CTE 본문에 write op (UPDATE / DELETE / INSERT) 를
- * 포함한다. 이 경우 wrapped statement 의 severity 와 동일하게 결정해야
- * 하며, 단순 `WITH` → INFO 분기로는 잘못 분류된다.
- *
- * Heuristic: `WITH … AS (` 직후의 첫 keyword 를 본다. UPDATE/DELETE/INSERT
- * 면 그 statement body 를 `analyzeStatement` 로 재귀 분석해 severity 를
- * 결정한다. 단순 `SELECT` CTE 는 INFO 보존.
+ * DML CTE detection. A statement like `WITH x AS (UPDATE …) SELECT *`
+ * starts with `WITH` but carries a write op (UPDATE / DELETE / INSERT) in a
+ * CTE body, so its severity must follow the wrapped statement; the plain
+ * `WITH` → INFO branch would misclassify it. Returns null when no CTE body
+ * is found. How the bodies are scanned is documented inline (#1350).
  */
 function analyzeDmlCte(
   upper: string,
@@ -417,7 +414,7 @@ export function analyzeStatement(
 ): StatementAnalysis {
   const normalized = normalize(sql, options?.dialect);
   if (normalized.length === 0) {
-    // Sprint 254 — empty / unrecognised input defaults to INFO so the
+    // Empty / unrecognised input defaults to INFO so the
     // SafeMode matrix never escalates a benign no-op buffer. WARN is
     // reserved for *known* write surfaces.
     return { kind: "other", severity: "info", reasons: [] };
@@ -468,21 +465,20 @@ export function analyzeStatement(
     };
   }
 
-  // Sprint 391 — DDL destructive (DROP / TRUNCATE / ALTER … DROP) is
-  // classified through the AST first.
-  // Sprint 392 — extended to the DML write triad (INSERT / UPDATE /
-  // DELETE). The WASM module may not be loaded (cold-start, jsdom unit
+  // DDL destructive (DROP / TRUNCATE / ALTER … DROP) and the DML write
+  // triad (INSERT / UPDATE / DELETE) are classified through the AST
+  // first. The WASM module may not be loaded (cold-start, jsdom unit
   // tests) in which case `parseSqlPreloaded` returns `null` and we fall
   // back to the legacy regex matchers below. The regex fallback is
   // *bit-identical* to the prior behavior so existing sqlSafety tests
   // remain green either way.
-  // Sprint 393a — SELECT widened grammar (FROM / JOIN / WHERE expression /
+  // SELECT widened grammar (FROM / JOIN / WHERE expression /
   // GROUP / HAVING / ORDER / LIMIT). The AST may succeed for inputs that
   // the regex path classifies anyway; for inputs the AST cannot parse
-  // (CTE / subquery / set ops / aggregate — deferred to sprint-393b), the
+  // (CTE / subquery / set ops / aggregate), the
   // `error` variant lets the regex SELECT branch below handle them.
-  // Sprint 395 — extended to GRANT / REVOKE / EXPLAIN / SHOW / SET / COPY /
-  // COMMENT. EXPLAIN inherits the inner statement's classification (D1);
+  // GRANT / REVOKE / EXPLAIN / SHOW / SET / COPY / COMMENT also go through
+  // the AST. EXPLAIN inherits the inner statement's classification (D1);
   // CALL/DO are warn-tier because routine/procedural side effects are opaque
   // to the client parser. COPY / GRANT / REVOKE classify per the misc-grammar
   // table; SHOW / SET / COMMENT classify as info-tier metadata-like
@@ -574,7 +570,7 @@ export function analyzeStatement(
         reasons: ["DELETE without WHERE clause"],
       };
     }
-    // Sprint 254 — bounded DELETE WHERE = WARN tier (was "safe").
+    // Bounded DELETE WHERE = WARN tier.
     // Issue #1117 — an always-true predicate (`WHERE 1=1`) still classifies as
     // WARN, not danger, by design: the static classifier only checks WHERE
     // *presence*, and full predicate evaluation is intentionally deferred to
@@ -597,7 +593,7 @@ export function analyzeStatement(
         reasons: ["UPDATE without WHERE clause"],
       };
     }
-    // Sprint 254 — bounded UPDATE WHERE = WARN tier.
+    // Bounded UPDATE WHERE = WARN tier.
     return { kind: "dml-update", severity: "warn", reasons: [] };
   }
 
@@ -719,7 +715,7 @@ export function analyzeStatement(
   // (column + data loss / FK invalidation) that the structure-surface
   // gate must flag it for the production warn / strict tier.
   //
-  // Sprint-394 — additive ALTER TABLE actions (ADD COLUMN / ADD
+  // Additive ALTER TABLE actions (ADD COLUMN / ADD
   // CONSTRAINT / RENAME TO / RENAME COLUMN) classify with their own
   // kinds + pinned reasons (D2). The regex path mirrors the AST path
   // bit-for-bit so jsdom unit tests without a preloaded WASM module
@@ -776,12 +772,10 @@ export function analyzeStatement(
     }
   }
 
-  // Sprint 395 — GRANT / REVOKE classify as `permission-change` / warn
-  // with pinned reasons per D5. Pre-sprint-395 the regex branch classified
-  // these as `ddl-other` / danger (sprint 254 baseline); sprint-395 moves
-  // them to warn-tier so SafeMode `confirm` happens at the QueryTab dialog
-  // (not the STOP gate). Reason strings are pinned verbatim — reviewers
-  // must reject silent rewording.
+  // GRANT / REVOKE classify as `permission-change` / warn with pinned
+  // reasons per D5 — warn-tier rather than `ddl-other` / danger, so SafeMode
+  // `confirm` happens at the QueryTab dialog (not the STOP gate). Reason
+  // strings are pinned verbatim — reviewers must reject silent rewording.
   if (/^GRANT\b/.test(upper)) {
     return {
       kind: "permission-change",
@@ -797,7 +791,7 @@ export function analyzeStatement(
     };
   }
 
-  // Sprint-394 — CREATE TABLE / INDEX / VIEW / MATERIALIZED VIEW classify
+  // CREATE TABLE / INDEX / VIEW / MATERIALIZED VIEW classify
   // as `ddl-create` / info / empty reasons. CREATE FUNCTION / TRIGGER /
   // ROLE / EXTENSION also classify here (the AST parser rejects them as
   // SyntaxError; the regex fallback still produces `ddl-create` because
@@ -807,7 +801,7 @@ export function analyzeStatement(
   }
 
   if (/^DROP\b/.test(upper) || /^ALTER\b/.test(upper)) {
-    // Sprint 254 — non-DROP-keyword DROP / ALTER without a recognised
+    // Non-DROP-keyword DROP / ALTER without a recognised
     // action keyword falls through here. Defensive — most ALTER TABLE /
     // DROP variants are handled by their dedicated branches above.
     return { kind: "ddl-other", severity: "warn", reasons: [] };
@@ -826,19 +820,18 @@ export function analyzeStatement(
   }
 
   if (/^SELECT\b/.test(upper)) {
-    // Sprint 254 — SELECT = INFO tier (read).
+    // SELECT = INFO tier (read).
     return { kind: "select", severity: "info", reasons: [] };
   }
 
   if (/^WITH\b/.test(upper)) {
-    // Sprint 254 — DML CTE 식별. `WITH x AS (UPDATE …) SELECT *` 같은 form
-    // 은 wrapped DML 의 severity 를 따른다. 순수 WITH-SELECT 만 INFO.
+    // DML CTE — see `analyzeDmlCte`. Only a pure WITH-SELECT stays INFO.
     const dml = analyzeDmlCte(upper, options);
     if (dml) return dml;
     return { kind: "select", severity: "info", reasons: [] };
   }
 
-  // Sprint 395 — COPY classifies as data-movement / warn (regex fallback
+  // COPY classifies as data-movement / warn (regex fallback
   // when AST is not preloaded). Direction-specific reason string is
   // pinned per D5.
   if (/^COPY\b/.test(upper)) {
@@ -859,21 +852,20 @@ export function analyzeStatement(
     };
   }
 
-  // Sprint 395 — COMMENT classifies as metadata / info / empty reasons.
+  // COMMENT classifies as metadata / info / empty reasons.
   if (/^COMMENT\b/.test(upper)) {
     return { kind: "metadata", severity: "info", reasons: [] };
   }
 
-  // Sprint 395 — SET classifies as config-write / info / empty reasons.
+  // SET classifies as config-write / info / empty reasons.
   // Match `^SET\b` early (before falling through to "other" defaults).
   if (/^SET\b/.test(upper)) {
     return { kind: "config-write", severity: "info", reasons: [] };
   }
 
-  // Sprint 255 — read-only / metadata introspection 의 INFO tier. EXPLAIN /
+  // INFO tier for read-only / metadata introspection: EXPLAIN /
   // SHOW / DESCRIBE / DESC.
-  // Sprint 254 — severity 가 명시적으로 "info" 로 정렬됨.
-  // Sprint 395 (D4) — SHOW (regex fallback) maps to `config-read`, distinct
+  // D4 — SHOW (regex fallback) maps to `config-read`, distinct
   // from the EXPLAIN/DESCRIBE/DESC `info` kind. EXPLAIN remains in the
   // legacy `info` bucket via this regex branch because the regex path
   // cannot identify the inner statement to inherit from (D1's "inherit
@@ -913,15 +905,12 @@ export function isDangerous(analysis: StatementAnalysis): boolean {
 }
 
 /**
- * INFO tier 식별 휴리스틱. raw editor 의 WARN dialog mount 분기에서
- * 호출되어 read-only / metadata-introspection statement 만 dialog skip →
- * 직접 IPC 발동.
+ * INFO tier check. Called from the raw editor's WARN dialog mount branch so
+ * only read-only / metadata-introspection statements skip the dialog and
+ * fire the IPC directly.
  *
- * Sprint 254 — `severity === "info"` 직접 비교로 단순화. 기존 두-가지 kind
- * 매칭 (`select` / `info`) 의미 보존: 둘 다 severity:"info".
- *
- * `severity: "warn"` (UPDATE WHERE / CREATE …) 와 `"danger"` (STOP) 는
- * INFO 가 아니므로 false.
+ * Compares `severity === "info"` directly. `"warn"` (e.g. UPDATE WHERE)
+ * and `"danger"` (STOP) return false.
  */
 export function isInfoStatement(analysis: StatementAnalysis): boolean {
   return analysis.severity === "info";

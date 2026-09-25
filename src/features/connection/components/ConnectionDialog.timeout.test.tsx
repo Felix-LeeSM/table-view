@@ -172,7 +172,7 @@ describe("ConnectionDialog connection timeout (#2448)", () => {
   it("[conn-timeout-ui] switching to a stricter adapter re-clamps the timeout", async () => {
     const user = userEvent.setup();
     // Port at the Mongo default, so the switch is silent — a custom port would
-    // raise the Sprint 108 confirm modal and defer the swap.
+    // raise the confirm modal and defer the swap.
     renderDialog(
       makeConnection({
         dbType: "mongodb",

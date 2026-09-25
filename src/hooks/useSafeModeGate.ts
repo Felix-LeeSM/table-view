@@ -14,7 +14,7 @@ import type { ConnectionConfig } from "@/types/connection";
  * `decideSafeModeAction` (`src/lib/safeMode.ts`); both Mongo aggregate
  * and the RDB grid / DDL editors share the same decision matrix.
  *
- * Policy (Sprint 245 — ADR 0022 Phase 1, destructive-only):
+ * Policy (ADR 0022 Phase 1, destructive-only):
  *
  * | env             | mode    | statement                       | result   |
  * |-----------------|---------|---------------------------------|----------|
@@ -27,14 +27,14 @@ import type { ConnectionConfig } from "@/types/connection";
  * | production      | warn    | destructive                     | confirm  |
  * | production      | off     | destructive                     | confirm  |
  *
- * Sprint 244's "production + strict | off = read-only" was reverted —
+ * The earlier "production + strict | off = read-only" rule was reverted —
  * INSERT / UPDATE WHERE / CREATE / ALTER additive flow without a
- * confirm dialog on production. Cmd+Z undoes *uncommitted* grid edits
- * only (`dataGridEditStore.undoStack`, Sprint 249) — committed safe
- * writes are not recoverable yet (Phase 5 compensating-commit undo
- * pending, #1126). The Yes/No destructive dialog (Sprint 246, Phase 2)
- * handles the unrecoverable destructive cases. See `src/lib/safeMode.ts`
- * for the canonical matrix + reason copy.
+ * confirm dialog on production. Cmd+Z undoes uncommitted grid edits
+ * (`dataGridEditStore.undoStack`); it does not revert a committed write in
+ * the DB — a post-commit Cmd+Z re-stages the pre-commit values as a new
+ * pending edit (ADR 0048, #1126). The Yes/No destructive dialog handles
+ * the unrecoverable destructive cases. See `src/lib/safeMode.ts` for the
+ * canonical matrix + reason copy.
  */
 export type { SafeModeDecision };
 
@@ -47,7 +47,7 @@ type SafeModeConnection = Pick<ConnectionConfig, "id" | "environment">;
 /**
  * Single environment-resolution path for every Safe Mode entry point.
  *
- * #1114 — "environment 미확정 = allow" uniformly. A missing connection
+ * #1114 — "unresolved environment = allow" uniformly. A missing connection
  * (unknown id, store not yet hydrated) resolves to null; there is no
  * per-call-site fail-closed override anymore, so raw query / KV / grid / DDL /
  * Mongo all read the SAME protection. Same risk = same gate at every surface.

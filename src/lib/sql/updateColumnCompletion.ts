@@ -16,20 +16,22 @@ import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
  * never see column candidates — a regression the user reported on
  * 2026-05-11.
  *
- * Sprint 292 (2026-05-14) — `DELETE FROM users WHERE <cursor>` 도 같은
- * 한계. built-in 이 DELETE 컨텍스트의 target table 을 alias 맵에 등록하지
- * 않아 WHERE 절 컬럼이 노출되지 않는다. 이 source 가 DELETE 도 처리하도록
- * 확장.
+ * `DELETE FROM users WHERE <cursor>` hits the same limit (2026-05-14): the
+ * built-in does not register the target table of a DELETE context in its
+ * alias map, so WHERE-clause columns are not shown. This source is extended
+ * to handle DELETE as well.
  *
  * This source augments the default by walking the syntax tree to the
- * enclosing Statement, identifying the verb (`update` or `insert`), and
- * extracting the target table identifier directly. Columns are then
+ * enclosing Statement, identifying the verb (`update` / `insert` /
+ * `delete` / `select`), and extracting the target table identifier
+ * directly. Columns are then
  * pulled from the provided `SQLNamespace` (the same one fed to
  * `sql({ schema })`), so this source stays in sync with whatever
  * `useSqlAutocomplete` produces.
  *
  * The source is intentionally conservative:
- *   - Returns `null` outside `UPDATE` / `INSERT INTO`.
+ *   - Returns `null` outside `UPDATE` / `INSERT INTO` / `DELETE FROM` /
+ *     `SELECT … FROM`.
  *   - Returns `null` when the cursor is inside the target table
  *     identifier itself (you want table suggestions, not column ones).
  *   - Returns `null` inside strings / numbers / comments (value
@@ -108,7 +110,7 @@ export function updateColumnCompletionSource(
     // For SELECT, scan forward to the FROM keyword (lang-sql does not
     // auto-register the FROM table as an alias when the source is invoked
     // out of band, so we resolve the single-table FROM ourselves; multi-
-    // table JOIN alias resolution is sprint-294 territory).
+    // table JOIN alias resolution belongs to `aliasColumnCompletionSource`).
     if (firstKw === "select") {
       scan = scan.nextSibling;
       while (scan) {

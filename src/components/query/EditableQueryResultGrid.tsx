@@ -73,8 +73,8 @@ export interface EditableQueryResultGridProps {
 
 function formatCellDisplay(cell: unknown): string {
   if (cell == null) return "NULL";
-  // Sprint 261 (ADR 0026) — Decimal is `typeof === "object"`; detect
-  // before the generic object branch. BigInt falls through to `String(cell)`.
+  // ADR 0026 — Decimal is `typeof === "object"`; detect before the generic
+  // object branch. BigInt falls through to `String(cell)`.
   if (cell instanceof Decimal) return cell.toString();
   if (typeof cell === "object") return safeStringifyCell(cell);
   return String(cell);
@@ -111,10 +111,11 @@ export default function EditableQueryResultGrid({
     onAfterCommit,
   });
 
-  // #1477 review B1 — 가상화로 편집 행이 window 밖 unmount 후 remount 될 때
-  // `autoFocus` 는 focus 를 다시 훔치며 스크롤을 편집 셀로 점프시킨다.
-  // DataGridTable (editorFocusRef, L222) 과 동일하게 edit-start 시점에만
-  // effect 로 focus 한다 — remount 는 deps 를 안 바꾸므로 재focus 없음.
+  // #1477 review B1 — when virtualization unmounts an editing row outside
+  // the window and later remounts it, `autoFocus` steals focus again and
+  // jumps the scroll to the editing cell. Like DataGridTable (editorFocusRef,
+  // L222), focus from an effect only at edit-start — a remount does not
+  // change the deps, so there is no re-focus.
   const editorFocusRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     if (grid.editingCell && editorFocusRef.current) {
@@ -129,8 +130,8 @@ export default function EditableQueryResultGrid({
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
-  // Sprint 256 (AC-256-05) — connection name for the env-aware
-  // ExecuteButton "Execute on <conn>" target label.
+  // AC-256-05 — connection name for the env-aware ExecuteButton
+  // "Execute on <conn>" target label.
   const connectionLabel = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name ?? null,
   );
@@ -149,10 +150,11 @@ export default function EditableQueryResultGrid({
 
   const rowKeyFn = useCallback((rowIdx: number) => `row-1-${rowIdx}`, []);
 
-  // Sprint 258 — column widths via shared hook + `--cols` CSS variable.
-  // Sprint 260 (AC-260-02) — drag-resize 활성. raw query 결과는 stable
-  // identity 가 없어 persistenceKey 없이 in-memory only. Reset 도 toolbar
-  // 부재라 자동 적용 — widths 가 새 query 마다 default rem 으로 재계산된다.
+  // Column widths via shared hook + `--cols` CSS variable.
+  // AC-260-02 — drag-resize enabled. A raw query result has no stable
+  // identity, so widths are in-memory only, with no persistenceKey. Reset is
+  // automatic too, since there is no toolbar — widths recompute to the
+  // default rem for every new query.
   const widthColumns = useMemo(
     () => result.columns.map((c) => ({ name: c.name, category: c.category })),
     [result.columns],
@@ -200,25 +202,30 @@ export default function EditableQueryResultGrid({
     onCommitWidth: setWidth,
   });
 
-  // Issue #1442 — 대용량 SQL 결과 DOM 폭증 방어. DataGridTable 과 같은
-  // threshold/행높이/overscan 으로 가상화. threshold 이하는 기존 전량 렌더
-  // 경로 유지. 편집 중인 행이 window 밖으로 스크롤되면 unmount 되지만 편집
-  // 상태는 hook 에 남아 스크롤 복귀 시 그대로 복원된다 (DataGridTable 동일).
+  // Issue #1442 — guards against DOM blowup on a large SQL result.
+  // Virtualized with the same threshold / row height / overscan as
+  // DataGridTable. At or below the threshold the existing render-everything
+  // path stays. A row being edited unmounts when it scrolls outside the
+  // window, but the edit state stays in the hook and is restored intact when
+  // it scrolls back (same as DataGridTable).
   const shouldVirtualize = result.rows.length > VIRTUALIZE_THRESHOLD;
   const rowVirtualizer = useVirtualizer({
     count: shouldVirtualize ? result.rows.length : 0,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: () => ROW_HEIGHT_ESTIMATE,
-    // DataGridTable 과 동일 근거(#1295) — 빠른 scrollbar drag 의 blank flash 방지.
+    // Same reason as DataGridTable (#1295) — prevents the blank flash on a
+    // fast scrollbar drag.
     overscan: 24,
   });
 
-  // #1477 review B2 — 스크롤 리셋은 "새 쿼리" 에만. commit 후 재조회
-  // (onAfterCommit) 는 같은 SQL 로 result identity 만 바뀌므로 위치를 보존한다
-  // (DataGridTable #1369 의 executed_query deps 와 같은 근거). `sql` 을 deps
-  // 에 넣지 않는 이유: document 결과의 fallback 은 live editor 텍스트라
-  // 타이핑마다 바뀐다 — result 교체 시점에만 비교한다. `rowVirtualizer` 는
-  // 매 렌더 새 객체라 deps 에 넣으면 매 렌더 리셋된다.
+  // #1477 review B2 — reset the scroll only on a "new query". A re-fetch
+  // after a commit (onAfterCommit) runs the same SQL and only changes the
+  // result identity, so the position is preserved (same reason as
+  // DataGridTable's executed_query deps, #1369). `sql` is kept out of the
+  // deps because the fallback for a document result is the live editor text,
+  // which changes on every keystroke — compare only when the result is
+  // replaced. `rowVirtualizer` is a fresh object each render, so listing it
+  // in the deps would reset on every render.
   const lastResetSqlRef = useRef(sql);
   useEffect(() => {
     const isNewQuery = sql === undefined || lastResetSqlRef.current !== sql;
@@ -232,9 +239,10 @@ export default function EditableQueryResultGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, shouldVirtualize]);
 
-  // issue #1130 AC1/AC2 — 공유 data-cell roving. 좌표계: reorder 없어
-  // visualCol == colIdx. 가상화 시 window 밖 행은 scrollToIndex 로 스크롤-인
-  // 후 hook 이 재시도해 focus 한다 (useGridRoving 의 bounded rAF retry).
+  // issue #1130 AC1/AC2 — shared data-cell roving. Coordinates: no reorder,
+  // so visualCol == colIdx. Under virtualization a row outside the window is
+  // scrolled in via scrollToIndex, then the hook retries and focuses it
+  // (useGridRoving's bounded rAF retry).
   const roving = useGridRoving(
     result.rows.length,
     result.columns.length,
@@ -351,7 +359,7 @@ export default function EditableQueryResultGrid({
             style={{
               display: "grid",
               gridTemplateColumns: "var(--cols)",
-              // Sprint 261 — bg-secondary 가 horizontal scroll 끝까지 그려지도록.
+              // So bg-secondary paints to the end of the horizontal scroll.
               minWidth: "max-content",
             }}
           >
@@ -407,8 +415,9 @@ export default function EditableQueryResultGrid({
           </div>
         </div>
         {(() => {
-          // 가상/비가상 branch 가 같은 행 JSX 를 공유한다. 가상 branch 는
-          // DataGridTable 패턴 그대로 absolute-position + 고정 높이 행.
+          // The virtualized and non-virtualized branches share the same row
+          // JSX. The virtualized branch follows the DataGridTable pattern:
+          // absolute-positioned rows at a fixed height.
           const renderRow = (
             row: (typeof result.rows)[number],
             rowIdx: number,
@@ -479,10 +488,11 @@ export default function EditableQueryResultGrid({
                       }`}
                       title={readonlyReason ?? formatCellDisplay(cell)}
                       onKeyDown={(e) => {
-                        // issue #1130 AC2 — Enter/F2 로 focus 된 cell 편집 진입
-                        // (double-click 과 동일 경로). 편집 중엔 input 이 Enter/
-                        // Escape 를 stopPropagation 하므로 여기 안 옴. 편집 불가
-                        // cell (noPk / multi read-only / NULL 잠금) 은 무시.
+                        // issue #1130 AC2 — Enter/F2 starts editing the
+                        // focused cell (same path as double-click). While
+                        // editing, the input stopPropagations Enter/Escape so
+                        // they never reach here. Cells that cannot be edited
+                        // (noPk / multi read-only / NULL lock) are ignored.
                         if (isEditing) return;
                         if (e.key !== "Enter" && e.key !== "F2") return;
                         if (!cellEditable) return;
@@ -511,10 +521,11 @@ export default function EditableQueryResultGrid({
                         <input
                           ref={editorFocusRef}
                           type={getInputTypeForColumn(col.dataType)}
-                          // #1739 후속 (#1750) — px-0 aligns the editing value
-                          // with the static cell (px-3); the cell owns the edit
-                          // ring (INLINE_EDIT_CELL_RING) so the input stays bare
-                          // (dropped border/shadow "floating card" look).
+                          // #1739 follow-up (#1750) — px-0 aligns the editing
+                          // value with the static cell (px-3); the cell owns
+                          // the edit ring (INLINE_EDIT_CELL_RING) so the input
+                          // stays bare (dropped border/shadow "floating card"
+                          // look).
                           className="w-full bg-transparent px-0 py-0 text-xs text-foreground outline-none"
                           value={grid.editValue}
                           aria-label={t("editableGrid.editingCellAria", {
@@ -717,12 +728,12 @@ export default function EditableQueryResultGrid({
           }
           connectionId={connectionId}
           // `pendingConfirm.sql` carries the joined batch (`;\n`-
-          // delimited) per Sprint 196. For the dry-run preview we
-          // want one entry per statement so each row reports its own
-          // rows_affected. We re-split the joined string here rather
-          // than reach into the hook's source `sqls` array because
-          // the hook's public surface intentionally emits the joined
-          // string as the user-facing preview.
+          // delimited). For the dry-run preview we want one entry
+          // per statement so each row reports its own rows_affected.
+          // We re-split the joined string here rather than reach
+          // into the hook's source `sqls` array because the hook's
+          // public surface intentionally emits the joined string as
+          // the user-facing preview.
           statements={grid.pendingConfirm.sql
             .split(";")
             .map((s) => s.trim())

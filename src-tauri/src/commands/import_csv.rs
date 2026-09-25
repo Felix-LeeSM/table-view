@@ -18,8 +18,9 @@
 //! statement affecting more than one row rolls the transaction back. Sending
 //! every row as its own single-row INSERT inside one `execute_query_batch` call
 //! keeps the whole import in one transaction (all-or-nothing) while satisfying
-//! that guard. The commit path is PostgreSQL-only for now (PG-dialect quoting);
-//! other engines return `AppError::Unsupported`.
+//! that guard. The commit path is PostgreSQL-only (PG-dialect quoting);
+//! `ensure_pg_for_csv_import` rejects every other engine with
+//! `AppError::Unsupported`.
 //!
 //! File-read guards mirror `import_file.rs`: absolute path, regular file, and
 //! canonical app-data-dir rejection (read-exfil confinement, #1106). Parsing
@@ -405,9 +406,9 @@ mod tests {
     //! `import_file.rs` (absolute / regular-file / app-data-dir) with the size
     //! cap intentionally dropped (streaming reader, AC1):
     //!   - Happy: header + preview rows + exact row count.
-    //!   - 빈 입력: empty file -> empty preview (still Ok).
-    //!   - 상태/경로 검증: relative path rejected; directory rejected.
-    //!   - 보안: a file inside the app data dir is refused (read-exfil, #1106).
+    //!   - Empty input: empty file -> empty preview (still Ok).
+    //!   - State/path validation: relative path rejected; directory rejected.
+    //!   - Security: a file inside the app data dir is refused (read-exfil, #1106).
     //!
     //! Plus behavioural coverage: no-header column synthesis, preview cap vs.
     //! full row count, and a non-comma delimiter.
@@ -441,7 +442,7 @@ mod tests {
         );
     }
 
-    // Guard mirror #2 (빈 입력) — empty file previews as empty, still Ok.
+    // Guard mirror #2 (empty input) — empty file previews as empty, still Ok.
     #[test]
     fn empty_file_previews_as_empty() {
         let dir = TempDir::new().unwrap();
@@ -453,14 +454,14 @@ mod tests {
         assert!(preview.preview_rows.is_empty());
     }
 
-    // Guard mirror #3 (상대경로) — a non-absolute path is rejected.
+    // Guard mirror #3 (relative path) — a non-absolute path is rejected.
     #[test]
     fn relative_path_is_rejected() {
         let err = preview_csv(Path::new("people.csv"), &PreviewCsvOptions::default()).unwrap_err();
         assert!(matches!(err, AppError::Validation(_)), "got {err:?}");
     }
 
-    // Guard mirror #4 (경로 검증) — a directory is rejected as not a file.
+    // Guard mirror #4 (path validation) — a directory is rejected as not a file.
     #[test]
     fn directory_is_rejected_as_not_a_file() {
         let dir = TempDir::new().unwrap();
@@ -468,7 +469,7 @@ mod tests {
         assert!(matches!(err, AppError::Validation(_)), "got {err:?}");
     }
 
-    // Guard mirror #5 (보안) — a file resolving inside the app data dir must be
+    // Guard mirror #5 (security) — a file resolving inside the app data dir must be
     // refused (read-exfil confinement, #1106).
     #[test]
     #[serial]

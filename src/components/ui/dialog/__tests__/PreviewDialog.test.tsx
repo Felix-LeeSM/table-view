@@ -125,14 +125,15 @@ describe("PreviewDialog (sprint-96 preset)", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).not.toBeDisabled();
   });
 
-  // Reason: 사용자 보고 — commitError.message 에 공백 없는 KB급 hex 덤프
-  // (server response: Some(RawDocumentBuf { data: "24040000106e00..." }))가
-  // 오면 break-words(overflow-wrap:break-word)는 break opportunity 가 없어
-  // wrap 하지 못하고 다이얼로그를 가로로 뚫는다. break-all + min-w-0 조상으로
-  // wrap 을 강제한다. jsdom 은 레이아웃 미측정이라 wrapping affordance 클래스
-  // 계약으로 회귀 고정 (fix/mql-preview-overflow, 2026-07-18).
+  // Reason: user report — when commitError.message carries a KB-sized hex
+  // dump with no spaces (server response: Some(RawDocumentBuf { data:
+  // "24040000106e00..." })), break-words (overflow-wrap:break-word) finds no
+  // break opportunity, cannot wrap, and punches through the dialog
+  // horizontally. break-all + a min-w-0 ancestor force the wrap. jsdom does
+  // not measure layout, so the regression is pinned by the wrapping-affordance
+  // class contract (fix/mql-preview-overflow, 2026-07-18).
   it("wraps an unbreakable long commitError.message so it cannot overflow the dialog", () => {
-    const hex = `24040000106e0000${"a".repeat(2000)}`; // 공백 없는 단일 토큰
+    const hex = `24040000106e0000${"a".repeat(2000)}`; // one token, no spaces
     render(
       <PreviewDialog
         title="Review SQL"
@@ -151,18 +152,20 @@ describe("PreviewDialog (sprint-96 preset)", () => {
 
     const banner = screen.getByTestId("sql-preview-commit-error");
     const messageEl = screen.getByText(hex);
-    // break-words 는 break opportunity 없는 hex 를 못 감쌈 → break-all 필수.
+    // break-words can't wrap hex with no break opportunity → needs break-all.
     expect(messageEl).toHaveClass("break-all");
     expect(messageEl).not.toHaveClass("break-words");
-    // 조상 content 래퍼가 min-w-0 + max-w-full 이어야 grid 트랙이 넘치지 않고
-    // 자식이 wrap — 동시에 다이얼로그가 콘텐츠로 가로 확장되지 않는다.
+    // The ancestor content wrapper needs min-w-0 + max-w-full so the grid
+    // track does not overflow and the child wraps — and the dialog does not
+    // widen horizontally to fit the content.
     expect(banner.parentElement).toHaveClass("min-w-0");
     expect(banner.parentElement).toHaveClass("max-w-full");
   });
 
-  // Reason: 사용자 보고 — 긴 콘텐츠가 다이얼로그를 가로로 확장하면 헤더의
-  // 복사 버튼(shrink-0)이 오른쪽으로 밀려 사라진다. content 폭 상한 고정 후
-  // 복사 버튼이 헤더에 그대로 렌더되는지를 behavioral 로 고정
+  // Reason: user report — when long content widens the dialog horizontally,
+  // the header's Copy button (shrink-0) gets pushed off to the right and
+  // disappears. With the content width capped, this pins behaviorally that
+  // the Copy button still renders in the header
   // (fix/mql-preview-overflow, 2026-07-18).
   it("keeps the header Copy button rendered even with long preview + commitError content", () => {
     const hex = `24040000106e0000${"a".repeat(2000)}`;

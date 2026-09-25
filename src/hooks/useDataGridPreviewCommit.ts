@@ -8,10 +8,10 @@
 
 import i18n from "@lib/i18n";
 import { recordHistoryEntry } from "@lib/runtime/history/recordHistoryEntry";
-// Sprint 354 (L2 fix, 2026-05-16) — `executeQueryBatch` lives in
-// `@lib/tauri`; use namespace import so a test that stubs `@lib/tauri`
-// with a partial surface doesn't fail at module-load time. The lookup
-// is only reached on the RDB commit path; document commits never read
+// state-management-strategy L2 (2026-05-16) — `executeQueryBatch` lives in
+// `@lib/tauri`; use namespace import so a test that stubs `@lib/tauri` with
+// a partial surface doesn't fail at module-load time. The lookup is only
+// reached on the RDB commit path; document commits never read
 // `tauri.executeQueryBatch`.
 import * as tauri from "@lib/tauri";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -42,7 +42,7 @@ export interface UseDataGridPreviewCommitParams {
   page: number;
   paradigm: Paradigm;
   fetchData: () => void;
-  /** 읽기 전용 pending state — preview 생성 시 입력. */
+  /** Read-only pending state — the input for building the preview. */
   pendingEdits: Map<string, string | null>;
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
@@ -76,9 +76,9 @@ export interface UseDataGridPreviewCommitParams {
    */
   onPartialCommit?: (applied: AppliedPendingOps) => void;
   /**
-   * 커밋 시도 중 surface 한 cell-level coercion error map. preview 생성
-   * 시 reset (adapter 가 채운 `coerceErrors`), batch 실패 시 실패
-   * statement 의 key 에 한 entry 추가.
+   * Cell-level coercion error map surfaced during a commit attempt. Reset
+   * when the preview is built (to the `coerceErrors` the adapter filled);
+   * on a batch failure, one entry is added under the failed statement's key.
    */
   setPendingEditErrors: React.Dispatch<
     React.SetStateAction<Map<string, string>>
@@ -160,25 +160,25 @@ export function useDataGridPreviewCommit(
     beginCommitFlash,
   } = params;
 
-  // Sprint 354 (L2 fix) — schemaStore.executeQueryBatch was a thin
+  // state-management-strategy L2 — schemaStore.executeQueryBatch was a thin
   // pass-through (no cache write); reach for `@lib/tauri` directly. The
-  // namespace `tauri.executeQueryBatch` access is wrapped in a closure
-  // so vitest mocks that stub `@lib/tauri` with a partial surface (e.g.
-  // DocumentDataGrid tests that only need `findDocuments`) don't trip
-  // the "no export defined" guard at hook-mount time — the lookup is
-  // only reached on the RDB commit branch which already requires the
-  // mock to provide `executeQueryBatch`.
+  // namespace `tauri.executeQueryBatch` access is wrapped in a closure so
+  // vitest mocks that stub `@lib/tauri` with a partial surface (e.g.
+  // DocumentDataGrid tests that only need `findDocuments`) don't trip the
+  // "no export defined" guard at hook-mount time — the lookup is only
+  // reached on the RDB commit branch which already requires the mock to
+  // provide `executeQueryBatch`.
   const executeQueryBatch = useCallback(
     (...args: Parameters<typeof tauri.executeQueryBatch>) =>
       tauri.executeQueryBatch(...args),
     [],
   );
-  // sprint-373 (2026-05-17) — `addHistoryEntry` (in-memory) retired.
-  // `recordHistoryEntry` 가 backend wire shape + disable gate 를 책임.
+  // 2026-05-17 — `addHistoryEntry` (in-memory) retired.
+  // `recordHistoryEntry` owns the backend wire shape + the disable gate.
   // RDB / Mongo / DDL editors share one decision matrix via `useSafeModeGate`.
   const safeModeGate = useSafeModeGate(connectionId);
-  // Sprint 347 — derive SQL dialect from the connection's dbType so the
-  // generator can dispatch jsonb_set vs JSON_SET correctly.
+  // Derive SQL dialect from the connection's dbType so the generator can
+  // dispatch jsonb_set vs JSON_SET correctly.
   const dialect = useConnectionStore((s) => {
     const conn = s.connections.find((c) => c.id === connectionId);
     return dialectFromDbType(conn?.dbType);

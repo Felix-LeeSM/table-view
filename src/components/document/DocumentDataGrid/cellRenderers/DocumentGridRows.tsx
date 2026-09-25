@@ -177,16 +177,19 @@ export default function DocumentGridRows({
                     tabIndex={cellTabIndex(rowIdx, visualIdx)}
                     onFocus={() => onFocusCell(rowIdx, visualIdx)}
                     onKeyDown={(e) => {
-                      // issue #1130 (N1) — cell 내부 native 컨트롤(nested
-                      // toggle 버튼) focus 시 Space/Enter 를 셀 키맵이
-                      // 가로채지 않도록 자기 셀 focus 일 때만 동작.
+                      // issue #1130 (N1) — act only when the cell itself
+                      // has focus, so the cell keymap does not swallow
+                      // Space/Enter from a native control inside the cell
+                      // (the nested toggle button).
                       if (e.target !== e.currentTarget) return;
-                      // Design-swarm #4 Phase 3 — Enter/F2 로 focus 된 cell
-                      // 편집 진입 (double-click 과 동일 경로). 편집 중엔 editor
-                      // input 이 Enter/Escape 를 stopPropagation 하므로 안 옴.
+                      // Enter/F2 start editing the focused cell (same path
+                      // as double-click). While editing, the editor input
+                      // stopPropagation's Enter/Escape, so they never reach
+                      // here.
                       if (isEditing) return;
-                      // issue #1130 AC2 — Space 로 행 선택 (onClick 과 동일
-                      // modifier 시맨틱). preventDefault 로 page scroll 억제.
+                      // issue #1130 AC2 — Space selects the row (same
+                      // modifier semantics as onClick). preventDefault
+                      // suppresses page scroll.
                       if (e.key === " ") {
                         e.preventDefault();
                         e.stopPropagation();
@@ -221,7 +224,7 @@ export default function DocumentGridRows({
                         aria-label={t("gridRows.editingAriaLabel", {
                           colName: col.name,
                         })}
-                        // #1739 후속 (#1750) — px-0 so the editing value aligns
+                        // #1739 follow-up (#1750) — px-0 so the editing value aligns
                         // with the static cell (px-3); the cell owns the edit
                         // ring (INLINE_EDIT_CELL_RING) so the input stays bare.
                         className="w-full bg-transparent px-0 py-0 text-xs text-foreground outline-none"

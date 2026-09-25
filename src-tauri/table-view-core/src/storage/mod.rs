@@ -22,14 +22,14 @@ use zeroize::Zeroizing;
 /// Storage operations are all synchronous (blocking file I/O), so std::sync::Mutex is correct.
 static STORAGE_LOCK: LazyLock<std::sync::Mutex<()>> = LazyLock::new(|| std::sync::Mutex::new(()));
 
-/// #1103 / Sprint 356 — process master key resolved once at boot by
+/// #1103 — process master key resolved once at boot by
 /// [`boot_wire_master_key`] (which runs the keyring migration) and read by
 /// every storage secret path. `None` until boot seeds it; the sole in-process
-/// writer is boot, so the seeded key is effectively immutable at runtime.
-/// P3-3 (#1455) — the raw AES key lives in a [`Zeroizing`] buffer so the
-/// static and every per-decrypt clone are wiped on drop, matching the envelope
-/// key path (`crypto::derive_envelope_key`). The derived `Vec<u8>` used to
-/// linger in freed heap until overwritten.
+/// writer is boot, so the seeded key is effectively immutable at runtime. P3-3
+/// (#1455) — the raw AES key lives in a [`Zeroizing`] buffer so the static and
+/// every per-decrypt clone are wiped on drop, matching the envelope key path
+/// (`crypto::derive_envelope_key`). The derived `Vec<u8>` used to linger in
+/// freed heap until overwritten.
 static MASTER_KEY: Mutex<Option<Zeroizing<Vec<u8>>>> = Mutex::new(None);
 
 /// #1103 — seed the process master key from the boot-time keyring migration
@@ -59,7 +59,7 @@ fn master_key() -> Result<Zeroizing<Vec<u8>>, AppError> {
     Ok(Zeroizing::new(crypto::get_or_create_key()?))
 }
 
-/// #1103 — boot-time master-key resolution. Runs the Sprint 356 keyring
+/// #1103 — boot-time master-key resolution. Runs the keyring
 /// migration once (new install → key born in the keyring; existing plaintext
 /// `.key` → migrated into the keyring then retired; headless Linux / locked
 /// keychain → explicit disk fallback) and seeds the process master key. On

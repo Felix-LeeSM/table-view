@@ -321,13 +321,14 @@ describe("createMongoOperatorHighlight", () => {
   });
 });
 
-// Sprint 381 (2026-05-17) — admin command dict + completion sources.
+// 2026-05-17 — admin command dict + completion sources.
 //
-// 작성 이유: db-contract α 가 `db.runCommand({...})` / `db.adminCommand({...})`
-// 을 자동완성에 노출해야 하므로, MONGO_ADMIN_COMMANDS dict 의 핵심
-// 엔트리 + 두 source (db-level helpers + admin command literal) 가
-// 발동되는 위치를 lock 한다. AST 가 아닌 정규식 기반이라 trigger 패턴
-// 정확도 회귀 가드가 중요.
+// Reason: db-contract α must expose `db.runCommand({...})` /
+// `db.adminCommand({...})` in autocomplete, so these tests lock the core
+// entries of the MONGO_ADMIN_COMMANDS dict and the positions where the two
+// sources (db-level helpers + admin command literal) fire. The sources are
+// regex-based, not AST-based, so a regression guard on trigger-pattern
+// accuracy matters.
 
 describe("mongoAutocomplete — sprint-381 admin command catalog", () => {
   it("MONGOSH_DB_LEVEL_METHODS includes runCommand + adminCommand", () => {

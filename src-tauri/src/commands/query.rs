@@ -1,7 +1,7 @@
-//! Backwards-compatibility shim for the pre-Sprint 64 `commands::query`
+//! Backwards-compatibility shim for the former flat `commands::query`
 //! module.
 //!
-//! Sprint 64 moved the RDB query command handlers into
+//! The RDB query command handlers were moved into
 //! `commands::rdb::query`. Integration tests (which cannot be modified per
 //! contract invariant) still import the input validators from this path:
 //!

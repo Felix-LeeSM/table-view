@@ -1,12 +1,12 @@
-// Sprint 271a (2026-05-13) — schemaStore end-to-end DbMismatch recovery.
+// schemaStore end-to-end DbMismatch recovery (2026-05-13).
 //
-// 작성 이유: backend Sprint 266 가드가 schemaStore 의 read 호출을
-// `AppError::DbMismatch` 로 reject 할 때, 프론트엔드가
-//   (1) typed/legacy DbMismatch normalizer 로 감지하고
-//   (2) syncMismatchedActiveDb 로 verify+setActiveDb 를 호출하며
-//   (3) toast 는 띄우지 않는다 (background introspection 은 silent — 271a
-//       Out-of-Scope per contract).
-// 을 한꺼번에 단언. 대표 case 는 #744 typed envelope 로 mock 한다.
+// Reason: when the backend guard rejects a schemaStore read call with
+// `AppError::DbMismatch`, this file asserts in one place that the frontend
+//   (1) detects it through the typed/legacy DbMismatch normalizer,
+//   (2) calls verify + setActiveDb through syncMismatchedActiveDb, and
+//   (3) shows no toast (background introspection is silent — out of scope
+//       per the contract).
+// The representative case is mocked with the #744 typed envelope.
 
 import {
   registerSchemaStoreDbMismatchRecovery,
@@ -120,7 +120,7 @@ describe("schemaStore — DbMismatch silent sync (Sprint 271a)", () => {
     await flushMicrotasks();
     expect(verifyActiveDbMock).toHaveBeenCalledWith("conn1");
     expect(setActiveDbMock).toHaveBeenCalledWith("conn1", "dbB");
-    // Sprint 271a — silent sync. No toast for background introspection.
+    // Silent sync. No toast for background introspection.
     expect(toastWarningMock).not.toHaveBeenCalled();
   });
 

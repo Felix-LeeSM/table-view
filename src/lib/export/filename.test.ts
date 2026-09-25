@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildExportFilename } from "./filename";
 
-// 2026-05-01 — Sprint 181 AC-181-02. The filename helper is pure so we
+// 2026-05-01 — AC-181-02. The filename helper is pure so we
 // inject `now` to keep snapshots deterministic across CI clocks.
 
 const FIXED = new Date(2026, 4, 1, 14, 30, 12); // 2026-05-01 14:30:12 local

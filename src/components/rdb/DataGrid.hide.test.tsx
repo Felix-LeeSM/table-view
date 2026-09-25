@@ -1,10 +1,11 @@
-// Sprint 318 (2026-05-15) — Slice D.2: RDB DataGrid hide column wire-up.
+// RDB DataGrid hide column wire-up.
 //
-// 작성 이유: paradigm-shared `useHiddenColumns` 가 RDB DataGrid 에서
-// 도 (a) header context menu → hide → 회복 lifeline (badge + Show
-// all) 까지 한 사이클이 돌아가는지, (b) persist key 가
-// `hidden-columns:rdb:<schema>:<table>` 인지를 lock. `DataGridTable.hide`
-// 는 prop 차원 회귀를, 이 파일은 RDB shell 차원의 통합 회귀를 검증.
+// Reason: locks that the paradigm-shared `useHiddenColumns` also runs a
+// full cycle inside the RDB DataGrid — (a) header context menu → hide →
+// recovery lifeline (badge + Show all), and (b) the persist key is
+// `hidden-columns:rdb:<schema>:<table>`. `DataGridTable.hide` covers the
+// prop-level regression; this file covers the RDB shell-level
+// integration regression.
 
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -233,10 +234,10 @@ describe("RDB DataGrid — hide column (Sprint 318 D.2)", () => {
     ).toBeNull();
   });
 
-  // Sprint 369 — mount 시 hydration 은 IPC `get_datagrid_prefs` 책임.
-  // jsdom 환경에서 invoke mock 없이 호출되면 throw → hook 의 catch 가 silently
-  // empty 로 둠. legacy LS 값은 더 이상 hydrate 경로가 아니므로 mount 시
-  // 보이는 것이 invariant.
+  // Hydration on mount is the IPC `get_datagrid_prefs` responsibility.
+  // Called without an invoke mock under jsdom it throws → the hook's
+  // catch leaves it silently empty. Legacy LS values are no longer a
+  // hydrate path, so being visible on mount is the invariant.
   it("Sprint 369: legacy hidden-columns:* LS 값 무시 (LS 영속 폐기)", async () => {
     window.localStorage.setItem(
       "hidden-columns:rdb:public:users",

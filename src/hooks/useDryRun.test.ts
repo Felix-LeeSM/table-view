@@ -1,4 +1,4 @@
-// AC-247-H1..H5 — Sprint 247 (ADR 0022 Phase 3) `useDryRun` hook contract.
+// AC-247-H1..H5 — ADR 0022 Phase 3 `useDryRun` hook contract.
 // date 2026-05-09.
 //
 // `useDryRun` powers the destructive-statement confirm dialog's preview

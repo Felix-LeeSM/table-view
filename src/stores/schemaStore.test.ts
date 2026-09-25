@@ -127,9 +127,7 @@ beforeEach(() => {
         query_type: "select",
       }),
     ),
-    // Sprint 183 — schemaStore exposes a batch helper that wraps the
-    // multi-statement Tauri command. Mock kept simple; the store layer just
-    // forwards arguments.
+    // Multi-statement Tauri command mock, kept simple.
     executeQueryBatch: vi.fn((_id: string, statements: string[]) =>
       Promise.resolve(
         statements.map(() => ({
@@ -170,7 +168,7 @@ beforeEach(() => {
     getViewDefinition: vi.fn(() =>
       Promise.resolve("SELECT id, name FROM users WHERE active = true"),
     ),
-    // Sprint 272 — trigger IPC mock. Default resolves with a single
+    // Trigger IPC mock. Default resolves with a single
     // canonical fixture; individual tests override per-call as needed.
     listTriggers: vi.fn(() =>
       Promise.resolve([
@@ -209,7 +207,7 @@ describe("schemaStore", () => {
       postgresExtensions: {},
       sqliteCapabilities: {},
       tableColumnsCache: {},
-      // Sprint 272 — reset the triggers slice between tests so cache
+      // Reset the triggers slice between tests so cache
       // residue from a prior `getTableTriggers` doesn't leak into the
       // next test's "first call should hit IPC" expectation.
       triggers: {},
@@ -284,7 +282,7 @@ describe("schemaStore", () => {
         "users" as TableName,
       );
 
-    // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
+    // Forwards `db` as expectedDatabase (4th positional).
     expect(getTableColumns).toHaveBeenCalledWith(
       "conn1",
       "users",
@@ -347,15 +345,15 @@ describe("schemaStore", () => {
     );
   });
 
-  // clearForConnection 케이스는 schemaStore.clearForConnection.test.ts
-  // (canonical AC-360 11-slot suite) 로 이관됨 — issue #1631 (2026-07-22).
-  // triggers/views/functions sibling 보존 + wide drop + no-op edge 전부
-  // 그 SOT 가 소유. 이 파일은 fetch/delegate 전용.
+  // The clearForConnection cases moved to
+  // schemaStore.clearForConnection.test.ts (canonical AC-360 11-slot suite) —
+  // issue #1631 (2026-07-22). That SOT owns the triggers/views/functions
+  // sibling preservation, the wide drop, and the no-op edge.
 
-  // Sprint 354 (L2 fix) — `queryTableData` removed from schemaStore;
-  // direct tauri.queryTableData calls now live in `DataGrid.tsx`. The
-  // delegate-shape assertions belonged to a thin pass-through that no
-  // longer exists.
+  // state-management-strategy L2 fix — `queryTableData` removed from
+  // schemaStore; direct tauri.queryTableData calls now live in
+  // `useRdbTableData.ts`. The delegate-shape assertions belonged to a thin
+  // pass-through that no longer exists.
 
   it("delegates getTableIndexes", async () => {
     const { getTableIndexes } = await import("@lib/tauri");
@@ -368,7 +366,7 @@ describe("schemaStore", () => {
         "users" as TableName,
       );
 
-    // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
+    // Forwards `db` as expectedDatabase (4th positional).
     expect(getTableIndexes).toHaveBeenCalledWith(
       "conn1",
       "users",
@@ -391,7 +389,7 @@ describe("schemaStore", () => {
         "users" as TableName,
       );
 
-    // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
+    // Forwards `db` as expectedDatabase (4th positional).
     expect(getTableConstraints).toHaveBeenCalledWith(
       "conn1",
       "users",
@@ -402,13 +400,13 @@ describe("schemaStore", () => {
     expect(constraints[0]!.constraint_type).toBe("PRIMARY KEY");
   });
 
-  // Sprint 354 (L2 fix) — `queryTableData` filter / rawWhere delegate
-  // tests removed alongside the action; the same arg-passing assertions
-  // now belong to the DataGrid-level integration tests since the store
-  // no longer owns this surface.
+  // state-management-strategy L2 fix — `queryTableData` filter / rawWhere
+  // delegate tests removed alongside the action; the same arg-passing
+  // assertions now belong to the DataGrid-level integration tests since the
+  // store no longer owns this surface.
 
   it("[AC-191-01] evictSchemaForName drops tables/views/functions for one (conn, schema)", async () => {
-    // Sprint 191 (AC-191-01) — single-schema cache eviction action that
+    // AC-191-01 — single-schema cache eviction action that
     // replaces the SchemaTree:603 direct setState. Asserts (a) the
     // targeted (conn, schemaName) entries are removed across all three
     // caches and (b) sibling entries (other schemaName, other conn) stay
@@ -469,8 +467,8 @@ describe("schemaStore", () => {
     expect(state.tables.conn2?.db1?.public).toHaveLength(1);
   });
 
-  // Sprint 354 (L2 fix) — `executeQuery` removed from schemaStore;
-  // direct tauri.executeQuery calls already lived in
+  // state-management-strategy L2 fix — `executeQuery` removed from
+  // schemaStore; direct tauri.executeQuery calls already lived in
   // `useQueryExecution.ts`, so this delegate test no longer fits.
 
   it("recordTablesReloaded replaces one schema table cache and preserves siblings", () => {
@@ -654,7 +652,7 @@ describe("schemaStore", () => {
       .getState()
       .getViewColumns("conn1", "db1", "public", "active_users");
 
-    // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
+    // Forwards `db` as expectedDatabase (4th positional).
     expect(getViewColumns).toHaveBeenCalledWith(
       "conn1",
       "public",
@@ -673,7 +671,7 @@ describe("schemaStore", () => {
       .getState()
       .getViewDefinition("conn1", "db1", "public", "active_users");
 
-    // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
+    // Forwards `db` as expectedDatabase (4th positional).
     expect(getViewDefinition).toHaveBeenCalledWith(
       "conn1",
       "public",
@@ -696,17 +694,18 @@ describe("schemaStore", () => {
     ).rejects.toThrow("View does not exist");
   });
 
-  // clearForConnection views/functions/drops-every/no-op 케이스는 모두
-  // schemaStore.clearForConnection.test.ts (canonical AC-360 11-slot SOT)
-  // 로 이관됨 — issue #1631 (2026-07-22).
+  // The clearForConnection views/functions/drops-every/no-op cases all moved
+  // to schemaStore.clearForConnection.test.ts (canonical AC-360 11-slot
+  // SOT) — issue #1631 (2026-07-22).
 
-  // ── Sprint 272 — getTableTriggers cache + eviction ─────────────────────
+  // ── getTableTriggers cache + eviction ──────────────────────────────────
   //
-  // 작성 이유 (2026-05-13, Sprint 272): contract AC-272-05 + AC-272-08
-  // — 두 번째 호출이 IPC mock 을 재호출하지 않고 캐시 hit 으로 풀려야
-  // 함. eviction 3 사이트 (clearForConnection / clearForWorkspace /
-  // evictSchemaForName) 가 triggers 슬라이스를 비우면서 인접 캐시
-  // (tables / tableColumnsCache) 는 건드리지 않는 것까지 검증.
+  // Reason (2026-05-13): contract AC-272-05 + AC-272-08 — the second call
+  // must resolve as a cache hit without re-invoking the IPC mock. Also
+  // verifies that clearForWorkspace / evictSchemaForName empty the triggers
+  // slice without changing how they treat the adjacent caches (tables /
+  // tableColumnsCache); the clearForConnection case lives in
+  // schemaStore.clearForConnection.test.ts.
 
   it("getTableTriggers calls the IPC on first miss and caches the result", async () => {
     const { listTriggers } = await import("@lib/tauri");
@@ -720,8 +719,8 @@ describe("schemaStore", () => {
       );
     expect(first).toHaveLength(1);
     expect(first[0]!.name).toBe("audit_users_insert");
-    // Sprint 271a — `db` is forwarded as `expectedDatabase` (the 4th
-    // positional argument to the tauri wrapper).
+    // `db` is forwarded as `expectedDatabase` (the 4th positional argument
+    // to the tauri wrapper).
     expect(listTriggers).toHaveBeenCalledWith(
       "conn1",
       "public",
@@ -809,7 +808,7 @@ describe("schemaStore", () => {
     expect(state.triggers.conn1?.db1?.public).toBeUndefined();
     expect(state.triggers.conn1?.db1?.audit?.events).toEqual([]);
     // evictSchemaForName intentionally leaves tableColumnsCache alone
-    // (pre-Sprint-272 invariant — see store source for rationale).
+    // (an invariant that predates the triggers cache).
     expect(state.tableColumnsCache.conn1?.db1?.public?.users).toEqual([]);
   });
 

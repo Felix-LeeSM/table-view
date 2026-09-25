@@ -1,14 +1,16 @@
 /**
- * `workspaceStore` counter seed axis. 작성 2026-05-16 (Phase 0 sprint-354).
+ * `workspaceStore` counter seed axis. Written 2026-05-16.
  *
- * 사유: state-management-strategy M-2 fix — `tabCounter` / `queryCounter`
- * 는 boot 시 0 으로 시작하므로 persisted id 와 충돌 가능. 본 테스트는
- * `loadPersistedWorkspaces` 가 모든 workspace 의 tab/query id 를 scan 해
- * `Math.max(persisted ids) + 1` 로 counter 를 seed 함을 고정한다.
+ * Reason: state-management-strategy M-2 fix — `tabCounter` / `queryCounter`
+ * start at 0 on boot, so they can collide with persisted ids. This test
+ * locks that `loadPersistedWorkspaces` scans the tab/query ids of every
+ * workspace and seeds the counters so the next id is
+ * `Math.max(persisted ids) + 1`.
  *
- * Public-surface only: `loadPersistedWorkspaces()` → `addTab` / `addQueryTab`
- * 새 id. 내부 module-scope counter 변수 read 는 의도적으로 회피
- * (testing scenarios 원칙 — 동작 검증, 모양 검증 X).
+ * Public surface only: `loadPersistedWorkspaces()` → new ids from `addTab` /
+ * `addQueryTab`. Reading the internal module-scope counter variables is
+ * deliberately avoided (testing-scenarios principle — verify behavior, not
+ * shape).
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ConnectionId, TabId } from "@/types/branded";

@@ -1,21 +1,23 @@
-// 작성 2026-05-16 — Wave 9.5 회귀 2 (테마 빈 부팅).
+// Written 2026-05-16 — regression: unstyled first boot (theme).
 //
-// 사용자 보고 (sprint-367 머지 직후): 첫 부팅 시 스타일이 깨진 상태로 표시.
-// 사용자가 직접 테마를 고르면 정상.
+// User report: the first boot rendered with broken styles; picking a theme by
+// hand fixed it.
 //
-// Root cause: SQLite 의 settings.theme row 가 없을 때 backend 가
-// `ThemeStore::default()` 반환 — `{theme_id: "default", mode: "system"}`.
-// 그러나 frontend `themeCatalog` 에는 `"default"` id 가 없다 (DEFAULT_THEME_ID
-// === "slate"). `hydrateTheme` 의 `slot.themeId as ThemeId` 라는 unsafe cast 가
-// `"default"` 를 그대로 store 에 박고, subscriber 가 `applyTheme("default", …)`
-// 호출 → `data-theme="default"` 가 DOM 에 설정 → themes.css 에 그 selector 가
-// 없어 `--tv-*` 토큰 미정의 → 시각적으로 "스타일이 깨진" 상태.
+// Root cause: with no settings.theme row in SQLite, the backend returned
+// `ThemeStore::default()` — `{theme_id: "default", mode: "system"}`.
+// But the frontend `themeCatalog` has no `"default"` id (DEFAULT_THEME_ID
+// === "slate"). The unsafe cast `slot.themeId as ThemeId` in `hydrateTheme`
+// wrote `"default"` into the store as-is, a subscriber called
+// `applyTheme("default", …)` → `data-theme="default"` landed on the DOM →
+// themes.css has no such selector, so the `--tv-*` tokens were undefined →
+// visibly "broken styles".
 //
-// 본 regression test 는 두 invariant 를 잠근다:
-//   1. unknown themeId 가 wire 로 들어오면 frontend 가 `DEFAULT_THEME_ID`
-//      (= "slate") 로 fallback 한다 — store 의 themeId 가 catalog 안 valid id
-//      라는 사실 자체가 boundary 의 책임.
-//   2. unknown mode 도 동일하게 "system" 으로 fallback (이미 존재하던 분기).
+// Two invariants at this boundary (the cases below exercise the first):
+//   1. An unknown themeId on the wire makes the frontend fall back to
+//      `DEFAULT_THEME_ID` (= "slate") — keeping the store's themeId a valid
+//      catalog id is the boundary's own responsibility.
+//   2. An unknown mode likewise falls back to "system" (a branch that
+//      already existed).
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -81,7 +83,7 @@ describe("hydrateTheme — unknown themeId fallback (회귀 2)", () => {
 
     const state = useThemeStore.getState();
     expect(state.themeId).toBe(DEFAULT_THEME_ID);
-    // mode 는 valid 면 그대로
+    // A valid mode passes through unchanged.
     expect(state.mode).toBe("dark");
   });
 

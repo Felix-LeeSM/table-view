@@ -20,10 +20,9 @@ pub enum DatabaseType {
 }
 
 impl DatabaseType {
-    /// Paradigm tag exposed to the frontend. Sprint 65 promotes this from the
-    /// previous `&'static str` return type to a typed `Paradigm` enum so the
-    /// wire format is a validated discriminated tag rather than a free-form
-    /// string.
+    /// Paradigm tag exposed to the frontend. A typed `Paradigm` enum replaces
+    /// the previous `&'static str` return type so the wire format is a
+    /// validated discriminated tag rather than a free-form string.
     pub fn paradigm(&self) -> Paradigm {
         match self {
             DatabaseType::Postgresql
@@ -65,9 +64,9 @@ impl FromStr for DatabaseType {
 /// Database paradigm tag. Serialized lowercase (`"rdb"`, `"document"`,
 /// `"search"`, `"kv"`) to match the frontend `Paradigm` string-literal union.
 ///
-/// Sprint 65 promotes this from a bare `String` on `ConnectionConfigPublic` to
-/// a typed enum so that wire payloads can no longer carry an arbitrary empty
-/// string via `#[serde(default)]`.
+/// The typed enum replaces a bare `String` on `ConnectionConfigPublic` so that
+/// wire payloads can no longer carry an arbitrary empty string via
+/// `#[serde(default)]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Paradigm {
@@ -468,10 +467,10 @@ pub struct ConnectionConfigPublic {
     /// Whether a password is stored on disk. Derived, never persisted.
     #[serde(default, alias = "has_password")]
     pub has_password: bool,
-    /// Paradigm tag derived from `db_type`. Sprint 65 tightens this from the
-    /// previous `String` + `#[serde(default)]` shape into a typed
-    /// [`Paradigm`] enum; payloads lacking this field now fail to
-    /// deserialize instead of silently defaulting to `""`. The frontend
+    /// Paradigm tag derived from `db_type`. A typed [`Paradigm`] enum
+    /// replaces the previous `String` + `#[serde(default)]` shape; a payload
+    /// lacking this field fails to deserialize instead of silently
+    /// defaulting to `""`. The frontend
     /// `Paradigm` string-literal union (`"rdb" | "document" | "search" |
     /// "kv"`) mirrors the lowercase serialization.
     pub paradigm: Paradigm,
@@ -661,20 +660,21 @@ pub struct ConnectionGroup {
 
 /// Internally-tagged enum for a clean discriminated union on the frontend.
 ///
-/// Sprint 364 (Phase 3 Q14) — `Connecting` variant 추가 + `Connected` 가
-/// struct variant 로 승격되어 `active_db: Option<String>` 을 운반한다.
-/// `active_db` 는 PG `USE db` 결과 또는 connection string 의 `dbname` 으로,
-/// `connect` IPC 가 pool 을 열 때 결정된다.
+/// Q14 — there is a `Connecting` variant, and `Connected` is a struct variant
+/// so it can carry `active_db: Option<String>`. `active_db` comes from the
+/// result of PG `USE db` or the `dbname` in the connection string, decided when
+/// the `connect` IPC opens the pool.
 ///
 /// Serializes as:
-/// - `{"type": "connecting"}` — connect IPC 진행 중 (pool acquire 전).
-/// - `{"type": "connected"}` — pool ready, active_db 미지정.
-/// - `{"type": "connected", "activeDb": "foo"}` — pool ready, active_db 지정.
+/// - `{"type": "connecting"}` — the connect IPC is in flight (before pool
+///   acquire).
+/// - `{"type": "connected"}` — pool ready, no active_db.
+/// - `{"type": "connected", "activeDb": "foo"}` — pool ready, active_db set.
 /// - `{"type": "disconnected"}`
 /// - `{"type": "error", "message": "..."}`
 ///
-/// `active_db: None` 일 때 wire 에 `activeDb: null` 이 나타나지 않도록
-/// `skip_serializing_if = "Option::is_none"` 로 필드를 omit (codex 3차 #6).
+/// `skip_serializing_if = "Option::is_none"` omits the field so that
+/// `activeDb: null` never appears on the wire when `active_db` is `None`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(
     tag = "type",
@@ -1103,10 +1103,10 @@ mod tests {
 
     #[test]
     fn connection_config_public_rejects_payload_without_paradigm_field() {
-        // Sprint 65 tightens this: a payload lacking `paradigm` must no
-        // longer silently default to an empty string. (Sprint 64 allowed it
-        // via `#[serde(default)]`; the ability to round-trip old clients
-        // without a paradigm tag is now removed by design.)
+        // A payload lacking `paradigm` must not silently default to an empty
+        // string. The earlier `#[serde(default)]` shape allowed it; the
+        // ability to round-trip old clients without a paradigm tag is removed
+        // by design.
         let json = r#"{
             "id": "c1",
             "name": "DB",
@@ -1127,9 +1127,10 @@ mod tests {
 
     #[test]
     fn connection_status_serializes_as_discriminated_union() {
-        // Sprint 364 (2026-05-16) — `Connected { active_db: None }` 평면
-        // 직렬화 + `Error { message: ... }` struct variant 평면 직렬화
-        // 회귀 가드. 4-case 전체 wire shape 는 `tests/connection_status_serde.rs`.
+        // Regression guard for the flat serialization of
+        // `Connected { active_db: None }` and of the `Error { message: ... }`
+        // struct variant. The full 4-case wire shape is in
+        // `tests/connection_status_serde.rs`.
         let connected = ConnectionStatus::Connected { active_db: None };
         let json = serde_json::to_string(&connected).unwrap();
         assert_eq!(json, "{\"type\":\"connected\"}");
@@ -1164,7 +1165,7 @@ mod tests {
     #[test]
     fn connection_config_optional_fields_default_to_none() {
         // Simulates data saved before timeout/keep_alive/environment were added
-        // — and, from Sprint 65, before auth_source/replica_set/ssl_mode.
+        // — and before auth_source/replica_set/ssl_mode.
         let json = r#"{
             "id": "test",
             "name": "test",
@@ -1181,7 +1182,7 @@ mod tests {
         assert_eq!(config.connection_timeout, None);
         assert_eq!(config.keep_alive_interval, None);
         assert_eq!(config.environment, None);
-        // Sprint 65 additions remain None for legacy payloads.
+        // Later additions remain None for legacy payloads.
         assert_eq!(config.auth_source, None);
         assert_eq!(config.replica_set, None);
         // Reason: #1649 — a payload carrying neither `ssl_mode` nor the legacy

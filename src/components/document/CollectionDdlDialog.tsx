@@ -1,6 +1,6 @@
-// Sprint 334 (2026-05-15) — Slice L live wire. Mongo collection DDL
-// (create / rename / drop). v0 의 create options 는 raw JSON textarea
-// passthrough — capped / timeseries 전용 form 필드는 후속 sprint.
+// Live wire for Mongo collection DDL (create / rename / drop). The v0
+// create options are a raw JSON textarea passthrough — dedicated form
+// fields for capped / timeseries are not built yet.
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";

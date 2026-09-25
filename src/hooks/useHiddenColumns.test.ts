@@ -1,16 +1,17 @@
-// 작성 2026-05-16 (Phase 4 sprint-369) — IPC SOT 전환 회귀 lock.
+// Written 2026-05-16 — regression lock for the IPC SOT switch.
 //
-// 사유: sprint-317 시점 의 `hidden-columns:<key>` localStorage 영속은
-// Q20.5 결정 (`datagrid_column_prefs.hidden_columns_json` SQLite SOT) 으로
-// 폐지. 본 sprint 의 invariant:
-//   (1) `hidden-columns:*` LS key 의 getItem / setItem 0회,
-//   (2) `pk` 가 주어지면 mount 시 `get_datagrid_prefs` IPC 1회,
-//   (3) hide/show/toggle/clear 호출 시 `set_datagrid_prefs` 의 hiddenColumns
-//       patch (clear 는 빈 배열),
-//   (4) 명시적 reset 은 `reset_datagrid_prefs(field="hiddenColumns")` 로
-//       옵셔널 (UI 가 clear() 와 별도로 노출하는 경우).
+// Reason: the earlier `hidden-columns:<key>` localStorage persistence was
+// retired by decision Q20.5 (`datagrid_column_prefs.hidden_columns_json`
+// SQLite SOT). The invariants:
+//   (1) zero getItem / setItem calls on `hidden-columns:*` LS keys,
+//   (2) with a `pk`, one `get_datagrid_prefs` IPC on mount,
+//   (3) hide/show/toggle/clear send a `set_datagrid_prefs` hiddenColumns
+//       patch (clear sends an empty array),
+//   (4) an explicit reset via
+//       `reset_datagrid_prefs(field="hiddenColumns")` is optional (for when
+//       the UI exposes it separately from clear()).
 //
-// AC-369-09 매핑.
+// Maps to AC-369-09.
 
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";

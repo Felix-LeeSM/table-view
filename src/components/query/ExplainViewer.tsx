@@ -1,7 +1,7 @@
-// Sprint 337 (2026-05-15) — U2 live wire. RDB EXPLAIN (FORMAT JSON) and
-// Mongo runCommand({explain: …}) wrapped behind a single
-// component. PostgreSQL plans render a compact summary/tree, with raw JSON
-// retained for fallback and troubleshooting.
+// U2 live wire. RDB EXPLAIN (FORMAT JSON) and Mongo
+// runCommand({explain: …}) wrapped behind a single component. PostgreSQL
+// plans render a compact summary/tree, with raw JSON retained for fallback
+// and troubleshooting.
 // #2153 — the search paradigm joined through the same component: its plan is
 // the `profile` section of a `_search` re-run (#1818), rendered as the same
 // summary/tree shape.

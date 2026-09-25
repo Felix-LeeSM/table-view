@@ -7,9 +7,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
 import HomePage from "./HomePage";
 
-// Sprint 154 — HomePage's activation handler routes through
-// `@lib/window-controls` (workspace.show / focus / launcher.hide). Stub the
-// seam so the assertions can observe call shape directly.
+// HomePage's activation handler makes no `@lib/window-controls` call (no
+// workspace.show / focus / launcher.hide). Stub the seam so the assertions
+// can observe call shape directly.
 vi.mock("@lib/window-controls", () => ({
   showWindow: vi.fn(() => Promise.resolve()),
   hideWindow: vi.fn(() => Promise.resolve()),
@@ -199,8 +199,8 @@ describe("HomePage", () => {
   });
 
   // #2440 — Recent left the footer for the group rail. A second Recent surface
-  // on this page is the sprint-296 regression ("탭이 하나 더 생긴" 모양), so the
-  // footer must stay gone.
+  // on this page repeats an earlier regression (a doubled Recent header that
+  // read as an extra tab), so the footer must stay gone.
   it("[launcher] no longer renders a Recent footer strip", () => {
     render(<HomePage />);
     expect(screen.queryByTestId("home-recent")).toBeNull();
@@ -267,8 +267,8 @@ describe("HomePage", () => {
 
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
     // Single-click must NOT swap to workspace — that is reserved for
-    // onActivate (double-click / Enter / context-menu Connect). Sprint
-    // 154: assertion expressed against the seam (no `showWindow` call).
+    // onActivate (double-click / Enter). The assertion is expressed against
+    // the seam (no `showWindow` call).
     expect(windowControls.showWindow).not.toHaveBeenCalled();
   });
 
@@ -285,11 +285,9 @@ describe("HomePage", () => {
     });
 
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
-    // Wave 9.5 (2026-05-16) — sprint-361 이후 workspace 윈도우는 per-conn
-    // label (`workspace-{conn_id}`) 이며 ConnectionList 의
-    // `openWorkspaceWindow` 가 책임. HomePage 의 handleActivate 는 store
-    // side + launcher hide 만 (이전 showWindow("workspace") 호출은 sprint-175
-    // 의 옛 single-workspace 윈도우를 추가 생성해 두 창 visible 회귀 원천).
+    // 2026-05-16 — handleActivate owns only the store side; the per-conn
+    // workspace window is ConnectionList's job. See the note in
+    // `handleActivate` (`HomePage.tsx`).
     expect(windowControls.showWindow).not.toHaveBeenCalledWith("workspace");
     expect(windowControls.hideWindow).not.toHaveBeenCalled();
   });
@@ -297,7 +295,7 @@ describe("HomePage", () => {
   it("does not crash if onActivate is fired with an unknown connectionId", async () => {
     // Edge case: HomePage doesn't gate on connection existence, but the
     // swap itself must not throw and the store should accept any string id.
-    // Wave 9.5 — invariant: hideWindow("launcher") 만 호출.
+    // Invariant: no showWindow("workspace") and no hideWindow call.
     render(<HomePage />);
     await act(async () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
@@ -306,14 +304,13 @@ describe("HomePage", () => {
     expect(windowControls.hideWindow).not.toHaveBeenCalled();
   });
 
-  // ── Sprint 134: Home double-click swap (AC-S134-04) ──
+  // ── Home double-click swap (AC-S134-04) ──
   //
   // The lesson 2026-04-27-workspace-toolbar-ux-gaps reported that swap
   // didn't happen when the user picked a different connection from the
-  // toolbar `<ConnectionSwitcher>`. With the switcher gone in S134, Home →
-  // double-click is the single swap path, so we lock in the swap behaviour
-  // explicitly: both `focusedConnId` AND `screen` must update in one go,
-  // and a previously-focused connection must be replaced by the new one.
+  // toolbar `<ConnectionSwitcher>`. With the switcher gone, we lock in the
+  // Home double-click swap explicitly: `focusedConnId` must update, and a
+  // previously-focused connection must be replaced by the new one.
 
   it("double-click swap from connectionA to connectionB updates focusedConnId AND screen (AC-S134-04)", async () => {
     useConnectionStore.setState({
@@ -333,13 +330,14 @@ describe("HomePage", () => {
     // already-focused connection — the ConnectionItem-level swap-to-c2 path
     // is wired through HomePage in production, but here we hard-code the
     // expectation: any `onActivate(id)` call must (a) overwrite focusedConnId
-    // and (b) flip the surface (Sprint 154 — expressed via seam call).
+    // and (b) make no window-seam call (ConnectionList opens the window).
     await act(async () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
-    // Wave 9.5 — per-conn 윈도우 시스템에 맞춰 hideWindow("launcher") 만 잠금.
+    // Per-conn window model: no showWindow("workspace") and no hideWindow
+    // call.
     expect(windowControls.showWindow).not.toHaveBeenCalledWith("workspace");
     expect(windowControls.hideWindow).not.toHaveBeenCalled();
   });
@@ -356,18 +354,19 @@ describe("HomePage", () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
-    // active 한 자기 자신 더블클릭 → store side + launcher hide invariant 유지.
+    // Double-clicking the already-active connection → the store-side
+    // invariant holds and the launcher is not hidden.
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
     expect(windowControls.showWindow).not.toHaveBeenCalledWith("workspace");
     expect(windowControls.hideWindow).not.toHaveBeenCalled();
   });
 
-  // ── Sprint 157: activation debounce guard ──
+  // ── Activation debounce guard ──
 
-  // Reason (revised Wave 9.5, 2026-05-16): Sprint 157 의 activatingRef 가드는
-  // 여전히 유효 — 빠른 연속 더블클릭 시 launcher hide 가 중복 호출되지 않음.
-  // 이전 showWindow 중복 검증은 sprint-361 의 per-conn 모델에서 의미가 없다
-  // (HomePage 는 showWindow 호출 안 함).
+  // Reason (revised 2026-05-16): the activatingRef guard still holds — a
+  // rapid double activation updates the store side once. The old
+  // duplicate-showWindow check means nothing in the per-conn model (HomePage
+  // does not call showWindow).
   it("AC-157-01 (revised): rapid double activation — store side 1회 갱신, window seam 호출 0", async () => {
     useConnectionStore.setState({
       connections: [makeConnection("c1")],
@@ -381,16 +380,16 @@ describe("HomePage", () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
-    // launcher 항상 visible — hide 호출 0.
+    // The launcher stays visible — no hide call.
     expect(windowControls.hideWindow).not.toHaveBeenCalled();
     expect(windowControls.showWindow).not.toHaveBeenCalled();
     expect(windowControls.focusWindow).not.toHaveBeenCalled();
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // Reason (revised Wave 9.5, 2026-05-16): 단일 활성화는 가드 추가 후에도
-  // 동일하게 동작 — store side 갱신 + launcher hide. workspace label 직접
-  // 호출 0 (sprint-361 per-conn 시스템).
+  // Reason (revised 2026-05-16): a single activation behaves the same after
+  // the guard was added — the store side updates and the launcher is not
+  // hidden. No direct call with the workspace label (per-conn window model).
   it("AC-157-02 (revised): single activation still works correctly (regression guard)", async () => {
     useConnectionStore.setState({
       connections: [makeConnection("c1")],
@@ -409,15 +408,16 @@ describe("HomePage", () => {
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // #2440 — Sprint 296 의 Recent footer collapse 케이스 셋 (AC-296-01 /
-  // AC-296-02 / sprint-369 persistSetting) 제거. 접히던 footer 가 group rail
-  // 의 Recent view 로 대체돼 토글할 대상이 없다. footer 부재 자체의 회귀
-  // 가드는 위 `[launcher] no longer renders a Recent footer strip`.
+  // #2440 — the Recent footer collapse cases (AC-296-01 / AC-296-02 / the
+  // persistSetting case) were removed. The collapsible footer was replaced by
+  // the group rail's Recent view, so there is nothing to toggle. The
+  // regression guard for the footer's absence itself is
+  // `[launcher] no longer renders a Recent footer strip` above.
 
-  // Reason (revised Wave 9.5, 2026-05-16): Sprint 157 의 activatingRef 가드는
-  // 여전히 유효 — `hideWindow("launcher")` 가 reject 한 후에도 activatingRef
-  // 가 해제되어 다음 시도가 가능. 이전 contract 의 showWindow rejection 분기는
-  // sprint-361 의 per-conn 모델에서 의미가 없다.
+  // Reason (revised 2026-05-16): the activatingRef guard still holds — it is
+  // released after a microtask, so the next attempt can go through. The old
+  // contract's showWindow-rejection branch means nothing in the per-conn
+  // model.
   it("AC-157-03 (revised): activatingRef 가드는 microtask 후 풀려 두 번째 activation 시도도 store side 일관성 유지", async () => {
     useConnectionStore.setState({
       connections: [makeConnection("c1")],
@@ -430,13 +430,14 @@ describe("HomePage", () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
-    // microtask 후 activatingRef 풀림 — 두 번째 click 도 store side handler 가 진행.
+    // activatingRef is released after a microtask — the second click runs
+    // the store-side handler too.
     await act(async () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
-    // launcher 항상 visible — hide 호출 0.
+    // The launcher stays visible — no hide call.
     expect(windowControls.hideWindow).not.toHaveBeenCalled();
   });
 });

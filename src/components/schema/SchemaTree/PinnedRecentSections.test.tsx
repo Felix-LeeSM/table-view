@@ -148,9 +148,10 @@ describe("PinnedRecentSections", () => {
     expect(screen.getAllByText("public.orders")).toHaveLength(1);
   });
 
-  // Reason: #1738 (2026-07-25) — "접으면 완전 숨김(0개; 접힘 시 slice 5→0)".
-  // 최근 테이블 섹션은 shared HISTORY_DEFAULT_VISIBLE(5) 대신 0-cap 을 써서
-  // 접힘(기본) 상태에서 행을 하나도 렌더하지 않고, 펼치면 전부 노출한다.
+  // Reason: #1738 — "collapse hides it completely (0 rows; slice 5→0 when
+  // collapsed)". The recent-tables section uses a 0 cap instead of the shared
+  // HISTORY_DEFAULT_VISIBLE(5), so it renders no rows while collapsed (the
+  // default) and shows all of them when expanded.
   it("hides all recent rows while collapsed and reveals them on expand (#1738)", () => {
     seed(
       range(3).map((i) => ({
@@ -184,8 +185,8 @@ describe("PinnedRecentSections", () => {
     expect(screen.getByText("public.t2")).toBeInTheDocument();
   });
 
-  // Reason: #1738 (2026-07-25) — recent 의 0-cap 접힘은 pinned 섹션에 영향
-  // 없음. pinned 은 항상 노출되고, recent 만 접힘(0개) 대상이다.
+  // Reason: #1738 — the 0-cap collapse on recent does not affect the pinned
+  // section. Pinned rows are always shown; only recent collapses (to 0).
   it("keeps pinned rows visible while recent rows stay collapsed (#1738)", () => {
     seed([
       {

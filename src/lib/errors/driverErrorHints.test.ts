@@ -5,12 +5,14 @@ import {
   type DriverErrorCategory,
 } from "./driverErrorHints";
 
-// Purpose: driver 원문 에러 → 카테고리 매핑 표와 우선순위를 잠근다 (issue #1056)
-//          — Phase 22 milestone 22.30 (2026-07-03).
-// 각 needle 은 실제 드라이버(pg/mysql/mssql/oracle/redis/mongo/ES + OS)의
-// 원문 문자열 표본이다. 매핑을 한 곳(순수 함수)에 두고 프론트 3경로가 재사용한다.
+// Purpose: lock the raw driver error → category mapping table and its
+//          precedence (issue #1056) — GitHub milestone 22.30 (2026-07-03).
+// Each needle is a raw string sampled from a real driver (pg/mysql/mssql/
+// oracle/redis/mongo/ES + OS). The mapping lives in one place (a pure
+// function) that the frontend paths reuse.
 describe("classifyDriverError", () => {
-  // Reason: 전 DBMS 의 "연결 거부" 표현을 하나의 행동 힌트로 흡수 (2026-07-03).
+  // Reason: absorb every DBMS's "connection refused" wording into one action
+  //         hint (2026-07-03).
   const connectionRefused = [
     "Connection error: connection refused (os error 61)", // pg (macOS)
     "Connection error: Connection refused (os error 111)", // linux ECONNREFUSED
@@ -21,7 +23,8 @@ describe("classifyDriverError", () => {
     "ECONNREFUSED 127.0.0.1:5432",
   ];
 
-  // Reason: 인증 실패는 자격증명 확인을 유도해야 한다 — 전 DBMS 방언 흡수 (2026-07-03).
+  // Reason: an auth failure must lead the user to check credentials — absorbs
+  //         every DBMS dialect (2026-07-03).
   const authFailed = [
     'Connection error: password authentication failed for user "app"', // pg 28P01
     "Connection error: Access denied for user 'app'@'10.0.0.1' (using password: YES)", // mysql 1045
@@ -33,16 +36,17 @@ describe("classifyDriverError", () => {
     "Search authentication error: bad credentials", // AppError::SearchAuthentication
   ];
 
-  // Reason: 연결-phase 타임아웃만 네트워크/방화벽/도달성 점검을 유도 (2026-07-03).
-  //         쿼리-phase 타임아웃(락 경합/statement/request)은 여기 없다 — 아래
-  //         음성 케이스가 null 을 강제한다.
+  // Reason: only connection-phase timeouts lead to network/firewall/
+  //         reachability checks (2026-07-03). Query-phase timeouts (lock
+  //         contention/statement/request) are not here — the negative case
+  //         below forces null.
   const timeout = [
     "Connection error: connection timed out (os error 60)", // macOS ETIMEDOUT
     "Connection error: connection timed out (os error 110)", // linux ETIMEDOUT
-    "Server selection timeout: No available servers", // mongo — 연결 단계(서버 못 찾음)
+    "Server selection timeout: No available servers", // mongo — connection phase (no server found)
   ];
 
-  // Reason: 호스트 미해석은 오타/ DNS/VPN 점검을 유도 (2026-07-03).
+  // Reason: an unresolved host leads to typo / DNS / VPN checks (2026-07-03).
   const unknownHost = [
     "Connection error: failed to lookup address information: nodename nor servname provided, or not known", // macOS getaddrinfo
     "Connection error: failed to lookup address information: Name or service not known", // linux getaddrinfo
@@ -52,8 +56,9 @@ describe("classifyDriverError", () => {
     "getaddrinfo ENOTFOUND db.internal",
   ];
 
-  // Reason: 권한 거부는 연결은 됐으나 작업 권한 부족 — DBA 승인 유도 (2026-07-03).
-  //         #1060 (permission denied 전용 상태) 와 같은 키를 공유한다.
+  // Reason: permission denied means connected but lacking privileges for the
+  //         operation — leads to DBA approval (2026-07-03).
+  //         Shares its key with #1060 (dedicated permission-denied state).
   const permissionDenied = [
     'Database error: permission denied for table "users"', // pg 42501
     "Database error: SELECT command denied to user 'app'@'%' for table 'orders'", // mysql 1142
@@ -63,12 +68,14 @@ describe("classifyDriverError", () => {
     "Search permission error: action indices:data/read is unauthorized", // AppError::SearchPermission
   ];
 
-  // Reason: #1723 — sqlx 가 결과 메타(컬럼 타입)를 읽으려 태우는 describe 가
-  //         앞단 프록시/풀러의 왜곡으로 터진 원문. 사용자 SQL 문제로 오인되면
-  //         안 되므로 "메타를 못 읽었다 + 프록시 의심" 힌트로 흡수한다 (2026-07-24).
+  // Reason: #1723 — raw errors where the describe that sqlx runs to read
+  //         result metadata (column types) blows up because a proxy/pooler in
+  //         front distorts it. They must not be mistaken for a problem in the
+  //         user's SQL, so they are absorbed into a "could not read metadata +
+  //         suspect a proxy" hint (2026-07-24).
   const introspectionFailed = [
     'Database error: error returned from database: Index was outside the bounds of the array.; query: "SELECT ... pg_catalog.pg_attribute ..." (sqlx_postgres::connection::describe:492)', // pg describe via proxy
-    "Failed to describe statement (sqlx_sqlite::connection::describe:120)", // 다른 sqlx 드라이버 describe 경로
+    "Failed to describe statement (sqlx_sqlite::connection::describe:120)", // describe path of another sqlx driver
   ];
 
   const table: Array<[DriverErrorCategory, string[]]> = [
@@ -88,7 +95,8 @@ describe("classifyDriverError", () => {
     }
   }
 
-  // Reason: i18n 키는 카테고리에서 파생 — errors namespace 규약 (#1074) (2026-07-03).
+  // Reason: i18n keys derive from the category — errors namespace convention
+  //         (#1074) (2026-07-03).
   it("derives errors-namespace i18n keys from the category", () => {
     const hint = classifyDriverError("connection refused (os error 61)");
     expect(hint).toEqual({
@@ -98,7 +106,8 @@ describe("classifyDriverError", () => {
     });
   });
 
-  // Reason: 매칭은 대소문자 무관 — 드라이버마다 casing 이 다르다 (2026-07-03).
+  // Reason: matching is case-insensitive — drivers differ in casing
+  //         (2026-07-03).
   it("matches case-insensitively", () => {
     expect(classifyDriverError("CONNECTION REFUSED")?.category).toBe(
       "connectionRefused",
@@ -108,30 +117,34 @@ describe("classifyDriverError", () => {
     );
   });
 
-  // Reason: 우선순위 — mongo 는 "server selection timeout ... Connection refused"
-  //         처럼 timeout 래퍼 안에 root cause(refused)를 담는다. 사용자에게
-  //         더 실행가능한 refused 힌트가 이겨야 한다 (2026-07-03).
+  // Reason: precedence — mongo carries the root cause (refused) inside a
+  //         timeout wrapper, as in "server selection timeout ... Connection
+  //         refused". The refused hint is more actionable for the user and
+  //         must win (2026-07-03).
   it("prefers connectionRefused over timeout when both appear (mongo wrapper)", () => {
     const msg =
       "Server selection timeout: No available servers. Topology Kind: Unknown, Error: Connection refused (os error 61)";
     expect(classifyDriverError(msg)?.category).toBe("connectionRefused");
   });
 
-  // Reason: 인증 실패가 권한 거부보다 우선 — mysql 은 "denied" 를 둘 다 쓴다 (2026-07-03).
+  // Reason: auth failure takes precedence over permission denied — mysql uses
+  //         "denied" for both (2026-07-03).
   it("prefers authFailed over permissionDenied", () => {
     expect(
       classifyDriverError("Access denied for user 'app'@'%'")?.category,
     ).toBe("authFailed");
   });
 
-  // Reason: 쿼리-phase 타임아웃을 연결 에러로 오분류 금지 — 락 경합/statement/
-  //         request timeout 에 "네트워크/VPN/방화벽 점검" 조언은 오도 (#1227 리뷰, 2026-07-03).
-  //         bare "timeout"/"timed out" needle 제거로 연결-phase 마커만 매치한다.
+  // Reason: a query-phase timeout must not be misclassified as a connection
+  //         error — "check network/VPN/firewall" advice misleads for lock
+  //         contention / statement / request timeouts (#1227 review,
+  //         2026-07-03). With the bare "timeout"/"timed out" needles removed,
+  //         only connection-phase markers match.
   it("does not classify query-phase timeouts as connection errors", () => {
     expect(
       classifyDriverError(
         "Lock wait timeout exceeded; try restarting transaction",
-      ), // mysql 락 경합
+      ), // mysql lock contention
     ).toBeNull();
     expect(
       classifyDriverError("canceling statement due to statement timeout"), // pg statement_timeout
@@ -141,20 +154,23 @@ describe("classifyDriverError", () => {
     ).toBeNull();
   });
 
-  // Reason: index-OOB needle 단독 분류 — table 표본 2개가 모두 `connection::describe`
-  //         프레임을 담아, describe 문자열 없이 `index was outside the bounds of the
-  //         array` 만으로 introspectionFailed 매칭이 되는지 커버가 없었다. 프록시가
-  //         describe 프레임 없이 .NET IndexOutOfRangeException 원문만 반환하는
-  //         케이스를 잠근다. 이슈 #1723 후속 (2026-07-24).
+  // Reason: classify on the index-OOB needle alone — both table samples carry
+  //         a `connection::describe` frame, so nothing covered whether
+  //         `index was outside the bounds of the array` alone, without a
+  //         describe string, matches introspectionFailed. Locks the case where
+  //         a proxy returns only the raw .NET IndexOutOfRangeException text,
+  //         without a describe frame. Follow-up to issue #1723 (2026-07-24).
   it("classifies a bare index-OOB message (no connection::describe frame) as introspectionFailed", () => {
     const msg =
       'Database error: error returned from database: Index was outside the bounds of the array.; query: "SELECT id, name FROM users"';
-    // 단독 조건 보장 — describe 프레임이 섞이면 이 표본은 index needle 검증이 아니게 된다.
+    // Keep the condition standalone — with a describe frame mixed in, this
+    // sample would no longer test the index needle.
     expect(msg.toLowerCase()).not.toContain("connection::describe");
     expect(classifyDriverError(msg)?.category).toBe("introspectionFailed");
   });
 
-  // Reason: fail-open — 매핑 없는 원문은 그대로(null) 두고 억지 분류 금지 (2026-07-03).
+  // Reason: fail-open — leave unmapped raw text as it is (null) and do not
+  //         force a classification (2026-07-03).
   it("returns null for unmatched messages (fail-open)", () => {
     expect(classifyDriverError('syntax error at or near "SELCT"')).toBeNull();
     expect(classifyDriverError('relation "foo" does not exist')).toBeNull();

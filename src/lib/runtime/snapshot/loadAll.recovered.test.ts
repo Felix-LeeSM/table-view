@@ -1,9 +1,10 @@
-// 작성 2026-06-23 (v0.3.1) — boot 자동 복구 발생 시 frontend toast 검증.
+// Written 2026-06-23 (v0.3.1) — verifies the frontend toast when boot
+// auto-recovery runs.
 //
-// backend 가 `InitialAppState.recovered=true` 로 반환하면 (boot 중 state.db
-// body 손상 감지 → quarantine + fresh DB 복구), `loadAllFromSnapshot` 은
-// warning toast 로 사용자에게 알린다. `recovered=false` 면 미발화 — 정상 boot
-// 에서는 조용해야 한다.
+// When the backend returns `InitialAppState.recovered=true` (state.db body
+// corruption detected during boot → quarantine + recovery onto a fresh DB),
+// `loadAllFromSnapshot` tells the user with a warning toast. With
+// `recovered=false` nothing fires — a normal boot must stay quiet.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -67,8 +68,9 @@ describe("v0.3.1 boot recovery toast", () => {
   });
 });
 
-// #2183 — connections.json 이 사라졌다가 옆의 백업에서 돌아온 사건. 위의
-// `recovered` 와 같은 배선(boot flag → snapshot → toast)을 타지만 키가 따로다.
+// #2183 — connections.json went missing and came back from the backup beside
+// it. Same wiring as `recovered` above (boot flag → snapshot → toast), but a
+// separate key.
 describe("#2183 connections restored from backup toast", () => {
   beforeEach(() => {
     invokeMock.mockReset();

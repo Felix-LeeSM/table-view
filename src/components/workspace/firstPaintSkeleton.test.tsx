@@ -7,7 +7,7 @@ import MainArea from "@/components/layout/MainArea";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import WorkspaceSidebar from "./WorkspaceSidebar";
 
-// Sprint 270 (2026-05-13) — AC-270-03 swap-order regression.
+// AC-270-03 swap-order regression.
 //
 // Goal: assert the user never sees the post-hydrate empty surfaces
 // ("No connections yet" sidebar card, `EmptyState` welcome card) flash
@@ -41,9 +41,9 @@ vi.mock("@lib/zustand-ipc-bridge", () => ({
 }));
 
 vi.mock("@lib/window-label", async () => {
-  // sprint-366 (2026-05-16) — the hook + selector now import
-  // parseWorkspaceLabel/formatWorkspaceLabel from the same module, so the
-  // mock must surface them (use the real ones — they're pure string ops).
+  // The hook + selector import parseWorkspaceLabel/formatWorkspaceLabel
+  // from the same module, so the mock must surface them (use the real
+  // ones — they're pure string ops).
   const actual =
     await vi.importActual<typeof import("@lib/window-label")>(
       "@lib/window-label",
@@ -110,7 +110,6 @@ describe("First-paint skeleton swap-order (Sprint 270, AC-270-03)", () => {
     __resetMruStoreForTests();
   });
 
-  // Sprint 270 (2026-05-13)
   // AC-270-03 happy-path: delayed-resolve `listConnections` returning [].
   // At t=0 the sidebar skeleton must be present and the post-hydrate empty
   // card must be absent. After resolve, exact opposite: skeleton gone,
@@ -147,7 +146,6 @@ describe("First-paint skeleton swap-order (Sprint 270, AC-270-03)", () => {
     expect(screen.getByText(/no connections yet/i)).toBeInTheDocument();
   });
 
-  // Sprint 270 (2026-05-13)
   // AC-270-03 happy-path: main area equivalent. At t=0 the welcome-shaped
   // skeleton; after resolve the legacy `EmptyState` (logo wordmark).
   it("main area: skeleton at t=0, EmptyState after resolve — no flash of EmptyState pre-resolve", async () => {
@@ -181,7 +179,6 @@ describe("First-paint skeleton swap-order (Sprint 270, AC-270-03)", () => {
     expect(screen.getByAltText("Table View")).toBeInTheDocument();
   });
 
-  // Sprint 270 (2026-05-13)
   // AC-270-03 error branch — `loadConnections` rejecting still flips
   // `hasLoadedOnce`, so the skeleton must unmount. The post-hydrate
   // surface in this case is the same "No connections yet" empty card

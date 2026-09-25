@@ -7,12 +7,12 @@ import {
 
 describe("sqlSafety.analyzeStatement — AST read, DDL, and misc contracts", () => {
   // -------------------------------------------------------------------------
-  // Sprint 393a (2026-05-18) — AST-based SELECT classifier callsite.
+  // AST-based SELECT classifier callsite (2026-05-18).
   // SELECT widening (FROM-list / JOIN family / WHERE expression widening /
   // GROUP BY / HAVING / ORDER BY / LIMIT) routes through the AST and is
-  // classified as `kind:'select'` / `severity:'info'` / `reasons:[]`. The
-  // sprint-393a contract pins severity NOT to escalate for read-only joins /
-  // aggregations / paging — that decision is deferred to a later sprint.
+  // classified as `kind:'select'` / `severity:'info'` / `reasons:[]`. This
+  // block's contract (AC-393a-X) pins severity NOT to escalate for read-only
+  // joins / aggregations / paging — that decision is deferred.
   // -------------------------------------------------------------------------
   describe("Sprint 393a — AST-based SELECT widening classifier (AC-393a-X)", () => {
     usePreloadedSqlAst();
@@ -54,10 +54,10 @@ describe("sqlSafety.analyzeStatement — AST read, DDL, and misc contracts", () 
     });
 
     it("[AC-393a-X04] existing sqlSafety tests regress to zero — SELECT path stays info", () => {
-      // Spot-check the pre-sprint-393a SELECT inputs route through AST
+      // Spot-check that the pre-existing SELECT inputs route through AST
       // and stay classified the same way as the regex path did. The full
-      // regression-zero guarantee is pinned by the other AC-185 / AC-254
-      // cases above (which run without preload).
+      // regression-zero guarantee is pinned by the AC-185 / AC-254 cases
+      // in `sqlSafety.test.ts` (which run without preload).
       expect(analyzeStatement("SELECT * FROM users").severity).toBe("info");
       expect(
         analyzeStatement("SELECT id, name FROM users WHERE id = 1").severity,
@@ -73,7 +73,7 @@ describe("sqlSafety.analyzeStatement — AST read, DDL, and misc contracts", () 
   });
 
   // -------------------------------------------------------------------------
-  // Sprint 393b — AST-based SELECT widening 2 + CTE wrap classifier
+  // AST-based SELECT widening 2 + CTE wrap classifier
   // (AC-393b-X). The classifier inherits the inner statement's
   // classification (D1/D2) when the top-level kind is `with`.
   // -------------------------------------------------------------------------
@@ -109,7 +109,7 @@ describe("sqlSafety.analyzeStatement — AST read, DDL, and misc contracts", () 
       expect(a.kind).toBe("dml-update");
       expect(a.severity).toBe("danger");
       // Per D2, the reasons list is the inner statement's reasons,
-      // unchanged (verbatim). The sprint-392 "UPDATE without WHERE clause"
+      // unchanged (verbatim). The "UPDATE without WHERE clause" reason
       // surfaces.
       expect(a.reasons).toContain("UPDATE without WHERE clause");
     });
@@ -151,12 +151,12 @@ describe("sqlSafety.analyzeStatement — AST read, DDL, and misc contracts", () 
   });
 
   // -------------------------------------------------------------------------
-  // Sprint 394 (2026-05-18) — AST-based DDL additive classifier callsite.
-  // Pre-condition: WASM module preloaded (the mock above produces
-  // create-table / create-index / create-view / alter-table-additive
-  // shapes). Every case asserts the documented (kind, severity, reasons)
-  // triple. Reason strings are pinned per D2 — reviewers must reject
-  // silent rewording.
+  // AST-based DDL additive classifier callsite (2026-05-18).
+  // Pre-condition: WASM module preloaded (the mock in
+  // `sqlSafetyTestHarness.ts` produces create-table / create-index /
+  // create-view / alter-table-additive shapes). Every case asserts the
+  // documented (kind, severity, reasons) triple. Reason strings are pinned
+  // per D2 — reviewers must reject silent rewording.
   // -------------------------------------------------------------------------
   describe("Sprint 394 — AST-based DDL additive classifier (AC-394-X)", () => {
     usePreloadedSqlAst();
@@ -225,7 +225,7 @@ describe("sqlSafety.analyzeStatement — AST read, DDL, and misc contracts", () 
 
     it("[AC-394-X09] CREATE FUNCTION falls back to regex (ddl-create / info — D3 fallback contract)", () => {
       // The AST parser surfaces SyntaxError for CREATE FUNCTION (out of
-      // scope this sprint). The classifier falls back to the regex path
+      // scope). The classifier falls back to the regex path
       // which classifies `^CREATE\b` as `ddl-create` / info. The regex
       // path matches the AST classification for parity.
       const a = analyzeStatement(
@@ -236,8 +236,8 @@ describe("sqlSafety.analyzeStatement — AST read, DDL, and misc contracts", () 
     });
 
     it("[AC-394-X10] existing sqlSafety regression — DROP TABLE still danger via AST", () => {
-      // Sanity — adding the sprint-394 branches must not regress the
-      // sprint-391 DDL destructive classifier.
+      // Sanity — adding the DDL additive branches must not regress the
+      // DDL destructive classifier.
       const a = analyzeStatement("DROP TABLE users");
       expect(a.kind).toBe("ddl-drop");
       expect(a.severity).toBe("danger");
@@ -277,23 +277,24 @@ describe("sqlSafety.analyzeStatement — AST read, DDL, and misc contracts", () 
       const a = analyzeStatement("EXPLAIN DELETE FROM users");
       expect(a.kind).toBe("dml-delete");
       expect(a.severity).toBe("danger");
-      // The sprint-392 "WHERE 없는 DELETE" string passes through verbatim.
+      // The "DELETE without WHERE clause" reason passes through verbatim.
       expect(a.reasons).toContain("DELETE without WHERE clause");
     });
 
     it("[AC-395-X05] EXPLAIN ANALYZE UPDATE WHERE → update / danger (sprint-392 baseline) — inherits inner", () => {
-      // Sprint-392 baseline classifies bare UPDATE WHERE as `update` /
-      // `danger` when AST parses but the WHERE is in `unsupported-
-      // expression` territory (`x.a > 0` qualified-column comparison was
-      // not in sprint-392's narrow WHERE). Sprint-393b widened that —
-      // qualified-column WHERE now parses, so the analysis returns
-      // `update` / `warn` (bounded). EXPLAIN inherits per D1. We assert
-      // the kind + severity; reasons are empty when WHERE is present.
+      // The baseline named in the test title classifies bare UPDATE WHERE
+      // as `update` / `danger` when AST parses but the WHERE is in
+      // `unsupported-expression` territory (`x.a > 0` qualified-column
+      // comparison was not in that baseline's narrow WHERE). The widening
+      // tested by the AC-393b-X block above changed that — qualified-column
+      // WHERE now parses, so the analysis returns `update` / `warn`
+      // (bounded). EXPLAIN inherits per D1. We assert the kind + severity;
+      // reasons are empty when WHERE is present.
       const a = analyzeStatement(
         "EXPLAIN ANALYZE UPDATE users SET a = 1 WHERE id = 1",
       );
       expect(a.kind).toBe("dml-update");
-      // Bounded UPDATE WHERE — sprint-393b classifies as `warn`.
+      // Bounded UPDATE WHERE classifies as `warn`.
       expect(a.severity).toBe("warn");
       expect(a.reasons).toEqual([]);
     });
@@ -343,8 +344,8 @@ describe("sqlSafety.analyzeStatement — AST read, DDL, and misc contracts", () 
     });
 
     it("[AC-395-X12] existing regression — DROP TABLE still danger via AST", () => {
-      // Sanity — adding the sprint-395 branches must not regress the
-      // sprint-391 DDL destructive classifier.
+      // Sanity — adding the misc grammar branches must not regress the
+      // DDL destructive classifier.
       const a = analyzeStatement("DROP TABLE users");
       expect(a.kind).toBe("ddl-drop");
       expect(a.severity).toBe("danger");

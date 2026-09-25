@@ -13,7 +13,7 @@ import {
 } from "./DataGridTable.perfFixtures";
 
 /**
- * Sprint-114 (#PERF-1, #GRID-3) — virtualization regression tests.
+ * #PERF-1, #GRID-3 — virtualization regression tests.
  *
  * jsdom returns 0 for `offsetWidth`/`offsetHeight` on every element, which
  * makes `@tanstack/react-virtual` think the scroll container has no
@@ -244,13 +244,12 @@ describe("DataGridTable virtualization (sprint-114)", () => {
 // `ROW_HEIGHT_ESTIMATE` knows to revisit these test thresholds.
 void ROW_HEIGHT;
 
-// Sprint 349 (2026-05-15) — virtualized branch master/detail row gap was
-// the third Sprint 343 deferred item. The virtualizer assumes uniform
-// row heights; opening the inline JSON tree adds a variable-height
-// detail row that the virtualizer can't measure cleanly. The minimal
-// fix is to disable virtualization while `expandedNested` is set so the
-// non-virtualized branch (which already renders the master/detail row)
-// takes over. On close, virtualization resumes on the next paint.
+// The virtualizer assumes uniform row heights; opening the inline JSON tree
+// adds a variable-height detail row that the virtualizer can't measure
+// cleanly. The minimal fix is to disable virtualization while
+// `expandedNested` is set so the non-virtualized branch (which already
+// renders the master/detail row) takes over. On close, virtualization
+// resumes on the next paint.
 describe("DataGridTable virtualization + inline tree (Sprint 349)", () => {
   beforeEach(() => {
     Object.defineProperty(HTMLElement.prototype, "offsetWidth", {

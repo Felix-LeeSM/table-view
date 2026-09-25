@@ -11,7 +11,7 @@
  * three existing mechanisms already reset it on cold boot —
  *   1. `connectToDatabase` seeds `activeDb = connection.database` (store.ts),
  *      backed by the backend `connect` seeding `active_db = config.database`.
- *   2. The retired Sprint 143 durable `activeDb` persist (AC-148-4) means no
+ *   2. The retired durable `activeDb` persist (AC-148-4) means no
  *      last-db value survives a reconnect.
  *   3. Session-scoped localStorage is keyed by a per-process session UUID
  *      (`AppState::new()` → `Uuid::new_v4()`), so `hydrateFromSession`
@@ -19,7 +19,7 @@
  * The persisted workspace map is the only durable "last db" carrier, and it is
  * NEVER consulted to pick the active db — `hydrateWorkspacesFromSnapshot` just
  * stores every `(connId, db)` cell. These tests pin that invariant so a future
- * re-introduction of durable last-db restoration (the exact Sprint 143
+ * re-introduction of durable last-db restoration (the exact
  * temptation the reporter feared) cannot silently break decision A.
  */
 import { renderHook } from "@testing-library/react";

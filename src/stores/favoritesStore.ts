@@ -30,20 +30,18 @@ export type FavoriteScope = "all" | "global" | "connection";
 // IPC persistence
 // ---------------------------------------------------------------------------
 //
-// Sprint 370 (Phase 4 W2→W3) — backend SQLite is the single SOT. The
-// hand-rolled `table-view-favorites` localStorage persistence is retired
-// (sprint-370 AC-370-04). Every mutate path now serializes the full list
-// and ships it through `persist_favorites` IPC; boot hydration reads the
-// canonical list back via `list_favorites`.
+// Backend SQLite is the single SOT. The hand-rolled `table-view-favorites`
+// localStorage persistence is retired (AC-370-04). Every mutate path now
+// serializes the full list and ships it through `persist_favorites` IPC;
+// boot hydration reads the canonical list back via `list_favorites`.
 //
 // The IPC fire-and-forget mirrors the previous LS write semantics — the
 // store mutates synchronously so the UI surface stays optimistic. #1092 —
-// SQLite is the single SOT after the W3 cut with no file/LS fallback and
-// no wired boot reconcile, so a swallowed write is lost on the next boot.
-// A reject now surfaces a dev log AND an error toast so the user knows the
-// change did not persist. A reject does NOT roll the store back today
-// (the legacy LS path could not either); per-action rollback waits for a
-// future sprint once event/state-changed lands for favorites.
+// SQLite is the single SOT with no file/LS fallback and no wired boot
+// reconcile, so a swallowed write is lost on the next boot. A reject now
+// surfaces a dev log AND an error toast so the user knows the change did
+// not persist. A reject does NOT roll the store back today (the legacy LS
+// path could not either).
 
 function toPersistPayload(
   favorites: FavoriteQuery[],
@@ -89,7 +87,7 @@ interface FavoritesState {
   ) => void;
   getFavorites: (connectionId: string | null) => FavoriteQuery[];
   /**
-   * Sprint 370 — hydrate from SQLite via `list_favorites` IPC. Previously
+   * Hydrate from SQLite via `list_favorites` IPC. Previously
    * read from `table-view-favorites` localStorage; the LS path is now
    * retired and the snapshot IPC (`get_initial_app_state`) does not carry
    * favorites (lazy mount-time IPC by contract), so this entrypoint is the
@@ -110,15 +108,13 @@ export const SYNCED_KEYS: ReadonlyArray<keyof FavoritesState> = [
 let favoriteCounter = 0;
 
 /**
- * Sprint 375 (Phase 6 cleanup, 2026-05-17) — test-only escape hatch for
- * the module-scope `favoriteCounter`. The counter is intentionally
- * module-scope (not Zustand state) so the seed walk in
- * `loadPersistedFavorites` can ratchet it monotonically without going
- * through a `setState` round-trip; that means `useFavoritesStore.setState(
- * { favorites: [] })` cannot reset it back to zero for the next test.
- * Mirrors `__resetCountersForTests` in `workspaceStore.ts` (sprint-354)
- * and `__resetDocumentStoreForTests` in `documentStore.ts`. Namespaced
- * `__` to flag intent.
+ * Test-only escape hatch for the module-scope `favoriteCounter`. The
+ * counter is intentionally module-scope (not Zustand state) so the seed
+ * walk in `loadPersistedFavorites` can ratchet it monotonically without
+ * going through a `setState` round-trip; that means
+ * `useFavoritesStore.setState({ favorites: [] })` cannot reset it back to
+ * zero for the next test. Same pattern as `__resetCountersForTests`
+ * (`workspaceStore/shared.ts`).
  */
 export function __resetFavoriteCounterForTests(): void {
   favoriteCounter = 0;

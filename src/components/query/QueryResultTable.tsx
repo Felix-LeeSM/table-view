@@ -86,11 +86,12 @@ export function QueryResultTable({
     onCommitWidth: setWidth,
   });
 
-  // issue #1130 — read-only 결과도 role="grid" 를 유지하되 셀 키보드 nav 를
-  // 배선한다. AC4 는 role="table" 강등을 허용하나, (1) 같은 router 뒤의
-  // EditableQueryResultGrid 와의 일관성, (2) 강등 시 double-click(마우스) 전용이
-  // 되는 cell-detail 을 Enter/F2 로 키보드 개방, (3) e2e grid-text 헬퍼가 read-
-  // only 결과의 role="grid" 를 기대하는 회귀 회피를 위해 grid 를 유지한다.
+  // issue #1130 — read-only results keep role="grid" and wire up cell
+  // keyboard nav. AC4 allows demoting to role="table", but grid stays for
+  // (1) consistency with EditableQueryResultGrid behind the same router,
+  // (2) opening cell-detail with Enter/F2 — demotion would leave it
+  // double-click (mouse) only, and (3) avoiding the regression where the e2e
+  // grid-text helper expects role="grid" on read-only results.
   const openCellDetail = useCallback(
     (rowIdx: number, cellIdx: number) => {
       const col = result.columns[cellIdx];
@@ -104,25 +105,28 @@ export function QueryResultTable({
     [result.columns, result.rows],
   );
 
-  // Issue #1442 — 대용량 SQL 결과 DOM 폭증 방어. DataGridTable 과 같은
-  // threshold/행높이/overscan 으로 가상화한다. threshold 이하는 기존 전량
-  // 렌더 경로를 유지해 소규모 결과의 동작(및 기존 테스트 계약)이 변하지
-  // 않는다.
+  // Issue #1442 — guards against DOM blow-up on large SQL results.
+  // Virtualizes with the same threshold/row height/overscan as
+  // DataGridTable. Below the threshold the existing render-everything path
+  // stays, so small results (and the existing test contract) do not change.
   const shouldVirtualize = result.rows.length > VIRTUALIZE_THRESHOLD;
   const rowVirtualizer = useVirtualizer({
     count: shouldVirtualize ? result.rows.length : 0,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: () => ROW_HEIGHT_ESTIMATE,
-    // DataGridTable 과 동일 근거(#1295) — 빠른 scrollbar drag 의 blank flash 방지.
+    // Same reason as DataGridTable (#1295) — avoids the blank flash on a
+    // fast scrollbar drag.
     overscan: 24,
   });
 
-  // #1477 review B2 — 스크롤 리셋은 "새 쿼리" 에만. 같은 SQL 재조회(예:
-  // editable 경로의 commit 후 재실행과 대칭)는 result identity 만 바뀌므로
-  // 위치를 보존한다 (DataGridTable #1369 의 executed_query deps 와 같은
-  // 근거). `sql` 을 deps 에 넣지 않는 이유: document 결과의 fallback 은 live
-  // editor 텍스트라 타이핑마다 바뀐다 — result 교체 시점에만 비교한다.
-  // `rowVirtualizer` 는 매 렌더 새 객체라 deps 에 넣으면 매 렌더 리셋된다.
+  // #1477 review B2 — scroll resets only on a "new query". Re-running the
+  // same SQL (e.g. the symmetric re-execute after a commit on the editable
+  // path) changes only the result identity, so the position is preserved
+  // (same reason as the executed_query deps in DataGridTable #1369). `sql`
+  // is left out of the deps because the fallback for document results is the
+  // live editor text and changes on every keystroke — compare only when the
+  // result is replaced. `rowVirtualizer` is a fresh object each render, so
+  // listing it in the deps would reset on every render.
   const lastResetSqlRef = useRef(sql);
   useEffect(() => {
     const isNewQuery = sql === undefined || lastResetSqlRef.current !== sql;
@@ -149,8 +153,9 @@ export function QueryResultTable({
     },
   );
 
-  // 가상/비가상 branch 가 같은 행 JSX 를 공유한다. 가상 branch 는
-  // DataGridTable 패턴 그대로 absolute-position + 고정 높이 행.
+  // The virtual and non-virtual branches share the same row JSX. The virtual
+  // branch uses absolute-position + fixed-height rows, the DataGridTable
+  // pattern.
   const renderRow = (
     row: unknown[],
     rowIdx: number,
@@ -181,8 +186,9 @@ export function QueryResultTable({
             className="flex min-w-0 cursor-pointer items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground"
             title={`${formatCell(cell)}\n\n(double-click to expand)`}
             onKeyDown={(e) => {
-              // issue #1130 — Enter/F2 로 focus 된 cell 의 detail 열기
-              // (double-click 의 키보드 등가물). 읽기 전용이라 편집은 없음.
+              // issue #1130 — Enter/F2 opens the detail of the focused cell
+              // (keyboard equivalent of double-click). Read-only, so no
+              // editing.
               if (e.key !== "Enter" && e.key !== "F2") return;
               e.preventDefault();
               e.stopPropagation();

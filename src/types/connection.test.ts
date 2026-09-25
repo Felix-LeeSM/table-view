@@ -94,9 +94,10 @@ describe("createEmptyDraft", () => {
     expect(conn.paradigm).toBe("rdb");
   });
 
-  // Sprint 345 (2026-05-15) — createEmptyDraft 의 dbType 이 postgresql 이라
-  // database 도 PG default ('postgres') 로 prefill. 사용자가 폼 열자마자
-  // submit 해도 빈 database 가 backend 로 가지 않는다.
+  // 2026-05-15 — createEmptyDraft's dbType is postgresql, so database is
+  // prefilled with the PG default ('postgres') too. Even if the user submits
+  // right after opening the form, an empty database does not reach the
+  // backend.
   it("prefills database with PG default for the initial postgresql draft", () => {
     const conn = createEmptyDraft();
     expect(conn.database).toBe("postgres");
@@ -143,10 +144,11 @@ describe("parseConnectionUrl paradigm tagging (Sprint 65)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Sprint 178 — Postel's Law scheme aliases (mongodb+srv, mariadb) + edge
-// cases (encoded password regression, IPv6 host preservation, malformed
-// URL → null contract). Each test names its AC + a date so future readers
-// can trace the rationale (per feedback_test_documentation.md, 2026-04-28).
+// Postel's Law scheme aliases (mongodb+srv, mariadb) + edge cases (encoded
+// password regression, IPv6 host preservation, malformed URL → null
+// contract). The AC-178 cases name their AC (most with a date) so future
+// readers can trace the rationale (per feedback_test_documentation.md,
+// 2026-04-28).
 // ---------------------------------------------------------------------------
 describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
   // AC-178-01 (parser leg) — Mongo SRV transport. Frontend preserves the
@@ -296,7 +298,7 @@ describe("parseConnectionUrl Sprint 178 scheme aliases + edge cases", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Sprint 138 — DBMS-aware defaults + SQLite path fallback
+// DBMS-aware defaults + SQLite path fallback
 // ---------------------------------------------------------------------------
 describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
   it("PG defaults: port=5432, user=postgres, database=postgres", () => {
@@ -307,9 +309,11 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
     });
   });
 
-  // Sprint 345 (2026-05-15) — MySQL/Mongo database default 추가 (이전엔 ''
-  // 였음). 빈 채로 connect 시 surprise UX 가 발생해 paradigm 별 system db
-  // 로 prefill. 사용자가 수정 가능. ConnectionDialog 는 빈 submit 도 reject.
+  // 2026-05-15 — MySQL/Mongo gained a database default (previously '').
+  // Connecting with it blank caused a surprise UX, so it is prefilled with
+  // each paradigm's system db. The user can edit it. ConnectionDialog also
+  // rejects a blank submit for RDB connections; MongoDB connections do not
+  // require a database (`validateConnectionDraft`).
   it("MySQL defaults: port=3306, user=root, database='mysql'", () => {
     expect(DATABASE_DEFAULT_FIELDS.mysql).toEqual({
       port: 3306,
@@ -358,8 +362,9 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
     });
   });
 
-  // Sprint 345 (2026-05-15) — Mongo default 가 'admin'. Mongo native 의
-  // system db 라 어디든 항상 존재하고, DbSwitcher 가 runtime swap.
+  // 2026-05-15 — Mongo defaults to 'admin'. It is Mongo's native system db,
+  // so it always exists on any deployment, and DbSwitcher swaps it at
+  // runtime.
   it("Mongo defaults: port=27017, user='', database='admin'", () => {
     expect(DATABASE_DEFAULT_FIELDS.mongodb).toEqual({
       port: 27017,
@@ -398,9 +403,9 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Sprint 276 / 281 — legacy connection 생성 allow-list. Current profile
-// support source 는 `DATA_SOURCE_PROFILES` 이고, connection 생성 UI 노출은
-// `capabilities.connection.test` 와 이 list 가 정렬되어야 한다.
+// Legacy connection-creation allow-list. The current profile support source
+// is `DATA_SOURCE_PROFILES`, and for connection-creation UI exposure
+// `capabilities.connection.test` and this list must stay aligned.
 // Date 2026-05-13.
 // ---------------------------------------------------------------------------
 describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
@@ -437,8 +442,8 @@ describe("SUPPORTED_DATABASE_TYPES (Sprint 281)", () => {
   });
 
   it("DATABASE_TYPE_LABELS covers every DatabaseType variant", () => {
-    // 모든 variant 에 라벨이 있어야 한다 — unsupported 어댑터의 거부
-    // 메시지에서도 사용되므로.
+    // Every variant needs a label — labels are also used in the rejection
+    // message for an unsupported adapter.
     expect(DATABASE_TYPE_LABELS.postgresql).toBe("PostgreSQL");
     expect(DATABASE_TYPE_LABELS.mysql).toBe("MySQL");
     expect(DATABASE_TYPE_LABELS.mariadb).toBe("MariaDB");

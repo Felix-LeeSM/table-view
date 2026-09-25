@@ -13,16 +13,20 @@ import { useTranslation } from "react-i18next";
  * drops the sidebar column whole.
  *
  * Icon only, no caption: the toolbar's convention for its controls (frontend
- * guidance "버튼은 가능한 lucide icon + tooltip", as `LayoutCluster` already
- * follows). The old rail already dropped the caption when collapsed, so the
- * accessible name — not the visible text — is what anything ever bound to.
+ * guidance "buttons are a lucide icon + tooltip where possible" in
+ * `memory/engineering/conventions/frontend/memory.md`, as `LayoutCluster`
+ * already follows). The old rail already dropped the caption when collapsed,
+ * so the accessible name — not the visible text — is what anything ever
+ * bound to.
  *
  * Back ≠ Disconnect. This focuses the launcher and destroys *this* window; the
  * connection pool outlives it, and `DisconnectButton` is the only control that
- * tears the pool down. `destroyCurrentWindow` is `win.destroy()` rather than
- * `win.close()` so the `tauri://close-requested` lifecycle is bypassed
+ * tears the pool down. `destroyCurrentWindow` destroys the window (backend
+ * `Window::destroy()` through `invoke("workspace_close")`) rather than calling
+ * `win.close()`, so the `tauri://close-requested` lifecycle is bypassed
  * entirely — the reasoning lives in `src/lib/window-controls.ts` and in the
- * Wave 9.5 회귀 4 note on `WorkspacePage`.
+ * `WorkspacePage` lifecycle note on having no `tauri://close-requested`
+ * listener.
  *
  * i18n: the `pages` namespace, not `workspace`. `pages.backToConnections` is
  * the exact string the e2e smoke helpers pin as the marker for "this window is

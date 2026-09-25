@@ -25,12 +25,11 @@ export interface MruEntry {
  * Holds an ordered list of up to 5 entries. `lastUsedConnectionId` is a
  * derived view of `recentConnections[0]` kept for backward compat.
  *
- * Sprint 370 (Phase 4 W2→W3) — `table-view-mru` LS read/write retired.
+ * The `table-view-mru` LS read/write is retired.
  * Boot hydration arrives via the snapshot IPC (`get_initial_app_state`)
  * and every mutate ships through `persist_mru` to keep SQLite truth in
  * sync. `loadPersistedMru` is now a no-op so existing call sites in
- * `App.tsx` / `AppRouter.tsx` keep compiling but emit zero IPC + LS work;
- * sprint-375 removes the call sites entirely.
+ * `App.tsx` / `AppRouter.tsx` keep compiling but emit zero IPC + LS work.
  */
 
 const MAX_ENTRIES = 5;
@@ -43,7 +42,7 @@ function toPersistPayload(entries: MruEntry[]): PersistMruPayload[] {
 }
 
 function persistMruList(entries: MruEntry[]): void {
-  // Sprint 370 — fire-and-forget IPC mirror. Store mutates synchronously.
+  // Fire-and-forget IPC mirror. Store mutates synchronously.
   // #1092 — SQLite is the SOT with no file/LS fallback and no wired boot
   // reconcile (the boot mismatch metric is observation-only and does NOT
   // heal drift), so a failed write is lost on the next boot; surface a dev
@@ -56,7 +55,7 @@ function persistMruList(entries: MruEntry[]): void {
 }
 
 /**
- * Sprint 376 (Phase 6 Q21 #8) — backend `clear_mru` IPC dispatch.
+ * Backend `clear_mru` IPC dispatch (Q21 #8).
  * Truncates the SQLite `mru` table and emits `state-changed
  * { domain:"mru", op:"bulk", entityId:null }` so every window's
  * `RecentConnections` panel converges to empty. Fire-and-forget — store
@@ -77,17 +76,15 @@ interface MruState {
 
   markConnectionUsed: (id: string) => void;
   /**
-   * Sprint 290 — remove a single entry from the Recent rail. Persists the
-   * shortened list synchronously. `lastUsedConnectionId` is recomputed
-   * from the new head so a future Sprint that resurrects this derived
-   * pointer stays consistent.
+   * Remove a single entry from the Recent rail. Persists the shortened
+   * list. `lastUsedConnectionId` is recomputed from the new head so the
+   * derived pointer stays consistent.
    */
   removeRecentConnection: (id: string) => void;
   /**
-   * Sprint 376 (Phase 6 Q21 #8) — "Clear recent" affordance. Drops every
-   * entry locally + dispatches `clear_mru` IPC so the SQLite `mru` table
-   * is truncated and every other window receives `state-changed
-   * mru.bulk` (frontend dispatcher applies the empty array on receive).
+   * "Clear recent" affordance (Q21 #8). Drops every entry locally +
+   * dispatches `clear_mru` IPC so the SQLite `mru` table is truncated and
+   * every other window receives `state-changed mru.bulk`.
    */
   clearRecentConnections: () => void;
   hydrateMruFromSnapshot: (
@@ -95,10 +92,9 @@ interface MruState {
     lastUsedConnectionId: string | null,
   ) => void;
   /**
-   * Sprint 370 — no-op. Snapshot IPC (`loadAllFromSnapshot`) is the sole
+   * No-op. Snapshot IPC (`loadAllFromSnapshot`) is the sole
    * hydration path; this function survives only so existing call sites
-   * in `App.tsx` / `AppRouter.tsx` keep compiling. Sprint-375 removes
-   * the call sites and the function alongside.
+   * in `App.tsx` / `AppRouter.tsx` keep compiling.
    */
   loadPersistedMru: () => void;
 }
@@ -128,7 +124,7 @@ export const useMruStore = create<MruState>((set) => ({
         { connectionId: id, lastUsed: now },
         ...filtered,
       ].slice(0, MAX_ENTRIES);
-      // Persist via IPC — SQLite is the SOT after W3 cut.
+      // Persist via IPC — SQLite is the SOT.
       persistMruList(updated);
       return {
         recentConnections: updated,
@@ -178,7 +174,7 @@ export const useMruStore = create<MruState>((set) => ({
     // Snapshot IPC hydrates `recentConnections` + `lastUsedConnectionId`
     // before any consumer mounts. This function is a no-op kept for
     // backward compatibility with the boot effect call sites; the LS
-    // `table-view-mru` read is retired (sprint-370 AC-370-05).
+    // `table-view-mru` read is retired (AC-370-05).
   },
 }));
 
@@ -199,7 +195,7 @@ void attachZustandIpcBridge<MruState>(useMruStore, {
 
 /**
  * Reset hook for tests. Wipes the in-memory state so a single test cannot
- * leak MRU into the next. Sprint 370 — LS removal means the only state
+ * leak MRU into the next. LS removal means the only state
  * worth resetting lives in the zustand store.
  */
 export function __resetMruStoreForTests(): void {

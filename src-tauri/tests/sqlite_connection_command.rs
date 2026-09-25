@@ -60,8 +60,9 @@ fn setup() -> TempDir {
     dir
 }
 
-/// #1449 — connect/create 가드가 app data dir 전체를 거부하므로, user DB
-/// 파일 fixture 는 data dir (`setup()` 의 TempDir) 밖의 별도 TempDir 에 둔다.
+/// #1449 — the connect/create guard rejects the whole app data dir, so the
+/// user DB file fixture lives in its own TempDir outside the data dir
+/// (`setup()`'s TempDir).
 fn user_db_dir() -> TempDir {
     TempDir::new().unwrap()
 }

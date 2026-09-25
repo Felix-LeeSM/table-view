@@ -1,9 +1,11 @@
-// #1217 — 사이드바 조망. 4개 AC 의 user-journey 검증:
-//   1. 첫 스키마만 펼침 (신규 시드) + persist 존중.
-//   2. 스키마 노드 테이블 수 배지 (접힘 상태에서도 조망).
-//   3. 전역 필터 — 전 스키마 대상, 매치 자동 펼침, views/functions 포함.
-//   4. flat(SQLite)/no-schema(MySQL) 동일 필터 UX.
-// mock 은 lib boundary (schema store actions) 만; 렌더는 실제 SchemaTree.
+// #1217 — sidebar overview. User-journey checks for 4 ACs:
+//   1. Only the first schema expands (fresh seed) + persist respected.
+//   2. Table-count badge on the schema node (readable while collapsed).
+//   3. Global filter — every schema, matches auto-expand, views/functions
+//      included.
+//   4. flat(SQLite)/no-schema(MySQL) share one filter UX.
+// Mocks stop at the lib boundary (schema store actions); the render is the
+// real SchemaTree.
 
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
@@ -44,7 +46,7 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
     resetStores();
   });
 
-  // ── AC1 — 첫 스키마만 펼침 (신규 시드) ─────────────────────────────────
+  // ── AC1 — only the first schema expands (fresh seed) ─────────────────────
   it("seeds only the first schema expanded on a fresh workspace", async () => {
     setSchemaStoreState({
       schemas: {
@@ -80,7 +82,7 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
     ).toEqual(["public"]);
   });
 
-  // ── AC1 — persist 된 펼침 상태 존중 ────────────────────────────────────
+  // ── AC1 — persisted expansion state is respected ─────────────────────────
   it("respects a persisted expansion instead of re-seeding the first schema", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }, { name: "analytics" }] },
@@ -91,7 +93,7 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
         ],
       },
     });
-    // 사용자가 이전 세션에서 analytics 만 펼쳐둔 상태 (public 접힘).
+    // The user left only analytics expanded last session (public collapsed).
     useWorkspaceStore.getState().setExpanded("conn1", "db1", ["analytics"]);
 
     await act(async () => {
@@ -108,9 +110,10 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
     );
   });
 
-  // ── AC1 — 전부 접음 → 재시작(dehydrate/rehydrate) → 여전히 접힘 ──────────
-  // seed 가드가 "한 번도 seed 안 됨(null)" 과 "사용자가 전부 접음([])" 을
-  // 구분하는지 — persisted `[]` 가 재-seed 로 덮이면 안 된다.
+  // ── AC1 — collapse all → restart (dehydrate/rehydrate) → still collapsed ─
+  // Whether the seed guard separates "never seeded (null)" from "the user
+  // collapsed everything ([])" — a persisted `[]` must not be overwritten by a
+  // re-seed.
   it("does not re-seed after the user collapses every schema, dehydrate/rehydrate round-trip", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }, { name: "analytics" }] },
@@ -125,12 +128,12 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
     const view = await act(async () =>
       render(<SchemaTree connectionId="conn1" />),
     );
-    // fresh seed → 첫 스키마(public)만 펼침.
+    // fresh seed → only the first schema (public) is expanded.
     expect(
       useWorkspaceStore.getState().workspaces.conn1?.db1?.sidebar.expanded,
     ).toEqual(["public"]);
 
-    // 사용자가 유일하게 펼친 스키마를 접음 → expanded === [].
+    // The user collapses the only expanded schema → expanded === [].
     await act(async () => {
       fireEvent.click(screen.getByLabelText("public schema"));
     });
@@ -138,8 +141,8 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
       useWorkspaceStore.getState().workspaces.conn1!.db1!.sidebar.expanded,
     ).toEqual([]);
 
-    // 앱 재시작 시뮬레이션: dehydrate → JSON round-trip → migrate(fresh
-    // rehydrate). `[]` 가 array 로 살아남아야 (null 로 강등되면 재-seed 됨).
+    // Simulate an app restart: dehydrate → JSON round-trip → migrate(fresh
+    // rehydrate). `[]` must survive as an array (demoted to null it re-seeds).
     const ws = useWorkspaceStore.getState().workspaces.conn1!.db1!;
     const raw = JSON.parse(JSON.stringify({ conn1: { db1: dehydrate(ws) } }));
     const rehydrated = migrateLoadedWorkspaces(raw);
@@ -149,7 +152,7 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
     });
     useWorkspaceStore.setState({ workspaces: rehydrated });
 
-    // 새 세션(새 컴포넌트 인스턴스, 새 session ref) — 재-seed 하면 안 됨.
+    // New session (new component instance, new session ref) — must not re-seed.
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
     });
@@ -166,7 +169,7 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
     ).toEqual([]);
   });
 
-  // ── AC2 — 테이블 수 배지 (접힌 상태에서도 조망) ─────────────────────────
+  // ── AC2 — table-count badge (readable while collapsed) ───────────────────
   it("shows a table-count badge on each schema node, visible while collapsed", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }, { name: "analytics" }] },
@@ -190,13 +193,14 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
     const publicRow = screen.getByLabelText("public schema");
     expect(publicRow).toHaveTextContent("2");
 
-    // analytics 는 접혀 있어도 (첫 스키마만 펼침) 테이블 수가 보여야 조망 가능.
+    // analytics is collapsed (only the first schema expands), but its table
+    // count must still be visible.
     const analyticsRow = screen.getByLabelText("analytics schema");
     expect(analyticsRow).toHaveAttribute("aria-expanded", "false");
     expect(analyticsRow).toHaveTextContent("3");
   });
 
-  // ── AC3 — 전역 필터 (전 스키마, 매치 자동 펼침, views 포함) ──────────────
+  // ── AC3 — global filter (every schema, matches auto-expand, views) ───────
   it("global filter matches across schemas, auto-expands matches, includes views", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }, { name: "analytics" }] },
@@ -229,19 +233,19 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
       fireEvent.change(filter, { target: { value: "user" } });
     });
 
-    // public.users 매치 → public 펼쳐지고 users 보임.
+    // public.users matches → public expands and users shows.
     expect(screen.getByLabelText("users table")).toBeInTheDocument();
-    // analytics 는 접혀 있었지만 view 매치로 자동 펼침 → view 보임.
+    // analytics was collapsed but auto-expands on the view match → view shows.
     expect(screen.getByLabelText("user_activity view")).toBeInTheDocument();
-    // 비매치는 숨김.
+    // Non-matches are hidden.
     expect(screen.queryByLabelText("orders table")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("events table")).not.toBeInTheDocument();
 
-    // 필터 후에도 트리 구조 (roving/treeitem) 유지 — AC5.
+    // The tree structure (roving/treeitem) survives the filter — AC5.
     expect(screen.getByRole("tree")).toBeInTheDocument();
   });
 
-  // ── AC4 — flat(SQLite) 동일 필터 UX ────────────────────────────────────
+  // ── AC4 — flat(SQLite) has the same filter UX ────────────────────────────
   it("SQLite flat tree filters tables with the same global filter", async () => {
     useConnectionStore.setState({ connections: [makeConn("sl1", "sqlite")] });
     useConnectionStore.setState((s) => ({
@@ -275,7 +279,7 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
     expect(screen.queryByLabelText("settings table")).not.toBeInTheDocument();
   });
 
-  // ── AC3 — 필터가 function 도 매칭 (views/functions 포함 계약) ────────────
+  // ── AC3 — the filter matches functions too (views/functions contract) ────
   it("global filter matches functions and auto-expands the Functions category", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
@@ -306,15 +310,16 @@ describe("SchemaTree — sidebar overview (#1217)", () => {
       fireEvent.change(filter, { target: { value: "user" } });
     });
 
-    // Functions 카테고리는 기본 접힘이지만 매치로 강제 펼침 → 함수 row 보임.
+    // The Functions category defaults to collapsed, but a match forces it open
+    // → the function row shows.
     expect(
       screen.getByLabelText("calc_user_total function"),
     ).toBeInTheDocument();
-    // 비매치 table 은 숨김.
+    // Non-matching tables are hidden.
     expect(screen.queryByLabelText("orders table")).not.toBeInTheDocument();
   });
 
-  // ── AC4 — 매치 없을 때 placeholder (blank pane 방지) ─────────────────────
+  // ── AC4 — placeholder when nothing matches (no blank pane) ───────────────
   it("shows a no-matches placeholder when the filter matches nothing", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },

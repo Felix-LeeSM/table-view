@@ -11,20 +11,21 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Sprint 227 — `CreateTableTypeCombobox`. Filterable type picker for
- * the column-row repeater in `CreateTableDialog`. Uses the existing
+ * `CreateTableTypeCombobox`. Filterable type picker for the column-row
+ * repeater in `CreateTableDialog`. Uses the existing
  * `Popover` primitive (anchored to the input) + a manual filtered list
  * rendered inside the popover content; the list is keyboard-navigable
  * (↑/↓ to move, Enter to commit, Esc to close) and supports free-text
  * fallback — typing `numeric(10,4)` and committing on blur forwards
  * the raw input verbatim to `onChange`.
  *
- * Sprint 227 hot-fix (2026-05-07):
- * - chevron is now clickable (toggles popover, focuses input).
+ * Behaviour:
+ * - chevron is clickable (toggles popover, focuses input).
  * - popover opens on focus / click *and* on a fresh first-render mount
  *   into a focused row (mouse-click on the input still triggers it).
- * - popover content uses radix collision-aware max-height so it never
- *   gets clipped at the modal/viewport edge.
+ * - popover content is a fixed 240px box with internal scroll
+ *   (`avoidCollisions={false}`) so it never gets clipped at the
+ *   modal/viewport edge.
  * - selecting a bare parametric type (`varchar`, `char`, `numeric`)
  *   auto-expands to its canonical default (`varchar(255)` etc.) and
  *   places the caret between the parens for fast editing.
@@ -38,19 +39,16 @@ export interface CreateTableTypeComboboxProps {
   placeholder?: string;
   className?: string;
   /**
-   * Sprint 230 — optional dynamic type source. When supplied, the
-   * combobox filters from this list (typically the merged
-   * canonical + live PG types from `usePostgresTypes`); when omitted,
-   * the combobox falls back to the canonical
-   * `POSTGRES_COMMON_TYPES` list (Sprint 227 baseline). Default is
-   * `undefined` so existing tests / non-DB consumers stay
-   * byte-equivalent.
+   * Optional dynamic type source. When supplied, the combobox filters
+   * from this list (typically the merged canonical + live PG types from
+   * `usePostgresTypes`); when omitted, the combobox falls back to the
+   * canonical `POSTGRES_COMMON_TYPES` list. Default is `undefined` so
+   * existing tests / non-DB consumers stay byte-equivalent.
    */
   typesSource?: readonly string[];
   /**
-   * Sprint 234 — optional `display label → type_kind` lookup. When
-   * supplied, each option in the suggestion popover renders a small
-   * color dot prefix:
+   * Optional `display label → type_kind` lookup. When supplied, each
+   * option in the suggestion popover renders a small color dot prefix:
    *   `"base"`     → no dot (default — wrapper omitted entirely)
    *   `"enum"`     → blue dot   (`text-typekind-enum`)
    *   `"domain"`   → green dot  (`text-typekind-domain`)
@@ -62,18 +60,18 @@ export interface CreateTableTypeComboboxProps {
    * label — color dots are `<span aria-hidden>•</span>` so screen
    * readers see only the type name. Lookup is case-sensitive on the
    * display label string. When `typeKindMap` is omitted, the combobox
-   * renders identically to Sprint 230 (back-compat).
+   * renders no dots (back-compat).
    */
   typeKindMap?: ReadonlyMap<string, string>;
 }
 
 /**
- * Sprint 234 — map a `type_kind` string to the Tailwind color class for
- * the option's color dot. Returns `null` for `"base"` and any unknown
- * kind so the dot wrapper is omitted entirely (no DOM noise, no
- * spurious icon for built-ins). The closed switch matches the four
- * colored kinds enumerated in `PostgresTypeInfo` (Sprint 230); a future
- * PG kind (e.g. multirange `'m'`) automatically degrades to no dot.
+ * Map a `type_kind` string to the Tailwind color class for the option's
+ * color dot. Returns `null` for `"base"` and any unknown kind so the
+ * dot wrapper is omitted entirely (no DOM noise, no spurious icon for
+ * built-ins). The closed switch matches the four colored kinds
+ * enumerated in `PostgresTypeInfo`; a future PG kind (e.g. multirange
+ * `'m'`) automatically degrades to no dot.
  */
 function colorClassForTypeKind(kind: string | undefined): string | null {
   switch (kind) {
@@ -259,12 +257,12 @@ export default function CreateTableTypeCombobox({
           side="bottom"
           sideOffset={2}
           // No flip, no auto-shrink — fixed 240px box with internal
-          // scroll. Sprint 227 hot-fix used radix's available-height
-          // var which jumped/clipped near the viewport edge. Force-
-          // inline scroll on BOTH the radix content node and the
-          // listbox `<ul>` so a cn-merge or hot-reload glitch on one
-          // layer can't strip the scroll. `onWheel.stopPropagation()`
-          // keeps the parent Dialog from swallowing wheel events.
+          // scroll. Radix's available-height var jumped/clipped near the
+          // viewport edge. Force-inline scroll on BOTH the radix content
+          // node and the listbox `<ul>` so a cn-merge or hot-reload
+          // glitch on one layer can't strip the scroll.
+          // `onWheel.stopPropagation()` keeps the parent Dialog from
+          // swallowing wheel events.
           avoidCollisions={false}
           className="z-[60] w-[var(--radix-popover-trigger-width)] p-0"
           style={{ maxHeight: 240, overflowY: "auto" }}
@@ -284,10 +282,10 @@ export default function CreateTableTypeCombobox({
             style={{ maxHeight: 240, overflowY: "auto" }}
           >
             {suggestions.map((t, idx) => {
-              // Sprint 234 — color-dot prefix (only when typeKindMap is
-              // supplied AND the lookup yields a colored kind). The dot
-              // wrapper is omitted entirely for `"base"` / unknown
-              // kinds so screen readers see only the type name.
+              // Color-dot prefix (only when typeKindMap is supplied AND
+              // the lookup yields a colored kind). The dot wrapper is
+              // omitted entirely for `"base"` / unknown kinds so screen
+              // readers see only the type name.
               const dotColor = colorClassForTypeKind(typeKindMap?.get(t));
               return (
                 <li key={t}>

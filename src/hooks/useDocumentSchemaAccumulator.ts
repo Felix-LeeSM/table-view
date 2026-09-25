@@ -2,27 +2,28 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DocumentColumn } from "@/types/document";
 
 /**
- * Sprint 319 — Slice E.1: schemaless collection 의 페이지 간 column
- * 변동을 흡수하는 client-side 누적 schema.
+ * Slice E.1: client-side accumulated schema that absorbs column changes
+ * across pages of a schemaless collection.
  *
- * 문제:
- * - Mongo collection 은 schemaless. 페이지 N 의 documents 는 field
- *   `a, b` 만 갖고, 페이지 N+1 는 `a, c` 일 수 있다. backend 의
- *   `result.columns` 가 그대로 column 으로 surfaced 되면, 페이지 이동마다
- *   grid header 가 흔들린다.
+ * Problem:
+ * - Mongo collections are schemaless. Page N's documents may have only
+ *   fields `a, b`, and page N+1 may have `a, c`. If the backend's
+ *   `result.columns` surfaced as the columns as-is, the grid header would
+ *   shift on every page move.
  *
- * 해결:
- * - hook 안에서 `(connId, db, collection)` triple 단위로 누적 set 을
- *   유지. `merge(columns)` 호출마다 새 field 만 추가하고 기존은 보존.
- * - 정렬: `_id` 가 first (관습), 나머지는 alphabetical
+ * Solution:
+ * - The hook keeps an accumulated set per `(connId, db, collection)`
+ *   triple. Each `merge(columns)` call adds only new fields and keeps the
+ *   existing ones.
+ * - Order: `_id` first (convention), the rest alphabetical
  *   (case-insensitive).
- * - 동일 field name 의 type 충돌 처리: first-wins. subsequent 호출의
- *   type 은 무시. heuristic — type 흔들림이 grid 에 노출되면 사용자
- *   혼란 유발. 정확한 mixed-type 표기는 후속 슬라이스.
- * - `(connId, db, collection)` 변경 시 자동 reset (다른 collection 의
- *   schema 가 leak 되지 않도록).
+ * - Type conflicts on the same field name: first-wins. Types from later
+ *   calls are ignored. Heuristic — type churn surfacing in the grid confuses
+ *   users. Accurate mixed-type labeling is left to a later slice.
+ * - Auto-reset when `(connId, db, collection)` changes (so another
+ *   collection's schema does not leak).
  *
- * Slice E.2 (Sprint 320) 가 DocumentDataGrid 에 wire 한다.
+ * Slice E.2 wires it into DocumentDataGrid.
  */
 
 export interface UseDocumentSchemaAccumulatorResult {

@@ -93,9 +93,9 @@ describe("generateSql — UPDATE tri-state (null vs empty string vs text)", () =
 });
 
 describe("generateSql — INSERT null vs empty string", () => {
-  // Reason: #1433 잠금 갱신 — default/identity 메타가 없는 컬럼은 미입력
-  // (undefined sentinel)이어도 기존 계약(명시 NULL) 유지. 생략은
-  // default/identity 컬럼에만 적용 (2026-07-10)
+  // Reason: #1433 — a column with no default/identity metadata keeps the
+  // existing contract (explicit NULL) even when untouched (undefined
+  // sentinel). Omission applies only to default/identity columns.
   it("emits NULL for null/untouched cells and '' for empty-string cells in new rows", () => {
     const newRows = [
       [null, ""],
@@ -126,8 +126,8 @@ describe("generateSql — INSERT null vs empty string", () => {
   });
 });
 
-// Purpose: #1433 — server-default/identity 컬럼 미입력 시 INSERT 컬럼 목록에서
-// 생략해 서버 default/identity가 동작하게 한다 (wave 27 데이터 무결성, 2026-07-10)
+// Purpose: #1433 — omit an untouched server-default/identity column from the
+// INSERT column list so the server default/identity takes effect.
 describe("generateSql — INSERT omits untouched default/identity columns (#1433)", () => {
   const IDENTITY_DEFAULT_DATA: TableData = {
     columns: [
@@ -170,9 +170,10 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
     executed_query: "SELECT * FROM public.users LIMIT 100 OFFSET 0",
   };
 
-  // Reason: #1433 시나리오 B — serial/identity PK 미입력 시 명시 NULL이
-  // NOT NULL 위반을 일으켜 행 추가 전면 불가. 컬럼 자체를 생략해야 한다.
-  // 미입력 = add-row seed 의 `undefined` sentinel (2026-07-10)
+  // Reason: #1433 scenario B — on an untouched serial/identity PK an explicit
+  // NULL violates NOT NULL and blocks row insertion entirely. The column
+  // itself must be omitted. Untouched = the add-row seed's `undefined`
+  // sentinel.
   it("omits an untouched identity column so the sequence assigns the value", () => {
     const statements = generateSql(
       IDENTITY_DEFAULT_DATA,
@@ -188,8 +189,8 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
     ]);
   });
 
-  // Reason: #1433 시나리오 A — default 컬럼 미입력 시 명시 NULL이 server
-  // default를 silent 무시. 생략해서 default가 적용되게 한다 (2026-07-10)
+  // Reason: #1433 scenario A — on an untouched default column an explicit
+  // NULL silently ignores the server default. Omit it so the default applies.
   it("omits an untouched server-default column and keeps explicit values", () => {
     const statements = generateSql(
       IDENTITY_DEFAULT_DATA,
@@ -200,18 +201,21 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
       [[7, undefined, undefined]],
     );
 
-    // id는 입력됨 → 유지. status는 default 있음 + 미입력 → 생략.
-    // name은 default/identity 없음 + 미입력 → 기존 계약대로 명시 NULL.
+    // id is filled in → kept. status has a default + untouched → omitted.
+    // name has no default/identity + untouched → explicit NULL per the
+    // existing contract.
     expect(statements).toEqual([
       "INSERT INTO public.users (id, name) VALUES (7, NULL);",
     ]);
   });
 
-  // Reason: #1433 리뷰 B1 — Duplicate Row(useDataGridEdit.handleDuplicateRow)와
-  // undo 재-INSERT(buildRestageSnapshot의 DELETE reversal)는 원본 행을 verbatim
-  // 복사하므로 실제 NULL 값이 `null`로 유입된다. 이 NULL은 "미입력"이 아니라
-  // 데이터다 — 생략하면 server default('active')로 silent 치환되는 데이터
-  // 유실 회귀. 명시 NULL로 emit해야 한다 (2026-07-10)
+  // Reason: #1433 B1 review finding — Duplicate Row
+  // (`useDataGridEdit.handleDuplicateRow`) and undo re-INSERT
+  // (`buildRestageSnapshot`'s DELETE reversal) copy the original row verbatim,
+  // so a real NULL value arrives as `null`. That NULL is data, not
+  // "untouched" — omitting it silently substitutes the server default
+  // ('active'), a data-loss regression. It must be emitted as an explicit
+  // NULL.
   it("keeps a real NULL (duplicate row / undo re-INSERT) as explicit NULL on a default column", () => {
     const statements = generateSql(
       IDENTITY_DEFAULT_DATA,
@@ -229,9 +233,10 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
     ]);
   });
 
-  // Reason: #1433 리뷰 B1 — identity 컬럼의 실 NULL도 미입력과 구분되어야
-  // 한다. 생략이 아니라 명시 NULL emit — DB가 NOT NULL 위반을 표면화해서
-  // 사용자가 알 수 있게 (silent 치환 금지) (2026-07-10)
+  // Reason: #1433 B1 review finding — a real NULL on an identity column must
+  // also be distinguished from untouched. Emit an explicit NULL rather than
+  // omitting, so the DB surfaces the NOT NULL violation and the user sees it
+  // (no silent substitution).
   it("keeps a real NULL on an identity column as explicit NULL (no silent omission)", () => {
     const statements = generateSql(
       IDENTITY_DEFAULT_DATA,
@@ -247,8 +252,9 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
     ]);
   });
 
-  // Reason: #1433 — 모든 컬럼이 default/identity이고 전부 미입력이면 컬럼
-  // 목록이 비므로 dialect별 all-defaults INSERT 형태가 필요하다 (2026-07-10)
+  // Reason: #1433 — when every column is default/identity and all are
+  // untouched the column list is empty, so each dialect needs its own
+  // all-defaults INSERT form.
   it("emits DEFAULT VALUES when every column is untouched default/identity", () => {
     const allDefaultData: TableData = {
       ...IDENTITY_DEFAULT_DATA,
@@ -277,7 +283,7 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
     );
     expect(mysql).toEqual(["INSERT INTO `app`.`users` () VALUES ();"]);
 
-    // Oracle에는 DEFAULT VALUES 구문이 없음 — 컬럼 전체에 DEFAULT 키워드.
+    // Oracle has no DEFAULT VALUES syntax — DEFAULT keyword on every column.
     const oracle = generateSql(
       allDefaultData,
       "APP",
@@ -292,8 +298,8 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
     ]);
   });
 
-  // Reason: #1433 — Duplicate Row/undo 재-INSERT는 identity 셀에 실제 값을
-  // 담는다. 입력된 값은 생략하지 않고 그대로 emit해야 한다 (2026-07-10)
+  // Reason: #1433 — Duplicate Row / undo re-INSERT put a real value in the
+  // identity cell. A filled-in value is emitted as-is, never omitted.
   it("keeps an explicitly provided value for an identity column", () => {
     const statements = generateSql(
       IDENTITY_DEFAULT_DATA,

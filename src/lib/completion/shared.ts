@@ -86,10 +86,10 @@ export function parseFromContext(sql: string): FromContext {
       if (!tableTok) break;
       if (tableTok.kind !== "identifier") break;
 
-      // Sprint 294 (2026-05-14) — schema-qualified targets (`public.users`,
-      // `tenant.schema.tbl`) come through tokenize as `[identifier, '.',
-      // identifier, ...]`. Coalesce into a single dotted tableName so the
-      // following alias slot is read correctly.
+      // Schema-qualified targets (`public.users`, `tenant.schema.tbl`)
+      // come through tokenize as `[identifier, '.', identifier, ...]`.
+      // Coalesce into a single dotted tableName so the following alias
+      // slot is read correctly.
       let lastTableIdx = j;
       while (
         lastTableIdx + 2 < tokens.length &&

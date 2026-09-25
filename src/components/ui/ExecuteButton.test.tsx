@@ -1,7 +1,6 @@
-// Sprint 256 (2026-05-09): `ExecuteButton` — composed Execute affordance
-// applied across 5 surfaces (SqlPreviewDialog / MqlPreviewModal /
-// DataGrid inline preview / EditableQueryResultGrid toolbar /
-// ConfirmDestructiveDialog footer).
+// `ExecuteButton` — composed Execute affordance applied across
+// SqlPreviewDialog / MqlPreviewModal / DataGrid inline preview /
+// EditableQueryResultGrid toolbar / ConfirmDestructiveDialog footer.
 //
 // Tests cover the AC-256-05 contract:
 //   - 4 severity × env color matrix (WARN+dev/null=success,

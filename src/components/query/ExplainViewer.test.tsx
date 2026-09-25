@@ -1,7 +1,6 @@
-// Sprint 337 (2026-05-15) — U2 live wire. Verify ExplainViewer dispatches
-// to explain_rdb_query / explain_mongo_find via the @/lib/api/explain
-// wrappers and renders PostgreSQL plans as a readable tree with raw JSON
-// retained as fallback.
+// U2 live wire. Verify ExplainViewer dispatches to explain_rdb_query /
+// explain_mongo_find via the @/lib/api/explain wrappers and renders
+// PostgreSQL plans as a readable tree with raw JSON retained as fallback.
 
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

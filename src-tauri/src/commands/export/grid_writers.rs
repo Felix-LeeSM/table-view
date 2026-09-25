@@ -1,6 +1,6 @@
 //! Format-specific writers for grid-row export — CSV, TSV, SQL `INSERT`,
-//! JSON array. Hoisted out of `commands/export/mod.rs` (Sprint 213, P5
-//! step 2b) so the entry module is just types + Tauri commands. The
+//! JSON array. Hoisted out of `commands/export/mod.rs`
+//! so the entry module is just types + Tauri commands. The
 //! writer signatures stay private (`pub(super)`) — only the
 //! `write_export` orchestrator in mod.rs (and the test module) calls
 //! them.

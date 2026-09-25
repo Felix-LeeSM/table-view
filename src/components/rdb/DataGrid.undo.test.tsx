@@ -1,6 +1,5 @@
-// Sprint 249 (ADR 0022 Phase 5) — DataGrid Cmd+Z / Ctrl+Z keyboard
-// binding for pending-edit undo. Maps to AC-249-K1..K5 from
-// Sprint 249 contract. Date 2026-05-09.
+// ADR 0022 — DataGrid Cmd+Z / Ctrl+Z keyboard binding for pending-edit
+// undo. Maps to AC-249-K1..K5.
 //
 // Asserted scenarios:
 // - K1: Cmd+Z (metaKey) → editState.undo invoked.
@@ -8,7 +7,7 @@
 // - K3: Cmd+Shift+Z (redo slot) → editState.undo NOT invoked.
 // - K4: focused INPUT / contenteditable → browser native undo wins.
 // - K5: commit success → undo stack SURVIVES; post-commit Cmd+Z re-stages
-//   the pre-commit value as a new pending edit (ADR 0048 / #1126 Phase 1).
+//   the pre-commit value as a new pending edit (ADR 0048 / #1126).
 //
 // We share the helper-mocked schema/tab stores from
 // `__tests__/dataGridTestHelpers.tsx` so the renderDataGrid

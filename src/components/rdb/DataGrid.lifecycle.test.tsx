@@ -1,11 +1,10 @@
-// Sprint 222 — `lifecycle` axis split from `DataGrid.test.tsx` (P11
-// step 5, last). Covers initial mount + queryTableData call shape /
-// loading spinner / error message / column headers + ExportButton /
-// NULL italic / JSONB stringify / executed-query bar toggle / SQL
-// display / Sprint 99 empty-message branches / refresh-data event /
-// PK icon / data-type sub-label / schema.table fallback / Sprint 101
-// MongoDB beta-banner regression / legacy tab without `sorts`.
-// Cases are byte-equivalent to the originals — no behaviour change.
+// `lifecycle` axis of the DataGrid tests. Covers initial mount +
+// queryTableData call shape / loading spinner / error message / column
+// headers + ExportButton / NULL italic / JSONB stringify /
+// executed-query bar toggle / SQL display / empty-message branches /
+// refresh-data event / PK icon / data-type sub-label / schema.table
+// fallback / MongoDB beta-banner regression / legacy tab without
+// `sorts`.
 
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -52,8 +51,8 @@ beforeEach(() => {
   });
 });
 
-// Sprint 76 — a minimal reactive mock that mirrors zustand's hook + getState
-// shape. The component subscribes through the selector; `updateTabSorts`
+// A minimal reactive mock that mirrors zustand's hook + getState shape.
+// The component subscribes through the selector; `updateTabSorts`
 // mutates the tab entry and bumps `version` so every selector re-runs on
 // the next render. `forceRerender` via `useTabStoreBump` keeps React in
 // sync without dragging the real zustand library into the mock.
@@ -137,11 +136,11 @@ describe("DataGrid", () => {
 
   // 1. Initial rendering — queryTableData called with correct args
   //
-  // Sprint 354 (L2 fix, 2026-05-16) — the schemaStore wrapper accepted
-  // `(connId, db, table, schema, ...)`; the new direct `tauri.queryTableData`
-  // signature is `(connectionId, table, schema, page, pageSize, orderBy,
-  // filters, rawWhere, expectedDatabase)`. `db` moves to the last
-  // positional slot (`expectedDatabase`).
+  // The schemaStore wrapper accepted `(connId, db, table, schema, ...)`;
+  // the direct `tauri.queryTableData` signature is `(connectionId,
+  // table, schema, page, pageSize, orderBy, filters, rawWhere,
+  // expectedDatabase)`. `db` moves to the last positional slot
+  // (`expectedDatabase`).
   it("calls queryTableData with correct arguments on mount", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
@@ -190,8 +189,8 @@ describe("DataGrid", () => {
     // Data
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Charlie")).toBeInTheDocument();
-    // [AC-181-10] Sprint 181 ExportButton mounted into the toolbar.
-    // 2026-05-01 — regression guard so future toolbar refactors don't drop it.
+    // [AC-181-10] ExportButton mounted into the toolbar. Regression
+    // guard so future toolbar refactors don't drop it.
     expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
   });
 
@@ -205,12 +204,12 @@ describe("DataGrid", () => {
     expect(nulls[0]!.tagName).toBe("SPAN");
   });
 
-  // Sprint 343 (2026-05-15) — JSONB / ARRAY object cells now render as
-  // `{ ... }` / `[ N items ]` sentinels that toggle the inline JSON
-  // tree panel. Sprint 238's "compact one-line JSON" rendering was
-  // replaced because cell-level inline edit on a stringified JSON
-  // payload was lossy + error-prone; the tree panel edits leaves
-  // through jsonb_set so the wire literal stays canonical.
+  // JSONB / ARRAY object cells render as `{ ... }` / `[ N items ]`
+  // sentinels that toggle the inline JSON tree panel. The earlier
+  // "compact one-line JSON" rendering was replaced because cell-level
+  // inline edit on a stringified JSON payload was lossy + error-prone;
+  // the tree panel edits leaves through jsonb_set so the wire literal
+  // stays canonical.
   it("renders JSONB cells as expandable sentinels (Sprint 343)", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
@@ -223,7 +222,7 @@ describe("DataGrid", () => {
     // One of them carries the array's child count.
     const buttonTexts = expandButtons.map((b) => b.textContent);
     expect(buttonTexts).toContain("3 items");
-    // Raw JSON text from Sprint 238 must NOT appear as a cell value.
+    // Raw JSON text must NOT appear as a cell value.
     const cells = screen.getAllByRole("gridcell");
     const cellTexts = cells.map((c) => c.textContent);
     expect(cellTexts).not.toContain(JSON.stringify({ key: "value" }));
@@ -256,10 +255,10 @@ describe("DataGrid", () => {
   });
 
   // 14. Executed query displays the actual query text
-  // Sprint 233 (2026-05-07): bottom strip now routes through `<SqlSyntax>`
-  // so the SQL is split across token spans. The full text still lives in
-  // the surrounding region's textContent — assert that instead of trying
-  // to match across span boundaries with `getByText`.
+  // The bottom strip routes through `<SqlSyntax>` so the SQL is split
+  // across token spans. The full text still lives in the surrounding
+  // region's textContent — assert that instead of trying to match across
+  // span boundaries with `getByText`.
   it("displays the executed SQL query", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
@@ -276,8 +275,8 @@ describe("DataGrid", () => {
     });
     renderDataGrid();
     await screen.findByText("0 rows");
-    // Sprint 99 — branch B: no active filters → unfiltered empty message,
-    // no Clear filter affordance.
+    // Branch B: no active filters → unfiltered empty message, no Clear
+    // filter affordance.
     expect(screen.getByText("Table is empty")).toBeInTheDocument();
     expect(
       screen.queryByText("0 rows match current filter"),
@@ -288,7 +287,7 @@ describe("DataGrid", () => {
   });
 
   // 21a. Empty result set WITH filters shows the filtered-empty message + Clear filter button
-  // (Sprint 99 AC-01/AC-03)
+  // (AC-01/AC-03)
   it("shows '0 rows match current filter' + Clear filter button when filters are active", async () => {
     // First fetch (with the seeded initialFilters) returns 0 rows;
     // second fetch (after Clear filter clicks through) returns the
@@ -324,12 +323,12 @@ describe("DataGrid", () => {
       fireEvent.click(clearBtn);
     });
 
-    // After clearing, the data refetches with NO filters applied. Sprint
-    // 354 (L2 fix) — the schemaStore wrapper accepted `db` as positional
-    // arg 1 so `filters` was at index 7 and `rawWhere` at index 8. The
-    // new direct tauri signature is `(conn, table, schema, page,
-    // pageSize, orderBy, filters, rawWhere, expectedDatabase)` — filters
-    // is now at index 6 and rawWhere at index 7.
+    // After clearing, the data refetches with NO filters applied. The
+    // schemaStore wrapper accepted `db` as positional arg 1 so `filters`
+    // was at index 7 and `rawWhere` at index 8. The direct tauri
+    // signature is `(conn, table, schema, page, pageSize, orderBy,
+    // filters, rawWhere, expectedDatabase)` — filters is now at index 6
+    // and rawWhere at index 7.
     await waitFor(() => {
       expect(mockQueryTableData.mock.calls.length).toBeGreaterThan(callsBefore);
     });
@@ -404,13 +403,12 @@ describe("DataGrid", () => {
   });
 
   // -----------------------------------------------------------------
-  // Sprint 344 Slice F (2026-05-15) — end-to-end `+ key` / `+ item`
-  // adds through the RDB grid. Locks Slice E's central assumption that
-  // the inline tree panel's `onCommitEdit("<segment>", v)` for a
-  // jsonb / ARRAY cell at column idx C materialises a pendingEdit
-  // keyed `"<row>-<C>:<segment>"`, and that the SQL preview emits the
-  // expected `jsonb_set(..., true)` / `ARRAY[..., <new>]::etype[]`
-  // wire shape.
+  // End-to-end `+ key` / `+ item` adds through the RDB grid. Locks the
+  // central assumption that the inline tree panel's
+  // `onCommitEdit("<segment>", v)` for a jsonb / ARRAY cell at column
+  // idx C materialises a pendingEdit keyed `"<row>-<C>:<segment>"`, and
+  // that the SQL preview emits the expected `jsonb_set(..., true)` /
+  // `ARRAY[..., <new>]::etype[]` wire shape.
   //
   // Uses a custom fixture (text[] + jsonb) because MOCK_DATA's `meta`
   // is jsonb but has no Postgres ARRAY column for the `+ item` flow.
@@ -476,7 +474,7 @@ describe("DataGrid", () => {
       const keyInput = screen.getByTestId("tree-add-key-input-__root");
       const valueInput = screen.getByTestId("tree-add-value-input-__root");
       fireEvent.change(keyInput, { target: { value: "newKey" } });
-      // Bare numeric → Slice D coerces to number 42 → jsonb literal `'42'`.
+      // Bare numeric → coerced to number 42 → jsonb literal `'42'`.
       fireEvent.change(valueInput, { target: { value: "42" } });
       fireEvent.keyDown(valueInput, { key: "Enter" });
 
@@ -518,7 +516,7 @@ describe("DataGrid", () => {
       // (cellValue length = 2, no prior pending appends).
       fireEvent.click(screen.getByTestId("tree-add-item-"));
       const valueInput = screen.getByTestId("tree-add-item-input-");
-      // Quoted value → Slice D coerces to the string "c" (jsonb-style
+      // Quoted value → coerced to the string "c" (jsonb-style
       // outer-quotes rule). For text[] elementType the SQL generator
       // single-quotes it.
       fireEvent.change(valueInput, { target: { value: '"c"' } });

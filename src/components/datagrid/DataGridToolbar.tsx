@@ -100,12 +100,12 @@ export interface DataGridToolbarProps {
   onDeleteRow: () => void;
   onDuplicateRow: () => void;
   /**
-   * Sprint 249 (ADR 0022 Phase 5) — pending-edit undo. The Toolbar
-   * surfaces a small Undo button when `canUndo` is true so users who
-   * don't know Cmd+Z can still recover from a mis-Add / mis-Delete /
-   * accidental cell change before commit. Callers that don't yet wire
-   * the action default the prop to a noop + `canUndo=false` so the
-   * button stays disabled (existing DocumentDataGrid path).
+   * ADR 0022 — pending-edit undo. The Toolbar surfaces a small Undo button
+   * when `canUndo` is true so users who don't know Cmd+Z can still recover
+   * from a mis-Add / mis-Delete / accidental cell change before commit.
+   * Callers that don't yet wire the action default the prop to a noop +
+   * `canUndo=false` so the button stays disabled (existing DocumentDataGrid
+   * path).
    */
   onUndo?: () => void;
   canUndo?: boolean;
@@ -245,9 +245,9 @@ export default function DataGridToolbar({
               </>
             )}
             {canEditRows && onUndo && (
-              // Sprint 249 (ADR 0022 Phase 5) — discoverable Undo for users
-              // who don't know the Cmd+Z binding. Disabled when the undo
-              // stack is empty so a click never silently no-ops.
+              // ADR 0022 — discoverable Undo for users who don't know the
+              // Cmd+Z binding. Disabled when the undo stack is empty so a
+              // click never silently no-ops.
               <Button
                 variant="ghost"
                 size="xs"
@@ -468,13 +468,14 @@ interface PageJumpInputProps {
 }
 
 /**
- * Sprint 289 — page input draft. 매 키스트로크마다 fetch 가 발생하던 종전
- * onChange 결합 (`<input onChange={... onSetPage(val) ...}>`) 을 분리: 사용자
- * 가 자유롭게 숫자를 타이핑하는 동안은 local draft 만 변하고, commit 은
- * Enter / blur 두 시점에서만. invalid 입력은 외부 page 로 reset (revert).
+ * Page input draft. Splits the old onChange coupling
+ * (`<input onChange={... onSetPage(val) ...}>`) that fetched on every
+ * keystroke: typing only moves the local draft, and commit happens on Enter
+ * or blur alone. Invalid input resets to the external `page` (revert).
  *
- * 외부 page 가 다른 경로 (Prev/Next/Filter reset) 로 바뀌면 draft 도 동기화 —
- * 사용자가 input 에 focus 중이라도 stale 한 숫자가 남지 않도록.
+ * When the external `page` changes by another route (Prev/Next/Filter reset)
+ * the draft syncs too, so no stale number survives even while the user has
+ * the input focused.
  */
 function PageJumpInput({ page, totalPages, onCommit }: PageJumpInputProps) {
   const { t } = useTranslation("datagrid");

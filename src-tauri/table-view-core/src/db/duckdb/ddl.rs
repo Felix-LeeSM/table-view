@@ -126,8 +126,8 @@ impl DuckdbAdapter {
                 primary_key: req.primary_key.clone(),
                 preview_only: req.preview_only,
                 table_comment: req.table_comment.clone(),
-                // Sprint 271c — the parent handler already probed
-                // `expected_database`; child calls do not re-probe.
+                // The parent handler already probed `expected_database`;
+                // child calls do not re-probe.
                 expected_database: None,
             })
             .await?;
@@ -147,8 +147,8 @@ impl DuckdbAdapter {
                     expected_database: None,
                 })
                 .await
-                // Sprint 240 — surface the failing index name so the dialog's
-                // preview pane shows which row blocked the chain.
+                // Surface the failing index name so the dialog's preview pane
+                // shows which row blocked the chain.
                 .map_err(|e| {
                     AppError::Database(format!("Index \"{}\" failed: {}", idx.index_name, e))
                 })?;

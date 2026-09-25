@@ -1,5 +1,5 @@
 /**
- * Sprint 385 — frontend facade test.
+ * Frontend facade test.
  *
  * The facade lazy-loads a wasm-pack-generated module via dynamic
  * `import()`. In a jsdom/vitest environment the real `WebAssembly.
@@ -10,7 +10,7 @@
  * Mock scope (memory/engineering/conventions/testing-scenarios/mock-scope/memory.md):
  *   - We mock the WASM module — the unit under test is the TS facade
  *     wrapper, not the WASM binary itself. The Rust crate has its own
- *     `cargo test` suite (31 tests) that covers AC-385-L1..L7 +
+ *     `cargo test` suite that covers AC-385-L1..L7 +
  *     AC-385-P1..P10 directly.
  *   - The mock returns ParseResult shapes identical to what the Rust
  *     `serde_wasm_bindgen` bridge produces — that contract is the
@@ -335,7 +335,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           set_operation: [],
         } satisfies SqlParseResult;
       }
-      // ── sprint-393a SELECT widening ────────────────────────────────
+      // ── SELECT widening ────────────────────────────────────────────
       if (sql === "SELECT a FROM x JOIN y ON x.id = y.x_id") {
         return {
           kind: "select",
@@ -456,8 +456,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
         } satisfies SqlParseResult;
       }
       if (sql === "INSERT INTO x VALUES (1)") {
-        // Pre-sprint-392 this was an unsupported-statement; sprint-392
-        // promotes INSERT to a first-class variant.
+        // INSERT is a first-class variant.
         return {
           kind: "insert",
           table: "x",
@@ -517,7 +516,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           at: 0,
         } satisfies SqlParseResult;
       }
-      // ── sprint-392 DML write triad variants ──────────────────────
+      // ── DML write triad variants ─────────────────────────────────
       if (sql === "INSERT INTO users VALUES (1)") {
         return {
           kind: "insert",
@@ -707,7 +706,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
             },
           ],
           from: [],
-          // Sprint-393b — DML WHERE migrates to the unified SqlSelectExpr
+          // DML WHERE uses the unified SqlSelectExpr
           // shape (column-as-ColumnRef left, instead of bare string).
           where_clause: {
             kind: "comparison",
@@ -756,7 +755,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           returning: [],
         } satisfies SqlParseResult;
       }
-      // ── sprint-391 DDL destructive variants ──────────────────────
+      // ── DDL destructive variants ─────────────────────────────────
       if (sql === "DROP TABLE users") {
         return {
           kind: "drop",
@@ -813,7 +812,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           action: { kind: "drop-index", index: "idx" },
         } satisfies SqlParseResult;
       }
-      // ── sprint-394 DDL additive variants ─────────────────────────
+      // ── DDL additive variants ────────────────────────────────────
       if (sql === "CREATE TABLE users (id INTEGER, name TEXT)") {
         return {
           kind: "create-table",
@@ -948,7 +947,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
       if (sql === "__internal_break__") {
         return { not: "valid" } as unknown;
       }
-      // ── sprint-393b SELECT widening 2 — minimal stubs ──────────────
+      // ── SELECT widening 2 — minimal stubs ──────────────────────────
       if (sql === "WITH t AS (SELECT 1) SELECT * FROM t") {
         return {
           kind: "with",
@@ -1161,7 +1160,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           returning: [],
         } satisfies SqlParseResult;
       }
-      // ── sprint-395 misc grammar stubs ─────────────────────────────
+      // ── misc grammar stubs ────────────────────────────────────────
       if (sql === "GRANT SELECT ON users TO alice") {
         return {
           kind: "grant",
@@ -1420,7 +1419,7 @@ describe("parseSql (sprint-385 facade)", () => {
   });
 
   it("[AC-484-F01] parses MERGE into a kind:'merge' facade variant", async () => {
-    // Reason: Sprint 484 adds PostgreSQL MERGE to the WASM/TS parse
+    // Reason: PostgreSQL MERGE is part of the WASM/TS parse
     // result contract. (2026-05-27)
     const result = await parseSql(
       "MERGE INTO x USING y ON x.id = y.id WHEN MATCHED THEN UPDATE SET a = 1",
@@ -1437,7 +1436,7 @@ describe("parseSql (sprint-385 facade)", () => {
   });
 
   it("returns a tagged error union (not a thrown exception) for unsupported statements", async () => {
-    // Sprint-484 — MERGE is now supported, so REPLACE keeps this unsupported
+    // MERGE is supported, so REPLACE keeps this unsupported
     // tagged-union facade path covered.
     const result = await parseSql("REPLACE INTO x VALUES (1)");
     expect(result.kind).toBe("error");
@@ -1453,7 +1452,7 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(result.message).toContain("WASM bridge");
   });
 
-  // ── sprint-391 DDL destructive facade tests (AC-391-F) ───────────────
+  // ── DDL destructive facade tests (AC-391-F) ──────────────────────────
 
   it("[AC-391-F01] parses `DROP TABLE users` into a kind:'drop' variant", async () => {
     const result = await parseSql("DROP TABLE users");
@@ -1530,7 +1529,7 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(result.name).toBe("users");
   });
 
-  // ── sprint-392 DML write triad facade tests (AC-392-F) ─────────────
+  // ── DML write triad facade tests (AC-392-F) ────────────────────────
 
   it("[AC-392-F01] parses `INSERT INTO users VALUES (1)` into a kind:'insert' variant", async () => {
     const result = await parseSql("INSERT INTO users VALUES (1)");
@@ -1748,7 +1747,7 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(del.kind).toBe("delete");
   });
 
-  // ── sprint-393a SELECT widening facade tests (AC-393a-Fc) ──────────
+  // ── SELECT widening facade tests (AC-393a-Fc) ──────────────────────
 
   it("[AC-393a-Fc01] parses a SELECT with INNER JOIN into a kind:'select' variant with a 2-item FROM list", async () => {
     const result = await parseSql("SELECT a FROM x JOIN y ON x.id = y.x_id");
@@ -1841,7 +1840,7 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(ordered.kind).toBe("select");
   });
 
-  // ── sprint-393b SELECT widening 2 facade tests (AC-393b-F) ─────────
+  // ── SELECT widening 2 facade tests (AC-393b-F) ─────────────────────
 
   it("[AC-393b-F01] parses `WITH t AS (SELECT 1) SELECT * FROM t` into a `with` top-level", async () => {
     const result = await parseSql("WITH t AS (SELECT 1) SELECT * FROM t");
@@ -1925,7 +1924,7 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(i.kind).toBe("delete");
   });
 
-  // ── sprint-394 DDL additive facade tests (AC-394-F) ───────────────
+  // ── DDL additive facade tests (AC-394-F) ──────────────────────────
 
   it("[AC-394-F01] parses `CREATE TABLE users (id INTEGER, name TEXT)` into a kind:'create-table'", async () => {
     const result = await parseSql("CREATE TABLE users (id INTEGER, name TEXT)");
@@ -2018,7 +2017,7 @@ describe("parseSql (sprint-385 facade)", () => {
     expect(rn.kind).toBe("alter-table");
   });
 
-  // ── sprint-395 misc facade tests (AC-395-F) ──────────────────────
+  // ── misc facade tests (AC-395-F) ─────────────────────────────────
 
   it("[AC-395-F01] parses `GRANT SELECT ON users TO alice` into a kind:'grant' variant", async () => {
     const result = await parseSql("GRANT SELECT ON users TO alice");

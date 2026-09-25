@@ -177,9 +177,10 @@ function pushOperators(
   type: string,
 ): void {
   for (const label of list) {
-    // 2026-05-15 — UX 옵션 5/6: 알려진 operator 면 시그니처(detail)와
-    // 한 줄 설명(info)을 같이 surface. 누락된 토큰은 label only 로 fall
-    // through 해서 popup 이 깨지지 않는다.
+    // 2026-05-15 — UX options 5/6: for a known operator, surface the
+    // signature (detail) and a one-line description (info) together. A
+    // token without metadata falls through as label-only, so the popup
+    // does not break.
     const meta = MONGO_OPERATOR_META[label];
     out.push({
       label,
@@ -277,7 +278,7 @@ export function createMongoshDbSource(
       const prefix = collectionMatch[1] ?? "";
       const from = context.pos - prefix.length;
       const collections = opts.collectionNames ?? [];
-      // Sprint 381 (2026-05-17) — always surface the db-level helpers
+      // 2026-05-17 — always surface the db-level helpers
       // (`runCommand`, `adminCommand`, …) at this position so the user
       // who types `db.r` lands directly on `runCommand` without having
       // to remember the parens trick. Collection names come *after* the
@@ -328,18 +329,19 @@ export function createMongoshDbSource(
 }
 
 /**
- * Sprint 381 (2026-05-17) — `db.runCommand({` / `db.adminCommand({` 다음
- * 위치에서 admin command literal (`serverStatus`, `dbStats`, `ping`, …) 을
- * 추천하는 CompletionSource.
+ * 2026-05-17 — CompletionSource that suggests admin command literals
+ * (`serverStatus`, `dbStats`, `ping`, …) right after `db.runCommand({` /
+ * `db.adminCommand({`.
  *
- * 동작:
- *   - 정규식 `\b(runCommand|adminCommand)\s*\(\s*\{\s*([A-Za-z_$][A-Za-z0-9_$]*)?$`
- *     에 매칭되면 admin command 후보를 surface. 첫 키 위치에서만 발동
- *     — 두번째 key 부터는 BSON-key autocompletion 의 영역이라 noisy 회피.
- *   - `apply` 는 `<name>: <default>` 형태 (예: `serverStatus: 1`) 라
- *     사용자가 한 keystroke 으로 valid command body 를 얻는다.
+ * Behavior:
+ *   - When the regex `\b(runCommand|adminCommand)\s*\(\s*\{\s*([A-Za-z_$][A-Za-z0-9_$]*)?$`
+ *     matches, surface admin command candidates. Fires only at the first
+ *     key position — keys from the second on belong to BSON-key
+ *     autocompletion, so staying out avoids noise.
+ *   - `apply` has the `<name>: <default>` shape (e.g. `serverStatus: 1`), so
+ *     the user gets a valid command body in one keystroke.
  *
- * AST 가 아닌 정규식 기반 — sprint-382 가 AST 로 promote 예정.
+ * Regex-based, not AST-based.
  */
 export function createMongoAdminCommandSource(): CompletionSource {
   return (context: CompletionContext): CompletionResult | null => {

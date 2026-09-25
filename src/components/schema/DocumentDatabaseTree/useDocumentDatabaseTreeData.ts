@@ -17,10 +17,9 @@ import {
  */
 export interface UseDocumentDatabaseTreeData {
   databases: DatabaseInfo[];
-  /** Per-database collection lists for *this* connection. Sprint 265 lifted
-   *  the documentStore cache from flat `"connId:db"` keys to nested
-   *  `(connId, db)` maps, so the hook now projects `state.collections[connId]`
-   *  — keyed by `dbName` only. */
+  /** Per-database collection lists for *this* connection. The documentStore
+   *  cache is a nested `(connId, db)` map, so the hook projects
+   *  `state.collections[connId]` — keyed by `dbName` only. */
   collectionsByDb: Record<string, CollectionInfo[] | undefined>;
   loadingRoot: boolean;
   loadingDbs: Set<string>;
@@ -132,10 +131,10 @@ export function useDocumentDatabaseTreeData(
     [expandedDbs, connectionId, collectionsByDb, loadCollections],
   );
 
-  // Sprint 346 — user DB 가 먼저 (알파벳), system DB (admin/config/local) 가
-  // 끝. backend 의 list_database_names 가 자체 정렬을 보장하지 않아 자주
-  // `admin` 이 맨 위에 뜨는데, 사용자가 평소 작업할 DB 가 묻혀버리는 UX
-  // 회귀. 시각 구분 (italic + muted) 은 row 컴포넌트에서.
+  // User DBs first (alphabetical), system DBs (admin/config/local) last.
+  // The backend's `list_database_names` does not guarantee an order of its
+  // own, so `admin` often lands on top and buries the DB the user works in.
+  // The visual distinction (italic + muted) lives in the row component.
   const databaseList = useMemo(() => {
     const raw = databases ?? [];
     const userDbs: DatabaseInfo[] = [];

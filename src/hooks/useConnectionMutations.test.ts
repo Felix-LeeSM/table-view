@@ -2,12 +2,12 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 
-// 2026-05-06 — Sprint 219 (P10 step 1). The 3 mutation toasts (added /
-// updated / removed) used to live inside `connectionStore.ts`'s action
-// bodies. They've moved here so the store stays a pure state-transition
-// module. These tests pin the byte-equivalent toast text + the contract
-// that a store throw does NOT fire a toast (the dialog's catch renders the
-// error inline; we don't want a duplicate "success" toast on top).
+// The 3 mutation toasts (added / updated / removed) used to live inside
+// `connectionStore.ts`'s action bodies. They've moved here so the store
+// stays a pure state-transition module. These tests pin the byte-equivalent
+// toast text + the contract that a store throw does NOT fire a toast (the
+// dialog's catch renders the error inline; we don't want a duplicate
+// "success" toast on top).
 //
 // Mock pattern follows `useConnectionLifecycle.test.ts` — `vi.hoisted` +
 // factory `vi.mock("@stores/connectionStore", ...)` + `vi.mock("@lib/runtime/toast",

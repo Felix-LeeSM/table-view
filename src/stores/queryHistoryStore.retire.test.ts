@@ -1,20 +1,20 @@
 /**
- * 작성 2026-05-17 (Phase 5 sprint-373, AC-373-01 + AC-373-02).
+ * Written 2026-05-17 (AC-373-01 + AC-373-02).
  *
- * 사유: sprint-372 의 thin wrapper 가 도착한 직후 `entries` /
+ * Reason: right after the thin wrapper landed, `entries` /
  * `globalLog` / `searchFilter` / `connectionFilter` / `clearHistory` /
  * `clearGlobalLog` / `copyEntry` / `filteredGlobalLog` / `addHistoryEntry`
- * (legacy in-memory writer) 를 retire — type level 부재 + grep CI 단언.
+ * (the legacy in-memory writer) were retired — absent at the type level.
  *
- * 본 테스트는 두 invariant 를 lock:
- *   1. store 의 type / shape 에 retired field 가 부재 (TS 컴파일 단계).
- *   2. 남은 surface 가 정확히 thin wrapper 의 3개 (`recentVisible`,
- *      `setRecentVisible`, `addOptimisticEntry`).
+ * This test locks two invariants:
+ *   1. The store's type / shape has no retired field (TS compile step).
+ *   2. The remaining surface is exactly the thin wrapper's 3 fields
+ *      (`recentVisible`, `setRecentVisible`, `addOptimisticEntry`).
  *
- * 회귀 가드: TS 가 retired field 를 다시 정의하려고 하면 compile error,
- * runtime 에서 retired field 를 set 하려고 하면 zustand 가 silent merge
- * 하지만 추후 reader 는 undefined 를 본다 — 본 테스트가 truth shape 으로
- * snapshot.
+ * Regression guard: typed code that reads or sets a retired field fails TS
+ * compilation, but re-adding one to the store initializer compiles and a
+ * runtime set is silently merged by zustand — this test snapshots the true
+ * shape.
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
@@ -22,15 +22,15 @@ import { useQueryHistoryStore } from "./queryHistoryStore";
 
 describe("queryHistoryStore retire (sprint-373)", () => {
   beforeEach(() => {
-    // 본 store 는 module-load 시 한번 만들어진 singleton — 매 테스트마다
-    // recentVisible 만 리셋해서 leak 차단.
+    // The store is a singleton created once at module load — reset only
+    // recentVisible before each test to block leaks.
     useQueryHistoryStore.setState({ recentVisible: [] });
   });
 
-  // AC-373-01: 정적 shape — retired field 들이 모두 부재.
-  // 작성 2026-05-17. 사유: `getState()` 의 keys 가 정확히 thin-wrapper
-  // surface 3개. retired field (entries / globalLog / 등) 가 다시 store
-  // 에 추가되면 본 단언이 깨진다.
+  // AC-373-01: static shape — all retired fields are absent.
+  // Written 2026-05-17. Reason: `getState()` keys are exactly the 3
+  // thin-wrapper fields. Re-adding a retired field (entries / globalLog /
+  // etc.) to the store breaks this assertion.
   it("getState() exposes only the thin-wrapper surface", () => {
     const state = useQueryHistoryStore.getState();
     const keys = new Set(Object.keys(state));
@@ -39,8 +39,7 @@ describe("queryHistoryStore retire (sprint-373)", () => {
     expect(keys.has("setRecentVisible")).toBe(true);
     expect(keys.has("addOptimisticEntry")).toBe(true);
 
-    // Retired fields — sprint-372 의 thinwrapper test 가 회귀 가드를
-    // 잡고 있던 마지막 case 도 본 sprint 에서 제거됨.
+    // Retired fields.
     expect(keys.has("entries")).toBe(false);
     expect(keys.has("globalLog")).toBe(false);
     expect(keys.has("searchFilter")).toBe(false);

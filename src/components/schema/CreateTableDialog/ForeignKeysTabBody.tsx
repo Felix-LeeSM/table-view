@@ -11,24 +11,20 @@ import { ArrowDown, ArrowUp, Minus, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import OrderedColumnPicker from "./OrderedColumnPicker";
 
-// Sprint 241 — sub-tabs split FK / CHECK / UNIQUE. The active panel
-// renders one family at a time so a long declaration list in one
-// family doesn't crowd the others off-screen. Uses Radix's built-in
-// uncontrolled state via `defaultValue="fk"` — no parent-owned tab
-// key needed.
+// Sub-tabs split FK / CHECK / UNIQUE. The active panel renders one
+// family at a time so a long declaration list in one family doesn't
+// crowd the others off-screen. Uses Radix's built-in uncontrolled state
+// via `defaultValue="fk"` — no parent-owned tab key needed.
 
 /**
- * `ForeignKeysTabBody` — Sprint 229 (Phase 27 sprint 4) extraction.
+ * `ForeignKeysTabBody` — extraction out of `CreateTableDialog.tsx`.
  *
  * Why a sub-component:
- *   - Sprint 228's Indexes-tab editor body grew the parent
- *     `CreateTableDialog.tsx` past the project's 700-LOC threshold
- *     (extracted `IndexesTabBody.tsx` to drop it back to 793). Sprint
- *     229's Foreign Keys tab adds three sub-sections (FK / CHECK /
- *     UNIQUE) and ~280 LOC of JSX; inlining would push the parent
- *     past 1000. Per Sprint 229 contract Concerns #1 the editor body
- *     is mandatorily extracted to a sibling sub-component, mirroring
- *     the Sprint 228 `IndexesTabBody.tsx` precedent.
+ *   - The Foreign Keys tab holds three sub-sections (FK / CHECK /
+ *     UNIQUE) and a large block of JSX; inlining it would push the
+ *     parent past the project's LOC ceiling. Per the AC-229 contract
+ *     Concerns #1 the editor body is mandatorily extracted to a sibling
+ *     sub-component, mirroring the `IndexesTabBody.tsx` precedent.
  *
  * Shape:
  *   - Pure presentational mapper. Owns no state. The parent owns the
@@ -45,10 +41,9 @@ import OrderedColumnPicker from "./OrderedColumnPicker";
  *     name + expression input), "Unique constraints" (per-row name +
  *     columns multi-checkbox). Each sub-section's empty state is the
  *     dashed-border "No <name> declared. Click '+ <button>' to add
- *     one." pattern from Sprint 228 `IndexesTabBody.tsx`.
+ *     one." pattern from `IndexesTabBody.tsx`.
  *
- * Source: Sprint 229 contract
- * "Design Bar / Quality Bar".
+ * Source: AC-229 contract "Design Bar / Quality Bar".
  */
 
 /**
@@ -135,8 +130,8 @@ export interface ForeignKeysTabBodyProps {
   onUpdateFk: (trackingId: string, updates: Partial<ForeignKeyDraft>) => void;
   /**
    * Legacy single-toggle handlers — kept on the prop interface for the
-   * Sprint 229 test surface that drove the old multi-checkbox UI. The
-   * new `OrderedColumnPicker` calls `onUpdateFk(trackingId, { columns })`
+   * test surface that drove the old multi-checkbox UI. The new
+   * `OrderedColumnPicker` calls `onUpdateFk(trackingId, { columns })`
    * / `onUpdateFk(trackingId, { ref_columns })` /
    * `onUpdateUnique(trackingId, { columns })` with the full ordered
    * array on every mutation, so these props are no longer wired
@@ -153,10 +148,10 @@ export interface ForeignKeysTabBodyProps {
   /** Legacy — see comment above on `onToggleFkLocalColumn`. */
   onToggleUniqueColumn: (trackingId: string, colName: string) => void;
   /**
-   * Sprint 234 — three reorder callbacks (one per family). Same swap-
-   * in-place semantics as the column / index reorder. Boundary clicks
-   * are no-ops at the parent; the buttons render `disabled` here too
-   * for defense-in-depth.
+   * Three reorder callbacks (one per family). Same swap-in-place
+   * semantics as the column / index reorder. Boundary clicks are no-ops
+   * at the parent; the buttons render `disabled` here too for
+   * defense-in-depth.
    */
   onMoveFk: (trackingId: string, direction: -1 | 1) => void;
   onMoveCheck: (trackingId: string, direction: -1 | 1) => void;
@@ -186,20 +181,19 @@ export default function ForeignKeysTabBody({
   onMoveUnique,
 }: ForeignKeysTabBodyProps) {
   const { t } = useTranslation("schemaDialogs");
-  // Sprint 241 — sub-tab state. Default lands on `fk` because the
-  // Constraints tab's most common destination after the column-row
-  // inline path is multi-column foreign keys. Tab labels carry an
-  // `(N)` count suffix so the user sees at a glance which families
-  // already have declarations. Uncontrolled (`defaultValue`) so RTL
-  // tests can drive a Tab change with a single `fireEvent.click` —
-  // controlled-state Tabs needed an extra `await act` flush which
-  // proved flaky in the standalone-render test setup.
+  // Sub-tab state. Default lands on `fk` because the Constraints tab's
+  // most common destination after the column-row inline path is
+  // multi-column foreign keys. Tab labels carry an `(N)` count suffix
+  // so the user sees at a glance which families already have
+  // declarations. Uncontrolled (`defaultValue`) so RTL tests can drive
+  // a Tab change with a single `fireEvent.click` — controlled-state
+  // Tabs needed an extra `await act` flush which proved flaky in the
+  // standalone-render test setup.
   return (
     <div className="space-y-3">
-      {/* Sprint 241 — sub-tabs split FK / CHECK / UNIQUE. Per-family
-          scope reminders live inside each TabsContent so the user
-          sees the relevant guidance without scanning a generic
-          banner. */}
+      {/* Sub-tabs split FK / CHECK / UNIQUE. Per-family scope reminders
+          live inside each TabsContent so the user sees the relevant
+          guidance without scanning a generic banner. */}
       <Tabs defaultValue="fk">
         <TabsList className="w-full justify-start gap-0 rounded-none border-b border-border">
           <TabsTrigger value="fk" className="rounded-none">
@@ -229,8 +223,8 @@ export default function ForeignKeysTabBody({
         </TabsList>
 
         <TabsContent value="fk" className="pt-3 data-[state=inactive]:hidden">
-          {/* Sprint 241 — per-family scope reminder. Inline-cell path
-              for the single-column case, this tab for the multi-column
+          {/* Per-family scope reminder. Inline-cell path for the
+              single-column case, this tab for the multi-column
               variant. */}
           <p className="mb-2 text-2xs text-muted-foreground">
             {t("constraintsTab.fkScopeNote")}
@@ -268,7 +262,7 @@ export default function ForeignKeysTabBody({
                   const refCols = refColumnsByKey[refColsKey] ?? [];
                   const refColsLoading =
                     fkRefColumnsLoadingByTrackingId[fk.trackingId] === true;
-                  // Sprint 234 — boundary-disabled flags for ↑/↓.
+                  // Boundary-disabled flags for ↑/↓.
                   const isFirst = position === 0;
                   const isLast = position === fks.length - 1;
                   return (
@@ -495,7 +489,7 @@ export default function ForeignKeysTabBody({
                           </div>
                         </div>
                       </div>
-                      {/* Sprint 234 — ↑ / ↓ reorder buttons (left of `−`). */}
+                      {/* ↑ / ↓ reorder buttons (left of `−`). */}
                       <Button
                         variant="ghost"
                         size="icon-xs"
@@ -565,7 +559,7 @@ export default function ForeignKeysTabBody({
             ) : (
               <div className="space-y-2">
                 {checks.map((c, position) => {
-                  // Sprint 234 — ↑/↓ boundary flags.
+                  // ↑/↓ boundary flags.
                   const isFirst = position === 0;
                   const isLast = position === checks.length - 1;
                   return (
@@ -598,7 +592,7 @@ export default function ForeignKeysTabBody({
                           aria-label={t("constraintsTab.checkExprAria")}
                         />
                       </div>
-                      {/* Sprint 234 — ↑ / ↓ reorder buttons (left of `−`). */}
+                      {/* ↑ / ↓ reorder buttons (left of `−`). */}
                       <Button
                         variant="ghost"
                         size="icon-xs"
@@ -668,7 +662,7 @@ export default function ForeignKeysTabBody({
             ) : (
               <div className="space-y-2">
                 {uniques.map((u, position) => {
-                  // Sprint 234 — ↑/↓ boundary flags.
+                  // ↑/↓ boundary flags.
                   const isFirst = position === 0;
                   const isLast = position === uniques.length - 1;
                   return (
@@ -702,7 +696,7 @@ export default function ForeignKeysTabBody({
                           emptyMessage={t("createTable.primaryKeyEmptyHint")}
                         />
                       </div>
-                      {/* Sprint 234 — ↑ / ↓ reorder buttons (left of `−`). */}
+                      {/* ↑ / ↓ reorder buttons (left of `−`). */}
                       <Button
                         variant="ghost"
                         size="icon-xs"

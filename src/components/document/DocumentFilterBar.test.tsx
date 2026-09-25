@@ -209,9 +209,9 @@ describe("DocumentFilterBar", () => {
     ).toBeInTheDocument();
   });
 
-  // Sprint 313 (2026-05-14) — Slice B.1 wires `$in` / `$nin` through the
-  // structured row. The dropdown must expose the IN / NOT IN labels and
-  // CSV input must round-trip into an array via `buildMqlFilter`.
+  // `$in` / `$nin` are wired through the structured row. The dropdown must
+  // expose the IN / NOT IN labels and CSV input must round-trip into an
+  // array via `buildMqlFilter`.
   it("exposes IN and NOT IN options in the operator dropdown", () => {
     renderBar();
 
@@ -257,9 +257,9 @@ describe("DocumentFilterBar", () => {
     expect(onApply).toHaveBeenCalledWith({ age: { $nin: [1, "alpha", 2] } });
   });
 
-  // Sprint 314 (2026-05-15) — Slice B.2 composite ops. Match ALL/ANY
-  // toggle + per-row NOT button. ALL = implicit $and (default), ANY =
-  // top-level $or. NOT wraps the clause in $not.
+  // Composite ops. Match ALL/ANY toggle + per-row NOT button. ALL =
+  // implicit $and (default), ANY = top-level $or. NOT wraps the clause
+  // in $not.
   it("exposes Match ALL / ANY toggle defaulting to ALL", () => {
     renderBar();
     const all = screen.getByRole("radio", { name: "ALL" });

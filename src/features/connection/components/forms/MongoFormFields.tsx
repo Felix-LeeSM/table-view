@@ -1,14 +1,12 @@
 /**
- * Sprint 138 (#4 — DBMS-aware connection form): MongoDB-specific form
- * fields. Distinguishes from PG/MySQL by:
+ * MongoDB-specific form fields. Distinguishes from PG/MySQL by:
  *
  *   - `user` / `password` are optional (MongoDB allows unauthenticated
  *     connections in dev clusters)
  *   - `database` is the default DB to land on after connect — labelled
  *     "(optional)" because the user can pick a DB later via DbSwitcher
- *   - `authSource`, `replicaSet`, `sslMode` are Mongo-specific and
- *     persisted in the existing `ConnectionConfig` extension fields
- *     (see Sprint 65).
+ *   - `authSource` and `replicaSet` are Mongo-specific and persisted in the
+ *     existing `ConnectionConfig` extension fields.
  */
 import { useTranslation } from "react-i18next";
 import type { ConnectionDraft } from "../../model";
@@ -49,7 +47,7 @@ export default function MongoFormFields({
 }: MongoFormFieldsProps) {
   const { t } = useTranslation("featuresConnection");
   if (section === "advanced") {
-    // MongoDB-specific extension block (Sprint 65 compatibility). A fallback is
+    // MongoDB-specific extension block. A fallback is
     // not a promise the server accepts it: an empty `authSource` authenticates
     // against `database`, which is the wrong realm when the user lives in
     // `admin` (src-tauri/table-view-core/src/db/mongodb/connection.rs
@@ -208,12 +206,8 @@ export default function MongoFormFields({
         )}
       </div>
 
-      {/* Default Database — Sprint 345 made it required (defaults to
-          `admin`). Sprint 381 (2026-05-17) reverts that for Mongo only:
-          MongoDB connections do not require a default database. When
-          left blank the toolbar chip surfaces "(no database)" and the
-          user picks per-tab; admin commands (`db.runCommand({ping: 1})`)
-          run against the admin DB regardless of any pre-bound default. */}
+      {/* Default Database — optional for MongoDB (Mongo db-contract α); see
+          `validateConnectionDraft`. */}
       <div>
         <label htmlFor="conn-database" className={labelClass}>
           {t("form.labelDatabaseOptional")}

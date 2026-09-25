@@ -1,19 +1,19 @@
 [alias]
-# Sprint 237 P5+ (2026-05-08) — DB tier 2 통합 테스트 단축. testcontainers
-# 가 첫 호출 시 docker container 를 lazy 로 띄우고, 프로세스 종료 시
-# Drop 으로 자동 정리. PG/Mongo *_HOST/*_PORT 등 env 가 셋팅돼 있으면
-# 외부 인스턴스 재사용 (개발 중 빠른 iteration).
+# Shortcuts for the DB tier-2 integration tests. testcontainers brings the
+# docker container up lazily on the first call and cleans it up through Drop
+# when the process exits. When env vars such as PG/Mongo `*_HOST`/`*_PORT` are
+# set, an external instance is reused instead (fast iteration while developing).
 #
-# 호출 예:
-#   cargo pg-test                 — PG 통합 테스트 (query/schema/value-search/fixture)
-#   cargo mongo-test              — Mongo 통합 테스트
-#   cargo mysql-test              — MySQL 통합 테스트 (Sprint 296)
-#   cargo mssql-test              — SQL Server 통합 테스트 (#1642)
-#   cargo oracle-test             — Oracle 통합 테스트 (#1674; amd64 전용 이미지)
-#   cargo db-test                 — PG + Mongo + MySQL + MSSQL + Oracle 전부
-#   PGHOST=... cargo pg-test      — 외부 PG 재사용
-#   MSSQL_HOST=... cargo mssql-test — 외부 SQL Server 재사용
-#   ORACLE_HOST=... cargo oracle-test — 외부 Oracle 재사용 (arm 은 이미지 없음)
+# Examples:
+#   cargo pg-test                 — PG integration tests (query/schema/value-search/fixture)
+#   cargo mongo-test              — Mongo integration tests
+#   cargo mysql-test              — MySQL integration tests
+#   cargo mssql-test              — SQL Server integration tests (#1642)
+#   cargo oracle-test             — Oracle integration tests (#1674; amd64-only image)
+#   cargo db-test                 — PG + Mongo + MySQL + MSSQL + Oracle, all of them
+#   PGHOST=... cargo pg-test      — reuse an external PG
+#   MSSQL_HOST=... cargo mssql-test — reuse an external SQL Server
+#   ORACLE_HOST=... cargo oracle-test — reuse an external Oracle (no image for arm)
 pg-test = "test --test query_integration --test schema_integration --test value_search_integration --test fixture_loading"
 mongo-test = "test --test mongo_integration"
 mysql-test = "test --test mysql_integration"

@@ -1,10 +1,11 @@
 /**
- * 작성 2026-05-17 (Phase 5 sprint-372 / AC-372-04).
+ * AC-372-04.
  *
- * 사유: clear_history 의 user flow path 마지막 outcome (toast 가
- * deletedCount 와 함께 뜨는가) 까지 lock. confirm 단계 + 응답 N rows
- * formatting + error path 3개를 검증한다. backend 의 wire shape 은
- * `src/lib/tauri/history.test.ts` 와 lego (invoke "clear_history" no req).
+ * Reason: locks the last outcome of the `clear_history` user flow path
+ * (does the toast carry `deletedCount`?). Verifies the confirm step, the
+ * N-rows response formatting, and the error path. The backend wire shape
+ * belongs to `src/lib/tauri/history.test.ts` (lego; invoke
+ * "clear_history", no req).
  */
 
 import { act, render, screen, waitFor } from "@testing-library/react";
@@ -25,13 +26,13 @@ describe("ClearHistoryButton (sprint-372)", () => {
   });
 
   // AC-372-04 — confirm → IPC → toast "N rows cleared".
-  // 작성 2026-05-17. 사유: 사용자 단일 user flow path. confirm dialog
-  // 를 통과한 뒤 IPC 1회 + toast 1개 (deletedCount 가 메시지에 들어감).
+  // Reason: a single user flow path. After the confirm dialog, 1 IPC +
+  // 1 toast (the message carries `deletedCount`).
   it("[AC-372-04] confirm dialog → clear_history → toast with deletedCount", async () => {
     invokeMock.mockResolvedValueOnce({ deletedCount: 12 });
     render(<ClearHistoryButton />);
 
-    // 트리거 → confirm dialog 열림
+    // Trigger → the confirm dialog opens.
     act(() => {
       screen.getByTestId("clear-history-button").click();
     });
@@ -48,7 +49,7 @@ describe("ClearHistoryButton (sprint-372)", () => {
     });
     expect(invokeMock).toHaveBeenCalledTimes(1);
 
-    // toast 1개 + deletedCount 가 메시지에 등장.
+    // 1 toast, and `deletedCount` appears in the message.
     await waitFor(() => {
       const ts = useToastStore.getState().toasts;
       expect(ts).toHaveLength(1);
@@ -57,8 +58,8 @@ describe("ClearHistoryButton (sprint-372)", () => {
     });
   });
 
-  // 1 row → "1 row cleared" (singular). plural formatting 회귀 가드.
-  // 작성 2026-05-17. 사유: 사용자에게 매끄러운 i18n-ish 표현.
+  // 1 row → "1 row cleared" (singular). Plural-formatting regression
+  // guard. Reason: smooth, i18n-ish wording for the user.
   it("formats singular row count with 'row' (no s)", async () => {
     invokeMock.mockResolvedValueOnce({ deletedCount: 1 });
     render(<ClearHistoryButton />);
@@ -78,8 +79,8 @@ describe("ClearHistoryButton (sprint-372)", () => {
   });
 
   // backend reject → error toast.
-  // 작성 2026-05-17. 사유: clear 가 실패해도 user 가 silent failure 가
-  // 아니라 진단 메시지를 받는다.
+  // Reason: when the clear fails the user gets a diagnostic message,
+  // not a silent failure.
   it("surfaces backend reject as an error toast", async () => {
     invokeMock.mockRejectedValueOnce(new Error("disk full"));
     render(<ClearHistoryButton />);
@@ -99,9 +100,8 @@ describe("ClearHistoryButton (sprint-372)", () => {
     });
   });
 
-  // confirm cancel → IPC 0회.
-  // 작성 2026-05-17. 사유: 실수 클릭에 대한 escape path. backend 호출
-  // 0 이 lock.
+  // confirm cancel → 0 IPC calls.
+  // Reason: an escape path for a mis-click. The lock is 0 backend calls.
   it("does not call IPC when the user cancels the confirm dialog", async () => {
     render(<ClearHistoryButton />);
 

@@ -1,4 +1,4 @@
-//! Sprint 371 (Phase 5 F.5) — SQL literal masking for `query_history.sql_redacted`.
+//! SQL literal masking for `query_history.sql_redacted`.
 //!
 //! Strategy doc F.5 (line 535–562) — every `query_history` row carries two
 //! columns: `sql` (user-readable, returned only from `get_history_detail`) and
@@ -178,7 +178,7 @@ struct Tok {
 /// boundaries: quote/comment scans only stop on ASCII bytes (UTF-8
 /// continuation bytes never collide with ASCII), and the catch-all consumes
 /// whole UTF-8 sequences — so span slicing never panics into the fail-open
-/// `catch_unwind` path (2nd review B4).
+/// `catch_unwind` path.
 fn tokenize(sql: &str) -> Vec<Tok> {
     let b = sql.as_bytes();
     let n = b.len();
@@ -333,7 +333,7 @@ fn tokenize(sql: &str) -> Vec<Tok> {
         // sequence (continuation bytes are 0b10xxxxxx) so every token
         // boundary stays a char boundary — a byte-wise `i + 1` here ended a
         // token mid-char, later slicing panicked, and `catch_unwind`
-        // fail-opened to the plaintext original (2nd review B4).
+        // fail-opened to the plaintext original.
         i += 1;
         while i < n && (b[i] & 0xC0) == 0x80 {
             i += 1;
@@ -385,8 +385,8 @@ fn is_hex_literal(sql: &str, t: &Tok) -> bool {
 
 /// Subject token of a credential assignment: a bareword or quoted
 /// *identifier* whose text contains `password`/`pwd`/`secret` (the latter
-/// covers MSSQL `CREATE DATABASE SCOPED CREDENTIAL ... SECRET = '...'` —
-/// 2nd review B1; `IDENTITY = '...'` is not a subject and survives).
+/// covers MSSQL `CREATE DATABASE SCOPED CREDENTIAL ... SECRET = '...'`;
+/// `IDENTITY = '...'` is not a subject and survives).
 /// Single-quoted / dollar-quoted tokens are values, never subjects — that
 /// asymmetry is what keeps `SELECT 'my password'` and JSON literals
 /// untouched.
@@ -415,7 +415,7 @@ fn conn_string_regex() -> &'static Regex {
     })
 }
 
-/// Key=value credential in a *plain-text* driver message (review #1490 B2).
+/// Key=value credential in a *plain-text* driver message (#1490).
 /// Unlike [`conn_string_regex`] — which runs inside SQL string literals and
 /// must never cross the literal's own quotes — a driver message has no
 /// escape structure, so a single-/double-quoted value (libpq conninfo
@@ -515,7 +515,7 @@ fn credential_replacements(sql: &str, toks: &[Tok]) -> Vec<(usize, usize, &'stat
             if let Some(t1) = toks.get(i + 1) {
                 // `password = 'x'` / `password_hash = "x"` — and the colon
                 // form `pwd: "x"` / `"password": "x"` (mongo shell / ES raw
-                // text stored via the mongo error path, 2nd review B2).
+                // text stored via the mongo error path).
                 if is_char(sql, t1, '=') || is_char(sql, t1, ':') {
                     if let Some(t2) = toks.get(i + 2) {
                         // `is_hex_literal` covers MSSQL `PASSWORD = 0x... HASHED`
@@ -685,10 +685,10 @@ pub fn redact_credentials(sql: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-17 (Phase 5 sprint-371) — module-local smoke for the
-    //! redact regex. Cargo integration scenarios (panic fallback + exotic
-    //! literal shapes) live in `tests/sql_redact.rs` and use this module
-    //! via `table_view_lib::storage::sql_redact::sql_redact`.
+    //! Written 2026-05-17 — module-local smoke for the redact regex. Cargo
+    //! integration scenarios (panic fallback + exotic literal shapes) live in
+    //! `tests/sql_redact.rs` and use this module via
+    //! `table_view_lib::storage::sql_redact::sql_redact`.
 
     use super::{redact_connection_message, redact_credentials, redact_paths_and_dn, sql_redact};
 
@@ -755,7 +755,7 @@ mod tests {
         }
     }
 
-    // Reason: review #1490 B2 — libpq conninfo quotes its values
+    // Reason: #1490 — libpq conninfo quotes its values
     // (`password='x'` / `pwd="x"`, spaces allowed inside the quotes); the
     // pre-fix value class stopped at the leading quote and leaked the
     // secret whole (2026-07-11).

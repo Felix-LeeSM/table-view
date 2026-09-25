@@ -72,9 +72,9 @@ export function useDataGridEdit({
 
   // Cell editing state — these stay in component-local useState. Only
   // the four pending diff slices (pendingEdits / pendingNewRows /
-  // pendingDeletedRowKeys / undoStack) move to the cross-mount store
-  // (Sprint 251). `editingCell` / `editValue` are intrinsically per-mount
-  // input UI state and reset on remount is desirable.
+  // pendingDeletedRowKeys / undoStack) move to the cross-mount store.
+  // `editingCell` / `editValue` are intrinsically per-mount input UI
+  // state and reset on remount is desirable.
   const [editingCell, setEditingCell] = useState<{
     row: number;
     col: number;
@@ -232,11 +232,11 @@ export function useDataGridEdit({
     const key = editKey(editingCell.row, editingCell.col);
     const originalCell = data?.rows[editingCell.row]?.[editingCell.col];
     const originalValue = cellToEditValue(originalCell);
-    // Sprint 249: snapshot only when the edit actually changes
-    // pendingEdits — `applyEditOrClear` returns the same Map identity
-    // for no-ops (open editor + close without typing, or revert to
-    // original). We compute the resolved next map up-front so the
-    // pre-mutation snapshot lines up with the actual state change.
+    // Snapshot only when the edit actually changes pendingEdits —
+    // `applyEditOrClear` returns the same Map identity for no-ops (open
+    // editor + close without typing, or revert to original). We compute
+    // the resolved next map up-front so the pre-mutation snapshot lines
+    // up with the actual state change.
     const next = applyEditOrClear(pendingEdits, key, editValue, originalValue);
     if (next !== pendingEdits) {
       pushSnapshot();
@@ -335,8 +335,8 @@ export function useDataGridEdit({
         const key = editKey(editingCell.row, editingCell.col);
         const originalCell = data?.rows[editingCell.row]?.[editingCell.col];
         const originalValue = cellToEditValue(originalCell);
-        // Sprint 249: same no-op skip rule as `saveCurrentEdit` — only
-        // snapshot when this auto-save path actually shifts pendingEdits.
+        // Same no-op skip rule as `saveCurrentEdit` — only snapshot when
+        // this auto-save path actually shifts pendingEdits.
         const next = applyEditOrClear(
           pendingEdits,
           key,
@@ -381,7 +381,7 @@ export function useDataGridEdit({
   const handleAddRow = useCallback(() => {
     if (!canEditRows) return;
     if (!data) return;
-    // Sprint 249: deliberate user action — always snapshot.
+    // Deliberate user action — always snapshot.
     pushSnapshot();
     // #1433 — `undefined` is the "untouched" sentinel: the SQL generator
     // omits untouched cells on default/identity columns. `null` would be
@@ -402,8 +402,8 @@ export function useDataGridEdit({
   const handleDeleteRow = useCallback(() => {
     if (!canEditRows) return;
     if (selectedRowIds.size === 0) return;
-    // Sprint 249: snapshot AFTER the empty-selection guard so a no-op
-    // delete (no rows selected) doesn't pollute the stack.
+    // Snapshot AFTER the empty-selection guard so a no-op delete (no rows
+    // selected) doesn't pollute the stack.
     pushSnapshot();
     setPendingDeletedRowKeys((prev) => {
       const next = new Set(prev);
@@ -431,7 +431,7 @@ export function useDataGridEdit({
   const handleDuplicateRow = useCallback(() => {
     if (!canEditRows) return;
     if (!data || selectedRowIds.size === 0) return;
-    // Sprint 249: same guard-then-snapshot ordering as `handleDeleteRow`.
+    // Same guard-then-snapshot ordering as `handleDeleteRow`.
     pushSnapshot();
     const sortedIds = [...selectedRowIds].sort((a, b) => a - b);
     const newRows = sortedIds.map((rowIdx) => {
@@ -472,10 +472,10 @@ export function useDataGridEdit({
   //
   // Issue #1204 — the marker tracks *pending edits existing*, not the grid
   // being mounted. The four pending slices live in the cross-mount
-  // `dataGridEditStore` (Sprint 251), so a tab switch (which unmounts this
-  // grid) must NOT clear the marker while the edits survive in the store —
-  // otherwise the inactive tab's close / disconnect guard reads a stale
-  // false. The marker clears through this effect when the pending diff empties
+  // `dataGridEditStore`, so a tab switch (which unmounts this grid) must
+  // NOT clear the marker while the edits survive in the store — otherwise
+  // the inactive tab's close / disconnect guard reads a stale false. The
+  // marker clears through this effect when the pending diff empties
   // (commit / discard, still mounted) and through `removeTab` /
   // `clearForConnection` on explicit close.
   useEffect(() => {

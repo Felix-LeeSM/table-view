@@ -4,11 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig } from "@/types/connection";
 
 // ---------------------------------------------------------------------------
-// Mock @lib/tauri/window — sprint-363 (Phase 3, Q13) wires ConnectionList
-// double-click into `openWorkspaceWindow(connId)` so the per-conn label
-// `workspace-{id}` is build/focused by backend. Mocked at module scope so
-// every test in this file can spy on the IPC call shape without hitting
-// the Tauri runtime (vitest jsdom env).
+// Mock @lib/tauri/window — Q13 wires ConnectionList double-click into
+// `openWorkspaceWindow(connId)` so the backend builds/focuses the per-conn
+// label `workspace-{id}`. Mocked at module scope so every test in this file
+// can spy on the IPC call shape without hitting the Tauri runtime (vitest
+// jsdom env).
 // ---------------------------------------------------------------------------
 const openWorkspaceWindowMock = vi.fn((connId: string) => {
   void connId;
@@ -423,8 +423,9 @@ describe("ConnectionList", () => {
 
   // -----------------------------------------------------------------------
   // 2026-05-05 — drop visual indicators were removed per user request
-  // ("group에서 제거할 때 indicator가 남아있어"). The hint dialog and the
-  // dashed outline are no longer rendered at any point during the drag.
+  // ("the indicator stays behind when removing from a group"). The hint
+  // dialog and the dashed outline are no longer rendered at any point during
+  // the drag.
   // Lock the absence so a future re-introduction is caught in unit tests.
   // -----------------------------------------------------------------------
   it("never renders an ungrouped-drop-hint dialog during a drag", () => {
@@ -522,24 +523,23 @@ describe("ConnectionList", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 작성 2026-05-16 (Phase 3 sprint-363) — Q13 같은 conn focus + per-conn
-  // workspace window IPC 호출 규약.
+  // Written 2026-05-16 — Q13 same-conn focus + per-conn workspace window IPC
+  // call contract.
   //
-  // 사유: sprint-361 의 `openWorkspaceWindow(connId)` wrapper 는 backend
-  // 의 idempotent `workspace-{conn_id}` 라벨 build/focus 분기를 호출하는
-  // 유일한 frontend 경로. sprint-363 의 contract 는 connection
-  // double-click 시 이 wrapper 가 invoke 되어야 한다. 본 테스트는
-  // ConnectionList 가 onActivate 콜백을 wrap 해서 IPC 와 store-side
-  // 처리를 둘 다 발사함을 잠근다.
+  // Reason: the `openWorkspaceWindow(connId)` wrapper is the only frontend
+  // path that calls the backend's idempotent `workspace-{conn_id}` label
+  // build/focus branch. The contract is that a connection double-click
+  // invokes this wrapper. These tests lock that ConnectionList wraps the
+  // onActivate callback and fires both the IPC and the store-side handling.
   //
-  // 시나리오 매트릭스:
-  //   - AC-363-FE-01 single double-click → openWorkspaceWindow(id) 1회
-  //   - AC-363-FE-02 같은 conn 두 번 double-click → openWorkspaceWindow 2회
-  //     (backend idempotent 분기는 별 cargo test 에서 잠금됨)
-  //   - AC-363-FE-03 IPC reject 시 onActivate 는 여전히 호출됨 (store
-  //     side 가 IPC 결과와 독립적으로 user signal 을 받아야 함)
-  //   - AC-363-FE-04 onActivate 없이도 IPC 는 fire 된다 (정말로 window
-  //     open 만 원하는 caller 도 working flow)
+  // Scenario matrix:
+  //   - AC-363-FE-01 single double-click → openWorkspaceWindow(id) once
+  //   - AC-363-FE-02 same conn double-clicked twice → openWorkspaceWindow
+  //     twice (a separate cargo test locks the backend idempotent branch)
+  //   - AC-363-FE-03 on IPC rejection onActivate is still called (the store
+  //     side must receive the user signal independently of the IPC result)
+  //   - AC-363-FE-04 the IPC fires even without onActivate (a caller that
+  //     really only wants the window opened still works)
   // ---------------------------------------------------------------------------
   describe("AC-363-FE-*: openWorkspaceWindow on double-click", () => {
     beforeEach(() => {
@@ -678,7 +678,8 @@ describe("ConnectionList", () => {
       _draggedConnectionId = "c1";
     });
 
-    // Reason: dragover 시 그 그룹만 drop 대상으로 하이라이트 (2026-07-18)
+    // Reason: on dragover, highlight only that group as the drop target
+    // (2026-07-18)
     it("flags only the hovered group as the drop target on dragover", () => {
       render(<ConnectionList />);
       const [g1, g2] = screen.getAllByTestId("connection-group");
@@ -689,7 +690,8 @@ describe("ConnectionList", () => {
       expect(g2).toHaveAttribute("data-drop-target", "false");
     });
 
-    // Reason: 포인터가 다른 그룹으로 옮겨가면 하이라이트도 따라 이동 (2026-07-18)
+    // Reason: when the pointer moves to another group, the highlight follows
+    // (2026-07-18)
     it("moves the highlight to the group under the pointer", () => {
       render(<ConnectionList />);
       const [g1, g2] = screen.getAllByTestId("connection-group");
@@ -703,7 +705,8 @@ describe("ConnectionList", () => {
       expect(g2).toHaveAttribute("data-drop-target", "true");
     });
 
-    // Reason: dragend(=드롭/Esc 취소) 시 하이라이트 제거, 상태 누수 없음 (2026-07-18)
+    // Reason: dragend (= drop / Esc cancel) clears the highlight with no
+    // leaked state (2026-07-18)
     it("clears the highlight on dragend so an Esc cancel leaves nothing behind", () => {
       const { container } = render(<ConnectionList />);
       const [g1] = screen.getAllByTestId("connection-group");
@@ -719,7 +722,7 @@ describe("ConnectionList", () => {
       expect(g1).toHaveAttribute("data-drop-target", "false");
     });
 
-    // Reason: drop 완료 후 하이라이트 제거 (2026-07-18)
+    // Reason: clear the highlight once the drop completes (2026-07-18)
     it("clears the highlight after a drop on the root area", () => {
       const { container } = render(<ConnectionList />);
       const [g1] = screen.getAllByTestId("connection-group");
@@ -733,7 +736,8 @@ describe("ConnectionList", () => {
       expect(g1).toHaveAttribute("data-drop-target", "false");
     });
 
-    // Reason: 포인터가 루트(비그룹) 영역으로 나가면 그룹 하이라이트 해제 (2026-07-18)
+    // Reason: clear the group highlight when the pointer moves out to the
+    // root (ungrouped) area (2026-07-18)
     it("clears the group highlight when the pointer moves to the root area", () => {
       const { container } = render(<ConnectionList />);
       const [g1] = screen.getAllByTestId("connection-group");

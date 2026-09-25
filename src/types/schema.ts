@@ -37,7 +37,7 @@ export interface ColumnInfo {
    */
   check_clauses?: string[];
   /**
-   * Sprint 238 AC-238-02 — display category for the DataGrid (drives
+   * AC-238-02 — display category for the DataGrid (drives
    * default width + text-align). Independent of `data_type`, which is
    * preserved verbatim for structure / records views. Backend-optional
    * (`#[serde(default)]` → `unknown`) so older payloads / fixtures
@@ -79,8 +79,9 @@ export type FilterOperator =
   | "Gte"
   | "Lte"
   | "Like"
-  // 대소문자를 무시하는 LIKE. 방언마다 있고 없다 — 필터 목록에 뜨는 조건은
-  // `sqlDialectProfile` 의 `capabilities.ilike` 다 (#2430).
+  // Case-insensitive LIKE. Not every dialect has it — whether it shows up
+  // in the filter list is gated by `sqlDialectProfile`'s `capabilities.ilike`
+  // (#2430).
   | "Ilike"
   | "IsNull"
   | "IsNotNull";
@@ -156,11 +157,11 @@ export type ColumnChange =
       new_nullable: boolean | null;
       new_default_value: string | null;
       /**
-       * Sprint 237 — optional USING cast expression for
+       * Optional USING cast expression for
        * `ALTER COLUMN … TYPE … USING …`. Only emitted when both
        * `new_data_type` and `using_expression` are non-null. Free-text
        * passthrough; the backend serdes this with `#[serde(default)]`
-       * so payloads from pre-Sprint-237 callers (omitting the field)
+       * so payloads from callers that omit the field
        * deserialize to `None` and the emitted SQL is byte-equivalent.
        */
       using_expression?: string | null;
@@ -188,16 +189,16 @@ export interface AlterTableRequest {
   changes: ColumnChange[];
   preview_only?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. When set, the backend probes
+   * Opt-in DbMismatch guard. When set, the backend probes
    * the adapter's `current_database()` under the `active_connections`
    * lock and rejects with `AppError::DbMismatch` before invoking the
-   * trait method. Omitting the field is byte-equivalent to pre-Sprint-271.
+   * trait method. Omitting the field is byte-equivalent.
    */
   expected_database?: string;
 }
 
 /**
- * Sprint 235 — request payload for `tauri.renameTableRequest`. Mirrors
+ * Request payload for `tauri.renameTableRequest`. Mirrors
  * the Rust `RenameTableRequest` struct (camelCase wire form via serde
  * rename). `previewOnly` defaults to `false` server-side; the modal sends
  * `true` for the Show DDL fetch and `false` for the commit.
@@ -209,13 +210,13 @@ export interface RenameTableRequest {
   newName: string;
   previewOnly?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   * Opt-in DbMismatch guard. See `AlterTableRequest`.
    */
   expectedDatabase?: string;
 }
 
 /**
- * Sprint 235 — request payload for `tauri.dropTableRequest`. Mirrors
+ * Request payload for `tauri.dropTableRequest`. Mirrors
  * the Rust `DropTableRequest` struct. `cascade` defaults to `false`
  * (PG implicit RESTRICT; SQL omits the `RESTRICT` keyword for byte-
  * equivalence). `previewOnly` matches `RenameTableRequest`.
@@ -227,18 +228,18 @@ export interface DropTableRequest {
   cascade?: boolean;
   previewOnly?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   * Opt-in DbMismatch guard. See `AlterTableRequest`.
    */
   expectedDatabase?: string;
 }
 
 /**
- * Sprint 236 — request payload for `tauri.addColumnRequest`. Mirrors
+ * Request payload for `tauri.addColumnRequest`. Mirrors
  * the Rust `AddColumnRequest` struct (camelCase wire form via serde
- * rename). `column` reuses the Sprint 226 `ColumnDefinition` shape so
+ * rename). `column` reuses the `ColumnDefinition` shape so
  * the existing `CreateTableDialog` field types are reusable in the new
  * `AddColumnDialog`. `checkExpression` is request-level (NOT inside
- * `ColumnDefinition`) so the Sprint 226 `CreateTableRequest` payload
+ * `ColumnDefinition`) so the `CreateTableRequest` payload
  * stays diff = 0; when present and the trimmed expression is non-empty
  * the backend appends `CHECK (<expr>)` after `DEFAULT` (free-text
  * passthrough — no escaping, no syntax check). `previewOnly` toggles
@@ -252,16 +253,16 @@ export interface AddColumnRequest {
   checkExpression?: string | null;
   previewOnly?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   * Opt-in DbMismatch guard. See `AlterTableRequest`.
    */
   expectedDatabase?: string;
 }
 
 /**
- * Sprint 236 — request payload for `tauri.dropColumnRequest`. Mirrors
+ * Request payload for `tauri.dropColumnRequest`. Mirrors
  * the Rust `DropColumnRequest` struct. `cascade` defaults to `false`
  * (PG implicit RESTRICT; SQL omits the `RESTRICT` keyword for byte-
- * equivalence with the implicit form, matching Sprint 235
+ * equivalence with the implicit form, matching the
  * `DropTableRequest` convention). `previewOnly` matches
  * `AddColumnRequest`.
  */
@@ -273,7 +274,7 @@ export interface DropColumnRequest {
   cascade?: boolean;
   previewOnly?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   * Opt-in DbMismatch guard. See `AlterTableRequest`.
    */
   expectedDatabase?: string;
 }
@@ -288,7 +289,7 @@ export interface CreateIndexRequest {
   is_unique?: boolean;
   preview_only?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   * Opt-in DbMismatch guard. See `AlterTableRequest`.
    */
   expected_database?: string;
 }
@@ -305,7 +306,7 @@ export interface DropIndexRequest {
   if_exists?: boolean;
   preview_only?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   * Opt-in DbMismatch guard. See `AlterTableRequest`.
    */
   expected_database?: string;
 }
@@ -321,7 +322,7 @@ export type ConstraintDefinition =
       reference_table: string;
       reference_columns: string[];
       /**
-       * Sprint 229 — referential action when the referenced row is
+       * Referential action when the referenced row is
        * deleted. Whitelist (PG canonical, uppercase): NO ACTION |
        * RESTRICT | CASCADE | SET NULL | SET DEFAULT. Optional — when
        * omitted (or null) the backend's `#[serde(default)]` resolves
@@ -330,7 +331,7 @@ export type ConstraintDefinition =
        */
       on_delete?: string | null;
       /**
-       * Sprint 229 — referential action when the referenced row is
+       * Referential action when the referenced row is
        * updated. Same whitelist + default-omit semantics as
        * `on_delete`.
        */
@@ -353,7 +354,7 @@ export interface AddConstraintRequest {
   definition: ConstraintDefinition;
   preview_only?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   * Opt-in DbMismatch guard. See `AlterTableRequest`.
    */
   expected_database?: string;
 }
@@ -365,7 +366,7 @@ export interface DropConstraintRequest {
   constraint_name: string;
   preview_only?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   * Opt-in DbMismatch guard. See `AlterTableRequest`.
    */
   expected_database?: string;
 }
@@ -374,7 +375,7 @@ export interface SchemaChangeResult {
   sql: string;
 }
 
-// ── Create Table types (Sprint 226) ────────────────────────────────────
+// ── Create Table types ─────────────────────────────────────────────────
 
 export interface ColumnDefinition {
   name: string;
@@ -382,7 +383,7 @@ export interface ColumnDefinition {
   nullable: boolean;
   default_value: string | null;
   /**
-   * Sprint 227 — optional column comment. When `undefined` (or empty
+   * Optional column comment. When `undefined` (or empty
    * after trim) the backend emits no `COMMENT ON COLUMN`. When set,
    * single quotes are doubled (`O'Brien` → `'O''Brien'`) inside the
    * SQL literal and the statement is appended to the CREATE TABLE
@@ -390,14 +391,14 @@ export interface ColumnDefinition {
    */
   comment?: string;
   /**
-   * Sprint 242 — when `true`, the column is emitted as an
+   * When `true`, the column is emitted as an
    * auto-incrementing identity column (`GENERATED BY DEFAULT AS
    * IDENTITY` on PG). The backend forces NOT NULL and silently drops
    * any caller-supplied `default_value` to keep the SQL valid. Caller
    * is responsible for picking an integer-family `data_type`
    * (`smallint` / `integer` / `bigint`); the database engine itself
    * rejects non-integer types with a clear error. Defaults to `false`
-   * (omitting the field is byte-equivalent to pre-Sprint-242 callers).
+   * (omitting the field is byte-equivalent).
    */
   is_identity?: boolean;
 }
@@ -410,13 +411,13 @@ export interface CreateTableRequest {
   primary_key?: string[] | null;
   preview_only?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   * Opt-in DbMismatch guard. See `AlterTableRequest`.
    */
   expected_database?: string;
 }
 
 /**
- * Sprint 240 — child index entry inside a `CreateTablePlanRequest`.
+ * Child index entry inside a `CreateTablePlanRequest`.
  * Mirrors the Rust `CreateTablePlanIndex` struct (camelCase wire
  * form). The parent-level `connectionId` / `schema` / `name` /
  * `previewOnly` are inherited; this entry only carries the per-index
@@ -430,7 +431,7 @@ export interface CreateTablePlanIndex {
 }
 
 /**
- * Sprint 240 — child constraint entry inside a `CreateTablePlanRequest`.
+ * Child constraint entry inside a `CreateTablePlanRequest`.
  * Mirrors the Rust `CreateTablePlanConstraint` struct.
  */
 export interface CreateTablePlanConstraint {
@@ -439,12 +440,12 @@ export interface CreateTablePlanConstraint {
 }
 
 /**
- * Sprint 240 — unified `CREATE TABLE + indexes + constraints` payload.
+ * Unified `CREATE TABLE + indexes + constraints` payload.
  *
  * The `CreateTableDialog` previously fanned out N+1 IPC calls during
  * each preview refresh (1 `create_table` + N `create_index` + M
- * `add_constraint`). Sprint 240 collapses this into a single
- * server-side IPC: the backend builds the full SQL plan once and the
+ * `add_constraint`). A single server-side IPC replaces this: the
+ * backend builds the full SQL plan once and the
  * frontend renders it in one preview pane.
  *
  * Preview mode joins child SQL with `;\n`.
@@ -460,7 +461,7 @@ export interface CreateTablePlanRequest {
   constraints?: CreateTablePlanConstraint[];
   previewOnly?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   * Opt-in DbMismatch guard. See `AlterTableRequest`.
    */
   expectedDatabase?: string;
 }
@@ -482,7 +483,7 @@ export interface FunctionInfo {
 }
 
 /**
- * Sprint 272 — single trigger entry returned by `tauri.listTriggers`.
+ * Single trigger entry returned by `tauri.listTriggers`.
  *
  * Mirrors the Rust `TriggerInfo` struct with `#[serde(rename_all =
  * "camelCase")]`. PG-only this phase (non-PG RDB adapters return an
@@ -515,7 +516,7 @@ export interface TriggerInfo {
 }
 
 /**
- * Sprint 273 — `CREATE TRIGGER` request. Mirrors the Rust
+ * `CREATE TRIGGER` request. Mirrors the Rust
  * `CreateTriggerRequest` struct with `#[serde(rename_all = "camelCase")]`.
  *
  * Whitelists (server-side validation re-checks; UI restricts the
@@ -531,7 +532,7 @@ export interface TriggerInfo {
  *     PG surfaces any parse error. Empty / whitespace-only string is
  *     treated as "no clause".
  *   - `functionArguments`: optional comma-separated argument list. The
- *     server doubles every `'` (Sprint 272 findings § P3 fix) before
+ *     server doubles every `'` before
  *     interpolating into the `(args)` clause.
  */
 export interface CreateTriggerRequest {
@@ -548,18 +549,18 @@ export interface CreateTriggerRequest {
   functionArguments?: string;
   previewOnly?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   * Opt-in DbMismatch guard. See `AlterTableRequest`.
    */
   expectedDatabase?: string;
 }
 
 /**
- * Sprint 274 — `DROP TRIGGER` request. Mirrors the Rust
+ * `DROP TRIGGER` request. Mirrors the Rust
  * `DropTriggerRequest` struct with `#[serde(rename_all = "camelCase")]`.
  *
  * `cascade` defaults to `false` (PG implicit RESTRICT; SQL omits the
  * `RESTRICT` keyword for byte-equivalence with the implicit form,
- * mirroring Sprint 235 `DropTableRequest` convention). When `true`, the
+ * mirroring the `DropTableRequest` convention). When `true`, the
  * emitted SQL appends a trailing ` CASCADE` keyword. `previewOnly`
  * toggles between SQL emission and `sqlx::Transaction::begin/commit`
  * execution.
@@ -572,13 +573,13 @@ export interface DropTriggerRequest {
   cascade?: boolean;
   previewOnly?: boolean;
   /**
-   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   * Opt-in DbMismatch guard. See `AlterTableRequest`.
    */
   expectedDatabase?: string;
 }
 
 /**
- * Sprint 230 — single Postgres type entry returned by
+ * Single Postgres type entry returned by
  * `tauri.listPostgresTypes(connectionId)`. The wire shape matches the
  * Rust `PostgresTypeInfo` struct (snake_case `type_kind` mirrors serde
  * default naming).
@@ -592,8 +593,8 @@ export interface DropTriggerRequest {
  *   `"composite"` — `CREATE TYPE … AS (…)` (auto row types backing
  *                  every CREATE TABLE are excluded by the SQL filter)
  *
- * Sprint 230 surfaces the field but does not consume it for coloring
- * (deferred to Sprint 231 polish).
+ * `colorClassForTypeKind` in `src/components/schema/CreateTableTypeCombobox.tsx`
+ * maps this field to the option's color dot.
  */
 export interface PostgresTypeInfo {
   schema: string;

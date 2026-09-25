@@ -48,8 +48,8 @@ interface BsonBadge {
 }
 
 function canonicalStringify(value: unknown): string {
-  // Sprint 305 — replacer 가 BigInt/Decimal 을 digit string 으로 emit.
-  // raw JSON.stringify 는 BigInt 만나면 throw.
+  // The replacer emits BigInt/Decimal as a digit string. A raw
+  // `JSON.stringify` throws on BigInt.
   return safeStringifyCell(value);
 }
 

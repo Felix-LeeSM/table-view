@@ -2,17 +2,17 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// 작성 2026-05-16 (Phase 4 W2→W3 sprint-370)
+// Written 2026-05-16 (state-management-strategy Phase 4 W2→W3)
 //
-// 사유: mruStore 의 LS retire 이후 store 의 행동 contract 가
-// "localStorage round-trip" 에서 "snapshot hydrate + IPC persist" 로 옮겨갔다.
-// 본 파일은 Sprint 119/166/290 의 시나리오 의도 (recentConnections 의 head
-// 이동 / cap 5 / removeRecentConnection / lastUsedConnectionId 재계산) 를
-// 그대로 보존하면서, 영속 채널을 LS 가 아닌 `persist_mru` IPC 로 검사한다.
+// Reason: after mruStore's LS retirement, the store's behavior contract moved
+// from "localStorage round-trip" to "snapshot hydrate + IPC persist". This
+// file keeps the scenario intent (moving an entry to the recentConnections
+// head / cap 5 / removeRecentConnection / lastUsedConnectionId recompute) and
+// checks the persistence channel through the `persist_mru` IPC instead of LS.
 //
-// loadPersistedMru 는 sprint-370 의 결정에 따라 no-op 으로 격하되었으므로
-// 본 파일은 그 형태도 잠근다 — 호출 시 store 가 LS 를 만지지 않고 (legacy
-// 인터페이스 호환만 유지).
+// loadPersistedMru was demoted to a no-op, so this file locks that shape too —
+// when called, the store does not touch LS (it only keeps the legacy interface
+// compatible).
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -68,8 +68,8 @@ describe("mruStore", () => {
   });
 
   it("loadPersistedMru is a no-op after sprint-370 (snapshot SOT)", () => {
-    // Sprint 370 — snapshot IPC is the sole hydration path. The function
-    // survives as a no-op so existing boot effect call sites compile.
+    // The snapshot IPC is the sole hydration path. The function survives as
+    // a no-op so existing boot effect call sites compile.
     const setItemSpy = vi.spyOn(window.localStorage, "setItem");
     const getItemSpy = vi.spyOn(window.localStorage, "getItem");
 
@@ -90,14 +90,14 @@ describe("mruStore", () => {
     expect(useMruStore.getState().recentConnections).toEqual([]);
   });
 
-  // -- Sprint 153 (AC-153-06) — cross-window broadcast allowlist regression --
+  // -- AC-153-06 — cross-window broadcast allowlist regression --
   //
   // `SYNCED_KEYS` pins which top-level state keys are broadcast on the
   // `mru-sync` channel. Adding a new key to `MruState` MUST be a deliberate
   // opt-in/opt-out decision — silently leaking a sensitive new field across
   // windows is the failure mode this regression guards against.
   describe("SYNCED_KEYS allowlist (AC-153-06)", () => {
-    // Reason: Sprint 166 added recentConnections to the sync allowlist (2026-04-28)
+    // Reason: recentConnections joined the sync allowlist (2026-04-28)
     it("exposes exactly the cross-window-synced keys", () => {
       expect([...SYNCED_KEYS]).toEqual([
         "lastUsedConnectionId",
@@ -107,7 +107,7 @@ describe("mruStore", () => {
   });
 });
 
-// -- Sprint 166 — MRU list feature tests (Phase 16) --
+// -- MRU list feature tests (Phase 16) --
 
 describe("MRU list (Sprint 166)", () => {
   // Reason: Phase 16 AC-16-01 — markConnectionUsed adds entry to front of recentConnections (2026-04-28)
@@ -159,7 +159,7 @@ describe("MRU list (Sprint 166)", () => {
     expect(ids).not.toContain("c2");
   });
 
-  // Sprint 370 — IPC mirror replaces the old localStorage JSON.
+  // The IPC mirror replaces the old localStorage JSON.
   it("ships recentConnections to persist_mru IPC", async () => {
     useMruStore.getState().markConnectionUsed("c1");
     useMruStore.getState().markConnectionUsed("c2");
@@ -176,10 +176,11 @@ describe("MRU list (Sprint 166)", () => {
     ]);
   });
 
-  // 작성 이유 (2026-05-13, Sprint 290): 사용자 요구 — recent 항목을 개별
-  // 삭제할 수 있어야 함. mruStore.removeRecentConnection 액션을 추가했고,
-  // 본 회귀 가드는 (a) 정상 제거 + 영속 IPC (b) 미존재 id 무변경
-  // (c) lastUsedConnectionId 재계산 (d) 빈 리스트 → null 을 단언한다.
+  // Reason (2026-05-13): user request — recent entries must be removable one
+  // at a time. The mruStore.removeRecentConnection action was added for this,
+  // and this regression guard asserts (a) normal removal + persistence IPC
+  // (b) no change for an unknown id (c) lastUsedConnectionId recompute
+  // (d) empty list → null.
   describe("removeRecentConnection (Sprint 290)", () => {
     it("기존 항목을 제거하고 persist_mru IPC 에 반영한다", async () => {
       const store = useMruStore.getState();
@@ -228,12 +229,12 @@ describe("MRU list (Sprint 166)", () => {
     });
   });
 
-  // 작성 이유 (2026-08-18, #2433): `clear_mru` 의 wire shape 을 잠그던
-  // 유일한 자리가 `src/pages/HomePage.reset-affordance.test.tsx` 의
-  // AC-376-08 이었는데, #2433 이 그 버튼을 launcher action bar 에서
-  // Recent 목록 끝으로 옮기면서 HomePage 트리에서 사라졌다. 액션을 소유한
-  // store 로 옮겨 잠근다 — 위 `removeRecentConnection` 블록이 `persist_mru`
-  // 에 대해 하는 것과 같은 축이다.
+  // Reason (2026-08-18, #2433): the only place that locked the `clear_mru`
+  // wire shape was AC-376-08 in `src/pages/HomePage.reset-affordance.test.tsx`,
+  // but #2433 moved that button from the launcher action bar to the end of the
+  // Recent list, so the button left the HomePage tree. The lock moves to the
+  // store that owns the action — the same axis the `removeRecentConnection`
+  // block above covers for `persist_mru`.
   describe("clearRecentConnections (#2433 — wire lock 이관)", () => {
     it("목록을 비우고 clear_mru IPC 를 1회 발사한다", async () => {
       const store = useMruStore.getState();

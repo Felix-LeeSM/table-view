@@ -18,7 +18,7 @@ import {
 } from "./__tests__/createTableDialogTestHelpers";
 
 // ─────────────────────────────────────────────────────────────────────
-// Sprint 230 — dynamic Postgres type list (Phase 27 sprint 5).
+// Dynamic Postgres type list.
 // AC-230-08 (dialog wires `usePostgresTypes` → `typesSource` prop) +
 // AC-230-10 (loading-canonical-first + silent merge replacement).
 // ─────────────────────────────────────────────────────────────────────
@@ -29,9 +29,9 @@ describe("Sprint 230 — CreateTableDialog wires dynamic PG type list", () => {
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
     useQueryHistoryStore.setState({ recentVisible: [] });
-    // Punch the module memo so each Sprint 230 case sees a fresh
-    // fetch sequence — `usePostgresTypes` shares one Promise per
-    // connectionId across cases otherwise.
+    // Punch the module memo so each case sees a fresh fetch sequence —
+    // `usePostgresTypes` shares one Promise per connectionId across
+    // cases otherwise.
     invalidatePostgresTypesCache("conn-1");
     // Reset the default mock impl in case a prior case overrode it.
     mockListPostgresTypes.mockReset();
@@ -46,7 +46,7 @@ describe("Sprint 230 — CreateTableDialog wires dynamic PG type list", () => {
     renderDialog();
 
     await waitFor(() => expect(mockListPostgresTypes).toHaveBeenCalledTimes(1));
-    // Sprint 271a — wrapper now takes optional expectedDatabase as 2nd arg.
+    // The wrapper takes an optional expectedDatabase as its 2nd arg.
     // setProdConnection seeds connections[0].database = "app" → resolveActiveDb
     // falls back to the persisted database when no activeStatuses entry exists.
     expect(mockListPostgresTypes).toHaveBeenCalledWith("conn-1", "app");

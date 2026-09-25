@@ -1,26 +1,27 @@
-// Sprint 401 (2026-05-17) — WASM-backed mongosh statement parser.
+// 2026-05-17 — WASM-backed mongosh statement parser.
 //
-// 작성 이유: sprint-382/383/384 의 TS 구현 (lexer.ts / parser.ts /
-// argList.ts) 을 Rust 로 옮겨 `wasm-pack` 으로 빌드한 모듈을 lazy load
-// 하기 위함. 호출부 (`runCommandParser.ts`, `Toolbar.tsx`,
-// `useQueryExecution.ts`) 는 *sync* signature 를 기대하므로, 본 facade 는
-// 두 모드를 지원한다:
+// Reason: the earlier TS implementation (lexer.ts / parser.ts / argList.ts)
+// moved to Rust; this facade lazy-loads the module that `wasm-pack` builds
+// from it. Callers (`runCommandParser.ts`, `Toolbar.tsx`,
+// `mongoQueryExecution.ts`) expect a *sync* signature, so the facade supports
+// two modes:
 //
-//   1. **Eager pre-load** — `src/main.tsx` 가 React mount 직후
-//      `void initMongoshWasm()` 을 fire-and-forget. WASM 모듈이 백그라운드
-//      에서 로드되는 동안 사용자는 첫 화면을 보고 있다 — 실제 mongosh
-//      입력을 시작할 때쯤이면 모듈이 메모리에 있다.
-//   2. **Sync surface** — `parseMongoshStatement(sql)` 은 sync 유지.
-//      WASM 이 아직 로드 안 됐으면 `unsupported-syntax` 의 "parser
-//      initializing" 에러 객체를 반환 — Run 버튼은 disabled 상태로 안전하게
-//      대기. 다음 render cycle 에서 WASM 이 로드돼 있으면 실제 결과 반환.
+//   1. **Eager pre-load** — during boot, `src/main.tsx` starts a dynamic
+//      import that calls `initMongoshWasm()` (fire-and-forget) before it
+//      calls the React render. While the WASM module loads in the background
+//      the user is looking at the first screen — by the time they start
+//      typing mongosh input, the module is in memory.
+//   2. **Sync surface** — `parseMongoshStatement(sql)` stays sync. If WASM
+//      has not loaded yet, it returns an `unsupported-syntax` "parser
+//      initializing" error object. Once WASM has loaded, the next render
+//      cycle gets the real result.
 //
-// sprint-385 의 SQL facade 와 달리 본 facade 가 sync 인 이유:
-// `Toolbar.tsx` 의 `classifyMongoStatement(tab.sql)` 호출이 React render
-// function 안에 있다 — 매 keystroke 마다 호출됨. async 로 바꾸면
-// `useEffect`/`useState`/debounce pipeline 으로 재구조화해야 하고, 그
-// 사이에 Run 버튼의 enable/disable 가 한 프레임씩 늦게 따라가는 race 가
-//생긴다. sprint-401 contract `Decision Lock` 에서 본 trade-off 를 명시.
+// Why this facade is sync, unlike `parseSql` in the SQL facade
+// (`src/lib/sql/sqlAst.ts`): `Toolbar.tsx` calls
+// `classifyMongoStatement(tab.sql)` inside the React render function, so it
+// runs on every keystroke. Going async would mean restructuring into a
+// `useEffect`/`useState`/debounce pipeline, and in between the Run button's
+// enable/disable would trail one frame behind — a race.
 
 import type {
   MongoshAdminCommand,
@@ -54,9 +55,9 @@ let modulePromise: Promise<MongoshWasmModule> | null = null;
 
 /**
  * Public eager-init entry. Resolves once the WASM linear memory + `parse_
- * mongosh` export are ready. Called once from `src/main.tsx` after React
- * mounts (fire-and-forget) so that `parseMongoshStatement` is sync-ready by
- * the time the user enters a query.
+ * mongosh` export are ready. Called once from `src/main.tsx` during boot
+ * (fire-and-forget) so that `parseMongoshStatement` is sync-ready by the
+ * time the user enters a query.
  *
  * Memoized — subsequent calls return the same promise without re-fetching.
  *

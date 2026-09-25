@@ -1,16 +1,17 @@
-//! Issue #1558 — `open_pool` 이 migration 실패를 corruption 으로 오판해
-//! `state.db` 를 quarantine(.bak) 하고 fresh 빈 DB 를 만들면
-//! connections/favorites/query_history/settings 가 조용히 사라진다.
+//! Issue #1558 — when `open_pool` misjudges a migration failure as corruption,
+//! quarantines `state.db` (.bak) and creates a fresh empty DB,
+//! connections/favorites/query_history/settings silently disappear.
 //!
-//! 회귀 재현: 정상 DB 에 "미래" 버전 마이그레이션 행을 `_sqlx_migrations` 에
-//! 심어 downgrade(`MigrateError::VersionMissing`) 상황을 만든다 — 구버전
-//! 바이너리로 downgrade 한 사용자와 동일한 실패. reopen 시 `run_migrations`
-//! 가 실패하는데, 이는 storage corruption 이 아니라 논리적 마이그레이션
-//! 실패이므로 quarantine 하지 말고 명확한 부팅 에러로 전파해야 한다
-//! (`state.db` 보존, `.bak` 없음, `DID_RECOVER` unset).
+//! Regression repro: plant a "future" version migration row in
+//! `_sqlx_migrations` of a healthy DB to create a downgrade
+//! (`MigrateError::VersionMissing`) — the same failure as a user who downgraded
+//! to an older binary. `run_migrations` then fails on reopen, but that is a
+//! logical migration failure rather than storage corruption, so it must
+//! propagate as a clear boot error instead of quarantining (`state.db`
+//! preserved, no `.bak`, `DID_RECOVER` unset).
 //!
-//! corruption(read-path 손상) 시 quarantine 은 `corrupt_body_recovery.rs` 가
-//! 별도로 지킨다 — 본 테스트는 그 동작을 건드리지 않는다.
+//! Quarantine on corruption (read-path damage) is guarded separately by
+//! `corrupt_body_recovery.rs` — this test does not touch that behaviour.
 
 use serial_test::serial;
 use std::sync::atomic::Ordering;
@@ -33,12 +34,13 @@ fn cleanup() {
 async fn open_pool_preserves_db_when_migration_fails_on_downgrade() {
     let _dir = setup_dir();
 
-    // 1. valid DB + migrations 적용.
+    // 1. Valid DB with migrations applied.
     let pool = local::open_pool().await.unwrap();
 
-    // 2. downgrade 시뮬레이션 — 번들된 어떤 마이그레이션보다 높은 버전이
-    //    "적용됨" 으로 기록돼 있으면 sqlx 는 그 버전을 몰라 VersionMissing 으로
-    //    실패한다 (구버전 바이너리로 되돌린 사용자와 동일).
+    // 2. Simulate a downgrade — when a version higher than any bundled
+    //    migration is recorded as "applied", sqlx does not know that version
+    //    and fails with VersionMissing (same as a user who rolled back to an
+    //    older binary).
     sqlx::query(
         "INSERT INTO _sqlx_migrations \
          (version, description, installed_on, success, checksum, execution_time) \
@@ -53,14 +55,14 @@ async fn open_pool_preserves_db_when_migration_fails_on_downgrade() {
     let bak = path.with_extension("db.bak");
     corrupt_recovery::DID_RECOVER.store(false, Ordering::SeqCst);
 
-    // 3. reopen → migration 실패는 corruption 이 아니므로 전파돼야 한다.
+    // 3. Reopen → a migration failure is not corruption, so it must propagate.
     let result = local::open_pool().await;
     assert!(
         result.is_err(),
         "migration downgrade must fail boot loudly, not silently 'recover'"
     );
 
-    // 4. 데이터 손실 금지 — state.db 는 원래 이름 그대로 보존, quarantine 없음.
+    // 4. No data loss — state.db keeps its original name, no quarantine.
     assert!(
         path.exists(),
         "state.db must be preserved on migration failure"
@@ -74,8 +76,9 @@ async fn open_pool_preserves_db_when_migration_fails_on_downgrade() {
         "migration failure must NOT flag a corrupt-recovery"
     );
 
-    // 5. 원본 DB 가 그대로 열려 사용자 데이터(여기선 심어둔 마이그레이션 행)를
-    //    유지하는지 직접 확인 — fresh 빈 DB 로 교체되지 않았음을 증명.
+    // 5. Check directly that the original DB still opens and keeps the user
+    //    data (here, the planted migration row) — proof that it was not
+    //    replaced by a fresh empty DB.
     let verify = sqlx::SqlitePool::connect(&format!("sqlite://{}", path.display()))
         .await
         .unwrap();

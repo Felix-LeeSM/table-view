@@ -5,17 +5,14 @@ import { describe, expect, it } from "vitest";
 import { useMongoAutocomplete } from "./useMongoAutocomplete";
 
 /**
- * Sprint 309 — Hook signature collapsed to a single dispatch surface.
- * The `queryMode` argument is gone (Find/Aggregate toggle removed from
- * `Toolbar.tsx`); the hook serves the union of find query operators +
- * aggregate stages + accumulators + type tags so the user can type any
- * mongosh expression without flipping a UI mode. Tests below assert the
+ * Hook signature collapsed to a single dispatch surface with no
+ * `queryMode` argument; see `useMongoAutocomplete`. Tests below assert the
  * new contract: arrayful return, memoised across stable renders, new
  * memo when `fieldNames` identity flips, and tolerant of `undefined`.
  *
  * The deleted "produces a new memo when queryMode flips" / "find vs
- * aggregate" cases (Sprint 139 era) are intentionally gone — there is
- * no queryMode parameter to flip anymore.
+ * aggregate" cases are intentionally gone — there is no queryMode
+ * parameter to flip anymore.
  */
 describe("useMongoAutocomplete (Sprint 309 unified surface)", () => {
   it("returns an array containing at least the autocomplete + highlight extensions", () => {

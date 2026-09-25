@@ -1,32 +1,25 @@
 /**
- * Reason: Sprint-176 / RISK-009 — selective-attention overlay hardening
- * for the document (Mongo) grid. Mirrors the AC-176-01 negative-test
- * shape used by `DataGridTable.refetch-overlay.test.tsx` but exercises
+ * Reason: RISK-009 — selective-attention overlay hardening for the
+ * document (Mongo) grid. Mirrors the AC-176-01 negative-test shape used
+ * by `DataGridTable.refetch-overlay.test.tsx` but exercises
  * `DocumentDataGrid` so the AC-176-02 guarantee — every full-bleed
  * overlay surfaced by the audit — is locked in code, not just docs.
  *
- * NOTE on test mechanism (sprint-176 attempt 2 — Evaluator findings F-1
- * and F-2): the load-bearing assertion is `event.defaultPrevented ===
- * true`, which proves the overlay's React `onMouseDown` /
- * `onClick` / `onDoubleClick` / `onContextMenu` handlers actually
- * executed `e.preventDefault()`. In jsdom the overlay <div> is a sibling
- * of <table>, so a `fireEvent.click(overlay)` does not bubble to a
- * <tr>; the previous attempt 1 assertion `expect(spy).not.toHaveBeenCalled()`
- * was therefore vacuous. Secondary user-visible checks
- * (aria-selected unchanged, no inline editor mounted) are kept as
- * informative assertions but are not what proves the production
- * handlers ran. Attempt 2 also adds the missing mouseDown +
- * contextmenu coverage (F-2).
+ * NOTE on test mechanism: the load-bearing assertion is
+ * `event.defaultPrevented === true`, which proves the overlay's React
+ * `onMouseDown` / `onClick` / `onDoubleClick` / `onContextMenu` handlers
+ * actually executed `e.preventDefault()`. In jsdom the overlay <div> is a
+ * sibling of <table>, so a `fireEvent.click(overlay)` does not bubble to
+ * a <tr>; an `expect(spy).not.toHaveBeenCalled()` assertion is therefore
+ * vacuous. Secondary user-visible checks (aria-selected unchanged, no
+ * inline editor mounted) are kept as informative assertions but are not
+ * what proves the production handlers ran. mouseDown and contextmenu are
+ * covered here too.
  *
- * Date: 2026-04-30 (sprint-176, generator phase — attempt 2)
- *
- * Sprint-180 update (2026-04-30): the overlay is now threshold-gated by
- * the shared `AsyncProgressOverlay` + `useDelayedFlag(loading, 1000)`.
- * `enterRefetchState` now advances fake timers past 1s so the overlay
- * materialises before pointer-event assertions run. This file uses the
- * `useFakeTimers` shape carefully because the React fetch flow involves
- * microtasks — we resolve the first promise BEFORE turning on fake
- * timers, then switch them on for the threshold advance.
+ * The overlay is threshold-gated by the shared `AsyncProgressOverlay` +
+ * `useDelayedFlag(loading, 1000)`. `enterRefetchState` waits on real
+ * timers for that threshold before the pointer-event assertions run; see
+ * its doc comment for why fake timers are not used.
  */
 
 import {
@@ -120,12 +113,11 @@ function renderGrid() {
  * overlay element once it appears. The second-fetch hang is the only way
  * to reach the refetch state (loading=true + data already rendered).
  *
- * Sprint 180 (AC-180-01): the shared overlay is threshold-gated. Because
- * `useDelayedFlag` schedules a real-time `setTimeout` and our test runs
+ * AC-180-01: the shared overlay is threshold-gated. Because
+ * `useDelayedFlag` schedules a real-time `setTimeout` and this test runs
  * with real timers (the React fetch microtask path needs them), we wait
- * 1100ms wall-clock. This is acceptable for a 4-test file — the previous
- * fake-timer attempt deadlocked because the React fetch chain stalled
- * inside frozen timers and React's flushing internals.
+ * 1100ms wall-clock. Fake timers deadlock here, because the React fetch
+ * chain stalls inside frozen timers and React's flushing internals.
  */
 async function enterRefetchState(): Promise<HTMLElement> {
   findMock
@@ -148,9 +140,7 @@ async function enterRefetchState(): Promise<HTMLElement> {
 
 describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
   // Reason: AC-176-02 — overlay's mouseDown handler must call
-  // preventDefault. Mirrors the DataGridTable mouseDown gesture (added
-  // per Evaluator F-2: attempt 1 omitted mouseDown on DocumentDataGrid).
-  // Date: 2026-04-30 (sprint-176 attempt 2 — F-1, F-2)
+  // preventDefault. Mirrors the DataGridTable mouseDown gesture.
   it("[AC-176-02] overlay blocks mouseDown from reaching row", async () => {
     const overlay = await enterRefetchState();
 
@@ -166,11 +156,10 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
 
   // Reason: AC-176-02 — same negative-test guarantee as DataGridTable but
   // for the document grid. Load-bearing assertion: defaultPrevented true.
-  // Secondary check: aria-selected on the row stays "false". Replaces
-  // the attempt-1 vacuous `expect(...).toHaveAttribute("aria-selected",
-  // "false")` after fireEvent.click(overlay), which would have passed
-  // even if the production handler were stripped.
-  // Date: 2026-04-30 (sprint-176 attempt 2 — F-1)
+  // Secondary check: aria-selected on the row stays "false". On its own
+  // that `expect(...).toHaveAttribute("aria-selected", "false")` after
+  // fireEvent.click(overlay) is vacuous — it passes even if the
+  // production handler is stripped.
   it("[AC-176-02] overlay blocks click on rows during refetch", async () => {
     const overlay = await enterRefetchState();
 
@@ -197,9 +186,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
 
   // Reason: AC-176-02 — double-click on the overlay must not open the
   // inline editor on the cell underneath. DocumentDataGrid treats
-  // dblclick on a scalar cell as the cell-edit entry gesture; pre-176
-  // the bg-background/60 backdrop didn't intercept the gesture.
-  // Date: 2026-04-30 (sprint-176 attempt 2 — F-1)
+  // dblclick on a scalar cell as the cell-edit entry gesture.
   it("[AC-176-02] overlay blocks doubleClick from opening cell editor", async () => {
     const overlay = await enterRefetchState();
 
@@ -215,9 +202,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
   });
 
   // Reason: AC-176-02 — right-click on the overlay must not open a
-  // context menu on the row underneath. Added per Evaluator F-2:
-  // attempt 1 omitted contextmenu coverage on DocumentDataGrid.
-  // Date: 2026-04-30 (sprint-176 attempt 2 — F-2)
+  // context menu on the row underneath.
   it("[AC-176-02] overlay blocks contextmenu from opening menu", async () => {
     const overlay = await enterRefetchState();
 
@@ -231,8 +216,8 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
     pendingResolver?.(buildResult({ totalCount: 301 }));
   });
 
-  // Sprint 180 (AC-180-05) — per-vector retry guarantee for
-  // DocumentDataGrid. Trigger → cancel → re-trigger must land cleanly:
+  // AC-180-05 — per-vector retry guarantee for DocumentDataGrid.
+  // Trigger → cancel → re-trigger must land cleanly:
   // (a) overlay disappears post-cancel, (b) second attempt's data
   // renders, (c) no stuck overlay or `findDocuments` ghost call.
   //
@@ -243,8 +228,6 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
   // pending resolver — should it ever fire — is dropped), then click
   // Next page again to drive the third call. The expected end state is
   // overlay absent, page-2's row text present, page-1's row text absent.
-  //
-  // Date: 2026-04-30 (sprint-180 attempt 2)
   it("[AC-180-05-DocumentDataGrid] cancel → re-trigger paints second attempt's data", async () => {
     let secondPendingResolver: ((value: DocumentQueryResult) => void) | null =
       null;
@@ -348,12 +331,10 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
     await waitFor(() => expect(findMock.mock.calls.length).toBe(before + 1));
   });
 
-  // Reason: AC-176-04 — spinner visuals on DocumentDataGrid match the
-  // pre-176 implementation (same wrapper classes, same Loader2 size and
-  // colour). DOM-class assertion is sufficient — see findings.md
-  // §Mechanism Note for the AC-176-04 justification. Attempt 2 also
-  // pins `aria-hidden="true"` on the SVG (Evaluator F-5).
-  // Date: 2026-04-30 (sprint-176 attempt 2 — F-5)
+  // Reason: AC-176-04 — spinner visuals on DocumentDataGrid are unchanged
+  // (same wrapper classes, same Loader2 size and colour). A DOM-class
+  // assertion is sufficient — see findings.md §Mechanism Note for the
+  // AC-176-04 justification. Also pins `aria-hidden="true"` on the SVG.
   it("[AC-176-04] spinner DOM (classes, size, position) is unchanged", async () => {
     const overlay = await enterRefetchState();
 
@@ -371,8 +352,8 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
     expect(spinner).toHaveClass("animate-spin", "text-muted-foreground");
     expect(spinner).toHaveAttribute("width", "24");
     expect(spinner).toHaveAttribute("height", "24");
-    // a11y polish (attempt 2): SVG is decorative; assistive tech reads
-    // the wrapper's aria-label instead.
+    // a11y polish: the SVG is decorative; assistive tech reads the
+    // wrapper's aria-label instead.
     expect(spinner).toHaveAttribute("aria-hidden", "true");
 
     pendingResolver?.(buildResult({ totalCount: 301 }));

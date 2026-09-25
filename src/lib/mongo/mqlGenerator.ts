@@ -13,10 +13,10 @@
  *
  * Policy:
  * - Updates wrap the per-row patch in a single `$set`. Top-level fields
- *   and dot-paths from F.2 nested edits. Sprint 342 (V2) — structural
- *   edits join the same per-row patch: cells whose value equals the
- *   sentinel string `__op__:unset` lift into `$unset` instead of `$set`,
- *   so a row can mix add-key / overwrite / delete in one round-trip.
+ *   and dot-paths from F.2 nested edits. Structural edits join the same
+ *   per-row patch: cells whose value equals the sentinel string
+ *   `__op__:unset` lift into `$unset` instead of `$set`, so a row can mix
+ *   add-key / overwrite / delete in one round-trip.
  * - `_id` in a `$set` patch is rejected here (the backend rejects it
  *   too); the preview never shows an unexecutable statement.
  * - Sentinel cells (`"{...}"` for documents, `"[N items]"` for arrays)
@@ -153,20 +153,21 @@ function formatMqlValue(value: unknown): string {
   if (typeof value === "bigint") {
     return value.toString();
   }
-  // Sprint 324 — Slice G.2: canonical EJSON wrapper 는 mongosh literal
-  // 표기 (ObjectId / ISODate / NumberDecimal / BinData) 로 풀어 보여
-  // 사용자가 preview 에서 type 을 즉시 인지하도록 한다. multi-key /
-  // 미지원 wrapper 는 plain JSON fallback.
+  // Canonical EJSON wrappers render in mongosh literal notation
+  // (ObjectId / ISODate / NumberDecimal / BinData) so the user recognizes
+  // the type in the preview at a glance. Multi-key / unsupported wrappers
+  // fall back to plain JSON.
   const bsonLiteral = tryFormatBsonLiteral(value);
   if (bsonLiteral !== null) return bsonLiteral;
-  // Objects/arrays — safeStringifyCell so nested BigInt (Mongo Int64 / NumberLong)
-  // 가 들어와도 preview 가 throw 하지 않는다 (Sprint 306). commit payload
-  // 는 별도 path 라 preview 텍스트의 BigInt-as-string 직렬화는 안전.
+  // Objects/arrays — safeStringifyCell so a nested BigInt (Mongo Int64 /
+  // NumberLong) does not make the preview throw. The commit payload takes a
+  // separate path, so serializing BigInt as a string in the preview text is
+  // safe.
   return safeStringifyCell(value);
 }
 
-/** canonical EJSON 4 wrapper → mongosh literal. 미인식 시 null
- *  (호출자가 fallback). */
+/** The four canonical EJSON wrappers → mongosh literal. Null when
+ *  unrecognized (the caller falls back). */
 function tryFormatBsonLiteral(value: unknown): string | null {
   const type = detectBsonType(value);
   if (type === null) return null;
@@ -217,7 +218,7 @@ function tryFormatBsonLiteral(value: unknown): string | null {
 
 /** Render a flat object as ` { key: <val>, … }` for the preview string.
  *  Keys are unquoted when they are valid JS identifiers; keys containing a
- *  `.` (dot-notation paths from Sprint 322 F.2 nested edits) or other
+ *  `.` (dot-notation paths from F.2 nested edits) or other
  *  non-identifier chars are double-quoted so the rendered preview is valid
  *  mongosh syntax. */
 function formatMqlObjectKey(key: string): string {
@@ -288,8 +289,8 @@ function sameDocumentId(a: DocumentId | null, b: DocumentId): boolean {
 
 /** Navigate a dot-notation `path` inside a raw document, reading a numeric
  *  segment as an array index and any other segment as an object key. Returns
- *  `undefined` when the chain is missing or has the wrong shape. Sprint (issue
- *  #1704) — lets the array-removal step learn whether a `$unset` target's
+ *  `undefined` when the chain is missing or has the wrong shape. Issue
+ *  #1704 — lets the array-removal step learn whether a `$unset` target's
  *  parent is really an Array (splice) or an object with a numeric key ($unset). */
 function rawValueAtPath(root: Record<string, unknown>, path: string): unknown {
   let cur: unknown = root;
@@ -473,7 +474,7 @@ function collapsePrefixConflicts(
 /** `"rowIdx-colIdx"` → `[rowIdx, colIdx, null]`, or with a dot-path
  *  suffix `"rowIdx-colIdx:path.to.field"` → `[rowIdx, colIdx, "path.to.field"]`.
  *  Returns `null` for malformed keys so we never silently splice `NaN`
- *  into a preview string. Sprint 322 (Slice F.2) — nested edit support. */
+ *  into a preview string. Slice F.2 — nested edit support. */
 function parseEditKey(key: string): [number, number, string | null] | null {
   const [head, ...rest] = key.split(":");
   const path = rest.length > 0 ? rest.join(":") : null;
@@ -544,12 +545,11 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
   // rowIdx — means a cross-page edit on the same row index but a different
   // column emits its own updateOne against its own document, instead of
   // merging two documents' fields into one wrong-`_id` patch.
-  // Sprint 322 — Slice F.2: `column` 은 dot-path 가 포함된 patch
-  // field path (예: `meta.verified`). top-level edit 는 path === null
-  // → bare column name. nested edit (path !== null) 는 sentinel-edit
-  // guard 와 `_id`-in-patch guard 의 대상이 아님 (sentinel column
-  // 자체는 read-only 지만, 그 안의 1-depth scalar 는 dot-notation
-  // `$set` 으로 update 가능).
+  // Slice F.2: `column` is the patch field path, which may include a
+  // dot-path (e.g. `meta.verified`). A top-level edit has path === null
+  // → bare column name. A nested edit (path !== null) is not subject to
+  // the sentinel-edit guard (the sentinel column itself is read-only, but
+  // a 1-depth scalar inside it can be updated with a dot-notation `$set`).
   interface DocEditGroup {
     rowIdx: number;
     row: readonly unknown[] | undefined;
@@ -594,15 +594,15 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
     }
   });
 
-  // Sprint 324 — Slice G.2: pendingEdits Map type 은 string|null 이므로
-  // BSON wrapper 는 caller (DocumentDataGrid) 가 `__bson__:` prefix 의
-  // 직렬화 string 으로 보관. 여기서 prefix detect 시 parse 해서 wrapper
-  // 객체로 복원 → mongosh literal (`ObjectId("...")`) 로 출력된다.
-  // user report 2026-07-18 — `tagBsonWrapper` 는 non-string 값 (BSON wrapper
-  // object AND 트리 `+ key` 스칼라) 을 모두 JSON 으로 직렬화하므로 언랩도
-  // 대칭이어야 한다: object 뿐 아니라 parse 된 어떤 값 (number/boolean/null)
-  // 도 복원. object-only 가드는 스칼라를 리터럴 `"__bson__:3"` 문자열로
-  // 커밋해 WriteError 를 유발했다.
+  // The grid's pendingEdits Map type is string|null, so the caller
+  // (DocumentDataGrid) stores a BSON wrapper as a serialized string with a
+  // `__bson__:` prefix. Here the prefix is detected and parsed back into the
+  // wrapper object → rendered as a mongosh literal (`ObjectId("...")`).
+  // user report 2026-07-18 — `tagBsonWrapper` serializes all non-string
+  // values (BSON wrapper objects AND tree `+ key` scalars) to JSON, so the
+  // unwrap must be symmetric: restore any parsed value (number/boolean/null),
+  // not only objects. An object-only guard committed a scalar as the literal
+  // string `"__bson__:3"`, which caused a WriteError.
   editsByDoc.forEach(({ cells }) => {
     for (const cell of cells) {
       if (
@@ -656,10 +656,10 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
       return;
     }
 
-    // Sprint 342 V2 — split cells into $set vs $unset by sentinel.
+    // Split cells into $set vs $unset by sentinel.
     // The `__op__:unset` sentinel is owned by DocumentTreePanel's delete
     // action; it's a string so the existing pendingEdits Map type stays
-    // unchanged (string | object).
+    // unchanged (string | null).
     const rawSetOps: Record<string, unknown> = {};
     const rawUnsetOps: Record<string, unknown> = {};
     for (const { column, value } of cells) {
@@ -678,7 +678,7 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
     if (rawDoc !== undefined && sameDocumentId(documentIdFromRow(rawDoc), id)) {
       applyArrayElementRemovals(rawDoc, rawSetOps, rawUnsetOps);
     }
-    // Sprint (user report 2026-07-18) — fold parent/child prefix overlaps so a
+    // User report 2026-07-18 — fold parent/child prefix overlaps so a
     // container add + fill in one commit (`a`={} → `a.b`=3, `tags.1` →
     // `tags.1.test`) doesn't emit both paths and trip WriteError code 40. Both
     // the executed patch and the preview string derive from these, so the

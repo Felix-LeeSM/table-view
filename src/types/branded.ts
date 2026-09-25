@@ -8,13 +8,14 @@
  * legal while both were plain `string`.
  *
  * Values enter branded types by assertion at their trust boundary only:
- * - `ConnectionId` — asserted once where a connection first materialises in
- *   the renderer (`normalizeConnectionConfig`, the Rust→TS IPC boundary) and
- *   again at the tab-creation boundary (`addTab` / `addQueryTab`), where a
- *   plain-`string` connection id off component props / DOM events is minted
- *   into `TableTab.connectionId` / `QueryTab.connectionId`. Every downstream
- *   tab read (the tab-close purge, the RDB retry path) then flows the brand
- *   un-cast instead of re-asserting it (issue #1494 follow-up).
+ * - `ConnectionId` — asserted at the tab-creation boundary (`addTab` /
+ *   `addQueryTab`), where a plain-`string` connection id off component props /
+ *   DOM events is minted into `TableTab.connectionId` /
+ *   `QueryTab.connectionId`. `normalizeConnectionConfig` (the Rust→TS IPC
+ *   boundary) does not brand: `ConnectionConfig.id` stays a plain `string`
+ *   (see the note on it in `src/features/connection/model.ts`). Every
+ *   downstream tab read (the tab-close purge, the RDB retry path) then flows
+ *   the brand un-cast instead of re-asserting it (issue #1494 follow-up).
  * - `TabId` — asserted once where a tab id is minted (`nextTabId` /
  *   `nextQueryId`). Rust `String` wire types stay unchanged; TS→Rust
  *   serialisation is automatic and needs no unwrap.
@@ -26,11 +27,12 @@
  *   Asserted once at the `entryKey` call boundary (the tab-close purge and the
  *   grid pending-state hook), where the axes are read off a `TableTab`.
  *
- * Scope is deliberately narrow (issue #1493 과설계 경계): only identifiers
- * with a real swap-confusion history are branded. Do not brand SQL strings or
- * UI labels here. The `schemaStore` cache-layer key access
- * (`tableColumnsCache[conn][db][schema][table]`) shares the same swap risk but
- * is a much wider Record-typing surface — deferred to a follow-up.
+ * Scope is deliberately narrow (the over-engineering boundary of issue
+ * #1493): only identifiers with a real swap-confusion history are branded.
+ * Do not brand SQL strings or UI labels here. The `schemaStore` cache-layer
+ * key access (`tableColumnsCache[conn][db][schema][table]`) shares the same
+ * swap risk but is a much wider Record-typing surface — deferred to a
+ * follow-up.
  */
 
 export type Brand<T, B extends string> = T & { readonly __brand: B };

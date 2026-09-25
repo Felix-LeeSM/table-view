@@ -68,21 +68,21 @@ export interface PreviewDialogProps {
   /** Optional aria-label for the confirm button. */
   confirmAriaLabel?: string;
   /**
-   * Sprint 252: Optional clipboard payload. When defined AND non-empty
-   * after `.trim()`, a Copy button renders on the right side of the
-   * header (`data-testid="preview-dialog-copy"`). Empty/whitespace or
-   * undefined → button NOT rendered, preserving byte-identical output for
-   * existing callers that have not opted in.
+   * Optional clipboard payload. When defined AND non-empty after
+   * `.trim()`, a Copy button renders on the right side of the header
+   * (`data-testid="preview-dialog-copy"`). Empty/whitespace or undefined →
+   * button NOT rendered, so callers that do not opt in get byte-identical
+   * output.
    */
   copyText?: string;
   /**
-   * Sprint 252: Optional ARIA label override for the Copy button. Defaults
+   * Optional ARIA label override for the Copy button. Defaults
    * to "Copy". Provide a more specific label (e.g. "Copy SQL to clipboard")
    * when the surface benefits from screen-reader specificity.
    */
   copyAriaLabel?: string;
   /**
-   * Sprint 256 (ADR 0023, AC-256-05) — optional override for the entire
+   * ADR 0023 (AC-256-05) — optional override for the entire
    * confirm button. When provided, it replaces the default `<Button>`
    * footer affordance and must own its own `disabled` / `onClick`
    * wiring. The default Cancel button is still rendered. Used by

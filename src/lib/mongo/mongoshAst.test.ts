@@ -1,11 +1,11 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the `${...}` sits inside a fixture string of mongosh source text that the parser under test must tokenize. Interpolating it would change the input.
 
-// Sprint 382 (2026-05-17) — mongosh AST parser MVP unit tests.
+// 2026-05-17 — mongosh AST parser MVP unit tests.
 //
-// 작성 이유: sprint-381 의 정규식 기반 statement classifier 를 typed AST 로
-// promote. 본 파일은 AST 모듈 자체 (tokenizer + recursive-descent parser)
-// 를 covers; `runCommandParser.test.ts` 는 sprint-381 contract 가 본 AST
-// 위에서 동일하게 유지됨을 회귀-lock 한다.
+// Reason: the regex-based statement classifier is promoted to a typed AST.
+// This file covers the AST module itself (tokenizer + recursive-descent
+// parser); `runCommandParser.test.ts` regression-locks that the regex
+// classifier's contract holds unchanged on top of this AST.
 
 import { describe, expect, it } from "vitest";
 import {
@@ -207,9 +207,9 @@ describe("parseMongoshStatement — multi-statement rejection (AC-382-T9)", () =
   });
 });
 
-// Sprint 383 (2026-05-17) — BSON literal acceptance (was rejection in
-// sprint-382). The body is normalised to extended-JSON placeholders so
-// backend `run_mongo_command` can deserialize unchanged.
+// 2026-05-17 — BSON literal acceptance (previously rejected). The body is
+// normalised to extended-JSON placeholders so backend `run_mongo_command`
+// can deserialize unchanged.
 describe("parseMongoshStatement — BSON literal acceptance (AC-383-B1..B14)", () => {
   it("AC-383-B1 — ObjectId('<hex>') → {$oid: '<hex>'} inside the body", () => {
     const result = parseMongoshStatement(
@@ -358,7 +358,7 @@ describe("parseMongoshStatement — empty / unknown (AC-382-T11)", () => {
   });
 
   it("non-mongo SQL returns a non-db-statement error (no `db.` prefix)", () => {
-    // Sprint 383 — bare expression heads get the differentiated
+    // Bare expression heads get the differentiated
     // `non-db-statement` kind instead of the legacy `unsupported-syntax`.
     const result = parseMongoshStatement("SELECT 1");
     expectError(result);
@@ -375,7 +375,7 @@ describe("parseMongoshStatement — unsupported syntax (AC-382-T12)", () => {
     expect(result.errorKind).toBe("unsupported-syntax");
   });
 
-  // Sprint 383 (2026-05-17) — interpolation-free template literals are now
+  // 2026-05-17 — interpolation-free template literals are now
   // accepted as plain strings (AC-383-T1). Interpolation still rejected.
   it("rejects an unterminated string literal", () => {
     const result = parseMongoshStatement('db.runCommand({name: "alice');
@@ -395,7 +395,7 @@ describe("parseMongoshStatement — unsupported syntax (AC-382-T12)", () => {
     expect(result.errorKind).toBe("unsupported-syntax");
   });
 
-  // Sprint 383 (2026-05-17) — errorKind for `let`/`const`/`var` and function
+  // 2026-05-17 — errorKind for `let`/`const`/`var` and function
   // declarations is differentiated (AC-383-R1, AC-383-R2). Generic
   // `unsupported-syntax` is reserved for parser errors.
   it("rejects let/const/var declarations with `variable-declaration` errorKind", () => {
@@ -440,7 +440,7 @@ describe("parseMongoshStatement — invariants", () => {
   });
 });
 
-// Sprint 383 (2026-05-17) — block comment + template literal coverage.
+// 2026-05-17 — block comment + template literal coverage.
 describe("parseMongoshStatement — block comments (AC-383-C1..C3)", () => {
   it("AC-383-C1 — leading block comment is stripped", () => {
     const result = parseMongoshStatement(
@@ -523,14 +523,14 @@ describe("parseMongoshStatement — differentiated rejection (AC-383-R1..R3)", (
   });
 });
 
-// Sprint 401 (2026-05-17) — WASM facade smoke tests. The `mongoshAst` impl
+// 2026-05-17 — WASM facade smoke tests. The `mongoshAst` impl
 // now lives in `src-tauri/mongosh-parser-core/` (Rust → wasm-pack); the TS
-// surface is a thin lazy-load wrapper. The 47 grammar tests above already
+// surface is a thin lazy-load wrapper. The grammar tests above already
 // run against the WASM module via the `test-setup.ts` eager bootstrap —
 // these three additions explicitly cover the facade's pre/post-init
 // surface and the public `initMongoshWasm` export.
 describe("parseMongoshStatement — WASM facade (AC-401-W1..W3)", () => {
-  // The other 47 tests in this file have already implicitly exercised
+  // The other tests in this file have already implicitly exercised
   // initMongoshWasm via test-setup.ts. Re-asserting here documents the
   // public surface explicitly and locks the boot signature.
   it("AC-401-W1 — initMongoshWasm resolves without throwing (re-callable, idempotent)", async () => {
@@ -543,7 +543,7 @@ describe("parseMongoshStatement — WASM facade (AC-401-W1..W3)", () => {
   it("AC-401-W2 — non-string input returns a typed error, never throws", () => {
     // The facade's runtime guard converts a pathological non-string caller
     // into a tagged error rather than letting the WASM bridge see a
-    // non-utf-8 pointer. Mirrors the legacy TS contract from sprint-382.
+    // non-utf-8 pointer. Mirrors the legacy TS parser's contract.
     const result = parseMongoshStatement(
       123 as unknown as string,
     ) as MongoshParseError;

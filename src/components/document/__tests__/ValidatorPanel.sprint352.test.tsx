@@ -1,14 +1,15 @@
-// Sprint 352 (2026-05-15) — Mongo validator level/action 토글 확장.
+// Mongo validator level/action toggle extension.
 //
-// 작성 이유: 본 sprint 가 ValidatorPanel 에 `validationLevel` + `validationAction`
-// select 컨트롤을 추가했다. AC-352-03 (4 시나리오) + AC-352-04 (backward-compat)
-// 를 직접 단언한다. Sprint 333 기존 6 테스트는 `ValidatorPanel.test.tsx` 에 그대로
-// 유지된다.
+// Reason: ValidatorPanel gained `validationLevel` + `validationAction`
+// select controls; this file asserts AC-352-03 and AC-352-04
+// (backward-compat) directly. The earlier ValidatorPanel tests stay in
+// `ValidatorPanel.test.tsx`.
 //
-// #1791 (2026-08-01) — 두 컨트롤이 native `<select>` 에서 Radix `<Select>` 로
-// 옮겨갔다. Radix 는 trigger 버튼(role="combobox") + portal listbox 라
-// `fireEvent.change` / `toHaveValue` 가 닿지 않는다. 조회는 role + aria-label,
-// 선택은 trigger 클릭 → `role="option"` 클릭, 현재 값 단언은 trigger 의 텍스트다.
+// #1791 — both controls moved from a native `<select>` to a Radix
+// `<Select>`. Radix renders a trigger button (role="combobox") plus a
+// portal listbox, so `fireEvent.change` / `toHaveValue` never reach it:
+// query by role + aria-label, select by clicking the trigger then the
+// `role="option"`, and assert the current value from the trigger's text.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -42,7 +43,7 @@ describe("ValidatorPanel — Sprint 352 (level + action toggles)", () => {
   });
 
   it("AC-352-03 — hydrates level + action selects from the read response on mount", async () => {
-    // Sprint 352 envelope shape — backend returns the trio together.
+    // Envelope shape — the backend returns the trio together.
     getMongoValidatorMock.mockResolvedValueOnce({
       validator: { $jsonSchema: { bsonType: "object" } },
       validationLevel: "moderate",
@@ -183,10 +184,9 @@ describe("ValidatorPanel — Sprint 352 (level + action toggles)", () => {
   });
 
   it("AC-352-04 — backward-compat: legacy `{ validator }` response falls back to MongoDB defaults", async () => {
-    // The pre-Sprint-352 backend / a partial stub returns the legacy
-    // envelope (no level/action keys). The panel must not crash and the
-    // selects must hydrate to MongoDB's server-side defaults (strict /
-    // error).
+    // A legacy backend / a partial stub returns the old envelope (no
+    // level/action keys). The panel must not crash and the selects must
+    // hydrate to MongoDB's server-side defaults (strict / error).
     getMongoValidatorMock.mockResolvedValueOnce({
       validator: { $jsonSchema: {} },
     });
@@ -286,8 +286,8 @@ describe("ValidatorPanel — Sprint 352 (level + action toggles)", () => {
     });
   });
 
-  // #1791 — the sprint-112 rule the eslint guard encodes: this surface must not
-  // fall back to a native `<select>`. Fails RED the moment one is reintroduced.
+  // #1791 — the rule the eslint guard encodes: this surface must not fall
+  // back to a native `<select>`. Fails RED the moment one is reintroduced.
   it("#1791 — renders no native <select> (sprint-112 normalize)", async () => {
     getMongoValidatorMock.mockResolvedValueOnce(null);
 

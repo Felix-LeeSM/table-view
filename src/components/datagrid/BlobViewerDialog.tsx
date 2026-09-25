@@ -22,8 +22,9 @@ function toBytes(data: unknown): Uint8Array {
     return new TextEncoder().encode(String(data));
   }
 
-  // Objects (including arrays) — JSON stringify then encode. Sprint 305:
-  // BigInt-safe replacer so JSONB cell 안 큰 정수가 throw 시키지 않는다.
+  // Objects (including arrays) — JSON stringify then encode with a
+  // BigInt-safe replacer, so a large integer inside a JSONB cell does not
+  // throw.
   if (typeof data === "object") {
     return new TextEncoder().encode(safeStringifyCell(data));
   }

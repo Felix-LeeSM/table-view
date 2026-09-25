@@ -3,17 +3,16 @@ import { useCallback } from "react";
 import type { DatabaseName, SchemaName, TableName } from "@/types/branded";
 
 /**
- * Sprint 229 — small lifecycle hook for the FK reference table /
- * column lazy-load.
+ * Small lifecycle hook for the FK reference table / column lazy-load.
  *
  * Why a hook (not direct `getState()` in the modal):
  * - Lint rule `no-restricted-syntax` (eslint.config.js, 2026-05-05)
  *   forbids `store.getState()` inside `src` tsx files. Selector hooks
  *   are reactive; this is a one-shot imperative call surface, so we
  *   wrap it in a `src/hooks` boundary the rule already permits.
- * - The schema store body itself stays unchanged — Sprint 224
- *   freeze. We expose only the existing API surface (`tables`,
- *   `tableColumnsCache`, `loadTables`, `getTableColumns`).
+ * - The schema store needs no new API: the hook uses only the existing
+ *   surface (`tables`, `tableColumnsCache`, `loadTables`,
+ *   `getTableColumns`).
  *
  * Returned imperative ops:
  * - `ensureTablesLoaded(schema)` — calls `loadTables(connectionId,

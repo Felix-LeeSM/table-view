@@ -1,21 +1,23 @@
-//! 작성 2026-05-16 (Phase 3 sprint-361) — `open_workspace_window` IPC 의
-//! per-conn 라벨 + idempotent 계약 검증.
+//! Verifies the per-conn label + idempotent contract of the
+//! `open_workspace_window` IPC.
 //!
-//! sprint-361 (Q13): 워크스페이스 윈도우는 connection 당 1개 — `open_workspace_window`
-//! 가 두 번 호출돼도 새 윈도우는 생기지 않고 기존 `workspace-{connection_id}` 윈도우
-//! 가 focus 만 받는다. 서로 다른 connection 끼리는 독립 — 동시에 N개 가능.
+//! Q13: one workspace window per connection — calling `open_workspace_window`
+//! twice creates no second window; the existing `workspace-{connection_id}`
+//! window only takes focus. Different connections stay independent — N can
+//! exist at once.
 //!
-//! 검증 매트릭스 (Acceptance Criteria):
-//!   - AC-361-01 첫 호출 → label `workspace-conn-1` 윈도우 1개 생성.
-//!   - AC-361-02 같은 conn 두 번째 호출 → 새 윈도우 0개 (idempotent).
-//!   - AC-361-03 서로 다른 conn → 윈도우 2개 (`workspace-conn-1`, `workspace-conn-2`)
-//!     동시 존재.
-//!   - 추가: launcher 윈도우 label `"launcher"` 변경 0 (Invariant).
+//! Verification matrix (Acceptance Criteria):
+//!   - AC-361-01 first call → 1 window with label `workspace-conn-1`.
+//!   - AC-361-02 second call for the same conn → 0 new windows (idempotent).
+//!   - AC-361-03 different conns → 2 windows (`workspace-conn-1`,
+//!     `workspace-conn-2`) coexist.
+//!   - Extra: the launcher window label `"launcher"` is left untouched
+//!     (Invariant).
 //!
-//! Tauri 의 `MockRuntime` 은 OS 윈도우를 띄우지 않으므로 headless CI 에서도
-//! 안전. `tests/` 경로에 둠으로써 `lib.rs` 의 `invoke_handler` 가 등록한 IPC
-//! 시그니처 (Sprint contract: `open_workspace_window(connection_id: String)`)
-//! 가 모듈 public 으로 노출돼 있는지도 함께 잠금.
+//! Tauri's `MockRuntime` opens no OS window, so this is safe on headless CI
+//! too. Living under `tests/` also locks that the IPC signature registered
+//! through `invoke_handler` (`open_workspace_window(connection_id: String)`)
+//! is exposed as module public.
 
 use table_view_lib::commands::open_workspace_window::open_workspace_window_inner;
 use tauri::test::{mock_builder, mock_context, noop_assets};
@@ -140,9 +142,10 @@ async fn invariant_launcher_label_unchanged_by_workspace_open() {
     );
 }
 
-/// 사유: connection_id 빈 문자열은 frontend caller 가 잘못 호출했을 때만 발생
-/// 가능 — backend 가 validation 으로 즉시 거부하면 잘못된 label 윈도우
-/// (`workspace-` 단독) 가 생기는 회귀를 막을 수 있다.
+/// Reason: an empty connection_id can only come from a frontend caller that
+/// invoked this wrongly — rejecting it in backend validation right away
+/// blocks the regression where a window with a malformed label (a bare
+/// `workspace-`) gets created.
 #[tokio::test]
 async fn empty_connection_id_rejected_with_validation_error() {
     let app = make_app();

@@ -218,9 +218,9 @@ describe("SearchSidebar roving tabindex", () => {
   });
 
   // Reason: user OpenSearch-sidebar feedback #1716 — the index/alias/data-stream
-  // sections must be collapsible. The "정합 주의" is roving correctness: a
-  // collapsed section's rows are hidden, so they MUST leave the roving order or
-  // Arrow keys would land on invisible rows. (2026-07-22)
+  // sections must be collapsible. The issue's "consistency caveat" is roving
+  // correctness: a collapsed section's rows are hidden, so they MUST leave the
+  // roving order or Arrow keys would land on invisible rows. (2026-07-22)
   it("collapses a section: rows hidden and dropped from the roving order (#1716)", async () => {
     const tree = await renderTree();
     const header = within(tree).getByRole("treeitem", { name: /^indexes$/i });

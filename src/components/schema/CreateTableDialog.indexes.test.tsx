@@ -23,14 +23,11 @@ import {
   setProductionConnection,
 } from "./__tests__/createTableDialogTestHelpers";
 
-// ── Sprint 228 — Indexes tab functional ─────────────────────────────────
-//
-// Date: 2026-05-07.
+// ── Indexes tab functional ──────────────────────────────────────────────
 //
 // Why this block exists:
 //
-// Sprint 227 left the Indexes tab as a stale Sprint 228
-// placeholder. Sprint 228 closes that loop:
+// The Indexes tab is functional:
 //
 // - Replace placeholder body with editor (`+ Index` / `−` row buttons,
 //   per-row index name input + columns multi-checkbox + index type
@@ -49,7 +46,7 @@ import {
 //   `columns` array exactly matches the declared PK array, the chain
 //   skips `tauri.createIndex` for that row (PG implicitly indexes PKs).
 //
-// Source: Sprint 228 contract AC-228-01..AC-228-11.
+// Source: contract AC-228-01..AC-228-11.
 
 describe("Sprint 228 — Indexes tab functional", () => {
   beforeEach(() => {
@@ -203,7 +200,8 @@ describe("Sprint 228 — Indexes tab functional", () => {
     });
     fireEvent.click(within(panel).getByLabelText("Index column: email"));
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => {
       expect(mockCreateTable).toHaveBeenCalledTimes(1);
       expect(mockCreateIndex).toHaveBeenCalledTimes(1);
@@ -270,11 +268,11 @@ describe("Sprint 228 — Indexes tab functional", () => {
     const idCheckboxes = within(panel).getAllByLabelText("Index column: id");
     fireEvent.click(idCheckboxes[idCheckboxes.length - 1]!);
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch
-    // settles after 250 ms idle. Wait for the Execute button to actually
-    // become enabled (i.e. previewSql populated AND previewLoading=false)
-    // before firing the click — the mock-count-only waitFor used to fire
-    // mid-await and click a still-disabled button.
+    // Preview pane defaults open; auto-debounced fetch settles after
+    // 250 ms idle. Wait for the Execute button to actually become enabled
+    // (i.e. previewSql populated AND previewLoading=false) before firing
+    // the click — the mock-count-only waitFor used to fire mid-await and
+    // click a still-disabled button.
     await waitFor(
       () => {
         expect(mockCreateTable).toHaveBeenCalledTimes(1);
@@ -363,7 +361,8 @@ describe("Sprint 228 — Indexes tab functional", () => {
     const idCheckboxes = within(panel).getAllByLabelText("Index column: id");
     fireEvent.click(idCheckboxes[idCheckboxes.length - 1]!);
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateIndex).toHaveBeenCalledTimes(2));
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -442,7 +441,8 @@ describe("Sprint 228 — Indexes tab functional", () => {
       expect(emailBoxes.length).toBeGreaterThanOrEqual(3);
       for (let i = 0; i < 3; i += 1) fireEvent.click(emailBoxes[i]!);
 
-      // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+      // Preview pane defaults open; auto-debounced fetch settles via
+      // waitFor below.
       await waitFor(() => expect(mockCreateIndex).toHaveBeenCalledTimes(3));
 
       fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -509,7 +509,8 @@ describe("Sprint 228 — Indexes tab functional", () => {
     });
     fireEvent.click(within(panel).getByLabelText("Index column: id"));
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     // No createIndex call — row is PK-deduped.
@@ -550,7 +551,8 @@ describe("Sprint 228 — Indexes tab functional", () => {
     fireEvent.click(within(panel).getByLabelText("Index column: id"));
     fireEvent.click(within(panel).getByLabelText("Index column: email"));
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => {
       expect(mockCreateIndex).toHaveBeenCalledTimes(1);
     });
@@ -579,7 +581,8 @@ describe("Sprint 228 — Indexes tab functional", () => {
       target: { value: "integer" },
     });
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -612,7 +615,8 @@ describe("Sprint 228 — Indexes tab functional", () => {
     fireEvent.click(within(panel).getByLabelText("Index column: id"));
     fireEvent.click(within(panel).getByLabelText("Index column: email"));
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateIndex).toHaveBeenCalledTimes(1));
     const call = mockCreateIndex.mock.calls[0]![0] as { columns: string[] };
     expect(call.columns).toEqual(["id", "email"]);
@@ -639,7 +643,8 @@ describe("Sprint 228 — Indexes tab functional", () => {
     fireEvent.click(within(panel).getByLabelText("Index column: email"));
     fireEvent.click(within(panel).getByLabelText("Index unique"));
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateIndex).toHaveBeenCalledTimes(1));
     const call = mockCreateIndex.mock.calls[0]![0] as { is_unique?: boolean };
     expect(call.is_unique).toBe(true);
@@ -666,7 +671,8 @@ describe("Sprint 228 — Indexes tab functional", () => {
     });
     fireEvent.click(within(panel).getByLabelText("Index column: email"));
 
-    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
+    // Preview pane defaults open; auto-debounced fetch settles via
+    // waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     act(() => {

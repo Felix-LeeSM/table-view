@@ -1,16 +1,17 @@
-//! 작성 2026-05-17 (Phase 6 sprint-376 Q21) — `reset_setting` IPC 의
-//! backend contract 통합 검증.
+//! Written 2026-05-17 (Q21) — integration check of the `reset_setting` IPC
+//! backend contract.
 //!
 //! Lego invariant:
-//!   1. `settings` row 가 SQLite 에서 DELETE.
-//!   2. `state-changed` 이벤트가 `{domain:"setting", op:"reset", entityId:<key>}`
-//!      payload 로 emit (refetch 미경로 — receiver 가 frontend
-//!      `SETTING_DEFAULTS[entityId]` 에 set, strategy doc line 1389).
-//!   3. version 카운터는 (`setting`, `<key>`) 단위로 monotonic.
-//!   4. originWindow 이 caller 의 window label 로 echo (자기 자신 self-echo
-//!      skip 의 discriminator).
-//!   5. 존재하지 않는 key 의 reset 은 no-op + emit 1회 (idempotent — 다른 창의
-//!      stale 상태 converge).
+//!   1. The `settings` row is DELETEd from SQLite.
+//!   2. A `state-changed` event is emitted with the payload
+//!      `{domain:"setting", op:"reset", entityId:<key>}` (no refetch path —
+//!      the receiver sets the frontend `SETTING_DEFAULTS[entityId]`, strategy
+//!      doc line 1389).
+//!   3. The version counter is monotonic per (`setting`, `<key>`).
+//!   4. originWindow echoes the caller's window label (the discriminator for
+//!      skipping one's own self-echo).
+//!   5. Resetting a key that does not exist is a no-op and still emits once
+//!      (idempotent — other windows converge out of a stale state).
 
 use std::sync::{Arc, Mutex};
 

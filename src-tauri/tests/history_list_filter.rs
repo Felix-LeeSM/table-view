@@ -1,15 +1,15 @@
-//! 작성 2026-05-17 (Phase 5 sprint-371, AC-371-02 / AC-371-03 / AC-371-04) —
-//! `list_history` 의 filter union + tabId/connectionId pairing + limit clamp.
+//! Written 2026-05-17 (AC-371-02 / AC-371-03 / AC-371-04) — `list_history`'s
+//! filter union + tabId/connectionId pairing + limit clamp.
 //!
 //! Wire shape (camelCase):
 //!   `{ filter: { paradigm: "rdb" }, limit: 100 }`                  → OK
 //!   `{ filter: { queryMode: "find" } }`                            → serde reject (400)
-//!   `{ tabId: "tab-1" }` (connectionId 없음)                       → 400
+//!   `{ tabId: "tab-1" }` (no connectionId)                         → 400
 //!   `{ limit: 1000 }`                                              → clamp 500
 //!
-//! 본 파일은 frontend wrapper test 와 동일 wire shape — invoke("list_history",
-//! { req: { filter: {...}, limit: ... } }) 의 req payload 가 byte-equivalent
-//! 로 deserialize 되어야 한다.
+//! This file uses the same wire shape as the frontend wrapper test — the req
+//! payload of invoke("list_history", { req: { filter: {...}, limit: ... } })
+//! must deserialize byte-equivalently.
 
 use serde_json::json;
 use serial_test::serial;

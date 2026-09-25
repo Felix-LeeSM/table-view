@@ -1,6 +1,6 @@
 /**
  * Issue #1369 — the unmount-safe clipboard state machine extracted from
- * PreviewCopyButton (sprint-252) into a shared hook. Covers the success /
+ * PreviewCopyButton into a shared hook. Covers the success /
  * failure transient windows, multi-key targeting (password vs json), and
  * the unmount timer cleanup that keeps a late revert from setState-ing a
  * dead component.

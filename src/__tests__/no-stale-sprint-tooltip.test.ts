@@ -1,21 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 /**
- * Sprint 135 — AC-S135-06: stale "Coming in Sprint 1XX" copy guard.
+ * AC-S135-06: stale "Coming in Sprint 1XX" copy guard.
  *
- * Sprint 127–133 littered the toolbar with placeholder tooltips like
+ * The toolbar was once littered with placeholder tooltips like
  * "Coming in Sprint 128" / "Coming in Sprint 130" while features were
- * being staged. After the user-pass on 2026-04-27 the toolbar is now
- * SoT-clean and these placeholders should never reappear in production
- * code. This test scans `src/` (and `e2e/`, when present) for the regex
- * `/Coming in Sprint 1[2-3][0-9]/` and fails on any match so a future
- * sprint cannot accidentally re-introduce a "Coming in Sprint NNN" line
- * without a deliberate decision.
+ * being staged. The toolbar is now SoT-clean and these placeholders should
+ * never reappear in production code. This test scans `src/` (and `e2e/`,
+ * when present) for the regex `/Coming in Sprint 1[2-3][0-9]/` and fails on
+ * any match so nobody can accidentally re-introduce a "Coming in Sprint
+ * NNN" line without a deliberate decision.
  *
  * The regex is intentionally narrow: it targets the literal user-facing
  * prose `"Coming in Sprint 1XX"` rather than every reference to a sprint
- * number, so commit messages, comments referencing past sprints
- * (`// Sprint 130 — …`), and ADR titles continue to type-check.
+ * number, so commit messages, comments naming a past sprint, and ADR
+ * titles continue to type-check.
  *
  * Implementation note: this test uses Vite's `import.meta.glob` (the
  * project does not depend on `@types/node`) to load every `.ts` / `.tsx`
@@ -24,15 +23,14 @@ import { describe, expect, it } from "vitest";
  * synchronous map so the test body stays readable.
  */
 
-// Sprint 135 — narrow legacy guard (kept for backward-compat).
+// Narrow legacy guard (kept for backward-compat).
 const STALE_REGEX = /Coming in Sprint 1[2-3][0-9]/;
 
-// Sprint 141 (AC-141-2) — broader prose guards. Each pattern targets a
-// "feature is gated on a future sprint/phase" phrasing. They are ordered
-// from most-specific to least-specific so the failure message names the
-// strongest match. Each pattern is tested only outside JS comment lines
-// (heuristic below) so genuine `// Sprint 130 — note` annotations and
-// changelog comments continue to type-check.
+// AC-141-2 — broader prose guards. Each pattern targets a "feature is gated
+// on a future sprint/phase" phrasing. They are ordered from most-specific to
+// least-specific so the failure message names the strongest match. Each
+// pattern is tested only outside JS comment lines (heuristic below) so
+// genuine annotations and changelog comments continue to type-check.
 const PROSE_REGEXES: Array<{ name: string; re: RegExp }> = [
   {
     name: "coming in (sprint|phase) N",
@@ -62,7 +60,7 @@ const sources = import.meta.glob("/src/**/*.{ts,tsx}", {
 
 /** Heuristic: a line is "comment-only" if its first non-space character
  *  starts a JS comment. We skip these lines for the broader prose
- *  patterns so changelog comments like `// Sprint 130 — note` don't
+ *  patterns so changelog comments naming a sprint number don't
  *  spuriously fail. The legacy `STALE_REGEX` keeps its strict whole-file
  *  scan because its phrasing was specifically the user-facing tooltip
  *  literal. */
@@ -101,15 +99,13 @@ describe("Sprint 135 — stale 'Coming in Sprint 1XX' tooltip guard (AC-S135-06)
 });
 
 /**
- * Sprint 227 carve-out — `CreateTableDialog.tsx` deliberately renders
- * the verbatim placeholders `"Available in Sprint 228"` /
- * `"Available in Sprint 229"` inside the Indexes / Foreign Keys tab
- * bodies. These are the canonical empty-state strings asserted by the
- * Sprint 227 contract (AC-227-01) and removed in Sprint 228 / 229
- * when the tab bodies become functional. Rather than weaken the
- * AC-141-2 prose guard regex (which would let other surfaces drift),
- * the file path is whitelisted here so the guard keeps its bite for
- * every other surface.
+ * Carve-out for `CreateTableDialog.tsx`, which used to render the verbatim
+ * placeholders `"Available in Sprint 228"` / `"Available in Sprint 229"`
+ * inside the Indexes / Foreign Keys tab bodies — the canonical empty-state
+ * strings of the AC-227-01 contract, dropped once those tab bodies became
+ * functional. Rather than weaken the AC-141-2 prose guard regex (which
+ * would let other surfaces drift), the file path is allowlisted here so
+ * the guard keeps its bite for every other surface.
  */
 const SPRINT_PROSE_GUARD_PATH_ALLOWLIST: ReadonlySet<string> = new Set([
   "/src/components/schema/CreateTableDialog.tsx",

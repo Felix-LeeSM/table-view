@@ -1,7 +1,8 @@
-//! Sprint 358 (Phase 1 W1 dual-write) → Sprint 370 (Phase 4 W3 SQLite SOT).
+//! dual-write → SQLite-only SOT.
 //!
-//! `mruStore.markConnectionUsed` / `removeRecentConnection` 가 호출하는
-//! backend mirror. W3 cut 이후 file (`mru.json`) 분기는 제거되고 SQLite-only.
+//! Backend mirror called by `mruStore.markConnectionUsed` /
+//! `removeRecentConnection`. After the W3 cut the file (`mru.json`) branch was
+//! removed — SQLite-only.
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
@@ -25,8 +26,9 @@ pub async fn persist_mru_inner(
 ) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;
 
-    // Sprint 370 (Phase 4 W3) — file SOT 분기 제거. SQLite 가 유일한 SOT.
-    // #1092 — write 실패를 삼키지 않고 IPC 경계로 전파한다 (대체 원본 없음).
+    // The file SOT branch is gone — SQLite is the only SOT.
+    // #1092 — a write failure is not swallowed; it propagates to the IPC
+    // boundary (there is no fallback copy).
     if is_force_failure_for_tests() {
         return Err(AppError::Storage("forced failure for tests".into()));
     }
@@ -58,7 +60,7 @@ pub async fn persist_mru(
     persist_mru_inner(&pool, entries).await
 }
 
-/// Sprint 376 (Phase 6 Q21 #8) — "Clear recent" affordance on Home /
+/// Q21 #8 — "Clear recent" affordance on Home /
 /// launcher. Deletes every `mru` row + emits `state-changed
 /// { domain:"mru", op:"bulk", entityId:null }` so every window's
 /// `RecentConnections` panel converges to empty without re-fetching the
@@ -70,7 +72,8 @@ pub async fn persist_mru(
 pub async fn clear_mru_inner(pool: &SqlitePool) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;
 
-    // #1092 — delete 실패를 그대로 전파 (이전 counter-only 삼킴 제거).
+    // #1092 — a delete failure propagates as-is (the old counter-only
+    // swallowing is gone).
     if is_force_failure_for_tests() {
         return Err(AppError::Storage("forced failure for tests".into()));
     }
@@ -117,8 +120,8 @@ pub async fn clear_mru<R: Runtime>(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 1 sprint-358) — inline lib smoke for `--lib`
-    //! coverage gate. 통합 시나리오는 `tests/dual_write_connections.rs` /
+    //! Written 2026-05-16 — inline lib smoke for the `--lib` coverage gate.
+    //! The integration scenarios live in `tests/dual_write_connections.rs` /
     //! `tests/dual_write_reconcile.rs`.
 
     use super::*;
@@ -187,7 +190,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 1);
-        // Sprint 370 invariant — file SOT 분기 retired.
+        // Invariant — the file SOT branch is retired.
         assert!(
             !dir.path().join("mru.json").exists(),
             "mru.json must not exist after W3 cut"
@@ -196,11 +199,12 @@ mod tests {
     }
 
     // ---------------------------------------------------------------------
-    // 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    // Written 2026-05-17 — baseline cleanup.
     //
-    // `clear_mru_inner` (sprint-376 Q21 #8) 는 baseline 측정 set 의
-    // `tests/clear_mru.rs` 가 별 binary 라 본 모듈에서 직접 cover 되지 않음.
-    // 또한 `persist_mru_inner` 의 다중 entry / upsert path 도 inline 보강.
+    // `clear_mru_inner` (Q21 #8) is not covered directly in this module because
+    // `tests/clear_mru.rs` is a separate binary in the baseline measurement set.
+    // The multi-entry / upsert paths of `persist_mru_inner` are also backfilled
+    // inline.
     // ---------------------------------------------------------------------
 
     #[tokio::test]

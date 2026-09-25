@@ -1,7 +1,7 @@
 /**
- * Sprint 368 (Phase 4 Q12) — unified `state-changed` setting receiver.
+ * Unified `state-changed` setting receiver (Q12).
  *
- * The sprint-365 dispatcher (`stateChanged.ts`) registers exactly one
+ * The dispatcher (`stateChanged.ts`) registers exactly one
  * `setting.onUpdated` callback per process — shallow-merging multiple
  * registrations would silently drop the earlier one. Each store that
  * owns a `setting` key (theme / safe_mode / future sidebar_width …)
@@ -17,8 +17,7 @@
  * Strategy F.4 line 1388 — `setting.update` payloads carry the settings
  * key in `entityId`; the actual value is fetched via `get_setting(key)`
  * (the event is a notification, not a payload). `reset` is out of scope
- * for sprint-368 (sprint-372 owns the reset receiver for `theme` /
- * `safe_mode`; the dispatcher already separates `onUpdated` from
+ * for this receiver (the dispatcher already separates `onUpdated` from
  * `onReset` per strategy line 1389).
  */
 
@@ -65,16 +64,14 @@ async function dispatchSettingUpdate(entityId: string): Promise<void> {
       entityId === "query_history_enabled" ||
       entityId === "query_history_retention_days"
     ) {
-      // sprint-373 (2026-05-17) — query history toggle + retention select.
+      // Query history toggle + retention select.
       // Both keys route through the same dispatcher so cross-window
       // HistorySettings state stays coherent.
       await applyHistorySettingsFromBackend(entityId);
     }
-    // Other keys (sidebar_width, home_recent_collapsed, …) are handled
-    // by other sprints' receivers. The dispatcher route arrives here
-    // only because both stores register through the same singleton, so
-    // an unknown key is a silent no-op — its real owner will receive
-    // the same event in parallel.
+    // Other keys (sidebar_width, home_recent_collapsed, …) have no branch
+    // here. The dispatcher routes every `setting` update to this singleton
+    // receiver, so an unknown key is a silent no-op.
   } catch {
     // best-effort — see store comments. The next event will retry; the
     // boot snapshot is the recovery path.

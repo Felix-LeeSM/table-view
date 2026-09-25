@@ -1,4 +1,4 @@
-// Sprint 341 — utilities for the inline document tree (Option D).
+// Utilities for the inline document tree.
 //
 // `buildTreeNodes` walks a JSON-ish value (objects, arrays, scalars, and
 // `__bson__:<EJSON>` prefix-tagged BSON wrapper strings) into a flat
@@ -38,7 +38,7 @@ export interface TreeNode {
   /** True when this leaf came from a `__bson__:<EJSON>` wrapper string. */
   isBson?: boolean;
   /**
-   * Sprint 344 Slice A — true when this node exists only in
+   * True when this node exists only in
    * `pendingByPath` (a brand-new key/item) and not in the underlying
    * `value`. Used by DocumentTreePanel to render a "NEW" badge so
    * users can distinguish ghost adds from `● edited` leaf updates.
@@ -199,12 +199,12 @@ export function buildTreeNodes(value: unknown, basePath = ""): TreeNode[] {
 }
 
 /**
- * Sprint 344 Slice A — extend `buildTreeNodes` so paths present only
+ * Extends `buildTreeNodes` so paths present only
  * in `pendingByPath` (= brand-new keys/items not in `value` yet) also
  * render as TreeNodes, marked `isGhost: true`. Ghosts are inserted at
  * the END of their parent's child list in `pendingByPath` insertion
- * order, matching the contract used by the upcoming `+ key` / `+ item`
- * affordances (Slices B/C).
+ * order, matching the contract used by the `+ key` / `+ item`
+ * affordances (`useTreeAdd`).
  *
  * Ghost values that JSON-parse into an object/array expand into nested
  * ghost children (so a single `pendingByPath["meta"]` entry holding
@@ -477,7 +477,7 @@ export function buildTreeNodesWithGhosts(
 }
 
 /**
- * Sprint 344 Slice D — coerce a user-typed `+ key` / `+ item` raw input
+ * Coerce a user-typed `+ key` / `+ item` raw input
  * into a JSON-typed commit payload.
  *
  * Outer-quotes rule: trim whitespace, then try `JSON.parse`. On success
@@ -486,9 +486,10 @@ export function buildTreeNodesWithGhosts(
  * input) we fall back to the trimmed raw string so the user sees what
  * they typed instead of an error.
  *
- * Pure, deterministic, never throws. Slice B/C call this before firing
- * `onCommitEdit`; Slice A's ghost renderer then reads the parsed shape
- * to expand nested object/array adds at render time.
+ * Pure, deterministic, never throws. The `+ key` / `+ item` commit
+ * handlers (`useTreeAdd`) call this before firing `onCommitEdit`;
+ * `buildTreeNodesWithGhosts` then reads the parsed shape to expand
+ * nested object/array adds at render time.
  */
 export function coerceTreeAddValue(input: string): unknown {
   const trimmed = input.trim();
@@ -569,7 +570,7 @@ export interface FilterOptions {
  * leaf value. Returns the set of paths that should remain visible
  * (matches *and* all of their ancestors so the tree stays connected).
  *
- * Sprint 342 V2 — pass `{ regex: true }` to switch to JS regex matching.
+ * Pass `{ regex: true }` to switch to JS regex matching.
  * Invalid regex sources fall back to substring (so the user can type a
  * partial pattern without the tree blanking out mid-edit).
  */

@@ -34,7 +34,7 @@ let tabCounter = 0;
 let queryCounter = 0;
 
 /**
- * Sprint 354 (M-2 fix) — seed `tabCounter` / `queryCounter` from persisted
+ * M-2 fix — seed `tabCounter` / `queryCounter` from persisted
  * tab ids so post-boot `addTab` / `addQueryTab` allocate fresh ids that
  * cannot collide with the persisted set.
  */
@@ -63,8 +63,9 @@ export function seedCountersFromWorkspaces(
 }
 
 /**
- * Sprint 354 — test-only escape hatch. Counters are module-scope (M-9 in
- * the strategy doc) so `setState({ workspaces: {} })` cannot reset them.
+ * Test-only escape hatch, namespaced `__` to flag intent. Counters are
+ * module-scope (M-9 in the strategy doc) so `setState({ workspaces: {} })`
+ * cannot reset them.
  */
 export function __resetCountersForTests(): void {
   tabCounter = 0;

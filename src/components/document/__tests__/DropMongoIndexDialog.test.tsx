@@ -1,8 +1,9 @@
-// Sprint 351 (2026-05-15) — DropMongoIndexDialog typing-confirm modal.
+// DropMongoIndexDialog typing-confirm modal.
 //
-// 작성 이유: AC-351-05 — Confirm 버튼은 typing-confirm 일치 전까지 비활성,
-// happy path 시 dropMongoIndex 호출 + onDropped/toast + 모달 닫힘, driver
-// error 시 모달 유지 + role=alert inline.
+// Reason: AC-351-05 — the Confirm button stays disabled until the
+// typing-confirm matches; on the happy path `dropMongoIndex` is called,
+// onDropped/toast fire and the modal closes; on a driver error the modal
+// stays open with an inline role=alert.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

@@ -31,7 +31,7 @@ export interface ConnectionState {
   focusedConnId: string | null;
   loading: boolean;
   /**
-   * Sprint 270 — has `loadConnections` ever resolved (success OR error) in
+   * Has `loadConnections` ever resolved (success OR error) in
    * this window's lifetime. Distinct from `loading`: `loading` is "actively
    * in flight", `hasLoadedOnce` is "ever finished". The skeleton at first
    * paint is gated on this flag — once it flips, the skeleton swaps out
@@ -158,7 +158,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const connections = await tauri.listConnections();
-      // Sprint 270 — flip in BOTH success and error branches so the
+      // Flip in BOTH success and error branches so the
       // skeleton swaps to the existing empty/error surface and never
       // gets stuck shimmering. `hasLoadedOnce` is a session "ever
       // finished" signal, NOT persisted, NOT in `SYNCED_KEYS`.
@@ -246,7 +246,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         // previous session's last-viewed db is never restored. Restored tabs
         // for other dbs stay on disk (they key their own `(connId, db)` cell);
         // only this seeded value governs which cell is surfaced. Do not
-        // re-introduce a durable last-db restore here (retired Sprint 143,
+        // re-introduce a durable last-db restore here (retired,
         // AC-148-4) — regression-locked by
         // `connectionStore.activeDb-cold-boot.test.ts`.
         const conn = state.connections.find((c) => c.id === id);

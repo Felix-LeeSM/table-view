@@ -1,39 +1,43 @@
 /**
- * 작성 2026-05-17 (Wave 9.5 회귀 7) — user journey lock.
+ * Written 2026-05-17 (Wave 9.5 regression 7) — user journey lock.
  *
- * 사용자 보고: "친구 테마가 창 단위로 적용되는 것 같아. 모든 창이 공유해야 하는데".
- * Wave 9.5 의 메모리 규칙 (feedback_test_scenarios_user_journey) 1차 적용 —
- * mock 호출 단언이 아니라, 사용자가 보는 invariant (DOM `data-theme` /
- * `data-mode`, LS FOUC cache) 끝까지 따라가서 lock 한다.
+ * User report: "My friend's theme seems to apply per window. All windows
+ * should share it". First application of the Wave 9.5 memory rule
+ * (feedback_test_scenarios_user_journey) — lock by following the
+ * user-visible invariant (DOM `data-theme` / `data-mode`, LS FOUC cache)
+ * all the way through, not mock-call assertions.
  *
  * User journey:
- *   1. Window A 의 ThemePicker 클릭 → Window A 가 broadcast (frontend bridge
- *      `theme-sync` 채널 또는 backend `state-changed` setting 도메인)
- *   2. Window B 가 inbound 이벤트 수신
- *   3. Window B 의 zustand store 가 mutate (themeId + mode 동기화)
- *   4. Window B 의 subscriber 가 `applyTheme()` → DOM `data-theme` / `data-mode`
- *      attribute 가 외부 창의 선택과 일치
- *   5. Window B 의 subscriber 가 `writeStoredState()` → 다음 boot 의 FOUC
- *      cache 가 외부 창의 선택과 일치
+ *   1. Clicking the ThemePicker in Window A → Window A broadcasts (frontend
+ *      bridge `theme-sync` channel, or backend `state-changed` setting domain)
+ *   2. Window B receives the inbound event
+ *   3. Window B's zustand store mutates (themeId + mode kept in sync)
+ *   4. Window B's subscriber runs `applyTheme()` → the DOM `data-theme` /
+ *      `data-mode` attributes match the other window's choice
+ *   5. Window B's subscriber runs `writeStoredState()` → the next boot's
+ *      FOUC cache matches the other window's choice
  *
- * Self-echo 는 받지 않아야 한다 (sprint-153 의 loop guard).
+ * Self-echo must not be received (the loop guard).
  *
- * 회귀 시 (예: bridge listen 미등록, subscriber 의 LS write 누락, attach
- * race 등) 어느 step 이라도 깨지면 다른 창의 사용자가 "내 창만 테마가
- * 다른 색깔" 로 본다. 이건 unit mock 단언 (예: invoke 호출 횟수) 으로는
- * 잡을 수 없는 종류 — DOM + LS 의 끝-끝 invariant 까지 따라가야 잡힌다.
+ * On regression (e.g. bridge listen not registered, subscriber skipping the
+ * LS write, attach race), a broken step makes the user in the other window
+ * see "my window's theme color is different". Unit mock assertions (e.g.
+ * invoke call counts) cannot catch this kind — only following the
+ * end-to-end DOM + LS invariant can.
  *
- * jsdom 한계: 실제 두 webview process 시뮬레이션 불가. 본 테스트는 한
- * process 안에서 `@tauri-apps/api/event` 를 in-memory bus 로 mock 하여
- * "외부 origin 의 emit" 을 흉내낸다. 진짜 cross-webview broadcast 의
- * Tauri 측 transport 검증은 e2e + backend integration test 가 담당.
+ * jsdom limitation: two real webview processes cannot be simulated. This
+ * test mocks `@tauri-apps/api/event` with an in-memory bus in a single
+ * process to fake "an emit from an external origin". The Tauri-side
+ * transport of a real cross-webview broadcast is covered by e2e + backend
+ * integration tests.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// In-memory bus mock — `@tauri-apps/api/event` 가 process-spanning 인 척.
-// `vi.mock` factory 는 hoist 되어 themeStore.ts 의 module-load 보다 먼저
-// 실행되므로 외부 `const` 캡쳐는 TDZ 에 걸린다. `vi.hoisted` 로 bus 의
-// 본체도 같은 hoist 단계에 두고, mock factory 는 그 helper 들만 참조.
+// In-memory bus mock — fakes `@tauri-apps/api/event` spanning the process.
+// The `vi.mock` factory is hoisted and runs before themeStore.ts's
+// module-load, so capturing an outer `const` would hit the TDZ. `vi.hoisted`
+// keeps the bus itself in the same hoist stage, and the mock factory only
+// references those helpers.
 const { busEmit, busListen, bus } = vi.hoisted(() => {
   type Env = { event: string; payload: unknown };
   const bus = new Map<string, Set<(env: Env) => void>>();
@@ -72,10 +76,10 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(() => Promise.resolve()),
 }));
 
-// 본 테스트는 "자기 window 의 attach 가 사용한 originId" 와 다른 값으로
-// inbound 흉내내야 한다. themeStore.ts 의 module-load 시 attach 가 사용한
-// `getCurrentWindowLabel() ?? "unknown"` 값이 self id 이므로 그 자리는
-// 명시적으로 mock 해서 self/other 의 분리를 결정적으로 한다.
+// This test must fake inbound events with a value different from the originId
+// its own window's attach used. The `getCurrentWindowLabel() ?? "unknown"`
+// value used by the attach at themeStore.ts module-load is the self id, so
+// that slot is mocked explicitly to make the self/other split deterministic.
 vi.mock("@lib/window-label", () => ({
   getCurrentWindowLabel: () => "test-self",
   parseWorkspaceLabel: () => null,
@@ -102,10 +106,10 @@ Object.defineProperty(window, "localStorage", { value: localStorageMock });
 import { DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@lib/themeBoot";
 import { useThemeStore } from "./themeStore";
 
-// `attachZustandIpcBridge` 의 listen 등록은 비동기. module-load 시 fire-and-
-// forget 으로 시작되므로, 첫 inbound emit 흉내 전에 listener 가 bus 에
-// 등록되었음을 확인한다. 50ms 안에 등록 안 되면 명시적 실패 — 회귀 시
-// silent timeout 대신 즉각 노출.
+// `attachZustandIpcBridge` registers its listen asynchronously, fire-and-
+// forget at module-load. Verify the listener is on the bus before the first
+// fake inbound emit. An explicit failure if not registered in time —
+// immediate exposure on regression instead of a silent timeout.
 async function waitForBridgeAttach(): Promise<void> {
   for (let i = 0; i < 5; i++) {
     await Promise.resolve();
@@ -120,7 +124,7 @@ beforeEach(async () => {
   document.documentElement.removeAttribute("data-theme");
   document.documentElement.removeAttribute("data-mode");
   useThemeStore.setState({ themeId: DEFAULT_THEME_ID, mode: "system" });
-  // reset 의 subscriber 호출이 LS write 발생시킬 수 있으니 flush 후 clear.
+  // The reset's subscriber calls may trigger an LS write, so flush before clearing.
   await Promise.resolve();
   await Promise.resolve();
   localStorageMock.setItem.mockClear();
@@ -132,8 +136,8 @@ describe("Wave 9.5 회귀 7 — cross-window 테마 sync (theme-sync inbound use
       origin: "other-window",
       state: { themeId: "github", mode: "dark" },
     });
-    // attachZustandIpcBridge 의 inbound apply → subscriber → applyTheme +
-    // writeStoredState 가 모두 microtask. flush.
+    // attachZustandIpcBridge's inbound apply → subscriber → applyTheme +
+    // writeStoredState are all microtasks. Flush.
     await Promise.resolve();
     await Promise.resolve();
 

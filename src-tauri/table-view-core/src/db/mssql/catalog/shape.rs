@@ -259,7 +259,7 @@ pub(super) fn build_functions(
         .collect()
 }
 
-/// Issue #1071 (2차) — fold the per-event `sys.trigger_events` rows into one
+/// Issue #1071 (pass 2) — fold the per-event `sys.trigger_events` rows into one
 /// `TriggerInfo` per trigger. SQL Server DML triggers are statement-level and
 /// carry an inline T-SQL body (no separate trigger function), so `orientation`
 /// is always `STATEMENT` and `function_name` is left empty — the same non-PG
@@ -304,12 +304,13 @@ mod tests {
     use super::*;
     use crate::models::ColumnCategory;
 
-    // Reason: 회귀 #1071 (2차) — SQL Server trigger 목록은 이전엔 trait default
-    // `Ok(Vec::new())` 스텁이라 스키마 트리에 항상 빈 목록이었다. 실 DB 없이
-    // fold/매핑 로직을 고정: multi-event 행이 한 TriggerInfo 로 접히고, events 가
-    // 누적되며, INSTEAD OF/AFTER timing 매핑 + statement 지향 + inline-body
-    // placeholder(function_name 공백) + WITH ENCRYPTION NULL body 를 검증
-    // 한다 (2026-07-25).
+    // Reason: regression #1071 (pass 2) — the SQL Server trigger list used to
+    // be the trait default `Ok(Vec::new())` stub, so the schema tree always
+    // showed an empty list. This pins the fold/mapping logic without a live
+    // DB: multi-event rows fold into one TriggerInfo, events accumulate, and
+    // the INSTEAD OF/AFTER timing mapping, the statement orientation, the
+    // inline-body placeholder (empty function_name) and the WITH ENCRYPTION
+    // NULL body are all checked.
     #[test]
     fn build_triggers_folds_events_and_maps_sql_server_semantics() {
         let triggers = build_triggers(

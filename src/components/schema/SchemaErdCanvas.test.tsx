@@ -233,7 +233,7 @@ describe("SchemaErdCanvas", () => {
     expect(handleSelect).toHaveBeenCalledWith("table:public.orders");
   });
 
-  // Reason: 이슈 #1736 — 선택된 노드 재클릭 시 toggle 해제 (2026-07-24)
+  // Reason: issue #1736 — re-clicking the selected node toggles it off
   it("toggles selection off when the already-selected node is re-clicked", async () => {
     const handleSelect = vi.fn();
     render(
@@ -253,7 +253,7 @@ describe("SchemaErdCanvas", () => {
     expect(handleSelect).toHaveBeenLastCalledWith(null);
   });
 
-  // Reason: 이슈 #1736 — 빈 캔버스 클릭 시 선택 해제 (2026-07-24)
+  // Reason: issue #1736 — clicking the empty canvas clears the selection
   it("clears selection when the empty canvas pane is clicked", async () => {
     const handleSelect = vi.fn();
     const { container } = render(
@@ -274,7 +274,7 @@ describe("SchemaErdCanvas", () => {
     expect(handleSelect).toHaveBeenLastCalledWith(null);
   });
 
-  // Reason: 이슈 #1736 — ESC 키로 선택 해제 (2026-07-24)
+  // Reason: issue #1736 — the ESC key clears the selection
   it("clears selection when Escape is pressed", async () => {
     const handleSelect = vi.fn();
     render(

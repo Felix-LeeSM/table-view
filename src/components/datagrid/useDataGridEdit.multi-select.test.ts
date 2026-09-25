@@ -404,10 +404,11 @@ describe("useDataGridEdit — multi-row selection", () => {
     expect(result.current.pendingNewRows).toHaveLength(2);
   });
 
-  // Reason: #1433 리뷰 B1 — add-row seed 는 미입력 sentinel `undefined`.
-  // `null` 은 실 데이터 값(Duplicate Row / undo 재-INSERT 의 verbatim 복사)
-  // 이므로 seed 로 쓰면 sqlGenerator 의 default/identity 생략 guard 가 실
-  // NULL 과 미입력을 구분하지 못한다 (2026-07-10)
+  // Reason: #1433 B1 review finding — the add-row seed is the untouched
+  // sentinel `undefined`. `null` is a real data value (the verbatim copy from
+  // Duplicate Row / undo re-INSERT), so seeding with it would leave
+  // `sqlGenerator`'s default/identity omission guard unable to tell a real
+  // NULL from untouched.
   it("seeds added rows with undefined (untouched sentinel), not null", () => {
     const { result } = renderEditHook();
 

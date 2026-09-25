@@ -1,7 +1,7 @@
 //! PostgreSQL DDL mutations — drop / rename / alter table, index lifecycle,
 //! constraint lifecycle.
 //!
-//! Sprint 202 split from `db/postgres.rs`. Identifier validation/quoting
+//! Split out of `db/postgres.rs`. Identifier validation/quoting
 //! helpers (`validate_identifier`, `quote_identifier`, `qualified_table`)
 //! live here since DDL is the only path that builds raw SQL by string
 //! interpolation — every other sub-file uses parameterised queries.
@@ -27,23 +27,22 @@ use ddl::{
 use triggers::{build_create_trigger_sql, build_drop_trigger_sql};
 
 /// PG `NAMEDATALEN` default — identifiers longer than 63 bytes are
-/// truncated by the server. Sprint 235 surfaces the 63-byte boundary as
-/// an explicit `AppError::Validation` so the dialog can render the
-/// failure inline rather than letting PG silently truncate.
+/// truncated by the server. The 63-byte boundary surfaces as an explicit
+/// `AppError::Validation` so the dialog can render the failure inline
+/// rather than letting PG silently truncate.
 const PG_IDENTIFIER_MAX_BYTES: usize = 63;
 
 /// Validate a SQL identifier (table name, column name, index name, constraint name)
 /// to prevent SQL injection. Only allows `[a-zA-Z_][a-zA-Z0-9_]*` with
-/// length ≤ 63 bytes (PG's `NAMEDATALEN` default — Sprint 235).
+/// length ≤ 63 bytes (PG's `NAMEDATALEN` default).
 ///
 /// Embedded NULL bytes (`\0`), embedded `"`, and embedded whitespace are
 /// implicitly rejected by the alphanumeric-or-underscore body rule.
 ///
-/// Sprint 237 — visibility hoisted to `pub(crate)` so the
-/// `count_null_rows` command (which builds raw `SELECT COUNT(*) … WHERE
-/// "<col>" IS NULL` SQL with interpolated identifiers) can reuse the
-/// same validator as the rest of the DDL family. The body and rules are
-/// unchanged.
+/// The visibility is hoisted above this module so the `count_null_rows`
+/// command (which builds raw `SELECT COUNT(*) … WHERE "<col>" IS NULL`
+/// SQL with interpolated identifiers) can reuse the same validator as the
+/// rest of the DDL family.
 pub fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
@@ -89,7 +88,7 @@ pub(super) fn qualified_table(schema: &str, table: &str) -> String {
 }
 
 impl PostgresAdapter {
-    /// Drop a table permanently — Sprint 235 request-shaped variant.
+    /// Drop a table permanently — request-shaped variant.
     ///
     /// SQL emission:
     ///   `req.cascade == false` →  `DROP TABLE "<schema>"."<table>"`
@@ -97,7 +96,7 @@ impl PostgresAdapter {
     ///
     /// Note no `RESTRICT` keyword on the non-cascade branch — PG defaults
     /// to RESTRICT and byte-equivalence with the implicit form is locked
-    /// by the Sprint 235 fixtures.
+    /// by fixtures.
     ///
     /// `req.preview_only=true` returns the built SQL without touching
     /// the database. `req.preview_only=false` runs the statement inside
@@ -144,7 +143,7 @@ impl PostgresAdapter {
         Ok(SchemaChangeResult { sql })
     }
 
-    /// Rename a table — Sprint 235 request-shaped variant.
+    /// Rename a table — request-shaped variant.
     ///
     /// SQL emission: `ALTER TABLE "<schema>"."<table>" RENAME TO "<new_name>"`.
     /// Identifier validation routes through the shared
@@ -191,7 +190,7 @@ impl PostgresAdapter {
         Ok(SchemaChangeResult { sql })
     }
 
-    /// Sprint 236 — request-shaped `ALTER TABLE … ADD COLUMN`.
+    /// Request-shaped `ALTER TABLE … ADD COLUMN`.
     ///
     /// SQL emission shape:
     ///
@@ -206,9 +205,8 @@ impl PostgresAdapter {
     /// free-text passthrough (no escaping, no syntax check).
     ///
     /// `ColumnDefinition.comment` flows through deserialization but is
-    /// silently ignored by the emitter — Sprint 237 polish adds the
-    /// `COMMENT ON COLUMN` chain (atomic policy = C, mirroring Sprint
-    /// 227 `create_table`).
+    /// silently ignored by the emitter — this path emits no
+    /// `COMMENT ON COLUMN` statement.
     ///
     /// `req.preview_only=true` returns the built SQL without touching
     /// the database. `req.preview_only=false` runs the statement inside
@@ -244,7 +242,7 @@ impl PostgresAdapter {
         Ok(SchemaChangeResult { sql })
     }
 
-    /// Sprint 236 — request-shaped `ALTER TABLE … DROP COLUMN`.
+    /// Request-shaped `ALTER TABLE … DROP COLUMN`.
     ///
     /// SQL emission:
     ///   `req.cascade == false` → `ALTER TABLE "<schema>"."<table>"
@@ -253,11 +251,11 @@ impl PostgresAdapter {
     ///
     /// Note: NO `RESTRICT` keyword on the non-cascade branch — PG
     /// defaults to RESTRICT and byte-equivalence with the implicit
-    /// form is locked by fixture (mirrors Sprint 235 `drop_table`).
+    /// form is locked by fixture (mirrors `drop_table`).
     ///
     /// No pre-existence check — let PG surface its native `column
-    /// "X" of relation "Y" does not exist` error verbatim (mirrors
-    /// Sprint 235 drop pre-existence removal).
+    /// "X" of relation "Y" does not exist` error verbatim (mirrors the
+    /// pre-existence-check removal in `drop_table`).
     pub async fn drop_column(
         &self,
         req: &DropColumnRequest,
@@ -293,7 +291,7 @@ impl PostgresAdapter {
 
     // ── Schema change operations ──────────────────────────────────────
 
-    /// CREATE TABLE — Sprint 226.
+    /// CREATE TABLE.
     ///
     /// Identifier validation reuses the same `validate_identifier` helper
     /// that `alter_table` / `rename_table` (via `validate_identifier`)
@@ -325,7 +323,7 @@ impl PostgresAdapter {
         // column) leaves no partial state behind. CREATE TABLE itself
         // is implicitly transactional in PG, but the explicit
         // transaction is required for the additional `COMMENT ON
-        // COLUMN` statements emitted in Sprint 227 — they must roll
+        // COLUMN` statements in `plan.comment_stmts` — they must roll
         // back together with the CREATE TABLE if any leg fails.
         let mut tx = pool
             .begin()
@@ -501,16 +499,15 @@ impl PostgresAdapter {
         Ok(SchemaChangeResult { sql })
     }
 
-    /// Sprint 273 — `CREATE TRIGGER` SQL emitter + execute.
+    /// `CREATE TRIGGER` SQL emitter + execute.
     ///
     /// Builds the canonical SQL via `build_create_trigger_sql` (identifier
     /// validation, whitelist, canonical event ordering, single-quote
     /// re-escape on `function_arguments`, INSTEAD OF rejection paths).
     /// `req.preview_only=true` returns the built SQL without touching the
     /// database. `req.preview_only=false` wraps the single statement in
-    /// `BEGIN; <sql>; COMMIT;` for parity with the rest of the Phase 24-26
-    /// DDL family — a failure rolls back rather than leaving a half-created
-    /// trigger.
+    /// `BEGIN; <sql>; COMMIT;` for parity with the rest of the DDL family —
+    /// a failure rolls back rather than leaving a half-created trigger.
     pub async fn create_trigger(
         &self,
         req: &CreateTriggerRequest,
@@ -546,7 +543,7 @@ impl PostgresAdapter {
         Ok(SchemaChangeResult { sql })
     }
 
-    /// Sprint 274 — `DROP TRIGGER` SQL emitter + execute.
+    /// `DROP TRIGGER` SQL emitter + execute.
     ///
     /// Builds the canonical SQL via `build_drop_trigger_sql` (identifier
     /// validation, CASCADE branch). `req.preview_only=true` returns the
@@ -556,8 +553,8 @@ impl PostgresAdapter {
     /// back rather than leaving a partial state.
     ///
     /// No pre-existence check — let PG surface its native `trigger "X"
-    /// for relation "Y" does not exist` error verbatim (mirrors Sprint
-    /// 235 `drop_table` pre-existence removal).
+    /// for relation "Y" does not exist` error verbatim (mirrors the
+    /// pre-existence-check removal in `drop_table`).
     pub async fn drop_trigger(
         &self,
         req: &DropTriggerRequest,
@@ -605,12 +602,12 @@ mod tests {
         DropTriggerRequest, RenameTableRequest,
     };
 
-    // ── drop_table / rename_table — Sprint 235 fixtures ──────────────
+    // ── drop_table / rename_table fixtures ───────────────────────────
     //
-    // Sprint 235 mechanically rewrote the legacy positional-args fixtures
-    // to the new `*Request` shapes. Original test intents (rejection of
+    // The legacy positional-args fixtures were mechanically rewritten to
+    // the `*Request` shapes. Original test intents (rejection of
     // empty / whitespace / invalid-char / digit-start / connection-stage
-    // failure) preserved verbatim; new fixtures lock the byte-equivalent
+    // failure) preserved verbatim; the fixtures lock the byte-equivalent
     // SQL emission, the CASCADE branch, the rename-to-self permissive
     // path, and the 63-byte / embedded-NULL / embedded-quote rejections.
 
@@ -643,7 +640,7 @@ mod tests {
 
     #[tokio::test]
     async fn drop_table_without_connection_fails_non_preview() {
-        // Sprint 235 — execute branch (preview_only=false) requires a
+        // Execute branch (preview_only=false) requires a
         // live pool; without one the call surfaces the connection
         // sentinel before any DB work happens.
         let adapter = PostgresAdapter::new();
@@ -716,16 +713,16 @@ mod tests {
         let result = adapter.rename_table(&req).await;
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        // Sprint 235 unified validator surfaces "must start with a letter
-        // or underscore" via `validate_identifier` — replaces the
-        // pre-Sprint 235 ad-hoc "must not start with a digit" message.
+        // The unified validator surfaces "must start with a letter
+        // or underscore" via `validate_identifier` — it replaced an
+        // earlier ad-hoc "must not start with a digit" message.
         assert!(
             err_msg.contains("must start with a letter or underscore"),
             "Expected leading-letter validation error, got: {err_msg}"
         );
     }
 
-    /// Sprint 235 — byte-equivalent SQL for the canonical preview path.
+    /// Byte-equivalent SQL for the canonical preview path.
     /// Locks the ANSI-quoted form `ALTER TABLE "schema"."old" RENAME TO
     /// "new"` — any whitespace / quoting drift breaks this assertion
     /// before the dialog reaches a user.
@@ -741,7 +738,7 @@ mod tests {
         );
     }
 
-    /// Sprint 235 — preview branch returns SQL even when no live pool
+    /// Preview branch returns SQL even when no live pool
     /// exists. The check confirms `preview_only=true` short-circuits
     /// before the `active_pool().await?` call.
     #[tokio::test]
@@ -752,7 +749,7 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok preview, got {:?}", result);
     }
 
-    /// Sprint 235 — table-driven rejection cases for invalid `new_name`
+    /// Table-driven rejection cases for invalid `new_name`
     /// values. Embedded space / embedded `"` / length > 63 / leading
     /// digit all surface `AppError::Validation`.
     #[tokio::test]
@@ -791,7 +788,7 @@ mod tests {
         assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
     }
 
-    /// Sprint 235 — rename-to-self stays permissive at the backend.
+    /// Rename-to-self stays permissive at the backend.
     /// Frontend disables Apply, but direct IPC callers get the SQL
     /// emitted exactly as if it were a real rename — PG itself
     /// surfaces the no-op verbatim.
@@ -807,7 +804,7 @@ mod tests {
         );
     }
 
-    /// Sprint 235 — embedded NULL byte rejection (defense-in-depth
+    /// Embedded NULL byte rejection (defense-in-depth
     /// against any caller that bypassed the frontend regex).
     #[tokio::test]
     async fn rename_table_embedded_null_byte_rejected() {
@@ -819,7 +816,7 @@ mod tests {
         assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
     }
 
-    /// Sprint 235 — DROP TABLE byte-equivalent (no CASCADE). Confirms the
+    /// DROP TABLE byte-equivalent (no CASCADE). Confirms the
     /// implicit-RESTRICT form — no `RESTRICT` keyword in the emitted SQL.
     #[tokio::test]
     async fn drop_table_preview_no_cascade_byte_equivalent() {
@@ -830,7 +827,7 @@ mod tests {
         assert_eq!(result.unwrap().sql, r#"DROP TABLE "public"."users""#);
     }
 
-    /// Sprint 235 — DROP TABLE … CASCADE byte-equivalent.
+    /// DROP TABLE … CASCADE byte-equivalent.
     #[tokio::test]
     async fn drop_table_preview_cascade_byte_equivalent() {
         let adapter = PostgresAdapter::new();
@@ -843,7 +840,7 @@ mod tests {
         );
     }
 
-    /// Sprint 235 — preview branch returns SQL even without a live pool.
+    /// Preview branch returns SQL even without a live pool.
     #[tokio::test]
     async fn drop_table_preview_only_does_not_execute() {
         let adapter = PostgresAdapter::new();
@@ -852,7 +849,7 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok preview, got {:?}", result);
     }
 
-    /// Sprint 235 — invalid table-name rejections. Same identifier
+    /// Invalid table-name rejections. Same identifier
     /// validator as `rename_table`. Three cases (embedded space /
     /// embedded quote / empty post-trim).
     #[tokio::test]
@@ -879,11 +876,12 @@ mod tests {
         );
     }
 
-    // ── add_column / drop_column — Sprint 236 fixtures ────────────────
+    // ── add_column / drop_column fixtures ─────────────────────────────
     //
     // Locks the byte-equivalent SQL emission for the new
-    // `add_column` / `drop_column` paths. Mirrors Sprint 235 fixture
-    // structure (request builder helpers + table-driven invalid-name
+    // `add_column` / `drop_column` paths. Mirrors the `drop_table` /
+    // `rename_table` fixture structure (request builder helpers +
+    // table-driven invalid-name
     // rejections + preview-only-without-pool short circuit).
 
     fn add_col_req(
@@ -938,7 +936,7 @@ mod tests {
         }
     }
 
-    /// Sprint 236 — basic ADD COLUMN, nullable, no default, no check.
+    /// Basic ADD COLUMN, nullable, no default, no check.
     /// Locks the canonical preview output; any whitespace / quoting
     /// drift trips this assertion before reaching the dialog.
     #[tokio::test]
@@ -959,7 +957,7 @@ mod tests {
         );
     }
 
-    /// Sprint 236 — NOT NULL keyword emitted iff `!nullable`.
+    /// NOT NULL keyword emitted iff `!nullable`.
     #[tokio::test]
     async fn add_column_preview_with_not_null_byte_equivalent() {
         let adapter = PostgresAdapter::new();
@@ -978,8 +976,8 @@ mod tests {
         );
     }
 
-    /// Sprint 236 — DEFAULT clause emitted iff trimmed default is
-    /// non-empty (mirrors Sprint 226 `create_table` rule).
+    /// DEFAULT clause emitted iff trimmed default is
+    /// non-empty (mirrors the `create_table` rule).
     #[tokio::test]
     async fn add_column_preview_with_default_byte_equivalent() {
         let adapter = PostgresAdapter::new();
@@ -998,7 +996,7 @@ mod tests {
         );
     }
 
-    /// Sprint 236 — inline CHECK clause emitted iff trimmed
+    /// Inline CHECK clause emitted iff trimmed
     /// check_expression is non-empty. Free-text passthrough — verbatim
     /// interpolation, no escaping.
     #[tokio::test]
@@ -1040,7 +1038,7 @@ mod tests {
         );
     }
 
-    /// Sprint 236 — locked emission order verified end-to-end:
+    /// Locked emission order verified end-to-end:
     /// `<name> <type> NOT NULL DEFAULT <expr> CHECK (<expr>)`.
     #[tokio::test]
     async fn add_column_preview_full_combo_byte_equivalent() {
@@ -1060,7 +1058,7 @@ mod tests {
         );
     }
 
-    /// Sprint 236 — preview branch returns SQL even without a live
+    /// Preview branch returns SQL even without a live
     /// pool. Confirms the `preview_only=true` short-circuit before
     /// `active_pool().await?`.
     #[tokio::test]
@@ -1077,10 +1075,10 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok preview, got {:?}", result);
     }
 
-    /// Sprint 236 — table-driven rejection of invalid column names.
+    /// Table-driven rejection of invalid column names.
     /// Embedded space / embedded `"` / leading digit / >63 bytes /
     /// embedded NULL byte all surface `AppError::Validation`. Mirrors
-    /// the Sprint 235 `rename_table_invalid_new_name_rejected` shape.
+    /// the `rename_table_invalid_new_name_rejected` shape.
     #[tokio::test]
     async fn add_column_invalid_column_name_rejected() {
         let adapter = PostgresAdapter::new();
@@ -1164,8 +1162,8 @@ mod tests {
         );
     }
 
-    /// Sprint 236 — empty `data_type.trim()` rejected with
-    /// `AppError::Validation`. Mirrors the Sprint 226 `create_table`
+    /// Empty `data_type.trim()` rejected with
+    /// `AppError::Validation`. Mirrors the `create_table`
     /// rule for column definitions.
     #[tokio::test]
     async fn add_column_empty_data_type_rejected() {
@@ -1186,11 +1184,11 @@ mod tests {
         );
     }
 
-    /// Sprint 236 — DEFAULT free-text passthrough (no auto-doubling).
+    /// DEFAULT free-text passthrough (no auto-doubling).
     /// Locks the user-responsible escaping decision: an embedded `'`
     /// in the DEFAULT clause is forwarded verbatim to PG, which will
     /// reject the SQL with a syntax error — the error surfaces in
-    /// `previewError` (mirrors Sprint 229 CHECK contract).
+    /// `previewError` (mirrors the CHECK contract).
     #[tokio::test]
     async fn add_column_default_with_embedded_quote_passthrough() {
         let adapter = PostgresAdapter::new();
@@ -1210,9 +1208,9 @@ mod tests {
         );
     }
 
-    /// Sprint 236 — DROP COLUMN byte-equivalent (no CASCADE). Confirms
+    /// DROP COLUMN byte-equivalent (no CASCADE). Confirms
     /// the implicit-RESTRICT form — no `RESTRICT` keyword in the
-    /// emitted SQL (mirrors Sprint 235 `drop_table` convention).
+    /// emitted SQL (mirrors the `drop_table` convention).
     #[tokio::test]
     async fn drop_column_preview_no_cascade_byte_equivalent() {
         let adapter = PostgresAdapter::new();
@@ -1225,7 +1223,7 @@ mod tests {
         );
     }
 
-    /// Sprint 236 — DROP COLUMN … CASCADE byte-equivalent.
+    /// DROP COLUMN … CASCADE byte-equivalent.
     #[tokio::test]
     async fn drop_column_preview_cascade_byte_equivalent() {
         let adapter = PostgresAdapter::new();
@@ -1238,7 +1236,7 @@ mod tests {
         );
     }
 
-    /// Sprint 236 — preview branch returns SQL without a live pool.
+    /// Preview branch returns SQL without a live pool.
     #[tokio::test]
     async fn drop_column_preview_only_does_not_execute() {
         let adapter = PostgresAdapter::new();
@@ -1247,7 +1245,7 @@ mod tests {
         assert!(result.is_ok(), "Expected Ok preview, got {:?}", result);
     }
 
-    /// Sprint 236 — invalid column-name rejection (defense-in-depth
+    /// Invalid column-name rejection (defense-in-depth
     /// against any caller that bypassed the frontend regex). Three
     /// table-driven sub-cases.
     #[tokio::test]
@@ -1657,18 +1655,18 @@ mod tests {
         assert!(result.unwrap_err().to_string().contains("Not connected"));
     }
 
-    // ── Sprint 237 — USING cast expression fixtures ──────────────────
+    // ── USING cast expression fixtures ───────────────────────────────
     //
-    // 작성 이유 (2026-05-13): Phase 27 closure 의 `ALTER COLUMN … TYPE …
-    // USING …` SQL 갈래를 emitter level 에서 고정한다. 3 fixture:
-    //   (1) type-only Modify, `using_expression = None` → pre-Sprint-237
-    //       byte-equivalent (regression guard).
+    // Reason (2026-05-13): pins the `ALTER COLUMN … TYPE … USING …` SQL
+    // branch at the emitter level. 3 fixtures:
+    //   (1) type-only Modify, `using_expression = None` → byte-equivalent
+    //       to the form emitted without USING (regression guard).
     //   (2) type + USING → `ALTER COLUMN "col" TYPE int USING col::int`.
     //   (3) composite (type + USING + nullable + default) → comma-joined
     //       parts, USING only on TYPE clause; nullability / default parts
     //       unchanged (invariant: `alter_table` stays one SQL stmt).
-    // 별도 케이스 1 건: `using_expression` 만 있고 `new_data_type` 가 없는
-    // 잘못된 입력은 Validation 으로 reject (defensive — Generator 결정).
+    // One separate case: input carrying only `using_expression` without
+    // `new_data_type` is rejected as Validation (defensive).
 
     #[tokio::test]
     async fn alter_table_preview_modify_type_only_without_using_is_byte_equivalent() {
@@ -1689,7 +1687,7 @@ mod tests {
             expected_database: None,
         };
         let result = adapter.alter_table(&req).await.unwrap();
-        // pre-Sprint-237 byte-equivalent: no `USING` clause appended.
+        // Byte-equivalent to the no-USING form: no `USING` clause appended.
         assert_eq!(
             result.sql,
             "ALTER TABLE \"public\".\"users\" ALTER COLUMN \"age\" TYPE bigint"
@@ -1723,9 +1721,9 @@ mod tests {
 
     #[tokio::test]
     async fn alter_table_preview_modify_composite_using_only_on_type_clause() {
-        // 복합: type + USING + nullable + default 가 모두 함께 와도
-        // USING 은 TYPE 절에만 attach. nullability / default 는 별도
-        // 콤마 part 로 byte-equivalent 하게 emit.
+        // Composite: even when type + USING + nullable + default all come
+        // together, USING attaches only to the TYPE clause. Nullability /
+        // default are emitted byte-equivalently as separate comma parts.
         let adapter = PostgresAdapter::new();
         let req = AlterTableRequest {
             connection_id: "conn1".to_string(),
@@ -1751,9 +1749,9 @@ mod tests {
 
     #[tokio::test]
     async fn alter_table_using_without_type_change_is_rejected() {
-        // `using_expression` 만 있고 `new_data_type` 가 None 이면
-        // emit 단계에서 정적으로 reject (defensive validation; PG 의
-        // USING 절은 TYPE 절에만 의미를 갖는다).
+        // When only `using_expression` is present and `new_data_type` is
+        // None, the emit stage rejects it statically (defensive validation;
+        // PG's USING clause only means anything on a TYPE clause).
         let adapter = PostgresAdapter::new();
         let req = AlterTableRequest {
             connection_id: "conn1".to_string(),
@@ -1917,7 +1915,7 @@ mod tests {
         );
     }
 
-    /// Sprint 228 — explicit byte-string fixture for `gin`. The
+    /// Explicit byte-string fixture for `gin`. The
     /// pre-existing `create_index_all_types_accepted` loop only asserts
     /// `is_ok()` for each type; this case locks the actual SQL output
     /// so a future refactor (e.g. lowercase normalisation, identifier
@@ -1945,7 +1943,7 @@ mod tests {
         );
     }
 
-    /// Sprint 228 — explicit byte-string fixture for `gist`. Companion
+    /// Explicit byte-string fixture for `gist`. Companion
     /// to `create_index_preview_gin_byte_equivalent` — together they
     /// cover the two UI-exposed types (gin/gist) that previously only
     /// existed inside the all-types-acceptance loop.
@@ -2186,10 +2184,10 @@ mod tests {
                 columns: vec!["user_id".to_string()],
                 reference_table: "users".to_string(),
                 reference_columns: vec!["id".to_string()],
-                // Sprint 229 — Rust syntax requires complete field
+                // Rust syntax requires complete field
                 // listings even when `#[serde(default)]` is set; the
                 // 2-line `None` initializer keeps the emitted SQL
-                // (asserted below) byte-equivalent to Sprint 228.
+                // (asserted below) byte-equivalent to the no-action form.
                 on_delete: None,
                 on_update: None,
             },
@@ -2204,7 +2202,7 @@ mod tests {
         );
     }
 
-    // ── Sprint 229 — ON DELETE / ON UPDATE referential actions ─────────
+    // ── ON DELETE / ON UPDATE referential actions ──────────────────────
 
     #[tokio::test]
     async fn add_constraint_preview_foreign_key_on_delete_cascade() {
@@ -2462,7 +2460,7 @@ mod tests {
         assert!(result.unwrap_err().to_string().contains("Not connected"));
     }
 
-    // ── create_table tests (Sprint 226) ───────────────────────────────
+    // ── create_table tests ────────────────────────────────────────────
 
     fn col(name: &str, ty: &str, nullable: bool, default: Option<&str>) -> ColumnDefinition {
         ColumnDefinition {
@@ -2475,7 +2473,7 @@ mod tests {
         }
     }
 
-    /// Sprint 227 — `col` variant with a comment string. Mirrors `col`
+    /// `col` variant with a comment string. Mirrors `col`
     /// (no `comment` argument) but appends a non-empty `comment` for the
     /// `COMMENT ON COLUMN` emission tests.
     fn col_with_comment(
@@ -2738,18 +2736,18 @@ mod tests {
         );
     }
 
-    // ── create_table tests (Sprint 227) ───────────────────────────────
+    // ── create_table tests (column comments) ──────────────────────────
 
     #[tokio::test]
     async fn create_table_preview_zero_comment_byte_equivalent_to_sprint_226() {
-        // Sprint 227 additive regression proof — when no column carries
-        // a `comment`, the emitted SQL must remain byte-equivalent to
-        // the Sprint 226 composite-PK fixture. This test mirrors
+        // Additive regression proof — when no column carries a
+        // `comment`, the emitted SQL must remain byte-equivalent to
+        // the composite-PK fixture. This test mirrors
         // `create_table_preview_three_column_composite_pk_byte_equivalent`
-        // exactly but exercises the Sprint 227 codepath (which now
-        // walks the column list looking for comments). If the codepath
+        // exactly but exercises the comment codepath (which walks the
+        // column list looking for comments). If the codepath
         // accidentally appends a trailing `;` or stray space, this
-        // test breaks before the Sprint 226 fixture even runs.
+        // test breaks before the composite-PK fixture even runs.
         let adapter = PostgresAdapter::new();
         let req = CreateTableRequest {
             connection_id: "conn1".to_string(),
@@ -2775,7 +2773,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_table_preview_two_columns_one_comment_byte_equivalent() {
-        // Sprint 227 — single-column comment emission. The emitted SQL
+        // Single-column comment emission. The emitted SQL
         // is `CREATE TABLE …; COMMENT ON COLUMN "<schema>"."<table>"."<col>" IS '<text>';`
         // joined with `"; "` and terminated with a trailing `;`. The
         // uncommented column emits no `COMMENT ON` statement.
@@ -2803,7 +2801,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_table_preview_single_quote_escape_byte_equivalent() {
-        // Sprint 227 — `O'Brien`-style single-quote escape proof. The
+        // `O'Brien`-style single-quote escape proof. The
         // SQL literal must double the single quote to `''` so PG
         // accepts it as a literal character (not the literal
         // terminator). This case also covers a 3-column form with two
@@ -2834,7 +2832,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_table_preview_whitespace_comment_emits_no_statement() {
-        // Sprint 227 — whitespace-only / empty comment string emits no
+        // Whitespace-only / empty comment string emits no
         // `COMMENT ON COLUMN` statement (post-trim check). The SQL must
         // remain byte-equivalent to the no-comment form.
         let adapter = PostgresAdapter::new();
@@ -2858,7 +2856,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_table_preview_comment_with_semicolon_does_not_split() {
-        // Sprint 227 — comment string containing `;` is emitted verbatim
+        // Comment string containing `;` is emitted verbatim
         // inside the literal. The `;` is NOT a statement boundary; PG's
         // simple-query protocol parses single-quoted literals as a
         // contiguous token. The frontend `useDdlPreviewExecution` hook's
@@ -2886,15 +2884,15 @@ mod tests {
         );
     }
 
-    // ── create_table tests (Sprint 234 — table_comment) ────────────────
+    // ── create_table tests (table_comment) ─────────────────────────────
 
     #[tokio::test]
     async fn create_table_preview_table_comment_byte_equivalent() {
-        // Sprint 234 — table-level COMMENT ON TABLE statement appended
+        // Table-level COMMENT ON TABLE statement appended
         // FIRST in the comment chain. With a single column and no
         // per-column comment the emitted SQL is the canonical
         // CREATE TABLE … followed by `; COMMENT ON TABLE …;` and the
-        // trailing semicolon (Sprint 227 multi-statement convention).
+        // trailing semicolon (the multi-statement convention).
         let adapter = PostgresAdapter::new();
         let req = CreateTableRequest {
             connection_id: "conn1".to_string(),
@@ -2916,7 +2914,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_table_preview_table_and_column_comments_byte_equivalent() {
-        // Sprint 234 — when both a table comment and a per-column comment
+        // When both a table comment and a per-column comment
         // are supplied, the table-level COMMENT ON TABLE statement comes
         // FIRST, then per-column COMMENT ON COLUMN in declared order.
         let adapter = PostgresAdapter::new();
@@ -2943,9 +2941,9 @@ mod tests {
 
     #[tokio::test]
     async fn create_table_preview_table_comment_single_quote() {
-        // Sprint 234 — single-quote escape doubles internally to `''` so
+        // Single-quote escape doubles internally to `''` so
         // PG accepts the literal verbatim. Same rule as the per-column
-        // comment escape from Sprint 227.
+        // comment escape.
         let adapter = PostgresAdapter::new();
         let req = CreateTableRequest {
             connection_id: "conn1".to_string(),
@@ -2967,11 +2965,11 @@ mod tests {
 
     #[tokio::test]
     async fn create_table_preview_zero_table_comment_byte_equivalent_to_sprint_226() {
-        // Sprint 234 additive regression proof — when `table_comment` is
-        // None (Sprint 226-233 caller default), the emitted SQL must
-        // remain byte-equivalent to the Sprint 226 composite-PK fixture.
+        // Additive regression proof — when `table_comment` is
+        // None (the older caller default), the emitted SQL must
+        // remain byte-equivalent to the composite-PK fixture.
         // Mirrors `create_table_preview_three_column_composite_pk_
-        // byte_equivalent` exactly but exercises the Sprint 234 codepath.
+        // byte_equivalent` exactly but exercises the table_comment codepath.
         let adapter = PostgresAdapter::new();
         let req = CreateTableRequest {
             connection_id: "conn1".to_string(),
@@ -2997,7 +2995,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_table_preview_whitespace_table_comment_emits_no_statement() {
-        // Sprint 234 — whitespace-only `table_comment` emits NO COMMENT
+        // Whitespace-only `table_comment` emits NO COMMENT
         // ON TABLE statement (post-trim guard). SQL stays byte-equivalent
         // to the no-comment form.
         let adapter = PostgresAdapter::new();
@@ -3019,7 +3017,7 @@ mod tests {
         );
     }
 
-    // ── Sprint 242 — IDENTITY column emission ─────────────────────────
+    // ── IDENTITY column emission ──────────────────────────────────────
 
     fn col_identity(name: &str, ty: &str) -> ColumnDefinition {
         ColumnDefinition {
@@ -3034,7 +3032,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_table_identity_column_emits_generated_by_default_as_identity() {
-        // Sprint 242 — `is_identity: true` triggers SQL-standard
+        // `is_identity: true` triggers SQL-standard
         // `GENERATED BY DEFAULT AS IDENTITY` (PG 10+). The clause forces
         // NOT NULL and overrides the column-level NULL/DEFAULT branch.
         let adapter = PostgresAdapter::new();
@@ -3086,7 +3084,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_column_identity_emits_generated_by_default_as_identity() {
-        // Sprint 242 — single-column `add_column` IPC mirrors
+        // Single-column `add_column` IPC mirrors
         // `create_table` for IDENTITY emission (same per-column branch).
         let adapter = PostgresAdapter::new();
         let req = AddColumnRequest {
@@ -3112,7 +3110,7 @@ mod tests {
         );
     }
 
-    // ── create_trigger — Sprint 273 fixtures ─────────────────────────
+    // ── create_trigger fixtures ──────────────────────────────────────
     //
     // Locks `build_create_trigger_sql` emission shape against the master
     // spec § 6 SQL form. Validation order (identifier → timing →
@@ -3208,7 +3206,7 @@ mod tests {
     fn create_trigger_instead_of_insert_row_when_with_quoted_args() {
         // Master spec § 6 fixture (iii) — INSTEAD OF + WHEN + arguments
         // containing a single quote (`O'Brien`). The emitter must double
-        // every `'` in `function_arguments` per Sprint 272 findings § P3
+        // every `'` in `function_arguments` per the findings in § P3
         // — without this the generated SQL would either be a PG parse
         // error or, worse, allow trailing-quote injection through the
         // argument list.
@@ -3532,14 +3530,14 @@ mod tests {
             .contains("INSTEAD OF triggers must declare exactly one event"));
     }
 
-    // ── Sprint 274 — build_drop_trigger_sql fixtures ─────────────────
+    // ── build_drop_trigger_sql fixtures ──────────────────────────────
     //
-    // 작성 이유 (2026-05-13): trigger DROP 의 SQL emission 을 cascade on/off
-    // 두 분기로 박제 + identifier validation 3 식별자 (trigger_name /
-    // schema / table) 의 거부 경로를 단언. `build_drop_trigger_sql` 은
-    // pool-free 순수 헬퍼이므로 fixture 만으로 검증 가능. preview vs.
-    // execute 분기는 `commands/rdb/ddl.rs` 의 wiring / mismatch 테스트가
-    // 담당.
+    // Reason (2026-05-13): pins the SQL emission of a trigger DROP on both
+    // the cascade on and off branches, and asserts the rejection path of
+    // identifier validation for all 3 identifiers (trigger_name / schema /
+    // table). `build_drop_trigger_sql` is a pool-free pure helper, so
+    // fixtures alone verify it. The preview vs. execute branch is covered
+    // by the wiring / mismatch tests in `commands/rdb/ddl.rs`.
 
     fn drop_trigger_req(
         trigger_name: &str,
@@ -3622,7 +3620,7 @@ mod tests {
 
     #[test]
     fn drop_trigger_rejects_empty_trigger_name() {
-        // Empty trigger_name surfaces "must not be empty" — Sprint 235
+        // Empty trigger_name surfaces "must not be empty" — the shared
         // identifier helper rule.
         let req = drop_trigger_req("", "public", "users", false);
         let err = build_drop_trigger_sql(&req).unwrap_err();
@@ -3633,9 +3631,9 @@ mod tests {
 
     #[tokio::test]
     async fn drop_trigger_without_connection_fails_non_preview() {
-        // Sprint 274 — execute branch (preview_only=false) requires a
+        // Execute branch (preview_only=false) requires a
         // live pool; without one the call surfaces the connection
-        // sentinel before any DB work happens (mirrors Sprint 235
+        // sentinel before any DB work happens (mirrors
         // `drop_table_without_connection_fails_non_preview`).
         let adapter = PostgresAdapter::new();
         let req = DropTriggerRequest {
@@ -3659,7 +3657,7 @@ mod tests {
     #[tokio::test]
     async fn drop_trigger_preview_only_does_not_execute() {
         // preview_only=true returns the built SQL without touching the
-        // pool. Mirrors the Sprint 235 `drop_table_preview_only_does_not_execute`
+        // pool. Mirrors the `drop_table_preview_only_does_not_execute`
         // pattern — the adapter has no pool but preview still succeeds.
         let adapter = PostgresAdapter::new();
         let req = drop_trigger_req("tg_audit", "public", "users", false);

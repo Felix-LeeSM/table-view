@@ -8,11 +8,11 @@ import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import { updateColumnCompletionSource } from "./updateColumnCompletion";
 
-// 2026-05-11 — 신규 source. UPDATE / INSERT INTO 의 SET / 컬럼 리스트
-// 컨텍스트에서 컬럼 완성이 끊기던 버그(2026-05-11 user report) 의
-// 회귀 가드. lang-sql 의 built-in `getAliases` 는 `FROM` 키워드만
-// 인식하므로 별도 source 가 syntax tree 를 검사해 target table 을
-// 직접 추출한다.
+// 2026-05-11 — new source. Regression guard for the bug where column
+// completion broke in the SET / column-list context of UPDATE / INSERT INTO
+// (2026-05-11 user report). lang-sql's built-in `getAliases` only
+// recognizes the `FROM` keyword, so a separate source inspects the syntax
+// tree and extracts the target table directly.
 
 const TEST_SCHEMA: SQLNamespace = {
   users: { id: {}, name: {}, email: {}, age: {} },

@@ -138,13 +138,13 @@ export function formatDocumentIdForMql(id: DocumentId): string {
   return JSON.stringify(id.raw);
 }
 
-// ── Sprint 308 (2026-05-14) — bulkWrite wire types ─────────────────────────
+// ── 2026-05-14 — bulkWrite wire types ──────────────────────────────────────
 //
-// 작성 이유: A1 mongosh 파서가 `db.coll.bulkWrite([...])` 를 dispatch 했을
-// 때 reify 한 sub-op 배열을 그대로 IPC payload 로 보내고, 결과 카운터를
-// `WriteSummaryPanel` 이 per-op breakdown 으로 렌더링한다. Rust 측 `enum
-// BulkWriteOp` 는 `#[serde(tag = "op", rename_all = "camelCase")]` 로
-// camelCase wire tag (`"insertOne"` / `"updateOne"` / …) 를 emit 한다.
+// Reason: when the A1 mongosh parser dispatches `db.coll.bulkWrite([...])`,
+// the reified sub-op array goes out as the IPC payload unchanged, and
+// `WriteSummaryPanel` renders the result counters as a per-op breakdown.
+// The Rust-side `enum BulkWriteOp` emits camelCase wire tags (`"insertOne"`
+// / `"updateOne"` / …) via `#[serde(tag = "op", rename_all = "camelCase")]`.
 
 /**
  * `bulkWrite` sub-operation. Discriminated union mirrors Rust `enum

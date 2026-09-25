@@ -1,19 +1,21 @@
-//! Sprint 355 (Phase 1) — `meta` key-value table 액세스. 특히
-//! `meta.legacy_imported` 의 4-state enum 과 `meta.last_legacy_import_at`
-//! sentinel 을 관리.
+//! `meta` key-value table access. In particular it manages the
+//! `meta.legacy_imported` 4-state enum and the `meta.last_legacy_import_at`
+//! sentinel.
 //!
 //! Strategy line 1184: `pending | importing | done | failed`.
 //!
-//! - `pending`: 새 사용자 또는 첫 boot 전. legacy LS read 시도 가능 상태.
-//! - `importing`: legacy import IPC 진행 중 — A/C mutate IPC block 대상.
-//! - `done`: import 완료. 정상 동작.
-//! - `failed`: import 실패. 다음 boot 에서 재시도. 그 동안 A/C mutate block.
+//! - `pending`: a new user, or before the first boot. A legacy LS read may be
+//!   attempted in this state.
+//! - `importing`: a legacy import IPC is in flight — A/C mutate IPC is blocked.
+//! - `done`: import finished. Normal operation.
+//! - `failed`: import failed. Retried on the next boot. A/C mutate stays blocked
+//!   until then.
 
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
-/// `meta.legacy_imported` 4-state. snake_case 로 serialize.
+/// `meta.legacy_imported` 4-state. Serialized as snake_case.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LegacyImportState {
@@ -47,8 +49,8 @@ impl LegacyImportState {
     }
 }
 
-/// 현재 `legacy_imported` 상태 조회. 신규 fresh DB 는 migration 의
-/// `INSERT OR IGNORE` 로 `pending` 이 사전 저장됨.
+/// Reads the current `legacy_imported` state. A fresh DB has `pending`
+/// pre-seeded by the migration's `INSERT OR IGNORE`.
 pub async fn get_legacy_import_state(pool: &SqlitePool) -> Result<LegacyImportState, AppError> {
     let row: Option<(String,)> =
         sqlx::query_as("SELECT value FROM meta WHERE key = 'legacy_imported'")
@@ -60,8 +62,8 @@ pub async fn get_legacy_import_state(pool: &SqlitePool) -> Result<LegacyImportSt
     }
 }
 
-/// `legacy_imported` 상태 설정 + `last_legacy_import_at` 동시 갱신.
-/// idempotent — 같은 state 로 두 번 set 해도 안전.
+/// Sets the `legacy_imported` state and updates `last_legacy_import_at` in the
+/// same transaction. Idempotent — setting the same state twice is safe.
 pub async fn set_legacy_import_state(
     pool: &SqlitePool,
     state: LegacyImportState,
@@ -85,8 +87,8 @@ pub async fn set_legacy_import_state(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 1 sprint-355) — LegacyImportState parse/serialize
-    //! + get/set round-trip 의 4 state 별 검증.
+    //! Written 2026-05-16 — LegacyImportState parse/serialize plus the get/set
+    //! round-trip, verified for each of the 4 states.
 
     use super::*;
     use crate::storage::local;

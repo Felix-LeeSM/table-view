@@ -1,8 +1,7 @@
 //! Unit tests for `commands/export/*` — moved out of the inline
-//! `mod tests` block (Sprint P5 step 1, commit a60074d). Sprint 213
-//! (P5 step 2b) then split format-specific writers into the
-//! `grid_writers` sibling module, so this file imports the writer
-//! helpers explicitly. No test logic changed.
+//! `mod tests` block (commit a60074d). The format-specific writers were then
+//! split into the `grid_writers` sibling module, so this file imports the
+//! writer helpers explicitly. No test logic changed.
 
 use super::dump_writers::quote_pg_string;
 use super::grid_writers::{
@@ -255,12 +254,13 @@ fn test_extended_json_binary_preserved() {
 
 // ── Issue #1638: tabular JSON export (table/query context) ───────────
 //
-// 작성 이유 (2026-07-17): #1077 Stage 1 은 table/query 결과의 JSON export 를
-// 약속하지만 기존 JSON writer 는 Mongo collection 전용 (row.first() = 문서
-// 전체). preflight 도 collection 만 허용했다. 아래는 tabular array-of-objects
-// writer 계약 — headers 를 key 로 하는 object 배열, header 순서 보존,
-// NULL/중첩 JSON cell/wire-string(#1082) 직렬화. writer 분기 GREEN 전에는
-// preflight reject 로 RED.
+// Why (2026-07-17): #1077 Stage 1 promises JSON export of table/query
+// results, but the existing JSON writer is Mongo-collection-only
+// (row.first() = the whole document), and preflight allowed only
+// collections. The tests below pin the tabular array-of-objects
+// writer contract — an array of objects keyed by headers, header order
+// preserved, NULL/nested JSON cell/wire-string(#1082) serialization.
+// RED as a preflight reject before the writer branch went GREEN.
 
 fn tabular_json_string(headers: &[&str], rows: &[Vec<JsonValue>], ctx: &ExportContext) -> String {
     let dir = TempDir::new().unwrap();
@@ -494,10 +494,11 @@ fn test_zero_rows_produces_header_only() {
     assert!(body.ends_with("c\r\n"));
 }
 
-// [AC-192-02] Sprint 192 — write_text_file_export round-trip.
-// UTF-8 content (CR/LF + non-ASCII) 가 그대로 저장되고 byte 카운트
-// 가 정확한지 단언. spawn_blocking 경유의 async wrapper 가 아니라
-// 동기 core 를 직접 호출 — 본 함수가 책임지는 IO 자체만 검증.
+// [AC-192-02] write_text_file_export round-trip.
+// Asserts that UTF-8 content (CR/LF + non-ASCII) is stored verbatim and the
+// byte count is exact. Calls the synchronous core directly rather than
+// the async wrapper via spawn_blocking — verifies only the IO this
+// function owns.
 // date 2026-05-02
 #[test]
 fn test_write_text_file_export_roundtrip() {
@@ -511,14 +512,15 @@ fn test_write_text_file_export_roundtrip() {
     assert_eq!(body, content);
 }
 
-// [AC-192-02] target_path 가 디렉토리 / 부모가 없는 경로 등 file
-// create 자체가 실패하는 케이스는 Err 로 보고. 호출 측 (handler)
-// 이 best-effort 정리 + toast 로 사용자에게 surface 한다.
+// [AC-192-02] Cases where file creation itself fails — a directory
+// target_path, a path with no parent, etc. — are reported as Err. The
+// caller (handler) does the best-effort cleanup and surfaces it to the user
+// as a toast.
 // date 2026-05-02
 #[test]
 fn test_write_text_file_export_rejects_invalid_path() {
     let dir = TempDir::new().unwrap();
-    // 디렉토리 자체에 쓰려고 하면 OS 가 거절.
+    // The OS rejects a write to a directory itself.
     let result = write_text_file(dir.path(), "ignored");
     assert!(result.is_err(), "expected failure writing to a directory");
 }
@@ -548,15 +550,15 @@ fn test_export_format_serde_lowercase() {
     assert_eq!(parsed, ExportFormat::Csv);
 }
 
-// ── Sprint 192 schema dump helpers ────────────────────────────────────
+// ── schema dump helpers ────────────────────────────────────
 //
-// Reason for these tests (2026-05-02): PG INSERT formatter 의 dialect
-// 별 escape 가 schema dump SQL 의 round-trip 을 결정한다. lib pure
-// 함수만 격리해 회귀 가드 — streaming / cursor 자체는 real PG 가
-// 필요해 smoke 로 미룸.
+// Reason for these tests (2026-05-02): the PG INSERT formatter's per-dialect
+// escaping decides whether schema dump SQL round-trips. Isolates only the pure
+// lib functions as a regression guard — streaming / the cursor itself needs a
+// real PG, so it is deferred to smoke.
 
 // [AC-192-05] Identifier escape: ANSI double-quote with embedded `"`
-// doubled. PG/SQLite 공통 ANSI rule.
+// doubled. The ANSI rule shared by PG/SQLite.
 #[test]
 fn test_quote_pg_identifier_doubles_embedded_quote() {
     assert_eq!(quote_pg_identifier("plain"), r#""plain""#);
@@ -568,7 +570,7 @@ fn test_quote_pg_identifier_doubles_embedded_quote() {
 }
 
 // [AC-192-05] String literal escape: single-quote doubled, embedded
-// CR/LF preserved (PG 는 multi-line literal 허용).
+// CR/LF preserved (PG allows multi-line literals).
 #[test]
 fn test_quote_pg_string_single_quote_escape() {
     assert_eq!(quote_pg_string("O'Reilly"), "'O''Reilly'");
@@ -625,9 +627,9 @@ fn test_pg_value_to_sql_literal_number_unquoted() {
     );
 }
 
-// [AC-192-05] String → quoted + escaped. row_to_json 으로 들어온
-// bytea hex (`\\x...`), uuid, timestamp ISO 8601 모두 String variant
-// 라 같은 path — restore 시 PG 가 column type 에 따라 implicit cast.
+// [AC-192-05] String → quoted + escaped. bytea hex (`\\x...`) arriving from
+// row_to_json, uuid, and timestamp ISO 8601 all come in as the String
+// variant and share this path — on restore PG implicitly casts by column type.
 #[test]
 fn test_pg_value_to_sql_literal_string_escapes_quote() {
     assert_eq!(
@@ -638,9 +640,9 @@ fn test_pg_value_to_sql_literal_string_escapes_quote() {
         pg_value_to_sql_literal(&json!("O'Reilly"), ColumnCategory::Text),
         "'O''Reilly'"
     );
-    // bytea round-trip: row_to_json 의 `"\\x6162"` → literal `'\x6162'`.
-    // serde_json 의 `"\\x6162"` 직렬화는 backslash 1개 + x. INSERT
-    // 시점에 PG 가 bytea column type 이면 implicit cast 된다. #1677: PG
+    // bytea round-trip: row_to_json's `"\\x6162"` → literal `'\x6162'`.
+    // serde_json serializes `"\\x6162"` as one backslash + x. At INSERT
+    // time PG implicitly casts it when the column is a bytea type. #1677: PG
     // keeps the quoted `'\x…'` form even for a Binary category — its bytea
     // input parser casts it back to the exact bytes (unlike MySQL/MSSQL).
     assert_eq!(
@@ -649,8 +651,8 @@ fn test_pg_value_to_sql_literal_string_escapes_quote() {
     );
 }
 
-// [AC-192-05] Array / Object → '...'::jsonb. PG 의 implicit cast 가
-// text → jsonb 로 가능하지만 명시 cast 가 restore 견고함을 보장.
+// [AC-192-05] Array / Object → '...'::jsonb. PG's implicit cast can go
+// text → jsonb, but the explicit cast guarantees restore robustness.
 #[test]
 fn test_pg_value_to_sql_literal_object_casts_jsonb() {
     let lit = pg_value_to_sql_literal(&json!({"k": "v"}), ColumnCategory::Object);
@@ -665,7 +667,7 @@ fn test_pg_value_to_sql_literal_array_casts_jsonb() {
     assert!(lit.contains("'[1,2,\"a\"]'"), "lit: {}", lit);
 }
 
-// ── MySQL dump writer (Sprint #1641 / #1077 Stage 1) ──────────────────
+// ── MySQL dump writer (#1641 / #1077 Stage 1) ──────────────────
 //
 // Reason (2026-07-17): `export_schema_dump` hardcoded PG quoting, so MySQL
 // dumps went out as ANSI double-quote identifiers + `::jsonb` casts that a
@@ -1017,22 +1019,23 @@ fn test_oracle_binary_category_emits_hextoraw_literal() {
         oracle_value_to_sql_literal(&JsonValue::Null, ColumnCategory::Binary),
         "NULL"
     );
-    // False-positive guard: a TEXT column whose value merely starts with `0x`
-    // is NOT binary — it stays a quoted string. Type-driven, not a heuristic.
+    // False-positive guard — same rule as the MySQL sibling
+    // (`test_mysql_binary_category_emits_unquoted_binary_literal_1677`).
     assert_eq!(
         oracle_value_to_sql_literal(&json!("0xNotBinary"), ColumnCategory::Text),
         "'0xNotBinary'"
     );
 }
 
-// ── run_schema_dump direct tests (Sprint 237 P5) ─────────────────────
+// ── run_schema_dump direct tests ─────────────────────
 //
-// 작성 이유 (2026-05-08): export/mod.rs 의 `run_schema_dump` body 가
-// 0% coverage (Tauri command wrapper `export_schema_dump` 만 통합
-// smoke 로 doctored). private async fn 이지만 `&AppState` 만 받으므로
-// `AppState::new()` + 공유 stub 으로 직접 구동 가능. dispatch 분기
-// (NotFound / Unsupported / Ok / Cancel / batch_size=0) 와 mpsc drain
-// 회로 (table 별 INSERT formatting) 를 격리해 회귀 가드.
+// Why (2026-05-08): the `run_schema_dump` body in export/mod.rs had
+// 0% coverage (only the Tauri command wrapper `export_schema_dump` was
+// doctored through integration smoke). It is a private async fn but takes
+// only `&AppState`, so it can be driven directly with `AppState::new()` +
+// the shared stub. Isolates the dispatch branches (NotFound / Unsupported /
+// Ok / Cancel / batch_size=0) and the mpsc drain circuit (per-table INSERT
+// formatting) as a regression guard.
 
 use crate::commands::connection::AppState;
 use crate::db::testing::StubRdbAdapter;
@@ -1100,7 +1103,7 @@ async fn run_schema_dump_writes_ddl_header_only_when_include_ddl_no_tables() {
     let state = AppState::new();
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("ddl_only.sql");
-    // 끝에 `\n` 없는 header → 자동 append 되는 분기 검증.
+    // Header without a trailing `\n` → verifies the auto-append branch.
     let header = "CREATE TABLE t();";
     let summary = super::run_schema_dump(
         &state,
@@ -1202,8 +1205,8 @@ async fn run_schema_dump_dml_rejects_non_rdb_paradigm_with_unsupported() {
 
 #[tokio::test]
 async fn run_schema_dump_skips_tables_with_empty_column_names() {
-    // column_names 가 비어 있으면 INSERT 생성을 skip — DDL 만 의미 있는
-    // 테이블에 대한 보호.
+    // When column_names is empty, INSERT generation is skipped — protection for
+    // tables that only make sense as DDL.
     let state = AppState::new();
     {
         let mut active = state.active_connections.lock().await;
@@ -1229,7 +1232,7 @@ async fn run_schema_dump_skips_tables_with_empty_column_names() {
     assert_eq!(summary.rows_written, 0);
     let body = std::fs::read_to_string(&path).unwrap();
     assert!(!body.contains("INSERT"));
-    // 빈 column 테이블은 header 도 안 찍음.
+    // A table with empty columns does not even print the header.
     assert!(!body.contains("Data:"));
 }
 
@@ -1266,10 +1269,10 @@ async fn run_schema_dump_short_circuits_when_pre_cancelled() {
 
 #[tokio::test]
 async fn run_schema_dump_writes_insert_lines_for_streamed_rows() {
-    // stub adapter 의 stream_table_rows 는 default = Unsupported.
-    // 통합 검증을 위해 stream_table_rows_fn 이 closure 로 batch 를 보낼
-    // 수 있어야 — testing.rs 가 그 hook 을 노출하지 않으므로 별도 inline
-    // adapter 를 작성한다.
+    // The stub adapter's stream_table_rows defaults to Unsupported.
+    // Integration-level verification would need stream_table_rows_fn to send
+    // batches from a closure — testing.rs does not expose that hook, so this
+    // test writes a separate inline adapter.
     use crate::db::traits::{DbAdapter, RdbAdapter};
     use crate::db::types::{BoxFuture, NamespaceInfo, NamespaceLabel, RdbQueryResult};
     use crate::models::{
@@ -1616,11 +1619,11 @@ async fn run_schema_dump_writes_insert_lines_for_streamed_rows() {
     );
 }
 
-// ── _inner dispatchers (Sprint 237 P5, 2026-05-08) ─────────────────
-// 작성 이유: export_grid_rows / export_schema_dump / write_text_file_export
-// 이 `tauri::State<'_, AppState>` 받는 wrapper 라 0% 였던 본체를 _inner
-// 로 추출. cancel-token register/release contract + spawn_blocking
-// happy path 만 격리해 테스트.
+// ── _inner dispatchers (2026-05-08) ─────────────────
+// Why: export_grid_rows / export_schema_dump / write_text_file_export
+// are wrappers taking `tauri::State<'_, AppState>`, so the bodies at 0%
+// coverage were extracted as _inner. Isolates only the cancel-token
+// register/release contract + the spawn_blocking happy path for testing.
 
 #[tokio::test]
 async fn export_grid_rows_inner_csv_round_trip_releases_token() {
@@ -1679,8 +1682,8 @@ async fn export_grid_rows_inner_json_with_table_ctx_writes_tabular_array() {
 
 #[tokio::test]
 async fn export_grid_rows_inner_no_export_id_skips_token_registration() {
-    // export_id 가 None 이면 query_tokens 에 어떤 항목도 등록되지
-    // 않아야 한다. 다른 export 가 동시에 돌고 있을 때 충돌 회피.
+    // When export_id is None, nothing must be registered in query_tokens.
+    // Avoids collisions while another export is running concurrently.
     let state = AppState::new();
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("noid.csv");
@@ -1724,7 +1727,7 @@ async fn export_schema_dump_inner_validation_err_cleans_partial_file_and_release
     let state = AppState::new();
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("zero.sql");
-    // batch_size = 0 → Validation 에러
+    // batch_size = 0 → Validation error
     let opts = dump_opts(ExportInclude::Both, 0);
     let res = super::export_schema_dump_inner(
         &state,
@@ -1738,10 +1741,10 @@ async fn export_schema_dump_inner_validation_err_cleans_partial_file_and_release
     )
     .await;
     assert!(matches!(res, Err(AppError::Validation(_))));
-    // wrapper 의 partial-file cleanup 확인 — file::create 전에 reject 되므로
-    // 파일이 생성되지 않았다.
+    // Verifies the wrapper's partial-file cleanup — the rejection happens
+    // before file::create, so no file was created.
     assert!(!path.exists());
-    // 토큰은 등록 후 삭제됐어야 — release 분기 커버.
+    // The token must have been registered and then removed — covers the release branch.
     assert!(!state.query_tokens.lock().await.contains_key("dump-zero"));
 }
 
@@ -1761,9 +1764,10 @@ async fn write_text_file_export_inner_writes_content_and_returns_byte_count() {
 
 #[tokio::test]
 async fn write_text_file_export_inner_invalid_path_cleans_up_and_propagates_io_err() {
-    // 디렉토리가 없는 경로 → write_text_file 가 Io 에러. wrapper 의
-    // best-effort cleanup branch 가 호출되지만 파일은 애초에 생성되지
-    // 않았으므로 remove_file 가 silently 실패. 결과는 그대로 반환.
+    // A path whose directory does not exist → write_text_file fails with an Io
+    // error. The wrapper's best-effort cleanup branch runs, but since the file
+    // was never created remove_file fails silently. The result is returned
+    // as-is.
     let res =
         super::write_text_file_export_inner("/nonexistent/dir/out.sql".into(), "x".into()).await;
     assert!(res.is_err());
@@ -1771,16 +1775,17 @@ async fn write_text_file_export_inner_invalid_path_cleans_up_and_propagates_io_e
 
 // ── Issue #1094 regression: atomic write + path guard ────────────────
 //
-// 작성 이유 (2026-07-03): export 가 `File::create(target)` 로 기존 파일을
-// 즉시 truncate 하고 실패/취소 시 그 경로를 remove_file → 원본 파괴. 아울러
-// 렌더러 지정 target_path 에 경로 검증이 없어 XSS 시 내부 state DB overwrite
-// 가능. temp+rename atomic write + is_absolute/reject_internal_app_data_path
-// 가드로 fix. 아래 3 test 는 fix 전 RED.
+// Why (2026-07-03): export used `File::create(target)`, which truncated an
+// existing file immediately, and on failure/cancel removed that path —
+// destroying the original. Also, the renderer-supplied target_path had no path
+// validation, so an XSS could overwrite the internal state DB. Fixed with the
+// temp+rename atomic write + is_absolute/reject_internal_app_data_path
+// guards. The tests below were RED before the fix.
 
 use serial_test::serial;
 
-// [#1094] 기존 파일 위로 export 하다 취소되면 원본이 truncate 되지 않고
-// 그대로 남아야 한다 (atomic 교체). temp 잔여물도 남지 않는다.
+// [#1094] An export cancelled over an existing file must not truncate the
+// original; it must remain as-is (atomic replace). No temp leftovers either.
 #[test]
 fn write_export_cancel_preserves_existing_file() {
     let dir = TempDir::new().unwrap();
@@ -1800,12 +1805,12 @@ fn write_export_cancel_preserves_existing_file() {
     .unwrap_err();
     assert!(err.to_string().contains("cancelled"), "err: {err}");
 
-    // 원본 무손상.
+    // Original untouched.
     assert_eq!(
         std::fs::read_to_string(&path).unwrap(),
         "ORIGINAL IMPORTANT DATA"
     );
-    // temp 잔여물 없음 — dir 에는 report.csv 하나만.
+    // No temp leftovers — the dir holds only report.csv.
     let leftovers: Vec<String> = std::fs::read_dir(dir.path())
         .unwrap()
         .filter_map(|e| e.ok())
@@ -1815,14 +1820,14 @@ fn write_export_cancel_preserves_existing_file() {
     assert!(leftovers.is_empty(), "temp leftovers: {leftovers:?}");
 }
 
-// [#1094] target_path 가 상대경로 / 내부 app state DB 면 Validation 거부.
+// [#1094] A relative target_path or the internal app state DB is rejected with Validation.
 #[test]
 #[serial]
 fn write_export_rejects_relative_and_internal_state_paths() {
     let dir = TempDir::new().unwrap();
     std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
 
-    // 상대경로 거부.
+    // Relative path rejected.
     let rel = std::path::Path::new("relative.csv");
     let err = write_export(
         ExportFormat::Csv,
@@ -1835,7 +1840,7 @@ fn write_export_rejects_relative_and_internal_state_paths() {
     .unwrap_err();
     assert!(matches!(err, AppError::Validation(_)), "err: {err}");
 
-    // 내부 state DB 경로 거부.
+    // Internal state DB path rejected.
     let state_db = crate::storage::local::db_path().unwrap();
     let err = write_export(
         ExportFormat::Csv,
@@ -1855,11 +1860,12 @@ fn write_export_rejects_relative_and_internal_state_paths() {
     std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
 }
 
-// [#1449] wave 27 보안 2차 P1-1. export target 가드가 `state.db` exact-match 만
-// 막아 인접 credential 파일을 덮어쓸 수 있었다 (`.key` 교체 = 마스터키 탈취
-// 동등, `connections.json` = 암호화 password blob). 가드를 app_data_dir 전체
-// confine (`reject_internal_app_data_path`) 으로 넓혀 fix. fix 전 아래 reject
-// assertion 은 RED — 네 경로 모두 export 가 통과했다.
+// [#1449] The export target guard blocked only an exact `state.db` match, so
+// adjacent credential files could be overwritten (replacing `.key` is
+// equivalent to stealing the master key; `connections.json` is the encrypted
+// password blob). Fixed by widening the guard to confine the whole
+// app_data_dir (`reject_internal_app_data_path`). Before the fix the reject
+// assertions below were RED — export passed all four paths.
 #[test]
 #[serial]
 fn write_export_rejects_internal_app_data_paths() {
@@ -1884,8 +1890,8 @@ fn write_export_rejects_internal_app_data_paths() {
         assert!(!target.exists(), "{name} must not be written");
     }
 
-    // 정상 회귀: app_data_dir 밖의 target 은 계속 허용돼야 한다 (confine 은
-    // 내부 디렉토리 차단이지 외부 차단이 아님).
+    // Normal regression: targets outside app_data_dir must stay allowed (the
+    // confine blocks the internal directory, not external ones).
     let outside = TempDir::new().unwrap();
     let ok_target = outside.path().join("report.csv");
     write_export(
@@ -1902,7 +1908,7 @@ fn write_export_rejects_internal_app_data_paths() {
     std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
 }
 
-// [#1094] schema dump 실패 시에도 기존 target 은 무손상 (async atomic path).
+// [#1094] Even when the schema dump fails, the existing target is untouched (async atomic path).
 #[tokio::test]
 async fn run_schema_dump_failure_preserves_existing_target() {
     let state = AppState::new();
@@ -1910,7 +1916,7 @@ async fn run_schema_dump_failure_preserves_existing_target() {
     let path = dir.path().join("dump.sql");
     std::fs::write(&path, b"ORIGINAL DUMP").unwrap();
 
-    // Dml + 존재하지 않는 connection → Database err (file create 이후 지점).
+    // Dml + a non-existent connection → Database error (a point after file create).
     let res = super::run_schema_dump(
         &state,
         "no-such-conn",
@@ -1924,7 +1930,7 @@ async fn run_schema_dump_failure_preserves_existing_target() {
     .await;
     assert!(res.is_err());
 
-    // 원본 무손상 + temp 잔여물 없음.
+    // Original untouched + no temp leftovers.
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "ORIGINAL DUMP");
     let leftovers: Vec<String> = std::fs::read_dir(dir.path())
         .unwrap()
@@ -1935,8 +1941,8 @@ async fn run_schema_dump_failure_preserves_existing_target() {
     assert!(leftovers.is_empty(), "temp leftovers: {leftovers:?}");
 }
 
-// [AC-192-05] ExportInclude serde lowercase wire — frontend `"ddl"`
-// 등이 정확히 enum variant 로 매칭.
+// [AC-192-05] ExportInclude serde lowercase wire — frontend values like `"ddl"`
+// match the exact enum variant.
 #[test]
 fn test_export_include_serde_lowercase() {
     assert_eq!(

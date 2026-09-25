@@ -23,18 +23,19 @@ import DryRunPreview from "./DryRunPreview";
 const CONFIRM_ARM_DELAY_MS = 150;
 
 /**
- * `ConfirmDestructiveDialog` — Sprint 246 (ADR 0022 Phase 2). Single
- * confirmation surface for any destructive statement that the
- * `decideSafeModeAction` matrix routes to `action: "confirm"` (DROP /
- * TRUNCATE / ALTER … DROP / WHERE-less DELETE/UPDATE / Mongo $out etc.).
+ * `ConfirmDestructiveDialog` — ADR 0022 Phase 2. Single confirmation surface
+ * for any destructive statement that the `decideSafeModeAction` matrix
+ * routes to `action: "confirm"` (DROP / TRUNCATE / ALTER … DROP /
+ * WHERE-less DELETE/UPDATE / Mongo $out etc.).
  *
- * Supersedes the Sprint 186 dialog (type-to-confirm gate + `Run anyway`
+ * Supersedes the earlier dialog (type-to-confirm gate + `Run anyway`
  * button). ADR 0022 collapsed the warn-tier verbatim-typing
  * gate into a simple Yes/No because the destructive-only matrix already
  * narrows the dialog to genuinely destructive statements; verbatim typing
  * added friction without measurable error reduction.
  *
- * Header is environment-aware:
+ * Header is environment-aware so the user instantly sees which environment
+ * the statement is about to run against:
  *   - `environment="production"` → title `"PRODUCTION DATABASE"` +
  *     subcaption `"Destructive statement"`.
  *   - `environment="non-production"` → title `"Destructive statement"` +
@@ -47,10 +48,9 @@ const CONFIRM_ARM_DELAY_MS = 150;
  * its kill confirm without consulting Safe Mode at all. `src/lib/safeMode.ts`
  * still names that tier inside `reason` on the non-production strict path.
  *
- * Sprint 247 (ADR 0022 Phase 3) — the dry-run preview slot now mounts
- * `<DryRunPreview>` (was a static placeholder pre-247). Callers pass
- * `connectionId` / `statements` / `paradigm`; the inner hook fires
- * `execute_query_dry_run` IFF `open && paradigm === "rdb"`. Mongo
+ * ADR 0022 Phase 3 — the dry-run preview slot mounts `<DryRunPreview>`.
+ * Callers pass `connectionId` / `statements` / `paradigm`; the inner hook
+ * fires `execute_query_dry_run` IFF `open && paradigm === "rdb"`. Mongo
  * paradigm renders an `unsupported` disclaimer; closed dialog renders
  * the `idle` empty state.
  */
@@ -66,29 +66,30 @@ export interface ConfirmDestructiveDialogProps {
    */
   environment: "production" | "non-production";
   /**
-   * Sprint 247 — connection id for the dry-run IPC. Passed verbatim
-   * to `executeQueryDryRun` via `<DryRunPreview>`.
+   * Connection id for the dry-run IPC. Passed verbatim to
+   * `executeQueryDryRun` via `<DryRunPreview>`.
    */
   connectionId: string;
   /**
-   * Sprint 247 — normalized statement batch for the dry-run preview.
+   * Normalized statement batch for the dry-run preview.
    * Each caller's `pendingConfirm` shape (single sql / sqls array /
    * statements array / pipeline JSON) is normalized to `string[]` at
    * the call site so this dialog stays paradigm-agnostic.
    */
   statements: string[];
   /**
-   * Sprint 247 — paradigm gate. Non-RDB skips IPC entirely; `"rdb"`
+   * Paradigm gate. Non-RDB skips IPC entirely; `"rdb"`
    * invokes `execute_query_dry_run` while the dialog is open. `"search"`
    * (#1076) is non-RDB: the delete-by-query preview plan already supplied the
    * matched-count estimate, so the dry-run pane stays `unsupported`.
    */
   paradigm: "rdb" | "document" | "kv" | "search";
   /**
-   * Sprint 256 (ADR 0023, AC-256-05) — connection display name for the
-   * env-aware footer ExecuteButton ("Execute on <conn>"). Optional;
-   * legacy callers default to the plain "Confirm" affordance via the
-   * STOP-tier `--tv-destructive` fill regardless of connection identity.
+   * ADR 0023, AC-256-05 — connection display name for the env-aware
+   * footer ExecuteButton ("Execute on <conn>"). Optional; callers that omit
+   * it get the plain affordance (visible "Execute", aria-label "Confirm")
+   * on the STOP-tier `--tv-destructive` fill regardless of connection
+   * identity.
    */
   connectionLabel?: string | null;
   onConfirm: () => void;
@@ -125,11 +126,11 @@ export default function ConfirmDestructiveDialog({
     ? t("confirmDestructive.subcaptionProduction")
     : t("confirmDestructive.subcaptionNonProd");
 
-  // Sprint 256 (AC-256-06) — production header binds to the env tokens
+  // AC-256-06 — production header binds to the env tokens
   // (`--tv-env-prod` / `-prod-text`) for visual gravity matching the
   // prod-only window border in `App.tsx`. Non-production headers keep
   // the muted-foreground appearance to honour the contract's
-  // "비-prod 헤더는 회귀 0" invariant.
+  // "no regression in the non-prod header" invariant.
   const headerStyle = isProduction
     ? {
         backgroundColor: "var(--tv-env-prod)",

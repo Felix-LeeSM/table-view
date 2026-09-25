@@ -1,18 +1,19 @@
-//! Sprint 355 (Phase 1) — Q2 corrupt recovery.
+//! Q2 corrupt recovery.
 //!
-//! 정책 (strategy 2026-05-15 Q2, v0.3.1 확장):
-//! - 앱 boot 시 SQLite 파일이 corrupt 면 `state.db.bak` 으로 quarantine
-//! - 그 후 fresh DB 생성 (`open_pool` 이 `create_if_missing` 로 자동)
-//! - v0.3.1: magic header(probe) 뿐 아니라 boot health check(`open_pool` 의
-//!   `BEGIN IMMEDIATE` + read) 실패도 quarantine → 자동 복구. 복구 발생 시
-//!   `DID_RECOVER` flag 가 set 되고 `get_initial_app_state` wrapper 가 이를
-//!   `InitialAppState.recovered` 로 frontend 에 전달 → 사용자 toast 알림.
+//! Policy (strategy 2026-05-15 Q2, extended in v0.3.1):
+//! - On app boot, a corrupt SQLite file is quarantined as `state.db.bak`
+//! - A fresh DB is then created (`open_pool` does it via `create_if_missing`)
+//! - v0.3.1: not only the magic header (probe) but also a failing boot health
+//!   check (`open_pool`'s `BEGIN IMMEDIATE` + read) triggers quarantine →
+//!   auto-recovery. On recovery the `DID_RECOVER` flag is set and the
+//!   `get_initial_app_state` wrapper passes it to the frontend as
+//!   `InitialAppState.recovered` → user toast.
 //!
-//! Probe 전략: SQLite 의 magic header 16 byte (`"SQLite format 3\0"`) 를
-//! 검사한다. Header 가 손상되면 sqlx 가 어떤 statement 도 실행 못하므로
-//! pre-open 단계에서 잡는 게 가장 견고. integrity_check 까지 돌리면 비용이
-//! 큰데, header 손상은 가장 흔한 corruption mode (디스크 풀, 비정상 종료
-//! 중 partial write).
+//! Probe strategy: check SQLite's 16-byte magic header (`"SQLite format 3\0"`).
+//! A damaged header stops sqlx from running any statement, so catching it at
+//! the pre-open stage is the most robust. Running integrity_check as well is
+//! expensive, and header damage is the most common corruption mode (disk full,
+//! partial write during an abnormal shutdown).
 
 use crate::error::AppError;
 use std::fs;
@@ -144,9 +145,9 @@ pub(crate) fn claim_quarantine_path(preferred: &Path) -> Result<PathBuf, AppErro
     )))
 }
 
-/// Rename `state.db` to `state.db.bak` (Q2). 기존 `.bak` 가 있으면 timestamp
-/// suffix 를 붙여 누적 보존 — 사용자가 manual 복구 시 여러 corruption epoch
-/// 을 모두 inspect 가능.
+/// Rename `state.db` to `state.db.bak` (Q2). When a `.bak` already exists a
+/// timestamp suffix is appended so the copies accumulate — a user recovering by
+/// hand can inspect every corruption epoch.
 ///
 /// Issue #2302: the name is taken through [`claim_quarantine_path`] rather than
 /// handed straight to `fs::rename`. Both branches below needed it — the
@@ -229,9 +230,9 @@ fn relocate_onto_claim(
 
 #[cfg(test)]
 mod tests {
-    //! 작성 2026-05-16 (Phase 1 sprint-355) — corrupt header probe + quarantine
-    //! 단위 검증. 통합 동작 (open_pool + corrupt 파일 → recovery) 은
-    //! `tests/corrupt_recovery.rs` 에서 검증.
+    //! Written 2026-05-16 — unit checks for the corrupt header probe +
+    //! quarantine. The integrated behaviour (open_pool + corrupt file →
+    //! recovery) is checked in `tests/corrupt_recovery.rs`.
 
     use super::*;
     use tempfile::TempDir;

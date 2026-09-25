@@ -234,8 +234,8 @@ describe("TabBar", () => {
   // `pointerdown`. When the pointerdown bubbled up from the close
   // button, the capture rerouted the following `pointerup` to the tab
   // div, and the synthesized `click` then fired on the tab div instead
-  // of the close button — the user-visible symptom was "X 버튼이 안
-  // 닫힘". The fix bails out of drag setup whenever pointerdown
+  // of the close button — the user-visible symptom was "the X button does
+  // not close the tab". The fix bails out of drag setup whenever pointerdown
   // originates inside an interactive child (`.closest('button')`),
   // which leaves the close button's own click path intact. The
   // bare-click test above passes via `fireEvent.click` alone and
@@ -274,7 +274,7 @@ describe("TabBar", () => {
     expect(tablist.className).toContain("select-none");
   });
 
-  // ── Sprint 77: Compact tab bar height ──
+  // ── Compact tab bar height ──
 
   // AC-01 — the tab row must stay in the compact regime. `py-1 text-sm`
   // yields ~28px content (20px line-height + 4px+4px padding); combined
@@ -289,18 +289,18 @@ describe("TabBar", () => {
     const tab = screen.getByText("users").closest("[role='tab']")!;
     expect(tab.className).toContain("py-1");
     expect(tab.className).toContain("text-sm");
-    // Guard against regression to the pre-Sprint 77 padding.
+    // Guard against regression to the pre-compact padding.
     expect(tab.className).not.toContain("py-1.5");
     expect(tab.className).not.toContain("py-2");
   });
 
-  // ── Sprint 253 (AC-253-03): TabBar connection-color stripe REMOVED ──
+  // ── TabBar connection-color stripe REMOVED (AC-253-03) ──
   //
-  // 이전 (Sprint 28 / Sprint 45) 의 좌측 1px connection-색 stripe 는
-  // ADR 0023 의 13-question grill Q11 결과 *완전 제거* 되었다 (다중
-  // connection workflow 부재 + 후속 chrome H 가 환경 시그널을 carry).
-  // 본 회귀 가드는 stripe 가 어떤 connection 설정 조합에서도 다시
-  // mount 되지 않음을 단언한다. 작성 일자: 2026-05-09.
+  // The earlier left-side 1px connection-color stripe was *fully removed*
+  // as a result of the ADR 0023 13-question grill Q11 (no multi-connection
+  // workflow yet, and the later chrome H carries the environment signal).
+  // This regression guard asserts the stripe does not remount under any
+  // connection configuration combination. Written: 2026-05-09.
 
   function makeConnection(
     overrides: Partial<ConnectionConfig> = {},
@@ -329,7 +329,7 @@ describe("TabBar", () => {
     addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
     render(<TabBar />);
 
-    // No stripe — the affordance was retired in Sprint 253.
+    // No stripe — the affordance was retired.
     expect(screen.queryByLabelText("Connection color")).toBeNull();
   });
 
@@ -348,7 +348,7 @@ describe("TabBar", () => {
     expect(screen.queryAllByLabelText("Connection color")).toHaveLength(0);
   });
 
-  // ── Sprint 29: Preview Tab Display ──
+  // ── Preview Tab Display ──
 
   it("preview tab has italic title", () => {
     addTableTab({ title: "public.users", table: "users" });
@@ -372,7 +372,7 @@ describe("TabBar", () => {
     expect(titleEl.className).not.toContain("italic");
   });
 
-  // ── Sprint 43: Double-click tab promotion ──
+  // ── Double-click tab promotion ──
 
   it("promotes preview tab on double-click", () => {
     addTableTab({ title: "public.users", table: "users" });
@@ -422,10 +422,10 @@ describe("TabBar", () => {
     expect(getTestWorkspace().tabs[1]!.type).toBe("query");
   });
 
-  // ── Sprint 253 (AC-253-03): Sprint 45 tooltip test retired ──
+  // ── Tooltip test retired (AC-253-03) ──
   //
   // The "Connection color" stripe (and its connection-name tooltip) was
-  // removed in Sprint 253. Replaced by the regression guards above.
+  // removed. Replaced by the regression guards above.
 
   // ── Drag-and-drop reorder ──
 
@@ -588,11 +588,12 @@ describe("TabBar", () => {
     expect(getTestWorkspace().activeTabId).toBe(activeTabId);
   });
 
-  // 2026-05-11 — drag-end 불변식 매트릭스 헬퍼.
+  // 2026-05-11 — drag-end invariant matrix helper.
   //
-  // 어떤 종료 경로 (pointerup, pointercancel, 임계값 미달 release,
-  // viewport 밖 release 등) 든 다음 4 개 상태가 동시에 reset 되어야 한다.
-  // ghost 와 cursor cleanup 누락이 2026-05-11 user report 의 핵심 증상.
+  // Whatever the end path (pointerup, pointercancel, sub-threshold release,
+  // release outside the viewport, etc.), the following 4 states must reset
+  // together. Missing ghost and cursor cleanup was the core symptom of the
+  // 2026-05-11 user report.
   function expectCleanDragState() {
     expect(document.querySelector("[aria-hidden][class*='fixed']")).toBeNull();
     expect(document.body.style.cursor).toBe("");
@@ -604,9 +605,10 @@ describe("TabBar", () => {
     expect(dimmed.length).toBe(0);
   }
 
-  // 2026-05-11 회귀 — pre-2026-05-11 회귀: 트랙패드 클릭이 1–6px 미세
-  // 이동을 동반하면 4px 임계값을 넘어 ghost 가 잠시 표시됐다. 새 8px
-  // 임계값 하에서 같은 미세 이동은 ghost 를 트리거하지 않아야 한다.
+  // 2026-05-11 regression — before it: a trackpad click carrying a 1–6px
+  // micro-move crossed the 4px threshold and briefly showed the ghost.
+  // Under the new 8px threshold the same micro-move must not trigger the
+  // ghost.
   it("does not start dragging when cursor drifts under the 8px threshold (2026-05-11)", () => {
     setThreeTabs();
     render(<TabBar />);
@@ -627,13 +629,14 @@ describe("TabBar", () => {
     expectCleanDragState();
   });
 
-  // 2026-05-11 — pointerdown 즉시 native text-selection 차단.
+  // 2026-05-11 — block native text selection immediately at pointerdown.
   //
-  // `setPointerCapture` 는 pointer 이벤트만 라우팅하고 브라우저의
-  // selection 로직 (mousedown 에서 anchor → mousemove 로 확장) 은
-  // 그대로 동작한다. 임계값 (`dx > 8`) 을 넘은 뒤에 `userSelect=none` 을
-  // 거는 pre-2026-05-11 구현은 selection 이 이미 시작된 뒤라 무효였다.
-  // 회귀 가드: pointerdown 시점에 즉시 `userSelect=none` 이어야 한다.
+  // `setPointerCapture` only routes pointer events; the browser's selection
+  // logic (anchor at mousedown → extended by mousemove) still runs. The
+  // earlier implementation applied `userSelect=none` only after the
+  // threshold (`dx > 8`) was crossed, which was too late — selection had
+  // already started. Regression guard: `userSelect=none` must apply right at
+  // pointerdown.
   it("suppresses native text selection from pointerdown (not after threshold)", () => {
     setThreeTabs();
     render(<TabBar />);
@@ -658,11 +661,11 @@ describe("TabBar", () => {
     expect(document.body.style.userSelect).toBe("");
   });
 
-  // 2026-05-11 — 임계값 경계 매트릭스. 코드는 `dx > 8` 이므로:
-  //   dx = 7  → drag 안 시작
-  //   dx = 8  → drag 안 시작 (경계 미포함)
-  //   dx = 9  → drag 시작
-  // 각 경계에서 ghost mount 여부 + cleanup 불변식 둘 다 단언.
+  // 2026-05-11 — threshold boundary matrix. The code is `dx > 8`, so:
+  //   dx = 7  → no drag start
+  //   dx = 8  → no drag start (boundary excluded)
+  //   dx = 9  → drag starts
+  // At each boundary, assert both ghost mounting and the cleanup invariant.
   it.each([
     { dx: 7, shouldDrag: false, label: "below threshold (7px)" },
     { dx: 8, shouldDrag: false, label: "exactly at threshold (8px)" },
@@ -706,11 +709,12 @@ describe("TabBar", () => {
     expectCleanDragState();
   });
 
-  // 2026-05-11 회귀 — drop 후 ghost 가 cursor 를 계속 따라다니던 버그.
-  // WKWebView 가 native mouseup 을 swallow 했을 때 cleanup 이 누락되어
-  // dragStateRef + ghostStyle 이 살아남았다. pointer event + capture 는
-  // pointerup 이 capturing element 로 보장 delivery 되므로 구조적으로 차단.
-  // 그래도 cleanup 이 모든 release 경로에서 실제로 호출되는지 회귀 가드.
+  // 2026-05-11 regression — the bug where the ghost kept following the
+  // cursor after drop. When WKWebView swallowed the native mouseup, cleanup
+  // was skipped and dragStateRef + ghostStyle survived. Pointer events +
+  // capture structurally block this: pointerup is guaranteed delivery to
+  // the capturing element. Regression guard that cleanup really runs on
+  // every release path.
   it("cleans up ghost and drag state after pointerup, even at non-tab coordinates (2026-05-11)", () => {
     setThreeTabs();
     render(<TabBar />);
@@ -739,8 +743,8 @@ describe("TabBar", () => {
     expectCleanDragState();
   });
 
-  // 2026-05-11 회귀 — pointercancel 경로 (OS 가 드래그를 가로채는 경우)
-  // 에서도 cleanup 이 호출되어야 한다.
+  // 2026-05-11 regression — cleanup must also run on the pointercancel path
+  // (when the OS intercepts the drag).
   it("cleans up on pointercancel without reordering (2026-05-11)", () => {
     setThreeTabs();
     render(<TabBar />);
@@ -769,8 +773,9 @@ describe("TabBar", () => {
     expectCleanDragState();
   });
 
-  // 2026-05-11 — onClick 이 drag 직후 발화해도 (DOM 표준 동작) 탭이
-  // 재활성화되면 안 된다. justDraggedRef 가드가 click 을 한 번 swallow.
+  // 2026-05-11 — even when onClick fires right after a drag (standard DOM
+  // behaviour), the tab must not re-activate. The justDraggedRef guard
+  // swallows that click once.
   it("does not re-activate the dragged tab via the click event that follows pointerup", () => {
     setThreeTabs();
     render(<TabBar />);
@@ -820,7 +825,7 @@ describe("TabBar", () => {
     expect(getTestWorkspace().activeTabId).toBe("t2");
   });
 
-  // ── Sprint 97: dirty indicator + close gate ──
+  // ── Dirty indicator + close gate ──
 
   // AC-01 — a tab in `dirtyTabIds` renders a visible dirty marker
   // (data-dirty="true" + aria-label hint) so the user can spot unsaved
@@ -885,7 +890,7 @@ describe("TabBar", () => {
     expect(cleanTab.querySelector('[data-dirty="true"]')).toBeNull();
   });
 
-  // ── Sprint 134 (AC-S134-06): dirty marker is independent of activeTabId ──
+  // ── Dirty marker is independent of activeTabId (AC-S134-06) ──
   //
   // Lesson 2026-04-27-workspace-toolbar-ux-gaps (#9) reported that the
   // dirty dot was perceived to render only on the active tab. The
@@ -1079,7 +1084,7 @@ describe("TabBar", () => {
     expect(screen.queryByText("Discard unsaved changes?")).toBeNull();
   });
 
-  // ── Sprint 123: paradigm visual cues ──
+  // ── Paradigm visual cues ──
 
   it("renders a Mongo paradigm marker for document-paradigm tabs", () => {
     // Document tabs are partitioned by `database`; production callers
@@ -1137,7 +1142,7 @@ describe("TabBar", () => {
     expect(screen.queryByLabelText("MongoDB collection tab")).toBeNull();
   });
 
-  // ── Sprint 136 (AC-S136-06): preview cue coexists with dirty marker ──
+  // ── Preview cue coexists with dirty marker (AC-S136-06) ──
   //
   // The preview visual cue (`italic` + `opacity-70` on the title span)
   // and the dirty marker (`data-dirty="true"` dot to the right of the
@@ -1179,11 +1184,10 @@ describe("TabBar", () => {
     expect(dot).toHaveAttribute("aria-label", "Unsaved changes");
   });
 
-  // ── Sprint 142 (AC-147-1, AC-147-3): data-preview attribute on the
-  //    tab element so e2e + integration tests + future styling can hook
-  //    onto preview-vs-permanent state at the DOM level (italic class
-  //    alone is a styling concern; data-preview is the contractual
-  //    signal). ──
+  // ── data-preview attribute on the tab element (AC-147-1, AC-147-3) so
+  //    e2e + integration tests + future styling can hook onto
+  //    preview-vs-permanent state at the DOM level (italic class alone is a
+  //    styling concern; data-preview is the contractual signal). ──
 
   it('preview table tab exposes data-preview="true" on the tab element (AC-147-1)', () => {
     addTableTab({ title: "public.users", table: "users" });
@@ -1218,9 +1222,9 @@ describe("TabBar", () => {
 
   // Middle-click on a dirty tab also routes through the gate so the user
   // can never lose unsaved work via a stray scroll-wheel button press.
-  // Reason: Phase 13 AC-13-07 — preview tab의 접근성 속성 검증.
-  //         role="tab", aria-selected, data-preview="true", italic+opacity-70
-  //         클래스가 모두 올바르게 적용되는지 확인 (2026-04-28)
+  // Reason: AC-13-07 — verify the preview tab's accessibility attributes:
+  //         role="tab", aria-selected, data-preview="true", and the
+  //         italic+opacity-70 classes all applied correctly
   it("preview tab has correct aria attributes for accessibility (AC-13-07)", () => {
     addTableTab({ title: "public.users", table: "users" });
     // New tabs are preview by default.
@@ -1240,8 +1244,9 @@ describe("TabBar", () => {
     expect(titleEl.className).toContain("opacity-70");
   });
 
-  // Reason: Phase 13 AC-13-07 — permanent tab과 preview tab의 aria 속성 차이 검증.
-  //         permanent tab은 data-preview가 없어야 하고, italic 스타일도 없어야 함 (2026-04-28)
+  // Reason: AC-13-07 — verify the aria attribute difference between
+  //         permanent and preview tabs: a permanent tab must carry no
+  //         data-preview and no italic style
   it("permanent tab does not have preview-specific attributes (AC-13-07)", () => {
     addTableTab({ title: "public.users", table: "users" });
     // Promote to permanent.
@@ -1280,18 +1285,21 @@ describe("TabBar", () => {
     expect(screen.getByText("Discard unsaved changes?")).toBeInTheDocument();
   });
 
-  // ── Sprint 253 (AC-253-04, AC-253-05): Tab DnD empty-area release ──
+  // ── Tab DnD empty-area release (AC-253-04, AC-253-05) ──
   //
-  // 13-question grill Q13 결과: drag 후 strip 의 "탭이 없는 빈 영역"
-  // (마지막 탭 우측 또는 두 탭 사이 시각적 gap) 에서 mouse release 시,
-  // pre-2026-05-11 은 strip-level onMouseUp 이 처리. 2026-05-11 pointer
-  // event 마이그레이션 후엔 `setPointerCapture` 가 pointerup 을 capturing
-  // 탭으로 라우팅하므로 동일 로직이 per-tab onPointerUp 안에서 cursor X
-  // 기반으로 결정한다 (strip-level handler 는 제거됨).
+  // 13-question grill Q13 result: on mouse release in the strip's "empty
+  // area with no tabs" (right of the last tab, or the visual gap between
+  // two tabs), the pre-2026-05-11 code handled it with a strip-level
+  // onMouseUp. After the 2026-05-11 pointer event migration,
+  // `setPointerCapture` routes pointerup to the capturing tab, so the same
+  // logic now decides from the cursor X inside each tab's onPointerUp (the
+  // strip-level handler was removed).
   //
-  // jsdom 의 getBoundingClientRect 는 기본값이 0 이라 명시 mock 필수.
-  // 작성 일자: 2026-05-09 (/tdd 흐름 — 본 case 들이 먼저 fail → 구현 → green).
-  // 갱신 일자: 2026-05-11 (mouse → pointer 마이그레이션).
+  // jsdom's getBoundingClientRect defaults to 0, so explicit mocks are
+  // mandatory.
+  // Written: 2026-05-09 (/tdd flow — these cases failed first → implement →
+  // green).
+  // Updated: 2026-05-11 (mouse → pointer migration).
 
   it("drag release on empty area past the last tab moves source to the end (AC-253-04)", () => {
     setThreeTabs();

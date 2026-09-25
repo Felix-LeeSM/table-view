@@ -803,7 +803,7 @@ async fn catalog_surfaces_require_open_connection() {
     assert_oracle_not_open(adapter.get_view_columns("SYSTEM", "V").await);
     assert_oracle_not_open(adapter.list_schema_columns("SYSTEM").await);
     assert_oracle_not_open(adapter.get_function_source("SYSTEM", "F").await);
-    // #1072 (2차) — list_triggers now runs a live ALL_TRIGGERS catalog query,
+    // #1072 — list_triggers runs a live ALL_TRIGGERS catalog query,
     // so it fails closed like the sibling catalog surfaces instead of returning
     // a misleading empty vec on a disconnected adapter. (2026-07-25)
     assert_oracle_not_open(adapter.list_triggers("SYSTEM", "T").await);
@@ -868,7 +868,7 @@ async fn rdb_trait_catalog_surfaces_require_open_connection() {
         RdbAdapter::get_function_source(&adapter, "SYSTEM", "F").await,
     );
 
-    // #1072 (2차) — Oracle list_triggers is a live ALL_TRIGGERS query now, so
+    // #1072 — Oracle list_triggers is a live ALL_TRIGGERS query, so
     // the RdbAdapter override fails closed when the connection is not open.
     // (2026-07-25)
     assert_trait_not_open(

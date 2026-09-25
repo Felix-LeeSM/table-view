@@ -1,10 +1,10 @@
 /**
- * `workspaceStore` selector hooks. Sprint 262 (ADR 0027) TDD slice.
+ * `workspaceStore` selector hooks (ADR 0027).
  *
  * Behaviors:
  *   - `useCurrentWorkspaceKey()` derives `(connId, db)` from the Tauri
  *     window label (`workspace-{connection_id}` → `connId`,
- *     sprint-366 Phase 4 Q15) plus
+ *     state-management-strategy Q15) plus
  *     `connectionStore.activeStatuses[connId].activeDb`. Returns `null`
  *     when no window conn (launcher / jsdom) or no active DB.
  *   - `useCurrentWorkspace()` returns the matching `WorkspaceState` or
@@ -15,7 +15,7 @@
  * read seam too — a fresh launch (no writes yet) must return null, not
  * an auto-seeded empty workspace.
  *
- * sprint-366 update (2026-05-16): `connId` now comes from the window
+ * 2026-05-16 update: `connId` now comes from the window
  * label via `useCurrentWindowConnectionId()`. Tests stub the label with
  * `setFakeWindowConnectionId()` instead of seeding
  * `connectionStore.focusedConnId`.
@@ -77,15 +77,15 @@ describe("workspaceStore — selectors", () => {
   });
 
   it("useCurrentWorkspaceKey — null when no window connection (launcher / jsdom)", () => {
-    // 사유 (2026-05-16, sprint-366): pre-sprint-366 nullable signal was
-    // `focusedConnId === null`; post-sprint-366 it is the window label
-    // hook returning null (launcher window or jsdom with no Tauri seam).
+    // Reason (2026-05-16): the nullable signal used to be
+    // `focusedConnId === null`; now it is the window label hook returning
+    // null (launcher window or jsdom with no Tauri seam).
     const { result } = renderHook(() => useCurrentWorkspaceKey());
     expect(result.current).toBeNull();
   });
 
   it("useCurrentWorkspaceKey — derives (connId, db) from window label + activeStatuses", () => {
-    // 사유 (2026-05-16, sprint-366): label `workspace-conn1` → conn1.
+    // Reason (2026-05-16): label `workspace-conn1` → conn1.
     setFakeWindowConnectionId("conn1");
     useConnectionStore.setState({
       activeStatuses: { conn1: { type: "connected", activeDb: "dbA" } },
@@ -95,7 +95,7 @@ describe("workspaceStore — selectors", () => {
   });
 
   it("useCurrentWorkspaceKey — null when window has a connId but activeDb missing", () => {
-    // 사유 (2026-05-16, sprint-366): contract — both halves required.
+    // Reason (2026-05-16): contract — both halves required.
     // Window says "conn1" but the status is missing / disconnected → null.
     setFakeWindowConnectionId("conn1");
     useConnectionStore.setState({
@@ -106,7 +106,7 @@ describe("workspaceStore — selectors", () => {
   });
 
   it("useCurrentWorkspaceKey — ignores connectionStore.focusedConnId (Q15 lock)", () => {
-    // 사유 (2026-05-16, sprint-366): regression guard — if a future change
+    // Reason (2026-05-16): regression guard — if a future change
     // accidentally re-reads `state.focusedConnId`, this test fails because
     // the connectionStore slot points at "c-bait" while the window label
     // says "c-real". Q15 lock requires the window label to win.

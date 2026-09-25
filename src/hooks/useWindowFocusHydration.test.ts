@@ -51,9 +51,8 @@ vi.mock("@lib/zustand-ipc-bridge", () => ({
 }));
 
 vi.mock("@lib/window-label", async () => {
-  // sprint-366 (2026-05-16) — preserve the real parseWorkspaceLabel /
-  // formatWorkspaceLabel exports so transitive imports of
-  // `useCurrentWindowConnectionId` resolve.
+  // Preserve the real parseWorkspaceLabel / formatWorkspaceLabel exports so
+  // transitive imports of `useCurrentWindowConnectionId` resolve.
   const actual =
     await vi.importActual<typeof import("@lib/window-label")>(
       "@lib/window-label",
@@ -246,13 +245,13 @@ describe("useWindowFocusHydration", () => {
 
   // -- Connection switch: this window's tabs survive focus hydration (#1098) --
 
-  // Reason: sprint-361 gives every connection its own `workspace-{connId}`
-  // window, so a workspace window only ever holds its own connection's tabs.
+  // Reason: every connection gets its own `workspace-{connId}` window, so a
+  // workspace window only ever holds its own connection's tabs.
   // When the launcher moves focus to connection B while this workspace-A
   // window is hidden, a focus event hydrates `focusedConnId = B`. The old
-  // pre-361 wipe would then treat A as "stale" and clear A's own tabs — the
-  // #1098 data-loss bug. Focus hydration must never destroy this window's
-  // workspace; teardown belongs to disconnect/remove (cleanup.ts).
+  // focus-hydration wipe would then treat A as "stale" and clear A's own
+  // tabs — the #1098 data-loss bug. Focus hydration must never destroy this
+  // window's workspace; teardown belongs to disconnect/remove (cleanup.ts).
   it("keeps this window's tabs when focusedConnId hydrates to a different connection (#1098)", () => {
     // Pre-condition: workspace-A window has a PG tab active
     useWorkspaceStore.setState(

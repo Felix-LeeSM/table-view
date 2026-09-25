@@ -1,8 +1,7 @@
-// Sprint 187 (AC-187-06) — ConstraintsEditor strict / warn / confirm /
-// cancel / stripe regressions. The flow mirrors IndexesEditor — drops are
-// the dangerous path and surface as `ALTER TABLE … DROP CONSTRAINT …`,
-// which the Sprint 187 analyzer extension flags as ddl-alter-drop /
-// danger. Date: 2026-05-01.
+// AC-187-06 — ConstraintsEditor strict / warn / confirm / cancel / stripe
+// regressions. The flow mirrors IndexesEditor — drops are the dangerous path
+// and surface as `ALTER TABLE … DROP CONSTRAINT …`, which the analyzer flags
+// as ddl-alter-drop / danger.
 
 import {
   act,
@@ -27,7 +26,7 @@ beforeEach(() => {
         sql: "ALTER TABLE users ADD CONSTRAINT u_users_email UNIQUE (email)",
       }),
     ),
-    // Sprint 247 — `<DryRunPreview>` IPC stub. See IndexesEditor.test.tsx.
+    // `<DryRunPreview>` IPC stub. See IndexesEditor.test.tsx.
     executeQueryDryRun: vi.fn(() => Promise.resolve([])),
     cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
   });
@@ -111,10 +110,10 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
     });
   });
 
-  // AC-187-06a — production + strict + DROP CONSTRAINT preview opens
-  // the confirm dialog (was block under Sprint 187/244). Sprint 245
-  // (ADR 0022 Phase 1) — destructive-only policy uses the same dialog
-  // for strict / warn / off on production. date 2026-05-01 / 2026-05-08.
+  // AC-187-06a — production + strict + DROP CONSTRAINT preview opens the
+  // confirm dialog (was block under the earlier policy). ADR 0022 Phase 1 —
+  // the destructive-only policy uses the same dialog for strict / warn / off
+  // on production.
   it("[AC-187-06a] production + strict + DROP CONSTRAINT → confirm dialog opens, dropConstraint deferred", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
@@ -134,7 +133,7 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
   });
 
   // AC-187-06b — production + warn opens ConfirmDestructiveDialog instead
-  // of committing. date 2026-05-01.
+  // of committing.
   it("[AC-187-06b] production + warn + DROP CONSTRAINT → ConfirmDestructiveDialog mount", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -153,7 +152,7 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
 
   // AC-187-06c — confirm flow: typing the analyzer reason verbatim enables
   // the destructive button; click invokes dropConstraint with
-  // preview_only=false. date 2026-05-01.
+  // preview_only=false.
   it("[AC-187-06c] confirmDangerous → dropConstraint called with preview_only=false", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -163,9 +162,9 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
     await screen.findByText("PRODUCTION DATABASE");
-    // Sprint 246 (ADR 0022 Phase 2) — Confirm is a simple Yes button;
-    // the prior verbatim-typing gate was removed. #1111 — it arms after a
-    // short delay, so wait for it to enable before clicking.
+    // ADR 0022 Phase 2 — Confirm is a simple Yes button; the prior
+    // verbatim-typing gate was removed. #1111 — it arms after a short delay,
+    // so wait for it to enable before clicking.
     const confirmBtn = screen.getByTestId("confirm-destructive-confirm");
     await waitFor(() => expect(confirmBtn).not.toBeDisabled());
     act(() => {
@@ -183,7 +182,7 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
   });
 
   // AC-187-06d — cancel flow surfaces the standard warn message via
-  // previewError. date 2026-05-01.
+  // previewError.
   it("[AC-187-06d] cancelDangerous → previewError set with warn message", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -193,7 +192,7 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
     await screen.findByText("PRODUCTION DATABASE");
-    // Sprint 246 — Cancel is reachable via stable testid; no DOM walk.
+    // Cancel is reachable via stable testid; no DOM walk.
     act(() => {
       fireEvent.click(screen.getByTestId("confirm-destructive-cancel"));
     });
@@ -209,9 +208,9 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
     ).toBe(false);
   });
 
-  // AC-187-06e — non-production + warn environment commits without
-  // gate. Sprint 245 — re-pinned to mode=warn to avoid the new M.1
-  // strict-mode dialog (covered separately). date 2026-05-01 / 2026-05-08.
+  // AC-187-06e — non-production + warn environment commits without gate.
+  // Re-pinned to mode=warn to avoid the M.1 strict-mode dialog (covered
+  // separately).
   it("[AC-187-06e] non-production environment commits without gate", async () => {
     useConnectionStore.setState({
       connections: [
@@ -286,7 +285,7 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
 // hidden (disable-at-source, #1046) instead of click-then-error. Both are
 // constraint-ALTER forms, so a single `canAlterConstraint` gate covers them.
 // #1070 (ADR 0051 Stage 2) split this out of `alterTable`: DuckDB does native
-// column ALTER but cannot add/drop constraints. (2026-07-25)
+// column ALTER but cannot add/drop constraints.
 describe("ConstraintsEditor — #1618 D1 / #1070 alterConstraint gate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -310,7 +309,7 @@ describe("ConstraintsEditor — #1618 D1 / #1070 alterConstraint gate", () => {
   }
 
   // Reason: default (no prop) keeps the pre-#1618 surface for gating-agnostic
-  // callers. (2026-07-17)
+  // callers.
   it("shows Add Constraint + drop-constraint controls by default", () => {
     renderEditor();
     expect(
@@ -324,7 +323,7 @@ describe("ConstraintsEditor — #1618 D1 / #1070 alterConstraint gate", () => {
   });
 
   // Reason: an adapter that cannot run ALTER TABLE ADD/DROP CONSTRAINT (DuckDB)
-  // must not surface the click-then-error controls. (2026-07-17)
+  // must not surface the click-then-error controls.
   it("hides Add Constraint + drop-constraint controls when canAlterConstraint is false", () => {
     renderEditor(false);
     expect(
