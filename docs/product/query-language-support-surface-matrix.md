@@ -222,7 +222,7 @@ hash/list/set/zset KvMutationPanel write controls as Redis (#1075).
 
 **Current boundary**: Redis command parser is not owned by language-core yet,
 and the current backend parser is an allowlist, not arbitrary Redis CLI support.
-Completion is TypeScript allowlist vocabulary plus current scan-cache key
+Completion is Rust/WASM allowlist vocabulary plus current scan-cache key
 suggestions; it is not an unsupported command-family surface or full Redis
 autocomplete implementation. Unsupported command families reject with explicit
 messages. Key suggestions are hints only and can be stale if Redis/Valkey
@@ -235,7 +235,7 @@ multi-key destructive commands, and full Valkey compatibility are not claimed.
 **Current support**: Valkey has a KV runtime slice for connection, database/key
 scan, typed value preview, selected-key bounded stream reads, bounded
 Redis-compatible command query dispatch, the same string plus hash/list/set/zset
-KvMutationPanel write controls as Redis (#1075), and TypeScript command
+KvMutationPanel write controls as Redis (#1075), and Rust/WASM command
 completion for proven local-runtime rows (`GET`, `HGETALL`, `XRANGE`, `TYPE`,
 `EXISTS`, `SET`, `EXPIRE`, `PERSIST`, `DEL`). Runtime Happy Path smoke covers
 connect/key scan/value preview, `GET`, `HGETALL`, `XRANGE`, bounded

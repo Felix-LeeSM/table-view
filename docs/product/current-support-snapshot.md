@@ -8,8 +8,8 @@
 | [SQLite](#sqlite) | bounded parser/Safe Mode guardrails; raw DDL rejected by adapter | Rust/WASM built-in vocabulary + cached schema objects + sqlite-cli suggestions |
 | [DuckDB](#duckdb) | DuckDB SQL/file analytics guardrails | Rust/WASM DuckDB editor vocabulary + cached schema objects |
 | [MongoDB](#mongodb) | whitelisted mongosh/MQL | Rust/WASM vocabulary + cached catalog context |
-| [Redis](#redis) | backend KV guardrails plus bounded command allowlist and typed-confirm mutation controls; not language-core parser ownership | TypeScript bounded command vocabulary + current-DB/type-filtered key suggestions |
-| [Valkey](#valkey) | Redis-compatible bounded command allowlist and typed confirmation; same write surface as Redis (#1075) | TypeScript proven Valkey command subset + current-DB/type-filtered key suggestions |
+| [Redis](#redis) | backend KV guardrails plus bounded command allowlist and typed-confirm mutation controls; not language-core parser ownership | Rust/WASM bounded command vocabulary + current-DB/type-filtered key suggestions |
+| [Valkey](#valkey) | Redis-compatible bounded command allowlist and typed confirmation; same write surface as Redis (#1075) | Rust/WASM proven Valkey command subset + current-DB/type-filtered key suggestions |
 | [Elasticsearch/OpenSearch](#elasticsearchopensearch) | index-catalog sidebar shell plus selected-index lazy catalog detail and samples for both products; mapping/search guardrails for both products; destructive-plan guardrails for both products | Backend Search DSL validator active; full language-core parser/completion ownership remains future; bounded TypeScript completion is editor assistance for Elasticsearch/OpenSearch catalog and mapping context |
 | [MSSQL](#mssql) | bounded parser/Safe Mode unsupported-boundary recognition only | bounded editor assistance only |
 | [Oracle](#oracle) | bounded static Safe Mode classification only | bounded editor assistance only |
