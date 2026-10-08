@@ -9,6 +9,7 @@ import type { AppliedPendingOps } from "@/lib/datagrid/paradigmEditAdapter";
 import { toast } from "@/lib/runtime/toast";
 import {
   buildRestageSnapshot,
+  cellToEditValue,
   type EditSnapshot,
   UNDO_STACK_MAX,
 } from "./dataGridEditFsm";
@@ -359,12 +360,41 @@ export function useDataGridEditPendingState({
   // isolated from the live state (matches the original `undo` behavior).
   const restoreSnapshot = useCallback(
     (snap: EditSnapshot) => {
-      setPendingEdits(new Map(snap.pendingEdits));
-      setPendingNewRows(snap.pendingNewRows.map((row) => [...row]));
-      setPendingDeletedRowKeys(new Set(snap.pendingDeletedRowKeys));
+      // Issue #2686 (owner decision 2, #1126 2026-07-10) — a re-staged cell
+      // whose value equals the CURRENT baseline row dissolves instead of
+      // staging a no-op pending (an undo step that changes nothing, and a
+      // 0-change UPDATE if the user commits it). The baseline is the live
+      // `rows` page: the commit path refetches right after
+      // `restageAfterCommit` (`useDataGridPreviewCommit`), so at restore
+      // time a committed reversal cell equal to the refetched row is a no-op
+      // by construction. Restore is the only correct time for the check —
+      // at re-seed time the rows still hold the pre-commit values, which
+      // equal the reversal values for every real edit. Nested `:path`
+      // entries keep their path-scoped values, which a whole-cell comparison
+      // cannot judge; commit-reversal snapshots never contain them
+      // (`buildRestageSnapshot` collapses them to the base cell key).
+      const rows = rowsRef.current;
+      let staged = snap;
+      if (rows) {
+        let next: Map<string, string | null> | null = null;
+        for (const [key, value] of snap.pendingEdits) {
+          if (key.includes(":")) continue;
+          const rowIdx = Number.parseInt(key.split("-")[0]!, 10);
+          const colIdx = Number.parseInt(key.split("-")[1]!, 10);
+          const row = rows[rowIdx] as readonly unknown[] | undefined;
+          if (!row) continue;
+          if (value !== cellToEditValue(row[colIdx])) continue;
+          next ??= new Map(snap.pendingEdits);
+          next.delete(key);
+        }
+        if (next) staged = { ...snap, pendingEdits: next };
+      }
+      setPendingEdits(new Map(staged.pendingEdits));
+      setPendingNewRows(staged.pendingNewRows.map((row) => [...row]));
+      setPendingDeletedRowKeys(new Set(staged.pendingDeletedRowKeys));
       // Issue #1081 — restore the row-identity anchors in lockstep.
-      setPendingEditRowSnapshots(new Map(snap.pendingEditRowSnapshots));
-      setPendingDeletedRowSnapshots(new Map(snap.pendingDeletedRowSnapshots));
+      setPendingEditRowSnapshots(new Map(staged.pendingEditRowSnapshots));
+      setPendingDeletedRowSnapshots(new Map(staged.pendingDeletedRowSnapshots));
     },
     [
       setPendingEdits,
