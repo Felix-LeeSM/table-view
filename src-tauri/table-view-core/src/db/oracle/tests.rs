@@ -738,6 +738,123 @@ async fn current_database_without_connection_returns_none_for_fail_closed_guard(
 }
 
 #[tokio::test]
+async fn switch_database_fails_closed_without_connection() {
+    let adapter = OracleAdapter::new();
+
+    assert_oracle_not_open(RdbAdapter::switch_database(&adapter, "OTHER").await);
+}
+
+async fn seed_connected_config(
+    adapter: &OracleAdapter,
+    mutate: impl FnOnce(&mut ConnectionConfig),
+) {
+    let mut config = oracle_config();
+    mutate(&mut config);
+    let mut guard = adapter.state.lock().await;
+    guard.connected_config = Some(config);
+}
+
+#[tokio::test]
+async fn switch_database_refuses_sid_profile_before_any_dial() {
+    let adapter = OracleAdapter::new();
+    seed_connected_config(&adapter, |config| config.oracle_use_sid = Some(true)).await;
+
+    let err = RdbAdapter::switch_database(&adapter, "OTHER")
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        AppError::Validation(ref message) if message.contains("SID")
+    ));
+}
+
+#[tokio::test]
+async fn switch_database_refuses_a_tns_descriptor_profile() {
+    let adapter = OracleAdapter::new();
+    seed_connected_config(&adapter, |config| {
+        config.database = TCP_DESCRIPTOR.into();
+    })
+    .await;
+
+    let err = RdbAdapter::switch_database(&adapter, "OTHER")
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        AppError::Validation(ref message) if message.contains("TNS descriptor")
+    ));
+}
+
+#[tokio::test]
+async fn switch_database_refuses_the_seed_and_root_containers() {
+    let adapter = OracleAdapter::new();
+    seed_connected_config(&adapter, |_| {}).await;
+
+    for name in ["CDB$ROOT", "PDB$SEED"] {
+        let err = RdbAdapter::switch_database(&adapter, name)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                AppError::Validation(ref message) if message.contains("CDB$ROOT")
+            ),
+            "{name} must be refused before any dial"
+        );
+    }
+}
+
+#[tokio::test]
+async fn switch_database_rejects_names_outside_the_service_whitelist() {
+    let adapter = OracleAdapter::new();
+    seed_connected_config(&adapter, |_| {}).await;
+
+    // The #1065 whitelist runs inside `connect_config`, ahead of the dial —
+    // the rejection is a Validation error with no network attempt.
+    let err = RdbAdapter::switch_database(&adapter, "bad)(name")
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        AppError::Validation(ref message) if message.contains("unsupported characters")
+    ));
+}
+
+#[tokio::test]
+async fn list_databases_stays_empty_for_sid_profile_fail_closed() {
+    let adapter = OracleAdapter::new();
+    seed_connected_config(&adapter, |config| config.oracle_use_sid = Some(true)).await;
+
+    let dbs = RdbAdapter::list_databases(&adapter).await.unwrap();
+    assert!(dbs.is_empty());
+}
+
+#[tokio::test]
+async fn list_databases_stays_empty_for_descriptor_profile_fail_closed() {
+    let adapter = OracleAdapter::new();
+    seed_connected_config(&adapter, |config| {
+        config.database = TCP_DESCRIPTOR.into();
+    })
+    .await;
+
+    let dbs = RdbAdapter::list_databases(&adapter).await.unwrap();
+    assert!(dbs.is_empty());
+}
+
+#[test]
+fn switch_target_predicate_excludes_seed_root_and_unsafe_names() {
+    assert!(is_switchable_service_name("FREEPDB1"));
+    assert!(is_switchable_service_name("svc.high.adb.oraclecloud.com"));
+    assert!(!is_switchable_service_name("CDB$ROOT"));
+    assert!(!is_switchable_service_name("PDB$SEED"));
+    // Container names are system-generated uppercase, but the exclusion is
+    // case-insensitive so a stored variant cannot slip through.
+    assert!(!is_switchable_service_name("cdb$root"));
+    assert!(!is_switchable_service_name("bad)(name"));
+    assert!(!is_switchable_service_name(""));
+}
+
+#[tokio::test]
 async fn db_adapter_lifecycle_fails_closed_without_connection() {
     let adapter = OracleAdapter::new();
 

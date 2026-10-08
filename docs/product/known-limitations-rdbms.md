@@ -324,7 +324,14 @@ runtime is limited to catalog metadata, SELECT/DML batch execution, cooperative
 cancellation, tabular table-data query, key-projected editRows through the
 frontend SQL batch path, tested SELECT/DML/DDL Safe Mode classification, and
 bounded editor assistance. Bounded structured table/index/constraint DDL is now
-wired through the shared StructurePanel path (#1072). Oracle schema dumps
+wired through the shared StructurePanel path (#1072). Database switching is
+wired as a service-name re-dial (#1072): there is no `USE <db>` in Oracle, so a
+switch dials the target service through the same `connect_config` gate stack as
+the original session and swaps the stored session only after the new dial pings.
+Connections opened on a SID profile or from a pasted TNS descriptor refuse to
+switch (fail closed), `CDB$ROOT`/`PDB$SEED` are excluded on both the picker
+list and the dial, and the picker never offers a name the #1065 whitelist would
+reject. Oracle schema dumps
 restore into Oracle for text/numeric/binary data: `export_schema_dump` emits
 ANSI `"double-quote"`-quoted identifiers and Oracle INSERT value escaping
 (single-quote doubling, `HEXTORAW('…')` binary literals, `1`/`0` NUMBER
@@ -333,7 +340,7 @@ cursor, proven by a docker round-trip that dumps a table (including non-ASCII
 and RAW binary rows), empties it, restores the emitted SQL, and matches the
 source rows (#1674, #1077 Stage 1). DATE/TIMESTAMP columns dump as quoted
 strings whose restore depends on the session `NLS_DATE_FORMAT`, so date/time
-round-trip fidelity is not claimed. The adapter still blocks switch database,
+round-trip fidelity is not claimed. The adapter still blocks
 raw DDL/admin, PL/SQL body/package authoring, and trigger DDL beyond the bounded
 catalog smoke path. #1065 adds SID connections (driver-native
 `Config::with_sid`) and Oracle wallet mTLS (`Config::with_wallet`, `ewallet.pem`

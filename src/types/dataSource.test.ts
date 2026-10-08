@@ -194,7 +194,9 @@ describe("DataSourceProfile registry", () => {
       },
     }),
     oracle: expectedCapabilities({
-      connection: { test: true, readOnly: true },
+      // Issue #1072 — switch-database joins the live claims (service-name
+      // re-dial).
+      connection: { test: true, switchDatabase: true, readOnly: true },
       query: { query: true, cancel: true },
       catalog: {
         indexes: true,
@@ -544,10 +546,11 @@ describe("DataSourceProfile registry", () => {
     // Issue #2094 — declaration follows the wired adapter: `make_adapter`
     // builds `MssqlAdapter`, whose `RdbAdapter::switch_database` override
     // reaches `switch_active_database` instead of the trait's `Unsupported`
-    // default. Oracle keeps `false` because `OracleAdapter` declares no
-    // override and falls through to that default.
+    // default.
     expect(hasConnectionCapability("mssql", "switchDatabase")).toBe(true);
-    expect(hasConnectionCapability("oracle", "switchDatabase")).toBe(false);
+    // Issue #1072 — `OracleAdapter` now overrides `switch_database` with a
+    // service-name re-dial, so the declaration follows the wired adapter too.
+    expect(hasConnectionCapability("oracle", "switchDatabase")).toBe(true);
     expect(hasConnectionCapability("sqlite", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("mongodb", "switchDatabase")).toBe(false);
     expect(hasConnectionCapability("redis", "switchDatabase")).toBe(true);

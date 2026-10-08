@@ -187,19 +187,39 @@ describe("useAutoResolveActiveDb", () => {
     },
   );
 
-  // Reason: oracle is RDB but NOT switch-capable (`OracleAdapter` declares no
-  // `switch_database` override, so the trait default returns Unsupported), and
-  // it renders a read-only switcher — must be excluded too.
-  it("does not auto-resolve for a non-switch-capable RDB (oracle)", async () => {
+  // Reason: SQLite is RDB but NOT switch-capable (no `switchDatabase`
+  // capability on its profile), and it renders a read-only switcher — must be
+  // excluded too.
+  it("does not auto-resolve for a non-switch-capable RDB (sqlite)", async () => {
     setFakeWindowConnectionId("c1");
-    listDatabasesMock.mockResolvedValue([{ name: "FREEPDB1" }]);
-    seedConn(makeConnection({ id: "c1", paradigm: "rdb", dbType: "oracle" }), {
+    listDatabasesMock.mockResolvedValue([{ name: "app_db" }]);
+    seedConn(makeConnection({ id: "c1", paradigm: "rdb", dbType: "sqlite" }), {
       type: "connected",
     });
 
     renderHook(() => useAutoResolveActiveDb());
     await Promise.resolve();
     expect(listDatabasesMock).not.toHaveBeenCalled();
+  });
+
+  // Reason: issue #1072 — the capability flip makes Oracle a consumer of this
+  // hook's gate: `OracleAdapter` overrides `RdbAdapter::switch_database`
+  // (service-name re-dial), so an Oracle connection must self-heal the same
+  // way PG/MSSQL do instead of keeping the switcher read-only.
+  it("auto-resolves for Oracle now that it is switch-capable (#1072)", async () => {
+    setFakeWindowConnectionId("c1");
+    listDatabasesMock.mockResolvedValue([{ name: "FREEPDB1" }]);
+    switchActiveDbMock.mockResolvedValue(undefined);
+    seedConn(makeConnection({ id: "c1", paradigm: "rdb", dbType: "oracle" }), {
+      type: "connected",
+    });
+
+    renderHook(() => useAutoResolveActiveDb());
+
+    await waitFor(() => {
+      expect(switchActiveDbMock).toHaveBeenCalledWith("c1", "FREEPDB1");
+    });
+    await waitFor(() => expect(activeDbOf("c1")).toBe("FREEPDB1"));
   });
 
   // Reason: issue #2094 — the capability flip makes MSSQL the second consumer

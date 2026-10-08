@@ -68,7 +68,8 @@ const expectedMssqlRuntimeCapabilities = expectedCapabilities({
 });
 
 const expectedOracleRuntimeCapabilities = expectedCapabilities({
-  connection: { test: true, readOnly: true },
+  // Issue #1072 — switch-database joins the live claims (service-name re-dial).
+  connection: { test: true, switchDatabase: true, readOnly: true },
   query: { query: true, cancel: true },
   catalog: {
     indexes: true,
@@ -155,7 +156,8 @@ describe("RDBMS data source profiles", () => {
     });
     expect(oracle.capabilities).toEqual(expectedOracleRuntimeCapabilities);
     expect(oracle.capabilities.connection.test).toBe(true);
-    expect(oracle.capabilities.connection.switchDatabase).toBe(false);
+    // Issue #1072 — the wired `OracleAdapter` re-dials the target service name.
+    expect(oracle.capabilities.connection.switchDatabase).toBe(true);
     expect(oracle.capabilities.query.query).toBe(true);
     expect(oracle.capabilities.query.cancel).toBe(true);
     expect(oracle.capabilities.query.explain).toBe(false);

@@ -22,10 +22,10 @@ table-data query, key-projected editRows, bounded static Safe Mode classificatio
 and bounded editor completion assistance 만 허용한다. #907 adds representative
 Runtime Happy Path smoke for service-name connect, seeded catalog/routine browse,
 SELECT/DML, destructive Safe Mode confirmation, cancellation, and grid edit.
-SID/TNS/wallet/TLS/advanced
-auth, switch database, structured DDL, raw DDL/admin, full parser/completion
-promotion, PL/SQL body/package work, triggers beyond the bounded catalog smoke
-path, admin, import/export, profiler/activity, users/roles/grants,
+advanced
+auth, raw DDL/admin, full parser/completion
+promotion, PL/SQL body/package authoring, trigger DDL beyond the bounded catalog
+smoke path, admin, DB-level import/backup-restore, users/roles/grants,
 session/storage, and full workbench parity 는 claim 하지 않는다.
 MSSQL 과 Oracle 의 승격은 각 source 의 matching
 runtime, contract, docs, smoke evidence 가 같은 PR/linked PR set 에서 닫힐 때에만

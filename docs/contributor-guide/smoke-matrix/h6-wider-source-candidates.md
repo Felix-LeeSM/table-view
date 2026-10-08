@@ -88,9 +88,8 @@ Safe Mode confirmation, cancellation, and grid edit. It enables lifecycle,
 catalog metadata, SELECT/DML batch execution, cooperative cancellation, tabular
 table-data query, key-projected editRows through the frontend SQL batch path,
 tested SELECT/DML/DDL Safe Mode classification, and bounded editor assistance.
-The wrapper still blocks switch database, structured DDL, raw DDL/admin, PL/SQL
-body/package authoring/source, and trigger catalog beyond the bounded catalog
-smoke path. SID, TNS, wallet, TLS, advanced auth, full parser/completion
+The wrapper still blocks raw DDL/admin, PL/SQL
+body/package authoring, and trigger DDL/single-source. SID, TNS, wallet, TLS, advanced auth, full parser/completion
 promotion, admin/import/export/full workbench, and broader Oracle semantics
 remain unsupported or unclaimed until separate evidence lands.
 

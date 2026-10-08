@@ -73,9 +73,10 @@ pub async fn list_databases(
 /// Dispatch table:
 ///   - `Rdb`      → `RdbAdapter::switch_database`. PostgreSQL, MySQL and SQL
 ///                  Server override the trait default to swap the active
-///                  sub-pool to `db_name`; an adapter without an override
-///                  returns `Unsupported` and the frontend toast surfaces the
-///                  message.
+///                  sub-pool to `db_name`; Oracle overrides it to re-dial the
+///                  target service name (#1072). An adapter without an
+///                  override returns `Unsupported` and the frontend toast
+///                  surfaces the message.
 ///   - `Document` → `DocumentAdapter::switch_database`. The
 ///                  MongoAdapter override mutates its `active_db` field
 ///                  after a cheap `list_database_names` probe. Other
