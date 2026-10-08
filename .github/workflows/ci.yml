@@ -668,9 +668,10 @@ jobs:
   # was last committed instead of what the PR's Rust source compiles to. This
   # job builds first, then measures — which is why the build step is in scope.
   #
-  # No `Swatinem/rust-cache` here on purpose. From an absent target dir the two
-  # crates build in 14.48s (sql) and 23.00s (mongo) locally — wasm-pack's own
-  # `Done in` line for each `wasm-pack build --target web --features wasm` — and
+  # No `Swatinem/rust-cache` here on purpose. From an absent target dir the
+  # three crates build in 14.48s (sql), 23.00s (mongo) and 7.64s (redis) locally
+  # — wasm-pack's own `Done in` line for each
+  # `wasm-pack build --target web --features wasm` — and
   # rust-cache keys include the job name, so this job would open cache entries
   # of its own that only main can save. Not worth the moving parts on an
   # advisory job; add it if the cold build ever crowds the runner.
@@ -710,10 +711,10 @@ jobs:
         with:
           tool: wasm-pack@0.15.0
 
-      # pnpm and Node are here only to run the two `build:*-wasm` scripts, which
-      # own the wasm-pack flags (`--target web`, `--features wasm`, out-dir).
-      # Spelling wasm-pack out again in this file would fork those flags into a
-      # second copy that drifts. No `pnpm install`: neither script reads
+      # pnpm and Node are here only to run the three `build:*-wasm` scripts,
+      # which own the wasm-pack flags (`--target web`, `--features wasm`,
+      # out-dir). Spelling wasm-pack out again in this file would fork those
+      # flags into a second copy that drifts. No `pnpm install`: no script reads
       # node_modules.
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -735,6 +736,7 @@ jobs:
         run: |
           pnpm run build:sql-wasm
           pnpm run build:mongosh-wasm
+          pnpm run build:redis-wasm
 
       # Budgets, their derivation and the reproduction commands live in the
       # script's header, not here — one copy.

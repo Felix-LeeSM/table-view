@@ -3,14 +3,18 @@
 import type { CompletionResult } from "@codemirror/autocomplete";
 import { CompletionContext } from "@codemirror/autocomplete";
 import { EditorState } from "@codemirror/state";
-import { describe, expect, it } from "vitest";
+import {
+  __resetRedisCommandWasmModuleForTests,
+  initRedisCommandWasm,
+} from "@lib/redis/redisCommandCore";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   createRedisCommandCompletionSource,
-  REDIS_COMMAND_COMPLETIONS,
+  getRedisCommandCompletions,
+  getValkeyCommandCompletions,
   REDIS_UNSUPPORTED_COMMAND_FAMILIES,
   type RedisCommandCompletionTarget,
   type RedisKeySuggestion,
-  VALKEY_COMMAND_COMPLETIONS,
 } from "./redisCommandCompletion";
 
 const BACKEND_ALLOWLIST = [
@@ -45,6 +49,25 @@ const KEY_SUGGESTIONS = [
   { key: "profiles:stream", keyType: "stream" },
 ] as const satisfies readonly RedisKeySuggestion[];
 
+beforeAll(async () => {
+  // Same bootstrap as `src/test-setup.ts`: jsdom has no `fetch()`, so pass
+  // the committed artifact bytes straight to the `initSync` code path.
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const { resolve, dirname } = await import("node:path");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const wasmPath = resolve(
+    here,
+    "../../../lib/redis/wasm/redis_command_core_bg.wasm",
+  );
+  const buf = readFileSync(wasmPath);
+  const bytes = buf.buffer.slice(
+    buf.byteOffset,
+    buf.byteOffset + buf.byteLength,
+  );
+  await initRedisCommandWasm(bytes as ArrayBuffer);
+});
+
 function runSource(
   doc: string,
   explicit = true,
@@ -70,13 +93,13 @@ function labels(result: CompletionResult | null): string[] {
 
 describe("redis command completion vocabulary", () => {
   it("matches the bounded backend command allowlist", () => {
-    expect(REDIS_COMMAND_COMPLETIONS.map((command) => command.name)).toEqual([
-      ...BACKEND_ALLOWLIST,
-    ]);
+    expect(getRedisCommandCompletions().map((command) => command.name)).toEqual(
+      [...BACKEND_ALLOWLIST],
+    );
   });
 
   it("covers arity, argument hints, and snippets for every command", () => {
-    for (const command of REDIS_COMMAND_COMPLETIONS) {
+    for (const command of getRedisCommandCompletions()) {
       expect(command.arity).not.toHaveLength(0);
       expect(command.arguments.length).toBeGreaterThan(0);
       expect(command.snippet).toContain(command.name);
@@ -84,14 +107,14 @@ describe("redis command completion vocabulary", () => {
     }
 
     expect(
-      REDIS_COMMAND_COMPLETIONS.find((command) => command.name === "XRANGE"),
+      getRedisCommandCompletions().find((command) => command.name === "XRANGE"),
     ).toMatchObject({
       arity: "key start end [COUNT n]",
       arguments: ["key", "start", "end", "COUNT"],
       snippet: "XRANGE ${key} - + COUNT 100",
     });
     expect(
-      REDIS_COMMAND_COMPLETIONS.find((command) => command.name === "ZRANGE"),
+      getRedisCommandCompletions().find((command) => command.name === "ZRANGE"),
     ).toMatchObject({
       arguments: ["key", "start", "stop", "WITHSCORES"],
       snippet: "ZRANGE ${key} 0 99 WITHSCORES",
@@ -116,7 +139,7 @@ describe("redis command completion vocabulary", () => {
   });
 
   it("keeps destructive suggestions lower priority and clearly labeled", () => {
-    const del = REDIS_COMMAND_COMPLETIONS.find(
+    const del = getRedisCommandCompletions().find(
       (command) => command.name === "DEL",
     );
     expect(del).toMatchObject({
@@ -208,8 +231,33 @@ describe("redis command completion vocabulary", () => {
     expect(labels(runSource("KEYS pro", true, KEY_SUGGESTIONS))).toEqual([]);
   });
 
+  it("suggests nothing while the WASM vocabulary has not loaded", async () => {
+    __resetRedisCommandWasmModuleForTests();
+    try {
+      expect(labels(runSource("XR"))).toEqual([]);
+      expect(getRedisCommandCompletions()).toEqual([]);
+    } finally {
+      const { readFileSync } = await import("node:fs");
+      const { fileURLToPath } = await import("node:url");
+      const { resolve, dirname } = await import("node:path");
+      const here = dirname(fileURLToPath(import.meta.url));
+      const buf = readFileSync(
+        resolve(here, "../../../lib/redis/wasm/redis_command_core_bg.wasm"),
+      );
+      await initRedisCommandWasm(
+        buf.buffer.slice(
+          buf.byteOffset,
+          buf.byteOffset + buf.byteLength,
+        ) as ArrayBuffer,
+      );
+    }
+    expect(labels(runSource("XR"))).toEqual(["XRANGE"]);
+  });
+
   it("uses the proven Valkey command subset as the Valkey vocabulary source", () => {
-    expect(VALKEY_COMMAND_COMPLETIONS.map((command) => command.name)).toEqual([
+    expect(
+      getValkeyCommandCompletions().map((command) => command.name),
+    ).toEqual([
       "GET",
       "HGETALL",
       "LRANGE",
@@ -225,7 +273,7 @@ describe("redis command completion vocabulary", () => {
       "DEL",
     ]);
     expect(labels(runSource("", true, [], "valkey"))).toEqual(
-      VALKEY_COMMAND_COMPLETIONS.map((command) => command.name),
+      getValkeyCommandCompletions().map((command) => command.name),
     );
     expect(labels(runSource("H", true, [], "valkey"))).toEqual(["HGETALL"]);
     expect(labels(runSource("L", true, [], "valkey"))).toEqual(["LRANGE"]);

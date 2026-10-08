@@ -120,6 +120,10 @@ keyring = { version = "3", default-features = false, features = ["sync-secret-se
 [dev-dependencies]
 tempfile = "3"
 serial_test = "3"
+# #1805 — the Redis completion vocabulary SOT. Test-only so the release graph
+# carries no dependency on it; `src-tauri/Cargo.toml` measures the normal
+# edges of this crate in CI.
+redis-command-core = { path = "../redis-command-core", version = "0.1.0" }
 
 # `[profile.dev] debug = 0` lives in the workspace root (`src-tauri/Cargo.toml`).
 # Cargo warns about and ignores a member's `[profile.*]`, so putting it here would

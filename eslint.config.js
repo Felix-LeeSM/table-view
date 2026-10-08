@@ -24,6 +24,7 @@ const ARBITRARY_PX =
 const GENERATED_WASM_ESLINT_IGNORES = [
   "src/lib/sql/wasm/**",
   "src/lib/mongo/wasm/**",
+  "src/lib/redis/wasm/**",
 ];
 
 const FEATURE_BOUNDARY_ALLOWED_PREFIXES = [

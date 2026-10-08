@@ -593,3 +593,62 @@ fn redis_and_valkey_connection_errors_mask_credential_echo() {
     );
     assert!(message.contains("valkey.local"));
 }
+
+// #1805 drift guard — the editor completion vocabulary
+// (`redis-command-core`, exposed to the editor over WASM) and the backend
+// allowlist parser (`command_parser.rs`) must not drift. Every vocabulary
+// row must parse through `parse_redis_command`, and the effect tier the
+// editor shows (suggestion boost + destructive warning) must equal the tier
+// the backend enforces for the same command. The reverse direction — a
+// backend command the editor does not surface — is a product decision, not
+// drift: the vocabulary is deliberately a proven subset of the allowlist.
+#[test]
+fn completion_vocabulary_rows_parse_on_the_backend_allowlist_with_matching_tiers() {
+    use super::command_parser::{parse_redis_command, RedisCommandEffect as BackendEffect};
+    use redis_command_core::{
+        command_specs, RedisCommandEffect as VocabularyEffect, RedisKeyArgument,
+    };
+
+    for spec in command_specs() {
+        let parsed = parse_redis_command(spec.probe).unwrap_or_else(|error| {
+            panic!("completion row {} no longer parses: {error}", spec.name)
+        });
+        let expected_tier = match spec.effect {
+            VocabularyEffect::Read => BackendEffect::Read,
+            VocabularyEffect::Write => BackendEffect::Write,
+            VocabularyEffect::Ttl => BackendEffect::Ttl,
+            VocabularyEffect::Stream => BackendEffect::Stream,
+            VocabularyEffect::Destructive => BackendEffect::Destructive,
+        };
+        assert_eq!(
+            parsed.effect(),
+            expected_tier,
+            "{} completion tier drifted from the backend parser",
+            spec.name
+        );
+
+        // The backend confirms `DEL`/`PERSIST` with the exact typed key; the
+        // completion rows advertise that in their summary. Keep the pair
+        // aligned so the editor copy cannot claim less safety than dispatch.
+        let requires_confirmation = parsed.required_confirmation_key().is_some();
+        assert_eq!(
+            requires_confirmation,
+            matches!(spec.name, "DEL" | "PERSIST"),
+            "{} typed-confirmation advertising drifted",
+            spec.name
+        );
+
+        // `key_argument` modes feed the editor's key-suggestion filter; the
+        // modes must hold against the same parser the arguments go to.
+        match spec.key_argument {
+            RedisKeyArgument::None => {}
+            RedisKeyArgument::Any | RedisKeyArgument::KeyTypes => assert_eq!(
+                spec.arguments.first(),
+                Some(&"key"),
+                "{} advertises a first-argument key but its argument shape does not start with one",
+                spec.name
+            ),
+            RedisKeyArgument::VariadicAny => {}
+        }
+    }
+}

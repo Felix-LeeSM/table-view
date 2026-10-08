@@ -73,6 +73,28 @@ beforeAll(async () => {
   await initMongoshWasm(ab);
 });
 
+// #1805 — same eager bootstrap for the Redis/Valkey completion vocabulary.
+// `RedisCommandEditor` mounts `createRedisCommandCompletionSource`, whose
+// sync source reads the vocabulary from the WASM module; component specs
+// that assert the autocomplete popup (#2509) need it loaded before render.
+beforeAll(async () => {
+  const { initRedisCommandWasm } = await import("@lib/redis/redisCommandCore");
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const { resolve, dirname } = await import("node:path");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const wasmPath = resolve(
+    here,
+    "lib",
+    "redis",
+    "wasm",
+    "redis_command_core_bg.wasm",
+  );
+  const buf = readFileSync(wasmPath);
+  const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  await initRedisCommandWasm(ab);
+});
+
 // Phase 4 Q15 — workspace tree components read
 // their connection identity from `useCurrentWindowConnectionId()` which
 // delegates to `getCurrentWindowLabel()`. The real implementation calls
