@@ -566,6 +566,77 @@ describe("useDataGridEdit — undo stack (Sprint 249, ADR 0022 Phase 5)", () => 
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
   });
 
+  it("[#2692] undo keeps the reversal when a coincidentally-equal row moved into its index", async () => {
+    // Two distinct rows share the name "Alice" — PK is the only identity.
+    const DATA: TableData = {
+      columns: MOCK_DATA.columns,
+      rows: [
+        [1, "Alice"],
+        [2, "Bob"],
+        [3, "Alice"],
+      ],
+      total_count: 3,
+      page: 1,
+      page_size: 100,
+      executed_query: "SELECT * FROM public.users LIMIT 100 OFFSET 0",
+    };
+    const { result, rerender } = renderEditHook(DATA);
+
+    // Commit a real edit on row 0 (id=1): Alice → Alicia. The reversal value
+    // is the pre-edit cell "Alice".
+    act(() => {
+      result.current.handleStartEdit(0, 1, "Alice");
+    });
+    act(() => {
+      result.current.setEditValue("Alicia");
+    });
+    act(() => {
+      result.current.saveCurrentEdit();
+    });
+    act(() => {
+      result.current.handleCommit();
+    });
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    if (result.current.pendingConfirm) {
+      await act(async () => {
+        await result.current.confirmDangerous();
+      });
+    }
+    expect(result.current.pendingEdits.size).toBe(0);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+
+    // The commit path refetches after `restageAfterCommit`; the fixture
+    // models a reorder: id=3 — whose name coincides with the reversal
+    // value — now sits at index 0 where id=1 used to be.
+    rerender({
+      data: {
+        ...DATA,
+        rows: [
+          [3, "Alice"],
+          [2, "Bob"],
+          [1, "Alicia"],
+        ],
+      },
+    });
+
+    act(() => {
+      result.current.undo();
+    });
+
+    // The reversal survives: the value-only comparison would dissolve it
+    // against id=3's cell, but id=3 is not the anchored row.
+    expect(result.current.pendingEdits.size).toBe(1);
+    expect(result.current.pendingEdits.get("0-1")).toBe("Alice");
+    // The anchor rides along so a re-commit still targets id=1, not id=3.
+    expect(result.current.pendingEditRowSnapshots.get("0-1")).toEqual([
+      1,
+      "Alicia",
+    ]);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+  });
+
   it("[AC-249-U9] consecutive actions → undo restores LIFO (most recent first)", () => {
     const { result } = renderEditHook();
 

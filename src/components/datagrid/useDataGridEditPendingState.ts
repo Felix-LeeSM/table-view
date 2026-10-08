@@ -11,6 +11,8 @@ import {
   buildRestageSnapshot,
   cellToEditValue,
   type EditSnapshot,
+  pendingEditAnchorMatches,
+  rowIdentityKey,
   UNDO_STACK_MAX,
 } from "./dataGridEditFsm";
 
@@ -34,6 +36,14 @@ interface UseDataGridEditPendingStateParams {
    * `useDataGridEdit`.
    */
   rows?: unknown[][];
+  /**
+   * Issue #2692 — the current page's column metadata (PK flags). The undo
+   * restore's baseline-dissolve comparison gates on the same row identity
+   * the paint overlay uses (`pendingEditAnchorMatches`), which needs the PK
+   * columns to compute it. Optional: without it the comparison stays
+   * value-only.
+   */
+  columns?: ReadonlyArray<{ is_primary_key: boolean }>;
 }
 
 export function useDataGridEditPendingState({
@@ -42,6 +52,7 @@ export function useDataGridEditPendingState({
   schema,
   table,
   rows,
+  columns,
 }: UseDataGridEditPendingStateParams) {
   const fallbackInstanceKeyRef = useRef<string | null>(null);
   if (fallbackInstanceKeyRef.current === null) {
@@ -52,6 +63,9 @@ export function useDataGridEditPendingState({
   // page without re-creating on every data change.
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
+
+  const columnsRef = useRef(columns);
+  columnsRef.current = columns;
 
   const storeKey = useMemo(() => {
     if (!connectionId || !database || !schema || !table) {
@@ -384,6 +398,24 @@ export function useDataGridEditPendingState({
           const row = rows[rowIdx] as readonly unknown[] | undefined;
           if (!row) continue;
           if (value !== cellToEditValue(row[colIdx])) continue;
+          // Issue #2692 — the same identity gate the paint overlay uses
+          // (`pendingEditAnchorMatches`): a post-commit reorder can seat a
+          // different row at this index whose cell value coincides with the
+          // reversal value. Dissolving on the value alone would erase a real
+          // reversal (undo silently loses a step). No anchor on the key, or
+          // no columns to compare with, keeps the value-only comparison.
+          const cols = columnsRef.current;
+          if (
+            cols &&
+            !pendingEditAnchorMatches(
+              key,
+              rowIdentityKey(row, cols),
+              cols,
+              snap.pendingEditRowSnapshots,
+            )
+          ) {
+            continue;
+          }
           next ??= new Map(snap.pendingEdits);
           next.delete(key);
         }
