@@ -93,6 +93,11 @@ pub fn export_connections(ids: Vec<String>) -> Result<String, AppError> {
             // sslmode posture itself is not a secret and round-trips; the user
             // re-selects the CA file after import.
             p.ca_cert_path = None;
+            // #1064 (ADR 0052 Q5) — strip the SSH private-key path for the same
+            // reason. The tunnel settings themselves (host/port/user/auth
+            // method) are not secrets and round-trip; the tunnel secrets ride
+            // the same never-exported contract as the password.
+            p.ssh_key_path = None;
             p
         })
         .collect();
@@ -301,11 +306,28 @@ pub fn import_connections(json: String) -> Result<ImportResult, AppError> {
             // re-entry contract). The wallet password is likewise never carried.
             wallet_path: None,
             wallet_password: String::new(),
+            // #1064 — tunnel settings round-trip (not secrets); the key path
+            // is stripped like the wallet path, and the tunnel secrets are
+            // never carried — the user re-enters them after import.
+            ssh_enabled: conn.ssh_enabled,
+            ssh_host: conn.ssh_host.clone(),
+            ssh_port: conn.ssh_port,
+            ssh_user: conn.ssh_user.clone(),
+            ssh_auth_method: conn.ssh_auth_method,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         };
 
         // Save with explicit empty password + empty wallet password (no
         // preserve / no encrypt).
-        storage::save_connection_with_wallet(stored, Some(String::new()), Some(String::new()))?;
+        storage::save_connection_with_wallet(
+            stored,
+            Some(String::new()),
+            Some(String::new()),
+            Some(String::new()),
+            Some(String::new()),
+        )?;
         result.imported.push(new_id);
     }
 
@@ -583,6 +605,14 @@ mod tests {
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
+                ssh_enabled: false,
+                ssh_host: None,
+                ssh_port: None,
+                ssh_user: None,
+                ssh_auth_method: crate::models::SshAuthMethod::Password,
+                ssh_key_path: None,
+                has_ssh_password: false,
+                has_ssh_passphrase: false,
             }],
             groups: vec![],
         };
@@ -762,6 +792,14 @@ mod tests {
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
+                ssh_enabled: false,
+                ssh_host: None,
+                ssh_port: None,
+                ssh_user: None,
+                ssh_auth_method: crate::models::SshAuthMethod::Password,
+                ssh_key_path: None,
+                has_ssh_password: false,
+                has_ssh_passphrase: false,
             }],
             groups: vec![],
         };
@@ -807,6 +845,14 @@ mod tests {
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
+                ssh_enabled: false,
+                ssh_host: None,
+                ssh_port: None,
+                ssh_user: None,
+                ssh_auth_method: crate::models::SshAuthMethod::Password,
+                ssh_key_path: None,
+                has_ssh_password: false,
+                has_ssh_passphrase: false,
             }],
             groups: vec![], // group_id refers to nothing
         };
@@ -854,6 +900,14 @@ mod tests {
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
+                ssh_enabled: false,
+                ssh_host: None,
+                ssh_port: None,
+                ssh_user: None,
+                ssh_auth_method: crate::models::SshAuthMethod::Password,
+                ssh_key_path: None,
+                has_ssh_password: false,
+                has_ssh_passphrase: false,
             }],
             groups: vec![ConnectionGroup {
                 id: "g-new".into(),
@@ -942,6 +996,14 @@ mod tests {
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
+                ssh_enabled: false,
+                ssh_host: None,
+                ssh_port: None,
+                ssh_user: None,
+                ssh_auth_method: crate::models::SshAuthMethod::Password,
+                ssh_key_path: None,
+                has_ssh_password: false,
+                has_ssh_passphrase: false,
             }],
             groups: vec![],
         };
@@ -1102,6 +1164,14 @@ mod tests {
                 oracle_use_sid: None,
                 wallet_path: None,
                 has_wallet_password: false,
+                ssh_enabled: false,
+                ssh_host: None,
+                ssh_port: None,
+                ssh_user: None,
+                ssh_auth_method: crate::models::SshAuthMethod::Password,
+                ssh_key_path: None,
+                has_ssh_password: false,
+                has_ssh_passphrase: false,
             }],
             groups: vec![],
         };

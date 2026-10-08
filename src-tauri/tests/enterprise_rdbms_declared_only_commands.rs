@@ -26,6 +26,14 @@ fn oracle_public() -> ConnectionConfigPublic {
         oracle_use_sid: None,
         wallet_path: None,
         has_wallet_password: false,
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        has_ssh_password: false,
+        has_ssh_passphrase: false,
     }
 }
 
@@ -35,6 +43,8 @@ async fn test_connection_dispatches_oracle_validation_instead_of_declared_only_r
         config: oracle_public(),
         password: Some("pw".into()),
         wallet_password: None,
+        ssh_password: None,
+        ssh_passphrase: None,
         existing_id: None,
     })
     .await;

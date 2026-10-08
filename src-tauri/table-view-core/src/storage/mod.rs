@@ -8,6 +8,7 @@ pub mod meta;
 pub mod mismatch_metric;
 pub mod reconcile;
 pub mod sql_redact;
+pub mod ssh_pins;
 
 use crate::error::AppError;
 use crate::models::{ConnectionConfig, ConnectionGroup, StorageData};
@@ -676,6 +677,10 @@ pub fn load_storage_redacted() -> Result<StorageData, AppError> {
             // IPC contract as `password`; never let its ciphertext reach a
             // frontend-bound payload.
             conn.wallet_password.clear();
+            // #1064 — the SSH tunnel password and key passphrase ride the
+            // same contract.
+            conn.ssh_password.clear();
+            conn.ssh_passphrase.clear();
         }
         Ok(data)
     })
@@ -695,6 +700,14 @@ pub fn load_storage_with_secrets() -> Result<StorageData, AppError> {
             // path so the adapter can hand it to the driver.
             if !conn.wallet_password.is_empty() {
                 conn.wallet_password = crypto::decrypt(&conn.wallet_password, &key)?;
+            }
+            // #1064 — the SSH tunnel password and key passphrase, same
+            // connect-only contract.
+            if !conn.ssh_password.is_empty() {
+                conn.ssh_password = crypto::decrypt(&conn.ssh_password, &key)?;
+            }
+            if !conn.ssh_passphrase.is_empty() {
+                conn.ssh_passphrase = crypto::decrypt(&conn.ssh_passphrase, &key)?;
             }
         }
         Ok(data)
@@ -764,6 +777,67 @@ pub fn wallet_password_presence_map() -> Result<std::collections::HashMap<String
     })
 }
 
+/// #1064 — whether each connection currently has a stored SSH tunnel
+/// password, indexed by id. Cheap (no decryption).
+pub fn ssh_password_presence_map() -> Result<std::collections::HashMap<String, bool>, AppError> {
+    with_lock(|| {
+        let data = load_storage_raw()?;
+        Ok(data
+            .connections
+            .into_iter()
+            .map(|c| (c.id, !c.ssh_password.is_empty()))
+            .collect())
+    })
+}
+
+/// #1064 — whether each connection currently has a stored SSH key passphrase,
+/// indexed by id. Cheap (no decryption).
+pub fn ssh_passphrase_presence_map() -> Result<std::collections::HashMap<String, bool>, AppError> {
+    with_lock(|| {
+        let data = load_storage_raw()?;
+        Ok(data
+            .connections
+            .into_iter()
+            .map(|c| (c.id, !c.ssh_passphrase.is_empty()))
+            .collect())
+    })
+}
+
+/// #1064 — decrypt the SSH tunnel password for a single connection, same
+/// 3-value contract as [`get_decrypted_password`]. Used by `test_connection`
+/// to substitute the stored tunnel password when the dialog omits it.
+pub fn get_decrypted_ssh_password(id: &str) -> Result<Option<String>, AppError> {
+    with_lock(|| {
+        let data = load_storage_raw()?;
+        let conn = data.connections.iter().find(|c| c.id == id);
+        match conn {
+            None => Ok(None),
+            Some(c) if c.ssh_password.is_empty() => Ok(Some(String::new())),
+            Some(c) => {
+                let key = master_key()?;
+                Ok(Some(crypto::decrypt(&c.ssh_password, &key)?))
+            }
+        }
+    })
+}
+
+/// #1064 — decrypt the SSH key passphrase for a single connection, same
+/// 3-value contract as [`get_decrypted_password`].
+pub fn get_decrypted_ssh_passphrase(id: &str) -> Result<Option<String>, AppError> {
+    with_lock(|| {
+        let data = load_storage_raw()?;
+        let conn = data.connections.iter().find(|c| c.id == id);
+        match conn {
+            None => Ok(None),
+            Some(c) if c.ssh_passphrase.is_empty() => Ok(Some(String::new())),
+            Some(c) => {
+                let key = master_key()?;
+                Ok(Some(crypto::decrypt(&c.ssh_passphrase, &key)?))
+            }
+        }
+    })
+}
+
 /// Save a connection. `new_password` semantics:
 /// - `None`     → preserve the existing ciphertext (or empty for new ids)
 /// - `Some("")` → explicitly clear the password
@@ -775,17 +849,20 @@ pub fn save_connection(
     conn: ConnectionConfig,
     new_password: Option<String>,
 ) -> Result<(), AppError> {
-    save_connection_with_wallet(conn, new_password, None)
+    save_connection_with_wallet(conn, new_password, None, None, None)
 }
 
 /// #1065 — save a connection resolving both the DB password and the Oracle
 /// wallet password with identical 3-state semantics (`None` preserve /
 /// `Some("")` clear / `Some(s)` encrypt+store). Split from [`save_connection`]
-/// so the ~20 non-Oracle callers keep the 2-arg signature.
+/// so the ~20 non-Oracle callers keep the 2-arg signature. #1064 adds the two
+/// SSH tunnel secrets as further parameters of this same chokepoint.
 pub fn save_connection_with_wallet(
     mut conn: ConnectionConfig,
     new_password: Option<String>,
     new_wallet_password: Option<String>,
+    new_ssh_password: Option<String>,
+    new_ssh_passphrase: Option<String>,
 ) -> Result<(), AppError> {
     // #1649 (ADR 0058) — the single chokepoint every file-SOT writer passes
     // through (the `save_connection` IPC, the dual-write `persist_connection`
@@ -820,6 +897,8 @@ pub fn save_connection_with_wallet(
         };
         conn.password = resolve(new_password, existing.map(|c| &c.password))?;
         conn.wallet_password = resolve(new_wallet_password, existing.map(|c| &c.wallet_password))?;
+        conn.ssh_password = resolve(new_ssh_password, existing.map(|c| &c.ssh_password))?;
+        conn.ssh_passphrase = resolve(new_ssh_passphrase, existing.map(|c| &c.ssh_passphrase))?;
 
         if let Some(existing) = data.connections.iter_mut().find(|c| c.id == conn.id) {
             *existing = conn;
@@ -1133,6 +1212,14 @@ mod tests {
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: crate::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         }
     }
 
@@ -2337,7 +2424,14 @@ mod tests {
 
         let mut conn = sample_connection("c1", "Oracle");
         conn.wallet_password = "wsecret".into();
-        save_connection_with_wallet(conn, Some(String::new()), Some("wsecret".into())).unwrap();
+        save_connection_with_wallet(
+            conn,
+            Some(String::new()),
+            Some("wsecret".into()),
+            None,
+            None,
+        )
+        .unwrap();
 
         let data_dir = std::env::var("TABLE_VIEW_TEST_DATA_DIR").unwrap();
         let raw =
@@ -2366,11 +2460,12 @@ mod tests {
         let mut conn = sample_connection("c1", "Oracle");
         conn.password = "dbpw".into();
         conn.wallet_password = "w1".into();
-        save_connection_with_wallet(conn, Some("dbpw".into()), Some("w1".into())).unwrap();
+        save_connection_with_wallet(conn, Some("dbpw".into()), Some("w1".into()), None, None)
+            .unwrap();
 
         // None wallet + None password → both preserved.
         let stub = sample_connection("c1", "Oracle");
-        save_connection_with_wallet(stub, None, None).unwrap();
+        save_connection_with_wallet(stub, None, None, None, None).unwrap();
         assert_eq!(
             get_decrypted_wallet_password("c1").unwrap(),
             Some("w1".into())
@@ -2379,7 +2474,7 @@ mod tests {
 
         // Replace wallet only.
         let stub = sample_connection("c1", "Oracle");
-        save_connection_with_wallet(stub, None, Some("w2".into())).unwrap();
+        save_connection_with_wallet(stub, None, Some("w2".into()), None, None).unwrap();
         assert_eq!(
             get_decrypted_wallet_password("c1").unwrap(),
             Some("w2".into())
@@ -2392,7 +2487,7 @@ mod tests {
 
         // Clear wallet only.
         let stub = sample_connection("c1", "Oracle");
-        save_connection_with_wallet(stub, None, Some(String::new())).unwrap();
+        save_connection_with_wallet(stub, None, Some(String::new()), None, None).unwrap();
         assert_eq!(
             get_decrypted_wallet_password("c1").unwrap(),
             Some(String::new())

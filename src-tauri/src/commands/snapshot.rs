@@ -316,21 +316,35 @@ async fn read_connections(
     // fail-closed `verify-ca` gate. Take the authoritative posture from the file
     // SOT — the same store the wallet presence map above reads — and close the
     // window instead of documenting it.
-    let sot_posture: std::collections::HashMap<String, (crate::models::SslMode, Option<String>)> =
+    let sot_posture: std::collections::HashMap<String, crate::models::ConnectionConfig> =
         crate::storage::load_storage_redacted()?
             .connections
             .into_iter()
-            .map(|c| (c.id, (c.ssl_mode, c.ca_cert_path)))
+            .map(|c| (c.id.clone(), c))
             .collect();
+    let ssh_password_presence = crate::storage::ssh_password_presence_map()?;
+    let ssh_passphrase_presence = crate::storage::ssh_passphrase_presence_map()?;
     let items: Vec<ConnectionConfigPublic> = conn_rows
         .into_iter()
         .map(|row| {
             let mut p = row.into_public();
             p.has_wallet_password = *wallet_presence.get(&p.id).unwrap_or(&false);
-            if let Some((ssl_mode, ca_cert_path)) = sot_posture.get(&p.id) {
-                p.ssl_mode = *ssl_mode;
-                p.ca_cert_path = ca_cert_path.clone();
+            if let Some(sot) = sot_posture.get(&p.id) {
+                p.ssl_mode = sot.ssl_mode;
+                p.ca_cert_path = sot.ca_cert_path.clone();
+                // #1064 — the mirror holds no tunnel columns; without this
+                // overlay an edit-before-`loadConnections()` save through the
+                // defaults would silently drop the tunnel settings (the same
+                // boot-window shape #1649 closed for the CA posture).
+                p.ssh_enabled = sot.ssh_enabled;
+                p.ssh_host = sot.ssh_host.clone();
+                p.ssh_port = sot.ssh_port;
+                p.ssh_user = sot.ssh_user.clone();
+                p.ssh_auth_method = sot.ssh_auth_method;
+                p.ssh_key_path = sot.ssh_key_path.clone();
             }
+            p.has_ssh_password = *ssh_password_presence.get(&p.id).unwrap_or(&false);
+            p.has_ssh_passphrase = *ssh_passphrase_presence.get(&p.id).unwrap_or(&false);
             p
         })
         .collect();
@@ -415,6 +429,19 @@ impl ConnectionRow {
             // Default; `read_connections` overrides from the file-SOT presence
             // map since the SQLite mirror does not store the wallet password.
             has_wallet_password: false,
+            // Default; `read_connections` overlays these from the file SOT —
+            // the SQLite mirror holds no tunnel columns (#1064), and an
+            // edit-before-`loadConnections()` save through the defaults would
+            // silently drop the tunnel settings (the same boot-window shape
+            // #1649 closed for the CA posture).
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: crate::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            has_ssh_password: false,
+            has_ssh_passphrase: false,
         }
     }
 }
@@ -1108,17 +1135,27 @@ mod tests {
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: crate::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         };
         crate::storage::save_connection_with_wallet(
             with_wallet.clone(),
             None,
             Some("wallet-secret".into()),
+            None,
+            None,
         )
         .unwrap();
         let mut no_wallet = with_wallet;
         no_wallet.id = "c-plain".into();
         no_wallet.name = "PlainConn".into();
-        crate::storage::save_connection_with_wallet(no_wallet, None, None).unwrap();
+        crate::storage::save_connection_with_wallet(no_wallet, None, None, None, None).unwrap();
 
         // Mirror both ids into the SQLite snapshot store.
         for (idx, id) in ["c-wallet", "c-plain"].into_iter().enumerate() {
