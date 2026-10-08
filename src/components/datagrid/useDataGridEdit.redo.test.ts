@@ -1,8 +1,8 @@
 // Issue #1527 (ADR 0050) — pending-edit redo stack on `useDataGridEdit`,
 // the symmetric counterpart of the undo stack. Redo re-applies what an
 // undo reverted; any NEW edit clears the redo stack (standard undo/redo
-// semantics). Scope: pending-edit symmetry only — commit-span redo
-// survival (ADR 0050 point 1) stays deferred to #1126.
+// semantics). Commit-span redo survival (ADR 0050 point 1, #1126) is
+// covered here too: a successful commit keeps the redo stack.
 //
 // The harness focus is the *pending-state* boundary: undo populates the
 // redo stack, redo restores from it, and a fresh edit invalidates it.
@@ -86,6 +86,17 @@ function renderEditHook() {
 describe("useDataGridEdit — redo stack (Issue #1527, ADR 0050)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The commit-span survival test below drives the real commit path, so
+    // the tauri mock must resolve like the undo suite's does.
+    mockExecuteQueryBatch.mockResolvedValue([
+      {
+        columns: [],
+        rows: [],
+        total_count: 0,
+        execution_time_ms: 1,
+        query_type: "dml" as const,
+      },
+    ]);
     setupTauriMock({
       get executeQueryBatch() {
         return mockExecuteQueryBatch;
@@ -227,5 +238,68 @@ describe("useDataGridEdit — redo stack (Issue #1527, ADR 0050)", () => {
       result.current.handleDiscard();
     });
     expect(result.current.canRedo).toBe(false);
+  });
+
+  it("[#1126 / ADR 0050 (1)] a commit does NOT wipe the redo stack — undo → commit → redo restores the undone edits", async () => {
+    const { result } = renderEditHook();
+
+    // Two pending edits.
+    act(() => {
+      result.current.handleStartEdit(0, 1, "Alice");
+    });
+    act(() => {
+      result.current.setEditValue("Bob");
+    });
+    act(() => {
+      result.current.saveCurrentEdit();
+    });
+    act(() => {
+      result.current.handleStartEdit(1, 1, "Bob");
+    });
+    act(() => {
+      result.current.setEditValue("Charlie");
+    });
+    act(() => {
+      result.current.saveCurrentEdit();
+    });
+    expect(result.current.pendingEdits.size).toBe(2);
+
+    // Undo peels the second edit off (pending keeps only the first one) and
+    // parks the two-edit state on the redo stack.
+    act(() => {
+      result.current.undo();
+    });
+    expect(result.current.pendingEdits.size).toBe(1);
+    expect(result.current.canRedo).toBe(true);
+
+    // Commit the surviving edit (row 0 → Bob). One DB write.
+    act(() => {
+      result.current.handleCommit();
+    });
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    if (result.current.pendingConfirm) {
+      await act(async () => {
+        await result.current.confirmDangerous();
+      });
+    }
+    expect(result.current.pendingEdits.size).toBe(0);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+
+    // ADR 0050 (1) — the commit survives symmetrically with undo: the redo
+    // stack is still intact after the commit.
+    expect(result.current.canRedo).toBe(true);
+
+    // Redo restores the undone second edit (and re-applies the committed
+    // first one) as PENDING state — no DB write until the user commits again.
+    act(() => {
+      result.current.redo();
+    });
+    expect(result.current.pendingEdits.get("0-1")).toBe("Bob");
+    expect(result.current.pendingEdits.get("1-1")).toBe("Charlie");
+    expect(result.current.canRedo).toBe(false);
+    expect(result.current.canUndo).toBe(true);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
   });
 });

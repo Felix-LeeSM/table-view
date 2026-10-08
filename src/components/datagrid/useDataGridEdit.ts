@@ -151,10 +151,12 @@ export function useDataGridEdit({
   }, [clearPendingEntry, clearSelection]);
 
   // ADR 0048 (#1126) — commit-success cleanup differs from discard: the undo
-  // stack must SURVIVE the commit. `restageAfterCommit` swaps the committed
-  // pending edits for a single reversal snapshot so a post-commit Cmd+Z
-  // re-stages the old values as a new pending edit (DB writes stay commit-only).
-  // Everything else mirrors `clearAllPending` (drop editor / selection / errors).
+  // stack must SURVIVE the commit. `restageAfterCommit` collapses the committed
+  // pending edits into a reversal snapshot pushed onto the retained stack, so
+  // a post-commit Cmd+Z re-stages the old values as a new pending edit and
+  // consecutive Cmd+Z walk back through earlier commit reversals (DB writes
+  // stay commit-only). Everything else mirrors `clearAllPending` (drop editor
+  // / selection / errors).
   const clearPendingAfterCommit = useCallback(() => {
     // #1126 Phase 2 — pass the columns so a committed INSERT can be reversed
     // only when its primary key is reproducible from the typed row values.

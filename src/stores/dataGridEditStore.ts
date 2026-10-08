@@ -20,8 +20,9 @@
  * - `clearEntry(key)` resets all slices on `key` to empty (used by
  *   `clearAllPending` on an explicit discard or when the grid stops being
  *   editable, and by `useDataGridEditPendingState`'s `restageAfterCommit`
- *   after a successful commit, which then seeds `undoStack` with the
- *   reversal snapshot when there is one — ADR 0048).
+ *   after a successful commit, which then re-seeds `undoStack` with the
+ *   prior history plus the new reversal snapshot and `redoStack` with the
+ *   prior redo entries — ADR 0048 / ADR 0050).
  * - `purgeKey(key)` removes the entry from the map entirely (used by
  *   `workspaceStore.removeTab` when the closing tab was the last consumer
  *   of that key).
@@ -59,6 +60,11 @@ export interface EditSnapshot {
   // INSERT/DELETE can't be reproduced (auto-increment PK / missing row
   // snapshot) as non-restageable. Mirrors the type in `dataGridEditFsm.ts`.
   restageBlocked?: boolean;
+  // #1126 multi-step — set on commit-reversal snapshots
+  // (`buildRestageSnapshot`). `restageAfterCommit` keeps only these when
+  // re-seeding the undo stack so Cmd+Z walks the commit history. Mirrors the
+  // type in `dataGridEditFsm.ts`.
+  restage?: boolean;
 }
 
 export interface PendingEntry {
@@ -72,9 +78,10 @@ export interface PendingEntry {
   //   consume:  `redo()` pops the top back and re-pushes it onto `undoStack`.
   //   clear:    (a) `pushSnapshot` on any NEW edit (standard redo invalidation),
   //             (b) `prunePartiallyCommitted` after a partial-commit prune,
-  //             (c) `clearEntry` on post-commit / discard.
-  // Pending-edit symmetry only — commit-span redo survival (ADR 0050 point 1)
-  // stays deferred to #1126, which is why (c) wipes it rather than restaging.
+  //             (c) `clearEntry` on discard.
+  // Commit-span survival (ADR 0050 point 1, #1126): a successful commit
+  // re-seeds both stacks from the pre-commit entry, so redo survives a
+  // commit exactly like undo does.
   redoStack: ReadonlyArray<EditSnapshot>;
   /**
    * Issue #1081 — row-identity anchors captured at edit/delete time so a
