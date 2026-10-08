@@ -110,7 +110,7 @@ impl MssqlAdapter {
         let qualified = qualified_table(&req.schema, &req.table);
         let mut statements = Vec::with_capacity(req.changes.len());
         for change in &req.changes {
-            statements.push(build_alter_table_statement(&qualified, change)?);
+            statements.extend(build_alter_table_statements(&qualified, change)?);
         }
 
         self.preview_or_execute(req.preview_only, statements, "alter table")
@@ -341,7 +341,10 @@ impl MssqlAdapter {
     }
 }
 
-fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result<String, AppError> {
+fn build_alter_table_statements(
+    qualified: &str,
+    change: &ColumnChange,
+) -> Result<Vec<String>, AppError> {
     match change {
         ColumnChange::Add {
             name,
@@ -357,11 +360,11 @@ fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result
                 comment: None,
                 is_identity: false,
             };
-            Ok(format!(
+            Ok(vec![format!(
                 "ALTER TABLE {} ADD {}",
                 qualified,
                 build_column_definition(&column)?
-            ))
+            )])
         }
         ColumnChange::Modify {
             name,
@@ -383,46 +386,96 @@ fn build_alter_table_statement(qualified: &str, change: &ColumnChange) -> Result
                     "SQL Server structured ALTER COLUMN USING expressions are not supported".into(),
                 ));
             }
-            if new_default_value.is_some() {
-                return Err(AppError::Unsupported(
-                    "SQL Server structured default-constraint changes are not supported".into(),
-                ));
-            }
-            let Some(data_type) = new_data_type.as_deref().map(str::trim) else {
+            // #1071 — the per-row editor sends `new_default_value` on every
+            // DEFAULT edit. `None` is "no default change" (the editor
+            // conflates a cleared field with no change, exactly like the
+            // PG/MySQL emitters treat it). An empty string follows the `Add`
+            // precedent above: no default leg.
+            let new_default = new_default_value
+                .as_deref()
+                .map(str::trim)
+                .filter(|default| !default.is_empty());
+            let data_type = new_data_type.as_deref().map(str::trim);
+            if data_type.is_none() && (new_nullable.is_some() || new_default.is_none()) {
+                // T-SQL `ALTER COLUMN` carries the type in its grammar and the
+                // bounded builder does no catalog read-back of the current
+                // type, so a nullability leg — or a change with no legs at
+                // all — cannot be emitted without one. A default-only swap is
+                // the one leg that works without a type.
                 return Err(AppError::Validation(format!(
                     "SQL Server ALTER COLUMN requires a data type for '{}'",
                     name
                 )));
-            };
-            if data_type.is_empty() {
-                return Err(AppError::Validation(format!(
-                    "Column '{}' must have a non-empty data type",
-                    name
-                )));
             }
-            validate_ddl_fragment(data_type, "Data type")?;
-            let nullability = match new_nullable {
-                Some(true) => " NULL",
-                Some(false) => " NOT NULL",
-                None => "",
-            };
-            Ok(format!(
-                "ALTER TABLE {} ALTER COLUMN {} {}{}",
-                qualified,
-                quote_ident(name),
-                data_type,
-                nullability
-            ))
+
+            // A DEFAULT arrives as `Some(value)`. SQL Server binds it as a
+            // named constraint (no `ALTER COLUMN … SET DEFAULT`), so the swap
+            // is drop-then-add: the drop looks the constraint name up at
+            // execution time because a system-named default is not known to
+            // the builder, and a DEFAULT constraint blocks `ALTER COLUMN`
+            // with Msg 5074, so the drop also precedes a type change.
+            let mut statements = Vec::new();
+            if new_default.is_some() {
+                statements.push(default_constraint_drop_batch(qualified, name));
+            }
+            if let Some(data_type) = data_type {
+                if data_type.is_empty() {
+                    return Err(AppError::Validation(format!(
+                        "Column '{}' must have a non-empty data type",
+                        name
+                    )));
+                }
+                validate_ddl_fragment(data_type, "Data type")?;
+                let nullability = match new_nullable {
+                    Some(true) => " NULL",
+                    Some(false) => " NOT NULL",
+                    None => "",
+                };
+                statements.push(format!(
+                    "ALTER TABLE {} ALTER COLUMN {} {}{}",
+                    qualified,
+                    quote_ident(name),
+                    data_type,
+                    nullability
+                ));
+            }
+            if let Some(default) = new_default {
+                validate_ddl_fragment(default, "DEFAULT value")?;
+                statements.push(format!(
+                    "ALTER TABLE {} ADD DEFAULT {} FOR {}",
+                    qualified,
+                    default,
+                    quote_ident(name)
+                ));
+            }
+            Ok(statements)
         }
         ColumnChange::Drop { name } => {
             validate_identifier(name, "Column name")?;
-            Ok(format!(
+            Ok(vec![format!(
                 "ALTER TABLE {} DROP COLUMN {}",
                 qualified,
                 quote_ident(name)
-            ))
+            )])
         }
     }
+}
+
+/// #1071 — self-contained batch that drops the DEFAULT constraint bound to
+/// `column`, a no-op when the column has none. T-SQL `DROP CONSTRAINT` needs
+/// the constraint's name, so the batch resolves it from
+/// `sys.default_constraints` at execution time and drops it inside one batch —
+/// the builder runs without a connection, so the name cannot be resolved here.
+fn default_constraint_drop_batch(qualified: &str, column: &str) -> String {
+    let table_literal = qualified.replace('\'', "''");
+    let column_literal = column.replace('\'', "''");
+    format!(
+        "DECLARE @df sysname; \
+         SELECT @df = name FROM sys.default_constraints \
+         WHERE parent_object_id = OBJECT_ID(N'{table_literal}') \
+         AND COL_NAME(parent_object_id, parent_column_id) = N'{column_literal}'; \
+         IF @df IS NOT NULL EXEC(N'ALTER TABLE {qualified} DROP CONSTRAINT ' + QUOTENAME(@df))"
+    )
 }
 
 fn build_column_definition(column: &ColumnDefinition) -> Result<String, AppError> {

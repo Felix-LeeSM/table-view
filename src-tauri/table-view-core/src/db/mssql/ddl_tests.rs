@@ -219,6 +219,91 @@ async fn alter_table_preview_emits_tsql_statement_chain() {
     );
 }
 
+// Reason: #1071 — the per-row editor (`ddl.modifyColumn: true`) ships
+// `new_default_value` on every DEFAULT edit, but this arm answered
+// `Unsupported` — a click-then-error. SQL Server binds a DEFAULT as a named
+// constraint (no `ALTER COLUMN … SET DEFAULT`), so the swap is drop-then-add,
+// with the drop looking the constraint name up at execution time because a
+// system-named default is not known to the builder. (2026-10-08)
+#[tokio::test]
+async fn alter_table_preview_swaps_default_constraint_on_modify() {
+    let req = AlterTableRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        table: "users".into(),
+        changes: vec![ColumnChange::Modify {
+            name: "age".into(),
+            new_data_type: None,
+            new_nullable: None,
+            new_default_value: Some("0".into()),
+            using_expression: None,
+            new_comment: None,
+        }],
+        preview_only: true,
+        expected_database: None,
+    };
+
+    let sql = MssqlAdapter::new().alter_table(&req).await.unwrap().sql;
+
+    assert_eq!(
+        sql,
+        "DECLARE @df sysname; SELECT @df = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID(N'[dbo].[users]') AND COL_NAME(parent_object_id, parent_column_id) = N'age'; IF @df IS NOT NULL EXEC(N'ALTER TABLE [dbo].[users] DROP CONSTRAINT ' + QUOTENAME(@df)); ALTER TABLE [dbo].[users] ADD DEFAULT 0 FOR [age]"
+    );
+}
+
+// Reason: #1071 — a DEFAULT constraint blocks `ALTER COLUMN` (Msg 5074), so
+// when a type change rides along the swap order must be drop → ALTER COLUMN
+// → add. (2026-10-08)
+#[tokio::test]
+async fn alter_table_preview_orders_default_swap_around_alter_column() {
+    let req = AlterTableRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        table: "users".into(),
+        changes: vec![ColumnChange::Modify {
+            name: "age".into(),
+            new_data_type: Some("BIGINT".into()),
+            new_nullable: Some(false),
+            new_default_value: Some("0".into()),
+            using_expression: None,
+            new_comment: None,
+        }],
+        preview_only: true,
+        expected_database: None,
+    };
+
+    let sql = MssqlAdapter::new().alter_table(&req).await.unwrap().sql;
+
+    assert_eq!(
+        sql,
+        "DECLARE @df sysname; SELECT @df = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID(N'[dbo].[users]') AND COL_NAME(parent_object_id, parent_column_id) = N'age'; IF @df IS NOT NULL EXEC(N'ALTER TABLE [dbo].[users] DROP CONSTRAINT ' + QUOTENAME(@df)); ALTER TABLE [dbo].[users] ALTER COLUMN [age] BIGINT NOT NULL; ALTER TABLE [dbo].[users] ADD DEFAULT 0 FOR [age]"
+    );
+}
+
+// Reason: #1071 — the new default fragment is interpolated verbatim into the
+// ADD DEFAULT DDL, so it carries the same `validate_ddl_fragment` guard as the
+// Add path. (2026-10-08)
+#[tokio::test]
+async fn alter_table_rejects_default_value_statement_breakout() {
+    let req = AlterTableRequest {
+        connection_id: "conn".into(),
+        schema: "dbo".into(),
+        table: "users".into(),
+        changes: vec![ColumnChange::Modify {
+            name: "age".into(),
+            new_data_type: None,
+            new_nullable: None,
+            new_default_value: Some("0; DROP TABLE x".into()),
+            using_expression: None,
+            new_comment: None,
+        }],
+        preview_only: true,
+        expected_database: None,
+    };
+
+    assert_validation(MssqlAdapter::new().alter_table(&req).await, "DEFAULT value");
+}
+
 #[tokio::test]
 async fn remaining_table_column_and_index_preview_paths_emit_tsql() {
     let adapter = MssqlAdapter::new();
