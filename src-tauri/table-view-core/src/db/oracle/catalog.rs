@@ -29,6 +29,14 @@ use super::{map_oracle_connection_error, OracleAdapter};
 
 impl OracleAdapter {
     pub async fn list_databases(&self) -> Result<Vec<SchemaInfo>, AppError> {
+        // #1072 — the picker and the dial apply the same gates. A SID or TNS
+        // descriptor profile cannot re-dial a service name at all, so the list
+        // axis fail-closes to the empty list — the trait's graceful "no
+        // databases to show" signal — before any probe.
+        let config = self.connected_config().await?;
+        if super::service_redial_profile_error(&config).is_some() {
+            return Ok(Vec::new());
+        }
         let rows = self
             .query_catalog_rows_strict(
                 "Oracle current database probe failed",
@@ -55,7 +63,10 @@ impl OracleAdapter {
                 .filter(|database| !database.is_empty())
         });
 
+        // #1072 — never offer a name the dial would reject (whitelist) or a
+        // system container the dial refuses.
         Ok(name
+            .filter(|name| super::is_switchable_service_name(name))
             .map(|name| vec![SchemaInfo { name }])
             .unwrap_or_default())
     }

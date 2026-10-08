@@ -329,8 +329,12 @@ describe("adapter conformance matrix", () => {
 
     expect(oracle.level).toBe("runtime");
     // Issue #1529 — read-only is a live claim (engine-agnostic backend gate).
+    // Issue #1072 — switch-database joins them: the wired `OracleAdapter`
+    // overrides `RdbAdapter::switch_database` (service-name re-dial), so the
+    // claim is live, not a deferral (nothing enters `deferred`).
     expect(oracle.areas.connection.checks).toEqual([
       "connection.test",
+      "connection.switchDatabase",
       "connection.readOnly",
     ]);
     expect(oracle.areas.catalog.checks).toEqual([
@@ -353,7 +357,6 @@ describe("adapter conformance matrix", () => {
     ]);
     expect(oracle.areas.connection.deferred).toEqual([]);
     expect(oracle.areas.connection.unsupported).toEqual([
-      "connection.switchDatabase",
       "connection.filePicker",
     ]);
     expect(oracle.areas.catalog.unsupported).toEqual([]);

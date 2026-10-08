@@ -90,9 +90,10 @@ parser/safety 경계, fixture/live evidence 가 함께 갖추어진 범위만을
   bounded editor assistance only. #907 wires representative Runtime Happy Path
   smoke for service-name connect, seeded catalog browse including routine
   metadata, SELECT/DML, destructive Safe Mode confirmation, cancellation, and
-  grid edit. SID, TNS, wallet, TLS, advanced auth,
-  switch database, structured DDL, raw DDL/admin, full parser/completion
-  promotion, PL/SQL body/package authoring/source, triggers, import/export,
+  grid edit. Advanced auth,
+  raw DDL/admin, full parser/completion
+  promotion, PL/SQL body/package authoring, trigger DDL, DB-level
+  import/backup-restore,
   users/roles/grants/session/storage, and full workbench
   parity stay unsupported or unclaimed.
   Full admin parity, import/export, full profiler/activity admin parity,

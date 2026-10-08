@@ -443,6 +443,11 @@ export const UNSUPPORTED_CAPABILITIES = capabilities();
 export const ORACLE_CAPABILITIES = capabilities({
   connection: {
     test: true,
+    // Issue #1072 — the backend `OracleAdapter` overrides
+    // `RdbAdapter::switch_database` with a service-name re-dial, so the
+    // switcher claim is live (gates: SID/TNS-descriptor profiles fail closed,
+    // CDB$ROOT/PDB$SEED excluded on list and dial).
+    switchDatabase: true,
     // Issue #1529 — the backend read-only gate is engine-agnostic, so every
     // server RDB that can write exposes the toggle (same protection = same
     // control). Prevents a stuck read-only connection with no UI to clear it.

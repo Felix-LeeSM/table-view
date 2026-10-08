@@ -12,10 +12,13 @@
 //! same `connect_config` axis: a pasted TNS connect descriptor (parsed down to
 //! host/port/service/protocol, every other clause rejected) and wallet-less
 //! 1-way TLS (TCPS) driven by the shared [`crate::db::tls`] posture, with the
-//! CA file of `verify-ca` as the trust anchor. Raw DDL/admin execution,
-//! switch-database, trigger DDL (create/drop) and single-trigger source,
-//! tnsnames.ora alias resolution, and advanced auth remain unsupported or
-//! unclaimed.
+//! CA file of `verify-ca` as the trust anchor. Issue #1072 (pass 3) adds
+//! service-name database switching (`switch_database`): a re-dial through the
+//! same `connect_config` gate stack, refused on SID and TNS-descriptor
+//! profiles, with `CDB$ROOT`/`PDB$SEED` excluded on both the picker list and
+//! the dial. Raw DDL/admin execution, trigger DDL (create/drop) and
+//! single-trigger source, tnsnames.ora alias resolution, and advanced auth
+//! remain unsupported or unclaimed.
 
 mod admin;
 mod catalog;
@@ -153,6 +156,60 @@ impl OracleAdapter {
             .as_ref()
             .map(|config| config.database.trim().to_string())
             .filter(|service_name| !service_name.is_empty())
+    }
+
+    /// Issue #1072 — switch the active service by re-dialing.
+    ///
+    /// Oracle has no `USE <db>`: a switch is a new dial. The target goes
+    /// through the same `connect_config` gate stack the original session used
+    /// (#1065 whitelist, TLS posture, wallet, descriptor rules), so a name the
+    /// picker could not have offered still fails at the trust boundary. The
+    /// stored session is replaced only after the new dial pings; on any
+    /// earlier failure the old session stays live.
+    async fn switch_active_database(&self, db_name: &str) -> Result<(), AppError> {
+        let db_name = db_name.trim();
+        if db_name.is_empty() {
+            return Err(AppError::Validation(
+                "Oracle service name is required".into(),
+            ));
+        }
+        let config = self.connected_config().await?;
+        if let Some(error) = service_redial_profile_error(&config) {
+            return Err(error);
+        }
+        if is_seed_or_root_container(db_name) {
+            return Err(AppError::Validation(
+                "Oracle cannot switch into the CDB$ROOT or PDB$SEED containers; connect to a pluggable database service (#1072)".into(),
+            ));
+        }
+
+        let mut target = config.clone();
+        target.database = db_name.to_string();
+        let timeout_secs = connection_timeout_secs(&target);
+        let oracle_config = Self::connect_config(&target, timeout_secs)?;
+        let connection = Self::dial(oracle_config, timeout_secs).await?;
+        if let Err(err) = connection.ping().await {
+            let _ = connection.close().await;
+            return Err(map_oracle_connection_error(err));
+        }
+        let server_info = connection.server_info().await;
+
+        let previous = {
+            let mut guard = self.state.lock().await;
+            guard.server_version = non_empty(server_info.version);
+            guard.server_banner = non_empty(server_info.banner);
+            guard.connected_config = Some(target);
+            guard.connection.replace(connection)
+        };
+        // The switch has landed by this point — a failed close on the replaced
+        // session must not roll the reported state back. The old server-side
+        // session is reaped by the server eventually; log, don't fail.
+        if let Some(previous) = previous {
+            if let Err(err) = previous.close().await {
+                tracing::warn!("Oracle previous session close failed after service switch: {err}");
+            }
+        }
+        Ok(())
     }
 
     fn connect_config(
@@ -450,6 +507,10 @@ impl RdbAdapter for OracleAdapter {
             let dbs = OracleAdapter::list_databases(self).await?;
             Ok(dbs.into_iter().map(NamespaceInfo::from).collect())
         })
+    }
+
+    fn switch_database<'a>(&'a self, db_name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { self.switch_active_database(db_name).await })
     }
 
     fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
@@ -933,6 +994,43 @@ fn is_oracle_identifier_safe(value: &str) -> bool {
         && value
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '$' | '#' | '.' | '-'))
+}
+
+/// #1072 — the system containers a switch must never target. Their names pass
+/// the #1065 whitelist (`$` is a legal identifier char), so the exclusion is
+/// explicit. Case-insensitive: `CON_NAME` returns the container name as stored.
+fn is_seed_or_root_container(name: &str) -> bool {
+    matches!(name.to_ascii_uppercase().as_str(), "CDB$ROOT" | "PDB$SEED")
+}
+
+/// #1072 — the name gate both switch axes share. The picker list
+/// (`OracleAdapter::list_databases`) applies it before offering an entry; the
+/// dial applies it through `connect_config`'s whitelist plus the explicit
+/// container exclusion, so nothing can be offered that the dial would reject.
+fn is_switchable_service_name(name: &str) -> bool {
+    !is_seed_or_root_container(name) && is_oracle_identifier_safe(name)
+}
+
+/// #1072 — which connected profiles may re-dial by service name at all.
+///
+/// A SID profile's `database` field holds a SID, not a service name, and a
+/// pasted TNS descriptor owns host/port inside the descriptor itself — the
+/// form fields beside it are disabled and can be empty or stale, so a
+/// service-name re-dial from the stored config would be meaningless or would
+/// silently dial coordinates the user never picked. `Some` rejects the switch
+/// (dial axis) and empties the picker (list axis).
+fn service_redial_profile_error(config: &ConnectionConfig) -> Option<AppError> {
+    if config.oracle_use_sid.unwrap_or(false) {
+        return Some(AppError::Validation(
+            "Oracle database switching is unsupported over a SID connection; reconnect with a service name (#1072)".into(),
+        ));
+    }
+    if config.database.trim().starts_with('(') {
+        return Some(AppError::Validation(
+            "Oracle database switching is unsupported from a pasted TNS descriptor connection; reconnect with a service name (#1072)".into(),
+        ));
+    }
+    None
 }
 
 /// #1065 — warn (do not fail) when the wallet directory is group/other

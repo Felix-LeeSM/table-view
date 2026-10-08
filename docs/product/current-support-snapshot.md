@@ -277,7 +277,9 @@ scripting remain unclaimed.
 ## Oracle
 
 **Runtime**: service-name lifecycle plus bounded catalog/query/cancel/tabular
-runtime and PK-projected row edit
+runtime, PK-projected row edit, and service-name database switching (#1072 —
+SID/TNS-descriptor profiles fail closed; `CDB$ROOT`/`PDB$SEED` excluded on the
+picker list and the dial)
 
 **현재 판단**: `oracle` remains a source-specific profile/dialect identity with
 Oracle labels, service-name defaults, URL parsing, and seed/spec inventory. #905
@@ -289,9 +291,10 @@ blocks. #907 adds representative Runtime Happy Path smoke for service-name
 connect, seeded catalog/routine browse, SELECT/DML, destructive Safe Mode
 confirmation, cancellation, and grid edit. #1072 dissolves the runtime slice and
 wires the full adapter, promoting bounded structured table/index/constraint DDL
-through the shared StructurePanel path. The runtime still blocks switch
-database, raw DDL/admin, PL/SQL body/package authoring, trigger DDL beyond the
-bounded catalog smoke path, SID/TNS/wallet/TLS/advanced auth, import/export,
+through the shared StructurePanel path and service-name database switching (a
+re-dial through the same `connect_config` gate stack). The runtime still blocks
+raw DDL/admin, PL/SQL body/package authoring, trigger DDL beyond the
+bounded catalog smoke path, advanced auth, import/export,
 profiler/activity, users/roles/grants/session/storage, full workbench parity,
 and full parser/completion promotion.
 
