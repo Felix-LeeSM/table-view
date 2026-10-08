@@ -128,8 +128,12 @@ Runtime Happy Path smoke wiring은 #907 전까지 넓히지 않습니다.
 `fixtures:stop`은 `docker compose down -v`라서 볼륨까지 지웁니다. seed 데이터 자체는
 `e2e/fixtures/`에 그대로 있으므로, 컨테이너에 직접 넣거나
 `e2e/fixtures/seed-smoke.ts`로 smoke seeding을 실행할 수 있습니다. DBMS별 seed는
-`e2e/fixtures/<dbms>/` 디렉터리에 들어 있지만, MSSQL과 Oracle의 seed는 디렉터리가
-아니라 `e2e/fixtures/seed.mssql.sql`과 `e2e/fixtures/seed.oracle.sql` 파일입니다.
+`e2e/fixtures/<dbms>/` 아래 유형별 하위 디렉터리를 한 단 더 둔 경로에 들어
+있습니다(`e2e/fixtures/seed-paths.ts`가 DBMS별 seed 경로를 모아 둔다). 바로 뒤
+명령의 `e2e/fixtures/mariadb/query/seed.sql`이 그 모양입니다. MSSQL과 Oracle의
+seed만 이 디렉터리 구조 밖에서 `e2e/fixtures/` 바로 아래의
+`e2e/fixtures/seed.mssql.sql`과 `e2e/fixtures/seed.oracle.sql` 파일로 들어
+있습니다.
 
 ```bash
 pnpm db:up            # 컨테이너 기동 (docker compose up -d)
@@ -265,12 +269,15 @@ TABLE_VIEW_TEST_DATA_DIR=/tmp/table-view-smoke \
 `WEBKIT_DISABLE_COMPOSITING_MODE=1`, `LIBGL_ALWAYS_SOFTWARE=1`을 직접 export해야
 합니다 (#1261/#1293).
 
-macOS와 Windows 로컬 환경에서는 이 절차를 host-native로 실행할 수 없습니다.
+macOS와 Windows 로컬 환경에서는 이 절차를 host-native로 아직 실행할 수 없습니다.
 `tauri-driver`가 Linux 전용이라서 두 플랫폼의 host-native 검증이 실현 불가라고
 [ADR 0020](./docs/decisions/0020-e2e-pre-push-host-docker/memory.md)이 판정했기
-때문입니다. ADR 0020은 `Superseded` 상태입니다. 다만 ADR 0020을 대체한
-[ADR 0044](./docs/decisions/0044-e2e-smoke-remote-required/memory.md)에는 이 platform
-판정을 다시 적은 문장이 없습니다.
+때문입니다. tauri-driver가 WKWebView 지원을 갖추거나 다른 macOS smoke 경로가
+생길 때까지 두 플랫폼의 desktop runtime smoke은 보류입니다. ADR 0020은
+`Superseded` 상태이고, 이를 대체한
+[ADR 0044](./docs/decisions/0044-e2e-smoke-remote-required/memory.md)는 runtime
+smoke의 source of truth를 원격 CI로 옮겼습니다. 그래서 두 플랫폼의 기여자는 이
+절차 대신 위의 `Runtime Happy Path` workflow로 smoke 증거를 얻습니다.
 
 ---
 
