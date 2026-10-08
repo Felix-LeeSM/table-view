@@ -18,6 +18,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { SortInfo } from "@/types/schema";
 import {
+  MOCK_DATA,
   mockAddTab,
   mockExecuteQuery,
   mockExecuteQueryBatch,
@@ -240,6 +241,17 @@ describe("DataGrid — Sprint 249 Cmd+Z / Ctrl+Z undo (AC-249-K1..K5)", () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText("Commit changes"));
     });
+    // The commit path refetches after the write (#2686): the refetch must
+    // return the COMMITTED value, or every post-commit reversal value would
+    // equal the live baseline and the undo would (correctly) dissolve it.
+    mockQueryTableData.mockResolvedValue({
+      ...MOCK_DATA,
+      rows: [
+        [1, "Bob", { key: "value" }],
+        [2, null, null],
+        [3, "Charlie", [1, 2, 3]],
+      ],
+    });
     // #1111 — Execute is briefly disabled after the preview opens.
     const executeBtn = screen.getByLabelText("Execute SQL");
     await waitFor(() => expect(executeBtn).not.toBeDisabled());
@@ -252,6 +264,8 @@ describe("DataGrid — Sprint 249 Cmd+Z / Ctrl+Z undo (AC-249-K1..K5)", () => {
     // Exactly one DB write happened (the commit). Baseline for the
     // no-write-on-undo assertion below.
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+    // The refetch landed — row 0's name cell now renders the committed value.
+    await screen.findByText("Bob");
 
     // ADR 0048 (#1126) — the undo stack SURVIVES the commit. Cmd+Z now
     // re-stages the pre-commit value ("Alice") as a NEW pending edit rather

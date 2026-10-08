@@ -72,17 +72,19 @@ const MOCK_DATA: TableData = {
   executed_query: "SELECT * FROM public.users LIMIT 100 OFFSET 0",
 };
 
-function renderEditHook() {
-  return renderHook(() =>
-    useDataGridEdit({
-      data: MOCK_DATA,
-      database: "db1",
-      schema: "public",
-      table: "users",
-      connectionId: "conn1",
-      page: 1,
-      fetchData: mockFetchData,
-    }),
+function renderEditHook(data: TableData = MOCK_DATA) {
+  return renderHook(
+    (props: { data: TableData }) =>
+      useDataGridEdit({
+        data: props.data,
+        database: "db1",
+        schema: "public",
+        table: "users",
+        connectionId: "conn1",
+        page: 1,
+        fetchData: mockFetchData,
+      }),
+    { initialProps: { data } },
   );
 }
 
@@ -406,7 +408,7 @@ describe("useDataGridEdit — undo stack (Sprint 249, ADR 0022 Phase 5)", () => 
   });
 
   it("[#1126 multi-step] two consecutive commits → undo walks back through BOTH reversals", async () => {
-    const { result } = renderEditHook();
+    const { result, rerender } = renderEditHook();
 
     // Commit 1: Alice → Bob at row 0's name cell.
     act(() => {
@@ -431,6 +433,21 @@ describe("useDataGridEdit — undo stack (Sprint 249, ADR 0022 Phase 5)", () => 
     }
     expect(result.current.pendingEdits.size).toBe(0);
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+
+    // The commit path refetches after `restageAfterCommit`, so the hook's
+    // rows move to the committed value before the undo. The fixture models
+    // that — with stale rows every reversal value would equal the baseline
+    // and #2686's dissolution would (correctly) stage nothing.
+    rerender({
+      data: {
+        ...MOCK_DATA,
+        rows: [
+          [1, "Bob"],
+          [2, "Bob"],
+          [3, "Charlie"],
+        ],
+      },
+    });
 
     // Commit 2: Bob → Charlie at row 1's name cell (a DIFFERENT cell, so the
     // two reversals are distinguishable).
@@ -457,6 +474,18 @@ describe("useDataGridEdit — undo stack (Sprint 249, ADR 0022 Phase 5)", () => 
     expect(result.current.pendingEdits.size).toBe(0);
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(2);
 
+    // Refetch after commit 2 — row 1's name is now Charlie.
+    rerender({
+      data: {
+        ...MOCK_DATA,
+        rows: [
+          [1, "Bob"],
+          [2, "Charlie"],
+          [3, "Charlie"],
+        ],
+      },
+    });
+
     // First undo re-stages the LAST commit's reversal (row 1 back to Bob).
     act(() => {
       result.current.undo();
@@ -473,6 +502,68 @@ describe("useDataGridEdit — undo stack (Sprint 249, ADR 0022 Phase 5)", () => 
     expect(result.current.pendingEdits.size).toBe(1);
     expect(result.current.pendingEdits.get("0-1")).toBe("Alice");
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(2);
+  });
+
+  it("[#2686 decision 2] undo dissolves the reversal cell the baseline already holds and stages the real one", async () => {
+    const { result, rerender } = renderEditHook();
+
+    // A value-no-op entry on row 0's name cell — staged the way the
+    // JSON-tree panel and the document grid stage (direct `setPendingEdits`,
+    // no original-value guard): the staged value EQUALS the baseline cell,
+    // so the commit writes the value the row already holds.
+    act(() => {
+      result.current.setPendingEdits(new Map([["0-1", "Alice"]]));
+    });
+    // A real edit on row 1 rides the same commit.
+    act(() => {
+      result.current.handleStartEdit(1, 1, "Bob");
+    });
+    act(() => {
+      result.current.setEditValue("Bobby");
+    });
+    act(() => {
+      result.current.saveCurrentEdit();
+    });
+    expect(result.current.pendingEdits.size).toBe(2);
+
+    act(() => {
+      result.current.handleCommit();
+    });
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    if (result.current.pendingConfirm) {
+      await act(async () => {
+        await result.current.confirmDangerous();
+      });
+    }
+    expect(result.current.pendingEdits.size).toBe(0);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+
+    // The commit path refetches after `restageAfterCommit`, so the hook's
+    // rows hold the committed values before the undo (fixture models the
+    // refetch).
+    rerender({
+      data: {
+        ...MOCK_DATA,
+        rows: [
+          [1, "Alice"],
+          [2, "Bobby"],
+          [3, "Charlie"],
+        ],
+      },
+    });
+
+    // The reversal carries both cells (0-1 → "Alice", 1-1 → "Bob"). Owner
+    // decision 2 (#1126, 2026-07-10): a re-staged value equal to the current
+    // baseline dissolves — undo stages ONLY the real reversal cell.
+    act(() => {
+      result.current.undo();
+    });
+    expect(result.current.pendingEdits.size).toBe(1);
+    expect(result.current.pendingEdits.get("1-1")).toBe("Bob");
+    expect(result.current.pendingEdits.has("0-1")).toBe(false);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
   });
 
   it("[AC-249-U9] consecutive actions → undo restores LIFO (most recent first)", () => {
