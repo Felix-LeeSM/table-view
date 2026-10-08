@@ -128,7 +128,7 @@ blocking 0 인 재리뷰는 어느 쪽도 안 걸려 트리거가 아니다 — 
 
 노드가 memory 를 스스로 읽으러 오리라 기대하지 않는다 — 안 읽는 것이 실측이다.
 그래서 고정부를 파일로 두고 **spawn 하는 쪽이 그대로 첨부**한다. 그 고정부는 역할
-preamble 인 `.agents/prompts/<role>.md` 다. Claude Code 네이티브 spawn 에서는
+preamble 이고 `.agents/prompts/` 아래에 있다. Claude Code 네이티브 spawn 에서는
 `.claude/agents/` 에 있는 역할 정의가 그 파일을 첫 행동으로 읽는다. preamble 은
 MANDATORY 첫 명령(사본 경로 검증)과 착수 전 MANDATORY read 목록을 싣고, **계약
 본문은 복제하지 않는다** — 읽는 것이 노드의 첫 행동이다. spawn 메시지는 가변부만
