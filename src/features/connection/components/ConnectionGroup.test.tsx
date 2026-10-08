@@ -947,7 +947,7 @@ describe("ConnectionGroup", () => {
       />,
     );
 
-    const accent = screen.getByTestId("group-color-accent");
+    const accent = screen.getByTestId("group-color-accent-g1");
     expect(accent).toBeInTheDocument();
     expect(accent.getAttribute("style")).toMatch(/background-color/);
     // Normalized to rgb in jsdom
@@ -961,11 +961,30 @@ describe("ConnectionGroup", () => {
       <ConnectionGroup group={makeGroup({ color: null })} connections={[]} />,
     );
 
-    const accent = screen.getByTestId("group-color-accent");
+    const accent = screen.getByTestId("group-color-accent-g1");
     expect(accent).toBeInTheDocument();
     // The placeholder uses a bordered transparent swatch so header metrics
     // stay consistent but there is no raw background color.
     expect(accent.getAttribute("style")).toBeFalsy();
+  });
+
+  // Reason: #2673 — two groups rendering side by side must not share one
+  // header-dot testid. Each id below resolves to exactly one dot (getByTestId
+  // throws on a second match), and the two dots are distinct nodes.
+  it("gives each rendered group header dot its own testid", () => {
+    render(
+      <>
+        <ConnectionGroup group={makeGroup({ id: "g1" })} connections={[]} />
+        <ConnectionGroup
+          group={makeGroup({ id: "g2", name: "Staging" })}
+          connections={[]}
+        />
+      </>,
+    );
+
+    const first = screen.getByTestId("group-color-accent-g1");
+    const second = screen.getByTestId("group-color-accent-g2");
+    expect(first).not.toBe(second);
   });
 
   // -----------------------------------------------------------------------
