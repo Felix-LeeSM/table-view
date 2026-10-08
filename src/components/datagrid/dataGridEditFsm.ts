@@ -245,6 +245,14 @@ export type EditSnapshot = {
   // reversal). `undo()` pops it with a toast instead of staging a wrong-row
   // write. Must mirror `dataGridEditStore.EditSnapshot`.
   restageBlocked?: boolean;
+  // #1126 multi-step — set on the commit-reversal snapshots
+  // `buildRestageSnapshot` produces (including blocked ones).
+  // `restageAfterCommit` keeps only these when re-seeding the undo stack, so
+  // Cmd+Z walks the commit history. Pre-commit edit snapshots are dropped:
+  // after the commit their pending values are already the baseline, so
+  // restoring one would stage a no-op edit. Must mirror
+  // `dataGridEditStore.EditSnapshot`.
+  restage?: boolean;
 };
 
 export const UNDO_STACK_MAX = 50;
@@ -379,6 +387,7 @@ export function buildRestageSnapshot(
     pendingDeletedRowKeys: reversalDeletes,
     pendingEditRowSnapshots: reversalAnchors,
     pendingDeletedRowSnapshots: reversalDeleteSnaps,
+    restage: true,
   };
 }
 
@@ -390,5 +399,6 @@ function blockedSnapshot(): EditSnapshot {
     pendingEditRowSnapshots: new Map(),
     pendingDeletedRowSnapshots: new Map(),
     restageBlocked: true,
+    restage: true,
   };
 }

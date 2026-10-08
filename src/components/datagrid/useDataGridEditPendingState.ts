@@ -220,12 +220,17 @@ export function useDataGridEditPendingState({
   }, [storeKey, storeClearEntry]);
 
   // #1126 Phase 1 (ADR 0048) — on commit success the undo stack must SURVIVE.
-  // Collapse the just-committed pending edits into one reversal snapshot so a
-  // post-commit Cmd+Z re-stages the pre-commit values as a new pending edit;
-  // clear the pending slices but replace the stack with that snapshot (or
-  // leave it empty when there was nothing restageable). Reads the current
-  // store entry BEFORE clearing so the committed edits + row anchors are still
-  // present.
+  // Collapse the just-committed pending edits into one reversal snapshot and
+  // PUSH it onto the retained reversal history, so consecutive Cmd+Z walk
+  // back through earlier commit reversals (multi-step commit-history undo).
+  // `storeClearEntry` resets every slice (pending + both stacks), so the two
+  // stacks are re-seeded from the entry read BEFORE clearing. The undo stack
+  // is re-seeded with only the prior `restage`-marked reversals plus the new
+  // one: pre-commit edit snapshots are dropped because their pending values
+  // became the baseline — restoring one would stage a no-op edit. A redo
+  // stack is kept, not wiped: ADR 0050 (1) — redo survives a commit
+  // symmetrically with undo. When there is nothing restageable (`null`) the
+  // prior reversals still survive.
   const restageAfterCommit = useCallback(
     (columns?: ReadonlyArray<{ is_primary_key: boolean }>) => {
       const current = useDataGridEditStore.getState().getEntry(storeKey);
@@ -233,8 +238,16 @@ export function useDataGridEditPendingState({
       // is reversible (PK reproducible) before staging a reverse DELETE.
       const restage = buildRestageSnapshot(current, columns);
       storeClearEntry(storeKey);
+      const priorReversals = current.undoStack.filter((s) => s.restage);
       if (restage) {
-        storeSetSlice(storeKey, "undoStack", [restage]);
+        const next = [...priorReversals, restage];
+        if (next.length > UNDO_STACK_MAX) next.shift();
+        storeSetSlice(storeKey, "undoStack", next);
+      } else if (priorReversals.length > 0) {
+        storeSetSlice(storeKey, "undoStack", priorReversals);
+      }
+      if (current.redoStack.length > 0) {
+        storeSetSlice(storeKey, "redoStack", current.redoStack);
       }
     },
     [storeKey, storeClearEntry, storeSetSlice],

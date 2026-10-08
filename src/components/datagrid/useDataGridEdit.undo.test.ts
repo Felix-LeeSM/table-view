@@ -377,25 +377,102 @@ describe("useDataGridEdit — undo stack (Sprint 249, ADR 0022 Phase 5)", () => 
     }
     expect(result.current.pendingNewRows.length).toBe(0);
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
-    // The undo stack survived the commit with a blocked marker.
+    // The undo stack survived the commit: the blocked marker was pushed onto
+    // the retained pre-add history.
     expect(result.current.canUndo).toBe(true);
     const toastsBefore = useToastStore.getState().toasts.length;
 
     // Undo the non-reproducible commit → a toast fires and NOTHING is staged;
-    // no DB write, and the (single-entry) stack drains.
+    // no DB write, and the blocked marker drains.
     act(() => {
       result.current.undo();
     });
     expect(result.current.pendingEdits.size).toBe(0);
     expect(result.current.pendingNewRows.length).toBe(0);
     expect(result.current.pendingDeletedRowKeys.size).toBe(0);
-    expect(result.current.canUndo).toBe(false);
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
     const toasts = useToastStore.getState().toasts;
     expect(toasts).toHaveLength(toastsBefore + 1);
     expect(toasts[toasts.length - 1]!.message).toBe(
       i18n.t("datagrid:undoRestageBlocked"),
     );
+
+    // A further undo drains the retained pre-add snapshot — the history is
+    // still walkable past the blocked commit.
+    act(() => {
+      result.current.undo();
+    });
+    expect(result.current.canUndo).toBe(false);
+  });
+
+  it("[#1126 multi-step] two consecutive commits → undo walks back through BOTH reversals", async () => {
+    const { result } = renderEditHook();
+
+    // Commit 1: Alice → Bob at row 0's name cell.
+    act(() => {
+      result.current.handleStartEdit(0, 1, "Alice");
+    });
+    act(() => {
+      result.current.setEditValue("Bob");
+    });
+    act(() => {
+      result.current.saveCurrentEdit();
+    });
+    act(() => {
+      result.current.handleCommit();
+    });
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    if (result.current.pendingConfirm) {
+      await act(async () => {
+        await result.current.confirmDangerous();
+      });
+    }
+    expect(result.current.pendingEdits.size).toBe(0);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+
+    // Commit 2: Bob → Charlie at row 1's name cell (a DIFFERENT cell, so the
+    // two reversals are distinguishable).
+    act(() => {
+      result.current.handleStartEdit(1, 1, "Bob");
+    });
+    act(() => {
+      result.current.setEditValue("Charlie");
+    });
+    act(() => {
+      result.current.saveCurrentEdit();
+    });
+    act(() => {
+      result.current.handleCommit();
+    });
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+    if (result.current.pendingConfirm) {
+      await act(async () => {
+        await result.current.confirmDangerous();
+      });
+    }
+    expect(result.current.pendingEdits.size).toBe(0);
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(2);
+
+    // First undo re-stages the LAST commit's reversal (row 1 back to Bob).
+    act(() => {
+      result.current.undo();
+    });
+    expect(result.current.pendingEdits.size).toBe(1);
+    expect(result.current.pendingEdits.get("1-1")).toBe("Bob");
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(2);
+
+    // Second undo re-stages the FIRST commit's reversal (row 0 back to
+    // Alice) — the commit-1 history survived commit 2.
+    act(() => {
+      result.current.undo();
+    });
+    expect(result.current.pendingEdits.size).toBe(1);
+    expect(result.current.pendingEdits.get("0-1")).toBe("Alice");
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(2);
   });
 
   it("[AC-249-U9] consecutive actions → undo restores LIFO (most recent first)", () => {
