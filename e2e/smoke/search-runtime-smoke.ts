@@ -236,9 +236,15 @@ export function runSearchRuntimeSmoke(options: SearchRuntimeSmokeOptions) {
         // is `doc-1`, which no step in this spec deletes, and the absent needle
         // rules out the empty-hit state (`noHits` in
         // src/lib/i18n/locales/search.ts:17) so the assertion cannot pass on a
-        // result view that rendered no hits at all.
+        // result view that rendered no hits at all. The aggregation needle is
+        // `doc_count` (#2595), not the aggregation name: the name also sits in
+        // the query JSON above, and a body-substring needle satisfied by the
+        // editor text proves nothing about the render. `doc_count` is spelled
+        // only by a rendered bucket row
+        // (src/components/search/SearchResultView.tsx:504), so it holds only
+        // when an aggregation actually rendered.
         await waitForWorkspaceTextAll(
-          ["fixture log", "by_status"],
+          ["fixture log", "doc_count"],
           30000,
           `${productLabel} SearchResultView did not render hits and aggregations`,
           ["No Search hits"],

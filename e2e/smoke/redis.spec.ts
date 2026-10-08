@@ -72,12 +72,16 @@ describe("Redis smoke", () => {
         // counting what is left. The empty-state string is in the absent list
         // because it embeds the pattern — `No keys match pattern tv:string.`
         // would otherwise satisfy the `tv:string` needle on an empty list
-        // (src/lib/i18n/locales/workspace.ts:242).
+        // (src/lib/i18n/locales/workspace.ts:242). `tv:hash` and `tv:events`
+        // (#2595) are the other seeded `tv:` keys
+        // (e2e/fixtures/redis/kv/seed.json): a scan pattern widened to `tv:*`
+        // keeps them on screen, so their absence is what separates the exact
+        // `tv:string` narrowing from a prefix-shaped pattern.
         await waitForWorkspaceTextAll(
           ["tv:string"],
           15000,
           "Redis filtered key scan did not narrow the key list to tv:string",
-          [NON_TV_SEED_KEY, "No keys match pattern"],
+          [NON_TV_SEED_KEY, "tv:hash", "tv:events", "No keys match pattern"],
         );
         // Selecting a key now opens the right-hand KvKeyDetailPanel tab (the
         // sidebar no longer renders an inline value/mutation surface).
