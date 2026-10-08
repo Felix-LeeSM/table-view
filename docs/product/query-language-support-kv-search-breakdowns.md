@@ -13,7 +13,7 @@ Child page of
   language-core parser ownership. It classifies selected read/write/TTL/stream/
   destructive commands, requires exact-key confirmation for single-key
   `DEL`/`PERSIST`, and rejects unsupported command families.
-- Completion / autocomplete: `redis-command` has TypeScript-owned command-name
+- Completion / autocomplete: `redis-command` has Rust/WASM-owned command-name
   vocabulary for the backend allowlist plus current-DB key suggestions from a
   bounded first-page key scan. Key suggestions are filtered by command key type
   where available and fall back to no key suggestions when the scan cache is

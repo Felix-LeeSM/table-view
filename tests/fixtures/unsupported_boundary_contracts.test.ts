@@ -2,9 +2,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  REDIS_COMMAND_COMPLETIONS,
+  getRedisCommandCompletions,
+  getValkeyCommandCompletions,
   REDIS_UNSUPPORTED_COMMAND_FAMILIES,
-  VALKEY_COMMAND_COMPLETIONS,
 } from "@features/completion/redis/redisCommandCompletion";
 import { parseMongoshExpression } from "@features/query";
 import { describe, expect, it } from "vitest";
@@ -229,9 +229,11 @@ describe("unsupported_boundary_contracts.json", () => {
       expect.arrayContaining(["FLUSHDB", "CLUSTER", "MODULE", "SUBSCRIBE"]),
     );
 
-    const valkeyCompletionNames = VALKEY_COMMAND_COMPLETIONS.map(
+    const valkeyCompletionNames = getValkeyCommandCompletions().map(
       (command) => command.name,
     );
+    // Negative pins below are vacuous if the WASM vocabulary did not load.
+    expect(valkeyCompletionNames.length).toBeGreaterThan(0);
     for (const command of row.valkeyCompletionExclusions ?? []) {
       expect(valkeyCompletionNames).not.toContain(command);
     }
@@ -255,9 +257,11 @@ describe("unsupported_boundary_contracts.json", () => {
       ]),
     );
 
-    const redisCompletionNames = REDIS_COMMAND_COMPLETIONS.map(
+    const redisCompletionNames = getRedisCommandCompletions().map(
       (command) => command.name,
     );
+    // Negative pins below are vacuous if the WASM vocabulary did not load.
+    expect(redisCompletionNames.length).toBeGreaterThan(0);
     for (const command of row.redisUnsupportedCommands ?? []) {
       expect(redisCompletionNames).not.toContain(command);
     }

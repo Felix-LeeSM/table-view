@@ -1,0 +1,16 @@
+{
+  "name": "redis-command-core",
+  "type": "module",
+  "description": "Pure-Rust Redis/Valkey command completion vocabulary SOT for table-view. Compiles to native (rlib, drift guard in table-view-core) and wasm32-unknown-unknown (frontend via wasm-pack). #1805.",
+  "version": "0.1.0",
+  "files": [
+    "redis_command_core_bg.wasm",
+    "redis_command_core.js",
+    "redis_command_core.d.ts"
+  ],
+  "main": "redis_command_core.js",
+  "types": "redis_command_core.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

@@ -21,6 +21,7 @@
       "!e2e/wdio-report",
       "!src/lib/sql/wasm",
       "!src/lib/mongo/wasm",
+      "!src/lib/redis/wasm",
       "!.claude",
       "!worktrees"
     ]
