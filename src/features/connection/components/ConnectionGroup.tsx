@@ -204,8 +204,13 @@ export default function ConnectionGroup({
                 <ChevronDown size={12} />
               )}
               {/* Color accent dot. Shared with the GroupDialog preview via
-                  `GroupColorDot` so both render a color the same way. */}
-              <GroupColorDot color={group.color} />
+                  `GroupColorDot` so both render a color the same way. The
+                  group id suffix keeps each header dot queryable apart when
+                  several groups render (#2673). */}
+              <GroupColorDot
+                color={group.color}
+                testId={`group-color-accent-${group.id}`}
+              />
               {renaming ? (
                 <Input
                   ref={renameRef}
