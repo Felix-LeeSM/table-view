@@ -39,6 +39,23 @@ describe("Redis smoke", () => {
         30000,
         "Redis key browser did not surface the Safe Mode scan-paused gate",
       );
+      // Issue #2568: the delete step below removes the seeded `tv:string`, and
+      // the seeder runs once per spec — not per retry (mechanism at the
+      // filtered-scan comment below) — so a retry inherited the deletion and
+      // failed this step's scan assertion instead of re-testing where the
+      // first attempt broke. Re-seed the key before that assertion: a plain
+      // `SET` of the seeded value is idempotent on a fresh run and heals a
+      // retry after a death anywhere in the previous attempt, so the retry
+      // re-tests the same journey. No assertion here reads the seed's 3600s
+      // TTL that a plain SET clears (e2e/fixtures/redis/kv/seed.json).
+      await openNewQueryTab();
+      await setCodeMirrorText(`SET tv:string ${INITIAL_VALUE}`);
+      await runQuery();
+      await waitForWorkspaceTextAll(
+        ["1 row affected"],
+        15000,
+        "Redis SET did not confirm the seeded key re-seed",
+      );
       await triggerKvKeyScan();
       await waitForKvKeyVisible(
         "tv:string",
@@ -178,14 +195,14 @@ describe("Redis smoke", () => {
       );
     });
 
-    // Issue #2568: the delete above removes the seeded `tv:string` and nothing
-    // re-created it — the seeder does not re-run inside the `specFileRetries`
-    // retry (mechanism at the filtered-scan comment above) — so a retry failed
-    // the first scan assertion again instead of re-testing where the first
-    // attempt actually broke. Re-create the key with the seeded value. Plain
-    // `SET`, no `EX`: a re-armed TTL could expire under a delayed retry, and
-    // no assertion here reads the seed's 3600s TTL
-    // (e2e/fixtures/redis/kv/seed.json).
+    // Issue #2568: re-create the key the delete step removed so a passing run
+    // leaves the seeded shape in the shared fixture DB. The re-seed before
+    // this spec's first existence assertion is what heals a retry (the seeder
+    // itself runs once per spec — mechanism at the filtered-scan comment
+    // above — not per retry); this end-of-spec restore only keeps the key
+    // present after a green run. Plain `SET`, no `EX`: a re-armed TTL could
+    // expire under a delayed retry, and no assertion here reads the seed's
+    // 3600s TTL (e2e/fixtures/redis/kv/seed.json).
     await step("restore the seeded key the delete step removed", async () => {
       await openNewQueryTab();
       await setCodeMirrorText(`SET tv:string ${INITIAL_VALUE}`);
