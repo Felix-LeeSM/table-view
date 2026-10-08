@@ -114,6 +114,9 @@ export function useDataGridEdit({
     // Issue #1081 — the pending-state layer auto-captures a row-identity
     // anchor for every new edit/delete key from the current page's rows.
     rows: data?.rows,
+    // Issue #2692 — the undo restore's baseline-dissolve comparison gates on
+    // the same PK identity the paint overlay uses.
+    columns: data?.columns,
   });
 
   // Multi-row selection lives in `useDataGridSelection` so the facade
