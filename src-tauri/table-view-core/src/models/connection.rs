@@ -206,6 +206,22 @@ impl SslMode {
     }
 }
 
+/// #1064 (ADR 0052 Q1) — how the SSH tunnel authenticates to the jump host.
+/// The first slice ships password and key-file(+passphrase) auth;
+/// `ssh-agent` is a later axis and has no variant yet.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SshAuthMethod {
+    /// Authenticates with the tunnel password (`ssh_password` secret).
+    #[default]
+    Password,
+    /// Authenticates with the private key at `ssh_key_path`, decrypted by the
+    /// `ssh_passphrase` secret when one is stored. The key *content* is never
+    /// read into the config — the path is a reference, stripped on export
+    /// (ADR 0052 Q5).
+    KeyFile,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(from = "ConnectionConfigDe")]
 pub struct ConnectionConfig {
@@ -269,6 +285,42 @@ pub struct ConnectionConfig {
     /// the IPC boundary in plaintext (ADR 0005). Empty means "none stored".
     #[serde(default)]
     pub wallet_password: String,
+    // ── SSH tunnel (#1064, ADR 0052). ────────────────────────────────────
+    // All fields `#[serde(default)]` so pre-SSH persisted JSON round-trips.
+    // The tunnel dials `ssh_host:ssh_port` and the adapters dial a
+    // `127.0.0.1` ephemeral listener in front of it; `host`/`port` above stay
+    // the *target* as the user typed them (they are what the tunnel forwards
+    // to on the far side).
+    /// Master switch. `false` (and every field below) is ignored by the
+    /// connect path; file-backed DBMS never honor it.
+    #[serde(default)]
+    pub ssh_enabled: bool,
+    /// Jump host the tunnel dials. `None` falls back to `host` at open time.
+    #[serde(default)]
+    pub ssh_host: Option<String>,
+    /// Jump host port. `None` means the SSH default (22) at open time.
+    #[serde(default)]
+    pub ssh_port: Option<u16>,
+    /// SSH username. Required at open time; `None` falls back to `user`.
+    #[serde(default)]
+    pub ssh_user: Option<String>,
+    /// Which secret authenticates the tunnel (see [`SshAuthMethod`]).
+    #[serde(default)]
+    pub ssh_auth_method: SshAuthMethod,
+    /// Filesystem path to the SSH private key (auth `KeyFile`). A path
+    /// *reference* only — never the key contents (ADR 0052 Q5). Stripped from
+    /// export envelopes like `wallet_path`/`ca_cert_path`.
+    #[serde(default)]
+    pub ssh_key_path: Option<String>,
+    /// Tunnel password (`Password` auth). Encrypted at rest under the same
+    /// keyring envelope as `password` (ADR 0040/0052 Q5); never crosses the
+    /// IPC boundary in plaintext (ADR 0005). Empty means "none stored".
+    #[serde(default)]
+    pub ssh_password: String,
+    /// Passphrase decrypting the key file (`KeyFile` auth). Same envelope and
+    /// IPC contract as `ssh_password`. Empty means "no passphrase".
+    #[serde(default)]
+    pub ssh_passphrase: String,
 }
 
 /// Issue #2429 — seconds a dial waits before failing when the user left
@@ -371,6 +423,22 @@ struct ConnectionConfigDe {
     wallet_path: Option<String>,
     #[serde(default)]
     wallet_password: String,
+    #[serde(default)]
+    ssh_enabled: bool,
+    #[serde(default)]
+    ssh_host: Option<String>,
+    #[serde(default)]
+    ssh_port: Option<u16>,
+    #[serde(default)]
+    ssh_user: Option<String>,
+    #[serde(default)]
+    ssh_auth_method: Option<SshAuthMethod>,
+    #[serde(default)]
+    ssh_key_path: Option<String>,
+    #[serde(default)]
+    ssh_password: String,
+    #[serde(default)]
+    ssh_passphrase: String,
 }
 
 impl From<ConnectionConfigDe> for ConnectionConfig {
@@ -400,16 +468,25 @@ impl From<ConnectionConfigDe> for ConnectionConfig {
             oracle_use_sid: de.oracle_use_sid,
             wallet_path: de.wallet_path,
             wallet_password: de.wallet_password,
+            ssh_enabled: de.ssh_enabled,
+            ssh_host: de.ssh_host,
+            ssh_port: de.ssh_port,
+            ssh_user: de.ssh_user,
+            ssh_auth_method: de.ssh_auth_method.unwrap_or_default(),
+            ssh_key_path: de.ssh_key_path,
+            ssh_password: de.ssh_password,
+            ssh_passphrase: de.ssh_passphrase,
         }
     }
 }
 
 /// P3-2 (#1455) — manual `Debug` so an accidental `{:?}` (log line, error
 /// context, `#[derive(Debug)]` on an enclosing struct) never prints the
-/// plaintext `password`. Every other field is rendered as-is; `password` and
-/// `wallet_password` (#1065) are masked to a fixed `"***"` regardless of
+/// plaintext `password`. Every other field is rendered as-is; `password`,
+/// `wallet_password` (#1065), and the SSH tunnel secrets `ssh_password` /
+/// `ssh_passphrase` (#1064) are masked to a fixed `"***"` regardless of
 /// length so the debug output leaks neither the value nor whether one is set.
-/// The derived `Debug` printed both secrets verbatim.
+/// The derived `Debug` printed the secrets verbatim.
 impl std::fmt::Debug for ConnectionConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ConnectionConfig")
@@ -434,6 +511,14 @@ impl std::fmt::Debug for ConnectionConfig {
             .field("oracle_use_sid", &self.oracle_use_sid)
             .field("wallet_path", &self.wallet_path)
             .field("wallet_password", &"***")
+            .field("ssh_enabled", &self.ssh_enabled)
+            .field("ssh_host", &self.ssh_host)
+            .field("ssh_port", &self.ssh_port)
+            .field("ssh_user", &self.ssh_user)
+            .field("ssh_auth_method", &self.ssh_auth_method)
+            .field("ssh_key_path", &self.ssh_key_path)
+            .field("ssh_password", &"***")
+            .field("ssh_passphrase", &"***")
             .finish()
     }
 }
@@ -498,6 +583,27 @@ pub struct ConnectionConfigPublic {
     /// the plaintext wallet password never leaves the backend (#1065, ADR 0005).
     #[serde(default, alias = "has_wallet_password")]
     pub has_wallet_password: bool,
+    // ── SSH tunnel (#1064, ADR 0052). The tunnel *settings* round-trip — they
+    // are not secrets; the two tunnel secrets (password, key passphrase) ride
+    // the same derived-boolean contract as `hasPassword`/`hasWalletPassword`.
+    #[serde(default, alias = "ssh_enabled")]
+    pub ssh_enabled: bool,
+    #[serde(default, alias = "ssh_host")]
+    pub ssh_host: Option<String>,
+    #[serde(default, alias = "ssh_port")]
+    pub ssh_port: Option<u16>,
+    #[serde(default, alias = "ssh_user")]
+    pub ssh_user: Option<String>,
+    #[serde(default, alias = "ssh_auth_method")]
+    pub ssh_auth_method: SshAuthMethod,
+    #[serde(default, alias = "ssh_key_path")]
+    pub ssh_key_path: Option<String>,
+    /// Whether a tunnel password is stored on disk. Derived, never persisted.
+    #[serde(default, alias = "has_ssh_password")]
+    pub has_ssh_password: bool,
+    /// Whether a key passphrase is stored on disk. Derived, never persisted.
+    #[serde(default, alias = "has_ssh_passphrase")]
+    pub has_ssh_passphrase: bool,
 }
 
 /// #1649 (ADR 0058) — deserialize shim for the public wire shape, mirroring
@@ -553,6 +659,22 @@ struct ConnectionConfigPublicDe {
     wallet_path: Option<String>,
     #[serde(default, alias = "has_wallet_password")]
     has_wallet_password: bool,
+    #[serde(default, alias = "ssh_enabled")]
+    ssh_enabled: bool,
+    #[serde(default, alias = "ssh_host")]
+    ssh_host: Option<String>,
+    #[serde(default, alias = "ssh_port")]
+    ssh_port: Option<u16>,
+    #[serde(default, alias = "ssh_user")]
+    ssh_user: Option<String>,
+    #[serde(default, alias = "ssh_auth_method")]
+    ssh_auth_method: Option<SshAuthMethod>,
+    #[serde(default, alias = "ssh_key_path")]
+    ssh_key_path: Option<String>,
+    #[serde(default, alias = "has_ssh_password")]
+    has_ssh_password: bool,
+    #[serde(default, alias = "has_ssh_passphrase")]
+    has_ssh_passphrase: bool,
 }
 
 impl From<ConnectionConfigPublicDe> for ConnectionConfigPublic {
@@ -583,6 +705,14 @@ impl From<ConnectionConfigPublicDe> for ConnectionConfigPublic {
             oracle_use_sid: de.oracle_use_sid,
             wallet_path: de.wallet_path,
             has_wallet_password: de.has_wallet_password,
+            ssh_enabled: de.ssh_enabled,
+            ssh_host: de.ssh_host,
+            ssh_port: de.ssh_port,
+            ssh_user: de.ssh_user,
+            ssh_auth_method: de.ssh_auth_method.unwrap_or_default(),
+            ssh_key_path: de.ssh_key_path,
+            has_ssh_password: de.has_ssh_password,
+            has_ssh_passphrase: de.has_ssh_passphrase,
         }
     }
 }
@@ -612,6 +742,14 @@ impl From<&ConnectionConfig> for ConnectionConfigPublic {
             oracle_use_sid: c.oracle_use_sid,
             wallet_path: c.wallet_path.clone(),
             has_wallet_password: !c.wallet_password.is_empty(),
+            ssh_enabled: c.ssh_enabled,
+            ssh_host: c.ssh_host.clone(),
+            ssh_port: c.ssh_port,
+            ssh_user: c.ssh_user.clone(),
+            ssh_auth_method: c.ssh_auth_method,
+            ssh_key_path: c.ssh_key_path.clone(),
+            has_ssh_password: !c.ssh_password.is_empty(),
+            has_ssh_passphrase: !c.ssh_passphrase.is_empty(),
         }
     }
 }
@@ -646,6 +784,16 @@ impl ConnectionConfigPublic {
             // Wallet password, like the DB password, never crosses IPC — the
             // storage layer separately receives the optional new value.
             wallet_password: String::new(),
+            ssh_enabled: self.ssh_enabled,
+            ssh_host: self.ssh_host,
+            ssh_port: self.ssh_port,
+            ssh_user: self.ssh_user,
+            ssh_auth_method: self.ssh_auth_method,
+            ssh_key_path: self.ssh_key_path,
+            // SSH tunnel secrets ride the same IPC contract: empty slots here,
+            // the storage layer separately receives the optional new values.
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         }
     }
 }
@@ -731,6 +879,14 @@ mod tests {
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: crate::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         };
         let debug = format!("{conn:?}");
         assert!(
@@ -773,6 +929,14 @@ mod tests {
             oracle_use_sid: Some(true),
             wallet_path: Some("/home/u/wallet".into()),
             wallet_password: "wpass@42XY".into(),
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: crate::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         };
         let debug = format!("{conn:?}");
         assert!(
@@ -786,6 +950,60 @@ mod tests {
         // Non-secret Oracle fields still render.
         assert!(debug.contains("wallet_path: Some(\"/home/u/wallet\")"));
         assert!(debug.contains("oracle_use_sid: Some(true)"));
+    }
+
+    /// #1064 — the tunnel secrets sit in the same struct as `password`, so the
+    /// manual `Debug` must mask them with the same fixed `"***"`; an accidental
+    /// `{:?}` on a tunnel connection never leaks them.
+    #[test]
+    fn debug_masks_ssh_secrets() {
+        let conn = ConnectionConfig {
+            id: "c1".into(),
+            name: "Tunnelled".into(),
+            db_type: DatabaseType::Postgresql,
+            host: "db.internal".into(),
+            port: 5432,
+            user: "u".into(),
+            password: String::new(),
+            database: "d".into(),
+            read_only: false,
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+            environment: None,
+            auth_source: None,
+            replica_set: None,
+            ssl_mode: SslMode::Prefer,
+            ca_cert_path: None,
+            oracle_use_sid: None,
+            wallet_path: None,
+            wallet_password: String::new(),
+            ssh_enabled: true,
+            ssh_host: Some("jump.internal".into()),
+            ssh_port: Some(22),
+            ssh_user: Some("tunnel".into()),
+            ssh_auth_method: crate::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: "sshpw@789ZZ".into(),
+            ssh_passphrase: "passphrase@42XY".into(),
+        };
+        let debug = format!("{conn:?}");
+        assert!(
+            !debug.contains("sshpw@789ZZ"),
+            "debug leaked the ssh password: {debug}"
+        );
+        assert!(
+            !debug.contains("passphrase@42XY"),
+            "debug leaked the ssh passphrase: {debug}"
+        );
+        assert!(
+            debug.contains("ssh_password: \"***\"") && debug.contains("ssh_passphrase: \"***\""),
+            "debug missing the ssh secret masks: {debug}"
+        );
+        // Non-secret tunnel settings still render.
+        assert!(debug.contains("ssh_enabled: true"));
+        assert!(debug.contains("ssh_host: Some(\"jump.internal\")"));
     }
 
     /// #1065 — the public/exported shape derives `has_wallet_password` from
@@ -815,6 +1033,14 @@ mod tests {
             oracle_use_sid: Some(true),
             wallet_path: Some("/home/u/wallet".into()),
             wallet_password: "wpass@42XY".into(),
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: crate::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         };
         let public = ConnectionConfigPublic::from(&conn);
         assert!(public.has_wallet_password);
@@ -907,6 +1133,14 @@ mod tests {
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: crate::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         };
         let public = ConnectionConfigPublic::from(&conn);
         assert_eq!(public.paradigm, Paradigm::Rdb);
@@ -958,6 +1192,14 @@ mod tests {
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: crate::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         };
         let public = ConnectionConfigPublic::from(&conn);
         assert_eq!(public.paradigm, Paradigm::Document);
@@ -1283,6 +1525,14 @@ mod tests {
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: crate::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         };
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: ConnectionConfig = serde_json::from_str(&json).unwrap();
@@ -1349,6 +1599,14 @@ mod tests {
             oracle_use_sid: None,
             wallet_path: None,
             has_wallet_password: false,
+            ssh_enabled: true,
+            ssh_host: Some("jump".into()),
+            ssh_port: Some(22),
+            ssh_user: Some("tunnel".into()),
+            ssh_auth_method: SshAuthMethod::Password,
+            ssh_key_path: None,
+            has_ssh_password: true,
+            has_ssh_passphrase: false,
         };
         let config = public.into_config_with_empty_password();
         assert_eq!(config.password, "", "password slot must be cleared");
@@ -1366,5 +1624,15 @@ mod tests {
         assert_eq!(config.replica_set.as_deref(), Some("rs0"));
         assert_eq!(config.ssl_mode, SslMode::VerifyFull);
         assert_eq!(config.ca_cert_path, None);
+        // #1064 — tunnel *settings* survive the promotion; the tunnel secret
+        // slots start empty like the password slot.
+        assert!(config.ssh_enabled);
+        assert_eq!(config.ssh_host.as_deref(), Some("jump"));
+        assert_eq!(config.ssh_port, Some(22));
+        assert_eq!(config.ssh_user.as_deref(), Some("tunnel"));
+        assert_eq!(config.ssh_auth_method, SshAuthMethod::Password);
+        assert_eq!(config.ssh_key_path, None);
+        assert_eq!(config.ssh_password, "");
+        assert_eq!(config.ssh_passphrase, "");
     }
 }

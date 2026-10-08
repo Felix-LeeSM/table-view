@@ -33,6 +33,14 @@ fn sqlite_public(path: &str) -> ConnectionConfigPublic {
         oracle_use_sid: None,
         wallet_path: None,
         has_wallet_password: false,
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        has_ssh_password: false,
+        has_ssh_passphrase: false,
     }
 }
 
@@ -108,6 +116,8 @@ fn save_connection_accepts_sqlite_without_host() {
         connection: sqlite_public(db_path.to_str().unwrap()),
         password: Some(String::new()),
         wallet_password: None,
+        ssh_password: None,
+        ssh_passphrase: None,
         is_new: Some(false),
     })
     .unwrap();
@@ -127,6 +137,8 @@ fn save_connection_rejects_sqlite_without_file_path() {
         connection: sqlite_public("   "),
         password: Some(String::new()),
         wallet_password: None,
+        ssh_password: None,
+        ssh_passphrase: None,
         is_new: Some(false),
     });
 
@@ -146,6 +158,8 @@ fn save_connection_rejects_sqlite_relative_file_path() {
         connection: sqlite_public("relative.sqlite"),
         password: Some(String::new()),
         wallet_password: None,
+        ssh_password: None,
+        ssh_passphrase: None,
         is_new: Some(false),
     });
 
@@ -170,6 +184,8 @@ fn save_connection_rejects_internal_app_state_db_path() {
         connection: sqlite_public(state_path.to_str().unwrap()),
         password: Some(String::new()),
         wallet_password: None,
+        ssh_password: None,
+        ssh_passphrase: None,
         is_new: Some(false),
     });
 
@@ -198,6 +214,8 @@ fn save_connection_rejects_normalized_internal_app_state_db_path_before_file_exi
         connection: sqlite_public(&normalized_equivalent),
         password: Some(String::new()),
         wallet_password: None,
+        ssh_password: None,
+        ssh_passphrase: None,
         is_new: Some(false),
     });
 
@@ -226,6 +244,8 @@ async fn test_connection_routes_sqlite_to_adapter() {
         config: sqlite_public(db_path.to_str().unwrap()),
         password: Some(String::new()),
         wallet_password: None,
+        ssh_password: None,
+        ssh_passphrase: None,
         existing_id: None,
     })
     .await
@@ -247,6 +267,8 @@ async fn test_connection_rejects_internal_app_state_db_path() {
         config: sqlite_public(state_path.to_str().unwrap()),
         password: Some(String::new()),
         wallet_password: None,
+        ssh_password: None,
+        ssh_passphrase: None,
         existing_id: None,
     })
     .await;
@@ -284,6 +306,8 @@ async fn create_sqlite_database_file_creates_new_valid_database() {
         config: sqlite_public(&created),
         password: Some(String::new()),
         wallet_password: None,
+        ssh_password: None,
+        ssh_passphrase: None,
         existing_id: None,
     })
     .await
