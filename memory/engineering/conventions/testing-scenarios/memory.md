@@ -1,7 +1,7 @@
 ---
 title: 비-E2E 테스트 시나리오 설계 원칙 (Rust unit/integration · React component · Zustand store · Hook · Async)
 type: memory
-updated: 2026-08-16
+updated: 2026-09-26
 keywords: 9 가지 원칙, 레이어 분리, getByRole, vi.clearAllMocks(), mockall, vi.useFakeTimers(), tokio::time::pause, src/test-setup.ts, 무의미 테스트 금지, tautology, change-detector, assertion-roulette, 경로 미분리, path-ambiguous, 프로덕션 경로가 둘, 갈라지는 지점
 ---
 
@@ -69,12 +69,12 @@ E2E 원칙([e2e-scenarios](../e2e-scenarios/memory.md))과 같은 P-시리즈
 - 코드 리뷰 시 "이 테스트가 왜 있는지"를 코멘트만 보고 알 수 있어야 한다.
 
 **형식**:
-- `describe` 블록 상단: `// Purpose: <파일/스코프 전체 목적> — Phase NN sprint <N> (YYYY-MM-DD)`
+- `describe` 블록 상단: `// Purpose: <파일/스코프 전체 목적> (YYYY-MM-DD)`
 - `test` / `it` 블록 상단: `// Reason: <이 테스트 작성 이유> (YYYY-MM-DD)`
-- 버그 회귀 테스트: 버그 보고 출처(사용자 보고 / 이슈 번호 / sprint number) 명시.
+- 버그 회귀 테스트: 버그 보고 출처(사용자 보고 / 이슈 번호 / PR 번호 / ADR 번호) 명시.
 
 ```typescript
-// Purpose: connection activation lifecycle 회귀 진단 — Phase 13 sprint 156 (2026-04-28)
+// Purpose: connection activation lifecycle 회귀 진단 (2026-04-28)
 describe('ConnectionActivation', () => {
   // Reason: 사용자 보고 — connection 더블클릭해도 workspace 미열림 (2026-04-28)
   it('double-click triggers showWindow → focusWindow → hideWindow chain', () => {

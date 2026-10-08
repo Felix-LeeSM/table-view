@@ -1,7 +1,7 @@
 ---
 title: E2E 시나리오 설계 원칙
 type: memory
-updated: 2026-07-17
+updated: 2026-09-26
 surface: e2e/**
 task: e2e, testing, scenario
 keywords: spec.ts, CUJ 5종, Critical User Journey, Runtime Happy Path, e2e/scope-map.mjs, 테스트 피라미드, regression-pinned, skip(), tauri-driver 한계, step 라벨, e2e/wdio-report/, Flakiness
@@ -47,7 +47,7 @@ keywords: spec.ts, CUJ 5종, Critical User Journey, Runtime Happy Path, e2e/scop
 
 ### P5. 회귀 고정 (regression-pinned)
 - 사용자-가시 버그가 한 번 발생하면 명시 spec으로 박는다.
-- 박을 때는 그 버그가 발생한 sprint/ADR을 spec 상단 코멘트에 인용한다 (예: ADR 0014).
+- 박을 때는 그 버그가 발생한 이슈 · PR 번호 또는 ADR을 spec 상단 코멘트에 인용한다 (예: ADR 0014).
 - 회귀 spec은 절대 P1으로 강등하지 않는다 — 단위 테스트로는 못 잡혀서 e2e가 된 것.
 
 ### P6. `skip()`은 부채 — 만료일이 있어야 한다
@@ -89,7 +89,7 @@ keywords: spec.ts, CUJ 5종, Critical User Journey, Runtime Happy Path, e2e/scop
 
 - [ ] 이 시나리오가 vitest/component test로 동등하게 잡히는가? → 그렇다면 e2e에 두지 않는다.
 - [ ] CUJ 5종 중 하나인가? → `e2e/cuj/` 위치/태그 적용.
-- [ ] 회귀 고정인가? → 상단 코멘트에 sprint/ADR 인용.
+- [ ] 회귀 고정인가? → 상단 코멘트에 이슈 · PR 번호 또는 ADR 인용.
 - [ ] tauri-driver 한계에 걸리는가? → P7 우선순위로 처리.
 - [ ] 모든 step에 `step("...")` 라벨이 있는가?
 - [ ] `skip()`을 새로 추가했다면 만료 조건이 sprint handoff에 기록됐는가?
