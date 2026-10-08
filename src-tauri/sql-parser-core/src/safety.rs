@@ -1387,6 +1387,79 @@ mod tests {
     }
 
     #[test]
+    fn issue_2647_dash_dash_directly_before_newline_still_classifies_write_behind_it() {
+        // A bare `--` comment line: the line-comment branch must advance
+        // exactly the two dashes so the newline stays outside the comment and
+        // the write verb behind it reaches the keyword fallback. Advancing one
+        // byte further swallows the `\n`, the comment body runs to the next
+        // line end, and the DROP degrades to Info. Advancing one byte less is
+        // observationally equivalent — the newline scan skips the second `-`
+        // either way — so this newline-hugging form is what pins the branch.
+        assert_eq!(classify("--\nDROP TABLE users"), Severity::Danger);
+    }
+
+    #[test]
+    fn issue_2647_dash_dash_directly_before_newline_readonly_gate_blocks_write() {
+        // Same form on the read-only gate — `leading_keyword_is_write` is the
+        // other direct caller of the same branch, so the same flip makes the
+        // `DELETE` behind a bare `--` line read as safe. `--` comments on every
+        // dialect, so no dialect gate to exercise here.
+        assert!(!is_read_only_safe_with_dialect(
+            "--\nDELETE FROM users",
+            SqlDialect::Other
+        ));
+    }
+
+    #[test]
+    fn issue_2647_empty_block_comment_closes_at_the_first_star_slash() {
+        // The block branch must consume exactly the two `/*` bytes before
+        // scanning for the close: in an empty `/**/` the very next two bytes
+        // are the close, and the write behind it reaches the keyword fallback.
+        // An open advance one byte wider lands past the close, the scan never
+        // finds another `*/`, and the whole input is swallowed → Info. One
+        // byte narrower stays equivalent — the close scan simply starts one
+        // byte earlier and still matches. The mutation is dialect-independent,
+        // so the fail-closed default dialect is enough to pin it.
+        assert_eq!(classify("/**/ DROP TABLE t"), Severity::Danger);
+    }
+
+    #[test]
+    fn issue_2647_postgres_inner_open_advance_keeps_inner_body_first_close_in_play() {
+        // PostgreSQL depth counting: an inner `/*` must be consumed by exactly
+        // its two bytes, so the `*/` that opens the inner body still closes the
+        // inner comment and the outer `*/` closes the outer one. Advancing one
+        // byte further lands past that inner close, the outer close is eaten
+        // as depth, and the trailing DROP is swallowed → Info.
+        assert_eq!(
+            classify_with_dialect("/* /**/ x */ DROP TABLE t", SqlDialect::Postgres),
+            Severity::Danger
+        );
+    }
+
+    #[test]
+    fn issue_2647_postgres_inner_open_narrow_read_keeps_unterminated_comment_unterminated() {
+        // The one-byte-narrower direction IS observable on a different form:
+        // when an inner body opens with `/`, reading the inner `/*` by one
+        // byte matches `*/` at the inner body's first two bytes, closes the
+        // inner comment one level early, and the outer `*/` closes the whole
+        // thing — the server would still be inside the comment and reject the
+        // input, so the faithful verdict is Info, not Danger.
+        assert_eq!(
+            classify_with_dialect("/* /*/ x */ DROP TABLE t", SqlDialect::Postgres),
+            Severity::Info
+        );
+    }
+
+    #[test]
+    fn issue_2647_block_close_advance_does_not_swallow_the_byte_after_the_close() {
+        // The `*/` close must advance exactly its two bytes: one wider eats
+        // the byte behind the comment into the comment, so `*` (which the real
+        // server would see as the start of a syntax error) disappears and the
+        // DROP behind it surfaces → Danger. The faithful verdict is Info.
+        assert_eq!(classify("/*x*/*DROP TABLE t"), Severity::Info);
+    }
+
+    #[test]
     fn issue_1450_where_inside_literal_is_not_a_bounding_clause() {
         // The `WHERE` lives inside a string literal, so the UPDATE is unbounded.
         assert_eq!(
