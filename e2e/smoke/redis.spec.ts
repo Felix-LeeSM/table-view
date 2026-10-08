@@ -177,6 +177,25 @@ describe("Redis smoke", () => {
         "Manual re-scan did not show the deleted key removed from the sidebar",
       );
     });
+
+    // Issue #2568: the delete above removes the seeded `tv:string` and nothing
+    // re-created it — the seeder does not re-run inside the `specFileRetries`
+    // retry (mechanism at the filtered-scan comment above) — so a retry failed
+    // the first scan assertion again instead of re-testing where the first
+    // attempt actually broke. Re-create the key with the seeded value. Plain
+    // `SET`, no `EX`: a re-armed TTL could expire under a delayed retry, and
+    // no assertion here reads the seed's 3600s TTL
+    // (e2e/fixtures/redis/kv/seed.json).
+    await step("restore the seeded key the delete step removed", async () => {
+      await openNewQueryTab();
+      await setCodeMirrorText(`SET tv:string ${INITIAL_VALUE}`);
+      await runQuery();
+      await waitForWorkspaceTextAll(
+        ["1 row affected"],
+        15000,
+        "Redis SET did not confirm the seeded key restore",
+      );
+    });
   });
 });
 
