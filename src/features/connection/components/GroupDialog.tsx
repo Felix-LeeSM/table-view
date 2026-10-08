@@ -11,6 +11,12 @@ import GroupColorDot from "./GroupColorDot";
 interface GroupDialogProps {
   /** Existing group for rename/recolor; undefined for create. */
   group?: ConnectionGroup;
+  /**
+   * Member count shown in the preview. Pass the count the list header shows
+   * for `group` — the header counts after the list's environment filter,
+   * which this dialog cannot see. A group being created has none (default).
+   */
+  memberCount?: number;
   onClose: () => void;
 }
 
@@ -23,7 +29,11 @@ interface GroupDialogProps {
  *   owns the title + body + submit/cancel footer boilerplate; this file
  *   keeps the form-specific bits (palette radio group, name validation).
  */
-export default function GroupDialog({ group, onClose }: GroupDialogProps) {
+export default function GroupDialog({
+  group,
+  memberCount = 0,
+  onClose,
+}: GroupDialogProps) {
   const { t } = useTranslation("featuresConnection");
   const isEditing = !!group;
   const [name, setName] = useState(group?.name ?? "");
@@ -33,11 +43,6 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
 
   const addGroup = useConnectionStore((s) => s.addGroup);
   const updateGroup = useConnectionStore((s) => s.updateGroup);
-  // Member count shown in the preview. A group being created has none yet;
-  // editing shows what the list header already shows for that group.
-  const memberCount = useConnectionStore((s) =>
-    group ? s.connections.filter((c) => c.groupId === group.id).length : 0,
-  );
 
   // WAI-ARIA radiogroup roving: the palette is a single tab stop (the checked
   // swatch) and arrows move *and* select in one step. Ordered `null` sentinel

@@ -10,14 +10,19 @@ import {
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, ConnectionGroup } from "@/types/connection";
+import ConnectionList from "./ConnectionList";
 import GroupDialog from "./GroupDialog";
 
 const mockAddGroup = vi.fn();
 const mockUpdateGroup = vi.fn();
 
-function setStoreState(connections: ConnectionConfig[] = []) {
+function setStoreState(
+  connections: ConnectionConfig[] = [],
+  groups: ConnectionGroup[] = [],
+) {
   useConnectionStore.setState({
     connections,
+    groups,
     addGroup: mockAddGroup.mockResolvedValue({
       id: "new-gid",
       name: "stub",
@@ -160,12 +165,7 @@ describe("GroupDialog", () => {
     expect(dot.className).toContain("bg-transparent");
   });
 
-  it("[group-dialog] preview mirrors the typed name and the group's connection count", () => {
-    setStoreState([
-      makeConnection({ id: "c1", groupId: "g1" }),
-      makeConnection({ id: "c2", groupId: "g1" }),
-      makeConnection({ id: "c3", groupId: "g2" }),
-    ]);
+  it("[group-dialog] preview mirrors the typed name", () => {
     const group: ConnectionGroup = {
       id: "g1",
       name: "Prod",
@@ -176,7 +176,6 @@ describe("GroupDialog", () => {
 
     const preview = screen.getByTestId("group-dialog-preview");
     expect(preview).toHaveTextContent("Prod");
-    expect(preview).toHaveTextContent("(2)");
 
     act(() => {
       fireEvent.change(screen.getByLabelText(/name/i), {
@@ -192,6 +191,62 @@ describe("GroupDialog", () => {
       });
     });
     expect(preview).toHaveTextContent(/untitled group/i);
+  });
+
+  // -------------------------------------------------------------------------
+  // #2500 — preview opened from the list's group header
+  // -------------------------------------------------------------------------
+
+  // Reason: #2500 — the preview counted every stored member of the group while
+  // the header counts the list's environment-filtered set, so the two
+  // disagreed once a filter was set (2026-09-26)
+  it("[group-preview-count] preview count matches the group header count under an environment filter", () => {
+    const group: ConnectionGroup = {
+      id: "g1",
+      name: "Prod",
+      color: null,
+      collapsed: false,
+    };
+    // One of the three members is production, so the filter changes the count.
+    setStoreState(
+      [
+        makeConnection({ id: "c1", groupId: "g1", environment: "production" }),
+        makeConnection({ id: "c2", groupId: "g1", environment: "staging" }),
+        makeConnection({ id: "c3", groupId: "g1", environment: "staging" }),
+      ],
+      [group],
+    );
+    render(<ConnectionList environmentFilter="production" />);
+
+    const header = screen.getByRole("button", { name: /^Prod group/ });
+    expect(header).toHaveTextContent("(1)");
+
+    fireEvent.contextMenu(header);
+    fireEvent.click(screen.getByRole("menuitem", { name: /change color/i }));
+
+    expect(screen.getByTestId("group-dialog-preview")).toHaveTextContent("(1)");
+  });
+
+  // Reason: #2500 — GroupColorDot's testId is optional. The header renders the
+  // dot without one and the preview passes its own; once the dialog opens from
+  // the header both dots are on screen, and each id must still name exactly
+  // one of them (2026-09-26)
+  it("[group-preview-count] header and preview dots stay queryable apart while the dialog is open", () => {
+    setStoreState(
+      [],
+      [{ id: "g1", name: "Prod", color: null, collapsed: false }],
+    );
+    render(<ConnectionList />);
+
+    const header = screen.getByRole("button", { name: /^Prod group/ });
+    fireEvent.contextMenu(header);
+    fireEvent.click(screen.getByRole("menuitem", { name: /change color/i }));
+
+    // getByTestId throws on a second match, so each id resolves to one dot.
+    expect(header).toContainElement(screen.getByTestId("group-color-accent"));
+    expect(screen.getByTestId("group-dialog-preview")).toContainElement(
+      screen.getByTestId("group-preview-color-accent"),
+    );
   });
 
   it("disables the Create button when the name is blank", () => {

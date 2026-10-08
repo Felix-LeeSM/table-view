@@ -1,8 +1,11 @@
 interface GroupColorDotProps {
   /** Group accent color; `null` renders the bordered placeholder. */
   color: string | null;
-  /** Call sites differ so a rendered list header and dialog preview stay queryable apart. */
-  testId: string;
+  /**
+   * Defaults to the list header's id. The dialog preview passes its own, so
+   * the two stay queryable apart while both are on screen.
+   */
+  testId?: string;
 }
 
 /**
@@ -12,7 +15,10 @@ interface GroupColorDotProps {
  * `color=null` fall back to a bordered transparent dot so header metrics stay
  * consistent across the list.
  */
-export default function GroupColorDot({ color, testId }: GroupColorDotProps) {
+export default function GroupColorDot({
+  color,
+  testId = "group-color-accent",
+}: GroupColorDotProps) {
   return (
     <span
       data-testid={testId}
