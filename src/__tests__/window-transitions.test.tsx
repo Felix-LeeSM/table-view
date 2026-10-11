@@ -193,7 +193,7 @@ afterEach(() => {
 
 describe("AC-154-*: Window lifecycle wiring", () => {
   // ---------------------------------------------------------------------------
-  // AC-154-01
+  // AC-154-01 (2026-05-16)
   //
   // Old contract: `showWindow("workspace")` → `focusWindow("workspace")` →
   // `hideWindow("launcher")`, on the single-workspace model (one window
@@ -254,7 +254,7 @@ describe("AC-154-*: Window lifecycle wiring", () => {
     });
 
     // Desired UX: "pressing < Connections should close the connection window
-    // and move focus to the connections window". The launcher is always
+    // and move focus to the connections window". The launcher is always (2026-05-16)
     // visible, so the pattern is focus + close, not hide/show.
     expect(focusWindowMock).toHaveBeenCalledWith("launcher");
     expect(destroyCurrentWindowMock).toHaveBeenCalled();
@@ -359,7 +359,7 @@ describe("AC-154-*: Window lifecycle wiring", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // AC-154-05: the workspace registers no close-requested listener.
+  // AC-154-05: the workspace registers no close-requested listener. (2026-05-16)
   //
   // Old contract — in the launcher-hidden era an OS-level close made the
   // process look dead, so close-requested had to be intercepted. Under the

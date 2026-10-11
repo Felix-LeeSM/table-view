@@ -15,7 +15,7 @@ import { cteColumnCompletionSource } from "./cteColumnCompletion";
 import { updateColumnCompletionSource } from "./updateColumnCompletion";
 
 /**
- * Slice A — Level-3 baseline (CTE / derived subquery alias).
+ * Slice A — Level-3 baseline (CTE / derived subquery alias). (2026-05-14)
  *
  * Reason
  * ------
@@ -218,7 +218,7 @@ describe("SQL Level-3 자동완성 — CTE / derived subquery baseline (Slice A 
 });
 
 /**
- * Slice E — Cross-source dedup regression guard.
+ * Slice E — Cross-source dedup regression guard. (2026-05-14)
  *
  * Reason:
  *   When the 4 sources (lang-sql built-in + Level-1 + Level-2 + CTE /

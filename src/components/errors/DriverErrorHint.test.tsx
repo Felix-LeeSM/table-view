@@ -5,10 +5,10 @@ import { DriverErrorHint } from "./DriverErrorHint";
 
 // Purpose: locks that a classified hint renders with the errors-namespace
 //          wording (summary + action) and that an unclassified (null) hint
-//          renders nothing (issue #1056).
+//          renders nothing (issue #1056). (2026-07-03)
 describe("DriverErrorHint", () => {
   // Reason: a classified hint resolves to the en errors wording and shows
-  //         the user a summary + action.
+  //         the user a summary + action. (2026-07-03)
   it("renders the summary title and action hint for a classified error", () => {
     render(
       <DriverErrorHint
@@ -24,7 +24,7 @@ describe("DriverErrorHint", () => {
   });
 
   // Reason: a surface that already carries a label (search) hides the title
-  //         and shows only the hint sentence.
+  //         and shows only the hint sentence. (2026-07-03)
   it("omits the title when showTitle is false", () => {
     render(
       <DriverErrorHint
@@ -38,7 +38,7 @@ describe("DriverErrorHint", () => {
     ).toBeInTheDocument();
   });
 
-  // Reason: fail-open — an unclassified (null) hint renders no text at all.
+  // Reason: fail-open — an unclassified (null) hint renders no text at all. (2026-07-03)
   it("renders nothing when the hint is null", () => {
     const { container } = render(<DriverErrorHint hint={null} />);
     expect(container).toBeEmptyDOMElement();

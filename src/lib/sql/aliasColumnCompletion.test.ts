@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { aliasColumnCompletionSource } from "./aliasColumnCompletion";
 
 /**
- * Slice B — alias-aware mid-typing column source.
+ * Slice B — alias-aware mid-typing column source. (2026-05-14)
  *
  * Reason:
  *   The real gap the Slice A findings established — at the point where the
@@ -159,7 +159,7 @@ describe("aliasColumnCompletionSource (Sprint 294 Slice B)", () => {
 });
 
 /**
- * Slice D — edge case assertions.
+ * Slice D — edge case assertions. (2026-05-14)
  *
  * Reason:
  *   SQL that users actually write goes beyond the single-JOIN simple pattern
@@ -250,7 +250,7 @@ describe("aliasColumnCompletionSource — Sprint 294 Slice D edge cases", () => 
 });
 
 /**
- * Slice E — dedup regression guard.
+ * Slice E — dedup regression guard. (2026-05-14)
  *
  * Reason:
  *   The column candidate labels `aliasColumnCompletionSource` emits must be

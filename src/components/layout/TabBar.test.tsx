@@ -605,7 +605,7 @@ describe("TabBar", () => {
     expect(dimmed.length).toBe(0);
   }
 
-  // 2026-05-11 regression — before it: a trackpad click carrying a 1–6px
+  // 2026-05-11 regression — before 2026-05-11: a trackpad click carrying a 1–6px
   // micro-move crossed the 4px threshold and briefly showed the ghost.
   // Under the new 8px threshold the same micro-move must not trigger the
   // ghost.
@@ -633,7 +633,7 @@ describe("TabBar", () => {
   //
   // `setPointerCapture` only routes pointer events; the browser's selection
   // logic (anchor at mousedown → extended by mousemove) still runs. The
-  // earlier implementation applied `userSelect=none` only after the
+  // pre-2026-05-11 implementation applied `userSelect=none` only after the
   // threshold (`dx > 8`) was crossed, which was too late — selection had
   // already started. Regression guard: `userSelect=none` must apply right at
   // pointerdown.
@@ -1224,7 +1224,7 @@ describe("TabBar", () => {
   // can never lose unsaved work via a stray scroll-wheel button press.
   // Reason: AC-13-07 — verify the preview tab's accessibility attributes:
   //         role="tab", aria-selected, data-preview="true", and the
-  //         italic+opacity-70 classes all applied correctly
+  //         italic+opacity-70 classes all applied correctly (2026-04-28)
   it("preview tab has correct aria attributes for accessibility (AC-13-07)", () => {
     addTableTab({ title: "public.users", table: "users" });
     // New tabs are preview by default.
@@ -1246,7 +1246,7 @@ describe("TabBar", () => {
 
   // Reason: AC-13-07 — verify the aria attribute difference between
   //         permanent and preview tabs: a permanent tab must carry no
-  //         data-preview and no italic style
+  //         data-preview and no italic style (2026-04-28)
   it("permanent tab does not have preview-specific attributes (AC-13-07)", () => {
     addTableTab({ title: "public.users", table: "users" });
     // Promote to permanent.

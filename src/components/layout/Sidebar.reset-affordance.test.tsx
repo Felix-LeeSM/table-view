@@ -1,5 +1,5 @@
 /**
- * Q21 affordance #3-a + #7.
+ * Q21 affordance #3-a + #7. (2026-05-17)
  *
  * Reason: of the 9 Q21 affordances,
  *   (3-a) right-click the Sidebar resize handle → "Reset width" →
@@ -149,7 +149,7 @@ describe("Sidebar reset affordances (Q21 #3-a + #7)", () => {
     expect(ws?.sidebar.expanded).toEqual([]);
   });
 
-  // Reason: after dragging the width, the user must be able to reset to the
+  // Reason: after dragging the width, the user must be able to reset to the (2026-05-17)
   // default immediately by double-clicking the purple drag handle exposed on
   // hover, without going through the context menu or the settings panel
   // (image #7). A single mousedown on the handle (drag-start) sends no reset

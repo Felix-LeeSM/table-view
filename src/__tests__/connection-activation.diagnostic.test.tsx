@@ -1,4 +1,4 @@
-// Purpose: Connection activation lifecycle diagnostics
+// Purpose: Connection activation lifecycle diagnostics (2026-04-28)
 //
 // User-reported bugs:
 //   Bug 1: Double-clicking a Connection did not open the workspace
@@ -179,7 +179,7 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("AC-156-*: Connection activation diagnostic", () => {
-  // Reason: workspace windows carry a per-conn label `workspace-{conn_id}`
+  // Reason: workspace windows carry a per-conn label `workspace-{conn_id}` (2026-05-16)
   // and ConnectionList's `openWorkspaceWindow(id)` owns build/focus.
   // HomePage's handleActivate touches the store side only. The old
   // contract's showWindow/focusWindow assertions came from the
@@ -202,7 +202,7 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(hideWindowMock).not.toHaveBeenCalled();
   });
 
-  // Reason: the rapid double-click guard still holds — no window seam call,
+  // Reason: the rapid double-click guard still holds — no window seam call, (2026-05-16)
   // and the store side keeps the activated connection focused.
   it("AC-156-02 (revised): rapid double-click — window seam 호출 0, store side 1회만 갱신", async () => {
     useConnectionStore.setState({
@@ -225,7 +225,7 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // Reason: re-activation after a disconnect. The invariant is that the
+  // Reason: re-activation after a disconnect. The invariant is that the (2026-05-16)
   // store refocuses the connection and no window seam is called.
   it("AC-156-03 (revised): after disconnecting, re-activating the same connection still hides launcher", async () => {
     useConnectionStore.setState({
@@ -251,7 +251,7 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // Reason: the old contract's "showWindow rejects → launcher stays visible"
+  // Reason: the old contract's "showWindow rejects → launcher stays visible" (2026-05-16)
   // recovery lost its meaning once HomePage stopped calling showWindow.
   // What this locks now is that handleActivate calls no window seam at all
   // and the store side still updates.
@@ -276,7 +276,7 @@ describe("AC-156-*: Connection activation diagnostic", () => {
   // Reason: a single click (select) must not trigger a window swap.
   //         Only double-click (= onActivate) triggers a swap. To avoid
   //         duplicating the existing tests, this asserts the zero seam calls
-  //         explicitly.
+  //         explicitly. (2026-04-28)
   it("AC-156-05: single-click (onSelect) does NOT trigger any window swap", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
@@ -297,7 +297,7 @@ describe("AC-156-*: Connection activation diagnostic", () => {
   });
 
   // Reason: locks only the store side of sequential activation (focusedConn
-  // update + stale tab cleanup). The old showWindow/focusWindow call
+  // update + stale tab cleanup). The old showWindow/focusWindow call (2026-05-16)
   // assertions conflicted with the per-conn window system — the source of
   // the double-window regression.
   it("AC-156-06 (revised): activating connection A then B → B becomes focused, A's stale tabs are cleared", async () => {
@@ -368,7 +368,7 @@ describe("AC-156-*: Connection activation diagnostic", () => {
 
   // Reason: checks that handleActivate updates focusedConnId synchronously.
   //         If the async ordering slips, the workspace can render while
-  //         focusedConnId is not updated yet.
+  //         focusedConnId is not updated yet. (2026-04-28)
   it("AC-156-01 (extended): setFocusedConn runs synchronously before the async window swap", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
@@ -388,7 +388,7 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // Reason: HomePage no longer calls showWindow / focusWindow("workspace"),
+  // Reason: HomePage no longer calls showWindow / focusWindow("workspace"), (2026-05-16)
   // so this case's original scenario is moot. It now locks that a rejecting
   // focusWindow mock leaves the HomePage flow untouched, because focusWindow
   // is never called.

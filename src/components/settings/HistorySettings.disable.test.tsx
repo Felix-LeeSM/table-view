@@ -1,5 +1,5 @@
 /**
- * AC-373-03 + AC-373-04 + AC-373-08.
+ * AC-373-03 + AC-373-04 + AC-373-08. (2026-05-17)
  *
  * User journey:
  *   1. (default) HistorySettings toggle ON — `query_history_enabled = true`
@@ -149,13 +149,13 @@ describe("HistorySettings (sprint-373) — disable toggle gates IPC", () => {
 
   // AC-373-08 — default = enabled on a new user's boot.
   // Reason: history must start ON for new users so the "did not know it
-  // was recording" regression never appears.
+  // was recording" regression never appears. (2026-05-17)
   it("defaults to enabled = true (AC-373-08)", () => {
     expect(useHistorySettingsStore.getState().queryHistoryEnabled).toBe(true);
   });
 
   // AC-373-03 — after toggling OFF, none of the 6 source callers fire IPC.
-  // Reason: when the user disables, the IPC count = 0 invariant.
+  // Reason: when the user disables, the IPC count = 0 invariant. (2026-05-17)
   it("disables IPC across all 6 source callers when toggled off (AC-373-03)", async () => {
     render(<HistorySettings />);
 
@@ -183,7 +183,7 @@ describe("HistorySettings (sprint-373) — disable toggle gates IPC", () => {
   });
 
   // AC-373-04 — after restoring the toggle to ON, IPC calls resume.
-  // Reason: the disable → enable round trip matches the user's mental
+  // Reason: the disable → enable round trip matches the user's mental (2026-05-17)
   // model exactly (IPC stop → IPC resume).
   it("re-enables IPC when toggled back on (AC-373-04)", async () => {
     render(<HistorySettings />);
@@ -211,7 +211,7 @@ describe("HistorySettings (sprint-373) — disable toggle gates IPC", () => {
   });
 
   // The toggle state mirrors aria-pressed — accessibility regression guard.
-  // Reason: aria-pressed is 1:1 with the enabled boolean so a screen
+  // Reason: aria-pressed is 1:1 with the enabled boolean so a screen (2026-05-17)
   // reader user perceives the toggle state accurately.
   it("aria-pressed mirrors the enabled state", async () => {
     render(<HistorySettings />);

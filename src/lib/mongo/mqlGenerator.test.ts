@@ -356,7 +356,7 @@ describe("generateMqlPreview — edge cases", () => {
     );
   });
 
-  // DocumentTreePanel's delete action stores the `__op__:unset` sentinel
+  // DocumentTreePanel's delete action stores the `__op__:unset` sentinel (2026-05-15)
   // against a field path. The generator must route that into a `$unset`
   // operator (and let it coexist with `$set` on the same row so one click
   // of Save covers overwrite + delete).
@@ -455,7 +455,7 @@ describe("generateMqlPreview — edge cases", () => {
   });
 });
 
-// Slice G.2: regression guard for the path where the canonical EJSON BSON
+// Slice G.2: regression guard for the path where the canonical EJSON BSON (2026-05-15)
 // wrapper is printed as a mongosh literal. The G.1 helper builds the
 // wrapper shape, and mqlGenerator renders that shape in user-friendly
 // mongosh notation (ObjectId("..."), ISODate("..."), etc).
@@ -547,7 +547,7 @@ describe("generateMqlPreview — BSON literal (Sprint 324 G.2)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Slice E — Generator dispatch for inline-tree `+ key` adds on Mongo grid.
+// Slice E — Generator dispatch for inline-tree `+ key` adds on Mongo grid. (2026-05-15)
 // mqlGenerator itself needs no code change: it handles dot-paths natively —
 // `$set` auto-creates the missing path. This regression guard locks two
 // things:

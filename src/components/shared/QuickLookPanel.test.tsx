@@ -1092,7 +1092,7 @@ describe("QuickLookPanel", () => {
   // Reason: user requirement — every draggable restores its start size when
   // Esc is pressed mid-drag. QuickLookPanel is a third resize path that does
   // not go through the shared resize hook, so the same semantics are verified
-  // directly here (PR #1690).
+  // directly here (PR #1690). (2026-07-18)
   describe("drag resize Esc-revert (2026-07-18)", () => {
     const getHandle = () =>
       screen.getByRole("separator", { name: "Resize Quick Look panel" });

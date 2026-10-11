@@ -1,4 +1,4 @@
-// DataGrid DbMismatch end-to-end recovery.
+// DataGrid DbMismatch end-to-end recovery. (2026-05-13)
 //
 // Reason: when the backend guard rejects the DataGrid row-fetch with
 // `AppError::DbMismatch`, assert in one go that

@@ -328,7 +328,7 @@ describe("BsonTreeViewer", () => {
     ).toBeInTheDocument();
   });
 
-  // BigInt freeze regression guard. When `canonicalStringify` was a raw
+  // BigInt freeze regression guard. When `canonicalStringify` was a raw (2026-05-14)
   // `JSON.stringify`, nested BigInt input threw.
   it("[Sprint 306] BigInt leaf 가 있어도 throw 없이 render", () => {
     expect(() =>

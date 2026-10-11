@@ -153,7 +153,7 @@ vi.mock("@components/workspace/KvKeyDetailPanel", () => ({
   ),
 }));
 
-// The Mongo document-paradigm branch renders a Records/Structure sub-tab
+// The Mongo document-paradigm branch renders a Records/Structure sub-tab (2026-05-15)
 // bar that mounts `DocumentDataGrid` (Records) or `MongoStructurePanel`
 // (Structure). Both are mocked so this suite focuses on the routing logic
 // in `MainArea`, not the panels' bodies.
@@ -176,7 +176,7 @@ vi.mock("@components/document/DocumentDataGrid", () => ({
   ),
 }));
 
-// The mock renders the controlled `active` prop and exposes a button that
+// The mock renders the controlled `active` prop and exposes a button that (2026-05-15)
 // calls `onActiveChange`. AC-350-02 requires the inner Indexes/Validator
 // pick to survive an outer Records ↔ Structure remount, so the mock must
 // let the test (a) read whatever value the parent passes down and (b) drive
@@ -242,7 +242,7 @@ function makeTableTab({
   };
 }
 
-// Document-paradigm tab fixture. The document branch keys on `database` /
+// Document-paradigm tab fixture. The document branch keys on `database` / (2026-05-15)
 // `collection` (mongo names) rather than `schema` / `table`.
 function makeDocumentTab({
   id = "doc-tab-1",
@@ -390,6 +390,7 @@ describe("MainArea", () => {
   // First-paint skeleton (AC-270-02, post-hydrate parity)
   // ------------------------------------------------------------------
 
+  // (2026-05-13)
   // AC-270-02 — pre-hydrate the main area must show the welcome-shaped
   // skeleton, not the `EmptyState`. Same rationale as sidebar: avoid the
   // empty-state flash during the IPC round-trip.
@@ -411,6 +412,7 @@ describe("MainArea", () => {
     ).toBeNull();
   });
 
+  // (2026-05-13)
   // AC-270-04 (post-hydrate parity) — once hasLoadedOnce flips to true, the
   // skeleton stays unmounted and the legacy `EmptyState` renders even on a
   // remount (e.g. user navigates between layouts).
@@ -1104,7 +1106,7 @@ describe("MainArea", () => {
   });
 
   // ------------------------------------------------------------------
-  // Mongo Records/Structure sub-tab bar.
+  // Mongo Records/Structure sub-tab bar. (2026-05-15)
   // ------------------------------------------------------------------
   // Reason: the document-paradigm tab renders a Records/Structure sub-tab
   // bar instead of mounting DocumentDataGrid directly. One describe guards
@@ -1175,7 +1177,7 @@ describe("MainArea", () => {
     });
 
     // AC-350-02 literal wording: "the inner selection survives
-    // Structure-tab re-activation". Toggling outer Records → Structure →
+    // Structure-tab re-activation". Toggling outer Records → Structure → (2026-05-15)
     // Records → Structure must NOT reset the user's Indexes/Validator pick.
     // Owned by `TableTabView` so the state outlives the conditional remount
     // of `MongoStructurePanel`.

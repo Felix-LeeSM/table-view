@@ -134,7 +134,7 @@ beforeEach(() => {
 const WORKSPACE_LABEL = "workspace-c1";
 vi.mock("@lib/window-label", async () => {
   // Keep the real parseWorkspaceLabel / formatWorkspaceLabel exports (pure
-  // string ops) so `useCurrentWindowConnectionId()` and downstream selectors
+  // string ops) so `useCurrentWindowConnectionId()` and downstream selectors (2026-05-16)
   // don't crash when this file's tests mount workspace-tree components.
   const actual =
     await vi.importActual<typeof import("@lib/window-label")>(

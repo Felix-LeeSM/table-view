@@ -306,7 +306,7 @@ describe("ExportButton", () => {
     expect(toasts.some((toast) => toast.variant === "info")).toBe(true);
   });
 
-  // [Invariant] ExportButton's IPC payload never includes password
+  // [Invariant] ExportButton's IPC payload never includes password (2026-05-01)
   // fields. Guards the ADR-0005 plaintext password boundary.
   it("never sends a password field in the invoke payload", async () => {
     const user = userEvent.setup();
