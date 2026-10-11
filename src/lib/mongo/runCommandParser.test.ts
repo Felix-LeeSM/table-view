@@ -1,5 +1,5 @@
 // 2026-05-17 — statement-kind classifier tests. When the classifier moved to
-// the AST, all cases from the regex-based version were preserved verbatim,
+// the AST, all cases from the regex-based version were preserved verbatim, (2026-05-17)
 // plus AC-382-R additions for behavior that the AST now handles correctly
 // (comments anywhere, nested body, multi-statement reject).
 //
