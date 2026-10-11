@@ -42,19 +42,23 @@ function tsUnionMembers(path: string, name: string): string[] {
  * `#[serde(...)]` attribute says otherwise
  * (https://serde.rs/variant-attrs.html, https://serde.rs/container-attrs.html),
  * so a serde attribute on the enum or on a variant throws instead of being
- * guessed at, and so does a variant that is not a plain unit variant. */
+ * guessed at, and so does a variant that is not a plain unit variant. The
+ * file is lexed by a regex that reads raw strings as plain strings and block
+ * comments as non-nesting: a raw string that holds a `"` or ends in `\`, or a
+ * nested block comment, can put it out of step with the source, and a serde
+ * attribute can then go unseen. */
 function rustEnumVariants(path: string, name: string): string[] {
-  // Comments go first, so that a doc comment does not reach the readers below
-  // and a commented-out declaration reads as absent. String literals are
-  // matched so that a comment marker inside one survives.
+  // Comments and string and char literals are blanked first, so that a doc
+  // comment does not reach the readers below, a commented-out declaration
+  // reads as absent, and a `]` inside a literal cannot end an attribute.
   const code = readFileSync(resolve(repoRoot, path), "utf8").replace(
-    /"(?:\\.|[^"\\])*"|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
-    (token) => (token.startsWith('"') ? token : " "),
+    /"(?:\\[\s\S]|[^"\\])*"|'(?:\\(?:x..|u\{[^}]*\}|.)|[^'\\])'|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+    " ",
   );
   const declarations = [
     ...code.matchAll(
       new RegExp(
-        String.raw`((?:#\[[^\]]*\]\s*)*)(?:pub(?:\([^)]*\))?\s+)?enum\s+${name}\s*\{([^}]*)\}`,
+        String.raw`(?:pub(?:\([^)]*\))?\s+)?enum\s+${name}\s*\{([^}]*)\}`,
         "g",
       ),
     ),
@@ -62,7 +66,13 @@ function rustEnumVariants(path: string, name: string): string[] {
   if (declarations.length > 1) {
     throw new Error(`${path} declares \`enum ${name}\` more than once`);
   }
-  const [, attributes = "", body = ""] = declarations[0] ?? [];
+  const [declaration] = declarations;
+  if (declaration === undefined) return [];
+  const attributes = code.slice(
+    attributesStart(code, declaration.index),
+    declaration.index,
+  );
+  const body = declaration[1] ?? "";
   if (/\bserde\b/.test(attributes + body)) {
     throw new Error(
       `a #[serde(...)] attribute on \`enum ${name}\` (${path}) can change ` +
@@ -83,6 +93,24 @@ function rustEnumVariants(path: string, name: string): string[] {
     variants.push(match[1]);
   }
   return variants;
+}
+
+/** Index where the `#[...]` attributes stacked on the item starting at `end`
+ * begin, or `end` when it has none. Brackets are paired by depth, so a `]`
+ * nested in an attribute's arguments does not end that attribute; `code` has
+ * to come with its comments and literals blanked, or a bracket inside one
+ * would be paired too. */
+function attributesStart(code: string, end: number): number {
+  let open = code.slice(0, end).trimEnd().length - 1;
+  if (code[open] !== "]") return end;
+  for (let depth = 0; open >= 0; open -= 1) {
+    if (code[open] === "]") depth += 1;
+    else if (code[open] === "[") depth -= 1;
+    if (depth === 0) break;
+  }
+  if (open < 0) return end;
+  const hash = code.slice(0, open).trimEnd().length - 1;
+  return code[hash] === "#" ? attributesStart(code, hash) : end;
 }
 
 const sortedUnique = (names: string[]): string[] => [...new Set(names)].sort();
