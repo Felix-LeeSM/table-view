@@ -1,4 +1,4 @@
-// ValidatorPanel live wire: it calls `getMongoValidator` /
+// ValidatorPanel live wire: it calls `getMongoValidator` / (2026-05-15)
 // `setMongoValidator`, and the raw JSON editor is wired through to the
 // collMod call.
 //

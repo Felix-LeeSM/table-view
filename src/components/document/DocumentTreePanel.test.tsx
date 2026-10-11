@@ -1,4 +1,4 @@
-// DocumentTreePanel.
+// DocumentTreePanel. (2026-05-15)
 // Locks the public contract NestedExpandPopover used to satisfy so the
 // grid-level commit flow keeps working unchanged: value / fieldName /
 // pendingByPath / onCommitEdit. Plus the toggles + search + edit
@@ -119,7 +119,7 @@ describe("DocumentTreePanel", () => {
 
   // Enter on an unchanged value must NOT fire onCommitEdit, otherwise a
   // stray click+blur on a leaf creates a phantom pendingEdit.
-  // Reason: a regression where the user clicked and pressed Enter on the
+  // Reason: a regression where the user clicked and pressed Enter on the (2026-05-15)
   // same value, so mqlGenerator built an empty $set and the update ran
   // silently.
   it("no-op commit (draft equals rendered value) skips onCommitEdit", async () => {
@@ -163,7 +163,7 @@ describe("DocumentTreePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  // #1445 KV JSON tree — read-only gate. When the panel is reused as a
+  // #1445 KV JSON tree — read-only gate. When the panel is reused as a (2026-07-17)
   // read-only viewer (no onCommitEdit — the KV JSON tree case), a leaf click
   // must NOT open the inline editor: the editor's commit is a no-op there, so
   // an input that opens only to swallow edits is a dead-end. The shared
@@ -185,7 +185,7 @@ describe("DocumentTreePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  // #1445 — Mongo regression guard: with onCommitEdit the editor still opens on
+  // #1445 — Mongo regression guard: with onCommitEdit the editor still opens on (2026-07-17)
   // a leaf click (the invariant the read-only gate must not break).
   it("opens the leaf editor when onCommitEdit is provided", async () => {
     const user = userEvent.setup();
@@ -206,7 +206,7 @@ describe("DocumentTreePanel", () => {
     ).toBeInTheDocument();
   });
 
-  // BSON wrappers open the type-aware BsonTypeEditor instead of being
+  // BSON wrappers open the type-aware BsonTypeEditor instead of being (2026-05-15)
   // read-only. Commits are normalized back to a __bson__: wrapper at the
   // grid layer (tagBsonWrapper round-trip) so the pendingEdits Map shape
   // doesn't change. Reason: locking BSON left ObjectId/Date uneditable
@@ -232,7 +232,7 @@ describe("DocumentTreePanel", () => {
     });
   });
 
-  // Structural edit: leaf delete. Trash icon commits a `__op__:unset`
+  // Structural edit: leaf delete. Trash icon commits a `__op__:unset` (2026-05-15)
   // sentinel against the leaf path; the grid-level commit bar then routes
   // it through mqlGenerator into a `$unset` operator. Reason: the user
   // must be able to mark a legacy field for deletion inside the tree
@@ -275,7 +275,7 @@ describe("DocumentTreePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  // `_id` MUST NOT have a trash button. MongoDB rejects $unset on _id and
+  // `_id` MUST NOT have a trash button. MongoDB rejects $unset on _id and (2026-05-15)
   // mqlGenerator's id-in-patch guard would drop the whole row; surfacing a
   // non-functional trash icon would be a UX trap.
   it("does not render trash for _id leaves", () => {
@@ -291,7 +291,7 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByTestId("tree-delete-name")).toBeInTheDocument();
   });
 
-  // The regex toggle promotes the search box to JS-regex mode. Locks the
+  // The regex toggle promotes the search box to JS-regex mode. Locks the (2026-05-15)
   // wire-up so a future refactor of the visiblePaths memo can't silently
   // drop the option.
   it("regex toggle switches the search to JS regex matching", async () => {
@@ -314,7 +314,7 @@ describe("DocumentTreePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  // Ghost rendering: a path that exists only in `pendingByPath` must
+  // Ghost rendering: a path that exists only in `pendingByPath` must (2026-05-15)
   // render as a visible leaf with a "NEW" badge that is distinct from the
   // existing "● edited" badge. Without this, the `+ key` / `+ item`
   // affordances have no on-screen feedback — committed adds would
@@ -339,7 +339,7 @@ describe("DocumentTreePanel", () => {
     expect(within(ghost).queryByText(/edited/)).not.toBeInTheDocument();
   });
 
-  // Edit + add coexist on the same parent. A pending entry on an existing
+  // Edit + add coexist on the same parent. A pending entry on an existing (2026-05-15)
   // path renders the amber edit badge; a pending entry on a new path
   // renders the NEW badge. No de-duplication mistake collapses them.
   it("renders both an edit on existing-key and a NEW ghost together", () => {
@@ -362,7 +362,7 @@ describe("DocumentTreePanel", () => {
     expect(within(ghost).getByText("NEW")).toBeInTheDocument();
   });
 
-  // A nested JSON-parseable ghost value expands into a visible subtree.
+  // A nested JSON-parseable ghost value expands into a visible subtree. (2026-05-15)
   // Locks the integration between the panel and `buildTreeNodesWithGhosts`
   // for the expand branch.
   it("expands a JSON-parseable ghost into nested ghost rows", () => {
@@ -385,7 +385,7 @@ describe("DocumentTreePanel", () => {
     expect(inner.textContent).toMatch(/owner/);
   });
 
-  // Parse-fail fallback: the ghost stays a single string leaf, no nested
+  // Parse-fail fallback: the ghost stays a single string leaf, no nested (2026-05-15)
   // children. No crash.
   it("renders a non-JSON ghost value as a plain string leaf", () => {
     const pending = new Map<string, string>([["raw", "not-json {"]]);
@@ -414,10 +414,10 @@ describe("DocumentTreePanel", () => {
   });
 
   // -----------------------------------------------------------------
-  // `+ key` inline pair input on object nodes. AC-344-B-01 ~ 11.
+  // `+ key` inline pair input on object nodes. AC-344-B-01 ~ 11. (2026-05-15)
   // -----------------------------------------------------------------
 
-  // AC-344-B-01 — the `+ key` affordance must appear on every object
+  // AC-344-B-01 — the `+ key` affordance must appear on every object (2026-05-15)
   // node (root + nested) only when `onCommitEdit` is provided. Without
   // onCommitEdit the panel is effectively read-only and the affordance
   // must NOT render.
@@ -445,7 +445,7 @@ describe("DocumentTreePanel", () => {
     expect(screen.queryByTestId("tree-add-key-nested")).not.toBeInTheDocument();
   });
 
-  // AC-344-B-02 — clicking `+ key` reveals the paired inputs and the
+  // AC-344-B-02 — clicking `+ key` reveals the paired inputs and the (2026-05-15)
   // key input must be focused first so the user can start typing
   // immediately.
   it("AC-344-B-02: clicking `+ key` reveals key + value inputs, key focused", async () => {
@@ -467,7 +467,7 @@ describe("DocumentTreePanel", () => {
     expect((valueInput as HTMLInputElement).placeholder).toMatch(/value/i);
   });
 
-  // AC-344-B-03 — Tab from key input moves focus to value input;
+  // AC-344-B-03 — Tab from key input moves focus to value input; (2026-05-15)
   // Shift+Tab from value input goes back. Locks the keyboard flow so
   // the user never has to grab the mouse to commit a pair.
   it("AC-344-B-03: Tab moves key→value, Shift+Tab moves value→key", async () => {
@@ -489,7 +489,7 @@ describe("DocumentTreePanel", () => {
     expect(keyInput).toHaveFocus();
   });
 
-  // AC-344-B-04 — Enter from key OR value input commits exactly once.
+  // AC-344-B-04 — Enter from key OR value input commits exactly once. (2026-05-15)
   // Path = parentPath joined with the typed key (root = bare key).
   // Value = the coerced JSON value.
   it("AC-344-B-04: Enter from key or value input commits exactly once with coerced value", async () => {
@@ -511,7 +511,7 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("age", 42);
   });
 
-  // AC-344-B-05 — Esc closes the input pair and does NOT commit. After
+  // AC-344-B-05 — Esc closes the input pair and does NOT commit. After (2026-05-15)
   // Esc the `+ key` affordance is visible again so the user can retry.
   it("AC-344-B-05: Esc closes the inputs without committing", async () => {
     const user = userEvent.setup();
@@ -537,7 +537,7 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByTestId("tree-add-key-__root")).toBeInTheDocument();
   });
 
-  // AC-344-B-06 — empty key + Enter must NOT commit. The inputs surface
+  // AC-344-B-06 — empty key + Enter must NOT commit. The inputs surface (2026-05-15)
   // `aria-invalid` and an inline validation message (aria-live polite
   // for screen readers).
   it("AC-344-B-06: empty key + Enter blocks commit and surfaces aria-invalid", async () => {
@@ -560,7 +560,7 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByText(/key required/i)).toBeInTheDocument();
   });
 
-  // AC-344-B-07 — duplicate key collision against `value` OR
+  // AC-344-B-07 — duplicate key collision against `value` OR (2026-05-15)
   // `pendingByPath` blocks commit. The hint message must say "key
   // already exists" so the user knows why the commit didn't fire.
   it("AC-344-B-07a: duplicate key against existing value blocks commit", async () => {
@@ -583,7 +583,7 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByText(/key already exists/i)).toBeInTheDocument();
   });
 
-  // AC-344-B-07b — duplicate against a path that is only in
+  // AC-344-B-07b — duplicate against a path that is only in (2026-05-15)
   // `pendingByPath` (not yet in `value`) also rejects. Without this the
   // user could fire two `+ key` commits with the same key and the
   // second would silently overwrite the first.
@@ -607,7 +607,7 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByText(/key already exists/i)).toBeInTheDocument();
   });
 
-  // AC-344-B-08 — empty VALUE with a non-empty key IS allowed; the user
+  // AC-344-B-08 — empty VALUE with a non-empty key IS allowed; the user (2026-05-15)
   // is explicitly adding a key with an empty-string value.
   // `coerceTreeAddValue` returns "" for empty input.
   it("AC-344-B-08: empty value + non-empty key commits with empty string", async () => {
@@ -628,7 +628,7 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("note", "");
   });
 
-  // AC-344-B-09 — after a successful commit the input pair disappears
+  // AC-344-B-09 — after a successful commit the input pair disappears (2026-05-15)
   // and the `+ key` affordance re-renders so the user can immediately
   // add another key.
   it("AC-344-B-09: commit closes the inputs and re-renders `+ key`", async () => {
@@ -651,7 +651,7 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByTestId("tree-add-key-__root")).toBeInTheDocument();
   });
 
-  // AC-344-B-10 — nested objects get the same affordance. Path is
+  // AC-344-B-10 — nested objects get the same affordance. Path is (2026-05-15)
   // parent-joined (`nested.newKey`).
   it("AC-344-B-10: nested object `+ key` commits the joined path", async () => {
     const user = userEvent.setup();
@@ -672,7 +672,7 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("nested.fresh", true);
   });
 
-  // AC-344-B-11 — coerce outer-quotes rule. `42` (no quotes) commits as
+  // AC-344-B-11 — coerce outer-quotes rule. `42` (no quotes) commits as (2026-05-15)
   // the number 42; `"42"` (with quotes) commits as the string "42".
   // `coerceTreeAddValue` is the authority — this test pins the helper's
   // wire-up at the panel boundary.
@@ -714,7 +714,7 @@ describe("DocumentTreePanel", () => {
   });
 
   // Edge — whitespace-only key is rejected (contract treats it as
-  // empty). Without trimming, " " would pass as a valid path component
+  // empty). Without trimming, " " would pass as a valid path component (2026-05-15)
   // and produce un-clickable rows in the tree.
   it("AC-344-B-06 edge: whitespace-only key is treated as empty and rejected", async () => {
     const user = userEvent.setup();
@@ -735,7 +735,7 @@ describe("DocumentTreePanel", () => {
 
   // Edge — Enter while focused in the VALUE input also commits (mirrors
   // leaf-edit UX where Enter wherever you are inside the editor fires
-  // the same commit). Locked separately from AC-04 because that case
+  // the same commit). Locked separately from AC-04 because that case (2026-05-15)
   // fires Enter via the global keyboard helper, which can fail to
   // specify which input is focused.
   it("AC-344-B-04 edge: Enter from value input also commits", async () => {
@@ -758,7 +758,7 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("foo", "bar");
   });
 
-  // Edge — unicode + special-char key names. The `+ key` flow must not
+  // Edge — unicode + special-char key names. The `+ key` flow must not (2026-05-15)
   // strip or normalise the key beyond a trim; `joinPath` preserves the
   // full UTF-8 string. Spec edge list explicitly calls this out.
   it("AC-344-B-04 edge: unicode key commits intact", async () => {
@@ -778,7 +778,7 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("한국어", "value");
   });
 
-  // Edge — typing keeps the input pair open and clears the previous
+  // Edge — typing keeps the input pair open and clears the previous (2026-05-15)
   // validation error so the user can recover from an empty/duplicate
   // reject in the same session.
   it("AC-344-B-06 edge: re-typing after empty-key reject clears the error", async () => {
@@ -802,10 +802,10 @@ describe("DocumentTreePanel", () => {
   });
 
   // -----------------------------------------------------------------
-  // `+ item` inline value input on array nodes. AC-344-C-01 ~ 10.
+  // `+ item` inline value input on array nodes. AC-344-C-01 ~ 10. (2026-05-15)
   // -----------------------------------------------------------------
 
-  // AC-344-C-01 — the `+ item` affordance must appear on every array
+  // AC-344-C-01 — the `+ item` affordance must appear on every array (2026-05-15)
   // node only when `onCommitEdit` is provided. Without onCommitEdit the
   // panel is read-only and the affordance must NOT render, mirroring
   // the `+ key` discipline.
@@ -834,7 +834,7 @@ describe("DocumentTreePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  // AC-344-C-02 — clicking `+ item` reveals a single value input and an
+  // AC-344-C-02 — clicking `+ item` reveals a single value input and an (2026-05-15)
   // index label `[N]` where N = current array length. The value input
   // is auto-focused so the user can start typing immediately.
   it("AC-344-C-02: clicking `+ item` reveals `[N]` label + value input (auto-focused)", async () => {
@@ -856,7 +856,7 @@ describe("DocumentTreePanel", () => {
     expect(indexLabel.textContent).toBe("[2]");
   });
 
-  // AC-344-C-03 — Enter commits exactly once. Path uses bracket
+  // AC-344-C-03 — Enter commits exactly once. Path uses bracket (2026-05-15)
   // notation (`tags[2]`), value is coerced (number `42` not string).
   it("AC-344-C-03: Enter commits exactly once with bracket path and coerced value", async () => {
     const user = userEvent.setup();
@@ -876,7 +876,7 @@ describe("DocumentTreePanel", () => {
     expect(typeof (commit.mock.calls[0]?.[1] as unknown)).toBe("number");
   });
 
-  // AC-344-C-04 — Esc closes the input and does NOT commit. After Esc
+  // AC-344-C-04 — Esc closes the input and does NOT commit. After Esc (2026-05-15)
   // the `+ item` affordance is visible again.
   it("AC-344-C-04: Esc closes the input without committing", async () => {
     const user = userEvent.setup();
@@ -899,7 +899,7 @@ describe("DocumentTreePanel", () => {
   });
 
   // AC-344-C-05 — empty value + Enter IS allowed (user wants to append
-  // the string `""`). `coerceTreeAddValue` returns `""` for empty
+  // the string `""`). `coerceTreeAddValue` returns `""` for empty (2026-05-15)
   // input.
   it("AC-344-C-05: empty value + Enter commits empty string", async () => {
     const user = userEvent.setup();
@@ -917,7 +917,7 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("tags[1]", "");
   });
 
-  // AC-344-C-06 — two consecutive `+ item` commits without a save in
+  // AC-344-C-06 — two consecutive `+ item` commits without a save in (2026-05-15)
   // between produce `[N]` and `[N+1]`. The second click must see the
   // pending append already accounted for so the label advances and both
   // rows render as separate ghosts (ghost-render integration).
@@ -964,7 +964,7 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledTimes(2);
   });
 
-  // AC-344-C-07 — nested arrays (an array inside an object) get the
+  // AC-344-C-07 — nested arrays (an array inside an object) get the (2026-05-15)
   // same affordance and the joined bracket path (`meta.tags[N]`).
   it("AC-344-C-07: nested array `+ item` commits the joined bracket path", async () => {
     const user = userEvent.setup();
@@ -984,7 +984,7 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("meta.tags[1]", "y");
   });
 
-  // AC-344-C-08 — the index label is a read-only span, NOT an input.
+  // AC-344-C-08 — the index label is a read-only span, NOT an input. (2026-05-15)
   // Verify it carries no value/onChange surface (text content only) and
   // is not focusable, so accidental clicks or keystrokes inside it
   // cannot mutate the auto-derived index.
@@ -1009,7 +1009,7 @@ describe("DocumentTreePanel", () => {
     expect(valueInput).toHaveFocus();
   });
 
-  // AC-344-C-09 — coerce outer-quotes rule for array values. `42` →
+  // AC-344-C-09 — coerce outer-quotes rule for array values. `42` → (2026-05-15)
   // number 42; `[1,2]` → array (the ghost render then expands the
   // nested subtree). This pins the coercion wire at the panel boundary
   // just like AC-344-B-11 does for `+ key`.
@@ -1053,7 +1053,7 @@ describe("DocumentTreePanel", () => {
     expect(arg).toEqual([1, 2]);
   });
 
-  // AC-344-C-10 — first add on an empty array yields index `[0]`. The
+  // AC-344-C-10 — first add on an empty array yields index `[0]`. The (2026-05-15)
   // current array length is 0, no prior pending appends, so the
   // auto-derived index naturally lands at 0.
   it("AC-344-C-10: first add on an empty array uses index [0]", async () => {
@@ -1075,7 +1075,7 @@ describe("DocumentTreePanel", () => {
   });
 
   // Edge — opening `+ item` does NOT show a key input (only `+ key` on
-  // object nodes shows the key input). Guards against an accidental
+  // object nodes shows the key input). Guards against an accidental (2026-05-15)
   // shared-state bug where the array-add UI accidentally reveals the
   // object-add inputs.
   it("AC-344-C-02 edge: opening `+ item` does not render the key input", async () => {
@@ -1104,7 +1104,7 @@ describe("DocumentTreePanel", () => {
   // root-level add for keys in the supplied set.
   // -----------------------------------------------------------------
 
-  // AC-344-F-04 — without `forbiddenRootKeys`, a root `_id` add commits
+  // AC-344-F-04 — without `forbiddenRootKeys`, a root `_id` add commits (2026-05-15)
   // (paradigm-agnostic default = no reserved keys). Guards against an
   // accidental "always-on" `_id` block bleeding into the RDB grid where
   // `_id` is a legitimate column name.
@@ -1126,7 +1126,7 @@ describe("DocumentTreePanel", () => {
     expect(commit).toHaveBeenCalledWith("_id", "x");
   });
 
-  // AC-344-F-04 — when `forbiddenRootKeys` contains `_id`, a root `_id`
+  // AC-344-F-04 — when `forbiddenRootKeys` contains `_id`, a root `_id` (2026-05-15)
   // add is rejected with aria-invalid + inline message; `onCommitEdit`
   // MUST NOT fire. Mongo grid uses this to prevent `_id` mutations the
   // backend would reject anyway.
@@ -1153,7 +1153,7 @@ describe("DocumentTreePanel", () => {
     ).toBeInTheDocument();
   });
 
-  // AC-344-F-04 — the guard only fires at the document root. A literal
+  // AC-344-F-04 — the guard only fires at the document root. A literal (2026-05-15)
   // `_id` field inside a nested object stays legal because Mongo
   // permits arbitrary keys below the root, and the generator's
   // id-in-patch check only inspects the top-level `_id`. Without this

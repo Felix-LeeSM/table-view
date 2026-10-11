@@ -1,4 +1,4 @@
-// AC-260-02: widens DocumentDataGrid drag-resize. Same harness pattern as
+// AC-260-02: widens DocumentDataGrid drag-resize. Same harness pattern as (2026-05-11)
 // the RDB DataGridTable (mousedown handle → mousemove document → only the
 // first `--cols` token grows, adjacent column unchanged). The Document
 // grid's resize result persists through the `set_datagrid_prefs` IPC, not

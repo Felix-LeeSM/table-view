@@ -1,4 +1,4 @@
-// DocumentDataGrid schema accumulator wire-up.
+// DocumentDataGrid schema accumulator wire-up. (2026-05-15)
 //
 // Reason: regression guard that on a schemaless collection the grid's
 // column headers stay stable across page/filter/sort changes, that new

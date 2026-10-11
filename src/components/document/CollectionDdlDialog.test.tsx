@@ -1,4 +1,4 @@
-// Live wire. CollectionDdlDialog dispatches a real IPC in all three modes
+// Live wire. CollectionDdlDialog dispatches a real IPC in all three modes (2026-05-15)
 // (create / rename / drop) and calls onClose / onSuccess on success. Also
 // guards JSON options parsing and the required-field guard.
 

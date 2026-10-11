@@ -16,7 +16,9 @@
  * what proves the production handlers ran. mouseDown and contextmenu are
  * covered here too.
  *
- * The overlay is threshold-gated by the shared `AsyncProgressOverlay` +
+ * Date: 2026-04-30
+ *
+ * The overlay is threshold-gated by the shared `AsyncProgressOverlay` + (2026-04-30)
  * `useDelayedFlag(loading, 1000)`. `enterRefetchState` waits on real
  * timers for that threshold before the pointer-event assertions run; see
  * its doc comment for why fake timers are not used.
@@ -141,6 +143,7 @@ async function enterRefetchState(): Promise<HTMLElement> {
 describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
   // Reason: AC-176-02 — overlay's mouseDown handler must call
   // preventDefault. Mirrors the DataGridTable mouseDown gesture.
+  // Date: 2026-04-30
   it("[AC-176-02] overlay blocks mouseDown from reaching row", async () => {
     const overlay = await enterRefetchState();
 
@@ -160,6 +163,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
   // that `expect(...).toHaveAttribute("aria-selected", "false")` after
   // fireEvent.click(overlay) is vacuous — it passes even if the
   // production handler is stripped.
+  // Date: 2026-04-30
   it("[AC-176-02] overlay blocks click on rows during refetch", async () => {
     const overlay = await enterRefetchState();
 
@@ -187,6 +191,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
   // Reason: AC-176-02 — double-click on the overlay must not open the
   // inline editor on the cell underneath. DocumentDataGrid treats
   // dblclick on a scalar cell as the cell-edit entry gesture.
+  // Date: 2026-04-30
   it("[AC-176-02] overlay blocks doubleClick from opening cell editor", async () => {
     const overlay = await enterRefetchState();
 
@@ -203,6 +208,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
 
   // Reason: AC-176-02 — right-click on the overlay must not open a
   // context menu on the row underneath.
+  // Date: 2026-04-30
   it("[AC-176-02] overlay blocks contextmenu from opening menu", async () => {
     const overlay = await enterRefetchState();
 
@@ -228,6 +234,8 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
   // pending resolver — should it ever fire — is dropped), then click
   // Next page again to drive the third call. The expected end state is
   // overlay absent, page-2's row text present, page-1's row text absent.
+  //
+  // Date: 2026-04-30
   it("[AC-180-05-DocumentDataGrid] cancel → re-trigger paints second attempt's data", async () => {
     let secondPendingResolver: ((value: DocumentQueryResult) => void) | null =
       null;
@@ -335,6 +343,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
   // (same wrapper classes, same Loader2 size and colour). A DOM-class
   // assertion is sufficient — see findings.md §Mechanism Note for the
   // AC-176-04 justification. Also pins `aria-hidden="true"` on the SVG.
+  // Date: 2026-04-30
   it("[AC-176-04] spinner DOM (classes, size, position) is unchanged", async () => {
     const overlay = await enterRefetchState();
 

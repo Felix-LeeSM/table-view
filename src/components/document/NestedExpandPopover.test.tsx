@@ -1,4 +1,4 @@
-// Nested expand popover component.
+// Nested expand popover component. (2026-05-15)
 //
 // Reason: regression guard for the sentinel cell's 1-depth inspect popover
 // — (a) it mounts on trigger click, (b) each object / array entry renders
@@ -150,7 +150,7 @@ describe("NestedExpandPopover (Sprint 321 F.1)", () => {
     expect(pending).toHaveTextContent("admin");
   });
 
-  // A Pencil click on a BSON wrapper entry mounts the BsonTypeEditor
+  // A Pencil click on a BSON wrapper entry mounts the BsonTypeEditor (2026-05-15)
   // (type-aware input).
   it("Pencil on a $oid entry mounts the BsonTypeEditor (24-hex hint)", () => {
     render(

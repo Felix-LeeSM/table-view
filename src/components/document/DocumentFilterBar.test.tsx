@@ -209,7 +209,7 @@ describe("DocumentFilterBar", () => {
     ).toBeInTheDocument();
   });
 
-  // `$in` / `$nin` are wired through the structured row. The dropdown must
+  // `$in` / `$nin` are wired through the structured row. The dropdown must (2026-05-14)
   // expose the IN / NOT IN labels and CSV input must round-trip into an
   // array via `buildMqlFilter`.
   it("exposes IN and NOT IN options in the operator dropdown", () => {
@@ -257,7 +257,7 @@ describe("DocumentFilterBar", () => {
     expect(onApply).toHaveBeenCalledWith({ age: { $nin: [1, "alpha", 2] } });
   });
 
-  // Composite ops. Match ALL/ANY toggle + per-row NOT button. ALL =
+  // Composite ops. Match ALL/ANY toggle + per-row NOT button. ALL = (2026-05-15)
   // implicit $and (default), ANY = top-level $or. NOT wraps the clause
   // in $not.
   it("exposes Match ALL / ANY toggle defaulting to ALL", () => {

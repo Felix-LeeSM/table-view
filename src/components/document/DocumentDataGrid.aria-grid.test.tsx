@@ -1,4 +1,4 @@
-// AC-260-03: integrity guard for DocumentDataGrid's ARIA grid roles. Same
+// AC-260-03: integrity guard for DocumentDataGrid's ARIA grid roles. Same (2026-05-11)
 // shape as the RDB DataGridTable.aria-grid.test.tsx.
 //
 // Checks:
@@ -116,7 +116,7 @@ describe("DocumentDataGrid ARIA grid roles (Sprint 260 AC-260-03)", () => {
     expect(cells[2]).toHaveAttribute("aria-colindex", "3");
   });
 
-  // Bug fix: on horizontal overflow the row box was cut off at the parent
+  // Bug fix: on horizontal overflow the row box was cut off at the parent (2026-05-11)
   // width, clipping hover:bg-muted / border-b. Every row must stretch to
   // the sum of the grid tracks through min-width: max-content.
   it("모든 row 가 min-width: max-content (horizontal overflow bg 회귀 가드)", async () => {

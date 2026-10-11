@@ -1,4 +1,4 @@
-// Field projection dialog.
+// Field projection dialog. (2026-05-15)
 //
 // Reason: regression guard for server-side projection — (a) include /
 // exclude mode, (b) per-column checkbox, (c) the Apply / Clear / Cancel

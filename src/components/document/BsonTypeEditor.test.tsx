@@ -1,4 +1,4 @@
-// BSON type-aware editor.
+// BSON type-aware editor. (2026-05-15)
 //
 // Reason: regression guard that the inline editor for the 4 BSON wrappers
 // (ObjectId/ISODate/Decimal128/BinData) (a) shows the initial value

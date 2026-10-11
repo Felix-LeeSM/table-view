@@ -1,4 +1,4 @@
-// U3 live wire. Verifies CollectionStatsPanel dispatches
+// U3 live wire. Verifies CollectionStatsPanel dispatches (2026-05-15)
 // collection_stats_rdb / collection_stats_mongo through
 // `@/lib/api/collectionStats` wrappers and renders the result grid.
 

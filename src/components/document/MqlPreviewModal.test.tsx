@@ -132,7 +132,7 @@ describe("MqlPreviewModal", () => {
     expect(onExecute).toHaveBeenCalledTimes(1);
   });
 
-  // AC-256-05 — env-aware ExecuteButton with a staging connection. The
+  // AC-256-05 — env-aware ExecuteButton with a staging connection. The (2026-05-09)
   // background renders via the warning token; the label includes the
   // connection name to anchor the dispatch target.
   it("[AC-256-05] env=staging + connectionLabel renders 'Execute on <conn>' with warning token", () => {
@@ -148,7 +148,7 @@ describe("MqlPreviewModal", () => {
   // wrap classes do nothing unless the ancestor flex column carries
   // min-w-0 (a grid/flex item's min-width:auto grows the track). jsdom
   // cannot measure layout, so the regression is pinned as a contract on
-  // the wrapping affordance classes.
+  // the wrapping affordance classes. (2026-07-18)
   it("gives the preview block wrap affordances and a min-w-0 ancestor so long lines cannot overflow", () => {
     renderModal({
       previewLines: [

@@ -1,4 +1,4 @@
-// DropMongoIndexDialog typing-confirm modal.
+// DropMongoIndexDialog typing-confirm modal. (2026-05-15)
 //
 // Reason: AC-351-05 — the Confirm button stays disabled until the
 // typing-confirm matches; on the happy path `dropMongoIndex` is called,

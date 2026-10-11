@@ -1,11 +1,11 @@
-// Mongo validator level/action toggle extension.
+// Mongo validator level/action toggle extension. (2026-05-15)
 //
 // Reason: ValidatorPanel gained `validationLevel` + `validationAction`
 // select controls; this file asserts AC-352-03 and AC-352-04
 // (backward-compat) directly. The earlier ValidatorPanel tests stay in
 // `ValidatorPanel.test.tsx`.
 //
-// #1791 — both controls moved from a native `<select>` to a Radix
+// #1791 — both controls moved from a native `<select>` to a Radix (2026-08-01)
 // `<Select>`. Radix renders a trigger button (role="combobox") plus a
 // portal listbox, so `fireEvent.change` / `toHaveValue` never reach it:
 // query by role + aria-label, select by clicking the trigger then the

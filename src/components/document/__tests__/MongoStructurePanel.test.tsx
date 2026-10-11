@@ -1,4 +1,4 @@
-// MongoStructurePanel sub-sub-tab bar.
+// MongoStructurePanel sub-sub-tab bar. (2026-05-15)
 //
 // Reason: guards AC-350-02 / 04 for the Mongo Structure pane's sub-sub-tab
 // bar (Indexes / Validator) — (a) `role="tablist"` plus two `role="tab"`,
