@@ -14,76 +14,91 @@
 # 이 파일은 줄어들기만 한다. 테스트를 workflow 의 `--test` 로 부르기 시작했거나
 # 파일을 지웠으면 여기 줄도 같은 PR 에서 지운다 — 둘 다 가드가 위반으로 잡는다.
 #
-# ## 사유 `seed-2113` 은 시딩분이다
+# ## 사유 `measured-2559` 는 시딩분을 실행해서 얻은 판정이다
 #
-# `seed-2113` 이 붙은 줄은 이 게이트가 생기기 전부터 미호출이던 것이다. 각 줄을
-# "호출 편입" 과 "삭제" 중 무엇으로 닫을지 판정하는 것은 #2113 범위 밖이고
-# (오너 결정, 2026-08-03) 후속 이슈 몫이다. 그래서 seed 의 사유는 판정이 아니라
-# 출처다 — 남은 것은 `grep -c ' seed-2113$' ci-uncalled-tests.txt` 로 센다
-# (헤더의 언급이 안 섞이도록 줄 끝으로 고정한 패턴이다).
-# 새로 추가하는 줄은 seed 가 아니므로 진짜 사유를 적어라.
+# 이 사유가 붙은 줄은 이 게이트가 생기기 전부터 미호출이던 시딩분이고, 처음 사유는
+# `seed-2113` 이었다. #2559 가 `fd557c1104e6` 트리에서 줄마다 아래 명령을 로컬
+# (macOS aarch64, Docker 기동)로 돌렸고, 첫 실행의 결과를 판정으로 삼아 사유를
+# `measured-2559 <판정> <근거 요약>` 으로 바꿨다.
+#
+#   cargo test --manifest-path src-tauri/Cargo.toml --test <이름> -- --nocapture
+#
+#   fail = rc 가 0 이 아니다
+#   skip = rc 는 0 이지만 통과한 테스트가 0 개이거나 출력에 `SKIP:` 줄이 있다
+#   pass = rc 가 0 이고 통과한 테스트가 1 개 이상이며 `SKIP:` 줄이 없다
+#
+# `*_HOST` 환경 변수 없이 돌렸으므로, 서버 DB 에 붙는 target 은 테스트 helper 가 직접
+# 띄운 testcontainers 컨테이너를 썼다 (근거 요약 끝 괄호의 이미지). 판정은 그 트리에서
+# 잰 값이지 CI 결과가 아니다.
+# pass · skip 을 CI 에 붙이는 일은 #2705 가 맡고, fail 을 고치는 일은 target 마다
+# 따로 여는 이슈가 맡는다. 판정별 이름은 아래 명령으로 뽑는다 (`pass` 자리를 바꿔
+# 쓴다):
+#
+#   awk '$1 !~ /^#/ && $2 == "measured-2559" && $3 == "pass" {print $1}' ci-uncalled-tests.txt
+#
+# 새로 추가하는 줄은 측정분이 아니므로 진짜 사유를 적어라.
 #
 # 이 파일의 이름 집합은 게이트가 세는 미호출 집합과 정확히 같아야 한다. 지금 값은
 # 게이트를 돌리면 집계 줄에 나온다 — 통과하면 `ok:` 줄, 위반이 있으면 `집계:` 줄:
 #
 #   bash scripts/check-ci-test-calls.sh
 
-backend_adapter_contract_profile              seed-2113
-backend_query_result_contract                 seed-2113
-backend_safety_capability_contract            seed-2113
-cancel_error_classes                          seed-2113
-cancel_mongo                                  seed-2113
-cancel_mysql                                  seed-2113
-cancel_pg                                     seed-2113
-capability_allowlist_workspace_pattern        seed-2113
-catalog_explain_contract                      seed-2113
-clear_mru                                     seed-2113
-connection_status_serde                       seed-2113
-corrupt_body_recovery                         seed-2113
-corrupt_recovery                              seed-2113
-data_source_profile_parity                    seed-2113
-datagrid_prefs_field_reset                    seed-2113
-datagrid_prefs_get_default                    seed-2113
-datagrid_prefs_partial_patch                  seed-2113
-dual_write_connections                        seed-2113
-dual_write_reconcile                          seed-2113
-duckdb_browse_query_adapter                   seed-2113
-emit_state_changed_payload                    seed-2113
-enterprise_rdbms_declared_only_commands       seed-2113
-fixture_harness                               seed-2113
-guard_grep                                    seed-2113
-history_add_discriminated_union               seed-2113
-history_clear                                 seed-2113
-history_detail                                seed-2113
-history_executed_at_drift                     seed-2113
-history_list_filter                           seed-2113
-history_list_no_sql                           seed-2113
-history_retention_31d                         seed-2113
-history_tab_id_null_audit                     seed-2113
-introspection_pool_isolation                  seed-2113
-launcher_command_guard                        seed-2113
-legacy_file_cleanup                           seed-2113
-legacy_import                                 seed-2113
-mariadb_returning_runtime                     seed-2113
-migration_apply                               seed-2113
-migration_failure_preserves_db                seed-2113
-mismatch_metric                               seed-2113
-open_workspace_window_focus_event             seed-2113
-open_workspace_window_idempotent              seed-2113
-oracle_smoke_boundary_probe                   seed-2113
-persist_setting_state_changed_emit            seed-2113
-release_tab_connection_rollback               seed-2113
-reset_setting                                 seed-2113
-single_instance_2nd_launch                    seed-2113
-snapshot_atomic                               seed-2113
-snapshot_listener_buffer                      seed-2113
-snapshot_partial                              seed-2113
-snapshot_perf                                 seed-2113
-snapshot_shape                                seed-2113
-sql_redact                                    seed-2113
-sqlite_browse_query_adapter                   seed-2113
-sqlite_connection_command                     seed-2113
-tab_affinity_lazy                             seed-2113
-testcontainer_lifecycle_test                  seed-2113
-tls_verify_ca_fail_closed                     seed-2113
-workspace_sqlite_only                         seed-2113
+backend_adapter_contract_profile              measured-2559 pass 9 passed; 0 failed; 0 ignored
+backend_query_result_contract                 measured-2559 pass 3 passed; 0 failed; 0 ignored
+backend_safety_capability_contract            measured-2559 pass 8 passed; 0 failed; 0 ignored
+cancel_error_classes                          measured-2559 pass 10 passed; 0 failed; 0 ignored
+cancel_mongo                                  measured-2559 pass 1 passed; 0 failed; 0 ignored (testcontainers mongo:5.0.6)
+cancel_mysql                                  measured-2559 pass 3 passed; 0 failed; 0 ignored (testcontainers mysql:8.1)
+cancel_pg                                     measured-2559 fail 2 passed; 1 failed; 0 ignored — pg_execute_query_tracked_pid_enables_native_cancel 이 :156 의 10초 join 예산을 넘겼다, 다시 돌린 5회 중 4회 재현 (testcontainers postgres:11-alpine)
+capability_allowlist_workspace_pattern        measured-2559 pass 3 passed; 0 failed; 0 ignored
+catalog_explain_contract                      measured-2559 pass 2 passed; 0 failed; 0 ignored
+clear_mru                                     measured-2559 pass 3 passed; 0 failed; 0 ignored
+connection_status_serde                       measured-2559 pass 10 passed; 0 failed; 0 ignored
+corrupt_body_recovery                         measured-2559 pass 1 passed; 0 failed; 0 ignored
+corrupt_recovery                              measured-2559 pass 3 passed; 0 failed; 0 ignored
+data_source_profile_parity                    measured-2559 pass 1 passed; 0 failed; 0 ignored
+datagrid_prefs_field_reset                    measured-2559 pass 4 passed; 0 failed; 0 ignored
+datagrid_prefs_get_default                    measured-2559 pass 3 passed; 0 failed; 0 ignored
+datagrid_prefs_partial_patch                  measured-2559 pass 4 passed; 0 failed; 0 ignored
+dual_write_connections                        measured-2559 pass 12 passed; 0 failed; 0 ignored
+dual_write_reconcile                          measured-2559 pass 2 passed; 0 failed; 0 ignored
+duckdb_browse_query_adapter                   measured-2559 pass 9 passed; 0 failed; 0 ignored
+emit_state_changed_payload                    measured-2559 pass 10 passed; 0 failed; 0 ignored
+enterprise_rdbms_declared_only_commands       measured-2559 pass 1 passed; 0 failed; 0 ignored
+fixture_harness                               measured-2559 pass 3 passed; 0 failed; 0 ignored
+guard_grep                                    measured-2559 pass 3 passed; 0 failed; 0 ignored
+history_add_discriminated_union               measured-2559 pass 4 passed; 0 failed; 0 ignored
+history_clear                                 measured-2559 pass 4 passed; 0 failed; 0 ignored
+history_detail                                measured-2559 pass 5 passed; 0 failed; 0 ignored
+history_executed_at_drift                     measured-2559 pass 3 passed; 0 failed; 0 ignored
+history_list_filter                           measured-2559 pass 7 passed; 0 failed; 0 ignored
+history_list_no_sql                           measured-2559 pass 1 passed; 0 failed; 0 ignored
+history_retention_31d                         measured-2559 pass 3 passed; 0 failed; 0 ignored
+history_tab_id_null_audit                     measured-2559 pass 3 passed; 0 failed; 0 ignored
+introspection_pool_isolation                  measured-2559 pass 4 passed; 0 failed; 0 ignored
+launcher_command_guard                        measured-2559 pass 3 passed; 0 failed; 0 ignored
+legacy_file_cleanup                           measured-2559 pass 5 passed; 0 failed; 0 ignored
+legacy_import                                 measured-2559 pass 4 passed; 0 failed; 0 ignored
+mariadb_returning_runtime                     measured-2559 pass 1 passed; 0 failed; 0 ignored (testcontainers mariadb:11)
+migration_apply                               measured-2559 fail 6 passed; 2 failed; 0 ignored — :64 · :245 가 테이블 11개를 단언하는데 migration 0006_ssh_host_key_pins.sql 이 12번째 테이블을 더했다
+migration_failure_preserves_db                measured-2559 pass 1 passed; 0 failed; 0 ignored
+mismatch_metric                               measured-2559 pass 3 passed; 0 failed; 0 ignored
+open_workspace_window_focus_event             measured-2559 pass 4 passed; 0 failed; 0 ignored
+open_workspace_window_idempotent              measured-2559 pass 5 passed; 0 failed; 0 ignored
+oracle_smoke_boundary_probe                   measured-2559 skip 0 passed; 0 failed; 7 ignored — 7개 모두 #[ignore] (Oracle 컨테이너와 e2e/fixtures/seed.oracle.sql 필요) 라서 --ignored 가 없는 명령은 돌리지 않는다
+persist_setting_state_changed_emit            measured-2559 pass 4 passed; 0 failed; 0 ignored
+release_tab_connection_rollback               measured-2559 pass 2 passed; 0 failed; 0 ignored
+reset_setting                                 measured-2559 pass 4 passed; 0 failed; 0 ignored
+single_instance_2nd_launch                    measured-2559 pass 3 passed; 0 failed; 0 ignored
+snapshot_atomic                               measured-2559 pass 2 passed; 0 failed; 0 ignored
+snapshot_listener_buffer                      measured-2559 pass 3 passed; 0 failed; 0 ignored
+snapshot_partial                              measured-2559 pass 3 passed; 0 failed; 0 ignored
+snapshot_perf                                 measured-2559 pass 2 passed; 0 failed; 0 ignored
+snapshot_shape                                measured-2559 pass 12 passed; 0 failed; 0 ignored
+sql_redact                                    measured-2559 pass 12 passed; 0 failed; 0 ignored
+sqlite_browse_query_adapter                   measured-2559 pass 24 passed; 0 failed; 0 ignored
+sqlite_connection_command                     measured-2559 pass 11 passed; 0 failed; 0 ignored
+tab_affinity_lazy                             measured-2559 pass 4 passed; 0 failed; 0 ignored
+testcontainer_lifecycle_test                  measured-2559 pass 2 passed; 0 failed; 0 ignored
+tls_verify_ca_fail_closed                     measured-2559 pass 3 passed; 0 failed; 0 ignored
+workspace_sqlite_only                         measured-2559 pass 3 passed; 0 failed; 0 ignored
