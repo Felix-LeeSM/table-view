@@ -1,10 +1,10 @@
 ---
 title: 코드 주석 원칙
 type: convention
-updated: 2026-09-07
+updated: 2026-10-11
 task: comments, 주석, comment-style, comment-sweep, tsdoc, doc-comment
 surface: '**/*.ts, **/*.tsx, **/*.rs, e2e/**'
-keywords: 주석, comment, 한줄 주석, 간결, 재진술, restate, TSDoc, doc comment, ///, sprint 서사, 리뷰 라운드 서사, caller count, 메타 주석, 이중 서술, 출처 포인터, 이슈 번호, ADR 인용, file:line 인용, TODO, FIXME, MUST, NEVER, 영어 주석, 구획선, comment style
+keywords: 주석, comment, 한줄 주석, 간결, 재진술, restate, TSDoc, doc comment, ///, sprint 서사, 리뷰 라운드 서사, caller count, 메타 주석, 이중 서술, 출처 포인터, 이슈 번호, ADR 인용, file:line 인용, TODO, FIXME, MUST, NEVER, 영어 주석, 구획선, comment style, 테스트 머리 주석, 날짜, date
 ---
 
 # 코드 주석 원칙
@@ -30,7 +30,12 @@ keywords: 주석, comment, 한줄 주석, 간결, 재진술, restate, TSDoc, doc
 4. **메타·서사 금지** — sprint 번호 서사, 리뷰 라운드 서사, caller count 숫자, 라인 수는
    새로 쓰지 않고, 기존 것은 저장소 전체 스윕으로 정리한다. 메타 부분만 떼고
    load-bearing 본문은 보존한다. 이슈/PR 번호는 회귀 앵커라 남긴다. 분류와
-   `scripts/check-round-narrative.sh` 게이트는 god-file 방이 소유한다.
+   `scripts/check-round-narrative.sh` 게이트는 god-file 방이 소유한다. 테스트 파일과
+   테스트 블록의 머리 주석에 적힌 날짜(`YYYY-MM-DD`)는
+   [testing-scenarios](../testing-scenarios/memory.md) P7 이 Purpose · Reason 주석에
+   요구하는 작성 기록이지 메타가 아니므로 떼지 않는다. E2E 테스트는 testing-scenarios
+   방의 범위 밖이지만, god-file 방 「작업 단위」가 테스트 파일의 Reason/Date/Purpose
+   보존을 적고 있으므로 E2E 테스트의 날짜도 떼지 않는다.
 5. **미완·한계 표기** — TODO/FIXME/HACK 마커를 새로 쓰지 않는다. 진행 중인 일은 이슈
    번호와 남은 것 한 문장으로 남긴다(`src/components/datagrid/useDataGridEditPendingState.ts`
    의 `#1616` 주석 형태). 보장의 강도와 막지 못하는 창은 주석에 명시하고
