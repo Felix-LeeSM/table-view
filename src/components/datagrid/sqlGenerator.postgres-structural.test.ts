@@ -8,7 +8,7 @@ import {
 } from "./sqlGenerator.fixtures";
 
 // ---------------------------------------------------------------------------
-// Inline JSON tree edits: jsonb + Postgres ARRAY. Locks the path-key parser +
+// Inline JSON tree edits: jsonb + Postgres ARRAY. Locks the path-key parser + (2026-05-15)
 // per-cell dispatch so the inline tree (Mongo's DocumentTreePanel mounted in
 // the RDB grid) can edit / delete leaves through `:dot.path` pendingEdit keys
 // without the SQL generator collapsing them to invalid statements. Regression
@@ -16,7 +16,7 @@ import {
 // ---------------------------------------------------------------------------
 
 describe("generateSql — JSONB nested edits (Sprint 343)", () => {
-  // AC-344-E-07: every jsonb_set call uses the 4-arg form (`, true`).
+  // AC-344-E-07: every jsonb_set call uses the 4-arg form (`, true`). (2026-05-15)
   // create_missing=true does not break existing leaf-set semantics (an
   // existing key is still overwritten); it only extends the call so a new
   // add-key works.
@@ -240,7 +240,7 @@ describe("generateSql — Postgres ARRAY nested edits (Sprint 343)", () => {
 
 // ---------------------------------------------------------------------------
 // Generator dispatch for inline-tree `+ key` / `+ item` adds (a new path
-// commit in `pendingByPath`). Reason: when the inline tree commits a new
+// commit in `pendingByPath`). Reason: when the inline tree commits a new (2026-05-15)
 // key/item, `sqlGenerator` must turn it into correct SQL.
 //  - AC-344-E-01: jsonb create-missing key — add a new key beside an existing
 //    one.
@@ -450,7 +450,7 @@ describe("generateSql — Slice E add-key / add-item dispatch (Sprint 344)", () 
   });
 });
 
-// jsonb[] inner-path edit. The path syntax for an inner edit is
+// jsonb[] inner-path edit. The path syntax for an inner edit is (2026-05-15)
 // `[N].inner.path`. The emit reassigns the whole array (ARRAY[...]::jsonb[])
 // with edited slots wrapped in jsonb_set / #- and untouched slots referencing
 // `col[i+1]` (Postgres 1-indexed).

@@ -317,7 +317,7 @@ describe("generateSql — Sprint 75 attempt 2 INSERT coercion", () => {
     expect(keys).toEqual(["new-0-1", "new-0-2"]);
   });
 
-  // BigInt freeze regression guard. When `normalizeNewRowCell`'s
+  // BigInt freeze regression guard. When `normalizeNewRowCell`'s (2026-05-14)
   // typeof === "object" branch was raw JSON.stringify it threw on nested
   // BigInt input. Also guards the regression where `buildWhereClause` fell
   // through to [object Object] when it met a Decimal.

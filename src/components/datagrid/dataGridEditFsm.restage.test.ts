@@ -120,7 +120,7 @@ describe("buildRestageSnapshot (#1126 Phase 1)", () => {
   // Reason: #1433 B1 review finding — a real NULL in the delete-undo
   // re-INSERT snapshot must be preserved verbatim. Paired with the
   // `sqlGenerator` contract that emits this null as an explicit NULL — unlike
-  // an unfilled cell (undefined), it is not a candidate for omission.
+  // an unfilled cell (undefined), it is not a candidate for omission. (2026-07-10)
   it("committed DELETE reversal preserves real NULL cells verbatim", () => {
     const src = emptySource();
     src.pendingDeletedRowKeys.add("row-1-0");

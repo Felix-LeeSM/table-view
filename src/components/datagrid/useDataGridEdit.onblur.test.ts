@@ -1,5 +1,5 @@
 // ADR 0022 — onBlur commit hook-layer guards. Maps to AC-250-01 /
-// AC-250-04 / AC-250-05.
+// AC-250-04 / AC-250-05. (2026-05-09)
 //
 // Scope (hook layer only):
 // - AC-250-01: saveCurrentEdit applied via the onBlur entry point persists

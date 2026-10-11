@@ -59,7 +59,7 @@ describe("CellDetailDialog", () => {
     ).toBeInTheDocument();
   });
 
-  // Regression guard for the BigInt freeze. CellDetailDialog is the hot path
+  // Regression guard for the BigInt freeze. CellDetailDialog is the hot path (2026-05-14)
   // that froze when a JSONB / numeric column handed it a nested or
   // top-level BigInt.
   it("[Sprint 306] renders top-level BigInt as digit string without throwing", () => {

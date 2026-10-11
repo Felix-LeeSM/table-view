@@ -95,7 +95,7 @@ describe("generateSql — UPDATE tri-state (null vs empty string vs text)", () =
 describe("generateSql — INSERT null vs empty string", () => {
   // Reason: #1433 — a column with no default/identity metadata keeps the
   // existing contract (explicit NULL) even when untouched (undefined
-  // sentinel). Omission applies only to default/identity columns.
+  // sentinel). Omission applies only to default/identity columns. (2026-07-10)
   it("emits NULL for null/untouched cells and '' for empty-string cells in new rows", () => {
     const newRows = [
       [null, ""],
@@ -127,7 +127,7 @@ describe("generateSql — INSERT null vs empty string", () => {
 });
 
 // Purpose: #1433 — omit an untouched server-default/identity column from the
-// INSERT column list so the server default/identity takes effect.
+// INSERT column list so the server default/identity takes effect. (2026-07-10)
 describe("generateSql — INSERT omits untouched default/identity columns (#1433)", () => {
   const IDENTITY_DEFAULT_DATA: TableData = {
     columns: [
@@ -173,7 +173,7 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
   // Reason: #1433 scenario B — on an untouched serial/identity PK an explicit
   // NULL violates NOT NULL and blocks row insertion entirely. The column
   // itself must be omitted. Untouched = the add-row seed's `undefined`
-  // sentinel.
+  // sentinel. (2026-07-10)
   it("omits an untouched identity column so the sequence assigns the value", () => {
     const statements = generateSql(
       IDENTITY_DEFAULT_DATA,
@@ -190,7 +190,7 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
   });
 
   // Reason: #1433 scenario A — on an untouched default column an explicit
-  // NULL silently ignores the server default. Omit it so the default applies.
+  // NULL silently ignores the server default. Omit it so the default applies. (2026-07-10)
   it("omits an untouched server-default column and keeps explicit values", () => {
     const statements = generateSql(
       IDENTITY_DEFAULT_DATA,
@@ -215,7 +215,7 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
   // so a real NULL value arrives as `null`. That NULL is data, not
   // "untouched" — omitting it silently substitutes the server default
   // ('active'), a data-loss regression. It must be emitted as an explicit
-  // NULL.
+  // NULL. (2026-07-10)
   it("keeps a real NULL (duplicate row / undo re-INSERT) as explicit NULL on a default column", () => {
     const statements = generateSql(
       IDENTITY_DEFAULT_DATA,
@@ -236,7 +236,7 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
   // Reason: #1433 B1 review finding — a real NULL on an identity column must
   // also be distinguished from untouched. Emit an explicit NULL rather than
   // omitting, so the DB surfaces the NOT NULL violation and the user sees it
-  // (no silent substitution).
+  // (no silent substitution). (2026-07-10)
   it("keeps a real NULL on an identity column as explicit NULL (no silent omission)", () => {
     const statements = generateSql(
       IDENTITY_DEFAULT_DATA,
@@ -254,7 +254,7 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
 
   // Reason: #1433 — when every column is default/identity and all are
   // untouched the column list is empty, so each dialect needs its own
-  // all-defaults INSERT form.
+  // all-defaults INSERT form. (2026-07-10)
   it("emits DEFAULT VALUES when every column is untouched default/identity", () => {
     const allDefaultData: TableData = {
       ...IDENTITY_DEFAULT_DATA,
@@ -299,7 +299,7 @@ describe("generateSql — INSERT omits untouched default/identity columns (#1433
   });
 
   // Reason: #1433 — Duplicate Row / undo re-INSERT put a real value in the
-  // identity cell. A filled-in value is emitted as-is, never omitted.
+  // identity cell. A filled-in value is emitted as-is, never omitted. (2026-07-10)
   it("keeps an explicitly provided value for an identity column", () => {
     const statements = generateSql(
       IDENTITY_DEFAULT_DATA,

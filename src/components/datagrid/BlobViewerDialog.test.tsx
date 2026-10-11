@@ -80,7 +80,7 @@ describe("BlobViewerDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  // Regression guard for the BigInt freeze.
+  // Regression guard for the BigInt freeze. (2026-05-14)
   it("[Sprint 306] BigInt 셀이 와도 throw 없이 렌더링", () => {
     expect(() =>
       render(

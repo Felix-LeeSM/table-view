@@ -1,5 +1,5 @@
 /**
- * Q21 affordance #5 + #6.
+ * Q21 affordance #5 + #6. (2026-05-17)
  *
  * Reason: in the DataGrid column header's right-click context menu,
  *   (5) "Reset column widths" → one `onResetColumnWidths` callback.
@@ -122,7 +122,7 @@ describe("HeaderRow reset affordances (Q21 #5 + #6)", () => {
     expect(onShowAllColumns).not.toHaveBeenCalled();
   });
 
-  // Reason: after dragging a column width, the user must be able to
+  // Reason: after dragging a column width, the user must be able to (2026-05-17)
   // double-click the purple drag handle shown on hover to reset straight
   // back to the defaults (image #7). This is a *reset of all widths*, not
   // column-level — it reuses the `reset_datagrid_prefs (field=widths)` IPC.
@@ -174,7 +174,7 @@ describe("HeaderRow reset affordances (Q21 #5 + #6)", () => {
     expect(onSort).not.toHaveBeenCalled();
   });
 
-  // #1733. Reason: removing the duplicate toolbar reset button made the
+  // #1733. Reason: removing the duplicate toolbar reset button made the (2026-07-24)
   // double-click the only grip reset trigger. The grip exposes a hover
   // `title` hint so mouse users can discover this hidden affordance. If the
   // reset hint leaves the title text, this test fails (discoverability

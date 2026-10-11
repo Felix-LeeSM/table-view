@@ -2,7 +2,7 @@
 // selected row is aria-selected="true", every other row "false". Space on a
 // focused cell selects the row (onSelectRow) — modifiers are forwarded just
 // as click does. The Document grid already exposes aria-selected, so RDB is
-// matched to it for consistency.
+// matched to it for consistency. (2026-07-03)
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";

@@ -184,7 +184,7 @@ describe("DataGridTable ARIA grid roles & indices (sprint-106)", () => {
     expect(cells[0]).toHaveTextContent("Table is empty");
   });
 
-  // Bug fix: on horizontal overflow the row box was cut off at the parent
+  // Bug fix: on horizontal overflow the row box was cut off at the parent (2026-05-11)
   // width, so border-b / hover:bg-muted were not drawn to the end. Every row
   // must stretch to the sum of the grid tracks via min-width: max-content
   // (same for the sticky header rowgroup's bg-secondary).

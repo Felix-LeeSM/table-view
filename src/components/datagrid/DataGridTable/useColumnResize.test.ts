@@ -1,4 +1,4 @@
-// Purpose: column-resize drag lifecycle — Esc-revert + commit semantics.
+// Purpose: column-resize drag lifecycle — Esc-revert + commit semantics. (2026-07-18)
 // User requirement: every draggable restores its start size when Esc is
 // pressed during the drag. This file pins the resize-drag half of that
 // requirement at the useColumnResize layer. Component wiring (HeaderRow grip
@@ -40,7 +40,7 @@ describe("useColumnResize", () => {
   });
 
   // Reason: a normal resize still commits the new width — adding Esc does
-  // not regress it.
+  // not regress it. (2026-07-18)
   it("commits the dragged width on mouseup", () => {
     const { outer, onCommitWidth, result } = setup([100, 150]);
 
@@ -58,7 +58,7 @@ describe("useColumnResize", () => {
   });
 
   // Reason: Esc during the drag restores --cols to the start width and
-  // cancels the commit.
+  // cancels the commit. (2026-07-18)
   it("Esc reverts --cols to the start width and cancels the commit", () => {
     const { outer, onCommitWidth, result } = setup([100, 150]);
 
@@ -80,7 +80,7 @@ describe("useColumnResize", () => {
   });
 
   // Reason: a trailing mouseup after Esc does not commit, and the listeners
-  // are detached without leaking.
+  // are detached without leaking. (2026-07-18)
   it("does not commit or react to further events after Esc", () => {
     const { outer, onCommitWidth, result } = setup([100, 150]);
 

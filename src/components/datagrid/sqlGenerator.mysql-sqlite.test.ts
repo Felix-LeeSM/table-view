@@ -3,7 +3,7 @@ import type { TableData } from "@/types/schema";
 import { generateSql } from "./sqlGenerator";
 import { JSONB_DATA, MYSQL_JSON_DATA } from "./sqlGenerator.fixtures";
 
-// MySQL / SQLite JSON dispatch. `dialect` option routes nested edits to
+// MySQL / SQLite JSON dispatch. `dialect` option routes nested edits to (2026-05-15)
 // per-DBMS emit. MySQL uses JSON_SET / JSON_REMOVE against the jQuery-style
 // `'$.path'` literals (vs Postgres' segment-array `'{a,b,c}'`). SQLite stays
 // rejected with a clear message until `json1` extension dispatch lands.
@@ -245,7 +245,7 @@ describe("generateSql — MySQL row-write quoting and key projection (#444)", ()
 
 describe("generateSql — SQLite JSON nested edits (Sprint 347)", () => {
   // SQLite has no formal JSON column type (data_type comes through as
-  // TEXT/JSON depending on driver). Until `json1` extension dispatch lands,
+  // TEXT/JSON depending on driver). Until `json1` extension dispatch lands, (2026-05-15)
   // nested edits on a `json` column under dialect:sqlite are rejected with a
   // clear message rather than emitting broken SQL.
   const SQLITE_DATA: TableData = {
