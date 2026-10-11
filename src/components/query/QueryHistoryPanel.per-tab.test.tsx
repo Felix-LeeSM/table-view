@@ -1,5 +1,5 @@
 /**
- * AC-372-02, AC-372-06, AC-372-08.
+ * AC-372-02, AC-372-06, AC-372-08. (2026-05-17)
  *
  * Reason: on mount the per-tab panel calls the IPC once with a
  * `{connectionId, tabId}` filter, shows only the redacted response, and on a
@@ -60,6 +60,7 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
   // AC-372-02 — mount calls the list_history IPC with a
   // `{connectionId, tabId}` filter. The payload is byte-equivalent to the
   // backend's `tests/history_list_filter.rs` (lego).
+  // Date: 2026-05-17.
   it("[AC-372-02] mount fires list_history with connectionId + tabId filter", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [row(1)] });
     render(<QueryHistoryPanel connectionId="conn-1" tabId="tab-1" />);
@@ -136,7 +137,7 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
 
   // AC-372-08 — redact-only display. The original sql is absent from the
   // list response and must not appear anywhere in the panel.
-  // Reason: privacy invariant (strategy F.5 line 537). The original sql is
+  // Reason: privacy invariant (strategy F.5 line 537). The original sql is (2026-05-17)
   // exposed nowhere outside the detail modal.
   it("[AC-372-08] panel renders sqlRedacted only — no leak of original sql", async () => {
     invokeMock.mockResolvedValueOnce({
@@ -178,7 +179,7 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
   // entry" badge. Past page 1 the auto-refresh is blocked to protect the
   // user's reading position.
   // Reason: locks the user journey path down to its last outcome (does the
-  // new-entry badge become visible in the UI).
+  // new-entry badge become visible in the UI). (2026-05-17)
   it("[AC-372-06] paginated state + create event → 'New entry' badge appears, no auto-refetch", async () => {
     // First page — hasMore=true
     invokeMock.mockResolvedValueOnce({
@@ -222,7 +223,7 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
   });
 
   // empty state — empty array in the IPC response → "No queries…" notice.
-  // Reason: keeps a blank screen from looking to the user like silent
+  // Reason: keeps a blank screen from looking to the user like silent (2026-05-17)
   // loading.
   it("renders empty state when backend returns no rows", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [] });
@@ -237,7 +238,7 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
   });
 
   // "End of history" — with no nextCursor, mark the end of the list.
-  // Reason: so the user can tell at a glance they reached the last page.
+  // Reason: so the user can tell at a glance they reached the last page. (2026-05-17)
   it("shows 'End of history' marker when nextCursor is absent", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [row(1), row(2)] });
     render(<QueryHistoryPanel connectionId="conn-1" tabId="tab-1" />);
@@ -253,7 +254,7 @@ describe("QueryHistoryPanel per-tab (sprint-372)", () => {
   });
 
   // row click → detail modal mount + get_history_detail IPC call.
-  // Reason: locks that a real user click inside the panel triggers the
+  // Reason: locks that a real user click inside the panel triggers the (2026-05-17)
   // AC-372-03 wire path.
   it("clicking a row opens the detail modal and triggers get_history_detail IPC", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [row(42)] });

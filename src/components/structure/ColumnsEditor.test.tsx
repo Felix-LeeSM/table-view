@@ -3,18 +3,18 @@
 // exercise the RDB default through StructurePanel.test.tsx; this sibling
 // file keeps the dictionary-driven assertions close to the component they
 // cover so the audit (labels-audit.md) can point here for the "Add
-// Column"/"Add Field" + empty-state evidence.
+// Column"/"Add Field" + empty-state evidence. (2026-04-30)
 //
 // AC-187-04 — extends this file with strict / warn / cancel / confirm
 // regressions for the structure-surface Safe Mode gate. The `@lib/tauri`
 // mock is hoisted so each test can stub `alterTable` to return the danger
-// DDL we want the analyzer to flag.
+// DDL we want the analyzer to flag. (2026-05-01)
 //
 // AC-236-04 / AC-236-05 — `+ Column` toolbar button + per-row trash icon
 // both REROUTED through `AddColumnDialog` / `DropColumnDialog` modals (no
 // longer push pendingChanges). The inline-batched MODIFY path (Edit pencil
 // → change → save → Review SQL → Execute) stays UNCHANGED, so the Safe
-// Mode gate regressions drive the modify path instead of the trash path.
+// Mode gate regressions drive the modify path instead of the trash path. (2026-05-07)
 
 import {
   act,
@@ -143,7 +143,7 @@ describe("ColumnsEditor — paradigm-aware copy (Sprint 179)", () => {
   // Reason: AC-179-02b — paradigm="document" renders the Mongo button +
   // empty-state copy. The aria-label uses sentence case ("Add field") to
   // match the legacy ariaAddUnit pattern; visible text uses title case
-  // ("Add Field") sourced from the dictionary.
+  // ("Add Field") sourced from the dictionary. (2026-04-30)
   it("[AC-179-02b] paradigm=\"document\" renders 'Add Field' button and 'No fields found' empty state", () => {
     renderEditor({ paradigm: "document" });
 
@@ -160,7 +160,7 @@ describe("ColumnsEditor — paradigm-aware copy (Sprint 179)", () => {
   // Reason: AC-179-02 negative assertion — under paradigm="document" the
   // RDB strings ("Add Column", "No columns found", and the lowercase
   // aria-label "Add column") are absent so users don't see the wrong
-  // vocabulary.
+  // vocabulary. (2026-04-30)
   it('[AC-179-02c] paradigm="document" hides RDB vocabulary', () => {
     renderEditor({ paradigm: "document" });
 
@@ -173,7 +173,7 @@ describe("ColumnsEditor — paradigm-aware copy (Sprint 179)", () => {
 
   // Reason: AC-179-03 — explicit paradigm="rdb" continues to render the
   // legacy RDB vocabulary (button "Add Column" + empty-state "No columns
-  // found").
+  // found"). (2026-04-30)
   it("[AC-179-03c] paradigm=\"rdb\" renders 'Add Column' + 'No columns found'", () => {
     renderEditor({ paradigm: "rdb" });
 
@@ -187,6 +187,7 @@ describe("ColumnsEditor — paradigm-aware copy (Sprint 179)", () => {
   // Reason: AC-179-04b — paradigm prop missing/undefined falls back to
   // the RDB dictionary entry without throwing. Component-level fence on
   // top of the dictionary-level fence (paradigm-vocabulary.test.ts).
+  // Date: 2026-04-30.
   it("[AC-179-04b] paradigm undefined falls back to RDB vocabulary", () => {
     renderEditor({ paradigm: undefined });
 
@@ -213,7 +214,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
   // AC-187-04a — production + strict + danger-classified preview opens the
   // confirm dialog (was block under the earlier policy). ADR 0022 Phase 1 —
   // the destructive-only policy uses the same dialog for strict / warn / off
-  // on production.
+  // on production. (2026-05-01 / 2026-05-07 / 2026-05-08)
   it("[AC-187-04a] production + strict + danger preview → confirm dialog opens, alterTable deferred", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
@@ -238,7 +239,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
   // instead of committing. alterTable must not be invoked with
   // preview_only=false until the user clicks Confirm. The trigger is the
   // inline MODIFY path, and ADR 0022 Phase 2 replaced the type-to-confirm
-  // gate with the simple Yes/No environment-aware dialog.
+  // gate with the simple Yes/No environment-aware dialog. (2026-05-01 / 2026-05-07 / 2026-05-08)
   it("[AC-187-04b] production + warn + danger preview → ConfirmDestructiveDialog mount", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -264,7 +265,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
   // AC-187-04c — confirm flow: clicking the simple Confirm button invokes
   // alterTable with preview_only=false. ADR 0022 Phase 2 replaced the
   // type-to-confirm + Run-anyway gate with a single Yes button, so the test
-  // drives the destructive testid directly.
+  // drives the destructive testid directly. (2026-05-01 / 2026-05-07 / 2026-05-08)
   it("[AC-187-04c] confirmDangerous → alterTable called with preview_only=false", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -294,7 +295,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
   // surfaces the standard warn message via the SQL preview error banner (no
   // toast — structure-surface dialog already shows inline errors). The Cancel
   // button is reachable via the dialog's stable testid; no need to query the
-  // AlertDialog DOM.
+  // AlertDialog DOM. (2026-05-01 / 2026-05-07 / 2026-05-08)
   it("[AC-187-04d] cancelDangerous → previewError set with warn message", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -320,7 +321,8 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
   });
 
   // AC-187-04e — non-production environment skips the gate entirely.
-  // The MODIFY-flow click should commit immediately.
+  // The MODIFY-flow click should commit immediately. (2026-05-01)
+  // 2026-05-07.
   it("[AC-187-04e] non-production environment commits without gate", async () => {
     useConnectionStore.setState({
       connections: [
@@ -361,7 +363,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
   // entry tagged `source: "ddl-structure"`. We re-use the
   // development-environment scaffold so the Safe Mode gate stays in permissive
   // mode (development connection) and the apply flows directly to runAlter
-  // without a confirm-dialog detour.
+  // without a confirm-dialog detour. (2026-05-02 / 2026-05-07)
   it("[AC-196-04-1] runAlter records a ddl-structure history entry on success", async () => {
     const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
     useQueryHistoryStore.setState({ recentVisible: [] });
@@ -403,7 +405,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
 // inline `NewColumnRow` path is removed. The trash icon opens
 // `<DropColumnDialog>`. These two tests pin the mount contract; the dialog
 // internals themselves are exercised by `AddColumnDialog.test.tsx` /
-// `DropColumnDialog.test.tsx`.
+// `DropColumnDialog.test.tsx`. (2026-05-07)
 describe("ColumnsEditor — Sprint 236 modal entrypoints", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -474,7 +476,7 @@ describe("ColumnsEditor — Sprint 236 modal entrypoints", () => {
 // (b) a 500 ms debounced `countNullRows` probe that fires when the user
 // toggles SET NOT NULL on a currently-nullable column, surfacing an inline
 // warning when the count > 0. Both behaviours are advisory — neither blocks
-// preview / commit.
+// preview / commit. (2026-05-13)
 describe("ColumnsEditor — Sprint 237 USING + null-rows probe", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -695,7 +697,7 @@ describe("ColumnsEditor — Sprint 237 USING + null-rows probe", () => {
   // [AC-237-04d] — the probe is advisory; a rejected `countNullRows`
   // (network / permission / pool swap) must be swallowed silently — no
   // warning surfaced, no toast, no preview / commit blocking. PG surfaces the
-  // real error on commit if the user proceeds.
+  // real error on commit if the user proceeds. (2026-05-13)
   it("[AC-237-04d] countNullRows rejection is silently swallowed — no warning, no toast", async () => {
     vi.useFakeTimers();
     vi.mocked(tauri.countNullRows).mockRejectedValue(new Error("network"));
@@ -728,7 +730,7 @@ describe("ColumnsEditor — Sprint 237 USING + null-rows probe", () => {
 // Purpose: #1735 — column comment edit is exposed ONLY where the engine emits
 // COMMENT ON COLUMN (PG/Oracle → `canEditColumnComment`), and the edited value
 // forwards through the `alter_table` payload as `new_comment`. MySQL/MSSQL keep
-// the comment cell read-only even in edit mode.
+// the comment cell read-only even in edit mode. (2026-07-25)
 describe("ColumnsEditor — #1735 column comment edit", () => {
   beforeEach(() => {
     // P3 isolation, mirroring the three sibling describes: the shared
@@ -744,7 +746,7 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
 
   // Reason: #1735 — with the capability on, entering edit mode surfaces the
   // comment input and Save forwards the typed value as `new_comment` in the
-  // alterTable preview payload.
+  // alterTable preview payload. (2026-07-25)
   it("edits the comment cell and forwards new_comment when canEditColumnComment", async () => {
     render(
       <ColumnsEditor
@@ -786,7 +788,7 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
   // comment, emptying the input must forward `new_comment: ""` (the explicit
   // clear the backend turns into PG `IS NULL` / Oracle `IS ''`). Without this
   // case an FE regression to `comment || null` would drop the clear silently
-  // and no test would fail.
+  // and no test would fail. (2026-07-25)
   it("forwards new_comment as an empty string when the existing comment is cleared", async () => {
     render(
       <ColumnsEditor
@@ -818,7 +820,7 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
 
   // Reason: #1735 — an engine that defers comment emit (MySQL/MSSQL,
   // `canEditColumnComment={false}`) must keep the comment cell read-only: no
-  // comment input appears in edit mode, so no broken edit is surfaced.
+  // comment input appears in edit mode, so no broken edit is surfaced. (2026-07-25)
   it("keeps the comment cell read-only when canEditColumnComment is false", () => {
     render(
       <ColumnsEditor
@@ -842,7 +844,7 @@ describe("ColumnsEditor — #1735 column comment edit", () => {
   // Reason: #1804 — an engine that adds and drops columns but needs a full
   // table rebuild to change one (SQLite) keeps `canAlterTable` true and
   // `canModifyColumn` false. Add + Delete stay live and the per-row Edit stays
-  // on screen, disabled — the owner grill on #1804 kept the open question's
+  // on screen, disabled — the owner grill on #1804 kept the open question's (2026-07-25)
   // default (disable + tooltip) for rebuild-requiring changes.
   it("disables the per-row Edit when canModifyColumn is false and keeps Add/Delete", () => {
     render(

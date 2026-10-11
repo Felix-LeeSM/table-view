@@ -1,4 +1,4 @@
-// Multi-column sort wire-up.
+// Multi-column sort wire-up. (2026-05-15)
 //
 // Reason: the Mongo DocumentDataGrid must copy the RDB DataGrid sort
 // mechanic (click cycle, shift+click multi-key) 1:1, and the resulting

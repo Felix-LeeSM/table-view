@@ -248,7 +248,7 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
     expect(mockExecuteQuery).not.toHaveBeenCalled();
     // [AC-183-09a] — Mongo branch must NOT funnel through the RDB batch
     // transaction helper. Mongo retains its iterative dispatch;
-    // multi-document transactions are a separate, still-planned change.
+    // multi-document transactions are a separate, still-planned change. (2026-05-01)
     expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
   });
 

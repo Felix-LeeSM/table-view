@@ -34,7 +34,7 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 // launcher / workspace / unknown / missing surfaces without a real Tauri
 // runtime (vitest runs under jsdom).
 //
-// The Tauri seam is mocked, but the helpers `parseWorkspaceLabel` /
+// The Tauri seam is mocked, but the helpers `parseWorkspaceLabel` / (2026-05-16)
 // `formatWorkspaceLabel` are pure string utilities that AppRouter calls
 // inline. Spread the actual module first so those helpers remain available;
 // only override the runtime-dependent `getCurrentWindowLabel`.
@@ -146,7 +146,7 @@ describe("AC-150-*: window-label-driven boot routing", () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  // `document.title` is the only thing webdriver's `getTitle()` sees, so it
+  // `document.title` is the only thing webdriver's `getTitle()` sees, so it (2026-04-30)
   // must reflect the OS window decoration title for
   // `_helpers.ts:switchToWorkspaceWindow` to identify which window it landed
   // on. Both windows load the same `index.html`, so without this the
@@ -159,7 +159,7 @@ describe("AC-150-*: window-label-driven boot routing", () => {
     expect(document.title).toBe("Table View");
   });
 
-  // The bare `"workspace"` label is retired. Workspace windows are now
+  // The bare `"workspace"` label is retired. Workspace windows are now (2026-05-16)
   // per-connection (`workspace-{connection_id}`); the legacy single
   // workspace label is treated as unknown by AppRouter.
   it("AC-150-04b (sprint-361): per-conn label 'workspace-<id>' mounts the WorkspacePage shell", () => {

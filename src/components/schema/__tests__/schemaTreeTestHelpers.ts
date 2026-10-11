@@ -5,7 +5,7 @@
 // them in its own `beforeEach` so worker isolation +
 // `vi.clearAllMocks()` keep state from leaking across cases.
 //
-// The schemaStore cache shape is nested
+// The schemaStore cache shape is nested (2026-05-12)
 // `{ conn: { db: { schema: [...] } } }` rather than flat
 // `{ "conn:schema": [...] }`, per ADR 0027. To keep the axis tests
 // untouched, the helper auto-translates the legacy seed shapes (e.g.
@@ -27,7 +27,7 @@ import type {
 } from "@/types/schema";
 
 /**
- * Best-effort setter for the fake Tauri window label.
+ * Best-effort setter for the fake Tauri window label. (2026-05-16)
  * `useCurrentWorkspaceKey()` (and therefore `useActiveTab()`) resolves
  * `connId` from the window label. SchemaTree tests rely on the
  * active-tab highlight which goes through that chain. Mirrors the

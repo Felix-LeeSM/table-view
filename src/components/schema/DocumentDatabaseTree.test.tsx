@@ -84,7 +84,7 @@ describe("DocumentDatabaseTree", () => {
     });
   });
 
-  // The admin/config/local system DBs sort to the bottom of the sidebar
+  // The admin/config/local system DBs sort to the bottom of the sidebar (2026-05-15)
   // and are set apart from user DBs with italic + muted styling. The
   // backend's list_database_names guarantees no ordering, so admin can
   // land at the top and bury the user's own DB; this guards that UX
@@ -583,7 +583,7 @@ describe("DocumentDatabaseTree", () => {
   // ─────────────────────────────────────────────────────────────────
   // AC-S137-02: Mongo DB swap (DbSwitcher) must invalidate the document
   // store cache and trigger an immediate re-fetch so the sidebar
-  // reflects the new DB. The previous code path stayed pinned to the
+  // reflects the new DB. The previous code path stayed pinned to the (2026-04-27)
   // connection's default DB after a `switch_active_db` because the
   // auto-load guard short-circuited on identical `connectionId`.
   // ─────────────────────────────────────────────────────────────────
@@ -737,7 +737,7 @@ describe("DocumentDatabaseTree", () => {
 
   // Reason: after a double-click promote, clicking a different
   //         collection must create two tabs, permanent + preview. Same
-  //         semantics as the relational tree.
+  //         semantics as the relational tree. (2026-04-28)
   it("AC-156-doc-02: double-click promotion then clicking a different collection creates permanent + preview", async () => {
     // Override mock to include both table_view_test and dbX.
     const tauriMock = await import("@lib/tauri");
@@ -801,7 +801,7 @@ describe("DocumentDatabaseTree", () => {
   });
 
   // Reason: after promoting, clicking the same collection again must
-  //         not create a new tab. Checks that the exact match works.
+  //         not create a new tab. Checks that the exact match works. (2026-04-28)
   it("AC-156-doc-03: after promoting, clicking the same collection again is idempotent", async () => {
     render(<DocumentDatabaseTree connectionId="conn-mongo" />);
 

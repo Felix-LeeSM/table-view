@@ -1,4 +1,4 @@
-// RTL coverage of the write-method dispatch table. Each test mocks the
+// RTL coverage of the write-method dispatch table. Each test mocks the (2026-05-14)
 // relevant `@lib/tauri/document` wrapper and asserts:
 //   - the IPC was called with the parser-extracted payload,
 //   - the resulting QueryResult carries `resultKind: "writeSummary"` +

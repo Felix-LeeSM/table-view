@@ -1,4 +1,4 @@
-// DocumentDataGrid projection wire-up integration.
+// DocumentDataGrid projection wire-up integration. (2026-05-15)
 //
 // Reason: regression guard that ProjectionDialog's Apply (a) flows into
 // the `projection` of the `findDocuments` body, and (b) Clear / an empty

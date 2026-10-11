@@ -1,4 +1,4 @@
-// DataGrid dropped `<table>` for CSS Grid, so a drag-resize shows up as an
+// DataGrid dropped `<table>` for CSS Grid, so a drag-resize shows up as an (2026-05-11)
 // update to the outer container's `--cols` CSS variable. This test catches
 // that on drag → mouseup the first column px in `--cols` grew while the
 // second column px did not change.

@@ -12,6 +12,8 @@ import {
 
 // ── IDENTITY (auto-increment) toggle ──────────────────────────────────
 //
+// Date: 2026-05-08.
+//
 // Why these tests exist:
 //
 // `ColumnDraft` carries an `is_identity` flag plus a per-row "Identity"

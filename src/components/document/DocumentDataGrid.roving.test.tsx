@@ -1,7 +1,7 @@
 // Purpose: Document grid data-cell roving tabindex + arrow-key 2D nav —
 // exactly one data cell is a tab stop, and Arrow/Home/End move focus plus
 // the tabIndex=0 anchor. Also guards the onFocus=state-only /
-// keyboard=focus split regression (SchemaTree focus-steal).
+// keyboard=focus split regression (SchemaTree focus-steal). (2026-07-01)
 
 import { useConnectionStore } from "@stores/connectionStore";
 import {
@@ -102,7 +102,7 @@ function cell(grid: HTMLElement, row: number, col: number): HTMLElement {
 }
 
 describe("DocumentDataGrid roving tabindex (Design-swarm #4 Phase 1)", () => {
-  // Reason: initially only data cell (0,0) is a tab stop; the rest are -1
+  // Reason: initially only data cell (0,0) is a tab stop; the rest are -1 (2026-07-01)
   it("initially only the first data cell is a tab stop", async () => {
     const grid = await renderGrid();
     expect(cell(grid, 0, 0)).toHaveAttribute("tabindex", "0");
@@ -117,7 +117,7 @@ describe("DocumentDataGrid roving tabindex (Design-swarm #4 Phase 1)", () => {
     }
   });
 
-  // Reason: ArrowRight → focus + tabIndex move to (0,1)
+  // Reason: ArrowRight → focus + tabIndex move to (0,1) (2026-07-01)
   it("ArrowRight moves focus + tabIndex to the next column", async () => {
     const grid = await renderGrid();
     act(() => cell(grid, 0, 0).focus());
@@ -129,7 +129,7 @@ describe("DocumentDataGrid roving tabindex (Design-swarm #4 Phase 1)", () => {
     expect(cell(grid, 0, 1)).toHaveFocus();
   });
 
-  // Reason: ArrowDown → same col, next row
+  // Reason: ArrowDown → same col, next row (2026-07-01)
   it("ArrowDown moves focus down a row keeping the column", async () => {
     const grid = await renderGrid();
     act(() => cell(grid, 0, 1).focus());
@@ -141,7 +141,7 @@ describe("DocumentDataGrid roving tabindex (Design-swarm #4 Phase 1)", () => {
   });
 
   // Reason: ArrowLeft clamps at the left edge (no wrap). ArrowUp at row 0
-  // enters the header per #1127 and no longer clamps (separate case).
+  // enters the header per #1127 and no longer clamps (separate case). (2026-07-05)
   it("ArrowLeft clamps at the left edge (no wrap)", async () => {
     const grid = await renderGrid();
     act(() => cell(grid, 0, 0).focus());
@@ -154,7 +154,7 @@ describe("DocumentDataGrid roving tabindex (Design-swarm #4 Phase 1)", () => {
 
   // Reason: #1127 AC1 — the shared HeaderRow/useGridRoving extension applies
   // to the Document grid too: ArrowUp on the top row enters the matching
-  // column header cell.
+  // column header cell. (2026-07-05)
   it("ArrowUp from the top data row enters the header cell (#1127)", async () => {
     const grid = await renderGrid();
     act(() => cell(grid, 0, 0).focus());
@@ -165,7 +165,7 @@ describe("DocumentDataGrid roving tabindex (Design-swarm #4 Phase 1)", () => {
     expect(headers[0]).toHaveFocus();
   });
 
-  // Reason: Home → first col of the same row, End → last col
+  // Reason: Home → first col of the same row, End → last col (2026-07-01)
   it("Home/End jump to first/last column of the row", async () => {
     const grid = await renderGrid();
     act(() => cell(grid, 1, 1).focus());
@@ -184,7 +184,7 @@ describe("DocumentDataGrid roving tabindex (Design-swarm #4 Phase 1)", () => {
   // Reason: focus-steal regression guard — cell onFocus must only update
   // state and must not call `.focus()`. After the user clicks a cell and
   // moves to an outside input, a stale rAF must not grab focus back
-  // (SchemaTree mariadb E2E regression).
+  // (SchemaTree mariadb E2E regression). (2026-07-01)
   it("cell onFocus does not steal focus back on the next frame", async () => {
     const grid = await renderGrid();
     const external = document.createElement("input");
@@ -201,7 +201,7 @@ describe("DocumentDataGrid roving tabindex (Design-swarm #4 Phase 1)", () => {
 
   // Reason: Enter starts editing on the focused cell (same path as
   // double-click, `handleStartEditCell`). The editing cell gets
-  // data-editing="true" plus a value input.
+  // data-editing="true" plus a value input. (2026-07-01)
   it("Enter on a focused cell starts editing", async () => {
     const grid = await renderGrid();
     act(() => cell(grid, 0, 1).focus());
@@ -211,7 +211,7 @@ describe("DocumentDataGrid roving tabindex (Design-swarm #4 Phase 1)", () => {
     );
   });
 
-  // Reason: F2 also starts editing (the spreadsheet-standard key).
+  // Reason: F2 also starts editing (the spreadsheet-standard key). (2026-07-01)
   it("F2 on a focused cell starts editing", async () => {
     const grid = await renderGrid();
     act(() => cell(grid, 1, 1).focus());

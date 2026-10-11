@@ -399,7 +399,7 @@ describe("QueryTab — document", () => {
       executeBtn.click();
     });
 
-    // The analyzer's `kind: "other"` default changed to INFO
+    // The analyzer's `kind: "other"` default changed to INFO (2026-05-09)
     // (`severity: "info"`), so `\c admin` skips the WARN dialog and fires
     // IPC directly, bypassing the dialog mount. No regression in the
     // dialog-mount branch — `kind: "other"` is no longer WARN, so no
@@ -451,7 +451,7 @@ describe("QueryTab — document", () => {
       executeBtn.click();
     });
 
-    // The `kind: "other"` default for `\c admin` changed to INFO, so the
+    // The `kind: "other"` default for `\c admin` changed to INFO, so the (2026-05-09)
     // dialog mount is bypassed and IPC fires directly. No regression in
     // the dialog-mount branch.
 
@@ -619,6 +619,7 @@ describe("QueryTab — document", () => {
   // exercising the actual user-visible surface (queryState transitions +
   // ConfirmDestructiveDialog) rather than asserting on the gate hook
   // internals — those have unit coverage in `useSafeModeGate.test.ts`.
+  // date 2026-05-01.
   describe("Sprint 188 — Mongo aggregate safe-mode gate", () => {
     // Pipelines arrive via the parser as `db.users.aggregate([...])`
     // rather than bare JSON arrays. The dispatch is parser-driven; the
@@ -736,7 +737,7 @@ describe("QueryTab — document", () => {
       // ADR 0022 — was "blocked (prod-auto)"; now opens the confirm
       // dialog with prod-auto reason copy preserved. Off remains
       // distinguishable from warn on production via the dialog body
-      // text.
+      // text. (2026-05-02 / 2026-05-08)
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "off" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });

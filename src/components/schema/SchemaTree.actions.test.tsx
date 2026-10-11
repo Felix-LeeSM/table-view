@@ -1,4 +1,4 @@
-// `SchemaTree.actions.test.tsx` — SchemaTree context-menu actions.
+// `SchemaTree.actions.test.tsx` — SchemaTree context-menu actions. (2026-05-07)
 //
 // Shape of the surface under test:
 // - The Rename + Drop entries mount the `RenameTableDialog` +
@@ -1089,6 +1089,7 @@ describe("SchemaTree — actions", () => {
   // (Download icon → click surfaces the 3 actions [Schema/Data/Full] per
   // schema). It shows on RDB connections only; on mongodb / redis
   // connections the trigger button itself is hidden.
+  // date 2026-05-02
   it("[AC-192-04-1] header Export popover surfaces 3 actions per schema for RDB connections", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
@@ -1284,6 +1285,8 @@ describe("SchemaTree — actions", () => {
   // =========================================================================
   // AC-226-05 — schema-row "Create Table…" entry-point
   // =========================================================================
+  //
+  // Date: 2026-05-06.
   //
   // Why this case lives here:
   // - AC-226-05 mandates that right-clicking a schema row exposes a
@@ -1499,7 +1502,7 @@ describe("SchemaTree — actions", () => {
   // schema/table context-menu Export entry point
   // =========================================================================
   //
-  // Reason: the header Download Popover was the only export entry point,
+  // Reason: the header Download Popover was the only export entry point, (2026-05-13)
   // but users want the right-click flow to trigger a schema / table export
   // too. Right-clicking a schema row wires an "Export…" sub-menu (Schema
   // DDL / Data / Full) and right-clicking a table row wires an "Export…"

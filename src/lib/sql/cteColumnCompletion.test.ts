@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { cteColumnCompletionSource } from "./cteColumnCompletion";
 
 /**
- * Slice B — CTE / derived subquery column source.
+ * Slice B — CTE / derived subquery column source. (2026-05-14)
  *
  * Reason
  * ------
@@ -103,7 +103,7 @@ describe("cteColumnCompletionSource — Sprint 295 Slice B happy paths", () => {
 
 describe("Sprint 295 Slice D edge cases", () => {
   /**
-   * Slice D edge cases.
+   * Slice D edge cases. (2026-05-14)
    *
    * Reason
    * ------

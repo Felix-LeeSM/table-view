@@ -268,7 +268,7 @@ describe("QueryTab — execution", () => {
     // actually failed — the skipped tail is never executed, so there is no
     // "Syntax error 2".
     //
-    // The analyzer classifies `BAD` statements as `kind: "other"`
+    // The analyzer classifies `BAD` statements as `kind: "other"` (2026-05-09)
     // (default severity `info`), so they skip the WARN dialog and call
     // IPC directly — store behaviour is verified without a dialog
     // bypass.

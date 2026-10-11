@@ -3,7 +3,7 @@
 // columnheader is tabindex 0, the rest -1), ArrowLeft/Right move it, and
 // Enter/Space call onSort (Shift appends to the multi-sort). aria-sort
 // exposure is guarded too. HeaderRow is shared by the RDB and Document grids
-// (DataGridHeaderRow), so one fix covers both.
+// (DataGridHeaderRow), so one fix covers both. (2026-07-03)
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";

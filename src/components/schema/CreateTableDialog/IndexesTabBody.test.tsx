@@ -1,5 +1,7 @@
 // `IndexesTabBody` presentation tests.
 //
+// Date: 2026-05-07.
+//
 // Why this file exists:
 //   - `IndexesTabBody.tsx` was extracted from `CreateTableDialog.tsx`
 //     (parent body LOC ceiling). Two behaviours of this sub-component

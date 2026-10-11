@@ -71,7 +71,7 @@ describe("ShortcutCheatsheet", () => {
 
   // Reason: #1224 — user report: in the RAW query window Cmd+/ toggles a
   // comment, but CodeMirror only calls preventDefault, not stopPropagation, so
-  // the keydown bubbles up to document and the shortcut cheatsheet opens too.
+  // the keydown bubbles up to document and the shortcut cheatsheet opens too. (2026-07-03)
   // The Cmd+/ branch must also be suppressed by the editable
   // (contentEditable = CodeMirror `.cm-content`) guard.
   it("ignores Cmd+/ when focus is inside a contentEditable editor (#1224)", () => {

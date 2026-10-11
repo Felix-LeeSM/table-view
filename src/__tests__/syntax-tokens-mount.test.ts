@@ -1,4 +1,4 @@
-// ADR 0031 — asserts the 12 syntax tokens cascade to defined values in a
+// ADR 0031 — asserts the 12 syntax tokens cascade to defined values in a (2026-05-15)
 // real mount. The ESLint rule (`tv-local/no-undefined-css-token`) catches
 // reference integrity at source time; this vitest covers *run time* — under
 // either light or dark `data-mode`, `getComputedStyle` must not drop any of

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
  *
  * The toolbar was once littered with placeholder tooltips like
  * "Coming in Sprint 128" / "Coming in Sprint 130" while features were
- * being staged. The toolbar is now SoT-clean and these placeholders should
+ * being staged. The toolbar is now SoT-clean and these placeholders should (2026-04-27)
  * never reappear in production code. This test scans `src/` (and `e2e/`,
  * when present) for the regex `/Coming in Sprint 1[2-3][0-9]/` and fails on
  * any match so nobody can accidentally re-introduce a "Coming in Sprint

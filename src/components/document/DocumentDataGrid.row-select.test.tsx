@@ -1,7 +1,7 @@
 // Purpose: keyboard-reach guard for Document grid row selection (issue
 // #1130 AC2). Pressing Space on a focused cell selects that row, and the
 // row reflects it as aria-selected="true". Row aria-selected exposure
-// already existed — only the Space key path is added.
+// already existed — only the Space key path is added. (2026-07-03)
 
 import {
   act,

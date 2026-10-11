@@ -184,7 +184,7 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     const tabs = getTestWorkspace().tabs;
     expect(tabs).toHaveLength(0);
     expect(getTestWorkspace().activeTabId).toBeNull();
-    // Desired UX: the launcher stays visible. HomePage's handleActivate owns
+    // Desired UX: the launcher stays visible. HomePage's handleActivate owns (2026-05-16)
     // the store side only (focused conn / stale tabs) — zero window seam
     // calls. ConnectionList's `openWorkspaceWindow(id)` builds the workspace
     // window under a per-conn label.
@@ -235,7 +235,7 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     const ws = getTestWorkspace("c1", "db1");
     expect(ws.tabs).toHaveLength(1);
     expect(ws.activeTabId).toBe("query-1");
-    // The launcher stays visible; handleActivate owns the store side only —
+    // The launcher stays visible; handleActivate owns the store side only — (2026-05-16)
     // zero window seam calls.
     expect(windowControls.showWindow).not.toHaveBeenCalled();
     expect(windowControls.hideWindow).not.toHaveBeenCalled();

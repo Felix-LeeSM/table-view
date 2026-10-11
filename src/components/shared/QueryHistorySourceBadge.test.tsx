@@ -2,7 +2,7 @@
 // per-row `source` indicator (FB-5b) so users can tell editor-driven runs
 // apart from grid commits / DDL ops / Mongo direct ops. `raw` is
 // suppressed (the default for editor execution) to keep the row visually
-// quiet — only non-default sources light up.
+// quiet — only non-default sources light up. (2026-05-02)
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";

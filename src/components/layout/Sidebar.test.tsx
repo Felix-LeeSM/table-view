@@ -6,7 +6,7 @@ import {
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import type { ConnectionId, TabId } from "@/types/branded";
 
-// Sidebar reads its window's connection identity from
+// Sidebar reads its window's connection identity from (2026-05-16)
 // `useCurrentWindowConnectionId()` (which delegates to
 // `getCurrentWindowLabel()`). Tests inject the label via this mock so each
 // `setStores({ connections: [...] })` call can pair with
@@ -154,7 +154,7 @@ describe("Sidebar (schemas-only)", () => {
   });
 
   it("AC-366-04: Sidebar's selectedId comes from the window label hook (fake provider)", () => {
-    // Reason (Q15): contract AC-366-04 — verify the connId Sidebar passes
+    // Reason (Q15): contract AC-366-04 — verify the connId Sidebar passes (2026-05-16)
     // to its WorkspaceSidebar slot is sourced from
     // `useCurrentWindowConnectionId()` (label `workspace-c-fake` →
     // `"c-fake"`) and *not* from `connectionStore.focusedConnId`.
@@ -192,7 +192,7 @@ describe("Sidebar (schemas-only)", () => {
   });
 
   it("sprint-366: sidebar shows the WINDOW's connection id (label derive), not the active tab's", () => {
-    // Reason (Q15): the Sidebar used to auto-`setFocusedConn(activeTabConnId)`
+    // Reason (Q15): the Sidebar used to auto-`setFocusedConn(activeTabConnId)` (2026-05-16)
     // when a tab from a different conn became active. Under per-conn windows
     // this is by-construction impossible — a workspace window only ever
     // holds tabs for its own connection. The defensive invariant locked
@@ -232,7 +232,7 @@ describe("Sidebar (schemas-only)", () => {
   });
 
   it("sprint-366: sidebar reflects window connection id even after the connection list mutates", () => {
-    // Reason: the "heal vanished focused conn" effect used to re-point focus
+    // Reason: the "heal vanished focused conn" effect used to re-point focus (2026-05-16)
     // to the first surviving connected conn. Under per-conn windows, deleting
     // the window's own conn means the window itself should close (handled
     // elsewhere); until that lands, the sidebar still surfaces the window's
@@ -297,7 +297,7 @@ describe("Sidebar (schemas-only)", () => {
   });
 
   describe("Misc", () => {
-    // Reason: Cmd+N in a workspace window now means "new query tab" instead
+    // Reason: Cmd+N in a workspace window now means "new query tab" instead (2026-05-13)
     // of "new connection", so the Sidebar's `new-connection` listener and the
     // embedded ConnectionDialog mount were removed. This regression guard
     // asserts that (a) the dialog does not mount even when the event fires
@@ -313,7 +313,7 @@ describe("Sidebar (schemas-only)", () => {
       expect(screen.queryByTestId("connection-dialog")).toBeNull();
     });
 
-    // Reason: #1738 — the theme/language controls moved to a single area at
+    // Reason: #1738 — the theme/language controls moved to a single area at (2026-07-25)
     // the top of the sidebar (the WorkspacePage header theme popover). Locks
     // that the theme popover + LanguageSwitcher in the sidebar footer were
     // removed and no longer render (regression guard for the duplicate at

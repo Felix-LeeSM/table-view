@@ -1,11 +1,11 @@
-// CreateMongoIndexDialog full-option modal.
+// CreateMongoIndexDialog full-option modal. (2026-05-15)
 //
 // Reason: checks AC-351-04's option groups (compound fields, unique/sparse,
 // TTL with compound-aware gate, partialFilterExpression JSON validation,
 // collation locale+strength) and Save behaviour (happy / driver-error
 // inline alert). `createMongoIndex` is captured with `vi.mock`.
 //
-// #1791 — field direction / collation strength moved from a native
+// #1791 — field direction / collation strength moved from a native (2026-08-01)
 // `<select>` to a Radix `<Select>`. Radix renders a trigger button
 // (role="combobox") plus a portal listbox, so `fireEvent.change` never
 // reaches it: click the trigger, then click the `role="option"`.

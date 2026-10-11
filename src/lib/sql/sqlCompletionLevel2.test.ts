@@ -14,7 +14,7 @@ import { aliasColumnCompletionSource } from "./aliasColumnCompletion";
 import { updateColumnCompletionSource } from "./updateColumnCompletion";
 
 /**
- * Level-2 alias-aware JOIN baseline.
+ * Level-2 alias-aware JOIN baseline. (2026-05-14)
  *
  * Slice A's purpose is **measurement**. It captures in code how far the
  * `<alias>.<cursor>` case is solved by lang-sql's built-in
@@ -54,7 +54,7 @@ import { updateColumnCompletionSource } from "./updateColumnCompletion";
  * `languageDataAt<CompletionSource>("autocomplete")` and adds
  * `updateColumnCompletionSource`.
  *
- * Slice B update: with `aliasColumnCompletionSource` added, the mid-typing
+ * Slice B update: with `aliasColumnCompletionSource` added, the mid-typing (2026-05-14)
  * scenario transitioned to GREEN. `callAll` now also adds `aliasSource`,
  * and the last it.fails transitioned to a GREEN regression-guard it. After
  * Slice C wired it, this source is invoked automatically from dialect

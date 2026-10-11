@@ -1,5 +1,5 @@
 /**
- * Visual/UX regression guard for QueryLog.
+ * Visual/UX regression guard for QueryLog. (2026-05-17)
  *
  * Reason: the read source moved from `useQueryHistoryStore.entries` to the
  * backend `list_history` IPC. This file re-locks, on IPC mocks, the visual

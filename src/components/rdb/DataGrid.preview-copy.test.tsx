@@ -1,4 +1,4 @@
-// DataGrid inline SQL Preview polish.
+// DataGrid inline SQL Preview polish. (2026-05-09)
 //
 // Why: the DataGrid inline `<Dialog>` SQL Preview was a plain `<pre>`
 // with no Copy affordance. The change:

@@ -1,5 +1,5 @@
 // Verifies the ThemePicker component's click / hover / mode-toggle. Since
-// `setTheme` / `setMode` are async actions that call IPC and the click handler
+// `setTheme` / `setMode` are async actions that call IPC and the click handler (2026-05-16)
 // does not await the promise, the tests flush microtasks with
 // `Promise.resolve()` before asserting. `@tauri-apps/api/core` is mocked to
 // resolve immediately.
@@ -177,7 +177,7 @@ describe("ThemePicker", () => {
   });
 
   // User report: "the theme won't get selected. The preview works, but
-  // selecting doesn't." The earlier click test locked only
+  // selecting doesn't." The earlier click test locked only (2026-05-16)
   // `useThemeStore.getState().themeId` (store state) and never checked the
   // user-facing invariant — that the DOM `data-theme` attribute really changes
   // to the clicked id. First application of the new feedback rule
@@ -258,7 +258,7 @@ describe("ThemePicker", () => {
     );
   });
 
-  // User request: "I'd like light and dark to preview on mouse hover too."
+  // User request: "I'd like light and dark to preview on mouse hover too." (2026-05-16)
   // Hovering a mode toggle applies only the mode temporarily → the DOM
   // `data-mode` changes to the hovered mode (the store is untouched). Same
   // preview pattern as card hover.

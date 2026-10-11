@@ -1,6 +1,7 @@
 // DataGrid bottom executed-query strip syntax highlighting.
+// Date: 2026-05-07.
 // Reason: user report — a query like `SELECT * FROM
-// "public"."brief_news_tasks" LIMIT 300 OFFSET 0` rendered in the bottom
+// "public"."brief_news_tasks" LIMIT 300 OFFSET 0` rendered in the bottom (2026-05-07)
 // strip as a plain `<code>` with no colour at all. The `<SqlSyntax>`
 // component already exists (the CreateTableDialog inline preview uses it).
 // Swapping one element applies keyword colour (SELECT/FROM/LIMIT/OFFSET) and

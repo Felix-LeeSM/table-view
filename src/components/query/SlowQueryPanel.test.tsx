@@ -1,4 +1,4 @@
-// U5 live wire. Verifies SlowQueryPanel dispatches the paradigm-neutral
+// U5 live wire. Verifies SlowQueryPanel dispatches the paradigm-neutral (2026-05-15)
 // `slow_queries` IPC through `@/lib/api/slowQueries` and renders the top-N
 // table.
 

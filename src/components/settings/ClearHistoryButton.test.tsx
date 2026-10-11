@@ -1,5 +1,5 @@
 /**
- * AC-372-04.
+ * AC-372-04. (2026-05-17)
  *
  * Reason: locks the last outcome of the `clear_history` user flow path
  * (does the toast carry `deletedCount`?). Verifies the confirm step, the
@@ -26,7 +26,7 @@ describe("ClearHistoryButton (sprint-372)", () => {
   });
 
   // AC-372-04 — confirm → IPC → toast "N rows cleared".
-  // Reason: a single user flow path. After the confirm dialog, 1 IPC +
+  // Reason: a single user flow path. After the confirm dialog, 1 IPC + (2026-05-17)
   // 1 toast (the message carries `deletedCount`).
   it("[AC-372-04] confirm dialog → clear_history → toast with deletedCount", async () => {
     invokeMock.mockResolvedValueOnce({ deletedCount: 12 });
@@ -59,7 +59,7 @@ describe("ClearHistoryButton (sprint-372)", () => {
   });
 
   // 1 row → "1 row cleared" (singular). Plural-formatting regression
-  // guard. Reason: smooth, i18n-ish wording for the user.
+  // guard. Reason: smooth, i18n-ish wording for the user. (2026-05-17)
   it("formats singular row count with 'row' (no s)", async () => {
     invokeMock.mockResolvedValueOnce({ deletedCount: 1 });
     render(<ClearHistoryButton />);
@@ -79,7 +79,7 @@ describe("ClearHistoryButton (sprint-372)", () => {
   });
 
   // backend reject → error toast.
-  // Reason: when the clear fails the user gets a diagnostic message,
+  // Reason: when the clear fails the user gets a diagnostic message, (2026-05-17)
   // not a silent failure.
   it("surfaces backend reject as an error toast", async () => {
     invokeMock.mockRejectedValueOnce(new Error("disk full"));
@@ -101,7 +101,7 @@ describe("ClearHistoryButton (sprint-372)", () => {
   });
 
   // confirm cancel → 0 IPC calls.
-  // Reason: an escape path for a mis-click. The lock is 0 backend calls.
+  // Reason: an escape path for a mis-click. The lock is 0 backend calls. (2026-05-17)
   it("does not call IPC when the user cancels the confirm dialog", async () => {
     render(<ClearHistoryButton />);
 

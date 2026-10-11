@@ -23,6 +23,8 @@ import {
 
 // ── Foreign Keys + CHECK + UNIQUE tab functional ──────────────────────
 //
+// Date: 2026-05-07.
+//
 // Why this block exists:
 //
 // The Foreign Keys tab is an interactive editor housing **three**

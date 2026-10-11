@@ -1,5 +1,5 @@
 // `useDataGridEdit` persistence across unmount/remount via
-// `dataGridEditStore`. Maps to AC-251-H1..H5.
+// `dataGridEditStore`. Maps to AC-251-H1..H5. (2026-05-09)
 //
 // The hook used to keep its four pending slices (`pendingEdits`,
 // `pendingNewRows`, `pendingDeletedRowKeys`, `undoStack`) in `useState`,
@@ -171,7 +171,7 @@ describe("useDataGridEdit — Sprint 251 store-backed persistence", () => {
 
   it("[RISK-039] same connection/schema/table in a different database starts with empty pending state", () => {
     // Reason: RISK-039 — db1.public.users pending edits must not appear when
-    // the user switches to db2.public.users on the same connection.
+    // the user switches to db2.public.users on the same connection. (2026-05-22)
     const db1 = renderEditHook({ database: "db1" });
     act(() => {
       db1.result.current.handleStartEdit(0, 1, "Alice");

@@ -1,4 +1,4 @@
-// Column header context menu.
+// Column header context menu. (2026-05-15)
 //
 // Reason: HeaderRow is paradigm-shared, so locking the 6 items' callback
 // calls in one place covers both the RDB and the Mongo grid automatically.

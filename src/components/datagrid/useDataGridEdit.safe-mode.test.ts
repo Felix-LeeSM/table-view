@@ -1,7 +1,7 @@
 // AC-185-04 — useDataGridEdit Safe Mode gate.
 // AC-186-04 — warn-tier handoff (pendingConfirm + confirmDangerous +
 // cancelDangerous).
-// The earlier "production+strict|off = read-only" policy is REVERTED
+// The earlier "production+strict|off = read-only" policy is REVERTED (2026-05-08)
 // (ADR 0022 Phase 1). `[AC-244-10]` (block on prod+strict + safe DML) was
 // re-inverted back to a pass-through assertion below — same statement
 // (DELETE WHERE pk), opposite expectation, fresh AC id (AC-245-C1).
@@ -15,6 +15,7 @@
 //   - non-production + strict: destructive opens the dialog (M.1 new
 //     flow); safe writes / SELECT pass.
 //   - non-production + warn / off: bypass.
+// date 2026-05-01 (initial), 2026-05-08.
 
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { act, renderHook } from "@testing-library/react";

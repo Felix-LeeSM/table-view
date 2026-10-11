@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, vi } from "vitest";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 
-// `waitFor`'s default 1000ms timeout is not enough for this file's AC-229
+// `waitFor`'s default 1000ms timeout is not enough for this file's AC-229 (2026-05-17)
 // long DDL-chain scenarios under a full-suite coverage run (`pnpm test
 // --coverage`, instrumentation plus parallel load). 5000ms here alone
 // restores the margin under CI load; no other test file is affected.

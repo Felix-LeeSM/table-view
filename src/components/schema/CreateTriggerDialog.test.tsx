@@ -1,4 +1,4 @@
-// CreateTriggerDialog component test suite.
+// CreateTriggerDialog component test suite. (2026-05-13)
 //
 // Reason: lock the trigger CREATE dialog's contract — (1) form mount +
 // Apply disabled in the initial state, (2) picking INSTEAD OF disables

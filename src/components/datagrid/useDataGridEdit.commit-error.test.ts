@@ -13,7 +13,7 @@ import type { TableData } from "@/types/schema";
 import { useDataGridEdit } from "./useDataGridEdit";
 
 // handleExecuteCommit's SQL branch must surface commit failures instead of
-// swallowing them. The call is a single executeQueryBatch wrapped in
+// swallowing them. The call is a single executeQueryBatch wrapped in (2026-05-01)
 // BEGIN/COMMIT/ROLLBACK rather than N × executeQuery, so:
 //   - The user-facing message changed from "executed: K, failed at: K+1 of N"
 //     to "Commit failed — all changes rolled back: <backend message>".

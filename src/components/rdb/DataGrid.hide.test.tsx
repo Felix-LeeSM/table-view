@@ -1,4 +1,4 @@
-// RDB DataGrid hide column wire-up.
+// RDB DataGrid hide column wire-up. (2026-05-15)
 //
 // Reason: locks that the paradigm-shared `useHiddenColumns` also runs a
 // full cycle inside the RDB DataGrid — (a) header context menu → hide →

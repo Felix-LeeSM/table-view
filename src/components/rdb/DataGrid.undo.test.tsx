@@ -1,5 +1,5 @@
 // ADR 0022 — DataGrid Cmd+Z / Ctrl+Z keyboard binding for pending-edit
-// undo. Maps to AC-249-K1..K5.
+// undo. Maps to AC-249-K1..K5. (2026-05-09)
 //
 // Asserted scenarios:
 // - K1: Cmd+Z (metaKey) → editState.undo invoked.

@@ -1,5 +1,5 @@
-// MongoIndexesPanel: the read-only view plus CRUD — `+ Index` button,
-// per-row drop trash, `_id_` disabled tooltip, driver-error surfaces.
+// MongoIndexesPanel: the read-only view plus CRUD — `+ Index` button, (2026-05-15)
+// per-row drop trash, `_id_` disabled tooltip, driver-error surfaces. (2026-05-15)
 //
 // Reason: guards the indexes panel in the Mongo collection tab's Structure
 // pane — (a) the `+ Index` toggle opens CreateMongoIndexDialog, (b) a

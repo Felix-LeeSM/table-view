@@ -19,7 +19,9 @@
  * checks documenting the user-visible invariant, but the
  * `defaultPrevented` assertions are what actually catch a regression.
  *
- * The overlay is threshold-gated by `useDelayedFlag(loading, 1000)`
+ * Date: 2026-04-30
+ *
+ * The overlay is threshold-gated by `useDelayedFlag(loading, 1000)` (2026-04-30)
  * (AC-180-01). Each test wraps its setup with `vi.useFakeTimers()` and
  * advances 1100ms before asserting the overlay's presence so the AC-176-*
  * invariants still apply post-threshold. Without this gate, sub-second
@@ -102,7 +104,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
   };
 }
 
-// The shared `AsyncProgressOverlay` only paints after the host's threshold
+// The shared `AsyncProgressOverlay` only paints after the host's threshold (2026-04-30)
 // gate flips visible to true (1s). Every invariant below runs after the
 // timer has been advanced past the threshold; without `vi.useFakeTimers`
 // here, the overlay would never appear and
@@ -134,6 +136,7 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
   // `e.preventDefault()`. Selection in DataGridTable is sometimes started
   // on mousedown (drag-select), so blocking only `click` is insufficient.
   // Load-bearing assertion: `event.defaultPrevented === true`.
+  // Date: 2026-04-30
   it("[AC-176-01] overlay calls preventDefault on mouseDown", () => {
     const onSelectRow = vi.fn();
     const { overlay } = renderAndCrossThreshold(makeProps({ onSelectRow }));
@@ -153,6 +156,7 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
 
   // Reason: AC-176-01 — same shape as the mouseDown test above but for
   // the click gesture (the row-selection toggle on RDB grids).
+  // Date: 2026-04-30
   it("[AC-176-01] overlay calls preventDefault on click", () => {
     const onSelectRow = vi.fn();
     const { overlay } = renderAndCrossThreshold(makeProps({ onSelectRow }));
@@ -169,6 +173,7 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
   // assertion: without the hardening, a double-click on the overlay region
   // directly above a cell would bubble to the cell's `onDoubleClick` and
   // open the inline editor mid-refetch.
+  // Date: 2026-04-30
   it("[AC-176-01] overlay calls preventDefault on doubleClick", () => {
     const onStartEdit = vi.fn();
     const { overlay } = renderAndCrossThreshold(makeProps({ onStartEdit }));
@@ -184,6 +189,7 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
   // ContextMenu mid-refetch. The overlay must absorb the gesture so the
   // user can't trigger Edit/Delete/Copy actions before the refresh has
   // settled. Load-bearing assertion: `event.defaultPrevented === true`.
+  // Date: 2026-04-30
   it("[AC-176-01] overlay calls preventDefault on contextmenu", () => {
     const onSelectRow = vi.fn();
     const { overlay } = renderAndCrossThreshold(makeProps({ onSelectRow }));
@@ -205,6 +211,7 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
   // `toHaveClass` matches a subset. The Loader2 child still carries
   // `animate-spin text-muted-foreground` with width/height "24" and
   // `aria-hidden="true"`.
+  // Date: 2026-04-30
   it("[AC-176-04] spinner DOM (classes, size, position) is unchanged", () => {
     const { overlay } = renderAndCrossThreshold(makeProps());
 
@@ -236,6 +243,7 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
   // and pointer events on the rows reach their handlers as before.
   // Without this, the hardening could over-correct and break the normal
   // (non-loading) path.
+  // Date: 2026-04-30
   it("regression: with loading=false overlay is absent and clicks reach the row", () => {
     const onSelectRow = vi.fn();
     render(<DataGridTable {...makeProps({ loading: false, onSelectRow })} />);
@@ -255,6 +263,7 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
 
   // AC-180-01 — sub-second refetches must NOT paint the overlay.
   // Pre-threshold the overlay element is absent entirely.
+  // Date: 2026-04-30
   it("[AC-180-01] does not paint overlay before 1s threshold elapses", () => {
     render(<DataGridTable {...makeProps()} />);
     // 500ms < 1000ms → still pre-threshold.
@@ -270,6 +279,7 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
   // accessible name "Cancel" and clicking it invokes the host-supplied
   // `onCancelRefetch`. The host then clears `loading`, which (via
   // `useDelayedFlag`) flips the overlay back off within one frame.
+  // Date: 2026-04-30
   it("[AC-180-02] Cancel button click invokes onCancelRefetch", () => {
     const onCancelRefetch = vi.fn();
     renderAndCrossThreshold(makeProps({ onCancelRefetch }));
@@ -282,7 +292,7 @@ describe("DataGridTable refetch overlay (sprint-176)", () => {
 
   // AC-180-05 — per-vector retry guarantee for DataGridTable.
   //
-  // Reason: the contract requires "trigger → cancel → re-trigger" to land
+  // Reason: the contract requires "trigger → cancel → re-trigger" to land (2026-04-30)
   // cleanly: (a) overlay disappears when loading flips to false
   // post-cancel, (b) second attempt's data renders, (c) no stuck overlay.
   // We simulate the host by re-rendering with a controlled `loading` flag

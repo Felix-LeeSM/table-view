@@ -1,4 +1,4 @@
-// Smoke for the shared deferred-backend placeholder used by the
+// Smoke for the shared deferred-backend placeholder used by the (2026-05-15)
 // scaffolding panels. Contract D-73: the placeholder must surface (a) a
 // title, (b) the `pendingSprint` pointer, (c) a stable testid so the
 // wire-up can target it.

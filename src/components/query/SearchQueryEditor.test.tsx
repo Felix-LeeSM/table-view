@@ -9,7 +9,7 @@ import {
 import { expectUndoRevertsEdit } from "./__tests__/editorHistoryHelpers";
 import SearchQueryEditor from "./SearchQueryEditor";
 
-// Purpose: regression coverage for SearchQueryEditor — #1225.
+// Purpose: regression coverage for SearchQueryEditor — #1225. (2026-07-03)
 // The search (Elasticsearch/OpenSearch) editor has to install CodeMirror
 // history() like the other three editors for Cmd+Z undo to work.
 
@@ -62,7 +62,7 @@ describe("SearchQueryEditor", () => {
   });
 
   // Reason: #1225 — user report that Cmd+Z undo does not work, because no
-  // query editor installs history().
+  // query editor installs history(). (2026-07-03)
   it("reverts an edit via undo (history extension installed) (#1225)", () => {
     render(
       <SearchQueryEditor sql="{}" onSqlChange={vi.fn()} onExecute={vi.fn()} />,

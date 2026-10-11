@@ -1,4 +1,4 @@
-// DbMismatch auto-sync. After the expected_database guard blocks a mismatch
+// DbMismatch auto-sync. After the expected_database guard blocks a mismatch (2026-05-12)
 // in the backend, the frontend immediately takes the backend's actual db via
 // verifyActiveDb and syncs connectionStore + schemaStore, so the next user
 // click retries with the correct expectedDatabase.
@@ -231,7 +231,7 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
       }
     });
     expect(mockVerifyActiveDb).not.toHaveBeenCalled();
-    // AC-269-04 specificity gate. Non-mismatch errors must NOT push an
+    // AC-269-04 specificity gate. Non-mismatch errors must NOT push an (2026-05-13)
     // action-bearing toast. Positive assertion that no toast in the queue
     // carries an `action` field — preserves the specificity invariant in the
     // post-Retry world.
@@ -240,7 +240,7 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // DbMismatch toast Retry button.
+  // DbMismatch toast Retry button. (2026-05-13)
   // Reason: the passive `toast.warning(...)` left the user with no affordance
   // to re-run the same query against the now-synced active db. These cases
   // pin the Retry action shape + re-dispatch semantics + closure guards.

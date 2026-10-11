@@ -1,4 +1,4 @@
-// AC-235-01..AC-235-04, AC-235-09 — RenameTableDialog test suite.
+// AC-235-01..AC-235-04, AC-235-09 — RenameTableDialog test suite. (2026-05-07)
 //
 // Why this file exists:
 // - AC-235-01 / AC-235-03: assert IPC payload sent on Show DDL +

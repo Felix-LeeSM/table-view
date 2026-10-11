@@ -1,4 +1,4 @@
-// Option D: inline tree row.
+// Option D: inline tree row. (2026-05-15)
 //
 // Replaces the NestedExpandPopover regression guards with the equivalent
 // contract on the inline tree:
@@ -114,7 +114,7 @@ describe("DocumentDataGrid — nested inline tree (Sprint 341 Option D)", () => 
     expect(screen.queryByTestId("nested-detail-row-0")).not.toBeInTheDocument();
   });
 
-  // Sort/filter/refetch must auto-close the inline tree panel. Without
+  // Sort/filter/refetch must auto-close the inline tree panel. Without (2026-05-15)
   // this, the panel either dangles where the row used to be, or silently
   // re-attaches to a DIFFERENT doc that has slid into the same rowIdx —
   // both are confusing edits-go-to-the-wrong-row bugs. We snapshot `_id`
@@ -225,7 +225,7 @@ describe("DocumentDataGrid — nested inline tree (Sprint 341 Option D)", () => 
   });
 
   // -----------------------------------------------------------------
-  // End-to-end `+ key` add through the Mongo grid: open the inline tree
+  // End-to-end `+ key` add through the Mongo grid: open the inline tree (2026-05-15)
   // on an object cell, click the `+ key` affordance, type a key/value
   // pair, Enter, and assert that (a) the ghost row appears with a NEW
   // badge in the panel, and (b) the MQL preview line emits
@@ -288,7 +288,7 @@ describe("DocumentDataGrid — nested inline tree (Sprint 341 Option D)", () => 
       expect(preview).toHaveTextContent(/"owner"/);
     });
 
-    // AC-344-F-04 — root-level `_id` add is rejected by the Mongo grid's
+    // AC-344-F-04 — root-level `_id` add is rejected by the Mongo grid's (2026-05-15)
     // `forbiddenRootKeys` prop. Verifies the wire-up by mounting the
     // Mongo grid (not the panel alone) and confirming (a) the inline
     // rejection UX surfaces, (b) the pending pill does not increment,

@@ -57,7 +57,7 @@ describe("cellToEditValue — preserves null/empty-string distinction", () => {
     );
   });
 
-  // DataGrid mount-time freeze. When the cell was an object holding a nested
+  // DataGrid mount-time freeze. When the cell was an object holding a nested (2026-05-14)
   // BigInt, raw `JSON.stringify` threw (user report: "it froze with the
   // datagrid open"). `safeStringifyCell` wraps it, so stringify must succeed
   // however deeply the BigInt is nested.

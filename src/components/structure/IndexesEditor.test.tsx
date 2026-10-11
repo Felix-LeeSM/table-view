@@ -3,7 +3,7 @@
 // gate inside `handlePreviewConfirm` (after the user has reviewed the SQL)
 // because index drops surface their preview through a ref rather than a
 // re-runnable buildAlterRequest. The drop path is the dangerous one; CREATE
-// INDEX stays analyzer-safe.
+// INDEX stays analyzer-safe. (2026-05-01)
 
 import {
   act,
@@ -114,7 +114,7 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
   // AC-187-05a — production + strict + DROP INDEX preview opens the confirm
   // dialog (was block under the earlier policy). ADR 0022 Phase 1 — the
   // destructive-only policy uses the same dialog for strict / warn / off on
-  // production.
+  // production. (2026-05-01 / 2026-05-08)
   it("[AC-187-05a] production + strict + DROP INDEX → confirm dialog opens, dropIndex deferred", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
@@ -136,7 +136,7 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
   });
 
   // AC-187-05b — production + warn + DROP INDEX opens the warn dialog
-  // instead of committing.
+  // instead of committing. (2026-05-01)
   it("[AC-187-05b] production + warn + DROP INDEX → ConfirmDestructiveDialog mount", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -161,7 +161,7 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
 
   // AC-187-05c — confirm flow: typing the analyzer reason ("DROP INDEX")
   // enables the destructive button; clicking it invokes dropIndex with
-  // preview_only=false.
+  // preview_only=false. (2026-05-01)
   it("[AC-187-05c] confirmDangerous → dropIndex called with preview_only=false", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -190,7 +190,7 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
   });
 
   // AC-187-05d — cancel flow: clicking Cancel inside the warn dialog sets
-  // the standard warn previewError.
+  // the standard warn previewError. (2026-05-01)
   it("[AC-187-05d] cancelDangerous → previewError set with warn message", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -219,7 +219,7 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
   // AC-187-05e — non-production + warn environment commits without gate.
   // ADR 0022 Phase 1 — re-pinned to mode=warn so it still asserts "non-prod =
   // unguarded" without overlapping the M.1 strict-mode dialog flow (covered
-  // separately by the per-paradigm M.1 tests).
+  // separately by the per-paradigm M.1 tests). (2026-05-01 / 2026-05-08)
   it("[AC-187-05e] non-production environment commits without gate", async () => {
     useConnectionStore.setState({
       connections: [
@@ -331,6 +331,7 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
 // concern was that one action was verified while the other stayed live. Lock
 // both gates so a regression that drops either flag is caught. Create Index
 // reads `canCreateIndex`; the per-row drop-index trash reads `canDropObject`.
+// (2026-07-17)
 describe("IndexesEditor — #1618 D2 createIndex/dropObject symmetry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -356,7 +357,7 @@ describe("IndexesEditor — #1618 D2 createIndex/dropObject symmetry", () => {
     );
   }
 
-  // Reason: defaults keep both controls for gating-agnostic callers.
+  // Reason: defaults keep both controls for gating-agnostic callers. (2026-07-17)
   it("shows Create Index + drop-index controls by default", () => {
     renderEditor({});
     expect(
@@ -371,7 +372,7 @@ describe("IndexesEditor — #1618 D2 createIndex/dropObject symmetry", () => {
 
   // Reason: createIndex false hides only Create; the drop control stays visible
   // when dropObject is still allowed (proves the gates are independent, not a
-  // single coarse flag).
+  // single coarse flag). (2026-07-17)
   it("hides only Create Index when canCreateIndex is false", () => {
     renderEditor({ canCreateIndex: false, canDropObject: true });
     expect(
@@ -385,6 +386,7 @@ describe("IndexesEditor — #1618 D2 createIndex/dropObject symmetry", () => {
   });
 
   // Reason: dropObject false hides only the drop-index trash; Create stays.
+  // (2026-07-17)
   it("hides only the drop-index control when canDropObject is false", () => {
     renderEditor({ canCreateIndex: true, canDropObject: false });
     expect(

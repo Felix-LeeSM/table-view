@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ColumnInfo } from "@/types/schema";
 import { formatCellValue } from "./helpers";
 
-// QuickLook BigInt/Decimal regression guard. Before the hotfix, the
+// QuickLook BigInt/Decimal regression guard. Before the hotfix, the (2026-05-14)
 // `typeof === "object"` branch used raw JSON.stringify, so a nested BigInt
 // input threw → QuickLookPanel mount-time freeze.
 

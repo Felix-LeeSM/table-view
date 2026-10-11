@@ -175,7 +175,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
   });
 
   // ---------------------------------------------------------------------------
-  // AC-141-2
+  // AC-141-2 (2026-05-16)
   //
   // Old contract: HomePage called `showWindow("workspace")` →
   // `focusWindow("workspace")` → `hideWindow("launcher")` itself, on the
@@ -199,7 +199,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       fireEvent.doubleClick(screen.getByText(/^c1 DB$/));
     });
 
-    // Desired UX: the launcher stays visible. HomePage's handleActivate
+    // Desired UX: the launcher stays visible. HomePage's handleActivate (2026-05-16)
     // owns the store side (focusedConn) only.
     expect(showWindowMock).not.toHaveBeenCalled();
     expect(focusWindowMock).not.toHaveBeenCalled();
@@ -208,7 +208,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
   });
 
   // ---------------------------------------------------------------------------
-  // AC-141-3: Back → focusWindow('launcher') → destroyCurrentWindow; pool
+  // AC-141-3: Back → focusWindow('launcher') → destroyCurrentWindow; pool (2026-05-16)
   // stays alive.
   // ---------------------------------------------------------------------------
   it("AC-141-3 (revised): 'Back to connections' emits focusWindow('launcher') → destroyCurrentWindow and does NOT call disconnectFromDatabase", async () => {
@@ -301,7 +301,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     expect(showWindowMock).not.toHaveBeenCalledWith("workspace");
     expect(hideWindowMock).not.toHaveBeenCalledWith("workspace");
 
-    // 2. Workspace close path — the listener itself is gone. An OS-level
+    // 2. Workspace close path — the listener itself is gone. An OS-level (2026-05-16)
     //    close reaches the desired UX through the default destroy alone
     //    (the launcher is already visible, so it activates). Keeping a
     //    listener brings the trap back: `closeCurrentWindow()`
@@ -346,7 +346,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       focusedConnId: "c1",
     });
 
-    // Stage 2: activate — double-click. The launcher stays visible —
+    // Stage 2: activate — double-click. The launcher stays visible — (2026-05-16)
     // handleActivate owns the store side only. ConnectionList's
     // `openWorkspaceWindow(id)` owns the per-conn workspace window build.
     const { unmount } = render(<HomePage />);
@@ -401,7 +401,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     expect(hideWindowMock).not.toHaveBeenCalled();
   });
 
-  // The old contract assumed the launcher-hidden era: an OS-level close made
+  // The old contract assumed the launcher-hidden era: an OS-level close made (2026-05-16)
   // the process look dead, so the page had to intercept close-requested and
   // show the launcher. Once the desired UX kept the launcher always visible
   // that listener became dead code, and worse, `destroyCurrentWindow()`

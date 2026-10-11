@@ -1,4 +1,4 @@
-// Mongo db-contract α: Run-button gate.
+// Mongo db-contract α: Run-button gate. (2026-05-17)
 //
 // Reason: the root cause behind the user's report screenshot (#2) was
 // that the Run button went disabled on nothing more than an empty

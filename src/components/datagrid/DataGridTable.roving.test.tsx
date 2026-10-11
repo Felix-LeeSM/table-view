@@ -3,7 +3,7 @@
 // Arrow/Home/End move focus plus the tabIndex=0 anchor. Also checks the
 // focus-steal regression (SchemaTree) and the "ignore arrows while editing"
 // guard. Virtualization sync is covered deterministically by
-// useGridRoving.test.tsx; the real render belongs to E2E.
+// useGridRoving.test.tsx; the real render belongs to E2E. (2026-07-01)
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -101,7 +101,7 @@ function cell(row: number, col: number): HTMLElement {
 
 describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
   // Reason: initially only the first data cell (0,0) is a tab stop, the
-  // rest are -1.
+  // rest are -1. (2026-07-01)
   it("initially only the first data cell is a tab stop", () => {
     render(<DataGridTable {...makeProps()} />);
     expect(cell(0, 0)).toHaveAttribute("tabindex", "0");
@@ -115,7 +115,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     }
   });
 
-  // Reason: ArrowRight → (0,1), ArrowDown → (1,1) moves focus + tabIndex.
+  // Reason: ArrowRight → (0,1), ArrowDown → (1,1) moves focus + tabIndex. (2026-07-01)
   it("ArrowRight then ArrowDown move focus + tabIndex", async () => {
     render(<DataGridTable {...makeProps()} />);
     act(() => cell(0, 0).focus());
@@ -134,7 +134,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
 
   // Reason: ArrowLeft clamps at the left edge (no wrap). ArrowUp at row 0
   // no longer clamps — it enters the header (#1127; a separate case checks
-  // that).
+  // that). (2026-07-05)
   it("ArrowLeft clamps at the left edge", async () => {
     render(<DataGridTable {...makeProps()} />);
     act(() => cell(0, 0).focus());
@@ -145,7 +145,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(cell(0, 0)).toHaveFocus();
   });
 
-  // Reason: Home → first col of the row, End → last col.
+  // Reason: Home → first col of the row, End → last col. (2026-07-01)
   it("Home/End jump to first/last column of the row", async () => {
     render(<DataGridTable {...makeProps()} />);
     act(() => cell(1, 1).focus());
@@ -164,7 +164,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
   // Reason: focus-steal regression guard — cell onFocus must only update
   // state and never call `.focus()`. When the user moves from a cell to an
   // outside input, a stale rAF must not grab focus back (the SchemaTree
-  // mariadb E2E regression).
+  // mariadb E2E regression). (2026-07-01)
   it("cell onFocus does not steal focus back on the next frame", async () => {
     render(<DataGridTable {...makeProps()} />);
     const external = document.createElement("input");
@@ -184,7 +184,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
   // [data-grid-row] → the onKeyDown guard bails, so roving stays on the
   // editing cell instead of moving to the row below (the input's focus
   // bubbles into the gridcell onFocus, syncing the anchor to the editing
-  // cell (1,1)).
+  // cell (1,1)). (2026-07-01)
   it("arrows are ignored while editing (guard bails on non-cell target)", async () => {
     render(
       <DataGridTable
@@ -208,7 +208,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
   });
 
   // Reason: Enter starts editing the focused cell (same path as
-  // double-click, onStartEdit(row, dataCol, value)).
+  // double-click, onStartEdit(row, dataCol, value)). (2026-07-01)
   it("Enter on a focused cell starts editing", () => {
     const onStartEdit = vi.fn();
     render(<DataGridTable {...makeProps({ onStartEdit })} />);
@@ -217,7 +217,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(onStartEdit).toHaveBeenCalledWith(0, 1, "Alice");
   });
 
-  // Reason: F2 also starts editing (the spreadsheet-standard key).
+  // Reason: F2 also starts editing (the spreadsheet-standard key). (2026-07-01)
   it("F2 on a focused cell starts editing", () => {
     const onStartEdit = vi.fn();
     render(<DataGridTable {...makeProps({ onStartEdit })} />);
@@ -226,7 +226,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
     expect(onStartEdit).toHaveBeenCalledWith(2, 2, "carol@example.com");
   });
 
-  // Reason: with canEditRows=false, Enter/F2 do not start editing.
+  // Reason: with canEditRows=false, Enter/F2 do not start editing. (2026-07-01)
   it("Enter does not start editing when rows are not editable", () => {
     const onStartEdit = vi.fn();
     render(
@@ -239,7 +239,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
 
   // Reason: #1127 AC1 — ArrowUp from the top data row enters the matching
   // column's header. The only cross-boundary move joining the header row
-  // and the body (the roving anchor is kept).
+  // and the body (the roving anchor is kept). (2026-07-05)
   it("ArrowUp from the top data row enters the header cell of the same column (#1127)", async () => {
     render(<DataGridTable {...makeProps()} />);
     act(() => cell(0, 1).focus());
@@ -251,7 +251,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
 
   // Reason: #1127 AC1 — ArrowDown from a header cell returns to the top
   // data cell of the matching column. The header ArrowUp → body ArrowDown
-  // round-trip preserves the column.
+  // round-trip preserves the column. (2026-07-05)
   it("ArrowDown from a header cell returns to the top data row of the same column (#1127)", async () => {
     render(<DataGridTable {...makeProps()} />);
     const headers = screen.getAllByRole("columnheader");
@@ -264,7 +264,7 @@ describe("DataGridTable roving tabindex (Design-swarm #4 Phase 2)", () => {
   // Reason: #1127 AC3 — pending-new-rows must be reachable by arrow-key nav
   // too. The roving rowCount includes pendingNewRows and the cells carry
   // data-grid-* + tabIndex + onFocus, so ArrowDown from the last data row
-  // descends into them.
+  // descends into them. (2026-07-05)
   it("pending new rows are reachable by ArrowDown (#1127)", async () => {
     const pendingNewRows = [[99, "New", "new@example.com"]];
     render(<DataGridTable {...makeProps({ pendingNewRows })} />);

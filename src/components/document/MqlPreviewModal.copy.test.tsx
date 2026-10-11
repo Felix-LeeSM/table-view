@@ -1,4 +1,4 @@
-// MqlPreviewModal Copy button + plain fallback.
+// MqlPreviewModal Copy button + plain fallback. (2026-05-09)
 //
 // Why: PreviewDialog's `copyText` prop brings the Copy button to the MQL
 // preview too. The SQL syntax highlighter (SqlSyntax) is deliberately not

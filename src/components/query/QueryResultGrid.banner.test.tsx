@@ -1,6 +1,6 @@
 // ADR 0022 — `QueryResultGrid` dry-run banner.
 // Pinned to the contract `[AC-248-B1]` (banner mounts when `isDryRun=true`)
-// and `[AC-248-B2]` (banner absent otherwise).
+// and `[AC-248-B2]` (banner absent otherwise). (2026-05-09)
 //
 // We assert against the `data-testid="dry-run-banner"` carrier so the
 // test stays resilient to color-token / copy iteration; the user-facing

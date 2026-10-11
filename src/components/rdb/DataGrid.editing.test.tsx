@@ -818,7 +818,7 @@ describe("DataGrid", () => {
   // 44. Commit executes SQL and refreshes data
   // Asserts on `mockExecuteQueryBatch` rather than `mockExecuteQuery`
   // because the commit pipeline wraps the pending edits in a single
-  // transaction batch.
+  // transaction batch. (2026-05-01)
   it("Commit executes SQL and refreshes data", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
@@ -971,7 +971,7 @@ describe("DataGrid", () => {
   // Reason: sorting no longer promotes preview tabs — the promoteTab
   // useEffect was removed from DataGrid so that preview tabs stay as
   // previews until an explicit user action (double-click, edit, TabBar
-  // click) promotes them.
+  // click) promotes them. (2026-04-29)
   it("does NOT call promoteTab when sorting changes", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
@@ -1240,7 +1240,7 @@ describe("DataGrid", () => {
     expect(rows[2]!.className).not.toContain(SELECTED_ROW_FILL);
   });
 
-  // The AC-185-06 1px env color stripe above the DataGrid Preview Dialog
+  // The AC-185-06 1px env color stripe above the DataGrid Preview Dialog (2026-05-09)
   // header was removed per user feedback ("the line drawn across the top of
   // the SQL preview that shows up when editing in the datagrid ... just
   // remove that too"). The env signal flows through the footer
@@ -1254,6 +1254,7 @@ describe("DataGrid", () => {
     // emits a WHERE-less DELETE on its own; we mock generateSqlWithKeys to
     // inject a danger shape and verify the warn handoff renders the dialog
     // with the analyzer's reason text.
+    // date 2026-05-01.
     const { useConnectionStore } = await import("@stores/connectionStore");
     const { useSafeModeStore } = await import("@stores/safeModeStore");
     const sqlGen = await import("@components/datagrid/sqlGenerator");

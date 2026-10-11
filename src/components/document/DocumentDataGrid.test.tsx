@@ -196,7 +196,7 @@ describe("DocumentDataGrid", () => {
     expect(screen.getByText(/^2 documents$/)).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
     // [AC-181-10] ExportButton mounted into the toolbar. Regression guard
-    // so future toolbar refactors don't drop it.
+    // so future toolbar refactors don't drop it. (2026-05-01)
     expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
   });
 
@@ -560,6 +560,7 @@ describe("DocumentDataGrid", () => {
   // directly, so the global log would otherwise miss it. A successful
   // insert must surface a `source: "mongo-op"` history entry with the
   // synthesised `db.<col>.insertOne(...)` SQL line.
+  // 2026-05-02.
   it("[AC-196-05-1] Add Document submit records a mongo-op history entry on success", async () => {
     const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
     useQueryHistoryStore.setState({ recentVisible: [] });
@@ -612,7 +613,7 @@ describe("DocumentDataGrid", () => {
     expect(cell!.className).toMatch(/bg-highlight/);
   });
 
-  // Option D — nested cell toggle ↔ inline detail row contract. Clicking
+  // Option D — nested cell toggle ↔ inline detail row contract. Clicking (2026-05-15)
   // the in-cell toggle expands the tree panel beneath that row; toggling
   // again (or another cell) collapses.
   it("nested cell toggle expands an inline tree row underneath", async () => {

@@ -1,5 +1,5 @@
 /**
- * Collapse/expand all toggle per DB type.
+ * Collapse/expand all toggle per DB type. (2026-05-17)
  *
  * Reason: the Sidebar header's single "Collapse all" button was committed to
  * PG only, as the user capture (image #4) shows. It is upgraded to expose the
@@ -172,7 +172,7 @@ describe("Sidebar collapse/expand-all toggle per DB type (sprint-379)", () => {
   // Reason: #1737 — the "Expand all" button was a no-op stub with only the
   // collapse branch implemented, so clicking it showed the label and expanded
   // nothing. Every loaded schema name must be filled into sidebar.expanded.
-  // The expand rule matches the bare schema name SchemaTree uses as its key.
+  // The expand rule matches the bare schema name SchemaTree uses as its key. (2026-07-24)
   it("AC-1737: PG + expanded=[] → click 'Expand all schemas' populates every loaded schema name", () => {
     seed({ dbType: "postgresql", paradigm: "rdb", expanded: [] });
     useSchemaStore.setState({
@@ -193,6 +193,7 @@ describe("Sidebar collapse/expand-all toggle per DB type (sprint-379)", () => {
   // returning the same reference when current===nodes → no RED. Assert
   // instead that the guard blocks the store action itself, via whether
   // setExpanded was called: removing the guard calls setExpanded → RED.
+  // (2026-07-24)
   it("AC-1737: PG + empty schema cache → click 'Expand all schemas' is a no-op (setExpanded not called)", () => {
     seed({ dbType: "postgresql", paradigm: "rdb", expanded: [] });
     // schemaStore intentionally left empty (beforeEach clears it) →

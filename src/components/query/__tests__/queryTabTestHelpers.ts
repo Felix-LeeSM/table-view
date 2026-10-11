@@ -172,7 +172,7 @@ export function makeDocTab(
 
 export function resetQueryTabStores(): void {
   useWorkspaceStore.setState({ workspaces: {} });
-  // entries/globalLog retired. `recentVisible` is the only store slot.
+  // entries/globalLog retired. `recentVisible` is the only store slot. (2026-05-17)
   useQueryHistoryStore.setState({ recentVisible: [] });
   useConnectionStore.setState({ connections: [] });
   // Reset Safe Mode mode so the persisted localStorage state (or a previous

@@ -1,5 +1,7 @@
 // `CreateTableTypeCombobox` test suite.
 //
+// Date: 2026-05-06.
+//
 // Why this file exists:
 // - Locks AC-227-03 (filter behaviour, Enter commits highlighted
 //   suggestion, free-text fallback on blur).
@@ -165,7 +167,7 @@ describe("CreateTableTypeCombobox (Sprint 227 — AC-227-03)", () => {
     expect(spy).toHaveBeenLastCalledWith("uuid");
   });
 
-  // The combobox should open the suggestion list as soon as the user
+  // The combobox should open the suggestion list as soon as the user (2026-05-07)
   // focuses the input, even with an empty value, so the user discovers
   // the picker without having to know the ArrowDown / chevron-click
   // affordance up front.
@@ -184,7 +186,7 @@ describe("CreateTableTypeCombobox (Sprint 227 — AC-227-03)", () => {
     expect(labels).toContain("text");
   });
 
-  // The chevron button must be clickable — it toggles the popover and
+  // The chevron button must be clickable — it toggles the popover and (2026-05-07)
   // re-focuses the input. The pre-fix combobox rendered a
   // `pointer-events-none` chevron which was visually misleading.
   it("clicking the chevron toggles the listbox (AC-227-03 follow-up)", async () => {
@@ -199,7 +201,7 @@ describe("CreateTableTypeCombobox (Sprint 227 — AC-227-03)", () => {
     await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
   });
 
-  // Bare parametric types auto-expand to a canonical default —
+  // Bare parametric types auto-expand to a canonical default — (2026-05-07)
   // `varchar` → `varchar(255)`, `char` → `char(1)`, `numeric` →
   // `numeric(10,2)` — so the user doesn't have to remember the
   // parameter syntax. Free-text override still works (covered by the
@@ -368,6 +370,8 @@ describe("CreateTableTypeCombobox (Sprint 230 — typesSource prop)", () => {
 });
 
 // `typeKindMap` color-dot rendering.
+//
+// Date: 2026-05-07.
 //
 // Why this block exists:
 // - Locks AC-234-08 (color dot per `type_kind`) — `enum` blue, `domain`

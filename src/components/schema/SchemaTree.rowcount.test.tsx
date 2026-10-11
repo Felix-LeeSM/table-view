@@ -61,7 +61,7 @@ function activateConnection(connId: string) {
 // ---------------------------------------------------------------------------
 // AC-S137-03: PG row count cell must carry an aria-label / tooltip
 // explaining that the number is an *estimate* sourced from
-// `pg_class.reltuples`. The user check found the bare number misleading —
+// `pg_class.reltuples`. The user check found the bare number misleading — (2026-04-27)
 // users assumed it was an exact COUNT(*).
 //
 // Per the contract we implemented Option (a) (tooltip + aria-label) rather

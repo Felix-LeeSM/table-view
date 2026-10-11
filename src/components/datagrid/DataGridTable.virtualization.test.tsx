@@ -244,7 +244,7 @@ describe("DataGridTable virtualization (sprint-114)", () => {
 // `ROW_HEIGHT_ESTIMATE` knows to revisit these test thresholds.
 void ROW_HEIGHT;
 
-// The virtualizer assumes uniform row heights; opening the inline JSON tree
+// The virtualizer assumes uniform row heights; opening the inline JSON tree (2026-05-15)
 // adds a variable-height detail row that the virtualizer can't measure
 // cleanly. The minimal fix is to disable virtualization while
 // `expandedNested` is set so the non-virtualized branch (which already

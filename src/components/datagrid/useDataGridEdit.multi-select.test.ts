@@ -408,7 +408,7 @@ describe("useDataGridEdit — multi-row selection", () => {
   // sentinel `undefined`. `null` is a real data value (the verbatim copy from
   // Duplicate Row / undo re-INSERT), so seeding with it would leave
   // `sqlGenerator`'s default/identity omission guard unable to tell a real
-  // NULL from untouched.
+  // NULL from untouched. (2026-07-10)
   it("seeds added rows with undefined (untouched sentinel), not null", () => {
     const { result } = renderEditHook();
 

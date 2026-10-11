@@ -4,7 +4,7 @@ import { setupTauriMock } from "@/test-utils/tauriMock";
 import type { TableData } from "@/types/schema";
 import { useDataGridEdit } from "./useDataGridEdit";
 
-// Gate-consistency regression + performance smoke. This file pins:
+// Gate-consistency regression + performance smoke. This file pins: (2026-05-01)
 //   1. UPDATE + INSERT + DELETE all leave through a *single* batch call
 //      (executeQueryBatch for RDB; bulkWriteDocuments for Mongo).
 //   2. handleCommit's SQL/MQL preview build stays under O(N) — verified by a
@@ -372,6 +372,7 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     // through executeQueryBatch once; this test pins that all three statement
     // kinds (UPDATE, INSERT, DELETE) end up in the same batch array — i.e.
     // the gate is unified across mutation kinds.
+    // Date 2026-05-01.
     mockExecuteQueryBatch.mockImplementationOnce((_, stmts: string[]) =>
       happyBatchResolve(stmts),
     );
@@ -689,6 +690,7 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
     // Mongo has no batch transaction; this test pins that the
     // `bulkWriteDocuments` path carries all three primitives, and that the
     // RDB batch helper is never called from the Mongo branch.
+    // Date 2026-05-01.
     const { result } = renderDocHook();
 
     // 1) Pending UPDATE on row 0 ("Ada").

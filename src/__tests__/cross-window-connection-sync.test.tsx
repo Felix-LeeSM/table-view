@@ -116,7 +116,7 @@ beforeEach(() => {
 // the exported mock if needed. The default returns `"launcher"` so the
 // store's bridge attach uses that as its origin id at module-load time.
 vi.mock("@lib/window-label", async () => {
-  // Preserve the real parseWorkspaceLabel / formatWorkspaceLabel exports
+  // Preserve the real parseWorkspaceLabel / formatWorkspaceLabel exports (2026-05-16)
   // (pure string ops) for transitive imports of
   // `useCurrentWindowConnectionId`.
   const actual =

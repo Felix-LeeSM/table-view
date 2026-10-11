@@ -3,6 +3,7 @@
 // column category. The category lookup table itself is verified in
 // columnCategory.test; this file is the regression guard for the grid
 // renderer wiring.
+// Date: 2026-05-10.
 
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";

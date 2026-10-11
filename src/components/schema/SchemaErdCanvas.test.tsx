@@ -233,7 +233,7 @@ describe("SchemaErdCanvas", () => {
     expect(handleSelect).toHaveBeenCalledWith("table:public.orders");
   });
 
-  // Reason: issue #1736 — re-clicking the selected node toggles it off
+  // Reason: issue #1736 — re-clicking the selected node toggles it off (2026-07-24)
   it("toggles selection off when the already-selected node is re-clicked", async () => {
     const handleSelect = vi.fn();
     render(
@@ -253,7 +253,7 @@ describe("SchemaErdCanvas", () => {
     expect(handleSelect).toHaveBeenLastCalledWith(null);
   });
 
-  // Reason: issue #1736 — clicking the empty canvas clears the selection
+  // Reason: issue #1736 — clicking the empty canvas clears the selection (2026-07-24)
   it("clears selection when the empty canvas pane is clicked", async () => {
     const handleSelect = vi.fn();
     const { container } = render(
@@ -274,7 +274,7 @@ describe("SchemaErdCanvas", () => {
     expect(handleSelect).toHaveBeenLastCalledWith(null);
   });
 
-  // Reason: issue #1736 — the ESC key clears the selection
+  // Reason: issue #1736 — the ESC key clears the selection (2026-07-24)
   it("clears selection when Escape is pressed", async () => {
     const handleSelect = vi.fn();
     render(

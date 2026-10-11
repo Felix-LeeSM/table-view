@@ -1,4 +1,4 @@
-// DataGridTable hide column.
+// DataGridTable hide column. (2026-05-15)
 //
 // Reason: regression guard that the paradigm-shared `DataGridTable`'s
 // `hiddenColumnNames` + `onHideColumn` props (a) drop a hidden column's

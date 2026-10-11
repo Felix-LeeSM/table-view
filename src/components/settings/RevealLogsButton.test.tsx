@@ -1,5 +1,5 @@
 /**
- * #1566 — Reveal Logs.
+ * #1566 — Reveal Logs. (2026-07-17)
  *
  * Reason: locks the last outcome of the user flow path (button click →
  * one `open_log_dir` IPC → error toast on failure). The backend wire

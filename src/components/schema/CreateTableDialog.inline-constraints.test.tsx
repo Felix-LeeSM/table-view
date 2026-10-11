@@ -14,6 +14,8 @@ import {
 
 // ── Inline FK + CHECK on column row ───────────────────────────────────
 //
+// Date: 2026-05-08.
+//
 // Why these tests exist:
 //
 // Single-column FK + CHECK sit on the column row itself rather than the

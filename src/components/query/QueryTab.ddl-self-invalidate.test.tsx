@@ -1,3 +1,5 @@
+// Date: 2026-05-16.
+//
 // Reason: state-management-strategy Q23 self-window schemaCache invalidate.
 // A DDL (`CREATE TABLE foo ...`) must invalidate that window's sidebar cache
 // within 100ms and force `loadSchemas(connId, db)` to be called again.

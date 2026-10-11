@@ -1,5 +1,5 @@
 // DataGrid window Esc keydown listener (modal-aware pending discard).
-// Maps to AC-250-02 / AC-250-03 / AC-250-04.
+// Maps to AC-250-02 / AC-250-03 / AC-250-04. (2026-05-09)
 //
 // Asserted scenarios (component layer):
 // - AC-250-02 (superseded → gated): Esc on document.body now opens the

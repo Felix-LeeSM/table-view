@@ -9,7 +9,7 @@ import { useDataGridEdit } from "./useDataGridEdit";
 // per-cell error entry should appear in `pendingEditErrors`. Sibling edits
 // in the same batch are validated independently.
 
-// `executeQuery` / `executeQueryBatch` live in `@lib/tauri`, not in
+// `executeQuery` / `executeQueryBatch` live in `@lib/tauri`, not in (2026-05-16)
 // `schemaStore`. Mocks stay hoisted so the shared Tauri helper can close
 // over them.
 const { mockExecuteQuery, mockExecuteQueryBatch } = vi.hoisted(() => ({

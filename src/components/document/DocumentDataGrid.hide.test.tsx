@@ -1,4 +1,4 @@
-// Mongo DataGrid hide column.
+// Mongo DataGrid hide column. (2026-05-15)
 //
 // Reason: locks the `useHiddenColumns` + `HeaderRow.onHideColumn` wire-up
 // at grid level — (a) a hidden column disappears from both header and

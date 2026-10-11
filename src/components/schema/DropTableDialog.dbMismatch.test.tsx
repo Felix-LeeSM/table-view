@@ -1,4 +1,4 @@
-// DropTableDialog end-to-end DbMismatch recovery test.
+// DropTableDialog end-to-end DbMismatch recovery test. (2026-05-13)
 //
 // Reason: when the backend guard rejects `tauri.dropTableRequest` with
 // `AppError::DbMismatch`, this checks that the dialog's ddl preview catch

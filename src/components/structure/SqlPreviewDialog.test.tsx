@@ -107,7 +107,7 @@ describe("SqlPreviewDialog (sprint-109 syntax highlight)", () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  // AC-256-05 — footer Execute is an ExecuteButton with an env-aware label.
+  // AC-256-05 — footer Execute is an ExecuteButton with an env-aware label. (2026-05-09)
   // SqlPreviewDialog plumbs `environment` + `connectionLabel` so production
   // reads "Execute on <conn>" with the destructive (red) token.
   it("[AC-256-05] env=production + connectionLabel renders 'Execute on <conn>' with destructive token", () => {
@@ -190,7 +190,7 @@ describe("SqlPreviewDialog (sprint-109 syntax highlight)", () => {
     expect(screen.getAllByText("public.users").length).toBeGreaterThan(0);
   });
 
-  // The AC-187-03a 1px env color stripe above the dialog header was removed
+  // The AC-187-03a 1px env color stripe above the dialog header was removed (2026-05-09)
   // per user feedback ("the border isn't even applied and it looks bad — just
   // remove it"). The env signal now flows exclusively through the footer
   // ExecuteButton's color × env matrix and the ConfirmDestructiveDialog header

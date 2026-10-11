@@ -1,5 +1,5 @@
 // AC-236-02, AC-236-03, AC-236-05, AC-236-06, AC-236-09 — DropColumnDialog
-// test suite.
+// test suite. (2026-05-07)
 //
 // Why this file exists:
 // - AC-236-05: typing-confirm enable/disable, case-sensitive

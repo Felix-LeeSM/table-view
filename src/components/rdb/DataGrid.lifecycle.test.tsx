@@ -136,7 +136,7 @@ describe("DataGrid", () => {
 
   // 1. Initial rendering — queryTableData called with correct args
   //
-  // The schemaStore wrapper accepted `(connId, db, table, schema, ...)`;
+  // The schemaStore wrapper accepted `(connId, db, table, schema, ...)`; (2026-05-16)
   // the direct `tauri.queryTableData` signature is `(connectionId,
   // table, schema, page, pageSize, orderBy, filters, rawWhere,
   // expectedDatabase)`. `db` moves to the last positional slot
@@ -190,7 +190,7 @@ describe("DataGrid", () => {
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Charlie")).toBeInTheDocument();
     // [AC-181-10] ExportButton mounted into the toolbar. Regression
-    // guard so future toolbar refactors don't drop it.
+    // guard so future toolbar refactors don't drop it. (2026-05-01)
     expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
   });
 
@@ -204,7 +204,7 @@ describe("DataGrid", () => {
     expect(nulls[0]!.tagName).toBe("SPAN");
   });
 
-  // JSONB / ARRAY object cells render as `{ ... }` / `[ N items ]`
+  // JSONB / ARRAY object cells render as `{ ... }` / `[ N items ]` (2026-05-15)
   // sentinels that toggle the inline JSON tree panel. The earlier
   // "compact one-line JSON" rendering was replaced because cell-level
   // inline edit on a stringified JSON payload was lossy + error-prone;
@@ -255,7 +255,7 @@ describe("DataGrid", () => {
   });
 
   // 14. Executed query displays the actual query text
-  // The bottom strip routes through `<SqlSyntax>` so the SQL is split
+  // The bottom strip routes through `<SqlSyntax>` so the SQL is split (2026-05-07)
   // across token spans. The full text still lives in the surrounding
   // region's textContent — assert that instead of trying to match across
   // span boundaries with `getByText`.
@@ -403,7 +403,7 @@ describe("DataGrid", () => {
   });
 
   // -----------------------------------------------------------------
-  // End-to-end `+ key` / `+ item` adds through the RDB grid. Locks the
+  // End-to-end `+ key` / `+ item` adds through the RDB grid. Locks the (2026-05-15)
   // central assumption that the inline tree panel's
   // `onCommitEdit("<segment>", v)` for a jsonb / ARRAY cell at column
   // idx C materialises a pendingEdit keyed `"<row>-<C>:<segment>"`, and

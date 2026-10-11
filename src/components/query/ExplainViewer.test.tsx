@@ -1,4 +1,4 @@
-// U2 live wire. Verify ExplainViewer dispatches to explain_rdb_query /
+// U2 live wire. Verify ExplainViewer dispatches to explain_rdb_query / (2026-05-15)
 // explain_mongo_find via the @/lib/api/explain wrappers and renders
 // PostgreSQL plans as a readable tree with raw JSON retained as fallback.
 
