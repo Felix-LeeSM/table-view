@@ -1,4 +1,4 @@
-//! Verifies the per-conn label + idempotent contract of the
+//! Verifies the per-conn label + idempotent contract of the (2026-05-16)
 //! `open_workspace_window` IPC.
 //!
 //! Q13: one workspace window per connection — calling `open_workspace_window`

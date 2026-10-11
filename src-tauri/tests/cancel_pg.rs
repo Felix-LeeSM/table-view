@@ -1,4 +1,4 @@
-//! AC-359-03: PG native cancel.
+//! AC-359-03: PG native cancel. (2026-05-16)
 //!
 //! Drives `SELECT pg_sleep(60)` against a live testcontainers PG and
 //! issues `cancel_query_native(connection_id, server_pid)` mid-flight.

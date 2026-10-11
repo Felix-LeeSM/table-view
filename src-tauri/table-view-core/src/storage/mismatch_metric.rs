@@ -471,6 +471,8 @@ fn hash_pairs(payload: &[(String, String)]) -> String {
 
 #[cfg(test)]
 mod tests {
+    //! Date: 2026-05-16
+    //!
     //! Reason: locks the core invariant of the boot-time 4-domain comparison
     //! module at the unit level — counter unchanged when the data matches,
     //! counter += 1 on mismatch. The E2E scenario (the `lib.rs` setup call) is
