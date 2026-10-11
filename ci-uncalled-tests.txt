@@ -24,12 +24,12 @@
 #   cargo test --manifest-path src-tauri/Cargo.toml --test <이름> -- --nocapture
 #
 #   fail = rc 가 0 이 아니다
-#   skip = rc 는 0 이지만 통과한 테스트가 0 개이거나 출력에 `SKIP:` 줄이 있다
+#   skip = rc 는 0 이지만 통과한 테스트가 없거나 출력에 `SKIP:` 줄이 있다
 #   pass = rc 가 0 이고 통과한 테스트가 1 개 이상이며 `SKIP:` 줄이 없다
 #
-# `*_HOST` 환경 변수 없이 돌렸으므로, 서버 DB 에 붙는 target 은 테스트 helper 가 직접
-# 띄운 testcontainers 컨테이너를 썼다 (근거 요약 끝 괄호의 이미지). 판정은 그 트리에서
-# 잰 값이지 CI 결과가 아니다.
+# `PGHOST` · `MONGO_HOST` 같은 DB endpoint 환경 변수 없이 돌렸으므로, 서버 DB 에 붙는
+# target 은 테스트 helper 가 직접 띄운 testcontainers 컨테이너를 썼다 (근거 요약 끝 괄호의
+# 이미지). 판정은 그 트리에서 잰 값이지 CI 결과가 아니다.
 # pass · skip 을 CI 에 붙이는 일은 #2705 가 맡고, fail 을 고치는 일은 target 마다
 # 따로 여는 이슈가 맡는다. 판정별 이름은 아래 명령으로 뽑는다 (`pass` 자리를 바꿔
 # 쓴다):
