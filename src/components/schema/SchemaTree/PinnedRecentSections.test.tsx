@@ -149,7 +149,7 @@ describe("PinnedRecentSections", () => {
   });
 
   // Reason: #1738 — "collapse hides it completely (0 rows; slice 5→0 when
-  // collapsed)". The recent-tables section uses a 0 cap instead of the shared
+  // collapsed)". The recent-tables section uses a 0 cap instead of the shared (2026-07-25)
   // HISTORY_DEFAULT_VISIBLE(5), so it renders no rows while collapsed (the
   // default) and shows all of them when expanded.
   it("hides all recent rows while collapsed and reveals them on expand (#1738)", () => {
@@ -185,7 +185,7 @@ describe("PinnedRecentSections", () => {
     expect(screen.getByText("public.t2")).toBeInTheDocument();
   });
 
-  // Reason: #1738 — the 0-cap collapse on recent does not affect the pinned
+  // Reason: #1738 — the 0-cap collapse on recent does not affect the pinned (2026-07-25)
   // section. Pinned rows are always shown; only recent collapses (to 0).
   it("keeps pinned rows visible while recent rows stay collapsed (#1738)", () => {
     seed([

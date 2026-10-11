@@ -1,5 +1,5 @@
 // AC-235-02, AC-235-03, AC-235-05, AC-235-06, AC-235-09 — DropTableDialog
-// test suite.
+// test suite. (2026-05-07)
 //
 // Why this file exists:
 // - AC-235-05: typing-confirm enable/disable, CASCADE toggle → debounced

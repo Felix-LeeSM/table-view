@@ -35,6 +35,7 @@ import {
 // See the block header in `CreateTableDialog.constraints.test.tsx` for
 // why this block exists: the three constraint families on one tab, the
 // `tauri.addConstraint` chain target, and atomic policy C.
+// Date: 2026-05-07.
 //
 // Source: AC-229-01..AC-229-12.
 
@@ -154,7 +155,7 @@ describe("Sprint 229 — Constraint chain and cache contracts", () => {
       );
 
       // Preview pane defaults open; auto-debounced fetch settles via waitFor below.
-      // Intermediate debounce flushes (FK, FK+CHECK, FK+CHECK+UNIQUE)
+      // Intermediate debounce flushes (FK, FK+CHECK, FK+CHECK+UNIQUE) (2026-05-11)
       // fire during real-timer awaits, so exact call counts are non-deterministic
       // under heavy parallel load (full-suite coverage runs reproduce it).
       // Assert on terminal state instead — every constraint name eventually shows

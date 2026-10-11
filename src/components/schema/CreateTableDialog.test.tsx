@@ -1,5 +1,7 @@
 // `CreateTableDialog` test suite.
 //
+// Date: 2026-05-06.
+//
 // Why this file exists:
 // - Form behaviour + IPC sequence + history source + Safe Mode
 //   warn-cancel — assertion text strings preserved verbatim per

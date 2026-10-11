@@ -1,4 +1,4 @@
-// StructurePanel Triggers tab covers the read-only Triggers sub-tab.
+// StructurePanel Triggers tab covers the read-only Triggers sub-tab. (2026-05-13)
 // Asserts:
 //   - Tab list extended with "Triggers" after Constraints.
 //   - `initialSubTab="triggers"` mounts directly on the Triggers tab
@@ -12,7 +12,7 @@
 //     / orientation / function reference / WHEN clause).
 //   - Empty trigger list renders the italic "No triggers" placeholder.
 //
-// Trigger CRUD lives on this surface, not in a sidebar Triggers child
+// Trigger CRUD lives on this surface, not in a sidebar Triggers child (2026-05-13)
 // group. Further cases assert:
 //   - `+ Create Trigger` button mounts the `CreateTriggerDialog`.
 //   - Per-trigger row carries a trash icon (aria-label "Drop trigger
@@ -162,7 +162,7 @@ describe("StructurePanel Triggers tab (Sprint 272)", () => {
   });
 
   // -------------------------------------------------------------------
-  // Trigger CRUD is consolidated onto this tab.
+  // Trigger CRUD is consolidated onto this tab. (2026-05-13)
   // -------------------------------------------------------------------
 
   it("exposes a +Create Trigger button on the Triggers toolbar with aria-label", async () => {

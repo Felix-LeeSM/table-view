@@ -1,4 +1,4 @@
-// Purpose: diagnose every preview tab entry point in SchemaTree
+// Purpose: diagnose every preview tab entry point in SchemaTree (2026-04-28)
 //
 // User-reported bug:
 //   Bug 2: clicking a PG sidebar table accumulates preview tabs instead of
@@ -149,7 +149,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
 
   // Reason: clicking context menu "Data" must call `handleTableClick` and
   //         create a preview tab. User report — check whether opening from
-  //         the context menu accumulates tabs.
+  //         the context menu accumulates tabs. (2026-04-28)
   it("AC-156-04a: context menu 'Data' on a table opens a preview tab (isPreview: true)", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -176,7 +176,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
 
   // Reason: clicking context menu "Structure" must open a tab whose subView
   //         is "structure". Checks both the preview flag and the subView
-  //         value.
+  //         value. (2026-04-28)
   it("AC-156-04b: context menu 'Structure' on a table opens a structure tab with subView='structure'", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -204,7 +204,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
 
   // Reason: preview swap must still work when the search filter is active.
   //         Checks that the search filter does not change the `addTab`
-  //         branch.
+  //         branch. (2026-04-28)
   it("AC-156-04c: clicking a filtered table (search active) opens a preview tab and swap still works", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -245,7 +245,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
   //         permanent + preview. The existing test
   //         (SchemaTree.preview.test.tsx AC-S136-02) checks the follow-up
   //         click; here the diagnosis runs 3 steps: promote → another table →
-  //         yet another table.
+  //         yet another table. (2026-04-28)
   it("AC-156-04d: clicking a different table after promoting one → 2 tabs (1 permanent + 1 preview)", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -309,7 +309,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
 
   // Reason: check how a tab is created on a view click. Views go through
   //         `handleViewClick` and set objectKind: "view". Diagnoses whether a
-  //         view takes part in the preview slot.
+  //         view takes part in the preview slot. (2026-04-28)
   it("AC-156-04e: clicking a view opens a tab with objectKind='view'", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -339,7 +339,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
 
   // Reason: check that preview swap works when one view click follows
   //         another. `handleViewClick` calls `addTab`, so it must take the
-  //         same swap path.
+  //         same swap path. (2026-04-28)
   it("AC-156-04e (extended): clicking a second view swaps the preview slot", async () => {
     // Seed two views.
     setSchemaStoreState({
@@ -387,7 +387,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
 
   // Reason: diagnose whether preview swap works when another table is
   //         clicked after context menu "Data". Checks that the context-menu
-  //         path and the plain click path take the same `addTab` branch.
+  //         path and the plain click path take the same `addTab` branch. (2026-04-28)
   it("AC-156-04a (swap): context menu 'Data' then clicking a different table swaps the preview slot", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -418,7 +418,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
 
   // Reason: after promoting a table, clicking a view must leave 2 tabs — the
   //         permanent table + the preview view. Diagnoses cross-objectKind
-  //         preview slot independence.
+  //         preview slot independence. (2026-04-28)
   it("AC-156-04d (cross-kind): after promoting a table, clicking a view creates a new preview alongside permanent", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -452,7 +452,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
   // Reason: diagnose whether context menu "Structure" replaces the existing
   //         preview tab. `handleOpenStructure` calls `addTab`, so a preview
   //         swap should happen, but a different subView can fail the
-  //         exact-match.
+  //         exact-match. (2026-04-28)
   it("AC-156-04b (swap): context menu 'Structure' after a preview 'Data' tab → replaces the preview slot", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);

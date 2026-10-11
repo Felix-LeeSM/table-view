@@ -171,7 +171,7 @@ describe("SchemaTree — highlight", () => {
       fireEvent.click(viewsCategory);
     });
 
-    // The selected highlight lives on the wrapper div, not on the button
+    // The selected highlight lives on the wrapper div, not on the button (2026-05-06)
     // itself: the '+' button next to Tables and the itemCount badge are
     // split out as siblings outside the button, so the wrapper owns the
     // hover/selected colour for the whole row.
@@ -515,7 +515,7 @@ describe("SchemaTree — highlight", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // The itemCount badge sits in a sibling div outside the button, so the
+    // The itemCount badge sits in a sibling div outside the button, so the (2026-05-06)
     // check runs on the whole row's (wrapper) textContent.
     const tablesRow = screen.getByLabelText("Tables in public").parentElement!;
     const viewsRow = screen.getByLabelText("Views in public").parentElement!;

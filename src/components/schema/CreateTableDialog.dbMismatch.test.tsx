@@ -1,4 +1,4 @@
-// CreateTableDialog end-to-end DbMismatch recovery test.
+// CreateTableDialog end-to-end DbMismatch recovery test. (2026-05-13)
 //
 // Reason: checks that when the backend guard rejects
 // `tauri.createTablePlan` with `AppError::DbMismatch`, the dialog's ddl

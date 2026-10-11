@@ -9,7 +9,7 @@ import SchemaTree from "./SchemaTree";
 /**
  * MySQL/SQLite sidebar: the "Schemas" header and the surplus indent level.
  *
- * In MySQL a schema is the same thing as a database, so the "Schemas" header
+ * In MySQL a schema is the same thing as a database, so the "Schemas" header (2026-05-17)
  * carries no information, and the *empty schema level* indents
  * Tables/Views/Functions/Procedures one step deeper than root. The header is
  * awkward on SQLite for the same reason (though SQLite is a flat shape, so it

@@ -1,5 +1,5 @@
 // AddColumnDialog test suite — AC-236-01, AC-236-03, AC-236-04,
-// AC-236-09, AC-236-10.
+// AC-236-09, AC-236-10. (2026-05-07)
 //
 // Why this file exists:
 // - AC-236-04: form behaviour — opens with empty name + empty type;
@@ -15,7 +15,7 @@
 //   user-visible gate). The full reject matrix (space / quote /
 //   leading-digit / >63 bytes / NULL / empty) was pushed down to the
 //   `validateIdentifier` util unit test (./identifier.test.ts) in issue
-//   #1626 — one representative case stays here.
+//   #1626 — one representative case stays here. (2026-07-22)
 // - AC-236-10: DEFAULT/CHECK passthrough verbatim — no escaping, no
 //   syntax check, embedded `'` preserved.
 
@@ -137,7 +137,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
 
   // AC-236-04 / AC-236-09 — wire-up: an invalid identifier surfaces the
   // inline error AND keeps Apply disabled. The full reject matrix lives
-  // in ./identifier.test.ts (issue #1626); embedded space is the
+  // in ./identifier.test.ts (issue #1626); embedded space is the (2026-07-22)
   // representative invalid input.
   it("[AC-236-09] invalid identifier shows inline error + keeps Apply disabled", () => {
     renderDialog();
@@ -403,11 +403,11 @@ describe("AddColumnDialog (Sprint 236)", () => {
   // preview/commit reject must surface an inline alert while the modal
   // stays open (P4 parity with commit-success). Mirrors the
   // DropColumnDialog reject pattern (DropColumnDialog.test.tsx:385).
-  // Issue #1630.
+  // Issue #1630. (2026-07-24 / 2026-07-17)
   describe("error branches (issue #1630)", () => {
     // Reason: preview reject (previewOnly:true addColumnRequest throws)
     // → previewError surfaces as role="alert" + modal stays open
-    // (onClose NOT called). Issue #1630.
+    // (onClose NOT called). Issue #1630. (2026-07-24)
     it("preview reject surfaces inline alert + keeps modal open", async () => {
       mockAddColumnRequest.mockRejectedValueOnce(
         new Error('type "varcha" does not exist'),
@@ -430,7 +430,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
     // Reason: commit reject (previewOnly:false addColumnRequest throws)
     // → previewError surfaces as role="alert" + modal stays open
     // (onClose NOT called). Equal weight to commit-success (P4).
-    // Issue #1630.
+    // Issue #1630. (2026-07-24)
     it("commit reject surfaces inline alert + keeps modal open", async () => {
       mockAddColumnRequest
         .mockResolvedValueOnce({

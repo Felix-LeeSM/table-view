@@ -1,4 +1,4 @@
-// Sidebar wire-up to workspaceStore.
+// Sidebar wire-up to workspaceStore. (2026-05-12)
 //
 // AC-262-05: SchemaTree's `selectedNode` / `expanded` read and write the
 // `sidebar` axis of workspaceStore. When DbSwitcher (=> connectionStore's

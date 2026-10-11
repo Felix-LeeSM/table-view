@@ -1,4 +1,4 @@
-// DropTriggerDialog component test suite.
+// DropTriggerDialog component test suite. (2026-05-13)
 //
 // Reason: pins (1) the initial form mount with Apply disabled, (2) the
 // byte-for-byte typing-confirm gate (empty / partial / case-mismatched /

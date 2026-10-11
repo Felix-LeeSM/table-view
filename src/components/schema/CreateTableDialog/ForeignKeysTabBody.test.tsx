@@ -1,5 +1,7 @@
 // `ForeignKeysTabBody` presentation tests.
 //
+// Date: 2026-05-07.
+//
 // Why this file exists:
 //
 // `ForeignKeysTabBody.tsx` is a pure presentational mapper extracted

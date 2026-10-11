@@ -25,6 +25,8 @@ import {
 
 // ── Indexes tab functional ──────────────────────────────────────────────
 //
+// Date: 2026-05-07.
+//
 // Why this block exists:
 //
 // The Indexes tab is functional:
