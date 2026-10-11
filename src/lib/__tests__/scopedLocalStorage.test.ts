@@ -5,7 +5,7 @@
  * session data from stale data left by a previous app run, and that
  * connection store hydration reads/writes the correct keys. (2026-04-28)
  *
- * `scopedLocalStorage.ts` was renamed from `session-storage.ts`; see its
+ * `scopedLocalStorage.ts` was renamed from `session-storage.ts`; see its (2026-05-17)
  * module doc.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

@@ -1,4 +1,4 @@
-//! AC-359-02b: introspection_pool isolation + a round-robin call spy.
+//! AC-359-02b: introspection_pool isolation + a round-robin call spy. (2026-05-16)
 //!
 //! Strategy doc lines 478–480: sidebar / autocomplete / prefetch run an idle
 //! round-robin separate from the tab pool. The isolation surface is

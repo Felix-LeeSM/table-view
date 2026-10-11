@@ -7,7 +7,7 @@ import MainArea from "@/components/layout/MainArea";
 import { setupTauriMock } from "@/test-utils/tauriMock";
 import WorkspaceSidebar from "./WorkspaceSidebar";
 
-// AC-270-03 swap-order regression.
+// AC-270-03 swap-order regression. (2026-05-13)
 //
 // Goal: assert the user never sees the post-hydrate empty surfaces
 // ("No connections yet" sidebar card, `EmptyState` welcome card) flash
@@ -41,7 +41,7 @@ vi.mock("@lib/zustand-ipc-bridge", () => ({
 }));
 
 vi.mock("@lib/window-label", async () => {
-  // The hook + selector import parseWorkspaceLabel/formatWorkspaceLabel
+  // The hook + selector import parseWorkspaceLabel/formatWorkspaceLabel (2026-05-16)
   // from the same module, so the mock must surface them (use the real
   // ones — they're pure string ops).
   const actual =
@@ -110,6 +110,7 @@ describe("First-paint skeleton swap-order (Sprint 270, AC-270-03)", () => {
     __resetMruStoreForTests();
   });
 
+  // (2026-05-13)
   // AC-270-03 happy-path: delayed-resolve `listConnections` returning [].
   // At t=0 the sidebar skeleton must be present and the post-hydrate empty
   // card must be absent. After resolve, exact opposite: skeleton gone,
@@ -146,6 +147,7 @@ describe("First-paint skeleton swap-order (Sprint 270, AC-270-03)", () => {
     expect(screen.getByText(/no connections yet/i)).toBeInTheDocument();
   });
 
+  // (2026-05-13)
   // AC-270-03 happy-path: main area equivalent. At t=0 the welcome-shaped
   // skeleton; after resolve the legacy `EmptyState` (logo wordmark).
   it("main area: skeleton at t=0, EmptyState after resolve — no flash of EmptyState pre-resolve", async () => {
@@ -179,6 +181,7 @@ describe("First-paint skeleton swap-order (Sprint 270, AC-270-03)", () => {
     expect(screen.getByAltText("Table View")).toBeInTheDocument();
   });
 
+  // (2026-05-13)
   // AC-270-03 error branch — `loadConnections` rejecting still flips
   // `hasLoadedOnce`, so the skeleton must unmount. The post-hydrate
   // surface in this case is the same "No connections yet" empty card

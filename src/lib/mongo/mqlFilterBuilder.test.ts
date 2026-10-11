@@ -91,7 +91,7 @@ describe("buildMqlFilter", () => {
     });
   });
 
-  // `$in` / `$nin`: the form layer surfaces a single comma-separated input
+  // `$in` / `$nin`: the form layer surfaces a single comma-separated input (2026-05-14)
   // that the builder splits, trims, and per-token coerces. Empty arrays are
   // dropped (D-23) because `$in: []` is almost always a typo.
   it("builds a $in clause with per-token numeric coercion from CSV input", () => {
@@ -137,7 +137,7 @@ describe("buildMqlFilter", () => {
     expect(result).toEqual({ age: { $gte: 18, $in: [21, 25, 30] } });
   });
 
-  // Composite ops. The builder takes `matchMode` (`$or` wrapping) and
+  // Composite ops. The builder takes `matchMode` (`$or` wrapping) and (2026-05-15)
   // per-row `negate` (`$not` wrapping). `$and` stays implicit (D-25).
   // Single-row `any` collapses to the inner clause (D-26).
   describe("composite operators (Slice B.2)", () => {

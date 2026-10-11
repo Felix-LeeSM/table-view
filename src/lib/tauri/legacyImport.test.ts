@@ -1,4 +1,4 @@
-// `importLegacyLocalStorage` wrapper unit tests. Verifies only the backend
+// `importLegacyLocalStorage` wrapper unit tests. Verifies only the backend (2026-05-16)
 // IPC call contract (command name, payload shape, error propagation) —
 // actual SQLite writes are the Rust integration tests' responsibility.
 

@@ -1,4 +1,4 @@
-// `ExecuteButton` — composed Execute affordance applied across
+// `ExecuteButton` — composed Execute affordance applied across (2026-05-09)
 // SqlPreviewDialog / MqlPreviewModal / DataGrid inline preview /
 // EditableQueryResultGrid toolbar / ConfirmDestructiveDialog footer.
 //

@@ -1,4 +1,4 @@
-// Wire-shape verification for the `addHistoryEntry` / `listHistory` /
+// Wire-shape verification for the `addHistoryEntry` / `listHistory` / (2026-05-17)
 // `getHistoryDetail` / `clearHistory` wrappers.
 //
 // The invariant of this suite is the same wire shape (lego) as the backend

@@ -1,7 +1,7 @@
 // themeStore unit tests — covers hydrate, setTheme, setMode, setState,
 // system-mode resolution, and the cross-window broadcast allowlist.
 //
-// Actions persist through `persist_setting("theme", JSON)` IPC (Q12).
+// Actions persist through `persist_setting("theme", JSON)` IPC (Q12). (2026-05-16)
 // Tests mock `@tauri-apps/api/core` so the IPC resolves immediately in
 // jsdom and await each action. The single-LS-write invariant locked here
 // (AC-368 receiver path) holds because the subscriber owns the write —

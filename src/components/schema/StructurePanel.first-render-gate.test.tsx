@@ -116,7 +116,7 @@ describe("StructurePanel first-render flash gate (sprint-176)", () => {
   it("[AC-176-03] does not render empty-state copy before first fetch settles", () => {
     renderPanel();
 
-    // The spinner is threshold-gated (1s — `useDelayedFlag`), so this test
+    // The spinner is threshold-gated (1s — `useDelayedFlag`), so this test (2026-04-30)
     // does not assert it at mount. The load-bearing AC-176-03
     // invariant — that no empty-state copy paints during the pre-fetch
     // window — is independent of the spinner's visibility and is

@@ -1,4 +1,4 @@
-//! MySQL adapter joins the integration gate.
+//! MySQL adapter joins the integration gate. (2026-05-14)
 //!
 //! Why this exists: the IO bodies in `db/mysql/{queries,schema,mutations,connection}.rs`
 //! are not covered by unit mocks, so the Rust integration coverage gate
@@ -1830,7 +1830,7 @@ async fn test_mysql_execute_query_batch_strips_trailing_semicolons() {
 }
 
 // =============================================================================
-// Batch 5 — mirror of schema_integration.rs scenarios
+// Batch 5 — mirror of schema_integration.rs scenarios (2026-05-14)
 // =============================================================================
 // Why this exists: db/mysql/schema.rs (list_schemas/list_tables/
 // get_table_columns/list_views/list_functions/get_table_indexes/
@@ -3529,7 +3529,7 @@ async fn test_mysql_query_table_data_bigint_unsigned_value_is_string_wire() {
     adapter.disconnect_pool().await.ok();
 }
 
-// sqlx `bigdecimal` feature enabled + the queries.rs decode path converts via
+// sqlx `bigdecimal` feature enabled + the queries.rs decode path converts via (2026-05-14)
 // `BigDecimal::to_string()` → the same wire format as ADR 0026 (JSON string).
 // Regression guard against precision-sensitive DECIMAL columns going missing
 // from the frontend grid.
@@ -3725,7 +3725,7 @@ async fn test_mysql_query_table_data_tinyint_value_is_number_not_bool() {
 }
 
 // =============================================================================
-// Batch 6 — mutation preview + trait dispatch coverage
+// Batch 6 — mutation preview + trait dispatch coverage (2026-05-14)
 // =============================================================================
 // Why this exists: the lines/functions thresholds of the Rust integration
 // coverage gate (`Run integration coverage` in `.github/workflows/ci.yml`) fell

@@ -1,4 +1,4 @@
-//! Q9 boot perf of `get_initial_app_state_inner` (AC-357-05).
+//! Q9 boot perf of `get_initial_app_state_inner` (AC-357-05). (2026-05-16)
 //!
 //! Seed: 10 connections × 5 groups × 50 workspace tabs × 500 history rows.
 //! Strategy F.2 line 968 — p95 < 50ms.

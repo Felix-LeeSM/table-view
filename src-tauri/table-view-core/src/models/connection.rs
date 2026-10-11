@@ -1369,7 +1369,7 @@ mod tests {
 
     #[test]
     fn connection_status_serializes_as_discriminated_union() {
-        // Regression guard for the flat serialization of
+        // Regression guard for the flat serialization of (2026-05-16)
         // `Connected { active_db: None }` and of the `Error { message: ... }`
         // struct variant. The full 4-case wire shape is in
         // `tests/connection_status_serde.rs`.

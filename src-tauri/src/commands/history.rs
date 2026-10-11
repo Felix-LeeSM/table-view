@@ -772,7 +772,7 @@ pub async fn boot_vacuum_old_history(
 
 #[cfg(test)]
 mod tests {
-    //! Function-level unit tests for `boot_vacuum_old_history` (AC-371-10).
+    //! Function-level unit tests for `boot_vacuum_old_history` (AC-371-10). (2026-05-17)
     //! The wired scenarios (the 4 IPC) are covered by the
     //! `tests/history_*.rs` integration tests.
 
@@ -863,6 +863,8 @@ mod tests {
     }
 
     // ---------------------------------------------------------------------
+    // Date: 2026-05-17.
+    //
     // The inline tests above cover `boot_vacuum_*` only, and the
     // `tests/history_*` integration binaries sit outside the coverage
     // measurement set, which leaves `add_history_entry_inner` /

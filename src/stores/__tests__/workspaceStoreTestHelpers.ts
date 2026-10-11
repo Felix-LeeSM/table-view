@@ -12,7 +12,7 @@ import {
 } from "../workspaceStore";
 
 /**
- * Best-effort setter for the fake Tauri window label (Q15). Tests that
+ * Best-effort setter for the fake Tauri window label (Q15). Tests that (2026-05-16)
  * mount workspace-tree components must declare the
  * `vi.mock("@lib/window-label", ...)` block from `fakeWindowConnectionId.ts`
  * for this to work. If the mock is absent, `vi.mocked()` returns the
@@ -96,7 +96,7 @@ export function emptyWorkspacesState(): Pick<
  * workspace correctly. Standalone helper for tests that drive
  * `addTab` / `addQueryTab` directly (rather than via `seedWorkspace`).
  *
- * `useCurrentWorkspaceKey()` resolves
+ * `useCurrentWorkspaceKey()` resolves (2026-05-16)
  * `connId` from the Tauri window label. Tests that mount workspace-tree
  * components must declare `vi.mock("@lib/window-label", ...)`; this
  * helper additionally writes the fake label so the hook returns
@@ -171,7 +171,7 @@ export function seedWorkspace(
       },
     };
   });
-  // Also seed the fake Tauri window label so
+  // Also seed the fake Tauri window label so (2026-05-16)
   // `useCurrentWindowConnectionId()` (and therefore
   // `useCurrentWorkspaceKey()` and `Sidebar`) resolves to this connId.
   // No-op for files that didn't `vi.mock("@lib/window-label", ...)`.

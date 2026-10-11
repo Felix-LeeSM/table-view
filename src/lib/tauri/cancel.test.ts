@@ -1,4 +1,4 @@
-// AC-359-08: wire-shape assertions for the `cancel.ts` wrapper + verifying
+// AC-359-08: wire-shape assertions for the `cancel.ts` wrapper + verifying (2026-05-16)
 // the frontend parses the backend `CancelError` 3-bucket classification
 // correctly.
 //

@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the `${...}` is inside a test name that quotes the composite key's shape. Interpolating it would name the test after four undefined variables.
 
 // `dataGridEditStore` (in-memory zustand) lift of the four
-// pending-edit slices. Maps to AC-251-S1..S5.
+// pending-edit slices. Maps to AC-251-S1..S5. (2026-05-09)
 //
 // The RISK-039 fix extends the key to
 // `${connectionId}::${database}::${schema}::${table}` so same-name RDB

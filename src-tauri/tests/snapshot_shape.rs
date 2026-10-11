@@ -191,7 +191,7 @@ async fn test_snapshot_empty_db_defaults_partial_false() {
     assert_eq!(mru["lastUsedConnectionId"], Value::Null);
 
     // theme — default { themeId: "slate", mode: "system" }
-    // Contract: the backend default's theme_id must match the frontend
+    // Contract: the backend default's theme_id must match the frontend (2026-05-16)
     // `DEFAULT_THEME_ID` ("slate").
     let theme = stores["theme"].as_object().unwrap();
     assert_eq!(theme["themeId"], "slate");
@@ -374,7 +374,7 @@ async fn test_snapshot_runtime_active_statuses_reflects_status_map() {
     let (_dir, pool) = setup().await;
 
     let mut statuses = HashMap::new();
-    // `Connected` is a struct variant, so it has to be recorded with
+    // `Connected` is a struct variant, so it has to be recorded with (2026-05-16)
     // `active_db: None` for the wire shape inside the snapshot to stay
     // `{type:"connected"}` (field absent).
     statuses.insert(
