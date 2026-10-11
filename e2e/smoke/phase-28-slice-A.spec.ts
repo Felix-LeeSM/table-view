@@ -1,4 +1,4 @@
-// Phase 28 Slice A integration E2E.
+// Phase 28 Slice A integration E2E. (2026-05-14)
 // Reason: scenario E28-01 — when the user types a mongosh expression into
 // the query editor and hits Run, the grid must render result rows. The
 // scenario passes only when A1 (parser) → A2 (backend wire) → A3 (toggle

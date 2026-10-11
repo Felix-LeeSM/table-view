@@ -1,4 +1,4 @@
-// E2E for the original five history sources (Phase 5 F.5).
+// E2E for the original five history sources (Phase 5 F.5). (2026-05-17)
 // `explain` is covered by postgres-explain.spec.ts.
 //
 // Reason: AC-373-06 — after each of the five source callers (`raw` /
