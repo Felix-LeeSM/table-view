@@ -117,6 +117,23 @@ pub enum AppError {
     #[error("{message}")]
     CapabilityNotEnabled { code: String, message: String },
 
+    /// #1064 (ADR 0052 Q6) — SSH tunnel establishment failed. Kept distinct
+    /// from `Connection` so the frontend can render a tunnel-specific surface
+    /// (host-key confirm / mismatch recovery) instead of a generic dial error.
+    /// `code` is a stable machine key (`sshHostKeyUnknown`,
+    /// `sshHostKeyMismatch`, `sshAuthFailed`, `sshKeyFileUnreadable`,
+    /// `sshConnectFailed`, `sshTimeout`) the frontend maps to a localized
+    /// message; `message` is the English fallback. `fingerprint` carries the
+    /// server host-key fingerprint (OpenSSH `SHA256:` notation) for the two
+    /// host-key codes — it is a public value by construction and the only
+    /// thing the TOFU confirm UI needs.
+    #[error("{message}")]
+    SshTunnel {
+        code: String,
+        message: String,
+        fingerprint: Option<String>,
+    },
+
     #[error("Window error: {0}")]
     Window(String),
 
@@ -210,6 +227,35 @@ impl serde::Serialize for AppError {
                     kind: "CapabilityNotEnabled",
                     message,
                     payload: CapabilityPayload { code },
+                }
+                .serialize(serializer)
+            }
+            AppError::SshTunnel {
+                code,
+                message,
+                fingerprint,
+            } => {
+                #[derive(Serialize)]
+                struct SshTunnelPayload<'a> {
+                    code: &'a str,
+                    fingerprint: Option<&'a str>,
+                }
+
+                #[derive(Serialize)]
+                struct SshTunnelEnvelope<'a> {
+                    #[serde(rename = "type")]
+                    kind: &'static str,
+                    message: &'a str,
+                    payload: SshTunnelPayload<'a>,
+                }
+
+                SshTunnelEnvelope {
+                    kind: "SshTunnel",
+                    message,
+                    payload: SshTunnelPayload {
+                        code,
+                        fingerprint: fingerprint.as_deref(),
+                    },
                 }
                 .serialize(serializer)
             }
@@ -356,6 +402,34 @@ mod tests {
         assert_eq!(json["type"], "CapabilityNotEnabled");
         assert_eq!(json["payload"]["code"], "pg_stat_statements");
         assert_eq!(json["message"], "pg_stat_statements extension not enabled.");
+    }
+
+    // Reason: #1064 — the TOFU confirm/mismatch UI keys off the typed
+    // `SshTunnel` envelope: the machine `code` picks the surface and the
+    // `fingerprint` payload is what the user confirms (2026-10-08).
+    #[test]
+    fn ssh_tunnel_serializes_to_typed_envelope_with_fingerprint() {
+        let err = AppError::SshTunnel {
+            code: "sshHostKeyUnknown".into(),
+            message: "First connection to this SSH host.".into(),
+            fingerprint: Some("SHA256:abcdef".into()),
+        };
+        let json = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["type"], "SshTunnel");
+        assert_eq!(json["payload"]["code"], "sshHostKeyUnknown");
+        assert_eq!(json["payload"]["fingerprint"], "SHA256:abcdef");
+        assert_eq!(json["message"], "First connection to this SSH host.");
+    }
+
+    #[test]
+    fn ssh_tunnel_without_fingerprint_serializes_null() {
+        let err = AppError::SshTunnel {
+            code: "sshAuthFailed".into(),
+            message: "rejected".into(),
+            fingerprint: None,
+        };
+        let json = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["payload"]["fingerprint"], serde_json::Value::Null);
     }
 
     #[test]

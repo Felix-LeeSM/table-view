@@ -49,6 +49,14 @@ fn mssql_public(
         oracle_use_sid: None,
         wallet_path: None,
         has_wallet_password: false,
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        has_ssh_password: false,
+        has_ssh_passphrase: false,
     }
 }
 
@@ -80,6 +88,14 @@ fn mssql_config(
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     }
 }
 
@@ -192,6 +208,8 @@ async fn test_connection_dispatches_mssql_validation_instead_of_declared_only_re
         ),
         password: Some("pw".into()),
         wallet_password: None,
+        ssh_password: None,
+        ssh_passphrase: None,
         existing_id: None,
     })
     .await;
@@ -222,6 +240,8 @@ async fn test_connection_rejects_verify_ca_without_a_ca_file_before_network() {
         config: mssql_public("127.0.0.1", port, Some(1), SslMode::VerifyCa, None),
         password: Some("pw".into()),
         wallet_password: None,
+        ssh_password: None,
+        ssh_passphrase: None,
         existing_id: None,
     })
     .await;

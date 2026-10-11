@@ -586,6 +586,14 @@ pub async fn mysql_test_config() -> Option<ConnectionConfig> {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     })
 }
 
@@ -622,6 +630,14 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         },
         DatabaseType::Mysql => ConnectionConfig {
             id: "test-conn".to_string(),
@@ -645,6 +661,14 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         },
         DatabaseType::Mongodb => ConnectionConfig {
             id: "test-conn".to_string(),
@@ -668,6 +692,14 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         },
         other => panic!("test_config: unsupported DatabaseType {:?}", other),
     }
@@ -705,6 +737,14 @@ pub async fn pg_test_config() -> Option<ConnectionConfig> {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     })
 }
 
@@ -737,6 +777,14 @@ pub async fn mongo_test_config() -> Option<ConnectionConfig> {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     })
 }
 
@@ -776,6 +824,14 @@ pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     };
 
     let adapter = PostgresAdapter::new();
@@ -824,6 +880,14 @@ pub async fn setup_mysql_adapter() -> Option<MysqlAdapter> {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     };
 
     let adapter = MysqlAdapter::new();
@@ -873,6 +937,14 @@ pub async fn setup_mariadb_adapter() -> Option<MysqlAdapter> {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     };
 
     let adapter = MysqlAdapter::new_mariadb();
@@ -927,6 +999,14 @@ pub async fn setup_mssql_adapter() -> Option<MssqlAdapter> {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     };
 
     let adapter = MssqlAdapter::new();
@@ -1177,6 +1257,14 @@ pub async fn setup_oracle_adapter() -> Option<OracleAdapter> {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     };
 
     let adapter = OracleAdapter::new();
@@ -1227,6 +1315,14 @@ pub async fn setup_mongo_adapter() -> Option<MongoAdapter> {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     };
 
     let adapter = MongoAdapter::new();

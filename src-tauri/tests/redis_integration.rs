@@ -664,6 +664,14 @@ fn valkey_config(port: u16, database: &str) -> ConnectionConfig {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     }
 }
 
@@ -690,5 +698,13 @@ fn redis_config(port: u16, database: &str) -> ConnectionConfig {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     }
 }

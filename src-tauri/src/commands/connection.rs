@@ -39,6 +39,7 @@ use crate::db::OracleAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
 use crate::state::introspection_pool::IntrospectionPool;
+use table_view_core::ssh::tunnel::SshTunnel;
 
 pub mod crud;
 pub mod groups;
@@ -110,6 +111,12 @@ pub struct SaveConnectionRequest {
     /// (`None` keep / `Some("")` clear / `Some(s)` set). Absent for non-Oracle.
     #[serde(default)]
     pub wallet_password: Option<String>,
+    /// #1064 — SSH tunnel password, same three-way semantics as `password`.
+    #[serde(default)]
+    pub ssh_password: Option<String>,
+    /// #1064 — SSH key passphrase, same three-way semantics as `password`.
+    #[serde(default)]
+    pub ssh_passphrase: Option<String>,
     #[serde(default)]
     pub is_new: Option<bool>,
 }
@@ -128,6 +135,12 @@ pub struct TestConnectionRequest {
     /// stored wallet password without exposing it.
     #[serde(default)]
     pub wallet_password: Option<String>,
+    /// #1064 — SSH tunnel password; same three-way semantics.
+    #[serde(default)]
+    pub ssh_password: Option<String>,
+    /// #1064 — SSH key passphrase; same three-way semantics.
+    #[serde(default)]
+    pub ssh_passphrase: Option<String>,
     #[serde(default)]
     pub existing_id: Option<String>,
 }
@@ -197,6 +210,13 @@ pub struct AppState {
     /// (`pg_sleep`, big JOINs) the cooperative token can't abort. The entry
     /// is removed when the query finishes, so only in-flight queries appear.
     pub query_server_pids: Mutex<HashMap<String, i64>>,
+    /// #1064 — live SSH tunnels keyed by connection id. One tunnel per
+    /// connection (ADR 0052 Q2, connection-scoped — no sharing): the adapter
+    /// dials `tunnel.local_addr()` and the tunnel forwards to the configured
+    /// target. Installed by `connect` through [`AppState::install_connection`]
+    /// (which tears the predecessor down), removed by `disconnect` after the
+    /// adapter is gone.
+    pub ssh_tunnels: Mutex<HashMap<String, SshTunnel>>,
     /// Q5.4 — per-connection **introspection pool** selector.
     ///
     /// The intent is that sidebar / autocomplete / prefetch borrow idle
@@ -258,6 +278,7 @@ impl AppState {
         id: &str,
         adapter: Arc<ActiveAdapter>,
         keep_alive: JoinHandle<()>,
+        tunnel: Option<SshTunnel>,
     ) {
         let old_handle = self
             .keep_alive_handles
@@ -268,6 +289,11 @@ impl AppState {
             handle.abort();
         }
 
+        // #1064 — the predecessor tunnel is torn down with the predecessor
+        // adapter (adapter first, then tunnel — the same order as
+        // `disconnect`, so the adapter's sockets close over a still-live
+        // forward path).
+        let old_tunnel = self.ssh_tunnels.lock().await.remove(id);
         let old_adapter = self
             .active_connections
             .lock()
@@ -282,6 +308,18 @@ impl AppState {
                 );
             }
         }
+        if let Some(old_tunnel) = old_tunnel {
+            old_tunnel.close().await;
+        }
+        if let Some(tunnel) = tunnel {
+            self.ssh_tunnels.lock().await.insert(id.to_string(), tunnel);
+        }
+    }
+
+    /// #1064 — take the live tunnel for `id`, if any, leaving the map empty.
+    /// `disconnect` closes what this returns *after* the adapter is gone.
+    pub async fn take_ssh_tunnel(&self, id: &str) -> Option<SshTunnel> {
+        self.ssh_tunnels.lock().await.remove(id)
     }
 
     pub fn new() -> Self {
@@ -294,6 +332,7 @@ impl AppState {
             tab_affinity: Mutex::new(HashMap::new()),
             query_server_pids: Mutex::new(HashMap::new()),
             introspection_pools: Mutex::new(HashMap::new()),
+            ssh_tunnels: Mutex::new(HashMap::new()),
             session_id: uuid::Uuid::new_v4().to_string(),
         }
     }
@@ -346,6 +385,14 @@ pub(super) mod test_helpers {
             oracle_use_sid: None,
             wallet_path: None,
             wallet_password: String::new(),
+            ssh_enabled: false,
+            ssh_host: None,
+            ssh_port: None,
+            ssh_user: None,
+            ssh_auth_method: crate::models::SshAuthMethod::Password,
+            ssh_key_path: None,
+            ssh_password: String::new(),
+            ssh_passphrase: String::new(),
         }
     }
 
@@ -361,6 +408,8 @@ pub(super) mod test_helpers {
             connection: ConnectionConfigPublic::from(&conn),
             password,
             wallet_password: None,
+            ssh_password: None,
+            ssh_passphrase: None,
             is_new,
         };
         super::save_connection(req)

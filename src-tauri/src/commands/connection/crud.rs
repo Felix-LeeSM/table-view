@@ -10,6 +10,7 @@
 //!     `session::keep_alive_loop` so background ping + auto-reconnect runs
 //!     for every active connection.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::session::keep_alive_loop;
@@ -24,14 +25,17 @@ use crate::db::DuckdbAdapter;
 use crate::db::MssqlAdapter;
 use crate::db::OracleAdapter;
 use crate::error::AppError;
-use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
+use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType, SshAuthMethod};
 use crate::storage;
+use table_view_core::ssh::tunnel::{SshAuth, SshTunnel, SshTunnelError, SshTunnelParams};
 
 #[tauri::command]
 pub fn list_connections() -> Result<Vec<ConnectionConfigPublic>, AppError> {
     let data = storage::load_storage_redacted()?;
     let presence = storage::password_presence_map()?;
     let wallet_presence = storage::wallet_password_presence_map()?;
+    let ssh_password_presence = storage::ssh_password_presence_map()?;
+    let ssh_passphrase_presence = storage::ssh_passphrase_presence_map()?;
     Ok(data
         .connections
         .iter()
@@ -41,6 +45,8 @@ pub fn list_connections() -> Result<Vec<ConnectionConfigPublic>, AppError> {
             // from the presence map instead of the (now-empty) field.
             p.has_password = *presence.get(&c.id).unwrap_or(&false);
             p.has_wallet_password = *wallet_presence.get(&c.id).unwrap_or(&false);
+            p.has_ssh_password = *ssh_password_presence.get(&c.id).unwrap_or(&false);
+            p.has_ssh_passphrase = *ssh_passphrase_presence.get(&c.id).unwrap_or(&false);
             p
         })
         .collect())
@@ -75,13 +81,25 @@ pub fn save_connection(req: SaveConnectionRequest) -> Result<ConnectionConfigPub
 
     let new_password = req.password.clone();
     let new_wallet_password = req.wallet_password.clone();
-    storage::save_connection_with_wallet(conn.clone(), new_password, new_wallet_password)?;
+    let new_ssh_password = req.ssh_password.clone();
+    let new_ssh_passphrase = req.ssh_passphrase.clone();
+    storage::save_connection_with_wallet(
+        conn.clone(),
+        new_password,
+        new_wallet_password,
+        new_ssh_password,
+        new_ssh_passphrase,
+    )?;
 
     let presence = storage::password_presence_map()?;
     let wallet_presence = storage::wallet_password_presence_map()?;
+    let ssh_password_presence = storage::ssh_password_presence_map()?;
+    let ssh_passphrase_presence = storage::ssh_passphrase_presence_map()?;
     let mut public = ConnectionConfigPublic::from(&conn);
     public.has_password = *presence.get(&conn.id).unwrap_or(&false);
     public.has_wallet_password = *wallet_presence.get(&conn.id).unwrap_or(&false);
+    public.has_ssh_password = *ssh_password_presence.get(&conn.id).unwrap_or(&false);
+    public.has_ssh_passphrase = *ssh_passphrase_presence.get(&conn.id).unwrap_or(&false);
     Ok(public)
 }
 
@@ -96,6 +114,8 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         config,
         password,
         wallet_password,
+        ssh_password,
+        ssh_passphrase,
         existing_id,
     } = req;
 
@@ -118,43 +138,142 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         },
     };
 
+    // #1064 — same 3-state resolution for the two SSH tunnel secrets.
+    let resolved_ssh_password: String = match ssh_password {
+        Some(s) => s,
+        None => match existing_id.as_deref() {
+            Some(id) => storage::get_decrypted_ssh_password(id)?.unwrap_or_default(),
+            None => String::new(),
+        },
+    };
+    let resolved_ssh_passphrase: String = match ssh_passphrase {
+        Some(s) => s,
+        None => match existing_id.as_deref() {
+            Some(id) => storage::get_decrypted_ssh_passphrase(id)?.unwrap_or_default(),
+            None => String::new(),
+        },
+    };
+
     let mut full = config.into_config_with_empty_password();
     full.password = resolved_password;
     full.wallet_password = resolved_wallet_password;
+    full.ssh_password = resolved_ssh_password;
+    full.ssh_passphrase = resolved_ssh_passphrase;
 
-    match full.db_type {
-        DatabaseType::Postgresql => {
-            PostgresAdapter::test(&full).await?;
-        }
-        DatabaseType::Mysql | DatabaseType::Mariadb => {
-            MysqlAdapter::test(&full).await?;
-        }
-        DatabaseType::Sqlite => {
-            SqliteAdapter::test(&full).await?;
-        }
-        DatabaseType::Duckdb => {
-            DuckdbAdapter::test(&full).await?;
-        }
-        DatabaseType::Mssql => {
-            MssqlAdapter::test(&full).await?;
-        }
-        DatabaseType::Oracle => {
-            OracleAdapter::test(&full).await?;
-        }
-        DatabaseType::Mongodb => {
-            MongoAdapter::test(&full).await?;
-        }
-        DatabaseType::Redis => {
-            RedisAdapter::test(&full).await?;
-        }
-        DatabaseType::Valkey => {
-            RedisAdapter::test_valkey(&full).await?;
-        }
-        DatabaseType::Elasticsearch | DatabaseType::Opensearch => {
-            SearchEngineAdapter::test(&full).await?;
-        }
+    // #1064 — a tunnel-enabled connection tests through its tunnel: open it,
+    // run the adapter test against the local listener, then close it. The
+    // tunnel is never installed in `AppState` — it lives for this call only.
+    let tunnel = maybe_open_tunnel(&full).await?;
+    let mut effective = full;
+    if let Some(tunnel) = &tunnel {
+        rewrite_target_through_tunnel(&mut effective, tunnel);
     }
+
+    let test_result: Result<(), AppError> = match effective.db_type {
+        DatabaseType::Postgresql => PostgresAdapter::test(&effective).await,
+        DatabaseType::Mysql | DatabaseType::Mariadb => MysqlAdapter::test(&effective).await,
+        DatabaseType::Sqlite => SqliteAdapter::test(&effective).await,
+        DatabaseType::Duckdb => DuckdbAdapter::test(&effective).await,
+        DatabaseType::Mssql => MssqlAdapter::test(&effective).await,
+        DatabaseType::Oracle => OracleAdapter::test(&effective).await,
+        DatabaseType::Mongodb => MongoAdapter::test(&effective).await,
+        DatabaseType::Redis => RedisAdapter::test(&effective).await,
+        DatabaseType::Valkey => RedisAdapter::test_valkey(&effective).await,
+        DatabaseType::Elasticsearch | DatabaseType::Opensearch => {
+            SearchEngineAdapter::test(&effective).await
+        }
+    };
+    if let Some(tunnel) = tunnel {
+        tunnel.close().await;
+    }
+    test_result?;
     Ok("Connection successful".into())
+}
+
+/// #1064 — open the SSH tunnel `config` asks for, or return `None` when the
+/// connection does not use one (`ssh_enabled` off, or a file-backed DBMS
+/// where the toggle is meaningless). The adapters then dial the tunnel's
+/// local listener instead of `host`/`port`.
+///
+/// TOFU lives here rather than in the tunnel module: on first contact the
+/// presented fingerprint is recorded (`storage::ssh_pins`) and the connect
+/// fails once so the user can verify it; a *mismatch* never writes and only
+/// recovers through the explicit delete-pin step.
+async fn maybe_open_tunnel(
+    config: &crate::models::ConnectionConfig,
+) -> Result<Option<SshTunnel>, AppError> {
+    if !config.ssh_enabled || matches!(config.db_type, DatabaseType::Sqlite | DatabaseType::Duckdb)
+    {
+        return Ok(None);
+    }
+
+    let ssh_host = config
+        .ssh_host
+        .clone()
+        .unwrap_or_else(|| config.host.clone());
+    let ssh_port = config.ssh_port.unwrap_or(22);
+    let ssh_user = config
+        .ssh_user
+        .clone()
+        .unwrap_or_else(|| config.user.clone());
+    if ssh_user.trim().is_empty() {
+        return Err(AppError::Validation(
+            "SSH user is required for a tunneled connection".into(),
+        ));
+    }
+
+    let auth = match config.ssh_auth_method {
+        SshAuthMethod::Password => SshAuth::Password(config.ssh_password.clone()),
+        SshAuthMethod::KeyFile => {
+            let path = config
+                .ssh_key_path
+                .clone()
+                .filter(|p| !p.trim().is_empty())
+                .ok_or_else(|| {
+                    AppError::Validation("SSH key path is required for key-file auth".into())
+                })?;
+            SshAuth::KeyFile {
+                path: PathBuf::from(path),
+                passphrase: (!config.ssh_passphrase.is_empty())
+                    .then(|| config.ssh_passphrase.clone()),
+            }
+        }
+    };
+
+    let pinned = storage::ssh_pins::get_pin(&ssh_host, ssh_port).await?;
+    let params = SshTunnelParams {
+        host: ssh_host.clone(),
+        port: ssh_port,
+        user: ssh_user,
+        auth,
+        target_host: config.host.clone(),
+        target_port: config.port,
+        // Same clamp as the DB hop, but a 30s ceiling: dial + SSH handshake +
+        // auth is strictly more round trips than a DB dial, and every
+        // engine's own per-driver ceiling already sits at or below this.
+        timeout: config.connect_timeout(30),
+        pinned_fingerprint: pinned,
+    };
+
+    match SshTunnel::open(params).await {
+        Ok(tunnel) => Ok(Some(tunnel)),
+        Err(SshTunnelError::UnknownHostKey { fingerprint }) => {
+            // TOFU record-then-fail: the pin is written, the error surfaces
+            // the fingerprint, and the *next* connect matches and proceeds.
+            storage::ssh_pins::upsert_pin(&ssh_host, ssh_port, &fingerprint).await?;
+            Err(SshTunnelError::UnknownHostKey { fingerprint }.into())
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// #1064 — point `config` at the tunnel's local listener. The original
+/// `host`/`port` stay on the stored config; the clone handed to the adapter
+/// (and to the keep-alive loop, whose reconnect then dials the listener
+/// while the tunnel lives) carries the rewrite.
+fn rewrite_target_through_tunnel(config: &mut crate::models::ConnectionConfig, tunnel: &SshTunnel) {
+    config.host = tunnel.local_addr().ip().to_string();
+    config.port = tunnel.port();
 }
 
 #[tauri::command]
@@ -186,8 +305,10 @@ pub async fn connect(
         status.insert(id.clone(), ConnectionStatus::Connecting);
     }
 
-    let adapter = match make_adapter(&config.db_type) {
-        Ok(a) => a,
+    // #1064 — the tunnel (when enabled) is opened before the adapter dials,
+    // and every failure path closes it before returning.
+    let tunnel = match maybe_open_tunnel(&config).await {
+        Ok(t) => t,
         Err(e) => {
             let mut status = state.connection_status.lock().await;
             status.insert(
@@ -199,7 +320,31 @@ pub async fn connect(
             return Err(e);
         }
     };
-    if let Err(e) = adapter.lifecycle().connect(&config).await {
+    let mut effective = config.clone();
+    if let Some(tunnel) = &tunnel {
+        rewrite_target_through_tunnel(&mut effective, tunnel);
+    }
+
+    let adapter = match make_adapter(&config.db_type) {
+        Ok(a) => a,
+        Err(e) => {
+            if let Some(tunnel) = tunnel {
+                tunnel.close().await;
+            }
+            let mut status = state.connection_status.lock().await;
+            status.insert(
+                id.clone(),
+                ConnectionStatus::Error {
+                    message: e.to_string(),
+                },
+            );
+            return Err(e);
+        }
+    };
+    if let Err(e) = adapter.lifecycle().connect(&effective).await {
+        if let Some(tunnel) = tunnel {
+            tunnel.close().await;
+        }
         let mut status = state.connection_status.lock().await;
         status.insert(
             id.clone(),
@@ -221,18 +366,23 @@ pub async fn connect(
     };
 
     // Start keep-alive background task, then install atomically (issue #1100).
-    // `install_connection` aborts any previous keep-alive handle and
-    // `disconnect()`s any previous adapter for this id, so a re-connect never
-    // leaks a server session or leaves a second ping loop running.
+    // `install_connection` aborts any previous keep-alive handle,
+    // `disconnect()`s any previous adapter, and (since #1064) closes and
+    // replaces any previous tunnel for this id, so a re-connect never leaks a
+    // server session or leaves a second ping loop or listener running.
+    //
+    // The keep-alive loop receives the *rewritten* config: its reconnect
+    // dials the local listener, which forwards over the still-open tunnel —
+    // no SSH-specific retry path (grill decision, 2026-07-17).
     let keep_alive_interval = config.keep_alive_interval.unwrap_or(30) as u64;
     let handle = tokio::spawn(keep_alive_loop(
         app,
         id.clone(),
         keep_alive_interval,
-        config,
+        effective,
     ));
     state
-        .install_connection(&id, Arc::new(adapter), handle)
+        .install_connection(&id, Arc::new(adapter), handle, tunnel)
         .await;
 
     {
@@ -261,9 +411,19 @@ pub async fn disconnect(state: tauri::State<'_, AppState>, id: String) -> Result
         let mut connections = state.active_connections.lock().await;
         connections.remove(&id)
     };
-    if let Some(adapter) = adapter {
-        adapter.lifecycle().disconnect().await?;
+    let disconnect_result = if let Some(adapter) = adapter {
+        adapter.lifecycle().disconnect().await
+    } else {
+        Ok(())
+    };
+    // #1064 — the tunnel is closed last, so the adapter's sockets saw a live
+    // forward path while they closed (mirror of install order). The adapter
+    // result is surfaced only after the tunnel is torn down: an adapter error
+    // must not strand an open listener + SSH session in `AppState`.
+    if let Some(tunnel) = state.take_ssh_tunnel(&id).await {
+        tunnel.close().await;
     }
+    disconnect_result?;
     {
         let mut status = state.connection_status.lock().await;
         status.insert(id, ConnectionStatus::Disconnected);
@@ -420,8 +580,13 @@ mod tests {
             "Plaintext password leaked into list_connections payload: {}",
             json
         );
+        // The field-name guard anchors on the `"password":` key form (a value
+        // is never followed by `:`). #1064 added a legitimate non-secret wire
+        // *value* `password` — `sshAuthMethod`'s snake_case variant — so the
+        // bare `"password"` substring can no longer stand in for the field
+        // check without a false positive.
         assert!(
-            !json.contains("\"password\""),
+            !json.contains("\"password\":"),
             "Public payload must not include any 'password' field: {}",
             json
         );
@@ -446,6 +611,8 @@ mod tests {
             connection: ConnectionConfigPublic::from(&updated),
             password: None,
             wallet_password: None,
+            ssh_password: None,
+            ssh_passphrase: None,
             is_new: Some(false),
         };
         save_connection(req).unwrap();
@@ -472,6 +639,8 @@ mod tests {
             connection: ConnectionConfigPublic::from(&stub),
             password: Some(String::new()),
             wallet_password: None,
+            ssh_password: None,
+            ssh_passphrase: None,
             is_new: Some(false),
         };
         save_connection(req).unwrap();
@@ -500,6 +669,8 @@ mod tests {
             connection: ConnectionConfigPublic::from(&stub),
             password: Some("brand-new".into()),
             wallet_password: None,
+            ssh_password: None,
+            ssh_passphrase: None,
             is_new: Some(false),
         };
         save_connection(req).unwrap();
@@ -532,6 +703,8 @@ mod tests {
             config: ConnectionConfigPublic::from(&conn),
             password: None,
             wallet_password: None,
+            ssh_password: None,
+            ssh_passphrase: None,
             existing_id: Some("c1".into()),
         };
         let result = test_connection(req).await;
@@ -580,6 +753,8 @@ mod tests {
             config: ConnectionConfigPublic::from(&conn),
             password: Some(String::new()),
             wallet_password: None,
+            ssh_password: None,
+            ssh_passphrase: None,
             existing_id: None,
         };
         let result = test_connection(req).await;
@@ -613,6 +788,8 @@ mod tests {
             config: ConnectionConfigPublic::from(&conn),
             password: Some(String::new()),
             wallet_password: None,
+            ssh_password: None,
+            ssh_passphrase: None,
             existing_id: None,
         };
         let result = test_connection(req).await;
@@ -653,6 +830,8 @@ mod tests {
             config: ConnectionConfigPublic::from(&conn),
             password: Some(String::new()),
             wallet_password: None,
+            ssh_password: None,
+            ssh_passphrase: None,
             existing_id: None,
         };
         let result = test_connection(req).await;
@@ -687,6 +866,8 @@ mod tests {
             config: ConnectionConfigPublic::from(&conn),
             password: Some(String::new()),
             wallet_password: None,
+            ssh_password: None,
+            ssh_passphrase: None,
             existing_id: None,
         };
         let result = test_connection(req).await;
@@ -748,12 +929,12 @@ mod tests {
             let handle_a = tokio::spawn(std::future::pending::<()>());
             let abort_a = handle_a.abort_handle();
             state
-                .install_connection("c1", counting_adapter(disconnects.clone()), handle_a)
+                .install_connection("c1", counting_adapter(disconnects.clone()), handle_a, None)
                 .await;
 
             let handle_b = tokio::spawn(std::future::pending::<()>());
             state
-                .install_connection("c1", counting_adapter(disconnects.clone()), handle_b)
+                .install_connection("c1", counting_adapter(disconnects.clone()), handle_b, None)
                 .await;
 
             // Let the runtime process the abort of the displaced task.
@@ -788,7 +969,7 @@ mod tests {
                     let _guard = state.connection_guard("c1").await;
                     let handle = tokio::spawn(std::future::pending::<()>());
                     state
-                        .install_connection("c1", counting_adapter(counter), handle)
+                        .install_connection("c1", counting_adapter(counter), handle, None)
                         .await;
                 }));
             }

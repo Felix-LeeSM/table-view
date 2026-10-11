@@ -180,6 +180,16 @@ fn config(
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        // #1064 — no DSN this CLI accepts can set a tunnel; the fields
+        // exist only to satisfy the struct.
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     }
 }
 

@@ -60,6 +60,14 @@ async fn ac_370_01_no_drift_when_all_four_domains_match() {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     };
     table_view_lib::storage::save_connection(conn, None).unwrap();
     sqlx::query(
@@ -187,6 +195,14 @@ async fn ac_370_01_drift_in_all_four_domains_triggers_four_increments() {
         oracle_use_sid: None,
         wallet_path: None,
         wallet_password: String::new(),
+        ssh_enabled: false,
+        ssh_host: None,
+        ssh_port: None,
+        ssh_user: None,
+        ssh_auth_method: table_view_core::models::SshAuthMethod::Password,
+        ssh_key_path: None,
+        ssh_password: String::new(),
+        ssh_passphrase: String::new(),
     };
     table_view_lib::storage::save_connection(conn, None).unwrap();
     save_favorites_file(&[FavoriteRecord {

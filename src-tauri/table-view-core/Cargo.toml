@@ -107,6 +107,18 @@ oracle-rs = "0.1.7"
 # `prefer-post-quantum`, which is *not* enabled in this graph today, and turning
 # it on here would change the key exchange every other rustls user negotiates.
 rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "std"] }
+# #1064 — ssh/host_key.rs fingerprints host *certificates* (ssh-key 0.7-rc has
+# no certificate fingerprint method), hashing the wire encoding with SHA-256.
+# Already locked at 0.11 through russh's transitive tree, so this direct dep
+# adds no build cost.
+sha2 = "0.11"
+# #1064 — SSH tunnel. Pure-Rust (ADR 0052 Q3). The version floor is the
+# Terrapin (CVE-2023-48795) strict-kex fix, which russh shipped well before
+# 0.5x; 0.64 is the current stable line and passes cargo-deny's advisory
+# check. Default crypto backend is aws-lc-rs — the provider this workspace
+# already compiles for rustls. The `server` module (used only by tests) is
+# built unconditionally in 0.64; there is no feature to turn it off.
+russh = "0.64.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", default-features = false, features = ["apple-native"] }
