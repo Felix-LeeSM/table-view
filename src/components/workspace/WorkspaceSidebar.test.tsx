@@ -142,6 +142,7 @@ describe("WorkspaceSidebar", () => {
   // First-paint skeleton (AC-270-01, AC-270-04)
   // ------------------------------------------------------------------
 
+  // (2026-05-13)
   // AC-270-01 — pre-hydrate the sidebar must show the shimmer skeleton, not
   // the "No connections yet" card. Otherwise on cold boot the user sees the
   // empty card for ~1.4 s and panics that their connections were deleted.
@@ -161,6 +162,7 @@ describe("WorkspaceSidebar", () => {
     expect(screen.queryByText(/no connections yet/i)).toBeNull();
   });
 
+  // (2026-05-13)
   // AC-270-04 — once hydration has completed, even with zero connections,
   // the skeleton must NOT re-render. The user has been told "0 connections,
   // add one" and the sidebar must stay on that surface.
@@ -172,6 +174,7 @@ describe("WorkspaceSidebar", () => {
     expect(screen.getByText(/no connections yet/i)).toBeInTheDocument();
   });
 
+  // (2026-05-13)
   // AC-270-04 (remount) — flipping the flag to true and forcing a remount
   // by unmount/render must not revert to the skeleton. Verifies the
   // selector reads the live flag, not a captured-at-mount snapshot.

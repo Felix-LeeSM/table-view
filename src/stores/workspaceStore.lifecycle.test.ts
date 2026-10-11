@@ -306,7 +306,7 @@ describe("workspaceStore — lifecycle", () => {
     expect(entries.get(dbBKey)?.pendingEdits.get("0-1")).toBe("dbB edit");
   });
 
-  // AC-353-05 — in-memory closedTabHistory cap
+  // AC-353-05 — in-memory closedTabHistory cap (2026-05-16)
   // was 20; Q19 raises it to 25 so the dehydration cap and the in-memory
   // cap agree (newest-first, oldest dropped on overflow).
   it("AC-353-05 — caps in-memory closedTabHistory at 25 entries; the 26th close drops the oldest", () => {

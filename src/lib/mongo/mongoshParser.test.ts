@@ -2,7 +2,7 @@
 // The parser turns `db.<coll>.<method>(<args>).<chain>` strings into a
 // discriminated-union result so callers can route mongosh expressions
 // without invoking a JS evaluator. Tests cover happy-path methods, BSON
-// literal reifications, and refusal kinds.
+// literal reifications, and refusal kinds. (2026-05-14)
 
 import {
   MONGOSH_METHOD_WHITELIST,

@@ -1,5 +1,5 @@
 /**
- * Store axis for Find/Aggregate toggle removal. These tests lock the
+ * Store axis for Find/Aggregate toggle removal. These tests lock the (2026-05-14)
  * backward-compat contract:
  *
  *   1. `addQueryTab` on a document paradigm tab MUST leave `queryMode`

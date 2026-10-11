@@ -205,7 +205,7 @@ describe("Toaster", () => {
     expect(container.className).toContain("fixed");
   });
 
-  // --- Action button rendering ---------------------------------------------
+  // --- Action button rendering (2026-05-13) --------------------------------
   // The DbMismatch toast carries a Retry action; the toast row must render a
   // button whose accessible name equals `action.label`, click must fire the
   // callback exactly once and dismiss the toast in the same gesture.

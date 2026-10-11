@@ -109,7 +109,7 @@ describe("toast (lib)", () => {
     expect(useToastStore.getState().toasts).toHaveLength(0);
   });
 
-  // Pin that `options.action` is persisted onto the resulting `Toast`. The
+  // Pin that `options.action` is persisted onto the resulting `Toast`. The (2026-05-13)
   // DbMismatch Retry button rides on this field; without copying it through
   // `push`, the toaster has nothing to render.
   it("toast.warning with options.action persists the action on the resulting Toast", () => {
@@ -125,7 +125,7 @@ describe("toast (lib)", () => {
   });
 
   // Omitting `action` leaves the field off the persisted `Toast` (see
-  // `ToastAction`).
+  // `ToastAction`). (2026-05-13)
   it("existing call sites (no action) result in a Toast whose action is undefined", () => {
     const id = toast.success("ok");
     const stored = useToastStore.getState().toasts.find((t) => t.id === id);

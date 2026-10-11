@@ -1,4 +1,4 @@
-// documentStore cache shape lifted from flat
+// documentStore cache shape lifted from flat (2026-05-12)
 // colon-keyed strings to `(connId, db, collection)` nested maps. Existing
 // stale-guard / clearConnection semantics preserved; assertions migrated
 // to the nested form. Aggregate results moved to a dedicated axis
