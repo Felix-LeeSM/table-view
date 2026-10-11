@@ -40,7 +40,6 @@ export type { UseMongoAutocompleteOptions } from "./mongo/useMongoAutocomplete";
 export { useMongoAutocomplete } from "./mongo/useMongoAutocomplete";
 export type {
   RedisCommandCompletionEffect,
-  RedisCommandCompletionName,
   RedisCommandCompletionSourceOptions,
   RedisCommandCompletionSpec,
   RedisCommandCompletionTarget,
@@ -49,9 +48,9 @@ export type {
 } from "./redis/redisCommandCompletion";
 export {
   createRedisCommandCompletionSource,
-  REDIS_COMMAND_COMPLETIONS,
+  getRedisCommandCompletions,
+  getValkeyCommandCompletions,
   REDIS_UNSUPPORTED_COMMAND_FAMILIES,
-  VALKEY_COMMAND_COMPLETIONS,
 } from "./redis/redisCommandCompletion";
 export { buildSqlCompletionRequestFromCodeMirror } from "./sql/sqlCodeMirrorCompletionAdapter";
 export type {

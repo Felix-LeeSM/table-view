@@ -5,23 +5,24 @@ import {
   type CompletionSource,
   snippetCompletion,
 } from "@codemirror/autocomplete";
+import {
+  getRedisCommandRows,
+  type RedisCommandCompletionEffect,
+  type RedisCommandCoreRow,
+} from "@lib/redis/redisCommandCore";
 import type { KvKeyType } from "@/types/kv";
 
-export type RedisCommandCompletionEffect =
-  | "read"
-  | "write"
-  | "ttl"
-  | "stream"
-  | "destructive";
+export type { RedisCommandCompletionEffect };
 
-export interface RedisCommandCompletionSpec {
-  readonly name: string;
-  readonly effect: RedisCommandCompletionEffect;
-  readonly arity: string;
-  readonly arguments: readonly string[];
-  readonly snippet: string;
-  readonly summary: string;
-}
+/**
+ * Editor-facing view of a vocabulary row. The row SOT is the
+ * `redis-command-core` Rust crate; this picks the fields the completion
+ * source renders.
+ */
+export type RedisCommandCompletionSpec = Pick<
+  RedisCommandCoreRow,
+  "name" | "effect" | "arity" | "arguments" | "snippet" | "summary"
+>;
 
 export interface RedisUnsupportedCommandFamily {
   readonly label: string;
@@ -39,196 +40,6 @@ export interface RedisCommandCompletionSourceOptions {
   readonly keySuggestions?: readonly RedisKeySuggestion[];
   readonly target?: RedisCommandCompletionTarget;
 }
-
-export const REDIS_COMMAND_COMPLETIONS = [
-  {
-    name: "SCAN",
-    effect: "read",
-    arity: "cursor [MATCH pattern] [COUNT n]",
-    arguments: ["cursor", "MATCH", "COUNT"],
-    snippet: "SCAN 0 MATCH ${pattern} COUNT 100",
-    summary: "Incrementally scan the keyspace.",
-  },
-  {
-    name: "KEYS",
-    effect: "read",
-    arity: "pattern",
-    arguments: ["pattern"],
-    snippet: "KEYS ${pattern}",
-    summary: "Scan the full keyspace; Safe Mode gates this command.",
-  },
-  {
-    name: "GET",
-    effect: "read",
-    arity: "1 key",
-    arguments: ["key"],
-    snippet: "GET ${key}",
-    summary: "Read a string value.",
-  },
-  {
-    name: "HGETALL",
-    effect: "read",
-    arity: "1 key",
-    arguments: ["key"],
-    snippet: "HGETALL ${key}",
-    summary: "Read every field in a hash.",
-  },
-  {
-    name: "LRANGE",
-    effect: "read",
-    arity: "key start stop",
-    arguments: ["key", "start", "stop"],
-    snippet: "LRANGE ${key} 0 99",
-    summary: "Read a bounded list range.",
-  },
-  {
-    name: "SMEMBERS",
-    effect: "read",
-    arity: "1 key",
-    arguments: ["key"],
-    snippet: "SMEMBERS ${key}",
-    summary: "Read members from a set.",
-  },
-  {
-    name: "ZRANGE",
-    effect: "read",
-    arity: "key start stop [WITHSCORES]",
-    arguments: ["key", "start", "stop", "WITHSCORES"],
-    snippet: "ZRANGE ${key} 0 99 WITHSCORES",
-    summary: "Read a bounded sorted-set range.",
-  },
-  {
-    name: "XRANGE",
-    effect: "stream",
-    arity: "key start end [COUNT n]",
-    arguments: ["key", "start", "end", "COUNT"],
-    snippet: "XRANGE ${key} - + COUNT 100",
-    summary: "Read a bounded stream range.",
-  },
-  {
-    name: "TYPE",
-    effect: "read",
-    arity: "1 key",
-    arguments: ["key"],
-    snippet: "TYPE ${key}",
-    summary: "Inspect a key type.",
-  },
-  {
-    name: "TTL",
-    effect: "ttl",
-    arity: "1 key",
-    arguments: ["key"],
-    snippet: "TTL ${key}",
-    summary: "Read remaining TTL seconds.",
-  },
-  {
-    name: "EXISTS",
-    effect: "read",
-    arity: "1+ keys",
-    arguments: ["key", "key ..."],
-    snippet: "EXISTS ${key}",
-    summary: "Check whether one or more keys exist.",
-  },
-  {
-    name: "SET",
-    effect: "write",
-    arity: "key value [EX seconds]",
-    arguments: ["key", "value", "EX"],
-    snippet: "SET ${key} ${value}",
-    summary: "Write a string value; NX/XX stay in typed controls.",
-  },
-  {
-    name: "HSET",
-    effect: "write",
-    arity: "key field value",
-    arguments: ["key", "field", "value"],
-    snippet: "HSET ${key} ${field} ${value}",
-    summary: "Set one hash field.",
-  },
-  {
-    name: "LPUSH",
-    effect: "write",
-    arity: "key value [value ...]",
-    arguments: ["key", "value", "value ..."],
-    snippet: "LPUSH ${key} ${value}",
-    summary: "Push values to the head of a list.",
-  },
-  {
-    name: "RPUSH",
-    effect: "write",
-    arity: "key value [value ...]",
-    arguments: ["key", "value", "value ..."],
-    snippet: "RPUSH ${key} ${value}",
-    summary: "Push values to the tail of a list.",
-  },
-  {
-    name: "SADD",
-    effect: "write",
-    arity: "key member [member ...]",
-    arguments: ["key", "member", "member ..."],
-    snippet: "SADD ${key} ${member}",
-    summary: "Add members to a set.",
-  },
-  {
-    name: "ZADD",
-    effect: "write",
-    arity: "key score member",
-    arguments: ["key", "score", "member"],
-    snippet: "ZADD ${key} 1 ${member}",
-    summary: "Add one sorted-set member.",
-  },
-  {
-    name: "EXPIRE",
-    effect: "ttl",
-    arity: "key seconds",
-    arguments: ["key", "seconds"],
-    snippet: "EXPIRE ${key} 60",
-    summary: "Set a positive TTL.",
-  },
-  {
-    name: "PERSIST",
-    effect: "ttl",
-    arity: "1 key + exact confirmKey",
-    arguments: ["key"],
-    snippet: "PERSIST ${key}",
-    summary: "Remove TTL; backend requires exact key confirmation.",
-  },
-  {
-    name: "DEL",
-    effect: "destructive",
-    arity: "1 key + exact confirmKey",
-    arguments: ["key"],
-    snippet: "DEL ${key}",
-    summary: "Delete one key; backend requires exact key confirmation.",
-  },
-] as const satisfies readonly RedisCommandCompletionSpec[];
-
-export type RedisCommandCompletionName =
-  (typeof REDIS_COMMAND_COMPLETIONS)[number]["name"];
-
-const REDIS_COMMAND_COMPLETION_NAMES = new Set<RedisCommandCompletionName>(
-  REDIS_COMMAND_COMPLETIONS.map((command) => command.name),
-);
-
-const VALKEY_COMMAND_COMPLETION_NAMES = new Set<RedisCommandCompletionName>([
-  "GET",
-  "HGETALL",
-  "LRANGE",
-  "SMEMBERS",
-  "ZRANGE",
-  "XRANGE",
-  "TYPE",
-  "TTL",
-  "EXISTS",
-  "SET",
-  "EXPIRE",
-  "PERSIST",
-  "DEL",
-]);
-
-export const VALKEY_COMMAND_COMPLETIONS = REDIS_COMMAND_COMPLETIONS.filter(
-  (command) => VALKEY_COMMAND_COMPLETION_NAMES.has(command.name),
-);
 
 export const REDIS_UNSUPPORTED_COMMAND_FAMILIES = [
   {
@@ -254,31 +65,15 @@ export const REDIS_UNSUPPORTED_COMMAND_FAMILIES = [
   },
 ] as const satisfies readonly RedisUnsupportedCommandFamily[];
 
-const REDIS_KEY_ARGUMENTS = {
-  SCAN: "none",
-  KEYS: "none",
-  GET: ["string"],
-  HGETALL: ["hash"],
-  LRANGE: ["list"],
-  SMEMBERS: ["set"],
-  ZRANGE: ["zSet"],
-  XRANGE: ["stream"],
-  TYPE: "any",
-  TTL: "any",
-  EXISTS: "variadic-any",
-  SET: ["string"],
-  HSET: ["hash"],
-  LPUSH: ["list"],
-  RPUSH: ["list"],
-  SADD: ["set"],
-  ZADD: ["zSet"],
-  EXPIRE: "any",
-  PERSIST: "any",
-  DEL: "any",
-} as const satisfies Record<
-  (typeof REDIS_COMMAND_COMPLETIONS)[number]["name"],
-  readonly KvKeyType[] | "any" | "variadic-any" | "none"
->;
+/** Rows in SOT order, or an empty list while the WASM vocabulary loads. */
+export function getRedisCommandCompletions(): readonly RedisCommandCompletionSpec[] {
+  return getRedisCommandRows() ?? [];
+}
+
+/** The proven Valkey subset (`valkeyProven` rows of the same SOT). */
+export function getValkeyCommandCompletions(): readonly RedisCommandCompletionSpec[] {
+  return getRedisCommandRows()?.filter((row) => row.valkeyProven) ?? [];
+}
 
 export function createRedisCommandCompletionSource(
   options: RedisCommandCompletionSourceOptions = {},
@@ -289,10 +84,10 @@ export function createRedisCommandCompletionSource(
     const cursorOffset = context.pos - line.from;
     const keyPosition = readKeyPosition(line.text, cursorOffset, target);
     if (keyPosition) {
-      const { fromOffset, prefix, command } = keyPosition;
+      const { fromOffset, prefix, row } = keyPosition;
       if (!context.explicit && prefix.length === 0) return null;
       const keyOptions = (options.keySuggestions ?? [])
-        .filter((suggestion) => keyMatchesCommand(command, suggestion.keyType))
+        .filter((suggestion) => keyMatchesCommand(row, suggestion.keyType))
         .filter((suggestion) => suggestion.key.startsWith(prefix))
         .map((suggestion) => ({
           label: suggestion.key,
@@ -354,18 +149,14 @@ function readKeyPosition(
   lineText: string,
   cursorOffset: number,
   target: RedisCommandCompletionTarget,
-): { fromOffset: number; prefix: string; command: string } | null {
+): { fromOffset: number; prefix: string; row: RedisCommandCoreRow } | null {
   const beforeCursor = lineText.slice(0, cursorOffset);
   const match = beforeCursor.match(/^(\s*)([A-Za-z]+)(\s+.*)$/);
   if (!match) return null;
 
   const command = match[2]!.toUpperCase();
-  if (
-    !isRedisCommandCompletionName(command) ||
-    !targetSupportsCommand(target, command)
-  ) {
-    return null;
-  }
+  const row = commandRow(command);
+  if (row === null || !targetSupportsCommand(target, row)) return null;
 
   const argsText = match[3]!;
   const leadingWhitespace = argsText.match(/^\s*/)?.[0] ?? "";
@@ -374,51 +165,50 @@ function readKeyPosition(
   const tokens = args.trim().length === 0 ? [] : args.trim().split(/\s+/);
   const argumentIndex = endsWithWhitespace ? tokens.length : tokens.length - 1;
   const prefix = endsWithWhitespace ? "" : tokens[tokens.length - 1]!;
-  const keyMode =
-    REDIS_KEY_ARGUMENTS[command as keyof typeof REDIS_KEY_ARGUMENTS];
-  if (keyMode === "none") return null;
+  if (row.keyArgument === "none") return null;
   const acceptsArgument =
-    keyMode === "variadic-any" ? argumentIndex >= 0 : argumentIndex === 0;
+    row.keyArgument === "variadic-any"
+      ? argumentIndex >= 0
+      : argumentIndex === 0;
   if (!acceptsArgument) return null;
 
   return {
-    command,
+    row,
     fromOffset: beforeCursor.length - prefix.length,
     prefix,
   };
 }
 
-function keyMatchesCommand(command: string, keyType: KvKeyType): boolean {
-  const keyMode =
-    REDIS_KEY_ARGUMENTS[command as keyof typeof REDIS_KEY_ARGUMENTS];
-  if (keyMode === "none") return false;
-  if (keyMode === "any" || keyMode === "variadic-any") return true;
-  return (keyMode as readonly KvKeyType[]).includes(keyType);
+function commandRow(name: string): RedisCommandCoreRow | null {
+  const rows = getRedisCommandRows();
+  if (rows === null) return null;
+  return rows.find((row) => row.name === name) ?? null;
+}
+
+function keyMatchesCommand(
+  row: RedisCommandCoreRow,
+  keyType: KvKeyType,
+): boolean {
+  if (row.keyArgument === "none") return false;
+  if (row.keyArgument === "any" || row.keyArgument === "variadic-any") {
+    return true;
+  }
+  return row.keyTypes.includes(keyType);
 }
 
 function commandCompletionsForTarget(
   target: RedisCommandCompletionTarget,
 ): readonly RedisCommandCompletionSpec[] {
   return target === "valkey"
-    ? VALKEY_COMMAND_COMPLETIONS
-    : REDIS_COMMAND_COMPLETIONS;
+    ? getValkeyCommandCompletions()
+    : getRedisCommandCompletions();
 }
 
 function targetSupportsCommand(
   target: RedisCommandCompletionTarget,
-  command: RedisCommandCompletionName,
+  row: RedisCommandCoreRow,
 ): boolean {
-  return target === "valkey"
-    ? VALKEY_COMMAND_COMPLETION_NAMES.has(command)
-    : REDIS_COMMAND_COMPLETION_NAMES.has(command);
-}
-
-function isRedisCommandCompletionName(
-  command: string,
-): command is RedisCommandCompletionName {
-  return REDIS_COMMAND_COMPLETION_NAMES.has(
-    command as RedisCommandCompletionName,
-  );
+  return target === "valkey" ? row.valkeyProven : true;
 }
 
 function targetLabel(target: RedisCommandCompletionTarget): string {

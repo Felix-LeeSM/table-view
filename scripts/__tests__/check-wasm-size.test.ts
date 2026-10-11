@@ -40,9 +40,11 @@ const gate = "scripts/check-wasm-size.sh";
 // 잃는다 — 예산을 바꾸면 두 곳을 같이 고친다.
 const SQL_BUDGET_BYTES = 122_880;
 const MONGO_BUDGET_BYTES = 63_488;
+const REDIS_BUDGET_BYTES = 13_312;
 
 const SQL_REL = "src/lib/sql/wasm/sql_parser_core_bg.wasm";
 const MONGO_REL = "src/lib/mongo/wasm/mongosh_parser_core_bg.wasm";
+const REDIS_REL = "src/lib/redis/wasm/redis_command_core_bg.wasm";
 
 const trees: string[] = [];
 const restores: Array<() => void> = [];
@@ -56,7 +58,7 @@ afterEach(() => {
 // 컨테이너 안에서 조용히 거짓 green 이 되지 않게 건너뛴다.
 const asRoot = process.getuid?.() === 0;
 
-/** 산출물 두 벌을 repo 와 같은 상대 경로에 씨 뿌리고 그 루트를 돌려준다. */
+/** 산출물을 repo 와 같은 상대 경로에 씨 뿌리고 그 루트를 돌려준다. */
 function seed(files: Record<string, Buffer>): string {
   const root = mkdtempSync(join(tmpdir(), "wasm-size-"));
   trees.push(root);
@@ -95,9 +97,11 @@ function runGate(root: string) {
 }
 
 describe("check-wasm-size", () => {
-  it("passes when both artifacts sit under budget", () => {
-    const run = runGate(seed({ [SQL_REL]: tiny(), [MONGO_REL]: tiny() }));
-    expect(run.out).toContain("ok: parser WASM 2 개 다 gzip 예산 안");
+  it("passes when all three artifacts sit under budget", () => {
+    const run = runGate(
+      seed({ [SQL_REL]: tiny(), [MONGO_REL]: tiny(), [REDIS_REL]: tiny() }),
+    );
+    expect(run.out).toContain("ok: parser WASM 3 개 다 gzip 예산 안");
     expect(run.status).toBe(0);
   });
 
@@ -106,6 +110,7 @@ describe("check-wasm-size", () => {
       seed({
         [SQL_REL]: incompressible(SQL_BUDGET_BYTES + 8_192),
         [MONGO_REL]: tiny(),
+        [REDIS_REL]: tiny(),
       }),
     );
     expect(run.out).toContain(`FAIL ${SQL_REL}`);
@@ -118,6 +123,7 @@ describe("check-wasm-size", () => {
       seed({
         [SQL_REL]: tiny(),
         [MONGO_REL]: incompressible(MONGO_BUDGET_BYTES + 8_192),
+        [REDIS_REL]: tiny(),
       }),
     );
     expect(run.out).toContain(`FAIL ${MONGO_REL}`);
@@ -125,18 +131,33 @@ describe("check-wasm-size", () => {
     expect(run.status).toBe(1);
   });
 
+  it("fails on a Redis artifact over the gzip budget", () => {
+    const run = runGate(
+      seed({
+        [SQL_REL]: tiny(),
+        [MONGO_REL]: tiny(),
+        [REDIS_REL]: incompressible(REDIS_BUDGET_BYTES + 8_192),
+      }),
+    );
+    expect(run.out).toContain(`FAIL ${REDIS_REL}`);
+    expect(run.out).toContain(`> budget ${REDIS_BUDGET_BYTES} bytes`);
+    expect(run.status).toBe(1);
+  });
+
   // 한쪽이 걸리면 거기서 멈추는 게이트는 나머지 산출물의 현재 크기를 로그에
   // 안 남긴다 — 예산을 다시 잡을 때 필요한 숫자가 사라진다.
-  it("reports both artifacts even when the first one is over", () => {
+  it("reports all artifacts even when the first one is over", () => {
     const run = runGate(
       seed({
         [SQL_REL]: incompressible(SQL_BUDGET_BYTES + 8_192),
         [MONGO_REL]: incompressible(MONGO_BUDGET_BYTES + 8_192),
+        [REDIS_REL]: incompressible(REDIS_BUDGET_BYTES + 8_192),
       }),
     );
     expect(run.out).toContain(`FAIL ${SQL_REL}`);
     expect(run.out).toContain(`FAIL ${MONGO_REL}`);
-    expect(run.out).toContain("초과 2 건");
+    expect(run.out).toContain(`FAIL ${REDIS_REL}`);
+    expect(run.out).toContain("초과 3 건");
     expect(run.status).toBe(1);
   });
 
@@ -148,6 +169,7 @@ describe("check-wasm-size", () => {
       seed({
         [SQL_REL]: compressible(SQL_BUDGET_BYTES * 8),
         [MONGO_REL]: tiny(),
+        [REDIS_REL]: tiny(),
       }),
     );
     expect(run.out).toMatch(/SQL wasm: raw=983040 bytes gzip=\d{3,4} bytes/);
@@ -160,13 +182,18 @@ describe("check-wasm-size", () => {
   it("refuses to pass when an artifact is missing", () => {
     const run = runGate(seed({ [SQL_REL]: tiny() }));
     expect(run.out).toContain(`Mongo WASM 산출물이 없다: ${MONGO_REL}`);
+    expect(run.out).toContain(`Redis WASM 산출물이 없다: ${REDIS_REL}`);
     expect(run.out).not.toMatch(/^ok:/m);
     expect(run.status).toBe(2);
   });
 
   it("refuses to pass a zero-byte artifact", () => {
     const run = runGate(
-      seed({ [SQL_REL]: Buffer.alloc(0), [MONGO_REL]: tiny() }),
+      seed({
+        [SQL_REL]: Buffer.alloc(0),
+        [MONGO_REL]: tiny(),
+        [REDIS_REL]: tiny(),
+      }),
     );
     expect(run.out).toContain("SQL WASM 이 0 byte 다");
     expect(run.out).not.toMatch(/^ok:/m);
@@ -177,7 +204,11 @@ describe("check-wasm-size", () => {
   // 치환은 빈 문자열이 되고 `[ "" -gt 122880 ]` 은 rc 2 로 그냥 지나간다 —
   // 이 단언이 없으면 그 경로가 `ok:` + exit 0 으로 끝난다.
   it.skipIf(asRoot)("refuses to pass an unreadable artifact", () => {
-    const root = seed({ [SQL_REL]: tiny(), [MONGO_REL]: tiny() });
+    const root = seed({
+      [SQL_REL]: tiny(),
+      [MONGO_REL]: tiny(),
+      [REDIS_REL]: tiny(),
+    });
     const locked = join(root, SQL_REL);
     chmodSync(locked, 0o000);
     restores.push(() => chmodSync(locked, 0o644));

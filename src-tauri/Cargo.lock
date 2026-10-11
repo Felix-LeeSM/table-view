@@ -6032,6 +6032,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "redis-command-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7911,6 +7921,7 @@ dependencies = [
  "oracle-rs",
  "percent-encoding",
  "redis",
+ "redis-command-core",
  "regex",
  "reqwest 0.12.28",
  "russh",

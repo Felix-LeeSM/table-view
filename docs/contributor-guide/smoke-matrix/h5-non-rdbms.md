@@ -161,7 +161,7 @@ Current gap / routing:
 Final test coverage recheck maps backend runtime/query/edit and
 source-equivalent UI paths, parser/safety allowlist and unsupported-boundary
 behavior, fixture inventory, and Redis Runtime Happy Path routing before Redis
-milestone closure. Redis command completion now has bounded TypeScript
+milestone closure. Redis command completion now has bounded Rust/WASM
 vocabulary evidence for the backend allowlist plus current-DB/type-filtered key
 suggestion evidence. Fixture inventory remains contract evidence only unless the
 path is wired into the Redis Runtime Happy Path smoke.
@@ -282,7 +282,7 @@ Final docs recheck confirms the product snapshot, query-language
 runtime/parser-safety/autocomplete boundaries, known limitations, and testing
 matrix match shipped Valkey behavior. Runtime smoke, focused local testcontainer
 evidence, shared string plus hash/list/set/zset KvMutationPanel write evidence
-(#1075), TypeScript completion assistance, fixture-only compatibility inventory,
+(#1075), Rust/WASM completion assistance, fixture-only compatibility inventory,
 and remaining full-compatibility work stay separated before parity closure.
 
 ## Valkey support-claim closure audit

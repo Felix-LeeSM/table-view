@@ -181,6 +181,19 @@ async function boot() {
       );
     });
 
+  // #1805 — same eager pre-load for the Redis/Valkey completion vocabulary.
+  // `createRedisCommandCompletionSource` is a sync CodeMirror source; until
+  // the module lands it suggests nothing, and the Redis/Valkey command editor
+  // fills in right after boot.
+  void import("@lib/redis/redisCommandCore")
+    .then((m) => m.initRedisCommandWasm())
+    .catch((e) => {
+      logger.warn(
+        "[main] redis WASM init failed:",
+        e instanceof Error ? e.message : e,
+      );
+    });
+
   // Register the launcher's `tauri://close-requested` listener.
   // Fire-and-forget: if it rejects the app still works via system-tray / Cmd+Q.
   void bootWindowLifecycle().catch((e) => {

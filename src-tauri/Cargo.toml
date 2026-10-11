@@ -2,15 +2,21 @@
 # This manifest is the root and the lock is `src-tauri/Cargo.lock`.
 # `table-view-core` / `sql-parser-core` are path dependencies under
 # `[dependencies]` below, so they would be members without being listed, but
-# nothing depends on `mongosh-parser-core` or `tvw` — those two join only by
-# being listed here, so all four are listed. This list is what lets CI run
-# `cargo test --workspace --lib` / `cargo fmt --all` / `cargo clippy
-# --workspace` instead of naming each crate one by one.
+# nothing depends on `mongosh-parser-core`, `redis-command-core`, or `tvw` —
+# those join only by being listed here, so all are listed. This list is what
+# lets CI run `cargo test --workspace --lib` / `cargo fmt --all` / `cargo
+# clippy --workspace` instead of naming each crate one by one.
 # `tvw` is the CLI of #1770 (ADR 0061). It links `table-view-core` rather than
 # the app, and without an entry here that crate falls outside fmt, clippy, and
 # `--workspace --lib`.
 [workspace]
-members = ["table-view-core", "sql-parser-core", "mongosh-parser-core", "tvw"]
+members = [
+    "table-view-core",
+    "sql-parser-core",
+    "mongosh-parser-core",
+    "redis-command-core",
+    "tvw",
+]
 # The root manifest is a package, so the resolver already resolves to 2 from
 # `edition = "2021"` below. It is spelled out anyway because a refactor that
 # turns this manifest into a virtual one (moving the app package into a
@@ -33,6 +39,11 @@ codegen-units = 1
 strip = true
 
 [profile.release.package.mongosh-parser-core]
+opt-level = "z"
+codegen-units = 1
+strip = true
+
+[profile.release.package.redis-command-core]
 opt-level = "z"
 codegen-units = 1
 strip = true

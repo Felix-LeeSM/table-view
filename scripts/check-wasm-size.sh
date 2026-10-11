@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # check-wasm-size.sh — parser WASM 산출물의 gzip 크기 예산 (issue #2127).
 #
-# 두 산출물을 잰다:
-#   src/lib/sql/wasm/sql_parser_core_bg.wasm        <= 120 KiB gzip
-#   src/lib/mongo/wasm/mongosh_parser_core_bg.wasm  <=  62 KiB gzip
+# 세 산출물을 잰다:
+#   src/lib/sql/wasm/sql_parser_core_bg.wasm          <= 120 KiB gzip
+#   src/lib/mongo/wasm/mongosh_parser_core_bg.wasm    <=  62 KiB gzip
+#   src/lib/redis/wasm/redis_command_core_bg.wasm     <=  13 KiB gzip
 #
 # 사용:
 #   bash scripts/check-wasm-size.sh          # 이 repo 의 src/lib/**/wasm
@@ -28,19 +29,29 @@
 #
 #   gzip -9 -c < src/lib/sql/wasm/sql_parser_core_bg.wasm | wc -c
 #
-# ## 예산 근거 (2026-08-04 실측)
+# ## 예산 근거 (2026-08-04 실측, Redis 는 #1805)
 #
 # 기준값은 게이트가 도는 환경 — ubuntu-latest 의 GNU gzip — 에서 새로 빌드한
-# 산출물이다: SQL 102,131 byte · Mongo 52,735 byte.
+# 산출물이다: SQL 102,131 byte · Mongo 52,735 byte. Redis 기준값은 #1805 에서
+# Apple gzip 으로 잰 것이다:
+#
+#   pnpm run build:redis-wasm
+#   gzip -9 -c < src/lib/redis/wasm/redis_command_core_bg.wasm | wc -c
+#   → 10,909 byte (2026-10-08, Apple gzip, macOS)
+#
+# GNU gzip 이 mongo 에서 +1.24% 였던 변동폭을 Redis 기준값에 반영해도
+# ~11,045 byte 이라 13 KiB (13,312 byte) 예산은 20% 안쪽 여유를 유지한다.
 #
 #   # 빌드 (out-dir 는 체크인된 산출물 자리)
-#   pnpm run build:sql-wasm && pnpm run build:mongosh-wasm
+#   pnpm run build:sql-wasm && pnpm run build:mongosh-wasm \
+#     && pnpm run build:redis-wasm
 #   # 재기
 #   gzip -9 -c < src/lib/sql/wasm/sql_parser_core_bg.wasm | wc -c
 #   gzip -9 -c < src/lib/mongo/wasm/mongosh_parser_core_bg.wasm | wc -c
+#   gzip -9 -c < src/lib/redis/wasm/redis_command_core_bg.wasm | wc -c
 #
-# 여유 20% = 위 기준값 × 1.2 를 KiB 단위로 올림 (120 KiB / 62 KiB, 실제 여유
-# 20.3% / 20.4%). 20% 를 고른 근거는 재 본 변동폭이다:
+# 여유 20% = 위 기준값 × 1.2 를 KiB 단위로 올림 (120 KiB / 62 KiB / 13 KiB,
+# 실제 여유 20.3% / 20.4% / ~21%). 20% 를 고른 근거는 재 본 변동폭이다:
 #
 #   - gzip 구현: 같은 바이트가 Apple gzip 479 와 GNU gzip 1.12 에서 다르게
 #     나온다 — mongo 52,088 vs 52,735 (+1.24%), sql 102,055 vs 102,131 (+0.07%).
@@ -66,6 +77,7 @@ set -uo pipefail
 GZIP_LEVEL=9
 SQL_BUDGET_BYTES=122880   # 120 KiB
 MONGO_BUDGET_BYTES=63488  #  62 KiB
+REDIS_BUDGET_BYTES=13312  #  13 KiB (#1805)
 
 ROOT="${1:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"}"
 
@@ -127,9 +139,10 @@ gzip --version 2>&1 | head -1 || true
 
 check_wasm "SQL" "src/lib/sql/wasm/sql_parser_core_bg.wasm" "$SQL_BUDGET_BYTES"
 check_wasm "Mongo" "src/lib/mongo/wasm/mongosh_parser_core_bg.wasm" "$MONGO_BUDGET_BYTES"
+check_wasm "Redis" "src/lib/redis/wasm/redis_command_core_bg.wasm" "$REDIS_BUDGET_BYTES"
 
 if [ "$unmeasurable" -gt 0 ]; then
-	echo "::error::WASM 산출물 $unmeasurable 개를 못 쟀다 (위 ERROR 줄). 검사 불성립은 통과가 아니다 — 먼저 pnpm run build:sql-wasm / build:mongosh-wasm 로 산출물을 만들어라." >&2
+	echo "::error::WASM 산출물 $unmeasurable 개를 못 쟀다 (위 ERROR 줄). 검사 불성립은 통과가 아니다 — 먼저 pnpm run build:sql-wasm / build:mongosh-wasm / build:redis-wasm 로 산출물을 만들어라." >&2
 	exit 2
 fi
 
@@ -140,4 +153,4 @@ if [ "$violations" -gt 0 ]; then
 	exit 1
 fi
 
-echo "ok: parser WASM 2 개 다 gzip 예산 안 (SQL <= $SQL_BUDGET_BYTES, Mongo <= $MONGO_BUDGET_BYTES bytes)"
+echo "ok: parser WASM 3 개 다 gzip 예산 안 (SQL <= $SQL_BUDGET_BYTES, Mongo <= $MONGO_BUDGET_BYTES, Redis <= $REDIS_BUDGET_BYTES bytes)"

@@ -13,10 +13,11 @@ widening work lives in `docs/roadmap/follow-up-queue.md`.
   it does not mean full dialect semantic validation.
 - MongoDB does not run arbitrary JavaScript. Only whitelisted `db...`
   expressions are parsed and dispatched.
-- Redis `redis-command` is an active profile/dispatch identity with bounded
-  TypeScript command-name completion plus current-DB/type-filtered key
-  suggestions. It is not full language-core parser ownership or full Redis
-  autocomplete parity.
+- Redis `redis-command` is an active profile/dispatch identity. Its command
+  completion vocabulary lives in the Rust `redis-command-core` crate and reaches
+  the editor through the committed WASM artifact, alongside current-DB/
+  type-filtered key suggestions. It is not full language-core parser ownership
+  or full Redis autocomplete parity.
 - Valkey uses `redis-command` for bounded Redis-compatible command query
   dispatch and the active key browser/value-preview slice.
   `e2e/fixtures/valkey.redis-compatibility.json` records proven, candidate, and
@@ -84,16 +85,17 @@ command allowlist and `useQueryExecution` dispatch tests. Valkey reuses the same
 bounded command allowlist for query dispatch and owns a narrower completion
 target for proven local Valkey runtime rows, while direct mutation controls share
 the same string plus hash/list/set/zset KvMutationPanel write surface as Redis
-(#1075). The Redis command editor
-owns allowlist command-name vocabulary, arity hints, and snippets plus key
-suggestions from the current KV DB scan cache. Empty, failed, or stale scan
+(#1075). The Rust `redis-command-core` crate
+owns the allowlist command-name vocabulary, arity hints, and snippets that the
+editor loads through its WASM artifact; the editor adds key suggestions from the
+current KV DB scan cache. Empty, failed, or stale scan
 states fall back to no key suggestions instead of blocking the editor.
 
 | QueryLanguageId | Lifecycle | Parser owner | Completion owner | Fallback policy | Safety analyzer |
 |---|---|---|---|---|---|
 | `sql` | `active` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
 | `mongosh` | `active` | `rust-wasm-language-core` | `rust-wasm-language-core` | `compatibility-mirror` | `rust-wasm-language-core` |
-| `redis-command` | `active` | `future-language-core-contract` | `typescript-runtime-adapter` | `none` | `profile-safety-policy` |
+| `redis-command` | `active` | `future-language-core-contract` | `rust-wasm-language-core` | `none` | `profile-safety-policy` |
 | `search-dsl` | `active` | `future-language-core-contract` | `typescript-runtime-adapter` | `none` | `profile-safety-policy` |
 
 Declared or deferred language ids stay in the registry so future active profiles
@@ -235,9 +237,11 @@ are:
 - Redis has backend KV primitives, key browser/value preview/edit UI, bounded
   command dispatch/completion, current-DB/type-filtered key suggestions, and a
   wired representative Runtime Happy Path smoke. Fixture inventory is runtime
-  evidence only for paths wired into that smoke. Redis completion remains a
-  TypeScript allowlist/key-suggestion surface, not language-core parser or full
-  Redis completion ownership. Valkey now has focused local testcontainer
+  evidence only for paths wired into that smoke. Redis command completion
+  vocabulary is owned by the Rust `redis-command-core` crate (drift-checked
+  against the backend allowlist parser in table-view-core tests); language-core
+  parser ownership and full Redis autocomplete parity remain unclaimed. Valkey
+  now has focused local testcontainer
   evidence for connection, key scan, value preview, and bounded command query
   dispatch plus wired Runtime Happy Path smoke and proven-row command
   completion. The shared Redis/Valkey string plus hash/list/set/zset

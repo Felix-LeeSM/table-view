@@ -1,0 +1,35 @@
+[package]
+name = "redis-command-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91.0"
+publish = false
+description = "Pure-Rust Redis/Valkey command completion vocabulary SOT for table-view. Compiles to native (rlib, drift guard in table-view-core) and wasm32-unknown-unknown (frontend via wasm-pack). #1805."
+
+# Same two-target shape as `mongosh-parser-core`: `rlib` so the native
+# backend can consume the table (the #1805 drift guard in table-view-core
+# does, as a dev-dependency), `cdylib` so `wasm-pack build --target web`
+# produces the WASM artifact for the frontend.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+wasm = ["dep:wasm-bindgen", "dep:serde-wasm-bindgen"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Optional — only pulled in for the `wasm` feature (WASM build path).
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+
+# Same release WASM profile as sql-parser-core / mongosh-parser-core; it sits
+# in the workspace root's `[profile.release.package.redis-command-core]`
+# because cargo ignores a member's `[profile.*]`.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = [
+    "-Oz",
+    "--enable-bulk-memory",
+    "--enable-nontrapping-float-to-int",
+]
