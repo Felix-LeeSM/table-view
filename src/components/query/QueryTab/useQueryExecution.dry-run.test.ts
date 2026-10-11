@@ -1,7 +1,7 @@
 // ADR 0022 — `useQueryExecution.handleDryRun` contract. The hook owns
 // the explicit "Dry Run" dispatch path that the toolbar button +
 // Cmd+Shift+Enter shortcut both call into; this test pins the acceptance
-// criteria (`AC-248-E1..E7`).
+// criteria (`AC-248-E1..E7`). (2026-05-09)
 //
 // We exercise the hook via `renderHook` rather than mounting QueryTab
 // because:
@@ -341,7 +341,7 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     expect(call[2]).toEqual(expect.stringMatching(/^dry:/));
   });
 
-  // workspaceDb forwarding.
+  // workspaceDb forwarding. (2026-05-13)
   //
   // Reason: the dry-run preview MUST run on the same db the eventual
   // commit will hit. The contract pins useQueryExecution's dry-run path
@@ -370,7 +370,7 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     );
   });
 
-  // DbMismatch end-to-end.
+  // DbMismatch end-to-end. (2026-05-13)
   //
   // Reason: the mocked IPC throws the #744 typed DbMismatch envelope →
   // `useQueryExecution`'s catch detects it through the normalizer →

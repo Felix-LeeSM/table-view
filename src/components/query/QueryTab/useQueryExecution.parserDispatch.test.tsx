@@ -1,4 +1,4 @@
-// Parser-driven document Run dispatch. The hook routes the editor text
+// Parser-driven document Run dispatch. The hook routes the editor text (2026-05-14)
 // through `parseMongoshExpression` and dispatches to one of the read-path
 // IPC wrappers in `@lib/tauri/document`, replacing the prior
 // `JSON.parse` + `tab.queryMode === "aggregate"` branch.
@@ -793,7 +793,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
     // The backend wire `DocumentQueryMode` only allows `"count"` (the
     // legacy `"countDocuments"` is still alive in the record-history
     // input type, but `recordHistoryEntry`'s mapping narrows it to the
-    // backend wire). The history panel shows `"count"` to the user too.
+    // backend wire). The history panel shows `"count"` to the user too. (2026-05-17)
     expect(useQueryHistoryStore.getState().recentVisible[0]!.queryMode).toBe(
       "count",
     );

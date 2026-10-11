@@ -1,4 +1,4 @@
-// WARN-tier preview dialog mount for the raw SQL/MQL editor. The core
+// WARN-tier preview dialog mount for the raw SQL/MQL editor. The core (2026-05-09)
 // protection behind ADR 0023 grill Q3-(b) "every environment + every
 // write surface": an ad-hoc UPDATE WHERE / ALTER additive run from the
 // raw editor used to fire IPC immediately with no visual preview, and
@@ -22,7 +22,7 @@
 // Only the INFO tier skips the preview dialog. The INFO / STOP branches
 // are guarded by the regression tests above.
 //
-// Issue #2375 — the dialog mount condition widened from the WARN tier to
+// Issue #2375 — the dialog mount condition widened from the WARN tier to (2026-08-16)
 // every non-INFO tier. Under the shipped defaults (connection environment
 // tag non-production + Safe Mode `warn`) `decideSafeModeAction` lets a
 // destructive statement through as `allow` and no dialog opened for it,

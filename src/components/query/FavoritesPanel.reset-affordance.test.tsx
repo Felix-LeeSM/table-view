@@ -1,5 +1,5 @@
 /**
- * Q21 affordance #9 — audit only.
+ * Q21 affordance #9 — audit only. (2026-05-17)
  *
  * Reason: the per-entry remove in the Favorites panel is already the Q21
  * reset affordance, as implemented by the `removeFavorite` button in

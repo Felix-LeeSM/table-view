@@ -2,7 +2,7 @@
 //
 // The full env×mode×severity matrix (prod/strict|warn|off × destructive/safe)
 // was originally enumerated here AND in `QueryTab.safe-mode.test.tsx` — the
-// same decision matrix re-verified on two surfaces. Issue #1623 dedups: the
+// same decision matrix re-verified on two surfaces. Issue #1623 dedups: the (2026-07-24)
 // decision matrix SOT is the unit layer —
 //   - `src/lib/safeMode.test.ts` (`decideSafeModeAction`, L1..L8 + reason copy)
 //   - `src/hooks/useSafeModeGate.test.ts` (store/env wiring into that decision)
@@ -176,7 +176,7 @@ describe("EditableQueryResultGrid — Safe Mode gate → executeQueryBatch wirin
     // Representative "confirm → execute" wiring. Confirm is a single click;
     // #1111 — it arms after a short delay to absorb a reflexive Enter, so we
     // wait for it to enable before asserting the commit path fires exactly
-    // once.
+    // once. (2026-05-01)
     setup("production", "warn");
     await clickExecute(["DELETE FROM users"]);
 

@@ -1,4 +1,4 @@
-// Mongo db-contract α: runCommand IPC dispatch.
+// Mongo db-contract α: runCommand IPC dispatch. (2026-05-17)
 //
 // Reason: db-contract α has to dispatch `db.runCommand({...})` /
 // `db.adminCommand({...})` input to the generic `run_mongo_command` IPC.
@@ -243,7 +243,7 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     );
   });
 
-  // Destructive runCommand 5-keyword gate. Autocomplete
+  // Destructive runCommand 5-keyword gate. Autocomplete (2026-05-18)
   // (`mongoAutocomplete.ts`) suggests `drop` / `dropDatabase` /
   // `dropIndexes` / `killOp` / `renameCollection` in one click, so the
   // dispatch has to pass `safeModeGate.decide`.

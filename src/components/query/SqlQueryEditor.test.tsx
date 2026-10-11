@@ -66,7 +66,7 @@ describe("SqlQueryEditor (Sprint 139)", () => {
   });
 
   // AC-S139-02 — aria-label and SQL language facet.
-  // A new raw query tab must be typable the moment it opens. User journey:
+  // A new raw query tab must be typable the moment it opens. User journey: (2026-05-16)
   // Cmd+N → tab open → editor mount → cm-content auto-focus → the user's
   // keypress types straight away. The user-facing invariant is
   // "document.activeElement === .cm-content" — the OS-level focus state
@@ -270,7 +270,7 @@ describe("SqlQueryEditor (Sprint 139)", () => {
   });
 
   // Reason: #1225 — user report that Cmd+Z undo does not work after a Cmd+V
-  // paste in the RAW query window. Root cause is the missing history()
+  // paste in the RAW query window. Root cause is the missing history() (2026-07-03)
   // extension (not paste-specific).
   it("reverts an edit via undo (history extension installed) (#1225)", () => {
     render(
@@ -287,7 +287,7 @@ describe("SqlQueryEditor (Sprint 139)", () => {
   // controlled prop mirror) without an infinite loop or a conflict. Undo
   // reverting the doc updates the parent sql through onChange and the sync
   // effect can dispatch again, so this locks that `syncEditorDocument`'s
-  // equality guard blocks the re-dispatch and no loop happens.
+  // equality guard blocks the re-dispatch and no loop happens. (2026-07-03)
   it("undo reverts under controlled sql without a sync-dispatch loop (#1225)", () => {
     const changes: string[] = [];
     function Controlled() {

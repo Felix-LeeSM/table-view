@@ -1,5 +1,5 @@
 /**
- * AC-372-03 + AC-372-08.
+ * AC-372-03 + AC-372-08. (2026-05-17)
  *
  * Reason: the detail modal is the only escape hatch from the redact-only
  * display invariant — mounting it calls the `get_history_detail(id)` IPC and
@@ -23,7 +23,7 @@ describe("QueryHistoryDetailModal (sprint-372)", () => {
   });
 
   // AC-372-03 — modal mount → get_history_detail(id) once + sql display.
-  // Reason: the list response has no sql, so a detail click is the only path
+  // Reason: the list response has no sql, so a detail click is the only path (2026-05-17)
   // that exposes the original. Locks both the invoke args and the response
   // sql reaching the DOM.
   it("[AC-372-03] mount calls get_history_detail and shows original sql", async () => {
@@ -54,7 +54,7 @@ describe("QueryHistoryDetailModal (sprint-372)", () => {
   });
 
   // Loading indicator → gone once the fetch response arrives.
-  // Reason: guarantees the UX sequence where the user briefly sees the
+  // Reason: guarantees the UX sequence where the user briefly sees the (2026-05-17)
   // "Loading…" text and the sql soon replaces it.
   it("shows loading then swaps to detail on resolve", async () => {
     let resolveFn: (v: unknown) => void = () => {};
@@ -89,7 +89,7 @@ describe("QueryHistoryDetailModal (sprint-372)", () => {
 
   // backend NotFound → error path. The modal shows the message in an alert
   // role.
-  // Reason: when the detail row is race-deleted the user sees a diagnostic
+  // Reason: when the detail row is race-deleted the user sees a diagnostic (2026-05-17)
   // message instead of a blank screen.
   it("surfaces backend reject in an alert", async () => {
     invokeMock.mockRejectedValueOnce(new Error("Not found: history 999"));
@@ -102,7 +102,7 @@ describe("QueryHistoryDetailModal (sprint-372)", () => {
   });
 
   // Close button → onClose call. The parent un-mounts the modal.
-  // Reason: the modal escape path behaves consistently.
+  // Reason: the modal escape path behaves consistently. (2026-05-17)
   it("invokes onClose when Close button is clicked", async () => {
     invokeMock.mockResolvedValueOnce({
       id: 1,

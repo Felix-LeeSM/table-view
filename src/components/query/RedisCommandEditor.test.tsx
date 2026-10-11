@@ -125,7 +125,7 @@ describe("RedisCommandEditor", () => {
   });
 
   // Reason: #1225 — user report that Cmd+Z undo does not work, because no
-  // query editor installs history().
+  // query editor installs history(). (2026-07-03)
   it("reverts an edit via undo (history extension installed) (#1225)", () => {
     render(
       <RedisCommandEditor

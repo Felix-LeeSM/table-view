@@ -3,7 +3,7 @@
 // This file originally enumerated the full env×mode×severity matrix
 // (prod/strict|warn|off × destructive/safe), duplicating the same matrix
 // already verified on `EditableQueryResultGrid.safe-mode.test.tsx`. Issue #1623
-// dedups to the unit SOT:
+// dedups to the unit SOT: (2026-07-24)
 //   - `src/lib/safeMode.test.ts` (`decideSafeModeAction` L1..L8 + reason copy)
 //   - `src/hooks/useSafeModeGate.test.ts` (store/env wiring, incl. #1114
 //     env-unset=allow and #1125 non-canonical tag)
@@ -21,6 +21,8 @@
 // Plus [AC-906-01] Oracle PL/SQL package hard-block — an orthogonal
 // dialect-specific analyzer block (not the env×mode matrix), kept as its own
 // error/history contract.
+//
+// date 2026-05-07 (initial), 2026-07-24 (#1623 matrix dedup).
 
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";

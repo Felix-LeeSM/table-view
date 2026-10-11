@@ -184,7 +184,7 @@ describe("executeRdbQuery single-statement routing (#1223)", () => {
     dispatchDbMutationHintMock.mockReset();
   });
 
-  // Reason: user report — adding a comment under a RAW Query produced a
+  // Reason: user report — adding a comment under a RAW Query produced a (2026-07-03)
   // syntax error. Cause: the single-statement path re-injected the raw
   // sql instead of the cleaned `statements[0]` (#1223).
   it("sends the comment-stripped statement to executeQuery when a single statement has a trailing comment", async () => {

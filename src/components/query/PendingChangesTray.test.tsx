@@ -57,7 +57,7 @@ describe("PendingChangesTray", () => {
   });
 
   // [AC-182-01b] Single edit shows column / old / new / SQL.
-  // The SQL cell uses `buildRawEditSql` so it stays in lock step with the
+  // The SQL cell uses `buildRawEditSql` so it stays in lock step with the (2026-05-01)
   // Preview Dialog.
   it("renders one row per pending edit with column, old, new, and SQL", () => {
     const edits = new Map<string, string>([["0-1", "Alicia"]]);

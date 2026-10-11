@@ -3,7 +3,7 @@
 //   Consolidates the byte-identical QueryResultGrid.aria-grid + EditableQueryResultGrid
 //   .aria-grid copies (issue #1622, P9 subset duplication) into one describe.each over
 //   both mounts. DataGridTable.aria-grid.test.tsx keeps its RDB-only cases (column
-//   reorder, pendingNewRows) and stays separate.
+//   reorder, pendingNewRows) and stays separate. (2026-07-22)
 // Reason: AC-260-03 — grid ARIA integrity (aria-rowcount/colcount,
 //   aria-rowindex, aria-colindex in visual order, min-width max-content overflow
 //   guard, empty-state single gridcell). Read-only + editable share visual==data

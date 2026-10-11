@@ -1,6 +1,6 @@
 // TabDbChip — the tab-local database selector for a Mongo query tab.
 //
-// The display-only chip was replaced by an interactive selector after the
+// The display-only chip was replaced by an interactive selector after the (2026-05-15)
 // user asked for the lock to be lifted ("you can't even pick a
 // database"), which changed the chip's behaviour completely. This suite
 // guards the new contract:
@@ -56,7 +56,7 @@ describe("TabDbChip — interactive database selector", () => {
       },
     });
     useWorkspaceStore.setState({ workspaces: {} });
-    // TabDbChip uses `useCurrentWorkspaceKey()`, which resolves `connId`
+    // TabDbChip uses `useCurrentWorkspaceKey()`, which resolves `connId` (2026-05-16)
     // from the Tauri window label. Stub the label so the chip can write
     // to the (`conn-mongo`, `analytics`) workspace slot under test.
     setFakeWindowConnectionId("conn-mongo");
@@ -86,7 +86,7 @@ describe("TabDbChip — interactive database selector", () => {
     // database." The new contract keeps the affordance visible so the
     // user always has a clickable surface to set a database.
     //
-    // Mongo db-contract α: the label changed from "(select database)" to
+    // Mongo db-contract α: the label changed from "(select database)" to (2026-05-17)
     // "(no database)" so the chip reflects the *binding* (none), not a
     // nag-CTA. Admin commands run without one; collection commands
     // surface a separate error.

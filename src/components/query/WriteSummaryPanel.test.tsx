@@ -1,5 +1,5 @@
 // RTL coverage of the four `WriteSummaryPanel` variants (insert / update /
-// delete / bulkWrite).
+// delete / bulkWrite). (2026-05-14)
 //
 // Test axes:
 //   1. insert     — headline + chevron-expandable id list

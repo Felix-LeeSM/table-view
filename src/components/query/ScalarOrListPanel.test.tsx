@@ -1,5 +1,5 @@
 // RTL coverage of the three `ScalarOrListPanel` modes (count / list /
-// findOne-empty).
+// findOne-empty). (2026-05-14)
 //
 // Test axes:
 //   1. "count"           — big numeric + "Count" label

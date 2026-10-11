@@ -1,5 +1,5 @@
 /**
- * AC-372-01, AC-372-05, AC-372-08.
+ * AC-372-01, AC-372-05, AC-372-08. (2026-05-17)
  *
  * Reason: locks that QueryLog fills its rows through the backend
  * `list_history` IPC rather than the store `entries`, and that a detail click
@@ -52,7 +52,7 @@ describe("QueryLog list_history wire (sprint-372)", () => {
   });
 
   // AC-372-01 — one list_history IPC on QueryLog mount.
-  // Reason: this dock panel is the first user touchpoint of the move to the
+  // Reason: this dock panel is the first user touchpoint of the move to the (2026-05-17)
   // backend as single truth. Locks the single IPC and sqlRedacted arriving.
   it("[AC-372-01] toggle-query-log → list_history IPC + render rows", async () => {
     invokeMock.mockResolvedValueOnce({
@@ -77,7 +77,7 @@ describe("QueryLog list_history wire (sprint-372)", () => {
 
   // AC-372-08 — redact-only display. The original sql is exposed nowhere in
   // the dock panel.
-  // Reason: privacy invariant strategy F.5. The list response sends only
+  // Reason: privacy invariant strategy F.5. The list response sends only (2026-05-17)
   // sqlRedacted, and the panel render uses only sqlRedacted.
   it("[AC-372-08] panel never renders raw sql even if a fake row tried to leak", async () => {
     invokeMock.mockResolvedValueOnce({
@@ -102,7 +102,7 @@ describe("QueryLog list_history wire (sprint-372)", () => {
   });
 
   // AC-372-05 — create event while on the first page → refetch + prepend.
-  // Reason: an entry INSERTed from another window must be prepended at the
+  // Reason: an entry INSERTed from another window must be prepended at the (2026-05-17)
   // top of this dock so the user sees it at once.
   it("[AC-372-05] history.create event triggers refetch and prepends the new row", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [row(1)] });
@@ -135,7 +135,7 @@ describe("QueryLog list_history wire (sprint-372)", () => {
   });
 
   // detail click path — row click → modal mount → get_history_detail IPC.
-  // Reason: confirms the dock panel triggers the only path that exposes the
+  // Reason: confirms the dock panel triggers the only path that exposes the (2026-05-17)
   // original sql (AC-372-03).
   it("row click opens detail modal and fires get_history_detail IPC", async () => {
     invokeMock.mockResolvedValueOnce({ rows: [row(7)] });
@@ -165,7 +165,7 @@ describe("QueryLog list_history wire (sprint-372)", () => {
 
   // search filter — client side filter on sqlRedacted. User input narrows
   // the visible rows (a backend search is a later refinement).
-  // Reason: regression guard that the dock's search UX keeps working.
+  // Reason: regression guard that the dock's search UX keeps working. (2026-05-17)
   it("search input filters rows by sqlRedacted (client side)", async () => {
     invokeMock.mockResolvedValueOnce({
       rows: [row(1, "SELECT * FROM users"), row(2, "SELECT * FROM orders")],

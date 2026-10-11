@@ -1,4 +1,4 @@
-// Verifies the dry-run row-count escalation in
+// Verifies the dry-run row-count escalation in (2026-05-09)
 // `useQueryExecution.handleExecute`. The core protection behind ADR 0023
 // grill Q2-(a): a WARN-tier bounded UPDATE/DELETE whose dry-run reports
 // 100+ rows escalates automatically to STOP (`pendingRdbConfirm`).

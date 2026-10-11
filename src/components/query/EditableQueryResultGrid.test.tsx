@@ -247,6 +247,7 @@ describe("EditableQueryResultGrid", () => {
   // AC-196-03-3 (FB-5b). Successful raw-edit commit appends a
   // queryHistoryStore entry tagged `source: "grid-edit"` so the global log
   // can label commits driven by the editor grid (vs. raw editor execution).
+  // 2026-05-02.
   it("[AC-196-03-3] raw-edit commit records a grid-edit history entry", async () => {
     const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
     useQueryHistoryStore.setState({ recentVisible: [] });
@@ -430,7 +431,7 @@ describe("EditableQueryResultGrid", () => {
     expect(alert.textContent ?? "").not.toMatch(/executed: \d/);
   });
 
-  // The AC-185-06 1px env color stripe above the SQL preview header was
+  // The AC-185-06 1px env color stripe above the SQL preview header was (2026-05-09)
   // removed per user feedback ("that line drawn across the top of the SQL
   // preview that shows up when I edit in the datagrid ... just remove it
   // too"). The env signal flows through the footer ExecuteButton's color ×

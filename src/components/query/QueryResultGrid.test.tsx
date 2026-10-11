@@ -166,14 +166,14 @@ describe("QueryResultGrid", () => {
   //          mapping + folded original (#1723). Users reported that on query
   //          failure the sqlx/driver internal string surfaced as the primary
   //          message, leaving it unclear whether the SQL or the
-  //          connection/proxy was at fault.
+  //          connection/proxy was at fault. (2026-07-24)
   describe("friendly driver-error mapping (#1723)", () => {
     const INTROSPECTION_ERROR =
       'Database error: error returned from database: Index was outside the bounds of the array.; query: "SELECT ... pg_catalog.pg_attribute ..." (sqlx_postgres::connection::describe:492)';
 
     // Reason: for a known error class the friendly one-line message must come
     //         to the front (primary) and the original must move behind the
-    //         details toggle so it is not exposed immediately.
+    //         details toggle so it is not exposed immediately. (2026-07-24)
     it("promotes a friendly message to primary and collapses the raw error behind a details toggle", async () => {
       render(
         <QueryResultGrid
@@ -197,7 +197,7 @@ describe("QueryResultGrid", () => {
 
     // Reason: an unclassified error must fall back safely to showing the
     //         original as-is with no forced mapping — hiding it behind a fold
-    //         loses the diagnostic information.
+    //         loses the diagnostic information. (2026-07-24)
     it("shows an unclassified error inline as a safe fallback (no details toggle)", () => {
       render(
         <QueryResultGrid
@@ -313,7 +313,7 @@ describe("QueryResultGrid", () => {
     // Execution time
     expect(screen.getByText("15 ms")).toBeInTheDocument();
     // [AC-181-10] ExportButton mounted into the SELECT toolbar.
-    // Regression guard so future toolbar refactors don't drop it.
+    // Regression guard so future toolbar refactors don't drop it. (2026-05-01)
     expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
   });
 
