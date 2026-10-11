@@ -37,9 +37,11 @@
 // destructive at all. That tier is the KV path's only confirm-dialog lever (it
 // has no warn→confirm surface), so the map reuses `danger` to reach the dialog
 // for the backend's confirm-gated commands and, since #2513, for every verb the
-// backend calls `RedisCommandEffect::Destructive`. Those two sets are locked in
-// kvQueryExecution.test.ts and kvDestructiveTier.test.ts, which are the correct
-// homes for them — the axis parity table stays impact×loss-only.
+// backend calls `RedisCommandEffect::Destructive`. kvConfirmParity.test.ts
+// fails when the map's `losesData: true` verbs differ from that second set as
+// `command_parser.rs` declares it; for how the console routes these commands,
+// see kvQueryExecution.test.ts and kvDestructiveTier.test.ts. The axis parity
+// table stays impact×loss-only.
 //
 // This table is the lock: adding a paradigm or a new destructive syntax
 // means adding its row here. A drifted classifier fails the matching bucket.
