@@ -70,6 +70,12 @@ async fn dispatch_command(
         RedisCommand::Type { key } => type_command(adapter, key).await,
         RedisCommand::Ttl { key } => ttl_command(adapter, key).await,
         RedisCommand::Exists { keys } => exists_command(adapter, keys).await,
+        RedisCommand::Info { section } => info_command(adapter, section).await,
+        RedisCommand::DbSize => dbsize_command(adapter).await,
+        RedisCommand::ObjectEncoding { key } => object_encoding_command(adapter, key).await,
+        RedisCommand::MemoryUsage { key } => memory_usage_command(adapter, key).await,
+        RedisCommand::RandomKey => randomkey_command(adapter).await,
+        RedisCommand::LastSave => lastsave_command(adapter).await,
         RedisCommand::Set {
             key,
             value,
@@ -400,6 +406,74 @@ async fn exists_command(
         })
         .await?;
     Ok(single_row(&[int_col("existingKeys")], vec![json!(count)]))
+}
+
+/// Sends one read-diagnostic command (#2707) and decodes its reply. Callers
+/// whose reply can be nil — RANDOMKEY on an empty database, OBJECT ENCODING or
+/// MEMORY USAGE on a missing key, per each command's "Return information" at
+/// https://redis.io/docs/latest/commands/ — decode it as `Option`, so nil lands
+/// as a null cell instead of a type error.
+async fn query_reply<T: ::redis::FromRedisValue>(
+    adapter: &RedisAdapter,
+    cmd: &::redis::Cmd,
+) -> Result<T, AppError> {
+    adapter
+        .with_connection(async |connection| {
+            cmd.query_async(connection)
+                .await
+                .map_err(|err| adapter.database_error(err))
+        })
+        .await
+}
+
+async fn info_command(
+    adapter: &RedisAdapter,
+    section: Option<String>,
+) -> Result<RdbQueryResult, AppError> {
+    let info: String = query_reply(adapter, ::redis::cmd("INFO").arg(section)).await?;
+    Ok(single_row(&[text_col("info")], vec![json!(info)]))
+}
+
+async fn dbsize_command(adapter: &RedisAdapter) -> Result<RdbQueryResult, AppError> {
+    let count: u64 = query_reply(adapter, &::redis::cmd("DBSIZE")).await?;
+    Ok(single_row(&[int_col("keyCount")], vec![json!(count)]))
+}
+
+async fn object_encoding_command(
+    adapter: &RedisAdapter,
+    key: String,
+) -> Result<RdbQueryResult, AppError> {
+    let encoding: Option<String> =
+        query_reply(adapter, ::redis::cmd("OBJECT").arg("ENCODING").arg(&key)).await?;
+    Ok(single_row(
+        &[text_col("key"), text_col("encoding")],
+        vec![json!(key), json!(encoding)],
+    ))
+}
+
+async fn memory_usage_command(
+    adapter: &RedisAdapter,
+    key: String,
+) -> Result<RdbQueryResult, AppError> {
+    let bytes: Option<u64> =
+        query_reply(adapter, ::redis::cmd("MEMORY").arg("USAGE").arg(&key)).await?;
+    Ok(single_row(
+        &[text_col("key"), int_col("memoryBytes")],
+        vec![json!(key), json!(bytes)],
+    ))
+}
+
+async fn randomkey_command(adapter: &RedisAdapter) -> Result<RdbQueryResult, AppError> {
+    let key: Option<String> = query_reply(adapter, &::redis::cmd("RANDOMKEY")).await?;
+    Ok(single_row(&[text_col("key")], vec![json!(key)]))
+}
+
+async fn lastsave_command(adapter: &RedisAdapter) -> Result<RdbQueryResult, AppError> {
+    let unix_time: u64 = query_reply(adapter, &::redis::cmd("LASTSAVE")).await?;
+    Ok(single_row(
+        &[int_col("lastSaveUnixTime")],
+        vec![json!(unix_time)],
+    ))
 }
 
 async fn set_command(
@@ -929,5 +1003,146 @@ mod tests {
             execute_command(&adapter, request("GET alpha"), Some(&cancel)).await,
             Err(AppError::Database(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn read_diagnostic_info() {
+        // Reason: INFO joins the allowlist as a Read diagnostic, and its
+        // optional section has to reach the server (#2707) (2026-10-11)
+        let parsed = parse_redis_command("INFO server").unwrap();
+        assert_eq!(
+            parsed,
+            RedisCommand::Info {
+                section: Some("server".into())
+            }
+        );
+        assert_eq!(parsed.effect(), RedisCommandEffect::Read);
+        assert_eq!(
+            parse_redis_command("INFO").unwrap(),
+            RedisCommand::Info { section: None }
+        );
+
+        let adapter = connected_adapter().await;
+        let server = execute_command(&adapter, request("INFO server"), None)
+            .await
+            .unwrap();
+        assert_eq!(server.columns[0].name, "info");
+        assert_eq!(
+            server.rows[0],
+            vec![json!("# Server\r\nredis_version:7.2.4\r\n")]
+        );
+        let default = execute_command(&adapter, request("INFO"), None)
+            .await
+            .unwrap();
+        assert!(default.rows[0][0]
+            .as_str()
+            .is_some_and(|info| info.starts_with("# Keyspace")));
+    }
+
+    #[tokio::test]
+    async fn read_diagnostic_dbsize() {
+        // Reason: DBSIZE joins the allowlist as a Read diagnostic (#2707) (2026-10-11)
+        let parsed = parse_redis_command("DBSIZE").unwrap();
+        assert_eq!(parsed, RedisCommand::DbSize);
+        assert_eq!(parsed.effect(), RedisCommandEffect::Read);
+
+        let adapter = connected_adapter().await;
+        let result = execute_command(&adapter, request("DBSIZE"), None)
+            .await
+            .unwrap();
+        assert_eq!(result.columns[0].name, "keyCount");
+        assert_eq!(result.rows[0], vec![json!(2)]);
+    }
+
+    #[tokio::test]
+    async fn read_diagnostic_object_encoding() {
+        // Reason: OBJECT ENCODING joins the allowlist as a Read diagnostic,
+        // and the nil a missing key answers is a null cell (#2707) (2026-10-11)
+        let parsed = parse_redis_command("OBJECT encoding alpha").unwrap();
+        assert_eq!(
+            parsed,
+            RedisCommand::ObjectEncoding {
+                key: "alpha".into()
+            }
+        );
+        assert_eq!(parsed.effect(), RedisCommandEffect::Read);
+
+        let adapter = connected_adapter().await;
+        let hit = execute_command(&adapter, request("OBJECT ENCODING alpha"), None)
+            .await
+            .unwrap();
+        assert_eq!(hit.columns[1].name, "encoding");
+        assert_eq!(hit.rows[0], vec![json!("alpha"), json!("embstr")]);
+        let missing = execute_command(&adapter, request("OBJECT ENCODING missing"), None)
+            .await
+            .unwrap();
+        assert_eq!(missing.rows[0], vec![json!("missing"), Value::Null]);
+    }
+
+    #[tokio::test]
+    async fn read_diagnostic_memory_usage() {
+        // Reason: MEMORY USAGE leaves the rejected MEMORY family as a Read
+        // diagnostic, and the nil a missing key answers is a null cell
+        // (#2707) (2026-10-11)
+        let parsed = parse_redis_command("MEMORY usage alpha").unwrap();
+        assert_eq!(
+            parsed,
+            RedisCommand::MemoryUsage {
+                key: "alpha".into()
+            }
+        );
+        assert_eq!(parsed.effect(), RedisCommandEffect::Read);
+
+        let adapter = connected_adapter().await;
+        let hit = execute_command(&adapter, request("MEMORY USAGE alpha"), None)
+            .await
+            .unwrap();
+        assert_eq!(hit.columns[1].name, "memoryBytes");
+        assert_eq!(hit.rows[0], vec![json!("alpha"), json!(64)]);
+        let missing = execute_command(&adapter, request("MEMORY USAGE missing"), None)
+            .await
+            .unwrap();
+        assert_eq!(missing.rows[0], vec![json!("missing"), Value::Null]);
+    }
+
+    #[tokio::test]
+    async fn read_diagnostic_randomkey() {
+        // Reason: RANDOMKEY joins the allowlist as a Read diagnostic, and the
+        // nil an empty database answers is a null cell (#2707) (2026-10-11)
+        let parsed = parse_redis_command("RANDOMKEY").unwrap();
+        assert_eq!(parsed, RedisCommand::RandomKey);
+        assert_eq!(parsed.effect(), RedisCommandEffect::Read);
+
+        let adapter = connected_adapter().await;
+        let hit = execute_command(&adapter, request("RANDOMKEY"), None)
+            .await
+            .unwrap();
+        assert_eq!(hit.columns[0].name, "key");
+        assert_eq!(hit.rows[0], vec![json!("alpha")]);
+        // Database 1 holds no keys in the stub's INFO keyspace reply.
+        let empty_database = KvCommandRequest {
+            command: "RANDOMKEY".into(),
+            database: Some(1),
+            confirm_key: None,
+        };
+        let empty = execute_command(&adapter, empty_database, None)
+            .await
+            .unwrap();
+        assert_eq!(empty.rows[0], vec![Value::Null]);
+    }
+
+    #[tokio::test]
+    async fn read_diagnostic_lastsave() {
+        // Reason: LASTSAVE joins the allowlist as a Read diagnostic (#2707) (2026-10-11)
+        let parsed = parse_redis_command("LASTSAVE").unwrap();
+        assert_eq!(parsed, RedisCommand::LastSave);
+        assert_eq!(parsed.effect(), RedisCommandEffect::Read);
+
+        let adapter = connected_adapter().await;
+        let result = execute_command(&adapter, request("LASTSAVE"), None)
+            .await
+            .unwrap();
+        assert_eq!(result.columns[0].name, "lastSaveUnixTime");
+        assert_eq!(result.rows[0], vec![json!(1_700_000_000)]);
     }
 }

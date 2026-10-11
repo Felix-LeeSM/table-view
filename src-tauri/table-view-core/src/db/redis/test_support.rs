@@ -55,6 +55,8 @@ pub(super) async fn spawn_redis_catalog_stub() -> u16 {
 async fn handle_redis_stub_connection(mut stream: tokio::net::TcpStream) {
     let mut buffer = Vec::new();
     let mut scratch = [0_u8; 1024];
+    // The connection's SELECTed database; RANDOMKEY answers by it.
+    let mut database = String::from("0");
     loop {
         let Ok(read) = stream.read(&mut scratch).await else {
             break;
@@ -64,7 +66,13 @@ async fn handle_redis_stub_connection(mut stream: tokio::net::TcpStream) {
         }
         buffer.extend_from_slice(&scratch[..read]);
         while let Some(command) = parse_resp_command(&mut buffer) {
-            let response = redis_stub_response(&command);
+            if command
+                .first()
+                .is_some_and(|verb| verb.eq_ignore_ascii_case("SELECT"))
+            {
+                database = command.get(1).cloned().unwrap_or_default();
+            }
+            let response = redis_stub_response(&command, &database);
             if stream.write_all(&response).await.is_err() {
                 return;
             }
@@ -115,11 +123,14 @@ fn find_crlf(buffer: &[u8], start: usize) -> Option<usize> {
         .map(|relative| start + relative)
 }
 
-fn redis_stub_response(command: &[String]) -> Vec<u8> {
+fn redis_stub_response(command: &[String], database: &str) -> Vec<u8> {
     let text = match command.first().map(|value| value.to_ascii_uppercase()).as_deref() {
         Some("CLIENT") => "+OK\r\n",
         Some("PING") => "+PONG\r\n",
         Some("CONFIG") => "*2\r\n$9\r\ndatabases\r\n$1\r\n4\r\n",
+        Some("INFO") if command.get(1).is_some_and(|section| section == "server") => {
+            "$31\r\n# Server\r\nredis_version:7.2.4\r\n\r\n"
+        }
         Some("INFO") => {
             "$77\r\n# Keyspace\r\ndb0:keys=2,expires=1,avg_ttl=42\r\ndb2:keys=1,expires=0,avg_ttl=0\r\n\r\n"
         }
@@ -135,6 +146,13 @@ fn redis_stub_response(command: &[String]) -> Vec<u8> {
         Some("MEMORY") if command.get(2).is_some_and(|key| key == "alpha") => ":64\r\n",
         Some("MEMORY") if command.get(2).is_some_and(|key| key == "beta") => ":96\r\n",
         Some("MEMORY") => "$-1\r\n",
+        Some("OBJECT") if command.get(2).is_some_and(|key| key == "alpha") => "$6\r\nembstr\r\n",
+        Some("OBJECT") => "$-1\r\n",
+        Some("DBSIZE") => ":2\r\n",
+        // Only db0 and db2 hold keys in the INFO keyspace reply above.
+        Some("RANDOMKEY") if matches!(database, "0" | "2") => "$5\r\nalpha\r\n",
+        Some("RANDOMKEY") => "$-1\r\n",
+        Some("LASTSAVE") => ":1700000000\r\n",
         Some("GET") if command.get(1).is_some_and(|key| key == "binary") => {
             return b"$3\r\n\xff\0A\r\n".to_vec();
         }
