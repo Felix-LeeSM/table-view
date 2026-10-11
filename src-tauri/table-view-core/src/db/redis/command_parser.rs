@@ -47,6 +47,18 @@ pub(super) enum RedisCommand {
     Exists {
         keys: Vec<String>,
     },
+    Info {
+        section: Option<String>,
+    },
+    DbSize,
+    ObjectEncoding {
+        key: String,
+    },
+    MemoryUsage {
+        key: String,
+    },
+    RandomKey,
+    LastSave,
     Set {
         key: String,
         value: String,
@@ -144,7 +156,13 @@ impl RedisCommand {
             | RedisCommand::SMembers { .. }
             | RedisCommand::ZRange { .. }
             | RedisCommand::Type { .. }
-            | RedisCommand::Exists { .. } => RedisCommandEffect::Read,
+            | RedisCommand::Exists { .. }
+            | RedisCommand::Info { .. }
+            | RedisCommand::DbSize
+            | RedisCommand::ObjectEncoding { .. }
+            | RedisCommand::MemoryUsage { .. }
+            | RedisCommand::RandomKey
+            | RedisCommand::LastSave => RedisCommandEffect::Read,
             RedisCommand::Set { .. }
             | RedisCommand::HSet { .. }
             | RedisCommand::LPush { .. }
@@ -216,6 +234,12 @@ pub(super) fn parse_redis_command(input: &str) -> Result<RedisCommand, AppError>
             key: one_key(args, "TTL")?,
         }),
         "EXISTS" => parse_exists(args),
+        "INFO" => parse_info(args),
+        "DBSIZE" => require_arg_count(args, 0, "DBSIZE").map(|()| RedisCommand::DbSize),
+        "OBJECT" => parse_object(args),
+        "MEMORY" => parse_memory(args),
+        "RANDOMKEY" => require_arg_count(args, 0, "RANDOMKEY").map(|()| RedisCommand::RandomKey),
+        "LASTSAVE" => require_arg_count(args, 0, "LASTSAVE").map(|()| RedisCommand::LastSave),
         "SET" => parse_set(args),
         "HSET" => parse_hset(args),
         "HDEL" => parse_members(args, "HDEL", |key, fields| RedisCommand::HDel {
@@ -375,6 +399,50 @@ fn parse_exists(args: &[String]) -> Result<RedisCommand, AppError> {
             .map(|key| checked_key(key))
             .collect::<Result<_, _>>()?,
     })
+}
+
+/// `INFO [section]` — at most one section (#2707).
+fn parse_info(args: &[String]) -> Result<RedisCommand, AppError> {
+    if args.len() > 1 {
+        return Err(AppError::Validation(
+            "INFO takes at most one section".into(),
+        ));
+    }
+    Ok(RedisCommand::Info {
+        section: args.first().cloned(),
+    })
+}
+
+/// `OBJECT ENCODING <key>` only; FREQ, IDLETIME, REFCOUNT and HELP stay
+/// outside the allowlist (#2707).
+fn parse_object(args: &[String]) -> Result<RedisCommand, AppError> {
+    match args.split_first() {
+        Some((subcommand, rest)) if subcommand.eq_ignore_ascii_case("ENCODING") => {
+            Ok(RedisCommand::ObjectEncoding {
+                key: one_key(rest, "OBJECT ENCODING")?,
+            })
+        }
+        _ => Err(AppError::Unsupported(
+            "OBJECT is bounded to the ENCODING <key> subcommand".into(),
+        )),
+    }
+}
+
+/// `MEMORY USAGE <key>` only; DOCTOR, STATS, PURGE and MALLOC-STATS stay
+/// outside the allowlist (#2707). The key is the only argument, so `SAMPLES`
+/// is refused too: `SAMPLES 0` samples every nested value of the key
+/// (https://redis.io/docs/latest/commands/memory-usage/).
+fn parse_memory(args: &[String]) -> Result<RedisCommand, AppError> {
+    match args.split_first() {
+        Some((subcommand, rest)) if subcommand.eq_ignore_ascii_case("USAGE") => {
+            Ok(RedisCommand::MemoryUsage {
+                key: one_key(rest, "MEMORY USAGE")?,
+            })
+        }
+        _ => Err(AppError::Unsupported(
+            "MEMORY is bounded to the USAGE <key> subcommand".into(),
+        )),
+    }
 }
 
 fn parse_set(args: &[String]) -> Result<RedisCommand, AppError> {
@@ -613,7 +681,6 @@ fn reject_command_family(command: &str) -> Result<(), AppError> {
         "FLUSH",
         "FUNCTION",
         "LATENCY",
-        "MEMORY",
         "MODULE",
         "MONITOR",
         "MIGRATE",
@@ -1078,6 +1145,41 @@ mod tests {
             parse_redis_command("SET session:1 Ada NX"),
             Err(AppError::Unsupported(_))
         ));
+    }
+
+    #[test]
+    fn parser_rejects_diagnostic_subcommands_outside_the_allowlist_and_wrong_arity() {
+        // Reason: only OBJECT ENCODING and MEMORY USAGE leave their command
+        // families, and the diagnostics keep the arity #2707 fixed (2026-10-11)
+        for command in [
+            "OBJECT FREQ alpha",
+            "OBJECT REFCOUNT alpha",
+            "OBJECT",
+            "MEMORY DOCTOR",
+            "MEMORY PURGE",
+            "MEMORY STATS",
+            "MEMORY",
+        ] {
+            assert!(
+                matches!(parse_redis_command(command), Err(AppError::Unsupported(_))),
+                "expected unsupported error for {command}"
+            );
+        }
+        for command in [
+            "INFO server clients",
+            "DBSIZE 0",
+            "RANDOMKEY alpha",
+            "LASTSAVE now",
+            "OBJECT ENCODING",
+            "OBJECT ENCODING alpha beta",
+            "MEMORY USAGE",
+            "MEMORY USAGE alpha SAMPLES 0",
+        ] {
+            assert!(
+                matches!(parse_redis_command(command), Err(AppError::Validation(_))),
+                "expected validation error for {command}"
+            );
+        }
     }
 
     #[test]
