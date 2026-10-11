@@ -38,7 +38,7 @@ GitHub 산출물로 남긴 뒤 종료한다. 다음 노드는 그렇게 남은 �
 | subagent spawn / 역할 프롬프트 | `.agents/prompts/` 가 orchestrator·issue-implement·pr-review·pr-subreview·pr-finalize 의 고정부를 갖는다. **자동으로 도달하지 않는다**: spawn 할 때 파일을 그대로 첨부하거나 `.claude/agents/` 의 역할 정의가 첫 행동으로 읽는다. 파일 경로가 정의 이름과 다른 자리가 있다: `subreviewer` 의 고정부는 `pr-subreview.md` 라는 이름으로 들어 있다. |
 | 사용자 대화 / 설계 결정 / raw→task 승격 | `memory/workflow/interface/memory.md` (top-level 세션 전용) |
 | 문서화                 | `memory/workflow/documentation/memory.md`              |
-| 한국어 산문 작성       | `.claude/output-styles/fluent-korean.md` 를 읽는다. 조사와 어미, 의미가 있는 문장 성분을 생략하지 않고 완성된 문장으로 끝맺게 하는 문체 기준이다. `.claude/settings.json` 이 이 파일을 기본 output style 로 지정해 두지만, output style 은 main conversation 에만 실리므로 **spawn 된 노드에는 전달되지 않는다.** 노드가 직접 열어야 지침이 도달한다. |
+| 한국어 산문 작성       | `.claude/output-styles/fluent-korean.md` 를 읽는다. 조사와 어미, 의미가 있는 문장 성분을 생략하지 않고 완성된 문장으로 끝맺게 하는 문체 기준이다. `.claude/settings.json` 이 이 파일을 기본 output style 로 지정해 두지만, output style 은 main conversation 에만 실리므로 **spawn 된 노드에는 전달되지 않는다.** 노드가 직접 열어야 지침이 도달한다. `.claude/agents/` 의 역할 정의는 노드가 첫 행동에서 고정부와 함께 이 파일도 읽게 한다. 역할을 지정하지 않은 spawn 과 다른 harness 에는 그 정의가 실리지 않으므로 지침이 여전히 전달되지 않는다. |
 | git / PR / push reject | `memory/workflow/git-policy/memory.md` (금지 목록·계약) + `.agents/skills/recovering-push-rejects/SKILL.md` (4-step 회복·SHA refspec·stale ref) |
 | 머지 충돌 해소         | `.agents/skills/resolving-merge-conflicts/SKILL.md`     |
 | PR merge 막힘 / BLOCKED | `memory/runbook/pr-merge-gates/memory.md` (required context 목록·계약) + `.agents/skills/diagnosing-merge-gates/SKILL.md` (진단 순서·트리거 함정) |
