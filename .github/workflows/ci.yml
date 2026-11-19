@@ -650,6 +650,12 @@ jobs:
       # `keyring_*` (#1815) sits in this job rather than the coverage job on
       # purpose — that job carries `--fail-under-*` ratchets and adding targets
       # there moves the denominator.
+      #
+      # The names after `keyring_linux_fallback` came out of the #2559
+      # measurement (#2705). A target whose source prints `SKIP:` when its
+      # database container is missing went to `Integration Tests (Docker)`
+      # instead: a skipped test exits 0, so here it would pass without testing
+      # anything.
       - name: Run cargo tests
         working-directory: src-tauri
         run: |
@@ -658,7 +664,60 @@ jobs:
             --test parse_sql_backend \
             --test keyring_migration \
             --test keyring_new_user \
-            --test keyring_linux_fallback
+            --test keyring_linux_fallback \
+            --test backend_adapter_contract_profile \
+            --test backend_query_result_contract \
+            --test backend_safety_capability_contract \
+            --test cancel_error_classes \
+            --test capability_allowlist_workspace_pattern \
+            --test catalog_explain_contract \
+            --test clear_mru \
+            --test connection_status_serde \
+            --test corrupt_body_recovery \
+            --test corrupt_recovery \
+            --test data_source_profile_parity \
+            --test datagrid_prefs_field_reset \
+            --test datagrid_prefs_get_default \
+            --test datagrid_prefs_partial_patch \
+            --test dual_write_connections \
+            --test dual_write_reconcile \
+            --test duckdb_browse_query_adapter \
+            --test emit_state_changed_payload \
+            --test enterprise_rdbms_declared_only_commands \
+            --test fixture_harness \
+            --test guard_grep \
+            --test history_add_discriminated_union \
+            --test history_clear \
+            --test history_detail \
+            --test history_executed_at_drift \
+            --test history_list_filter \
+            --test history_list_no_sql \
+            --test history_retention_31d \
+            --test history_tab_id_null_audit \
+            --test introspection_pool_isolation \
+            --test launcher_command_guard \
+            --test legacy_file_cleanup \
+            --test legacy_import \
+            --test migration_failure_preserves_db \
+            --test mismatch_metric \
+            --test open_workspace_window_focus_event \
+            --test open_workspace_window_idempotent \
+            --test persist_setting_state_changed_emit \
+            --test release_tab_connection_rollback \
+            --test reset_setting \
+            --test single_instance_2nd_launch \
+            --test snapshot_atomic \
+            --test snapshot_listener_buffer \
+            --test snapshot_partial \
+            --test snapshot_perf \
+            --test snapshot_shape \
+            --test sql_redact \
+            --test sqlite_browse_query_adapter \
+            --test sqlite_connection_command \
+            --test tab_affinity_lazy \
+            --test testcontainer_lifecycle_test \
+            --test tls_verify_ca_fail_closed \
+            --test workspace_sqlite_only
 
   # Advisory, and it stays advisory by construction (#2127, owner's call).
   # Required contexts are listed in the `pr_to_main` ruleset — live GitHub state
@@ -1101,6 +1160,9 @@ jobs:
             --test mssql_integration \
             --test oracle_integration \
             --test redis_integration \
+            --test cancel_mongo \
+            --test cancel_mysql \
+            --test mariadb_returning_runtime \
             --summary-only \
             --fail-under-lines 80 \
             --fail-under-functions 75 \
