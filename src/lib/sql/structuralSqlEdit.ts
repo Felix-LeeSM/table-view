@@ -50,13 +50,20 @@ function jsonbPathLiteral(path: string): string {
   return `'{${quoted}}'`;
 }
 
+/**
+ * The JSON text a staged nested jsonb / MySQL json edit writes: `null`,
+ * booleans and numerals pass through as JSON, anything else becomes a JSON
+ * string. `mysqlJsonValueLiteral` classifies the same way.
+ */
+export function nestedJsonEditText(value: string): string {
+  if (value === "null") return "null";
+  if (value === "true" || value === "false") return value;
+  if (NUMERIC_RE.test(value)) return value;
+  return safeStringifyCell(value);
+}
+
 function jsonbValueLiteral(value: string): string {
-  let json: string;
-  if (value === "null") json = "null";
-  else if (value === "true" || value === "false") json = value;
-  else if (NUMERIC_RE.test(value)) json = value;
-  else json = safeStringifyCell(value);
-  return `${escapeSqlString(json)}::jsonb`;
+  return `${escapeSqlString(nestedJsonEditText(value))}::jsonb`;
 }
 
 export function isJsonbColumn(dataType: string): boolean {

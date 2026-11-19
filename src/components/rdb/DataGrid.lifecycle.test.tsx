@@ -541,4 +541,80 @@ describe("DataGrid", () => {
       expect(previewText).toContain(`ARRAY['a', 'b', 'c']::text[]`);
     });
   });
+
+  // #2693 — a jsonb tree edit that puts a leaf back to its baseline value
+  // must dissolve the pending entry instead of restaging it (2026-11-19).
+  // Reason: the tree's onCommitEdit wrote straight through setPendingEdits,
+  // whose only guard is same-ref, so a value-equal restage stayed pending
+  // and became a jsonb_set UPDATE that changes nothing.
+  // Purpose: lock "edit, then restore the baseline value → nothing to
+  // commit" on the RDB JSON tree surface.
+  it("#2693: restoring a jsonb leaf to its baseline value leaves no pending edit", async () => {
+    mockQueryTableData.mockResolvedValue({
+      columns: [
+        {
+          name: "id",
+          data_type: "integer",
+          nullable: false,
+          default_value: null,
+          is_primary_key: true,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+        {
+          name: "meta",
+          data_type: "jsonb",
+          nullable: true,
+          default_value: null,
+          is_primary_key: false,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+      ],
+      rows: [[1, { existing: "foo", code: "5" }]],
+      total_count: 1,
+      page: 1,
+      page_size: 100,
+      executed_query: "SELECT * FROM public.users LIMIT 100 OFFSET 0",
+    } satisfies TableData);
+    renderDataGrid();
+    await screen.findByText("1 rows");
+    fireEvent.click(screen.getByRole("button", { name: /Expand meta/i }));
+
+    fireEvent.click(screen.getByTestId("tree-leaf-existing"));
+    const first = screen.getByTestId("tree-edit-existing");
+    fireEvent.change(first, { target: { value: '"bar"' } });
+    fireEvent.keyDown(first, { key: "Enter" });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Commit changes")).toBeInTheDocument(),
+    );
+
+    // Unquoted text commits as the plain string "foo" — the baseline.
+    fireEvent.click(screen.getByTestId("tree-leaf-existing"));
+    const second = screen.getByTestId("tree-edit-existing");
+    fireEvent.change(second, { target: { value: "foo" } });
+    fireEvent.keyDown(second, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("tree-leaf-existing").textContent).toBe(
+        '"foo"',
+      ),
+    );
+    expect(
+      screen.queryByTestId("document-tree-pending-pill"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Commit changes")).not.toBeInTheDocument();
+
+    // A bare numeral writes jsonb number 5, not the baseline string "5" —
+    // a real type change that must stay pending.
+    fireEvent.click(screen.getByTestId("tree-leaf-code"));
+    const third = screen.getByTestId("tree-edit-code");
+    fireEvent.change(third, { target: { value: "5" } });
+    fireEvent.keyDown(third, { key: "Enter" });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Commit changes")).toBeInTheDocument(),
+    );
+  });
 });

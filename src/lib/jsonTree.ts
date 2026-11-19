@@ -560,6 +560,20 @@ export function renderLeafValue(node: TreeNode): string {
   return safeStringifyCell(node.leafValue);
 }
 
+/**
+ * #2693 — the leaf of `value` at tree path `path` (same path encoding as
+ * {@link buildTreeNodes}), or `undefined` when `path` names a container, a
+ * pending-only ghost, or a node cut by the walk caps.
+ */
+export function findLeafNode(
+  value: unknown,
+  path: string,
+): TreeNode | undefined {
+  return buildTreeNodes(value).find(
+    (n) => n.path === path && n.kind === "leaf" && !n.truncated,
+  );
+}
+
 export interface FilterOptions {
   /** When true, `query` is compiled as a JS regex (case-insensitive). */
   regex?: boolean;
