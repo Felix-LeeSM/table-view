@@ -1,4 +1,5 @@
 import { $, browser, expect } from "@wdio/globals";
+import type { ChainablePromiseElement } from "webdriverio";
 import {
   type ClickPointHit,
   describeStuckClickPoint,
@@ -880,7 +881,7 @@ export async function activateVisibleTab(label: string) {
   await activateTab(label);
 }
 
-export async function saveConnectionDialog(dialog: WebdriverIO.Element) {
+export async function saveConnectionDialog(dialog: ChainablePromiseElement) {
   await (await $("button=Save")).click();
   try {
     await dialog.waitForDisplayed({ timeout: 10000, reverse: true });
@@ -1224,10 +1225,13 @@ export async function waitForDialogHeaderTextAll(
   await dialog.waitForDisplayed({ timeout });
   await browser.waitUntil(
     async () => {
-      const headers = await dialog.$$("[data-environment-header]");
-      if (headers.length === 0) return false;
+      const headers = await dialog
+        .$$("[data-environment-header]")
+        .getElements();
+      const header = headers[0];
+      if (!header) return false;
       const text = (
-        ((await headers[0].getProperty("textContent")) as string) ?? ""
+        ((await header.getProperty("textContent")) as string) ?? ""
       ).toLowerCase();
       return snippets.every((snippet) => text.includes(snippet.toLowerCase()));
     },

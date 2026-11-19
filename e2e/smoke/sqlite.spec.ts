@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { $, browser, expect } from "@wdio/globals";
 import Database from "better-sqlite3";
+import type { ChainablePromiseElement } from "webdriverio";
 import {
   createSqliteConnection,
   editGridCellInRow,
@@ -253,7 +254,7 @@ async function returnToLauncher() {
 }
 
 async function waitForElementTextAll(
-  element: WebdriverIO.Element,
+  element: ChainablePromiseElement,
   snippets: string[],
   timeout: number,
   timeoutMsg: string,

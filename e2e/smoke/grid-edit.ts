@@ -1,4 +1,5 @@
 import { $, browser } from "@wdio/globals";
+import type { ChainablePromiseElement } from "webdriverio";
 
 import { switchToWorkspaceWindow } from "./_helpers";
 import { normalizeGridEditorLabel } from "./grid-edit-label";
@@ -11,7 +12,9 @@ export async function editGridCellInRow(
 ) {
   await switchToWorkspaceWindow();
 
-  let targetCell: WebdriverIO.Element | null = null;
+  // Assigned inside the waitUntil callback, which control-flow analysis does
+  // not follow; a plain annotation would narrow this to `null` for good.
+  let targetCell = null as ChainablePromiseElement | null;
   await browser.waitUntil(
     async () => {
       targetCell = await findGridCellInRow(rowNeedle, ariaColIndex);
@@ -43,7 +46,7 @@ export async function editGridCellInRow(
 }
 
 async function openGridCellEditor(
-  targetCell: WebdriverIO.Element,
+  targetCell: ChainablePromiseElement,
   rowNeedle: string,
   ariaColIndex: number,
   editorLabel: string,
@@ -293,7 +296,7 @@ async function clickVisibleMenuItem(label: string, timeout = 1500) {
 async function findGridCellInRow(
   rowNeedle: string,
   ariaColIndex: number,
-): Promise<WebdriverIO.Element | null> {
+): Promise<ChainablePromiseElement | null> {
   const rowIndex = await browser.execute(
     (needle, colIndex) => {
       const rows = Array.from(document.querySelectorAll('[role="row"]'));
@@ -337,7 +340,7 @@ async function findGridCellInRow(
   return null;
 }
 
-async function isDisplayed(element: WebdriverIO.Element): Promise<boolean> {
+async function isDisplayed(element: ChainablePromiseElement): Promise<boolean> {
   try {
     return await element.isDisplayed();
   } catch {

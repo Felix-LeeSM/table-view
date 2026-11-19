@@ -13,7 +13,7 @@ const CONNECTION_NAME = "E2E Postgres Explain";
 async function waitForExplainSourceBadge(timeoutMs = 15000) {
   await browser.waitUntil(
     async () => {
-      const badges = await $$('[data-source="explain"]');
+      const badges = await $$('[data-source="explain"]').getElements();
       return badges.length > 0;
     },
     {

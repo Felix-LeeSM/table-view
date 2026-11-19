@@ -537,6 +537,13 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # #2706 — `pnpm build` runs `tsc -b` on tsconfig.json, whose include is
+      # `src` only, so nothing else type-checks the wdio specs and helpers.
+      # Riding `Frontend Checks` makes the check blocking without registering a
+      # new required context (memory/runbook/pr-merge-gates/memory.md).
+      - name: Type-check e2e
+        run: pnpm exec tsc -p tsconfig.e2e.json --noEmit
+
       - name: Download shard blob reports
         uses: actions/download-artifact@v4
         with:
