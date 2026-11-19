@@ -58,7 +58,7 @@ env:
 jobs:
   e2e-smoke-required:
     name: Runtime Happy Path
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Selected specs run one after another inside this single job, because the
     # required context has to be one always-present job and a matrix would
     # split the name. A scoped PR run is 1-8 specs; a full run is 26 and can

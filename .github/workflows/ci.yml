@@ -46,7 +46,7 @@ jobs:
   # runs on every event.
   pr-body:
     name: PR Body Contract
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
@@ -313,7 +313,7 @@ jobs:
 
   dependency-security:
     name: Dependency Security
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       CARGO_DENY_VERSION: "0.19.9"
@@ -357,7 +357,7 @@ jobs:
 
   dependency-advisories:
     name: Dependency Advisories (non-blocking)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     # Non-blocking (`continue-on-error`) advisory scan, split out of the
     # blocking gate above. A RUSTSEC advisory is an event about the outside
@@ -406,7 +406,7 @@ jobs:
   # the same statement/line counts).
   frontend-shard:
     name: Frontend Tests (shard ${{ matrix.shard }}/3)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     strategy:
@@ -470,7 +470,7 @@ jobs:
 
   frontend:
     name: Frontend Checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     needs: frontend-shard
     # `always()` keeps this aggregation running when a shard FAILS, so the
@@ -677,7 +677,7 @@ jobs:
   # advisory job; add it if the cold build ever crowds the runner.
   wasm-size:
     name: WASM Size Budget (non-blocking)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     # The name promised this and the job did not deliver it until #2174: an
     # over-budget commit ended this whole workflow run red. What the flag
@@ -745,7 +745,7 @@ jobs:
 
   rust-static:
     name: Rust Static Analysis
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
@@ -914,7 +914,7 @@ jobs:
   # equivalent serial pin.
   integration-tests:
     name: Integration Tests (Docker)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # 60, not 40: the instrumented `cargo llvm-cov nextest` build plus the
     # MySQL/MSSQL testcontainers do not fit a plain-test budget.
     timeout-minutes: 60
@@ -1148,7 +1148,7 @@ jobs:
   # suffix from the release verdict, and this one should count there.
   cli-live-query:
     name: CLI Live Query (Docker)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The run measured below was cold, and PR runs stay cold only until this job
     # has run on main: `Swatinem/rust-cache` keys its entries by job, so this one
     # opens entries of its own and `save-if` lets only main write them. Restore
