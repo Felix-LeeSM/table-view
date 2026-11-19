@@ -42,13 +42,28 @@ const MAX_CONCURRENT_FORWARDS: usize = 64;
 /// How the tunnel authenticates to the jump host. Built by the command layer
 /// from the stored config plus the *decrypted* secrets — this module never
 /// touches storage or keyring.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum SshAuth {
     Password(String),
     KeyFile {
         path: std::path::PathBuf,
         passphrase: Option<String>,
     },
+}
+
+/// Masks the secrets to a fixed `"***"`, like `ConnectionConfig`'s `Debug`
+/// (#2700). No wildcard arm: a new auth variant must be masked here too.
+impl std::fmt::Debug for SshAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SshAuth::Password(_) => f.debug_tuple("Password").field(&"***").finish(),
+            SshAuth::KeyFile { path, .. } => f
+                .debug_struct("KeyFile")
+                .field("path", path)
+                .field("passphrase", &"***")
+                .finish(),
+        }
+    }
 }
 
 /// Everything [`SshTunnel::open`] needs. `host`/`port` are the jump host;
@@ -697,5 +712,22 @@ mod tests {
         let json = serde_json::to_value(&err).unwrap();
         assert_eq!(json["payload"]["code"], "sshAuthFailed");
         assert_eq!(json["payload"]["fingerprint"], serde_json::Value::Null);
+    }
+
+    // #2700: `{:?}` on the decrypted auth must not print the secrets.
+    #[test]
+    fn ssh_auth_debug_masks_secrets_issue_2700() {
+        let password = format!("{:?}", SshAuth::Password("pw-plain-2700".into()));
+        assert!(!password.contains("pw-plain-2700"), "{password}");
+
+        let key_file = format!(
+            "{:?}",
+            SshAuth::KeyFile {
+                path: "/keys/id_ed25519".into(),
+                passphrase: Some("pp-plain-2700".into()),
+            }
+        );
+        assert!(!key_file.contains("pp-plain-2700"), "{key_file}");
+        assert!(key_file.contains("/keys/id_ed25519"), "{key_file}");
     }
 }
