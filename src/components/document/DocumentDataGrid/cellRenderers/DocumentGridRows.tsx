@@ -6,12 +6,14 @@ import {
   SELECTED_ROW_FILL,
 } from "@components/datagrid";
 import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
+import { UNSET_OP } from "@components/document/DocumentTreePanel/types";
 import { INLINE_EDIT_CELL_RING } from "@components/ui/inlineEdit";
 import { renderCellValue, safeStringifyCell } from "@lib/jsonCell";
 import { cn } from "@lib/utils";
 import Decimal from "decimal.js";
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
+import { findLeafNode } from "@/lib/jsonTree";
 import { type DocumentQueryResult, isDocumentSentinel } from "@/types/document";
 import type { ColumnInfo, TableData } from "@/types/schema";
 
@@ -444,10 +446,19 @@ function NestedDetailRow({
               const next = new Map(pendingEdits);
               const serialized =
                 typeof value === "string" ? value : tagBsonWrapper(value);
-              next.set(
-                `${rowIdx}-${expandedNested.colIdx}:${path}`,
-                serialized,
-              );
+              const key = `${rowIdx}-${expandedNested.colIdx}:${path}`;
+              // #2693 — the MQL generator writes a staged string as-is
+              // (`__bson__:` strings parse back to their tagged value), so a
+              // string equal to the baseline leaf is a no-op: drop the entry.
+              const leaf = findLeafNode(expandedRawValue, path);
+              const restoresBaseline =
+                serialized !== UNSET_OP && leaf?.leafValue === serialized;
+              if (restoresBaseline) {
+                if (!pendingEdits.has(key)) return;
+                next.delete(key);
+              } else {
+                next.set(key, serialized);
+              }
               setPendingEdits(next);
             }}
             onRemovePending={(path) => {

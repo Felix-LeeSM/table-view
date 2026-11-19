@@ -331,4 +331,39 @@ describe("DocumentDataGrid — nested inline tree (Sprint 341 Option D)", () => 
       ).not.toBeInTheDocument();
     });
   });
+
+  // #2693 — a tree edit that puts a leaf back to its baseline value must
+  // dissolve the pending entry instead of restaging it (2026-11-19).
+  // Reason: the tree's onCommitEdit wrote straight through setPendingEdits,
+  // whose only guard is same-ref, so a value-equal restage stayed pending
+  // and became an updateOne that changes nothing.
+  // Purpose: lock "edit, then restore the baseline value → nothing to
+  // commit" on the document grid surface.
+  it("#2693: restoring a nested leaf to its baseline value leaves no pending edit", async () => {
+    renderGrid();
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Expand meta" }));
+
+    fireEvent.click(screen.getByTestId("tree-leaf-role"));
+    const first = screen.getByTestId("tree-edit-role");
+    fireEvent.change(first, { target: { value: '"owner"' } });
+    fireEvent.keyDown(first, { key: "Enter" });
+    await screen.findByRole("button", { name: /Commit changes/i });
+
+    // Unquoted text commits as the plain string "admin" — the baseline.
+    fireEvent.click(screen.getByTestId("tree-leaf-role"));
+    const second = screen.getByTestId("tree-edit-role");
+    fireEvent.change(second, { target: { value: "admin" } });
+    fireEvent.keyDown(second, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("tree-leaf-role").textContent).toBe('"admin"'),
+    );
+    expect(
+      screen.queryByTestId("document-tree-pending-pill"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Commit changes/i }),
+    ).not.toBeInTheDocument();
+  });
 });

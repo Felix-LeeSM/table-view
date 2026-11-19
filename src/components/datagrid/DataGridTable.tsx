@@ -1,8 +1,10 @@
 import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
+import { UNSET_OP } from "@components/document/DocumentTreePanel/types";
 import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
 import { ContextMenu } from "@components/shared/ContextMenu";
 import { Button } from "@components/ui/button";
 import { safeStringifyCell } from "@lib/jsonCell";
+import { isArrayColumn, nestedJsonEditText } from "@lib/sql/structuralSqlEdit";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   type CSSProperties,
@@ -17,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { type ColumnCategory, getDefaultRem } from "@/lib/columnCategory";
+import { findLeafNode } from "@/lib/jsonTree";
 import type { ColumnPrefsPk } from "@/lib/tauri/datagrid_prefs";
 import type { SortInfo, TableData } from "@/types/schema";
 import BlobViewerDialog from "./BlobViewerDialog";
@@ -727,10 +730,28 @@ function DataGridTable({
                                       typeof value === "string"
                                         ? value
                                         : safeStringifyCell(value);
-                                    next.set(
-                                      `${rowIdx}-${expandedNested!.colIdx}:${path}`,
-                                      serialized,
-                                    );
+                                    const key = `${rowIdx}-${expandedNested!.colIdx}:${path}`;
+                                    // #2693 — a value that writes the
+                                    // baseline leaf back drops the entry
+                                    // instead of staging a no-op UPDATE.
+                                    // JSON columns only: ARRAY elements
+                                    // coerce by element type, not JSON.
+                                    const leaf = isArrayColumn(
+                                      expandedCol.data_type,
+                                    )
+                                      ? undefined
+                                      : findLeafNode(expandedCell, path);
+                                    const restoresBaseline =
+                                      leaf !== undefined &&
+                                      serialized !== UNSET_OP &&
+                                      nestedJsonEditText(serialized) ===
+                                        safeStringifyCell(leaf.leafValue);
+                                    if (restoresBaseline) {
+                                      if (!pendingEdits.has(key)) return;
+                                      next.delete(key);
+                                    } else {
+                                      next.set(key, serialized);
+                                    }
                                     setPendingEdits(next);
                                   }
                                 : undefined
