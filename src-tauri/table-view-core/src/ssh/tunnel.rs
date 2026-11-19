@@ -164,11 +164,12 @@ impl From<SshTunnelError> for crate::error::AppError {
 
 /// What [`client::Handler::check_server_key`] saw, smuggled out of the
 /// handshake for the caller to turn into a typed TOFU error (russh only
-/// surfaces a bare `UnknownKey` on rejection).
-#[derive(Debug, Clone)]
+/// surfaces a bare `UnknownKey` on rejection). The verdict is the one the
+/// handler decided on, so `open()` never re-derives it from the pin (#2702).
+#[derive(Debug)]
 struct HostKeyObservation {
     fingerprint: String,
-    trusted: bool,
+    verdict: host_key::HostKeyVerdict,
 }
 
 struct TofuHandler {
@@ -185,16 +186,13 @@ impl client::Handler for TofuHandler {
     ) -> Result<bool, Self::Error> {
         let fingerprint =
             host_key::fingerprint_of(server_public_key).map_err(|_| RusshError::UnknownKey)?;
-        let trusted = match &self.pinned {
-            // No pin → never trusted here. `open()` reads the observation and
-            // reports UnknownHostKey with the fingerprint (TOFU record +
-            // fail-once); blind accept is banned.
-            None => false,
-            Some(pin) => *pin == fingerprint,
-        };
+        // Only `Match` is trusted; `Unknown` is rejected too and `open()`
+        // reports it with the fingerprint (blind accept is banned).
+        let verdict = host_key::verdict(self.pinned.as_deref(), &fingerprint);
+        let trusted = verdict == host_key::HostKeyVerdict::Match;
         *self.observation.lock().await = Some(HostKeyObservation {
             fingerprint,
-            trusted,
+            verdict,
         });
         Ok(trusted)
     }
@@ -240,7 +238,7 @@ impl SshTunnel {
         let observation: Arc<tokio::sync::Mutex<Option<HostKeyObservation>>> =
             Arc::new(tokio::sync::Mutex::new(None));
         let handler = TofuHandler {
-            pinned: pinned_fingerprint.clone(),
+            pinned: pinned_fingerprint,
             observation: Arc::clone(&observation),
         };
         let mut handle = match tokio::time::timeout(
@@ -254,20 +252,28 @@ impl SshTunnel {
                 // A host-key rejection surfaces as russh's bare UnknownKey;
                 // the observation slot says whether that is what happened and
                 // carries the presented fingerprint either way.
-                let seen = observation.lock().await.clone();
-                if let Some(obs) = seen.filter(|o| !o.trusted) {
-                    return Err(match pinned_fingerprint {
-                        Some(pin) => SshTunnelError::HostKeyMismatch {
-                            pinned: pin,
-                            presented: obs.fingerprint,
-                        },
-                        None => SshTunnelError::UnknownHostKey {
-                            fingerprint: obs.fingerprint,
-                        },
-                    });
-                }
-                tracing::warn!(error = %err, "SSH handshake failed");
-                return Err(SshTunnelError::Protocol("handshake failed"));
+                let seen = observation.lock().await.take();
+                return Err(match seen {
+                    Some(HostKeyObservation {
+                        fingerprint,
+                        verdict: host_key::HostKeyVerdict::Unknown,
+                    }) => SshTunnelError::UnknownHostKey { fingerprint },
+                    Some(HostKeyObservation {
+                        fingerprint,
+                        verdict: host_key::HostKeyVerdict::Mismatch { pinned },
+                    }) => SshTunnelError::HostKeyMismatch {
+                        pinned,
+                        presented: fingerprint,
+                    },
+                    Some(HostKeyObservation {
+                        verdict: host_key::HostKeyVerdict::Match,
+                        ..
+                    })
+                    | None => {
+                        tracing::warn!(error = %err, "SSH handshake failed");
+                        SshTunnelError::Protocol("handshake failed")
+                    }
+                });
             }
             Ok(Ok(h)) => h,
         };
