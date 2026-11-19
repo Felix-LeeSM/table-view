@@ -257,7 +257,7 @@ async function invokeTauri<T>(
             invoke?: (
               command: string,
               args?: Record<string, unknown>,
-            ) => Promise<unknown>;
+            ) => Promise<T>;
           };
         }
       ).__TAURI_INTERNALS__?.invoke;
