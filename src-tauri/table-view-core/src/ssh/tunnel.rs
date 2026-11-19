@@ -698,4 +698,21 @@ mod tests {
         assert_eq!(json["payload"]["code"], "sshAuthFailed");
         assert_eq!(json["payload"]["fingerprint"], serde_json::Value::Null);
     }
+
+    // #2700: `{:?}` on the decrypted auth must not print the secrets.
+    #[test]
+    fn ssh_auth_debug_masks_secrets_issue_2700() {
+        let password = format!("{:?}", SshAuth::Password("pw-plain-2700".into()));
+        assert!(!password.contains("pw-plain-2700"), "{password}");
+
+        let key_file = format!(
+            "{:?}",
+            SshAuth::KeyFile {
+                path: "/keys/id_ed25519".into(),
+                passphrase: Some("pp-plain-2700".into()),
+            }
+        );
+        assert!(!key_file.contains("pp-plain-2700"), "{key_file}");
+        assert!(key_file.contains("/keys/id_ed25519"), "{key_file}");
+    }
 }
