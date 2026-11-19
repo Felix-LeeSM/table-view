@@ -334,7 +334,7 @@ printf '%s\n' $STUB_LABELS
 # 아래 "assertion helpers (#2330)" 절이 쓰는 패딩. 환경 변수나 인자가 아니라 파일로
 # 받는 이유: 그 payload 는 파이프 버퍼의 두 배(221183 자)이고, 인자·환경 문자열 하나의
 # 길이 상한은 플랫폼마다 다르다 — Linux 의 `MAX_ARG_STRLEN` 은 32 × page size 라
-# 4KiB page 에서 131072 바이트이고 CI 러너가 ubuntu-latest 다. 로컬만 보면 이 함정이
+# 4KiB page 에서 131072 바이트이고 CI 러너가 ubuntu-24.04 다. 로컬만 보면 이 함정이
 # 안 보인다: Darwin arm64 에서는 같은 221183 자 인자가 rc=0 으로 그냥 지나간다
 # (`getconf ARG_MAX` 1048576, 개별 상한 없음). 파일 경로는 짧아 그 상한과 무관하다.
 # `if` 로 감싸는 이유: 뒤에 붙인 `[ -n … ] && cat …` 는 빈 값일 때 rc=1 이라 스텁

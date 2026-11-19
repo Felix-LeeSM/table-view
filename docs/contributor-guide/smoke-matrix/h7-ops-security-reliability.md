@@ -306,7 +306,7 @@ Current evidence:
 Current gap / routing:
 
 The desktop runtime gate is Linux-only: `Runtime Happy Path` runs its selected
-smoke specs on `ubuntu-latest`, so no macOS or Windows runtime failure can block
+smoke specs on `ubuntu-24.04`, so no macOS or Windows runtime failure can block
 a merge. The opt-in `workflow_dispatch`
 platform canary runs separate
 macOS arm64 and Windows x86_64 install/Tauri no-bundle build jobs for evidence

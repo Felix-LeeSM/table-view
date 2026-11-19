@@ -31,7 +31,7 @@
 #
 # ## 예산 근거 (2026-08-04 실측, Redis 는 #1805)
 #
-# 기준값은 게이트가 도는 환경 — ubuntu-latest 의 GNU gzip — 에서 새로 빌드한
+# 기준값은 게이트가 도는 환경 — ubuntu-24.04 의 GNU gzip — 에서 새로 빌드한
 # 산출물이다: SQL 102,131 byte · Mongo 52,735 byte. Redis 기준값은 #1805 에서
 # Apple gzip 으로 잰 것이다:
 #
