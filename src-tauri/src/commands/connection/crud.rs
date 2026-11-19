@@ -255,12 +255,25 @@ async fn maybe_open_tunnel(
         pinned_fingerprint: pinned,
     };
 
-    match SshTunnel::open(params).await {
+    settle_tunnel_open(&ssh_host, ssh_port, SshTunnel::open(params).await).await
+}
+
+/// #1064 — the TOFU pin-write decision for one `SshTunnel::open` outcome.
+/// Only `UnknownHostKey` writes a pin; every other outcome, `HostKeyMismatch`
+/// above all, leaves the stored pin untouched (ADR 0052 Q4). Split out of
+/// `maybe_open_tunnel` so that invariant is testable without an SSH server
+/// (#2701).
+async fn settle_tunnel_open(
+    ssh_host: &str,
+    ssh_port: u16,
+    opened: Result<SshTunnel, SshTunnelError>,
+) -> Result<Option<SshTunnel>, AppError> {
+    match opened {
         Ok(tunnel) => Ok(Some(tunnel)),
         Err(SshTunnelError::UnknownHostKey { fingerprint }) => {
             // TOFU record-then-fail: the pin is written, the error surfaces
             // the fingerprint, and the *next* connect matches and proceeds.
-            storage::ssh_pins::upsert_pin(&ssh_host, ssh_port, &fingerprint).await?;
+            storage::ssh_pins::upsert_pin(ssh_host, ssh_port, &fingerprint).await?;
             Err(SshTunnelError::UnknownHostKey { fingerprint }.into())
         }
         Err(e) => Err(e.into()),
@@ -880,6 +893,41 @@ mod tests {
                 panic!("Valkey routing regressed — got Unsupported: {msg}");
             }
             other => panic!("Expected Valkey connection error, got: {:?}", other),
+        }
+
+        cleanup_test_env();
+    }
+
+    /// #2701 — a host-key mismatch must never overwrite the stored pin (ADR
+    /// 0052 Q4). Re-pinning on mismatch would make a MITM key trusted after
+    /// one failed connect.
+    #[tokio::test]
+    #[serial]
+    async fn host_key_mismatch_keeps_the_stored_pin_2701() {
+        let _dir = setup_test_env();
+        storage::ssh_pins::upsert_pin("bastion.example", 22, "SHA256:pinned-a")
+            .await
+            .unwrap();
+
+        let result = settle_tunnel_open(
+            "bastion.example",
+            22,
+            Err(SshTunnelError::HostKeyMismatch {
+                pinned: "SHA256:pinned-a".into(),
+                presented: "SHA256:presented-b".into(),
+            }),
+        )
+        .await;
+
+        assert_eq!(
+            storage::ssh_pins::get_pin("bastion.example", 22)
+                .await
+                .unwrap(),
+            Some("SHA256:pinned-a".into())
+        );
+        match result {
+            Err(AppError::SshTunnel { code, .. }) => assert_eq!(code, "sshHostKeyMismatch"),
+            other => panic!("Expected sshHostKeyMismatch, got: {:?}", other.map(|_| ())),
         }
 
         cleanup_test_env();
