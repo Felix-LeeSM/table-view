@@ -299,6 +299,58 @@ describe("App global shortcuts", () => {
     expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(true);
   });
 
+  // #2460 — AltGr arrives as Ctrl+Alt on Windows (the UI Events spec notes
+  // that some operating systems simulate AltGraph that way), and on a layout
+  // that maps AltGr+<key> to a plain Latin letter `e.key` is that letter. The
+  // XKB layout data has such a layout for each of t / i / l (the Czech `rus`
+  // variant maps all of b / i / j / l / t). Every Ctrl/Cmd+letter handler must
+  // therefore refuse an event that carries Alt, not just Cmd+B / Cmd+J above.
+  function fireAltGr(key: string) {
+    act(() => {
+      fireEvent(
+        document,
+        new KeyboardEvent("keydown", {
+          key,
+          ctrlKey: true,
+          altKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+  }
+
+  it("[hotkey-altgr] AltGr-typed t does not open a new query tab", () => {
+    useWorkspaceStore.setState(seedWorkspace([makeTableTab()], "tab-1"));
+    render(<App />);
+
+    fireAltGr("t");
+
+    expect(getTestWorkspace().tabs).toHaveLength(1);
+  });
+
+  it("[hotkey-altgr] AltGr-typed i does not format the SQL", () => {
+    const handler = vi.fn();
+    window.addEventListener("format-sql", handler);
+    render(<App />);
+
+    fireAltGr("i");
+
+    // The outcome is the event nobody receives; there is no state to read.
+    expect(handler).not.toHaveBeenCalled();
+    window.removeEventListener("format-sql", handler);
+  });
+
+  it("[hotkey-altgr] AltGr-typed l does not open the bottom dock", () => {
+    render(<App />);
+    expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(true);
+
+    fireAltGr("l");
+
+    expect(useLayoutStore.getState().bottomPanelCollapsed).toBe(true);
+    expect(useLayoutStore.getState().bottomPanelTab).not.toBe("details");
+  });
+
   it("Cmd+W closes the active tab", () => {
     const tab = makeTableTab();
     useWorkspaceStore.setState(seedWorkspace([tab], "tab-1"));
