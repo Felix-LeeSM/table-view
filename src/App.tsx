@@ -255,9 +255,17 @@ export default function App() {
   }, []);
 
   // Cmd+T / Ctrl+T — new query tab
+  // `!e.altKey` here and on Cmd+I / Cmd+L / Cmd+B / Cmd+J: on Windows AltGr
+  // arrives as Ctrl+Alt, and a layout that types a Latin letter through AltGr
+  // delivers that letter in `e.key` (#2460, tests tagged `[hotkey-altgr]` in `App.test.tsx`).
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "t") {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key === "t"
+      ) {
         if (isEditableTarget(e.target)) return;
         e.preventDefault();
         const connectionId = activeTab?.connectionId ?? "";
@@ -461,7 +469,12 @@ export default function App() {
   // Cmd+I / Ctrl+I — format SQL
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "i") {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key === "i"
+      ) {
         if (isEditableTarget(e.target)) return;
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("format-sql"));
@@ -548,7 +561,12 @@ export default function App() {
   const showBottomTab = useLayoutStore((s) => s.showBottomTab);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "l") {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key === "l"
+      ) {
         e.preventDefault();
         showBottomTab("details");
       }
