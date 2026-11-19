@@ -1,4 +1,4 @@
-// `getInitialAppState` wrapper unit tests. Verifies only the backend IPC
+// `getInitialAppState` wrapper unit tests. Verifies only the backend IPC (2026-05-16)
 // call contract (command name, return shape, error propagation) — actual
 // SQLite reads and atomicity guarantees are the Rust integration tests'
 // responsibility.

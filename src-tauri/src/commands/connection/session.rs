@@ -312,7 +312,7 @@ mod tests {
     fn status_change_event_serde_uses_id_and_status_camel_case_keys() {
         // The frontend reads only the `id`/`status` keys from the
         // `connection-status-changed` payload — guard the wire shape against
-        // new variants. `Connected` is a struct variant, so the event is built
+        // new variants. `Connected` is a struct variant, so the event is built (2026-05-16)
         // with `active_db: None`.
         let evt = StatusChangeEvent {
             id: "abc".into(),

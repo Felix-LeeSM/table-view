@@ -58,7 +58,7 @@ async fn seed_client(config: &ConnectionConfig) -> Client {
         host: config.host.clone(),
         port: Some(config.port),
     }];
-    // The testcontainers Mongo image has auth disabled, so `user` arrives as
+    // The testcontainers Mongo image has auth disabled, so `user` arrives as (2026-05-08)
     // an empty string. Setting a credential unconditionally would attempt
     // SCRAM auth and fail with `Authentication failed`, so the connection
     // stays anonymous whenever `user` is empty.
@@ -121,7 +121,7 @@ async fn test_mongo_adapter_connect_ping_list_disconnect_happy_path() {
         collections.len()
     );
 
-    // The empty-name guard is verified deterministically in
+    // The empty-name guard is verified deterministically in (2026-05-08)
     // `db::mongodb::schema::tests::list_collections_rejects_empty_db_name`.
     // In the integration test, setup assigns a default_db, so an empty string
     // flows into the fallback branch and Ok([]) is the legitimate result.
@@ -980,7 +980,7 @@ async fn test_mongo_adapter_delete_on_missing_id_returns_not_found() {
         .expect("disconnect should succeed");
 }
 
-// ── A1 dispatch surface integration ───────────────────────────────────────
+// ── A1 dispatch surface integration (2026-05-14) ──────────────────────────
 //
 // Reason: verifies that the 6 methods the A1 mongosh parser dispatches to
 // hold the intended wire shape + side effects against a real mongo
@@ -1334,7 +1334,7 @@ async fn test_mongo_adapter_bulk_write_aggregate_counters() {
         .expect("disconnect should succeed");
 }
 
-// ── Mongo index CRUD integration ──────────────────────────────────────────
+// ── Mongo index CRUD integration (2026-05-15) ─────────────────────────────
 //
 // Reason: verifies that the Mongo index CRUD trait methods
 // (`create_collection_index` / `drop_collection_index`) round-trip the
@@ -1787,7 +1787,7 @@ async fn test_mongo_adapter_create_index_duplicate_name_errors() {
 /// `validationAction` = "warn". After collMod the driver-side
 /// `listCollections.options` must surface all three values.
 ///
-/// Reason: the validator + level + action IPC pair is wired up as a
+/// Reason: the validator + level + action IPC pair is wired up as a (2026-05-15)
 /// round trip. On live routing the server-side `options` have to come back in
 /// the response, otherwise the ValidatorPanel UI cannot hydrate its select
 /// controls.
@@ -1861,7 +1861,7 @@ async fn test_mongo_adapter_set_validator_with_level_and_action_roundtrip() {
 /// Omitting `validation_level` / `validation_action` lets MongoDB apply its
 /// server-side defaults (`strict` / `error`).
 ///
-/// Reason: the backward-compat path. Older callers sent only the validator,
+/// Reason: the backward-compat path. Older callers sent only the validator, (2026-05-15)
 /// and the new wire format has to produce the same observable server state —
 /// which requires the omitted options to be absent from collMod. MongoDB
 /// then applies its server-side defaults, so the readback must be strict +
@@ -1932,7 +1932,7 @@ async fn test_mongo_adapter_set_validator_omitted_level_action_preserves_server_
 /// The Tauri command shim rejects unknown `validationLevel` values with
 /// `AppError::Validation` before any adapter round-trip.
 ///
-/// Reason: verifies the whitelist gate matches the whitelist spec at the
+/// Reason: verifies the whitelist gate matches the whitelist spec at the (2026-05-15)
 /// integration level too. The client-side safety guarantee is exactly that
 /// such a value never reaches the adapter.
 #[tokio::test]

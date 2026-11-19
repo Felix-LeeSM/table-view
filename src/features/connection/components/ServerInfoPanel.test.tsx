@@ -1,4 +1,4 @@
-// U4 live wire. Verifies ServerInfoPanel
+// U4 live wire. Verifies ServerInfoPanel (2026-05-15)
 // dispatches the paradigm-neutral `server_info` IPC through
 // `@/lib/api/serverInfo` and renders the result grid.
 

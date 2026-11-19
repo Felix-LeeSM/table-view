@@ -310,7 +310,7 @@ mod tests {
     // DB: multi-event rows fold into one TriggerInfo, events accumulate, and
     // the INSTEAD OF/AFTER timing mapping, the statement orientation, the
     // inline-body placeholder (empty function_name) and the WITH ENCRYPTION
-    // NULL body are all checked.
+    // NULL body are all checked. (2026-07-25)
     #[test]
     fn build_triggers_folds_events_and_maps_sql_server_semantics() {
         let triggers = build_triggers(

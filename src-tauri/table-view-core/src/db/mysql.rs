@@ -522,7 +522,7 @@ impl RdbAdapter for MysqlAdapter {
 
 #[cfg(test)]
 mod tests {
-    //! Reason: this trait-dispatcher file mostly delegates to inherent
+    //! Reason: this trait-dispatcher file mostly delegates to inherent (2026-05-13)
     //! methods, so it depends on a live DB — the regression guards here cover
     //! only the paradigm tags (`kind`, `namespace_label`) and the
     //! `Unsupported` reject copy of `create_trigger` / `drop_trigger`.
@@ -547,7 +547,7 @@ mod tests {
         assert!(matches!(a.namespace_label(), NamespaceLabel::Database));
     }
 
-    /// Reason: MySQL `list_namespaces` used to expose every schema (= DB) —
+    /// Reason: MySQL `list_namespaces` used to expose every schema (= DB) — (2026-05-13)
     /// a regression a user reported as "all 3 schemas show up at once". Right
     /// after that it was changed to surface only the current DB as a
     /// namespace, matching PG's (DB → schemas-of-current-DB → tables) 1:1.

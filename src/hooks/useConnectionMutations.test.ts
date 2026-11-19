@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 
-// The 3 mutation toasts (added / updated / removed) used to live inside
+// The 3 mutation toasts (added / updated / removed) used to live inside (2026-05-06)
 // `connectionStore.ts`'s action bodies. They've moved here so the store
 // stays a pure state-transition module. These tests pin the byte-equivalent
 // toast text + the contract that a store throw does NOT fire a toast (the

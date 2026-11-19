@@ -51,7 +51,7 @@ vi.mock("@lib/zustand-ipc-bridge", () => ({
 }));
 
 vi.mock("@lib/window-label", async () => {
-  // Preserve the real parseWorkspaceLabel / formatWorkspaceLabel exports so
+  // Preserve the real parseWorkspaceLabel / formatWorkspaceLabel exports so (2026-05-16)
   // transitive imports of `useCurrentWindowConnectionId` resolve.
   const actual =
     await vi.importActual<typeof import("@lib/window-label")>(

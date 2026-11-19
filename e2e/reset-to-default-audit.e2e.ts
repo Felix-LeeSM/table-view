@@ -1,4 +1,4 @@
-// Reset-to-default audit e2e (Q21).
+// Reset-to-default audit e2e (Q21). (2026-05-17)
 //
 // Status (#2474, 2026-09-05): no runner executes this file — it is not a
 // regression pin. wdio only picks up `e2e/smoke/**/*.spec.ts`
@@ -45,7 +45,7 @@
 // This spec requires the host docker daemon to be running the PG container
 // (same precondition as the other e2e specs).
 //
-// 9 scenarios (updated: the two settings panel entries removed):
+// 9 scenarios (updated: the two settings panel entries removed): (2026-05-17)
 //   1. (removed) Settings panel "Reset settings" — the user's direct
 //      request unmounted the settings panel UI itself. IPC `reset_setting`
 //      is kept. Currently e2e step 0 — satisfies audit-checklist item #1,
@@ -107,7 +107,7 @@ describe("Sprint 376 — Reset-to-default audit (Q21 9 affordance)", () => {
     await createPostgresConnection(PG_CONNECTION);
 
     // ----- Scenario 1: (removed) Settings panel "Reset settings" -----
-    // The settings panel UI was removed at the user's direct request. The
+    // The settings panel UI was removed at the user's direct request. The (2026-05-17)
     // e2e step was removed with it — the regression guard is RTL's
     // (`src/pages/HomePage.reset-affordance.test.tsx` AC-377-01).
     await switchToLauncherWindow();

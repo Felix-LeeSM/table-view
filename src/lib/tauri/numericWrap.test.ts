@@ -1,5 +1,5 @@
 // wrapNumericCells unit tests (ADR 0026). Verifies that the wrapper
-// branches only on column.dataType, leaves in-scope number columns
+// branches only on column.dataType, leaves in-scope number columns (2026-05-11)
 // untouched, and is idempotent.
 
 import Decimal from "decimal.js";

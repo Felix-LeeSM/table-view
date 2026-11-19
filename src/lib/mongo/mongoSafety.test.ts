@@ -369,8 +369,8 @@ describe("analyzeMongoOperation", () => {
   });
 });
 
-// `isInfoMongoOperation` — the Mongo INFO-tier heuristic; see its TSDoc in
-// `src/lib/mongo/mongoSafety.ts`.
+// `isInfoMongoOperation` — the Mongo INFO-tier heuristic; see its TSDoc in (2026-05-09)
+// `src/lib/mongo/mongoSafety.ts`. (2026-05-09)
 describe("isInfoMongoOperation (Sprint 255)", () => {
   it("[AC-255-02a] empty pipeline → INFO (no stages = read-only)", () => {
     expect(isInfoMongoOperation(analyzeMongoPipeline([]))).toBe(true);

@@ -426,7 +426,7 @@ pub async fn drop_rdb_database(
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
-    //! Reason: the RDB DDL handlers were extracted to
+    //! Reason: the RDB DDL handlers were extracted to (2026-05-08)
     //! `_inner(&AppState, &Request)`, so the tests call the prod `_inner`
     //! directly. 4-step contract:
     //!   1. active_connections lookup → miss → AppError::NotFound

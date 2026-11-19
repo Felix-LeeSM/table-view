@@ -84,7 +84,7 @@ describe("SafeModeToggle", () => {
   //      remains gated even when off is selected).
   // We test through the rendered DOM `title` attribute rather than mocking
   // a tooltip primitive — the toolbar uses native browser tooltips for
-  // every sibling button.
+  // every sibling button. (2026-05-08)
   it("[AC-245-T1] strict tooltip names all-environment scope + destructive statements", () => {
     render(<SafeModeToggle />);
     const strictTitle = screen
