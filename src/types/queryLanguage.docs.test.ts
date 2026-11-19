@@ -89,20 +89,70 @@ function matchesAnyRetiredNonClaim(text: string): boolean {
   return RETIRED_SEARCH_NONCLAIM_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+// Rows of the ownership tables in query-language-support.md: every table line
+// whose first cell is a backticked language id. The active table has six
+// columns and the deferred table adds a seventh (Current boundary) that is
+// prose, so only the first six cells are read. A row with fewer cells throws
+// instead of being skipped.
+function extractOwnershipRows(markdown: string) {
+  return markdown
+    .split("\n")
+    .filter((line) => /^\|\s*`/.test(line))
+    .map((line) => {
+      const cells = line
+        .split("|")
+        .slice(1, -1)
+        .map((cell) => cell.trim().replace(/^`(.*)`$/, "$1"));
+      if (cells.length < 6) {
+        throw new Error(`ownership row has ${cells.length} cells: ${line}`);
+      }
+      const [
+        id,
+        lifecycle,
+        parserOwner,
+        completionOwner,
+        fallbackPolicy,
+        safetyAnalyzer,
+      ] = cells;
+      return {
+        id,
+        lifecycle,
+        parserOwner,
+        completionOwner,
+        fallbackPolicy,
+        safetyAnalyzer,
+      };
+    });
+}
+
 describe("query language support documentation", () => {
-  it("documents every query language ownership record", () => {
+  // Reason: a whole-document `toContain` per value passes when ANY row carries
+  // the string. Owner values come from four names that many rows share, so a
+  // row that drifted from the registry (PR #2687: `redis-command`
+  // completion owner) was covered for by the `search-dsl` row. This compares
+  // each language id's own row, cell by cell. Issue #2698 (2026-11-19).
+  it("documents every query language ownership record in its own table row", () => {
     const supportDocs = readFileSync(
       "docs/product/query-language-support.md",
       "utf8",
     );
+    const rows = extractOwnershipRows(supportDocs);
+    const registry = Object.values(QUERY_LANGUAGE_REGISTRY);
 
-    for (const metadata of Object.values(QUERY_LANGUAGE_REGISTRY)) {
-      expect(supportDocs).toContain(`\`${metadata.id}\``);
-      expect(supportDocs).toContain(`\`${metadata.lifecycle}\``);
-      expect(supportDocs).toContain(metadata.parserOwner);
-      expect(supportDocs).toContain(metadata.completionOwner);
-      expect(supportDocs).toContain(metadata.fallbackPolicy.kind);
-      expect(supportDocs).toContain(metadata.safetyAnalyzer);
+    // An extractor that quietly finds nothing would make the loop below vacuous.
+    expect(rows.length).toBe(registry.length);
+
+    for (const metadata of registry) {
+      const matching = rows.filter((row) => row.id === metadata.id);
+      expect(matching, `rows for \`${metadata.id}\``).toHaveLength(1);
+      expect(matching[0], `row for \`${metadata.id}\``).toEqual({
+        id: metadata.id,
+        lifecycle: metadata.lifecycle,
+        parserOwner: metadata.parserOwner,
+        completionOwner: metadata.completionOwner,
+        fallbackPolicy: metadata.fallbackPolicy.kind,
+        safetyAnalyzer: metadata.safetyAnalyzer,
+      });
     }
   });
 
